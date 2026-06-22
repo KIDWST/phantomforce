@@ -136,16 +136,14 @@ h3 {
   grid-template-columns: auto 1fr auto;
   align-items: center;
   gap: 35px;
-  height: 70px;
+  height: 78px;
   padding: 0 var(--pad);
-  border-bottom: 1px solid var(--line);
-  background: rgba(5, 6, 6, 0.96);
-  backdrop-filter: blur(16px);
+  border-bottom: 1px solid transparent;
   transition: 0.2s;
 }
 .site-header.scrolled {
   border-color: var(--line);
-  background: rgba(5, 6, 6, 0.98);
+  background: rgba(5, 6, 6, 0.92);
   backdrop-filter: blur(16px);
 }
 .brand {
@@ -155,12 +153,12 @@ h3 {
 }
 .brand-mark {
   display: grid;
-  width: 32px;
-  height: 32px;
+  width: 35px;
+  height: 35px;
   place-items: center;
   border: 1px solid #4a504c;
   border-radius: 50%;
-  font-size: 18px;
+  font-size: 20px;
 }
 .brand > span:last-child {
   display: grid;
@@ -168,7 +166,7 @@ h3 {
 }
 .brand strong {
   font:
-    600 14px Space Grotesk,
+    600 15px Space Grotesk,
     sans-serif;
 }
 .brand small {
@@ -210,7 +208,7 @@ h3 {
 .hero {
   position: relative;
   min-height: 920px;
-  padding: 70px var(--pad) 0;
+  padding: 78px var(--pad) 0;
   background: #050606 url("assets/operator-core.png") center/cover no-repeat;
 }
 .hero:before {
