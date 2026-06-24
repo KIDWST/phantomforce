@@ -1,0 +1,17 @@
+{
+  "name": "PhantomForce AI",
+  "short_name": "PhantomForce",
+  "description": "AI command center for business operations.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#080a0d",
+  "theme_color": "#080a0d",
+  "icons": [
+    {
+      "src": "/assets/operator-core.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

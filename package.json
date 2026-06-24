@@ -1,0 +1,21 @@
+{
+  "name": "phantomforce",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*",
+    "server"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:web": "npm run dev --workspace @phantomforce/web",
+    "dev:server": "npm run dev --workspace @phantomforce/server",
+    "typecheck": "npm run build --workspace @phantomforce/contracts && npm run typecheck --workspace @phantomforce/web && npm run typecheck --workspace @phantomforce/server",
+    "prisma:generate": "npm run prisma:generate --workspace @phantomforce/server"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}
