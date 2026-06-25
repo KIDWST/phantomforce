@@ -9,3 +9,10 @@ logs/
 packages/contracts/src/*.js
 .DS_Store
 Thumbs.db
+# Local runtime state, backups, and recovery snapshots (not source)
+server/data/
+**/*.bak
+**/snapshots/
+# Local env files (real secrets) — only the example is tracked
+.env.local
+.env.production
