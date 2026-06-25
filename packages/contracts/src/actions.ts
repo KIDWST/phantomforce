@@ -149,6 +149,64 @@ export const ApprovalDecisionActionSchema = ActionBaseSchema.extend({
 });
 export type ApprovalDecisionAction = z.infer<typeof ApprovalDecisionActionSchema>;
 
+export const ClientAccessUpdateActionSchema = ActionBaseSchema.extend({
+  type: z.literal("client.access.update"),
+  policy: z.object({
+    surface: z.literal("internal"),
+    reversible: z.literal(true),
+    requiresApproval: z.literal(true),
+  }),
+  payload: z.object({
+    targetOrgId: z.string().uuid(),
+    accessStatus: z.enum(["active", "past_due", "suspended", "revoked"]),
+    paymentStatus: z.enum(["trialing", "paid", "due", "failed", "cancelled"]),
+    privateRoute: z.string().min(1).optional(),
+    reason: z.string().min(1),
+  }),
+});
+export type ClientAccessUpdateAction = z.infer<typeof ClientAccessUpdateActionSchema>;
+
+export const ClientModuleSetActionSchema = ActionBaseSchema.extend({
+  type: z.literal("client.module.set"),
+  policy: z.object({
+    surface: z.literal("internal"),
+    reversible: z.literal(true),
+    requiresApproval: z.literal(true),
+  }),
+  payload: z.object({
+    targetOrgId: z.string().uuid(),
+    moduleKey: z.string().min(1),
+    enabled: z.boolean(),
+    reason: z.string().min(1),
+  }),
+});
+export type ClientModuleSetAction = z.infer<typeof ClientModuleSetActionSchema>;
+
+export const ClientProvisionActionSchema = ActionBaseSchema.extend({
+  type: z.literal("client.provision"),
+  policy: z.object({
+    surface: z.literal("internal"),
+    reversible: z.literal(true),
+    requiresApproval: z.literal(true),
+  }),
+  payload: z.object({
+    clientId: z.string().min(1),
+    business: z.string().min(1),
+    owner: z.string().min(1),
+    plan: z.string().min(1),
+    source: z.enum(["nexprospex", "manual", "crm"]),
+    sourceRecordId: z.string().optional(),
+    winStatus: z.enum(["signed_agreement", "payment_received"]),
+    billingProvider: z.literal("manual-json-file").default("manual-json-file"),
+    billingSourceOfTruth: z.literal("local-manual-provider").default("local-manual-provider"),
+    paymentStatus: z.enum(["paid", "due", "failed"]),
+    privateRoute: z.string().min(1).optional(),
+    modules: z.array(z.string().min(1)).min(1),
+    reason: z.string().min(1),
+  }),
+});
+export type ClientProvisionAction = z.infer<typeof ClientProvisionActionSchema>;
+
 export const ActionSchema = z.union([
   EmailDraftActionSchema,
   EmailSendActionSchema,
@@ -158,6 +216,9 @@ export const ActionSchema = z.union([
   TaskCreateActionSchema,
   ContactUpsertActionSchema,
   ApprovalDecisionActionSchema,
+  ClientAccessUpdateActionSchema,
+  ClientModuleSetActionSchema,
+  ClientProvisionActionSchema,
 ]);
 export type PhantomForceAction = z.infer<typeof ActionSchema>;
 
@@ -170,6 +231,9 @@ export const ACTION_SCHEMAS = {
   "task.create": TaskCreateActionSchema,
   "contact.upsert": ContactUpsertActionSchema,
   "approval.decision": ApprovalDecisionActionSchema,
+  "client.access.update": ClientAccessUpdateActionSchema,
+  "client.module.set": ClientModuleSetActionSchema,
+  "client.provision": ClientProvisionActionSchema,
 } as const;
 
 export type ActionType = keyof typeof ACTION_SCHEMAS;

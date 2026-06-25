@@ -41,6 +41,26 @@ enum FalconJobStatus {
   failed
 }
 
+enum ClientAccessStatus {
+  active
+  past_due
+  suspended
+  revoked
+}
+
+enum PaymentStatus {
+  trialing
+  paid
+  due
+  failed
+  cancelled
+}
+
+enum GatewayProvider {
+  local
+  pangolin
+}
+
 model User {
   id           String       @id @default(uuid())
   email        String       @unique
@@ -66,6 +86,8 @@ model Org {
   contacts    Contact[]
   auditEvents AuditEvent[]
   falconJobs  FalconJob[]
+  clientAccess ClientAccess?
+  moduleEntitlements ModuleEntitlement[]
 }
 
 model Membership {
@@ -149,6 +171,7 @@ model Approval {
   decidedByUserId String?
   decidedAt       DateTime?
   reason          String?
+  payload         Json?
   createdAt       DateTime       @default(now())
   org             Org            @relation(fields: [orgId], references: [id], onDelete: Cascade)
   action          Action         @relation(fields: [actionId], references: [id], onDelete: Cascade)
@@ -199,6 +222,40 @@ model Contact {
   org          Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
 
   @@index([orgId])
+}
+
+model ClientAccess {
+  id              String             @id @default(uuid())
+  orgId           String             @unique
+  gatewayProvider GatewayProvider    @default(pangolin)
+  privateRoute    String?
+  accessStatus    ClientAccessStatus @default(active)
+  paymentStatus   PaymentStatus      @default(paid)
+  planName         String?
+  ownerName        String?
+  connectorCredentials Json?
+  lastAudit        String?
+  revokedAt       DateTime?
+  revokedReason   String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  org             Org                @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([accessStatus])
+  @@index([paymentStatus])
+}
+
+model ModuleEntitlement {
+  id        String   @id @default(uuid())
+  orgId     String
+  moduleKey String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, moduleKey])
+  @@index([orgId, enabled])
 }
 
 model AuditEvent {

@@ -8,6 +8,12 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:access": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-workflow.ps1",
+    "test:access:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-workflow-postgres.ps1",
+    "test:access:postgres-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-postgres-fail-closed.ps1",
+    "test:connector-boundary": "tsx scripts/test-connector-boundary.ts",
+    "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
+    "test:auth:production-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-production-fail-closed.ps1",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

@@ -6,8 +6,54 @@ import {
   FalconJobSchema,
 } from "@phantomforce/contracts";
 import "dotenv/config";
-import Fastify from "fastify";
+import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 
+import {
+  AccessApprovalDecisionSchema,
+  AccessChangeProposalSchema,
+  AccessModuleSetProposalBodySchema,
+  ClientProvisionProposalSchema,
+  decideAccessApproval,
+  dryRunClientProvision,
+  initializeAccessWorkflowState,
+  listAccessActions,
+  listAccessApprovals,
+  listAccessAuditEvents,
+  proposeAccessChange,
+  proposeClientProvision,
+  proposeModuleSet,
+} from "./access/access-workflow.js";
+import { accessRepository } from "./access/access-repository.js";
+import {
+  assertModuleAccess,
+  assertWorkspaceAccess,
+} from "./access/access-guard.js";
+import { initializeAccessIdentityState } from "./access/access-identity-state.js";
+import { getWorkspaceModuleView } from "./access/module-handlers.js";
+import {
+  AUTHORIZATION_HEADER,
+  AccessLoginSchema,
+  SESSION_HEADER,
+  assertAccessAuthConfiguration,
+  getAccessAuthConfiguration,
+  issueAccessSessionToken,
+  listAccessSessions,
+  requireAdminAccessSession,
+  requireAccessSession,
+  requireClientWorkspaceView,
+} from "./access/session.js";
+import {
+  ClientAccessStatusSchema,
+  getAccessDecision,
+  getClientAccess,
+  initializeClientAccessState,
+  listClientAccess,
+} from "./access/client-access-state.js";
+import { listPangolinDryRunPlan } from "./access/pangolin-reconciler.js";
+import { checkPangolinReadOnlyStatus } from "./access/pangolin-status.js";
+import { buildProductionReadinessReport } from "./access/production-readiness.js";
+import { getBillingProviderStatus } from "./access/billing-provider.js";
+import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
 
@@ -15,17 +61,29 @@ const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
 
 const app = Fastify({
-  logger: true,
+  logger: process.env.PHANTOMFORCE_SERVER_LOGGER === "false" ? false : true,
 });
 
 await app.register(cors, {
   origin: [/^http:\/\/127\.0\.0\.1:\d+$/, /^http:\/\/localhost:\d+$/],
   credentials: true,
+  allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER],
 });
 
 const falconBroker = createFalconBroker({
   baseUrl: process.env.FALCON_BASE_URL ?? "http://127.0.0.1:8765",
 });
+
+try {
+  assertAccessAuthConfiguration();
+  await initializeClientAccessState();
+  await initializeAccessIdentityState();
+  await initializeAccessWorkflowState();
+} catch (error) {
+  app.log.error(error, "PhantomForce server startup failed while loading access state.");
+  await app.close();
+  process.exit(1);
+}
 
 app.get("/health", async () => {
   return {
@@ -42,6 +100,451 @@ app.get("/contracts/actions", async () => {
   return {
     actionTypes: Object.keys(ACTION_SCHEMAS),
     falconJobTypes: Object.keys(FALCON_JOB_SCHEMAS),
+  };
+});
+
+app.get("/sessions", async () => {
+  const authConfiguration = getAccessAuthConfiguration();
+
+  return {
+    ok: true,
+    auth: {
+      ...authConfiguration,
+    },
+    sessions: listAccessSessions(),
+  };
+});
+
+async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) {
+  const authConfiguration = getAccessAuthConfiguration();
+
+  if (!authConfiguration.sessionLoginEnabled) {
+    return reply.code(403).send({
+      ok: false,
+      error: "Session login is disabled.",
+      auth: authConfiguration,
+    });
+  }
+
+  const parsed = AccessLoginSchema.safeParse(request.body);
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+    });
+  }
+
+  const token = issueAccessSessionToken(parsed.data.sessionId);
+
+  if (!token) {
+    return reply.code(404).send({
+      ok: false,
+      error: "Demo session not found.",
+      sessions: listAccessSessions(),
+    });
+  }
+
+  return {
+    ok: true,
+    ...token,
+  };
+}
+
+app.post("/auth/session-login", async (request, reply) => {
+  return handleSessionLogin(request, reply);
+});
+
+app.post("/auth/demo-login", async (request, reply) => {
+  const authConfiguration = getAccessAuthConfiguration();
+
+  if (!authConfiguration.demoAuthEnabled) {
+    return reply.code(403).send({
+      ok: false,
+      error: "Demo auth is disabled.",
+      auth: authConfiguration,
+    });
+  }
+
+  return handleSessionLogin(request, reply);
+});
+
+app.get("/session", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+  };
+});
+
+app.get("/readiness", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    report: await buildProductionReadinessReport(),
+  };
+});
+
+app.get("/billing/status/read-only", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    status: getBillingProviderStatus(),
+  };
+});
+
+app.get("/client-access", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const records = session.canManageAccess
+    ? listClientAccess()
+    : listClientAccess().filter((record) => record.id === session.clientId);
+
+  return {
+    ok: true,
+    session,
+    records,
+  };
+});
+
+app.get("/client-access/:id/decision", async (request, reply) => {
+  const params = request.params as { id: string };
+  const session = requireClientWorkspaceView(request, reply, params.id);
+
+  if (!session) {
+    return reply;
+  }
+
+  const record = getClientAccess(params.id);
+
+  if (!record) {
+    return reply.code(404).send({
+      ok: false,
+      error: "Client access record not found.",
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    record,
+    decision: getAccessDecision(params.id),
+  };
+});
+
+app.get("/client-workspaces/:id", async (request, reply) => {
+  const params = request.params as { id: string };
+  const session = requireClientWorkspaceView(request, reply, params.id);
+
+  if (!session) {
+    return reply;
+  }
+
+  const access = assertWorkspaceAccess(params.id);
+
+  if (!access.ok) {
+    return reply.code(access.statusCode).send({
+      ok: false,
+      error: access.error,
+      record: access.record,
+      decision: access.decision,
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    workspace: {
+      id: access.record.id,
+      business: access.record.business,
+      owner: access.record.owner,
+      plan: access.record.plan,
+      privateRoute: access.record.privateRoute,
+      gateway: access.record.gateway,
+      accessStatus: access.record.accessStatus,
+      paymentStatus: access.record.paymentStatus,
+      mode: access.decision.mode,
+      modules: access.decision.modules,
+    },
+    decision: access.decision,
+  };
+});
+
+app.get("/client-workspaces/:id/modules/:moduleKey", async (request, reply) => {
+  const params = request.params as { id: string; moduleKey: string };
+  const session = requireClientWorkspaceView(request, reply, params.id);
+
+  if (!session) {
+    return reply;
+  }
+
+  const access = assertModuleAccess(params.id, params.moduleKey);
+
+  if (!access.ok) {
+    return reply.code(access.statusCode).send({
+      ok: false,
+      error: access.error,
+      record: access.record,
+      decision: access.decision,
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    module: access.module,
+    mode: access.decision.mode,
+    moduleView: await getWorkspaceModuleView(access.record, access.decision, access.module),
+    workspace: {
+      id: access.record.id,
+      business: access.record.business,
+      accessStatus: access.record.accessStatus,
+      paymentStatus: access.record.paymentStatus,
+    },
+  };
+});
+
+app.post("/client-access/:id/status/propose", async (request, reply) => {
+  const params = request.params as { id: string };
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = AccessChangeProposalSchema.safeParse(request.body);
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+      allowedStatuses: ClientAccessStatusSchema.options,
+    });
+  }
+
+  const result = await proposeAccessChange(
+    params.id,
+    parsed.data.accessStatus,
+    parsed.data.reason,
+    parsed.data.proposedBy,
+  );
+
+  if (!result) {
+    return reply.code(404).send({
+      ok: false,
+      error: "Client access record not found.",
+    });
+  }
+
+  return {
+    ok: true,
+    ...result,
+  };
+});
+
+app.post("/client-access/:id/modules/:moduleKey/propose", async (request, reply) => {
+  const params = request.params as { id: string; moduleKey: string };
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = AccessModuleSetProposalBodySchema.safeParse(request.body);
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+    });
+  }
+
+  const result = await proposeModuleSet(
+    params.id,
+    params.moduleKey,
+    parsed.data.enabled,
+    parsed.data.reason,
+    parsed.data.proposedBy,
+  );
+
+  if (!result) {
+    return reply.code(404).send({
+      ok: false,
+      error: "Client access record not found.",
+    });
+  }
+
+  return {
+    ok: true,
+    ...result,
+  };
+});
+
+app.post("/client-provisioning/dry-run", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = ClientProvisionProposalSchema.safeParse(request.body);
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    plan: dryRunClientProvision(parsed.data),
+  };
+});
+
+app.post("/client-provisioning/propose", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = ClientProvisionProposalSchema.safeParse(request.body);
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    ...(await proposeClientProvision(parsed.data)),
+  };
+});
+
+app.get("/client-access-workflow", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    actions: listAccessActions(),
+    approvals: listAccessApprovals(),
+    auditEvents: listAccessAuditEvents(),
+    repository: accessRepository.info(),
+    storage: accessRepository.info().storage,
+  };
+});
+
+app.post("/client-access-workflow/snapshot", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = request.body as { label?: unknown } | undefined;
+  const label = typeof body?.label === "string" ? body.label : "manual";
+
+  return {
+    ok: true,
+    session,
+    snapshot: createAccessStorageSnapshot(label),
+    storage: accessRepository.info().storage,
+  };
+});
+
+app.get("/pangolin/reconcile/dry-run", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    ...listPangolinDryRunPlan(),
+  };
+});
+
+app.get("/pangolin/status/read-only", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    status: await checkPangolinReadOnlyStatus(),
+  };
+});
+
+app.post("/client-access-approvals/:approvalId/decision", async (request, reply) => {
+  const params = request.params as { approvalId: string };
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = AccessApprovalDecisionSchema.safeParse(request.body);
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+    });
+  }
+
+  const result = await decideAccessApproval(
+    params.approvalId,
+    parsed.data.decision,
+    parsed.data.decidedBy,
+    parsed.data.reason,
+  );
+
+  if (!result) {
+    return reply.code(404).send({
+      ok: false,
+      error: "Access approval not found.",
+    });
+  }
+
+  return {
+    ok: true,
+    ...result,
   };
 });
 

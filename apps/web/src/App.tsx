@@ -24,17 +24,29 @@ import {
   ShieldCheck,
   Sparkles,
   SquareCheckBig,
+  ToggleLeft,
   UserRound,
   Users,
   X,
   Zap,
 } from "lucide-react";
-import { FormEvent, ReactNode, useMemo, useState } from "react";
+import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
-type Route = "command" | "inbox" | "calendar" | "tasks" | "approvals" | "activity" | "connections";
+type Route =
+  | "command"
+  | "inbox"
+  | "calendar"
+  | "tasks"
+  | "approvals"
+  | "access"
+  | "activity"
+  | "connections";
 type ApprovalKind = "email" | "calendar" | "task";
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type ActivityLevel = "ok" | "info" | "warn";
+type ClientAccessStatus = "active" | "past_due" | "revoked";
+type PaymentStatus = "paid" | "due" | "failed";
+type MoneyDemoStage = "signed" | "paid" | "past_due" | "revoked" | "restored";
 
 type EmailItem = {
   id: string;
@@ -95,12 +107,162 @@ type Connection = {
   scopes: string[];
 };
 
+type ClientAccess = {
+  id: string;
+  business: string;
+  owner: string;
+  plan: string;
+  paymentStatus: PaymentStatus;
+  accessStatus: ClientAccessStatus;
+  gateway: "Pangolin";
+  privateRoute: string;
+  modules: string[];
+  lastAudit: string;
+};
+
+type GuardedWorkspace = {
+  id: string;
+  business: string;
+  mode: "full" | "read_only" | "blocked";
+  modules: string[];
+  reason: string;
+};
+
+type WorkspaceModuleAction = {
+  id: string;
+  label: string;
+  requiresFullAccess: boolean;
+  enabled: boolean;
+};
+
+type WorkspaceModuleView = {
+  moduleKey: string;
+  title: string;
+  mode: GuardedWorkspace["mode"];
+  writeAccess: boolean;
+  summary: string;
+  widgets: Array<{
+    id: string;
+    label: string;
+    value: string;
+  }>;
+  records: Array<{
+    id: string;
+    title: string;
+    status: string;
+  }>;
+  primaryActions: WorkspaceModuleAction[];
+  disabledActions: WorkspaceModuleAction[];
+  connector?: {
+    id: string;
+    provider: string;
+    credentialMode: string;
+    credentialSource: string;
+    credentialRef: string | null;
+    workspaceId: string | null;
+    scopes: string[];
+    status: string;
+    readOnly: boolean;
+    live: boolean;
+    reason: string;
+  };
+};
+
+type PangolinRoutePlan = {
+  clientId: string;
+  business: string;
+  privateRoute: string;
+  gateway: "Pangolin";
+  accessStatus: ClientAccessStatus;
+  paymentStatus: PaymentStatus;
+  desiredState: "enabled" | "read_only" | "disabled";
+  mode: GuardedWorkspace["mode"];
+  gatewayEnforcement: "allow_route" | "disable_route";
+  appEnforcement: GuardedWorkspace["mode"];
+  enforcementNote: string;
+  modules: string[];
+  reason: string;
+  liveChangeRequired: boolean;
+  liveChangesAllowed: boolean;
+};
+
+type PangolinReadOnlyStatus = {
+  provider: "Pangolin";
+  readOnly: true;
+  configured: boolean;
+  status: "unconfigured" | "reachable" | "unreachable";
+  checkedAt: string;
+  baseUrl?: string;
+  healthPath?: string;
+  httpStatus?: number;
+  latencyMs?: number;
+  reason: string;
+  liveChangesAllowed: false;
+};
+
+type ReadinessGate = {
+  id: string;
+  label: string;
+  status: "ready" | "needs_config" | "blocked";
+  detail: string;
+  evidence: string;
+};
+
+type ProductionReadinessReport = {
+  checkedAt: string;
+  localDemoReady: boolean;
+  productionReady: boolean;
+  summary: string;
+  gates: ReadinessGate[];
+};
+
+type AppSession = {
+  id: string;
+  label: string;
+  role: "admin" | "client";
+  clientId?: string;
+  canManageAccess: boolean;
+};
+
+const AUTHORIZATION_HEADER = "Authorization";
+
+const initialSessions: AppSession[] = [
+  {
+    id: "admin-jordan",
+    label: "Jordan / PhantomForce Admin",
+    role: "admin",
+    canManageAccess: true,
+  },
+  {
+    id: "client-chicagoshots",
+    label: "ChicagoShots client workspace",
+    role: "client",
+    clientId: "client-chicagoshots",
+    canManageAccess: false,
+  },
+  {
+    id: "client-sports-demo",
+    label: "Sports Ops Demo client",
+    role: "client",
+    clientId: "client-sports-demo",
+    canManageAccess: false,
+  },
+  {
+    id: "client-past-due",
+    label: "Past Due Pilot client",
+    role: "client",
+    clientId: "client-past-due",
+    canManageAccess: false,
+  },
+];
+
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Command", icon: <Command size={18} /> },
   { id: "inbox", label: "Inbox", icon: <Inbox size={18} /> },
   { id: "calendar", label: "Calendar", icon: <CalendarDays size={18} /> },
   { id: "tasks", label: "Tasks", icon: <SquareCheckBig size={18} /> },
   { id: "approvals", label: "Approvals", icon: <ShieldCheck size={18} /> },
+  { id: "access", label: "Access", icon: <KeyRound size={18} /> },
   { id: "activity", label: "Activity", icon: <Activity size={18} /> },
   { id: "connections", label: "Connections", icon: <Link2 size={18} /> },
 ];
@@ -243,6 +405,45 @@ const connections: Connection[] = [
   },
 ];
 
+const initialClientAccess: ClientAccess[] = [
+  {
+    id: "client-chicagoshots",
+    business: "ChicagoShots",
+    owner: "Jordan West",
+    plan: "Internal partner",
+    paymentStatus: "paid",
+    accessStatus: "active",
+    gateway: "Pangolin",
+    privateRoute: "app.phantomforce.online/chicagoshots",
+    modules: ["Command", "Content", "Tasks", "Approvals", "Activity"],
+    lastAudit: "Access confirmed for partner workspace",
+  },
+  {
+    id: "client-sports-demo",
+    business: "Sports Ops Demo",
+    owner: "Client Owner",
+    plan: "$2,000 Team Media Day",
+    paymentStatus: "paid",
+    accessStatus: "active",
+    gateway: "Pangolin",
+    privateRoute: "app.phantomforce.online/sports-ops-demo",
+    modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts"],
+    lastAudit: "Deposit paid; workspace active",
+  },
+  {
+    id: "client-past-due",
+    business: "Past Due Pilot",
+    owner: "Client Owner",
+    plan: "$1,250/mo Ops Support",
+    paymentStatus: "failed",
+    accessStatus: "revoked",
+    gateway: "Pangolin",
+    privateRoute: "app.phantomforce.online/past-due-pilot",
+    modules: ["Command", "Tasks", "Reports"],
+    lastAudit: "Payment failed; private route revoked",
+  },
+];
+
 const modules = [
   "AI Command",
   "Email",
@@ -255,13 +456,39 @@ const modules = [
   "Falcon Worker",
 ];
 
+const clientModuleCatalog = [
+  "Command",
+  "Calendar",
+  "Tasks",
+  "Approvals",
+  "Contacts",
+  "Content",
+  "Activity",
+  "Documents",
+  "Reports",
+];
+
+const API_BASE_URL = "http://127.0.0.1:5190";
+const MONEY_DEMO_CLIENT_ID = "client-money-demo";
+
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+}
+
+function normalizeModuleKey(moduleKey: string) {
+  return moduleKey.trim().toLowerCase();
+}
+
+function moduleTestId(clientId: string, moduleKey: string) {
+  const slug = moduleKey.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+  return `access-module-${clientId}-${slug}`;
 }
 
 function App() {
   const [route, setRoute] = useState<Route>("command");
   const [signedIn, setSignedIn] = useState(false);
+  const [activeSessionId, setActiveSessionId] = useState("admin-jordan");
+  const [sessionToken, setSessionToken] = useState("");
   const [commandText, setCommandText] = useState("");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
   const [emails, setEmails] = useState(initialEmails);
@@ -269,7 +496,249 @@ function App() {
   const [tasks, setTasks] = useState(initialTasks);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [activity, setActivity] = useState(initialActivity);
+  const [clientAccess, setClientAccess] = useState(initialClientAccess);
+  const [guardedWorkspace, setGuardedWorkspace] = useState<GuardedWorkspace | null>(null);
+  const [workspaceModuleView, setWorkspaceModuleView] = useState<WorkspaceModuleView | null>(null);
+  const [pangolinPlan, setPangolinPlan] = useState<PangolinRoutePlan[]>([]);
+  const [pangolinStatus, setPangolinStatus] = useState<PangolinReadOnlyStatus | null>(null);
+  const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
+  const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
   const [selectedOrg, setSelectedOrg] = useState("PhantomForce Pilot");
+  const activeSession = useMemo(
+    () => initialSessions.find((session) => session.id === activeSessionId) ?? initialSessions[0],
+    [activeSessionId],
+  );
+  const canManageAccess = activeSession.canManageAccess;
+  const visibleClientAccess = useMemo(() => {
+    if (canManageAccess) return clientAccess;
+    return clientAccess.filter((client) => client.id === activeSession.clientId);
+  }, [activeSession.clientId, canManageAccess, clientAccess]);
+
+  function sessionHeaders(json = false): Record<string, string> {
+    const headers: Record<string, string> = json ? { "Content-Type": "application/json" } : {};
+
+    if (sessionToken) {
+      headers[AUTHORIZATION_HEADER] = `Bearer ${sessionToken}`;
+    }
+
+    return headers;
+  }
+
+  async function signIn(sessionId: string) {
+    const session = initialSessions.find((item) => item.id === sessionId) ?? initialSessions[0];
+    setActiveSessionId(session.id);
+    setSelectedOrg(session.clientId ? session.label.replace(" client", "") : "PhantomForce Pilot");
+    setSessionToken("");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/auth/demo-login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sessionId: session.id }),
+      });
+
+      if (response.ok) {
+        const data = (await response.json()) as { token?: string };
+        setSessionToken(data.token ?? "");
+      } else {
+        addActivity("Signed in locally", "Backend auth token was not issued; API requests will fail closed.", "warn");
+      }
+    } catch {
+      addActivity("Signed in locally", "Backend auth service is offline; API requests will fail closed.", "warn");
+    }
+
+    setSignedIn(true);
+    setRoute("command");
+  }
+
+  async function refreshWorkspaceModule(clientId: string, moduleKey?: string) {
+    if (!moduleKey) {
+      setWorkspaceModuleView(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/client-workspaces/${clientId}/modules/${encodeURIComponent(moduleKey)}`,
+        {
+          headers: sessionHeaders(),
+        },
+      );
+
+      const data = (await response.json()) as { moduleView?: WorkspaceModuleView };
+
+      if (response.ok && data.moduleView) {
+        setWorkspaceModuleView(data.moduleView);
+        return;
+      }
+    } catch {
+      addActivity("Module handler offline", "The guarded module payload is waiting on the backend.", "warn");
+    }
+
+    setWorkspaceModuleView(null);
+  }
+
+  async function refreshGuardedWorkspace(clientId = activeSession.clientId ?? "client-sports-demo") {
+    try {
+      const response = await fetch(`${API_BASE_URL}/client-workspaces/${clientId}`, {
+        headers: sessionHeaders(),
+      });
+      const data = (await response.json()) as {
+        workspace?: {
+          id: string;
+          business: string;
+          mode: GuardedWorkspace["mode"];
+          modules: string[];
+        };
+        decision?: {
+          mode: GuardedWorkspace["mode"];
+          modules?: string[];
+          reason: string;
+        };
+        record?: {
+          id: string;
+          business: string;
+        };
+      };
+
+      if (response.ok && data.workspace) {
+        const modules = data.workspace.modules;
+        setGuardedWorkspace({
+          id: data.workspace.id,
+          business: data.workspace.business,
+          mode: data.workspace.mode,
+          modules,
+          reason: data.decision?.reason ?? "Workspace request allowed.",
+        });
+        const preferredModule = modules.includes("Calendar") ? "Calendar" : modules[0];
+        void refreshWorkspaceModule(data.workspace.id, preferredModule);
+        return;
+      }
+
+      if (data.record && data.decision) {
+        const modules = data.decision.modules ?? [];
+        setGuardedWorkspace({
+          id: data.record.id,
+          business: data.record.business,
+          mode: data.decision.mode,
+          modules,
+          reason: data.decision.reason,
+        });
+        setWorkspaceModuleView(null);
+      }
+    } catch {
+      setGuardedWorkspace({
+        id: clientId,
+        business: "Sports Ops Demo",
+        mode: "blocked",
+        modules: [],
+        reason: "Backend guard unavailable; production should fail closed.",
+      });
+      setWorkspaceModuleView(null);
+    }
+  }
+
+  async function refreshPangolinPlan() {
+    if (!canManageAccess) {
+      setPangolinPlan([]);
+      setPangolinStatus(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/pangolin/reconcile/dry-run`, {
+        headers: sessionHeaders(),
+      });
+
+      if (response.status === 403) {
+        setPangolinPlan([]);
+        return;
+      }
+
+      if (!response.ok) return;
+
+      const data = (await response.json()) as { plans?: PangolinRoutePlan[] };
+      if (Array.isArray(data.plans)) {
+        setPangolinPlan(data.plans);
+      }
+    } catch {
+      addActivity("Pangolin dry-run offline", "Gateway route planning is waiting on the backend.", "warn");
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/pangolin/status/read-only`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) return;
+
+      const data = (await response.json()) as { status?: PangolinReadOnlyStatus };
+      if (data.status) {
+        setPangolinStatus(data.status);
+      }
+    } catch {
+      addActivity("Pangolin status offline", "Read-only gateway verification is waiting on the backend.", "warn");
+    }
+  }
+
+  async function refreshReadinessReport() {
+    if (!canManageAccess) {
+      setReadinessReport(null);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/readiness`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setReadinessReport(null);
+        return;
+      }
+
+      const data = (await response.json()) as { report?: ProductionReadinessReport };
+      setReadinessReport(data.report ?? null);
+    } catch {
+      addActivity("Readiness API offline", "Production readiness gates are waiting on the backend.", "warn");
+      setReadinessReport(null);
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+
+    if (!signedIn) return undefined;
+
+    async function loadClientAccess() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/client-access`, {
+          headers: sessionHeaders(),
+        });
+        if (!response.ok) return;
+        const data = (await response.json()) as { records?: ClientAccess[] };
+        if (!cancelled && Array.isArray(data.records)) {
+          setClientAccess(data.records);
+        }
+      } catch {
+        addActivity("Access API offline", "Using local demo access state until the backend is available.", "warn");
+      }
+    }
+
+    void loadClientAccess();
+    void refreshGuardedWorkspace();
+    if (canManageAccess) {
+      void refreshPangolinPlan();
+      void refreshReadinessReport();
+    } else {
+      setPangolinPlan([]);
+      setReadinessReport(null);
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionId, sessionToken, signedIn]);
 
   const stats = useMemo(() => {
     return {
@@ -277,8 +746,9 @@ function App() {
       pending: approvals.filter((approval) => approval.status === "pending").length,
       today: tasks.filter((task) => task.status === "today").length,
       events: events.length,
+      revoked: clientAccess.filter((client) => client.accessStatus === "revoked").length,
     };
-  }, [emails, approvals, tasks, events]);
+  }, [emails, approvals, tasks, events, clientAccess]);
 
   function addActivity(title: string, detail: string, level: ActivityLevel = "info") {
     setActivity((current) => [
@@ -291,6 +761,13 @@ function App() {
       },
       ...current,
     ]);
+  }
+
+  function upsertClientAccessRecord(record: ClientAccess) {
+    setClientAccess((current) => {
+      const exists = current.some((item) => item.id === record.id);
+      return exists ? current.map((item) => (item.id === record.id ? record : item)) : [record, ...current];
+    });
   }
 
   function createFollowUpPlan(source = "command") {
@@ -437,8 +914,286 @@ function App() {
     addActivity("Task completed", "A task was marked complete from the PhantomForce app.", "ok");
   }
 
+  async function updateClientAccess(id: string, nextStatus: ClientAccessStatus) {
+    const client = clientAccess.find((item) => item.id === id);
+    const reason =
+      nextStatus === "active"
+        ? "Jordan restored paid private access"
+        : nextStatus === "past_due"
+          ? "Jordan marked account past due"
+          : "Jordan revoked private route for non-payment";
+
+    try {
+      const proposalResponse = await fetch(`${API_BASE_URL}/client-access/${id}/status/propose`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          accessStatus: nextStatus,
+          reason,
+          proposedBy: "Jordan",
+        }),
+      });
+
+      if (!proposalResponse.ok) {
+        addActivity("Access request blocked", "This session cannot propose client access changes.", "warn");
+        return;
+      }
+
+      const proposalData = (await proposalResponse.json()) as {
+        approval?: { id: string };
+      };
+
+      if (!proposalData.approval?.id) {
+        throw new Error("Access API did not return an approval.");
+      }
+
+      const approvalResponse = await fetch(
+        `${API_BASE_URL}/client-access-approvals/${proposalData.approval.id}/decision`,
+        {
+          method: "POST",
+          headers: sessionHeaders(true),
+          body: JSON.stringify({
+            decision: "approve",
+            decidedBy: "Jordan",
+            reason,
+          }),
+        },
+      );
+
+      if (approvalResponse.ok) {
+        const data = (await approvalResponse.json()) as { record?: ClientAccess };
+        if (data.record) {
+          upsertClientAccessRecord(data.record);
+        }
+      } else {
+        addActivity("Access approval blocked", "This session cannot approve client access changes.", "warn");
+        return;
+      }
+    } catch {
+      setClientAccess((current) =>
+        current.map((item) => {
+          if (item.id !== id) return item;
+          const paymentStatus: PaymentStatus =
+            nextStatus === "active" ? "paid" : nextStatus === "past_due" ? "due" : "failed";
+
+          return {
+            ...item,
+            accessStatus: nextStatus,
+            paymentStatus,
+            lastAudit: reason,
+          };
+        }),
+      );
+    }
+
+    if (client) {
+      const detail =
+        nextStatus === "active"
+          ? `${client.business} can access the dashboard through the private gateway.`
+          : nextStatus === "past_due"
+            ? `${client.business} is flagged past due before full revocation.`
+            : `${client.business} is blocked from the private dashboard route.`;
+      addActivity("Client access updated", detail, nextStatus === "revoked" ? "warn" : "ok");
+    }
+
+    void refreshGuardedWorkspace(id);
+    void refreshPangolinPlan();
+  }
+
+  async function updateClientModule(id: string, moduleKey: string, enabled: boolean) {
+    const client = clientAccess.find((item) => item.id === id);
+    const reason = enabled
+      ? `Jordan enabled ${moduleKey} for this package`
+      : `Jordan disabled ${moduleKey} for this package`;
+
+    try {
+      const proposalResponse = await fetch(
+        `${API_BASE_URL}/client-access/${id}/modules/${encodeURIComponent(moduleKey)}/propose`,
+        {
+          method: "POST",
+          headers: sessionHeaders(true),
+          body: JSON.stringify({
+            enabled,
+            reason,
+            proposedBy: "Jordan",
+          }),
+        },
+      );
+
+      if (!proposalResponse.ok) {
+        addActivity("Module request blocked", "This session cannot propose module entitlement changes.", "warn");
+        return;
+      }
+
+      const proposalData = (await proposalResponse.json()) as {
+        approval?: { id: string };
+      };
+
+      if (!proposalData.approval?.id) {
+        throw new Error("Access API did not return a module approval.");
+      }
+
+      const approvalResponse = await fetch(
+        `${API_BASE_URL}/client-access-approvals/${proposalData.approval.id}/decision`,
+        {
+          method: "POST",
+          headers: sessionHeaders(true),
+          body: JSON.stringify({
+            decision: "approve",
+            decidedBy: "Jordan",
+            reason,
+          }),
+        },
+      );
+
+      if (!approvalResponse.ok) {
+        addActivity("Module approval blocked", "This session cannot approve module entitlement changes.", "warn");
+        return;
+      }
+
+      const data = (await approvalResponse.json()) as { record?: ClientAccess };
+      if (data.record) {
+        upsertClientAccessRecord(data.record);
+      }
+    } catch {
+      setClientAccess((current) =>
+        current.map((item) => {
+          if (item.id !== id) return item;
+
+          const normalized = normalizeModuleKey(moduleKey);
+          const hasModule = item.modules.some((module) => normalizeModuleKey(module) === normalized);
+          const modules = enabled
+            ? hasModule
+              ? item.modules
+              : [...item.modules, moduleKey]
+            : item.modules.filter((module) => normalizeModuleKey(module) !== normalized);
+
+          return {
+            ...item,
+            modules,
+            lastAudit: reason,
+          };
+        }),
+      );
+    }
+
+    if (client) {
+      addActivity(
+        enabled ? "Client module enabled" : "Client module disabled",
+        `${moduleKey} ${enabled ? "enabled for" : "removed from"} ${client.business}.`,
+        enabled ? "ok" : "warn",
+      );
+    }
+
+    void refreshGuardedWorkspace(id);
+    void refreshPangolinPlan();
+  }
+
+  async function provisionMoneyDemo(paymentStatus: PaymentStatus) {
+    const paid = paymentStatus === "paid";
+    const reason = paid
+      ? "money demo payment received from NexProspex close"
+      : "money demo signed agreement before payment clears";
+    const proposalResponse = await fetch(`${API_BASE_URL}/client-provisioning/propose`, {
+      method: "POST",
+      headers: sessionHeaders(true),
+      body: JSON.stringify({
+        clientId: MONEY_DEMO_CLIENT_ID,
+        business: "Money Demo Athletics",
+        owner: "New Client Owner",
+        plan: "$2,000 Launch Ops",
+        source: "nexprospex",
+        sourceRecordId: paid ? "nxp-money-demo-paid" : "nxp-money-demo-signed",
+        winStatus: paid ? "payment_received" : "signed_agreement",
+        paymentStatus,
+        modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts"],
+        reason,
+        proposedBy: "Jordan",
+      }),
+    });
+
+    if (!proposalResponse.ok) {
+      addActivity("Money demo blocked", "This session cannot propose client provisioning.", "warn");
+      return;
+    }
+
+    const proposalData = (await proposalResponse.json()) as { approval?: { id: string } };
+    if (!proposalData.approval?.id) {
+      addActivity("Money demo blocked", "Provisioning did not return an approval card.", "warn");
+      return;
+    }
+
+    const approvalResponse = await fetch(
+      `${API_BASE_URL}/client-access-approvals/${proposalData.approval.id}/decision`,
+      {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          decision: "approve",
+          decidedBy: "Jordan",
+          reason,
+        }),
+      },
+    );
+
+    if (!approvalResponse.ok) {
+      addActivity("Money demo approval blocked", "This session cannot approve provisioning.", "warn");
+      return;
+    }
+
+    const data = (await approvalResponse.json()) as { record?: ClientAccess };
+    if (data.record) {
+      upsertClientAccessRecord(data.record);
+      addActivity(
+        paid ? "Money demo active" : "Money demo blocked",
+        paid
+          ? "Payment received; workspace, modules, private route, and Calendar boundary are active."
+          : "Signed lead is provisioned but blocked until payment clears.",
+        paid ? "ok" : "warn",
+      );
+    }
+
+    await refreshGuardedWorkspace(MONEY_DEMO_CLIENT_ID);
+    await refreshPangolinPlan();
+  }
+
+  async function runMoneyDemoStage(stage: MoneyDemoStage) {
+    setMoneyDemoBusy(stage);
+
+    try {
+      if (stage === "signed") {
+        await provisionMoneyDemo("due");
+        return;
+      }
+
+      if (stage === "paid") {
+        await provisionMoneyDemo("paid");
+        await refreshWorkspaceModule(MONEY_DEMO_CLIENT_ID, "Calendar");
+        return;
+      }
+
+      const nextStatus: ClientAccessStatus =
+        stage === "past_due" ? "past_due" : stage === "revoked" ? "revoked" : "active";
+      await updateClientAccess(MONEY_DEMO_CLIENT_ID, nextStatus);
+      await refreshGuardedWorkspace(MONEY_DEMO_CLIENT_ID);
+
+      if (stage === "restored") {
+        await refreshWorkspaceModule(MONEY_DEMO_CLIENT_ID, "Calendar");
+      }
+    } finally {
+      setMoneyDemoBusy(null);
+    }
+  }
+
   if (!signedIn) {
-    return <LoginScreen onSignIn={() => setSignedIn(true)} />;
+    return (
+      <LoginScreen
+        activeSessionId={activeSessionId}
+        sessions={initialSessions}
+        setActiveSessionId={setActiveSessionId}
+        onSignIn={signIn}
+      />
+    );
   }
 
   return (
@@ -456,10 +1211,15 @@ function App() {
 
         <div className="org-switcher">
           <span>Organization</span>
-          <select value={selectedOrg} onChange={(event) => setSelectedOrg(event.target.value)}>
+          <select
+            value={selectedOrg}
+            onChange={(event) => setSelectedOrg(event.target.value)}
+            disabled={!canManageAccess}
+          >
             <option>PhantomForce Pilot</option>
             <option>ChicagoShots</option>
             <option>Sports Ops Demo</option>
+            {!canManageAccess ? <option>{selectedOrg}</option> : null}
           </select>
         </div>
 
@@ -490,7 +1250,7 @@ function App() {
       </aside>
 
       <main className="workspace">
-        <Topbar selectedOrg={selectedOrg} pending={stats.pending} />
+        <Topbar activeSession={activeSession} selectedOrg={selectedOrg} pending={stats.pending} />
         {route === "command" ? (
           <CommandCenter
             messages={messages}
@@ -511,6 +1271,24 @@ function App() {
         {route === "tasks" ? <TasksView tasks={tasks} completeTask={completeTask} /> : null}
         {route === "approvals" ? (
           <ApprovalsView approvals={approvals} approveAction={approveAction} rejectAction={rejectAction} />
+        ) : null}
+        {route === "access" ? (
+          <AccessView
+            canManageAccess={canManageAccess}
+            clientAccess={visibleClientAccess}
+            guardedWorkspace={guardedWorkspace}
+            workspaceModuleView={workspaceModuleView}
+            pangolinPlan={pangolinPlan}
+            pangolinStatus={pangolinStatus}
+            readinessReport={readinessReport}
+            refreshGuardedWorkspace={refreshGuardedWorkspace}
+            refreshWorkspaceModule={refreshWorkspaceModule}
+            refreshReadinessReport={refreshReadinessReport}
+            updateClientAccess={updateClientAccess}
+            updateClientModule={updateClientModule}
+            runMoneyDemoStage={runMoneyDemoStage}
+            moneyDemoBusy={moneyDemoBusy}
+          />
         ) : null}
         {route === "activity" ? <ActivityView activity={activity} /> : null}
         {route === "connections" ? <ConnectionsView /> : null}
@@ -534,7 +1312,17 @@ function App() {
   );
 }
 
-function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
+function LoginScreen({
+  activeSessionId,
+  sessions,
+  setActiveSessionId,
+  onSignIn,
+}: {
+  activeSessionId: string;
+  sessions: AppSession[];
+  setActiveSessionId: (sessionId: string) => void;
+  onSignIn: (sessionId: string) => void | Promise<void>;
+}) {
   return (
     <main className="login-screen">
       <section className="login-copy">
@@ -566,18 +1354,28 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
           Password
           <input type="password" defaultValue="phantomforce" />
         </label>
-        <button className="primary-action" type="button" onClick={onSignIn}>
+        <label>
+          Session
+          <select value={activeSessionId} onChange={(event) => setActiveSessionId(event.target.value)}>
+            {sessions.map((session) => (
+              <option key={session.id} value={session.id}>
+                {session.label}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button className="primary-action" type="button" onClick={() => void onSignIn(activeSessionId)}>
           <KeyRound size={18} />
           Enter PhantomForce
         </button>
         <div className="login-rails">
           <p>
             <Lock size={16} />
-            External sends and calendar writes require explicit approval.
+            Private access can be revoked cleanly when payment stops.
           </p>
           <p>
             <ShieldCheck size={16} />
-            Organization isolation is part of the foundation.
+            Actions stay approval-gated behind the business dashboard.
           </p>
         </div>
       </section>
@@ -585,12 +1383,23 @@ function LoginScreen({ onSignIn }: { onSignIn: () => void }) {
   );
 }
 
-function Topbar({ selectedOrg, pending }: { selectedOrg: string; pending: number }) {
+function Topbar({
+  activeSession,
+  selectedOrg,
+  pending,
+}: {
+  activeSession: AppSession;
+  selectedOrg: string;
+  pending: number;
+}) {
   return (
     <header className="topbar">
       <div>
         <span className="eyebrow">Live workspace</span>
         <h1>{selectedOrg}</h1>
+        <span className={`session-chip ${activeSession.role}`}>
+          {activeSession.role === "admin" ? "Admin access" : "Client workspace"}
+        </span>
       </div>
       <div className="topbar-actions">
         <button type="button" title="Search">
@@ -853,6 +1662,403 @@ function ActivityView({ activity }: { activity: ActivityItem[] }) {
               <p>{item.detail}</p>
             </div>
             <time>{item.time}</time>
+          </article>
+        ))}
+      </div>
+    </Page>
+  );
+}
+
+function AccessView({
+  canManageAccess,
+  clientAccess,
+  guardedWorkspace,
+  workspaceModuleView,
+  pangolinPlan,
+  pangolinStatus,
+  readinessReport,
+  refreshGuardedWorkspace,
+  refreshWorkspaceModule,
+  refreshReadinessReport,
+  updateClientAccess,
+  updateClientModule,
+  runMoneyDemoStage,
+  moneyDemoBusy,
+}: {
+  canManageAccess: boolean;
+  clientAccess: ClientAccess[];
+  guardedWorkspace: GuardedWorkspace | null;
+  workspaceModuleView: WorkspaceModuleView | null;
+  pangolinPlan: PangolinRoutePlan[];
+  pangolinStatus: PangolinReadOnlyStatus | null;
+  readinessReport: ProductionReadinessReport | null;
+  refreshGuardedWorkspace: (clientId?: string) => void;
+  refreshWorkspaceModule: (clientId: string, moduleKey?: string) => void;
+  refreshReadinessReport: () => void;
+  updateClientAccess: (id: string, nextStatus: ClientAccessStatus) => void;
+  updateClientModule: (id: string, moduleKey: string, enabled: boolean) => void;
+  runMoneyDemoStage: (stage: MoneyDemoStage) => void;
+  moneyDemoBusy: MoneyDemoStage | null;
+}) {
+  const moneyDemoClient = clientAccess.find((client) => client.id === MONEY_DEMO_CLIENT_ID);
+  const moneyDemoStages: Array<{ id: MoneyDemoStage; label: string; detail: string }> = [
+    {
+      id: "signed",
+      label: "Signed",
+      detail: "Agreement landed from NexProspex; workspace is blocked until payment clears.",
+    },
+    {
+      id: "paid",
+      label: "Paid",
+      detail: "Payment activates modules, private route plan, and the Calendar boundary.",
+    },
+    {
+      id: "past_due",
+      label: "Past due",
+      detail: "Route stays reachable while PhantomForce handlers enforce read-only.",
+    },
+    {
+      id: "revoked",
+      label: "Revoked",
+      detail: "Pangolin route plan disables access and the app blocks workspace requests.",
+    },
+    {
+      id: "restored",
+      label: "Restored",
+      detail: "Paid access returns with modules and credential reference intact.",
+    },
+  ];
+
+  return (
+    <Page title="Client access control" kicker="Pangolin private gateway">
+      <section className="access-hero">
+        <div>
+          <span className="eyebrow">Private business OS</span>
+          <h3>Payment controls the doorway. PhantomForce controls the workspace.</h3>
+          <p>
+            {canManageAccess
+              ? "Clients get a simple dashboard. Jordan gets module entitlements, private routes, revocation, and audit history."
+              : "This client workspace only shows the modules and access state currently allowed by PhantomForce."}
+            {" "}Pangolin stays behind the glass as the access layer, not the product UI.
+          </p>
+        </div>
+        <div className="access-proof">
+          <KeyRound size={22} />
+          <strong>Paid users enter</strong>
+          <span>Past-due users can be blocked without exposing backend services.</span>
+        </div>
+      </section>
+
+      {canManageAccess ? (
+        <section className="money-demo-panel" data-testid="money-demo-panel">
+          <div className="route-panel-head">
+            <div>
+              <span className="eyebrow">Revenue proof</span>
+              <h3>NexProspex win to paid workspace</h3>
+            </div>
+            <span className={`money-demo-status ${moneyDemoClient?.accessStatus ?? "revoked"}`}>
+              {moneyDemoClient
+                ? `${moneyDemoClient.paymentStatus} / ${moneyDemoClient.accessStatus}`
+                : "not provisioned"}
+            </span>
+          </div>
+          <div className="money-demo-steps">
+            {moneyDemoStages.map((stage, index) => (
+              <button
+                type="button"
+                data-testid={`money-demo-${stage.id}`}
+                disabled={moneyDemoBusy !== null}
+                key={stage.id}
+                onClick={() => runMoneyDemoStage(stage.id)}
+              >
+                <span>{index + 1}</span>
+                <strong>{moneyDemoBusy === stage.id ? "Running" : stage.label}</strong>
+                <small>{stage.detail}</small>
+              </button>
+            ))}
+          </div>
+          <div className="money-demo-proof">
+            <span>{moneyDemoClient?.privateRoute ?? "app.phantomforce.online/money-demo-athletics"}</span>
+            <span>Calendar credential ref: local-demo:{MONEY_DEMO_CLIENT_ID}:calendar</span>
+            <span>Approval and audit required</span>
+          </div>
+          <div className="demo-boundary-strip" data-testid="money-demo-production-boundary">
+            <strong>{readinessReport?.localDemoReady ? "Local demo verified" : "Demo gates checking"}</strong>
+            <span>
+              {readinessReport?.productionReady
+                ? "Production gates are clear."
+                : "Not production: real auth, live OAuth, Pangolin verification, deployment, and production Postgres still need gates cleared."}
+            </span>
+          </div>
+        </section>
+      ) : null}
+
+      {canManageAccess ? (
+        <section className="readiness-panel" data-testid="readiness-panel">
+          <div className="route-panel-head">
+            <div>
+              <span className="eyebrow">Production gates</span>
+              <h3>{readinessReport?.productionReady ? "Production ready" : "Local demo ready"}</h3>
+            </div>
+            <div className="readiness-actions">
+              <span className={`readiness-pill ${readinessReport?.productionReady ? "ready" : "needs_config"}`}>
+                {readinessReport?.productionReady ? "production ready" : "not production"}
+              </span>
+              <button type="button" onClick={refreshReadinessReport}>
+                <RefreshCcw size={16} />
+                Refresh
+              </button>
+            </div>
+          </div>
+          <p>{readinessReport?.summary ?? "Readiness gates have not loaded yet."}</p>
+          <div className="readiness-grid">
+            {(readinessReport?.gates ?? []).map((gate) => (
+              <article className={`readiness-card ${gate.status}`} data-testid={`readiness-${gate.id}`} key={gate.id}>
+                <div>
+                  <strong>{gate.label}</strong>
+                  <span>{gate.status.replace("_", " ")}</span>
+                </div>
+                <p>{gate.detail}</p>
+                <small>{gate.evidence}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="guard-panel" data-testid="access-guard-panel">
+        <div>
+          <span className="eyebrow">Request-time guard</span>
+          <h3>{guardedWorkspace?.business ?? "Sports Ops Demo"}</h3>
+          <p>
+            This panel calls the same backend decision endpoint a client workspace uses before loading private modules.
+          </p>
+        </div>
+        <div className={`guard-decision ${guardedWorkspace?.mode ?? "blocked"}`}>
+          <strong>{guardedWorkspace?.mode ?? "checking"}</strong>
+          <span>{guardedWorkspace?.reason ?? "Checking live server decision."}</span>
+        </div>
+        <div className="guard-modules">
+          {(guardedWorkspace?.modules.length ? guardedWorkspace.modules : ["No modules available"]).map((module) => (
+            <button
+              type="button"
+              key={module}
+              disabled={!guardedWorkspace || module === "No modules available"}
+              onClick={() => refreshWorkspaceModule(guardedWorkspace?.id ?? "client-sports-demo", module)}
+            >
+              {module}
+            </button>
+          ))}
+        </div>
+        <button type="button" onClick={() => refreshGuardedWorkspace()}>
+          <RefreshCcw size={16} />
+          Refresh guard
+        </button>
+      </section>
+
+      {workspaceModuleView ? (
+        <section className="module-view-panel" data-testid="module-view-panel">
+          <div className="route-panel-head">
+            <div>
+              <span className="eyebrow">Guarded module handler</span>
+              <h3>{workspaceModuleView.title}</h3>
+            </div>
+            <span className={`module-access-pill ${workspaceModuleView.writeAccess ? "write" : "read"}`}>
+              {workspaceModuleView.writeAccess ? "Write enabled" : "Read only"}
+            </span>
+          </div>
+          <p>{workspaceModuleView.summary}</p>
+          {workspaceModuleView.connector ? (
+            <div className="module-connector-boundary">
+              <span>connector: {workspaceModuleView.connector.id}</span>
+              <span>{workspaceModuleView.connector.provider}</span>
+              <span>{workspaceModuleView.connector.credentialMode}</span>
+              <span>{workspaceModuleView.connector.status}</span>
+              <span>{workspaceModuleView.connector.credentialSource}</span>
+              {workspaceModuleView.connector.credentialRef ? (
+                <span>ref: {workspaceModuleView.connector.credentialRef}</span>
+              ) : null}
+              <span>{workspaceModuleView.connector.readOnly ? "read only" : "write capable"}</span>
+              <small>{workspaceModuleView.connector.reason}</small>
+            </div>
+          ) : null}
+          <div className="module-view-grid">
+            {workspaceModuleView.widgets.map((widget) => (
+              <div className="module-widget" key={widget.id}>
+                <span>{widget.label}</span>
+                <strong>{widget.value}</strong>
+              </div>
+            ))}
+          </div>
+          <div className="module-view-body">
+            <div>
+              <span className="eyebrow">Records</span>
+              <div className="module-record-list">
+                {workspaceModuleView.records.map((record) => (
+                  <article key={record.id}>
+                    <strong>{record.title}</strong>
+                    <span>{record.status}</span>
+                  </article>
+                ))}
+              </div>
+            </div>
+            <div>
+              <span className="eyebrow">Actions</span>
+              <div className="module-action-list">
+                {workspaceModuleView.primaryActions.map((action) => (
+                  <span className="module-action enabled" key={action.id}>
+                    {action.label}
+                  </span>
+                ))}
+                {workspaceModuleView.disabledActions.map((action) => (
+                  <span className="module-action disabled" key={action.id}>
+                    {action.label}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="module-view-panel empty" data-testid="module-view-panel">
+          <span className="eyebrow">Guarded module handler</span>
+          <h3>No module payload loaded</h3>
+          <p>Choose an enabled workspace module to inspect the handler output.</p>
+        </section>
+      )}
+
+      {canManageAccess ? (
+        <section className="pangolin-panel" data-testid="pangolin-dry-run-panel">
+          <div className="route-panel-head">
+            <div>
+              <span className="eyebrow">Pangolin route dry-run</span>
+              <h3>Private gateway plan</h3>
+            </div>
+            <span className="dry-run-pill">No live changes</span>
+          </div>
+          <div className={`gateway-status ${pangolinStatus?.status ?? "unconfigured"}`} data-testid="pangolin-readonly-status">
+            <strong>{pangolinStatus?.status ?? "unconfigured"}</strong>
+            <span>{pangolinStatus?.reason ?? "Read-only gateway verification has not run yet."}</span>
+            <small>
+              {pangolinStatus?.configured
+                ? `${pangolinStatus.baseUrl}${pangolinStatus.healthPath ?? ""}`
+                : "PANGOLIN_READONLY_BASE_URL not configured"}
+            </small>
+          </div>
+          <div className="pangolin-grid">
+            {pangolinPlan.map((plan) => (
+              <article
+                className="pangolin-route"
+                data-testid={`pangolin-route-${plan.clientId}`}
+                key={plan.clientId}
+              >
+                <div>
+                  <h4>{plan.business}</h4>
+                  <p>{plan.privateRoute}</p>
+                </div>
+                <span className={`route-state ${plan.desiredState}`}>
+                  {plan.desiredState.replace("_", " ")}
+                </span>
+                <div className="route-meta">
+                  <span>{plan.paymentStatus}</span>
+                  <span>{plan.mode}</span>
+                  <span>gateway: {plan.gatewayEnforcement.replace("_", " ")}</span>
+                  <span>app: {plan.appEnforcement.replace("_", " ")}</span>
+                  <span>{plan.modules.length} modules</span>
+                </div>
+                <p className="route-note">{plan.enforcementNote}</p>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <div className="access-grid">
+        {clientAccess.map((client) => (
+          <article className={`access-card ${client.accessStatus}`} data-testid={`access-card-${client.id}`} key={client.id}>
+            <div className="record-top">
+              <div>
+                <h3>{client.business}</h3>
+                <p>{client.owner}</p>
+              </div>
+              <span className={`status-badge ${client.accessStatus}`}>{client.accessStatus}</span>
+            </div>
+            <dl className="payload">
+              <div>
+                <dt>Plan</dt>
+                <dd>{client.plan}</dd>
+              </div>
+              <div>
+                <dt>Payment</dt>
+                <dd>{client.paymentStatus}</dd>
+              </div>
+              <div>
+                <dt>Private route</dt>
+                <dd>{client.privateRoute}</dd>
+              </div>
+              <div>
+                <dt>Audit</dt>
+                <dd>{client.lastAudit}</dd>
+              </div>
+            </dl>
+            {canManageAccess ? (
+              <div className="module-control-list" aria-label={`${client.business} module entitlements`}>
+                {Array.from(new Set([...clientModuleCatalog, ...client.modules])).map((module) => {
+                  const enabled = client.modules.some(
+                    (clientModule) => normalizeModuleKey(clientModule) === normalizeModuleKey(module),
+                  );
+
+                  return (
+                    <button
+                      type="button"
+                      className={`module-toggle ${enabled ? "enabled" : "disabled"}`}
+                      data-testid={moduleTestId(client.id, module)}
+                      key={module}
+                      onClick={() => updateClientModule(client.id, module, !enabled)}
+                    >
+                      {enabled ? <Check size={14} /> : <Plus size={14} />}
+                      <span>{module}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="module-list">
+                {client.modules.map((module) => (
+                  <span key={module}>{module}</span>
+                ))}
+              </div>
+            )}
+            {canManageAccess ? (
+              <div className="access-actions">
+                <button
+                  type="button"
+                  data-testid={`access-restore-${client.id}`}
+                  onClick={() => updateClientAccess(client.id, "active")}
+                >
+                  <Check size={16} />
+                  Restore
+                </button>
+                <button
+                  type="button"
+                  data-testid={`access-due-${client.id}`}
+                  onClick={() => updateClientAccess(client.id, "past_due")}
+                >
+                  <Clock3 size={16} />
+                  Mark due
+                </button>
+                <button
+                  type="button"
+                  data-testid={`access-revoke-${client.id}`}
+                  onClick={() => updateClientAccess(client.id, "revoked")}
+                >
+                  <ToggleLeft size={16} />
+                  Revoke
+                </button>
+              </div>
+            ) : (
+              <p className="access-note">Access changes require PhantomForce admin approval.</p>
+            )}
           </article>
         ))}
       </div>

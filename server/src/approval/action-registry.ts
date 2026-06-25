@@ -58,4 +58,19 @@ export const actionRegistry: Partial<Record<ActionType, ActionHandler>> = {
     sideEffect: "internal",
     execute: notImplemented,
   },
+  "client.access.update": {
+    type: "client.access.update",
+    sideEffect: "internal",
+    execute: notImplemented,
+  },
+  "client.module.set": {
+    type: "client.module.set",
+    sideEffect: "internal",
+    execute: notImplemented,
+  },
+  "client.provision": {
+    type: "client.provision",
+    sideEffect: "internal",
+    execute: notImplemented,
+  },
 };
