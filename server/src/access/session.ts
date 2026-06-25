@@ -23,7 +23,12 @@ const authProvider = process.env.PHANTOMFORCE_AUTH_PROVIDER ?? "demo";
 const enableDemoAuth =
   authProvider === "demo" && process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH !== "false" && !productionMode;
 const enablePrismaDevAuth = authProvider === "prisma-dev" && !productionMode;
-const enableLocalSessionLogin = enableDemoAuth || enablePrismaDevAuth;
+const enableOwnerProductionAuth = authProvider === "owner-production";
+const ownerEmail = (process.env.PHANTOMFORCE_OWNER_EMAIL ?? "").trim().toLowerCase();
+const ownerLoginKey = process.env.PHANTOMFORCE_OWNER_LOGIN_KEY ?? "";
+const MIN_OWNER_LOGIN_KEY_LENGTH = 16;
+const MIN_SESSION_SECRET_LENGTH = 32;
+const enableLocalSessionLogin = enableDemoAuth || enablePrismaDevAuth || enableOwnerProductionAuth;
 
 const demoSessions: AccessSession[] = [
   {
@@ -55,11 +60,35 @@ const demoSessions: AccessSession[] = [
   },
 ];
 
-let accessSessions: AccessSession[] = enableDemoAuth ? demoSessions : [];
+export const OWNER_SESSION_ID = "owner-admin";
+
+const ownerSession: AccessSession = {
+  id: OWNER_SESSION_ID,
+  // Public /sessions exposes this label, so it must not leak the owner email.
+  label: "PhantomForce Owner",
+  role: "admin",
+  canManageAccess: true,
+};
+
+let accessSessions: AccessSession[] = enableDemoAuth
+  ? demoSessions
+  : enableOwnerProductionAuth
+    ? [ownerSession]
+    : [];
 
 const tokenTtlMs = Number(process.env.PHANTOMFORCE_SESSION_TTL_MS ?? 8 * 60 * 60 * 1000);
 const sessionSecret = process.env.PHANTOMFORCE_SESSION_SECRET ?? DEFAULT_SESSION_SECRET;
 const allowUnsignedSessionHeader = process.env.PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER === "true";
+const sessionSecretUsesDefault = sessionSecret === DEFAULT_SESSION_SECRET;
+const sessionSecretIsStrong =
+  !sessionSecretUsesDefault && sessionSecret.length >= MIN_SESSION_SECRET_LENGTH;
+const ownerProductionConfigured =
+  enableOwnerProductionAuth &&
+  sessionSecretIsStrong &&
+  Boolean(ownerEmail) &&
+  ownerLoginKey.length >= MIN_OWNER_LOGIN_KEY_LENGTH &&
+  !enableDemoAuth &&
+  !allowUnsignedSessionHeader;
 
 const AccessSessionTokenPayloadSchema = z.object({
   v: z.literal(1),
@@ -70,6 +99,7 @@ const AccessSessionTokenPayloadSchema = z.object({
 
 export const AccessLoginSchema = z.object({
   sessionId: z.string().min(1),
+  ownerKey: z.string().optional(),
 });
 
 export function getAccessAuthConfiguration() {
@@ -78,17 +108,28 @@ export function getAccessAuthConfiguration() {
     productionMode,
     demoAuthEnabled: enableDemoAuth,
     prismaDevAuthEnabled: enablePrismaDevAuth,
+    ownerProductionAuthEnabled: enableOwnerProductionAuth,
     sessionLoginEnabled: enableLocalSessionLogin,
-    sessionSource: enablePrismaDevAuth ? "prisma-membership" : enableDemoAuth ? "demo-seed" : "disabled",
-    productionReady: false,
+    sessionSource: enableOwnerProductionAuth
+      ? "owner-production"
+      : enablePrismaDevAuth
+        ? "prisma-membership"
+        : enableDemoAuth
+          ? "demo-seed"
+          : "disabled",
+    productionReady: ownerProductionConfigured,
     tokenType: "Bearer" as const,
     authorizationHeader: AUTHORIZATION_HEADER,
     legacyHeader: SESSION_HEADER,
     legacyHeaderAccepted: allowUnsignedSessionHeader,
     sessionSecretConfigured: Boolean(process.env.PHANTOMFORCE_SESSION_SECRET),
-    sessionSecretUsesDefault: sessionSecret === DEFAULT_SESSION_SECRET,
+    sessionSecretUsesDefault,
+    sessionSecretIsStrong,
+    ownerEmailConfigured: Boolean(ownerEmail),
+    ownerLoginKeyConfigured: ownerLoginKey.length >= MIN_OWNER_LOGIN_KEY_LENGTH,
     tokenTtlMs,
     loginEndpoint: enableLocalSessionLogin ? "/auth/session-login" : undefined,
+    ownerLoginEndpoint: enableOwnerProductionAuth ? "/auth/owner-login" : undefined,
     demoLoginEndpoint: enableDemoAuth ? "/auth/demo-login" : undefined,
   };
 }
@@ -96,11 +137,47 @@ export function getAccessAuthConfiguration() {
 export function assertAccessAuthConfiguration() {
   const authConfiguration = getAccessAuthConfiguration();
 
-  if (!productionMode) {
-    if (authProvider !== "demo" && authProvider !== "prisma-dev") {
-      throw new Error(`Unsupported PHANTOMFORCE_AUTH_PROVIDER "${authProvider}".`);
+  if (
+    authProvider !== "demo" &&
+    authProvider !== "prisma-dev" &&
+    authProvider !== "owner-production"
+  ) {
+    throw new Error(`Unsupported PHANTOMFORCE_AUTH_PROVIDER "${authProvider}".`);
+  }
+
+  // Owner-controlled production auth. Must be strongly configured whether or not
+  // NODE_ENV=production, and never coexists with demo auth or unsigned headers.
+  if (enableOwnerProductionAuth) {
+    if (allowUnsignedSessionHeader) {
+      throw new Error(
+        "PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER cannot be enabled with owner-production auth.",
+      );
     }
 
+    if (enableDemoAuth) {
+      throw new Error("Demo auth must be disabled for owner-production auth.");
+    }
+
+    if (sessionSecretUsesDefault || sessionSecret.length < MIN_SESSION_SECRET_LENGTH) {
+      throw new Error(
+        "PHANTOMFORCE_SESSION_SECRET must be a strong non-default value (at least 32 characters) for owner-production auth.",
+      );
+    }
+
+    if (!ownerEmail) {
+      throw new Error("PHANTOMFORCE_OWNER_EMAIL must be set for owner-production auth.");
+    }
+
+    if (ownerLoginKey.length < MIN_OWNER_LOGIN_KEY_LENGTH) {
+      throw new Error(
+        "PHANTOMFORCE_OWNER_LOGIN_KEY must be set to a strong value (at least 16 characters) for owner-production auth.",
+      );
+    }
+
+    return authConfiguration;
+  }
+
+  if (!productionMode) {
     return authConfiguration;
   }
 
@@ -108,12 +185,12 @@ export function assertAccessAuthConfiguration() {
     throw new Error("PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER cannot be enabled in production.");
   }
 
-  if (authConfiguration.sessionSecretUsesDefault || sessionSecret.length < 32) {
+  if (sessionSecretUsesDefault || sessionSecret.length < MIN_SESSION_SECRET_LENGTH) {
     throw new Error("PHANTOMFORCE_SESSION_SECRET must be set to a strong non-default value in production.");
   }
 
   throw new Error(
-    "Production auth is not implemented yet. Refusing to serve demo sessions in NODE_ENV=production.",
+    "Production auth requires PHANTOMFORCE_AUTH_PROVIDER=owner-production. Refusing to serve demo/dev sessions in NODE_ENV=production.",
   );
 }
 
@@ -183,8 +260,33 @@ function verifyAccessSessionToken(token: string | undefined) {
   }
 }
 
-export function issueAccessSessionToken(sessionId: string) {
+export function ownerProductionAuthEnabled() {
+  return enableOwnerProductionAuth;
+}
+
+export function verifyOwnerKey(provided: string | undefined): boolean {
+  if (!enableOwnerProductionAuth) {
+    return false;
+  }
+
+  if (ownerLoginKey.length < MIN_OWNER_LOGIN_KEY_LENGTH) {
+    return false;
+  }
+
+  if (!provided) {
+    return false;
+  }
+
+  return safeEqual(provided, ownerLoginKey);
+}
+
+export function issueAccessSessionToken(sessionId: string, options?: { ownerKey?: string }) {
   if (!enableLocalSessionLogin) {
+    return undefined;
+  }
+
+  // Owner-production requires the owner login key before any token is minted.
+  if (enableOwnerProductionAuth && !verifyOwnerKey(options?.ownerKey)) {
     return undefined;
   }
 
@@ -244,7 +346,11 @@ export function requireAccessSession(request: FastifyRequest, reply: FastifyRepl
     reply.code(401).send({
       ok: false,
       error: `Missing or invalid ${AUTHORIZATION_HEADER} bearer token.`,
-      loginEndpoint: "/auth/demo-login",
+      loginEndpoint: enableOwnerProductionAuth
+        ? "/auth/owner-login"
+        : enableDemoAuth
+          ? "/auth/demo-login"
+          : "/auth/session-login",
       sessions: listAccessSessions(),
     });
     return undefined;

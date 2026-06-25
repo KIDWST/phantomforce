@@ -135,12 +135,14 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
     });
   }
 
-  const token = issueAccessSessionToken(parsed.data.sessionId);
+  const token = issueAccessSessionToken(parsed.data.sessionId, {
+    ownerKey: parsed.data.ownerKey,
+  });
 
   if (!token) {
-    return reply.code(404).send({
+    return reply.code(401).send({
       ok: false,
-      error: "Demo session not found.",
+      error: "Invalid session credentials.",
       sessions: listAccessSessions(),
     });
   }
@@ -152,6 +154,10 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
 }
 
 app.post("/auth/session-login", async (request, reply) => {
+  return handleSessionLogin(request, reply);
+});
+
+app.post("/auth/owner-login", async (request, reply) => {
   return handleSessionLogin(request, reply);
 });
 

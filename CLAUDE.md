@@ -431,6 +431,39 @@ Latest verification on 2026-06-25:
   approval ID, client ID, before/after access state, module flags, billing
   status, source, and reason for critical transitions.
 
+## 2026-06-25 Owner-Production Auth Update
+
+- Added `owner-production` auth provider in `server/src/access/session.ts` as the
+  owner-controlled production launch auth path. Internal classification stays
+  "owner-controlled production launch candidate" until every readiness gate
+  passes.
+- Behavior:
+  - Seeds exactly one admin session (`owner-admin`, label `PhantomForce Owner`)
+    and zero client sessions. No public signup exists.
+  - Login requires `PHANTOMFORCE_OWNER_LOGIN_KEY` validated with
+    `timingSafeEqual`; tokens are the existing signed HMAC Bearer tokens.
+  - New endpoint `POST /auth/owner-login` (alias of `session-login` with the
+    owner key).
+  - Fails closed on boot unless: demo auth is off, unsigned session header is
+    off, `PHANTOMFORCE_SESSION_SECRET` is strong/non-default (>=32 chars),
+    `PHANTOMFORCE_OWNER_EMAIL` is set, and `PHANTOMFORCE_OWNER_LOGIN_KEY` is
+    strong (>=16 chars).
+  - `NODE_ENV=production` with `demo`/`prisma-dev` still refuses to boot.
+  - `/readiness` `production_auth` gate flips to `ready` only when
+    owner-production is fully configured (`auth.productionReady=true`). Overall
+    `productionReady` still requires Postgres, Pangolin, billing, live OAuth,
+    and deployment gates.
+- New env vars (documented in `.env.example`, no secrets committed):
+  `PHANTOMFORCE_OWNER_EMAIL`, `PHANTOMFORCE_OWNER_LOGIN_KEY`.
+- New test: `npm run test:auth:owner-production --workspace @phantomforce/server`
+  proves boot in production, owner login success, wrong-key rejection (401),
+  demo login disabled (403), admin-only `/readiness`, single owner session,
+  and fail-closed boot on weak secret and missing owner key.
+- Verification (2026-06-25): `npm run typecheck` pass, `npm run build` pass,
+  `test:auth:owner-production` pass (`ok:true`), `test:auth:production-fail-closed`
+  pass (`failedClosed:true`), `test:access` pass (`ok:true`, `auditEvents=546`).
+  `test:auth:prisma-dev` and `test:access:postgres` not re-run (require Postgres).
+
 ## Highest-Value Lane
 
 `OL-10 - PhantomForce backend spine implementation`
