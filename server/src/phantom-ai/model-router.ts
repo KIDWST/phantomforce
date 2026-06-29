@@ -2,11 +2,13 @@ import { createHash } from "node:crypto";
 
 import { compileHermesContext } from "./context-compiler.js";
 import { appendHermesLedgerRecord, redactSensitiveText, resolveHermesLedgerPath } from "./hermes-ledger.js";
+import { evaluateProviderBudgetPolicy } from "./provider-policy.js";
 import type {
   ActionPreview,
   ApprovalRequestPreview,
   ApprovalRequestStatus,
   ApprovalRiskLevel,
+  BudgetGuardStatus,
   ModelRouterDecision,
   ModelRouterMode,
   ModelRouterPreviewResult,
@@ -294,6 +296,7 @@ function buildApprovalRequestPreview(
   decision: ModelRouterDecision,
   actionPreview: ActionPreview,
   compactContext: string,
+  budgetStatus: BudgetGuardStatus | "not_enforced",
 ): ApprovalRequestPreview {
   const createdAt = new Date();
   const status = getApprovalStatus(actionPreview);
@@ -321,7 +324,7 @@ function buildApprovalRequestPreview(
       model_id: decision.model_id,
       estimated_tokens: Math.ceil(compactContext.length / 4),
       estimated_cost_usd: decision.estimated_cost_usd,
-      budget_status: "not_enforced",
+      budget_status: budgetStatus,
     },
     redacted_context_preview: redactSensitiveText(compactContext),
     safety_flags: {
@@ -337,6 +340,14 @@ function buildApprovalRequestPreview(
     },
     execution_disabled: true,
   };
+}
+
+function isSelectedProviderEnabled(route: ProviderRoute, status: ProviderSetupStatus) {
+  if (route === "mock") return true;
+  if (route === "openrouter_glm") return status.openrouter_glm.configured;
+  if (route === "claude") return status.claude_api.configured;
+  if (route === "local") return status.local_fallback.available;
+  return false;
 }
 
 export function previewModelRouterFoundation(
@@ -361,11 +372,24 @@ export function previewModelRouterFoundation(
     approval_restrictions: request.approval_restrictions ?? DEFAULT_APPROVAL_RESTRICTIONS,
   });
   const actionPreview = buildActionPreview(request, decision);
+  const providerPolicy = evaluateProviderBudgetPolicy(
+    {
+      route_candidate: decision.provider_route,
+      sensitivity_level: decision.sensitivity_level,
+      action_classification: actionPreview.status,
+      estimated_tokens: contextPacket.estimated_tokens,
+      estimated_cost_usd: decision.estimated_cost_usd,
+      approval_required: decision.approval_required,
+      provider_enabled: isSelectedProviderEnabled(decision.provider_route, status),
+    },
+    { env: options.env ?? process.env },
+  );
   const approvalRequest = buildApprovalRequestPreview(
     request,
     decision,
     actionPreview,
     contextPacket.compact_context,
+    providerPolicy.budget.status,
   );
 
   return {
@@ -373,6 +397,7 @@ export function previewModelRouterFoundation(
     context_packet: contextPacket,
     action_preview: actionPreview,
     approval_request: approvalRequest,
+    provider_policy: providerPolicy,
     dry_run: true,
     ledger_written: false,
     live_provider_called: false,
@@ -392,6 +417,7 @@ export async function runModelRouterFoundation(
     context_packet: contextPacket,
     action_preview: actionPreview,
     approval_request: approvalRequest,
+    provider_policy: providerPolicy,
   } = preview;
 
   const ledgerRecord = {
@@ -428,6 +454,7 @@ export async function runModelRouterFoundation(
     context_packet: contextPacket,
     action_preview: actionPreview,
     approval_request: approvalRequest,
+    provider_policy: providerPolicy,
     ledger_record: ledgerRecord,
   };
 }

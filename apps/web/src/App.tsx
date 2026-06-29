@@ -305,6 +305,64 @@ type HermesLedgerRecordPreview = {
   next_action: string;
 };
 
+type BudgetGuardStatus = "ok" | "warning" | "blocked" | "disabled";
+
+type ProviderPolicyPreview = {
+  route_candidate: string;
+  route_status: "allowed" | "blocked" | "dry_run_only";
+  route_allowed: boolean;
+  policy_status: "live_disabled" | "dry_run_only" | "budget_blocked" | "blocked";
+  approval_required: boolean;
+  live_call_disabled_reason: string;
+  client_safe_summary: string;
+  admin_debug_summary: string;
+  required_before_live_calls: string[];
+  policy: {
+    live_providers_globally_enabled: boolean;
+    managed_provider_mode: string;
+    byok_status: "enabled" | "disabled" | "planned_not_implemented";
+    local_fallback_status: "enabled" | "disabled" | "planned_not_implemented";
+    default_route_status: "allowed" | "blocked" | "dry_run_only";
+    admin_debug_visibility: "admin_only";
+    client_safe_status: string;
+    no_api_keys_stored: true;
+    budget_guard: {
+      caps: {
+        monthly_budget_cap_usd: number;
+        daily_budget_cap_usd: number;
+        per_request_estimated_token_cap: number;
+        per_request_estimated_cost_cap_usd: number;
+      };
+      enforcement_mode: "preview_only" | "disabled" | "future_live_guard";
+      status: BudgetGuardStatus;
+      detail: string;
+    };
+    required_before_live_calls: string[];
+  };
+  budget: {
+    status: BudgetGuardStatus;
+    enforcement_mode: "preview_only" | "disabled" | "future_live_guard";
+    live_provider_required: boolean;
+    estimated_tokens: number;
+    estimated_cost_usd: number | null;
+    monthly_budget_cap_usd: number;
+    daily_budget_cap_usd: number;
+    per_request_estimated_token_cap: number;
+    per_request_estimated_cost_cap_usd: number;
+    reasons: string[];
+  };
+  safety_flags: Record<string, boolean>;
+};
+
+type ProviderPolicyStatusResponse = {
+  policy: ProviderPolicyPreview["policy"];
+  preview: ProviderPolicyPreview;
+  execution_disabled: boolean;
+  live_provider_called: boolean;
+  approval_execution_implemented: boolean;
+  secrets_stored: boolean;
+};
+
 type HermesContextPreview = {
   dry_run: boolean;
   ledger_written: boolean;
@@ -366,6 +424,7 @@ type HermesContextPreview = {
     };
     execution_disabled: boolean;
   };
+  provider_policy: ProviderPolicyPreview;
   context: {
     compact_context: string;
     user_request_summary: string;
@@ -423,6 +482,7 @@ type ApprovalQueuePreviewResponse = {
   approval_execution_implemented: boolean;
   action_preview: HermesContextPreview["action_preview"];
   approval_request: HermesContextPreview["approval_request"];
+  provider_policy: ProviderPolicyPreview;
   queue_write: {
     queued: boolean;
     reason: "queued" | "preview_only_not_queued" | "queue_not_requested";
@@ -2999,6 +3059,121 @@ function queueRecordState(record: ApprovalQueueRecordPreview): TruthState {
   return "real";
 }
 
+function budgetGuardState(status: BudgetGuardStatus): TruthState {
+  if (status === "blocked") return "blocked";
+  if (status === "warning") return "stub";
+  if (status === "disabled") return "demo";
+  return "real";
+}
+
+function ProviderPolicyGatePanel({ policy }: { policy: ProviderPolicyPreview | null }) {
+  if (!policy) {
+    return (
+      <div className="provider-policy-panel">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Provider Policy Gate</span>
+            <h3>Admin-only live call policy</h3>
+          </div>
+          <TruthBadge state="demo" label="Not loaded" />
+        </div>
+        <p className="execution-disabled-banner">
+          Policy preview not loaded. Live calls remain disabled unless the server proves otherwise.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="provider-policy-panel">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">Provider Policy Gate</span>
+          <h3>Admin-only live call and budget guard</h3>
+        </div>
+        <TruthBadge state={policy.route_allowed ? "blocked" : "real"} label="No live call allowed" />
+      </div>
+      <p className="execution-disabled-banner">
+        POLICY PREVIEW ONLY: route selection, budget guard, and approval metadata are visible here, but no provider,
+        billing, upload, post, delete, deploy, or approval execution can run.
+      </p>
+      <div className="debug-safety-strip">
+        <TruthBadge state="real" label="Admin only" />
+        <TruthBadge state="real" label="No API keys stored" />
+        <TruthBadge state="stub" label="Budget guard preview" />
+        <TruthBadge state="blocked" label="Live calls disabled" />
+      </div>
+      <div className="provider-grid">
+        <ProviderStatusCard
+          label="Route allowed"
+          value={policy.route_allowed ? "Yes" : "No"}
+          detail={policy.live_call_disabled_reason}
+          state={policy.route_allowed ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Route status"
+          value={policy.route_status.replace(/_/g, " ")}
+          detail={policy.admin_debug_summary}
+          state={policy.route_status === "blocked" ? "blocked" : "stub"}
+        />
+        <ProviderStatusCard
+          label="Provider policy"
+          value={policy.policy_status.replace(/_/g, " ")}
+          detail={policy.policy.client_safe_status}
+          state={policy.policy_status === "budget_blocked" || policy.policy_status === "blocked" ? "blocked" : "stub"}
+        />
+        <ProviderStatusCard
+          label="Budget guard"
+          value={policy.budget.status}
+          detail={policy.budget.reasons.join(" ")}
+          state={budgetGuardState(policy.budget.status)}
+        />
+        <ProviderStatusCard
+          label="Budget enforcement"
+          value={policy.budget.enforcement_mode.replace(/_/g, " ")}
+          detail={`Request caps: ${policy.budget.per_request_estimated_token_cap} tokens / $${policy.budget.per_request_estimated_cost_cap_usd.toFixed(2)} estimated cost.`}
+          state="stub"
+        />
+        <ProviderStatusCard
+          label="Managed mode"
+          value={policy.policy.managed_provider_mode.replace(/_/g, " ")}
+          detail={`BYOK: ${policy.policy.byok_status.replace(/_/g, " ")}. Local fallback: ${policy.policy.local_fallback_status.replace(/_/g, " ")}.`}
+          state="demo"
+        />
+      </div>
+      <div className="approval-meta-grid">
+        <span>Monthly cap: ${policy.budget.monthly_budget_cap_usd.toFixed(2)}</span>
+        <span>Daily cap: ${policy.budget.daily_budget_cap_usd.toFixed(2)}</span>
+        <span>Estimated tokens: {policy.budget.estimated_tokens}</span>
+        <span>Estimated cost: ${policy.budget.estimated_cost_usd?.toFixed(4) ?? "unknown"}</span>
+        <span>Approval required: {policy.approval_required ? "yes" : "no"}</span>
+        <span>No API keys stored: {policy.policy.no_api_keys_stored ? "yes" : "no"}</span>
+      </div>
+      <div className="safety-flag-grid" aria-label="Provider policy safety flags">
+        {Object.entries(policy.safety_flags).map(([flag, enabled]) => (
+          <span className={enabled ? "enabled" : "disabled"} key={flag}>
+            {formatSafetyFlag(flag)}: {enabled ? "yes" : "no"}
+          </span>
+        ))}
+      </div>
+      <div className="context-preview">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Required before live calls</span>
+            <h3>Future guard checklist</h3>
+          </div>
+          <TruthBadge state="blocked" label="Still blocked" />
+        </div>
+        <ul>
+          {policy.required_before_live_calls.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: boolean) => Record<string, string> }) {
   const [records, setRecords] = useState<HermesLedgerRecordPreview[]>([]);
   const [queueRecords, setQueueRecords] = useState<ApprovalQueueRecordPreview[]>([]);
@@ -3015,6 +3190,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   });
   const [transitionNotes, setTransitionNotes] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<HermesContextPreview | null>(null);
+  const [providerPolicy, setProviderPolicy] = useState<ProviderPolicyPreview | null>(null);
   const [previewText, setPreviewText] = useState(
     "Summarize today's safest trainer follow-ups without sending, posting, uploading, or changing billing.",
   );
@@ -3023,6 +3199,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [historyStatus, setHistoryStatus] = useState("Not loaded");
   const [previewStatus, setPreviewStatus] = useState("Not loaded");
   const [queueStatus, setQueueStatus] = useState("Not loaded");
+  const [policyStatus, setPolicyStatus] = useState("Not loaded");
 
   function buildPreviewPayload(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     return {
@@ -3120,6 +3297,29 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     }
   }
 
+  async function refreshProviderPolicy() {
+    setPolicyStatus("Loading provider policy gate...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/provider-policy/status`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setProviderPolicy(null);
+        setPolicyStatus("Admin policy gate unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as ProviderPolicyStatusResponse;
+      setProviderPolicy(data.preview ?? null);
+      setPolicyStatus(data.preview?.route_allowed ? "Unsafe live route" : "Live calls blocked");
+    } catch {
+      setProviderPolicy(null);
+      setPolicyStatus("Backend offline");
+    }
+  }
+
   async function runContextPreview(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     setPreviewStatus("Running dry-run preview...");
 
@@ -3138,6 +3338,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
 
       const data = (await response.json()) as HermesContextPreview;
       setPreview(data);
+      setProviderPolicy(data.provider_policy);
       setPreviewStatus("Dry-run preview ready");
     } catch {
       setPreview(null);
@@ -3211,6 +3412,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   useEffect(() => {
     void refreshHistory();
     void refreshApprovalQueue();
+    void refreshProviderPolicy();
     void runContextPreview();
   }, []);
 
@@ -3235,6 +3437,8 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
       <div className="debug-safety-strip">
         <TruthBadge state="real" label="Real ledger read" />
         <TruthBadge state="demo" label="Dry-run context preview" />
+        <TruthBadge state="real" label="Provider policy blocks live calls" />
+        <TruthBadge state="stub" label="Budget guard preview" />
         <TruthBadge state="real" label="No live provider call" />
         <TruthBadge state="stub" label="Approval execution not implemented" />
       </div>
@@ -3315,7 +3519,29 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           detail="Queue writes are local JSONL only. No approval can execute from this queue."
           state="stub"
         />
+        <ProviderStatusCard
+          label="Provider policy gate"
+          value={policyStatus}
+          detail={
+            providerPolicy
+              ? providerPolicy.live_call_disabled_reason
+              : "Policy endpoint is admin-only. Live provider calls remain blocked."
+          }
+          state={providerPolicy?.route_allowed ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Budget guard preview"
+          value={providerPolicy?.budget.status ?? "Not loaded"}
+          detail={
+            providerPolicy
+              ? providerPolicy.budget.reasons.join(" ")
+              : "Budget status is preview-only and does not charge, bill, or call providers."
+          }
+          state={providerPolicy ? budgetGuardState(providerPolicy.budget.status) : "demo"}
+        />
       </div>
+
+      <ProviderPolicyGatePanel policy={preview?.provider_policy ?? providerPolicy} />
 
       <div className="approval-queue-panel">
         <div className="section-head compact">

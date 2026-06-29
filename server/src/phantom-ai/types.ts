@@ -9,6 +9,11 @@ export type ApprovalRiskLevel = "low" | "medium" | "high" | "critical";
 export type ApprovalQueueStatus = "pending" | "blocked_preview" | "preview_only";
 export type ApprovalQueueReviewStatus = "unreviewed" | "reviewed" | "dismissed" | "needs_changes" | "expired" | "note_added";
 export type ApprovalQueueTransitionStatus = Exclude<ApprovalQueueReviewStatus, "unreviewed">;
+export type ProviderRoutePolicyStatus = "allowed" | "blocked" | "dry_run_only";
+export type ProviderPolicyStatus = "live_disabled" | "dry_run_only" | "budget_blocked" | "blocked";
+export type ProviderPolicyFeatureStatus = "enabled" | "disabled" | "planned_not_implemented";
+export type BudgetGuardStatus = "ok" | "warning" | "blocked" | "disabled";
+export type BudgetGuardEnforcementMode = "preview_only" | "disabled" | "future_live_guard";
 
 export type HermesLedgerRecord = {
   timestamp: string;
@@ -123,6 +128,82 @@ export type ProviderSetupStatus = {
   };
 };
 
+export type ProviderBudgetCaps = {
+  monthly_budget_cap_usd: number;
+  daily_budget_cap_usd: number;
+  per_request_estimated_token_cap: number;
+  per_request_estimated_cost_cap_usd: number;
+};
+
+export type ProviderBudgetPolicyState = {
+  live_providers_globally_enabled: boolean;
+  managed_provider_mode: "phantomforce_managed_preview";
+  byok_status: ProviderPolicyFeatureStatus;
+  local_fallback_status: ProviderPolicyFeatureStatus;
+  default_route_status: ProviderRoutePolicyStatus;
+  admin_debug_visibility: "admin_only";
+  client_safe_status: string;
+  no_api_keys_stored: true;
+  budget_guard: {
+    caps: ProviderBudgetCaps;
+    enforcement_mode: BudgetGuardEnforcementMode;
+    status: BudgetGuardStatus;
+    detail: string;
+  };
+  required_before_live_calls: string[];
+};
+
+export type BudgetGuardPreview = {
+  status: BudgetGuardStatus;
+  enforcement_mode: BudgetGuardEnforcementMode;
+  live_provider_required: boolean;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  monthly_budget_cap_usd: number;
+  daily_budget_cap_usd: number;
+  per_request_estimated_token_cap: number;
+  per_request_estimated_cost_cap_usd: number;
+  reasons: string[];
+};
+
+export type ProviderPolicyEvaluationInput = {
+  route_candidate: ProviderRoute;
+  sensitivity_level: SensitivityLevel;
+  action_classification: ActionPreviewStatus;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  approval_required: boolean;
+  provider_enabled: boolean;
+};
+
+export type ProviderPolicyEvaluationResult = {
+  route_candidate: ProviderRoute;
+  route_status: ProviderRoutePolicyStatus;
+  route_allowed: false;
+  policy_status: ProviderPolicyStatus;
+  approval_required: boolean;
+  live_call_disabled_reason: string;
+  client_safe_summary: string;
+  admin_debug_summary: string;
+  required_before_live_calls: string[];
+  policy: ProviderBudgetPolicyState;
+  budget: BudgetGuardPreview;
+  safety_flags: {
+    live_providers_globally_disabled: boolean;
+    live_provider_call_allowed: false;
+    route_execution_allowed: false;
+    dry_run_only: true;
+    managed_provider_preview_only: true;
+    byok_not_implemented: boolean;
+    local_fallback_not_implemented: boolean;
+    budget_enforcement_preview_only: boolean;
+    secrets_stored: false;
+    approval_gate_required: boolean;
+    high_sensitivity: boolean;
+    destructive_or_external_action: boolean;
+  };
+};
+
 export type ModelRouterRequest = {
   tenant_id: string;
   business_name: string;
@@ -184,7 +265,7 @@ export type ApprovalRequestPreview = {
     model_id: string;
     estimated_tokens: number;
     estimated_cost_usd: number | null;
-    budget_status: "not_enforced";
+    budget_status: BudgetGuardStatus | "not_enforced";
   };
   redacted_context_preview: string;
   safety_flags: {
@@ -263,6 +344,7 @@ export type ModelRouterPreviewResult = {
   context_packet: HermesContextPacket;
   action_preview: ActionPreview;
   approval_request: ApprovalRequestPreview;
+  provider_policy: ProviderPolicyEvaluationResult;
   dry_run: true;
   ledger_written: false;
   live_provider_called: false;
@@ -273,5 +355,6 @@ export type ModelRouterRunResult = {
   context_packet: HermesContextPacket;
   action_preview: ActionPreview;
   approval_request: ApprovalRequestPreview;
+  provider_policy: ProviderPolicyEvaluationResult;
   ledger_record: HermesLedgerRecord;
 };

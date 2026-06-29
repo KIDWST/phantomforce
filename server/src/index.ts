@@ -78,6 +78,10 @@ import {
   previewModelRouterFoundation,
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
+import {
+  evaluateProviderBudgetPolicy,
+  getProviderBudgetPolicyStatus,
+} from "./phantom-ai/provider-policy.js";
 import type {
   ActorRole,
   ApprovalQueueTransitionStatus,
@@ -356,6 +360,36 @@ app.get("/phantom-ai/provider-status", async (request, reply) => {
   };
 });
 
+app.get("/phantom-ai/provider-policy/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const policy = getProviderBudgetPolicyStatus();
+  const preview = evaluateProviderBudgetPolicy({
+    route_candidate: "mock",
+    sensitivity_level: "low",
+    action_classification: "safe",
+    estimated_tokens: 0,
+    estimated_cost_usd: 0,
+    approval_required: false,
+    provider_enabled: true,
+  });
+
+  return {
+    ok: true,
+    session,
+    policy,
+    preview,
+    execution_disabled: true,
+    live_provider_called: false,
+    approval_execution_implemented: false,
+    secrets_stored: false,
+  };
+});
+
 app.get("/phantom-ai/hermes-ledger/history", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -539,6 +573,7 @@ app.post("/phantom-ai/context-preview", async (request, reply) => {
       next_action: redactSensitiveText(result.action_preview.next_action),
     },
     approval_request: redactApprovalRequestPreview(result.approval_request),
+    provider_policy: result.provider_policy,
     context: {
       compact_context: redactSensitiveText(result.context_packet.compact_context),
       user_request_summary: redactSensitiveText(result.context_packet.user_request_summary),
@@ -600,6 +635,7 @@ app.post("/phantom-ai/approvals/preview", async (request, reply) => {
       next_action: redactSensitiveText(result.action_preview.next_action),
     },
     approval_request: redactApprovalRequestPreview(result.approval_request),
+    provider_policy: result.provider_policy,
     queue_write: {
       ...queueWrite,
       record: queueWrite.record,
@@ -645,6 +681,7 @@ app.post("/phantom-ai/mock-route", async (request, reply) => {
     },
     ledger_record: redactHermesLedgerRecord(result.ledger_record),
     approval_request: redactApprovalRequestPreview(result.approval_request),
+    provider_policy: result.provider_policy,
   };
 });
 

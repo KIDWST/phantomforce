@@ -81,6 +81,15 @@ try {
   assert(mockResult.ledger_record.estimated_cost_usd === 0, "Mock route should record zero estimated cost.");
   assert(mockResult.approval_request.approval_id.startsWith("appr-"), "Approval request should have an id.");
   assert(mockResult.approval_request.execution_disabled, "Approval request must mark execution disabled.");
+  assert(!mockResult.provider_policy.route_allowed, "Provider policy must not allow live routes.");
+  assert(
+    mockResult.provider_policy.policy_status === "live_disabled",
+    "Provider policy should default to live disabled.",
+  );
+  assert(
+    mockResult.provider_policy.budget.status === "ok",
+    "Provider policy budget guard should pass small mock route.",
+  );
   assert(
     mockResult.approval_request.safety_flags.approval_execution_implemented === false,
     "Approval execution must remain unimplemented.",
@@ -180,6 +189,14 @@ try {
     "Destructive safety flag should be true.",
   );
   assert(
+    destructivePreview.provider_policy.route_status === "blocked",
+    "Destructive preview should be blocked by provider policy.",
+  );
+  assert(
+    !destructivePreview.provider_policy.route_allowed,
+    "Destructive preview provider policy must not allow live route.",
+  );
+  assert(
     destructivePreview.approval_request.redacted_context_preview.includes("API_KEY=[redacted]"),
     "Approval preview should redact key-like strings.",
   );
@@ -211,6 +228,8 @@ try {
         safeApprovalStatus: safePreview.approval_request.status,
         destructivePreview: destructivePreview.action_preview.status,
         destructiveApprovalStatus: destructivePreview.approval_request.status,
+        providerPolicyStatus: mockResult.provider_policy.policy_status,
+        destructivePolicyStatus: destructivePreview.provider_policy.route_status,
         contextChars: contextPacket.context_chars,
         rawContextChars: contextPacket.raw_context_chars,
         openRouterModel: openRouterStatus.openrouter_glm.model_id,

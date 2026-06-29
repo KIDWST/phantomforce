@@ -737,6 +737,15 @@ img {
   border-radius: 8px;
 }
 
+.provider-policy-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(96, 165, 250, 0.055);
+  border: 1px solid rgba(96, 165, 250, 0.2);
+  border-radius: 8px;
+}
+
 .execution-disabled-banner {
   margin: 0;
   padding: 12px;
