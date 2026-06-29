@@ -107,6 +107,7 @@ const directResult = evaluateProviderInvocationFirewall({
   estimated_tokens: 1200,
   estimated_cost_usd: 0.01,
   action_classification: mockPreview.action_preview.status,
+  sensitivity_level: mockPreview.decision.sensitivity_level,
   approval_request: mockPreview.approval_request,
   policy_result: mockPreview.provider_policy,
   readiness_result: mockFirewall.readiness_result,

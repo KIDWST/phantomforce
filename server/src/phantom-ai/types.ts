@@ -402,6 +402,7 @@ export type ProviderInvocationFirewallInput = {
   estimated_tokens: number;
   estimated_cost_usd: number | null;
   action_classification: ActionPreviewStatus;
+  sensitivity_level: SensitivityLevel;
   approval_request: ApprovalRequestPreview;
   policy_result: ProviderPolicyEvaluationResult;
   readiness_result: ProviderReadinessReport;
@@ -419,6 +420,50 @@ export type OpenRouterGlmAdapterDryRunResult = {
   execution_disabled: true;
   blocked_reason: string;
   required_before_live: string[];
+  live_transport_readiness: {
+    status: "blocked";
+    ready_for_live_transport: false;
+    live_transport_configured: false;
+    live_transport_enabled: false;
+    admin_only_mode: true;
+    provider_policy_allowed: false;
+    readiness_key_present: boolean;
+    budget_status_ok: false;
+    budget_status: BudgetGuardStatus;
+    approval_status_ok: false;
+    approval_status: ApprovalRequestStatus;
+    firewall_permits_call: false;
+    ledger_write_required: true;
+    request_redaction_required: true;
+    response_redaction_required: true;
+    live_smoke_test_explicitly_approved: false;
+    blocked_reasons: string[];
+    required_before_live_smoke_test: string[];
+  };
+  dry_run_request_envelope: {
+    envelope_id: string;
+    provider_id: "openrouter_glm";
+    model_id: "z-ai/glm-5.2";
+    request_id: string;
+    redacted_prompt_summary: string;
+    estimated_tokens: number;
+    estimated_cost_usd: number | null;
+    metadata: {
+      route_candidate: ProviderRoute;
+      sensitivity_level: SensitivityLevel;
+      approval_status: ApprovalRequestStatus;
+      budget_status: BudgetGuardStatus;
+    };
+    dry_run_only: true;
+    live_call_allowed: false;
+    execution_disabled: true;
+    no_live_call_reason: string;
+    network_payload_prepared: false;
+    ready_for_send: false;
+    contains_raw_credential: false;
+    contains_raw_env_value: false;
+    contains_raw_prompt: false;
+  };
   dry_run_response: {
     provider_called: false;
     network_call_performed: false;

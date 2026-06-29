@@ -77,6 +77,15 @@ assert(adapter.dry_run_response.provider_called === false, "Adapter must not cal
 assert(adapter.dry_run_response.network_call_performed === false, "Adapter must not call network.");
 assert(adapter.dry_run_response.http_request_prepared === false, "Adapter must not prepare HTTP request.");
 assert(adapter.dry_run_response.raw_response === null, "Adapter must not return raw provider response.");
+assert(adapter.live_transport_readiness.ready_for_live_transport === false, "Live transport must stay blocked.");
+assert(adapter.live_transport_readiness.live_transport_configured === false, "Live transport must not be configured.");
+assert(adapter.live_transport_readiness.live_transport_enabled === false, "Live transport must not be enabled.");
+assert(adapter.live_transport_readiness.firewall_permits_call === false, "Firewall must not permit live call.");
+assert(adapter.dry_run_request_envelope.ready_for_send === false, "Dry-run envelope must not be sendable.");
+assert(
+  adapter.dry_run_request_envelope.network_payload_prepared === false,
+  "Dry-run envelope must not prepare a network payload.",
+);
 assert(adapter.safety_flags.policy_route_allowed === false, "Adapter safety flags must preserve route_allowed false.");
 assert(adapter.safety_flags.readiness_live_call_allowed === false, "Adapter readiness live call flag must be false.");
 assert(adapter.required_before_live.length > 0, "Adapter must list prerequisites before live use.");
@@ -90,6 +99,9 @@ const secretAdapter = buildOpenRouterGlmAdapterDryRunPreview({
   redactedPromptSummary: `Preview only. ${sensitiveName}=${sensitiveValue} card ${cardLikeValue}.`,
   estimatedTokens: 800,
   estimatedCostUsd: null,
+  routeCandidate: routedPreview.decision.provider_route,
+  sensitivityLevel: routedPreview.decision.sensitivity_level,
+  approvalStatus: routedPreview.approval_request.status,
   providerPolicy: routedPreview.provider_policy,
   readinessRoute: firewall.readiness_route,
   firewallBlockedReasons: firewall.blocked_reasons,
@@ -101,6 +113,10 @@ assert(!serializedSecretAdapter.includes(sensitiveValue), "Adapter must redact s
 assert(!serializedSecretAdapter.includes(cardLikeValue), "Adapter must redact card-like prompt values.");
 assert(secretAdapter.dry_run_response.provider_called === false, "Direct adapter preview must not call provider.");
 assert(secretAdapter.dry_run_response.network_call_performed === false, "Direct adapter preview must not call network.");
+assert(
+  secretAdapter.dry_run_request_envelope.contains_raw_prompt === false,
+  "Direct adapter envelope must not contain a raw prompt.",
+);
 
 console.log(
   JSON.stringify(
@@ -113,6 +129,8 @@ console.log(
       providerCalled: adapter.dry_run_response.provider_called,
       networkCallPerformed: adapter.dry_run_response.network_call_performed,
       httpRequestPrepared: adapter.dry_run_response.http_request_prepared,
+      readyForLiveTransport: adapter.live_transport_readiness.ready_for_live_transport,
+      envelopeReadyForSend: adapter.dry_run_request_envelope.ready_for_send,
       policyRouteAllowed: routedPreview.provider_policy.route_allowed,
       secretsLeaked:
         serializedAdapter.includes(fakeProviderKey) ||

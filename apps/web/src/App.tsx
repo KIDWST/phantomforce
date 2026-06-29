@@ -419,6 +419,44 @@ type OpenRouterGlmAdapterDryRunResult = {
   execution_disabled: true;
   blocked_reason: string;
   required_before_live: string[];
+  live_transport_readiness: {
+    status: "blocked";
+    ready_for_live_transport: false;
+    live_transport_configured: false;
+    live_transport_enabled: false;
+    admin_only_mode: true;
+    provider_policy_allowed: false;
+    readiness_key_present: boolean;
+    budget_status_ok: false;
+    budget_status: string;
+    approval_status_ok: false;
+    approval_status: string;
+    firewall_permits_call: false;
+    ledger_write_required: true;
+    request_redaction_required: true;
+    response_redaction_required: true;
+    live_smoke_test_explicitly_approved: false;
+    blocked_reasons: string[];
+    required_before_live_smoke_test: string[];
+  };
+  dry_run_request_envelope: {
+    envelope_id: string;
+    provider_id: "openrouter_glm";
+    model_id: "z-ai/glm-5.2";
+    request_id: string;
+    redacted_prompt_summary: string;
+    estimated_tokens: number;
+    estimated_cost_usd: number | null;
+    dry_run_only: true;
+    live_call_allowed: false;
+    execution_disabled: true;
+    no_live_call_reason: string;
+    network_payload_prepared: false;
+    ready_for_send: false;
+    contains_raw_credential: false;
+    contains_raw_env_value: false;
+    contains_raw_prompt: false;
+  };
   dry_run_response: {
     provider_called: false;
     network_call_performed: false;
@@ -3550,6 +3588,68 @@ function ProviderInvocationFirewallPanel({ invocation }: { invocation: ProviderI
               detail={invocation.openrouter_adapter.admin_debug_summary}
               state={invocation.openrouter_adapter.dry_run_response.provider_called ? "blocked" : "real"}
             />
+            <ProviderStatusCard
+              label="Live transport"
+              value={invocation.openrouter_adapter.live_transport_readiness.live_transport_enabled ? "Enabled" : "Disabled"}
+              detail="Live transport is not configured or enabled; this adapter cannot send a provider request."
+              state="blocked"
+            />
+            <ProviderStatusCard
+              label="Key present"
+              value={invocation.openrouter_adapter.live_transport_readiness.readiness_key_present ? "Yes / masked" : "No"}
+              detail="Admin sees masked presence only. Raw credentials are never returned to the UI."
+              state={invocation.openrouter_adapter.live_transport_readiness.readiness_key_present ? "stub" : "demo"}
+            />
+            <ProviderStatusCard
+              label="Policy allowed"
+              value={invocation.openrouter_adapter.live_transport_readiness.provider_policy_allowed ? "Yes" : "No"}
+              detail="Provider policy still reports route_allowed false."
+              state="real"
+            />
+            <ProviderStatusCard
+              label="Budget gate"
+              value={invocation.openrouter_adapter.live_transport_readiness.budget_status}
+              detail="Budget status is preview-only and cannot authorize live spend."
+              state="stub"
+            />
+            <ProviderStatusCard
+              label="Approval execution"
+              value={
+                invocation.openrouter_adapter.live_transport_readiness.approval_status_ok
+                  ? "Ready"
+                  : "Not implemented"
+              }
+              detail={`Approval status: ${invocation.openrouter_adapter.live_transport_readiness.approval_status}.`}
+              state="blocked"
+            />
+            <ProviderStatusCard
+              label="Firewall"
+              value={
+                invocation.openrouter_adapter.live_transport_readiness.firewall_permits_call ? "Permits" : "Blocking"
+              }
+              detail={invocation.openrouter_adapter.dry_run_request_envelope.no_live_call_reason}
+              state="real"
+            />
+            <ProviderStatusCard
+              label="Dry-run envelope"
+              value={invocation.openrouter_adapter.dry_run_request_envelope.ready_for_send ? "Sendable" : "Not sendable"}
+              detail={`Envelope ${invocation.openrouter_adapter.dry_run_request_envelope.envelope_id}; no network payload is prepared.`}
+              state="demo"
+            />
+          </div>
+          <div className="context-preview">
+            <div className="section-head compact">
+              <div>
+                <span className="eyebrow">Required before live smoke test</span>
+                <h3>Transport readiness checklist</h3>
+              </div>
+              <TruthBadge state="blocked" label="Smoke test not approved" />
+            </div>
+            <ul>
+              {invocation.openrouter_adapter.live_transport_readiness.required_before_live_smoke_test.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
           </div>
           <div className="safety-flag-grid" aria-label="OpenRouter adapter safety flags">
             {Object.entries(invocation.openrouter_adapter.safety_flags).map(([flag, enabled]) => (

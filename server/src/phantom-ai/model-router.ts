@@ -402,6 +402,7 @@ export function previewModelRouterFoundation(
     estimated_tokens: contextPacket.estimated_tokens,
     estimated_cost_usd: decision.estimated_cost_usd,
     action_classification: actionPreview.status,
+    sensitivity_level: decision.sensitivity_level,
     approval_request: approvalRequest,
     policy_result: providerPolicy,
     readiness_result: providerReadiness,
