@@ -4,6 +4,8 @@ export type ProviderRoute = "mock" | "openrouter_glm" | "claude" | "local" | "ro
 export type ModelRouterMode = "mock" | "openrouter" | "claude" | "local" | "router";
 export type ApprovalStatus = "not_required" | "pending" | "approved" | "rejected" | "blocked";
 export type ActionPreviewStatus = "safe" | "pending_approval" | "blocked" | "destructive" | "live_provider_required";
+export type ApprovalRequestStatus = "preview-only" | "pending" | "blocked" | "approved" | "rejected" | "expired";
+export type ApprovalRiskLevel = "low" | "medium" | "high" | "critical";
 
 export type HermesLedgerRecord = {
   timestamp: string;
@@ -156,10 +158,51 @@ export type ActionPreview = {
   next_action: string;
 };
 
+export type ApprovalRequestPreview = {
+  approval_id: string;
+  action_type: string;
+  risk_level: ApprovalRiskLevel;
+  status: ApprovalRequestStatus;
+  summary: string;
+  approval_reason: string;
+  requested_by: {
+    actor_user_id: string;
+    actor_role: ActorRole;
+  };
+  tenant_context: {
+    tenant_id: string;
+    business_name: string;
+    request_id: string;
+  };
+  created_at: string;
+  expires_at: string | null;
+  estimated_impact: {
+    provider_route: ProviderRoute;
+    model_id: string;
+    estimated_tokens: number;
+    estimated_cost_usd: number | null;
+    budget_status: "not_enforced";
+  };
+  redacted_context_preview: string;
+  safety_flags: {
+    dry_run: true;
+    execution_disabled: true;
+    approval_execution_implemented: false;
+    live_provider_call_allowed: false;
+    ledger_write_allowed: false;
+    secrets_redacted: true;
+    destructive_action: boolean;
+    live_provider_required: boolean;
+    high_sensitivity: boolean;
+  };
+  execution_disabled: true;
+};
+
 export type ModelRouterPreviewResult = {
   decision: ModelRouterDecision;
   context_packet: HermesContextPacket;
   action_preview: ActionPreview;
+  approval_request: ApprovalRequestPreview;
   dry_run: true;
   ledger_written: false;
   live_provider_called: false;
@@ -169,5 +212,6 @@ export type ModelRouterRunResult = {
   decision: ModelRouterDecision;
   context_packet: HermesContextPacket;
   action_preview: ActionPreview;
+  approval_request: ApprovalRequestPreview;
   ledger_record: HermesLedgerRecord;
 };

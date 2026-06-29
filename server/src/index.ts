@@ -67,7 +67,12 @@ import {
   previewModelRouterFoundation,
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
-import type { ActorRole, ContextModuleData, SensitivityLevel } from "./phantom-ai/types.js";
+import type {
+  ActorRole,
+  ApprovalRequestPreview,
+  ContextModuleData,
+  SensitivityLevel,
+} from "./phantom-ai/types.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -314,6 +319,29 @@ function buildModelRouterRequestFromBody(
   };
 }
 
+function redactApprovalRequestPreview(approvalRequest: ApprovalRequestPreview): ApprovalRequestPreview {
+  return {
+    ...approvalRequest,
+    action_type: redactSensitiveText(approvalRequest.action_type),
+    summary: redactSensitiveText(approvalRequest.summary),
+    approval_reason: redactSensitiveText(approvalRequest.approval_reason),
+    requested_by: {
+      ...approvalRequest.requested_by,
+      actor_user_id: redactSensitiveText(approvalRequest.requested_by.actor_user_id),
+    },
+    tenant_context: {
+      tenant_id: redactSensitiveText(approvalRequest.tenant_context.tenant_id),
+      business_name: redactSensitiveText(approvalRequest.tenant_context.business_name),
+      request_id: redactSensitiveText(approvalRequest.tenant_context.request_id),
+    },
+    estimated_impact: {
+      ...approvalRequest.estimated_impact,
+      model_id: redactSensitiveText(approvalRequest.estimated_impact.model_id),
+    },
+    redacted_context_preview: redactSensitiveText(approvalRequest.redacted_context_preview),
+  };
+}
+
 app.get("/phantom-ai/provider-status", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -416,6 +444,7 @@ app.post("/phantom-ai/context-preview", async (request, reply) => {
       reasons: result.action_preview.reasons.map((reason) => redactSensitiveText(reason)),
       next_action: redactSensitiveText(result.action_preview.next_action),
     },
+    approval_request: redactApprovalRequestPreview(result.approval_request),
     context: {
       compact_context: redactSensitiveText(result.context_packet.compact_context),
       user_request_summary: redactSensitiveText(result.context_packet.user_request_summary),
@@ -458,6 +487,7 @@ app.post("/phantom-ai/mock-route", async (request, reply) => {
       compression_ratio: result.context_packet.compression_ratio,
     },
     ledger_record: redactHermesLedgerRecord(result.ledger_record),
+    approval_request: redactApprovalRequestPreview(result.approval_request),
   };
 });
 

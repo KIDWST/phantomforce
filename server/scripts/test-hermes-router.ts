@@ -79,14 +79,20 @@ try {
 
   assert(mockResult.decision.provider_route === "mock", "Default route should remain mock without provider config.");
   assert(mockResult.ledger_record.estimated_cost_usd === 0, "Mock route should record zero estimated cost.");
+  assert(mockResult.approval_request.approval_id.startsWith("appr-"), "Approval request should have an id.");
+  assert(mockResult.approval_request.execution_disabled, "Approval request must mark execution disabled.");
+  assert(
+    mockResult.approval_request.safety_flags.approval_execution_implemented === false,
+    "Approval execution must remain unimplemented.",
+  );
 
   const highSensitivityResult = await runModelRouterFoundation(
     {
       ...request,
       request_id: "test-router-002",
-      task_type: "billing_summary",
+      task_type: "private_notes_summary",
       sensitivity_level: "high",
-      user_request: "Summarize payment card and private health notes.",
+      user_request: "Summarize private health notes for manual review only.",
     },
     {
       ledgerPath,
@@ -106,6 +112,14 @@ try {
     highSensitivityResult.ledger_record.risks.some((risk) => risk.includes("High-sensitivity")),
     "High-sensitivity risk should be recorded.",
   );
+  assert(
+    highSensitivityResult.approval_request.risk_level === "high",
+    "High-sensitivity route should create a high-risk approval preview.",
+  );
+  assert(
+    highSensitivityResult.approval_request.safety_flags.high_sensitivity,
+    "High-sensitivity flag should be true.",
+  );
 
   const openRouterStatus = getProviderSetupStatus({
     PHANTOM_MODEL_ROUTER_MODE: "openrouter",
@@ -121,19 +135,64 @@ try {
   assert(records.every((record) => record.tenant_id === "demo-trainer"), "Tenant id should be recorded.");
   assert(records.every((record) => record.context_chars > 0), "Context size should be recorded.");
 
-  const destructivePreview = previewModelRouterFoundation({
-    ...request,
-    request_id: "test-preview-001",
-    task_type: "delete_client_record",
-    user_request: "Delete the client record and use OPENROUTER_API_KEY=abc123456789.",
-  });
+  const safePreview = previewModelRouterFoundation(
+    {
+      ...request,
+      request_id: "test-preview-safe",
+      user_request: "Summarize internal training ideas for owner review only.",
+    },
+    { env: { PHANTOM_MODEL_ROUTER_MODE: "mock" } },
+  );
+
+  assert(safePreview.approval_request.status === "preview-only", "Safe request should be preview-only.");
+  assert(safePreview.approval_request.risk_level === "low", "Safe request should be low risk.");
+  assert(
+    safePreview.approval_request.approval_reason.includes("locally without live provider calls"),
+    "Safe approval preview should explain that no approval is required.",
+  );
+  assert(
+    safePreview.approval_request.safety_flags.execution_disabled,
+    "Safe approval preview should still disable execution.",
+  );
+
+  const destructivePreview = previewModelRouterFoundation(
+    {
+      ...request,
+      request_id: "test-preview-001",
+      task_type: "delete_client_record",
+      user_request:
+        "Delete the client record and use API_KEY=abc123456789 with card 4242 4242 4242 4242.",
+    },
+    { env: { PHANTOM_MODEL_ROUTER_MODE: "mock" } },
+  );
 
   assert(destructivePreview.dry_run, "Preview should mark itself as dry-run.");
   assert(!destructivePreview.ledger_written, "Preview must not write to Hermes.");
   assert(!destructivePreview.live_provider_called, "Preview must not call a live provider.");
   assert(destructivePreview.action_preview.status === "destructive", "Delete request should preview as destructive.");
+  assert(destructivePreview.approval_request.status === "blocked", "Destructive approval preview should be blocked.");
   assert(
-    redactSensitiveText(destructivePreview.context_packet.compact_context).includes("OPENROUTER_API_KEY=[redacted]"),
+    destructivePreview.approval_request.risk_level === "critical",
+    "Destructive approval preview should be critical risk.",
+  );
+  assert(
+    destructivePreview.approval_request.safety_flags.destructive_action,
+    "Destructive safety flag should be true.",
+  );
+  assert(
+    destructivePreview.approval_request.redacted_context_preview.includes("API_KEY=[redacted]"),
+    "Approval preview should redact key-like strings.",
+  );
+  assert(
+    !JSON.stringify(destructivePreview.approval_request).includes("abc123456789"),
+    "Approval request must not contain raw key-like text.",
+  );
+  assert(
+    !JSON.stringify(destructivePreview.approval_request).includes("4242 4242 4242 4242"),
+    "Approval request must not contain raw card-like text.",
+  );
+  assert(
+    redactSensitiveText(destructivePreview.context_packet.compact_context).includes("API_KEY=[redacted]"),
     "Context preview redaction should mask key-like strings.",
   );
 
@@ -149,7 +208,9 @@ try {
         recordsAfterPreview: recordsAfterPreview.length,
         mockRoute: mockResult.decision.provider_route,
         highSensitivityRoute: highSensitivityResult.decision.provider_route,
+        safeApprovalStatus: safePreview.approval_request.status,
         destructivePreview: destructivePreview.action_preview.status,
+        destructiveApprovalStatus: destructivePreview.approval_request.status,
         contextChars: contextPacket.context_chars,
         rawContextChars: contextPacket.raw_context_chars,
         openRouterModel: openRouterStatus.openrouter_glm.model_id,

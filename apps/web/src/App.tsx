@@ -327,6 +327,45 @@ type HermesContextPreview = {
     reasons: string[];
     next_action: string;
   };
+  approval_request: {
+    approval_id: string;
+    action_type: string;
+    risk_level: "low" | "medium" | "high" | "critical";
+    status: "preview-only" | "pending" | "blocked" | "approved" | "rejected" | "expired";
+    summary: string;
+    approval_reason: string;
+    requested_by: {
+      actor_user_id: string;
+      actor_role: string;
+    };
+    tenant_context: {
+      tenant_id: string;
+      business_name: string;
+      request_id: string;
+    };
+    created_at: string;
+    expires_at: string | null;
+    estimated_impact: {
+      provider_route: string;
+      model_id: string;
+      estimated_tokens: number;
+      estimated_cost_usd: number | null;
+      budget_status: string;
+    };
+    redacted_context_preview: string;
+    safety_flags: {
+      dry_run: boolean;
+      execution_disabled: boolean;
+      approval_execution_implemented: boolean;
+      live_provider_call_allowed: boolean;
+      ledger_write_allowed: boolean;
+      secrets_redacted: boolean;
+      destructive_action: boolean;
+      live_provider_required: boolean;
+      high_sensitivity: boolean;
+    };
+    execution_disabled: boolean;
+  };
   context: {
     compact_context: string;
     user_request_summary: string;
@@ -2870,6 +2909,19 @@ function actionPreviewState(status: HermesContextPreview["action_preview"]["stat
   return "blocked";
 }
 
+function approvalPreviewState(approval: HermesContextPreview["approval_request"]): TruthState {
+  if (approval.status === "blocked" || approval.risk_level === "critical" || approval.risk_level === "high") {
+    return "blocked";
+  }
+
+  if (approval.status === "pending" || approval.risk_level === "medium") return "stub";
+  return "real";
+}
+
+function formatSafetyFlag(flag: string) {
+  return flag.replace(/_/g, " ");
+}
+
 function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: boolean) => Record<string, string> }) {
   const [records, setRecords] = useState<HermesLedgerRecordPreview[]>([]);
   const [preview, setPreview] = useState<HermesContextPreview | null>(null);
@@ -3073,6 +3125,83 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
             <strong>{preview.decision.sensitivity_level}</strong>
             <p>Approval required: {preview.decision.approval_required ? "yes" : "no"}</p>
           </article>
+          <div className="approval-preview-panel">
+            <div className="section-head compact">
+              <div>
+                <span className="eyebrow">Approval Preview</span>
+                <h3>Preview-only request object</h3>
+              </div>
+              <TruthBadge
+                state={approvalPreviewState(preview.approval_request)}
+                label={preview.approval_request.execution_disabled ? "Execution disabled" : "Unsafe"}
+              />
+            </div>
+            <p className="execution-disabled-banner">
+              PREVIEW ONLY: no approval was executed, no live provider was called, and no destructive action ran.
+            </p>
+            <div className="approval-summary-grid">
+              <ProviderStatusCard
+                label="Action classification"
+                value={preview.approval_request.action_type}
+                detail={preview.approval_request.summary}
+                state={approvalPreviewState(preview.approval_request)}
+              />
+              <ProviderStatusCard
+                label="Approval requirement"
+                value={
+                  preview.approval_request.status === "preview-only"
+                    ? "No approval required"
+                    : preview.approval_request.status
+                }
+                detail={preview.approval_request.approval_reason || "Safe local preview. No approval item is created."}
+                state={approvalPreviewState(preview.approval_request)}
+              />
+              <ProviderStatusCard
+                label="Risk level"
+                value={preview.approval_request.risk_level}
+                detail="Risk is structural metadata only; execution remains disabled."
+                state={approvalPreviewState(preview.approval_request)}
+              />
+              <ProviderStatusCard
+                label="Execution"
+                value={preview.approval_request.execution_disabled ? "Disabled" : "Unsafe"}
+                detail="Approval execution is not implemented in this patch."
+                state={preview.approval_request.execution_disabled ? "real" : "blocked"}
+              />
+            </div>
+            <div className="approval-meta-grid">
+              <span>Approval ID: {preview.approval_request.approval_id}</span>
+              <span>Requested by: {preview.approval_request.requested_by.actor_role}</span>
+              <span>Tenant: {preview.approval_request.tenant_context.business_name}</span>
+              <span>
+                Expires:{" "}
+                {preview.approval_request.expires_at ? preview.approval_request.expires_at : "Not applicable"}
+              </span>
+              <span>Estimated tokens: {preview.approval_request.estimated_impact.estimated_tokens}</span>
+              <span>Budget: {preview.approval_request.estimated_impact.budget_status.replace(/_/g, " ")}</span>
+            </div>
+            <div className="safety-flag-grid" aria-label="Approval preview safety flags">
+              {Object.entries(preview.approval_request.safety_flags).map(([flag, enabled]) => (
+                <span className={enabled ? "enabled" : "disabled"} key={flag}>
+                  {formatSafetyFlag(flag)}: {enabled ? "yes" : "no"}
+                </span>
+              ))}
+            </div>
+            <div className="context-preview approval-context">
+              <div className="section-head compact">
+                <div>
+                  <span className="eyebrow">Redacted approval context</span>
+                  <h3>Stored preview body</h3>
+                </div>
+                <TruthBadge state="real" label="Secrets redacted" />
+              </div>
+              {preview.approval_request.redacted_context_preview ? (
+                <pre>{preview.approval_request.redacted_context_preview}</pre>
+              ) : (
+                <p>No approval context preview returned.</p>
+              )}
+            </div>
+          </div>
           <div className="context-preview">
             <div className="section-head compact">
               <div>

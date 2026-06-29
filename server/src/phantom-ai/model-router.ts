@@ -1,7 +1,12 @@
+import { createHash } from "node:crypto";
+
 import { compileHermesContext } from "./context-compiler.js";
-import { appendHermesLedgerRecord, resolveHermesLedgerPath } from "./hermes-ledger.js";
+import { appendHermesLedgerRecord, redactSensitiveText, resolveHermesLedgerPath } from "./hermes-ledger.js";
 import type {
   ActionPreview,
+  ApprovalRequestPreview,
+  ApprovalRequestStatus,
+  ApprovalRiskLevel,
   ModelRouterDecision,
   ModelRouterMode,
   ModelRouterPreviewResult,
@@ -246,6 +251,94 @@ function buildActionPreview(request: ModelRouterRequest, decision: ModelRouterDe
   };
 }
 
+function createApprovalId(request: ModelRouterRequest) {
+  const digest = createHash("sha256")
+    .update(`${request.tenant_id}:${request.request_id}:${request.task_type}`)
+    .digest("hex")
+    .slice(0, 24);
+  return `appr-${digest}`;
+}
+
+function getApprovalStatus(actionPreview: ActionPreview): ApprovalRequestStatus {
+  if (actionPreview.status === "safe") return "preview-only";
+  if (actionPreview.status === "blocked" || actionPreview.status === "destructive") return "blocked";
+  return "pending";
+}
+
+function getRiskLevel(decision: ModelRouterDecision, actionPreview: ActionPreview): ApprovalRiskLevel {
+  if (actionPreview.status === "destructive") return "critical";
+  if (decision.sensitivity_level === "high" || actionPreview.status === "blocked") return "high";
+  if (actionPreview.status === "pending_approval" || actionPreview.status === "live_provider_required") return "medium";
+  return "low";
+}
+
+function getApprovalExpiry(status: ApprovalRequestStatus, createdAt: Date) {
+  if (status === "preview-only" || status === "blocked") return null;
+  return new Date(createdAt.getTime() + 24 * 60 * 60 * 1000).toISOString();
+}
+
+function buildApprovalSummary(request: ModelRouterRequest, actionPreview: ActionPreview) {
+  const prefix =
+    actionPreview.status === "safe"
+      ? "No approval required"
+      : actionPreview.status === "destructive"
+        ? "Blocked destructive action"
+        : actionPreview.status === "blocked"
+          ? "Blocked approval preview"
+          : "Approval required";
+  return `${prefix}: ${request.task_type} for ${request.business_name}`;
+}
+
+function buildApprovalRequestPreview(
+  request: ModelRouterRequest,
+  decision: ModelRouterDecision,
+  actionPreview: ActionPreview,
+  compactContext: string,
+): ApprovalRequestPreview {
+  const createdAt = new Date();
+  const status = getApprovalStatus(actionPreview);
+
+  return {
+    approval_id: createApprovalId(request),
+    action_type: redactSensitiveText(request.task_type),
+    risk_level: getRiskLevel(decision, actionPreview),
+    status,
+    summary: redactSensitiveText(buildApprovalSummary(request, actionPreview)),
+    approval_reason: redactSensitiveText(actionPreview.reasons.join(" ")),
+    requested_by: {
+      actor_user_id: redactSensitiveText(request.actor_user_id),
+      actor_role: request.actor_role,
+    },
+    tenant_context: {
+      tenant_id: redactSensitiveText(request.tenant_id),
+      business_name: redactSensitiveText(request.business_name),
+      request_id: redactSensitiveText(request.request_id),
+    },
+    created_at: createdAt.toISOString(),
+    expires_at: getApprovalExpiry(status, createdAt),
+    estimated_impact: {
+      provider_route: decision.provider_route,
+      model_id: decision.model_id,
+      estimated_tokens: Math.ceil(compactContext.length / 4),
+      estimated_cost_usd: decision.estimated_cost_usd,
+      budget_status: "not_enforced",
+    },
+    redacted_context_preview: redactSensitiveText(compactContext),
+    safety_flags: {
+      dry_run: true,
+      execution_disabled: true,
+      approval_execution_implemented: false,
+      live_provider_call_allowed: false,
+      ledger_write_allowed: false,
+      secrets_redacted: true,
+      destructive_action: actionPreview.status === "destructive",
+      live_provider_required: actionPreview.status === "live_provider_required",
+      high_sensitivity: decision.sensitivity_level === "high",
+    },
+    execution_disabled: true,
+  };
+}
+
 export function previewModelRouterFoundation(
   request: ModelRouterRequest,
   options: {
@@ -268,11 +361,18 @@ export function previewModelRouterFoundation(
     approval_restrictions: request.approval_restrictions ?? DEFAULT_APPROVAL_RESTRICTIONS,
   });
   const actionPreview = buildActionPreview(request, decision);
+  const approvalRequest = buildApprovalRequestPreview(
+    request,
+    decision,
+    actionPreview,
+    contextPacket.compact_context,
+  );
 
   return {
     decision,
     context_packet: contextPacket,
     action_preview: actionPreview,
+    approval_request: approvalRequest,
     dry_run: true,
     ledger_written: false,
     live_provider_called: false,
@@ -287,7 +387,12 @@ export async function runModelRouterFoundation(
   } = {},
 ): Promise<ModelRouterRunResult> {
   const preview = previewModelRouterFoundation(request, { env: options.env });
-  const { decision, context_packet: contextPacket, action_preview: actionPreview } = preview;
+  const {
+    decision,
+    context_packet: contextPacket,
+    action_preview: actionPreview,
+    approval_request: approvalRequest,
+  } = preview;
 
   const ledgerRecord = {
     timestamp: new Date().toISOString(),
@@ -322,6 +427,7 @@ export async function runModelRouterFoundation(
     decision,
     context_packet: contextPacket,
     action_preview: actionPreview,
+    approval_request: approvalRequest,
     ledger_record: ledgerRecord,
   };
 }
