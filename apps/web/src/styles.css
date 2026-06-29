@@ -211,7 +211,8 @@ img {
 .record-card,
 .approval-card,
 .connection-card,
-.module-panel {
+.module-panel,
+.simulation-hero {
   background: rgba(17, 21, 27, 0.86);
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 8px;
@@ -243,6 +244,10 @@ img {
 .engine-card small {
   color: var(--muted);
   line-height: 1.45;
+}
+
+.truth-rail-card {
+  margin-top: 0;
 }
 
 .status-dot {
@@ -595,6 +600,161 @@ img {
 
 .panel {
   padding: 16px;
+}
+
+.truth-panel,
+.phantom-ai-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.truth-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.truth-item {
+  min-height: 148px;
+  display: grid;
+  align-content: start;
+  gap: 9px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+}
+
+.truth-item > div,
+.status-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.truth-item span,
+.status-line span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.truth-item strong,
+.status-line strong {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.truth-item p,
+.phantom-ai-panel li,
+.simulation-hero p,
+.simulation-section p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.truth-item p {
+  margin: 0;
+  font-size: 13px;
+}
+
+.truth-item.real {
+  border-color: rgba(89, 208, 133, 0.22);
+}
+
+.truth-item.demo {
+  border-color: rgba(111, 167, 255, 0.22);
+}
+
+.truth-item.stub {
+  border-color: rgba(229, 181, 75, 0.24);
+}
+
+.truth-item.blocked {
+  border-color: rgba(236, 47, 69, 0.24);
+}
+
+.truth-badge,
+.simulation-status {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 24px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.truth-badge.real {
+  color: #d9fff0;
+  background: rgba(89, 208, 133, 0.13);
+  border: 1px solid rgba(89, 208, 133, 0.24);
+}
+
+.truth-badge.demo {
+  color: #d8f8ff;
+  background: rgba(111, 167, 255, 0.13);
+  border: 1px solid rgba(111, 167, 255, 0.24);
+}
+
+.truth-badge.stub {
+  color: #fff0c4;
+  background: rgba(229, 181, 75, 0.13);
+  border: 1px solid rgba(229, 181, 75, 0.24);
+}
+
+.truth-badge.blocked {
+  color: #ffd6db;
+  background: rgba(236, 47, 69, 0.13);
+  border: 1px solid rgba(236, 47, 69, 0.24);
+}
+
+.ai-status-list {
+  display: grid;
+  gap: 8px;
+}
+
+.status-line {
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 8px;
+}
+
+.status-line strong {
+  text-align: right;
+}
+
+.ai-rule-columns {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.ai-rule-columns > div {
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 8px;
+}
+
+.ai-rule-columns strong {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.ai-rule-columns ul {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+  padding-left: 18px;
 }
 
 .asset-panel {
@@ -1779,6 +1939,104 @@ img {
   padding: 18px;
 }
 
+.simulation-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 16px;
+  align-items: center;
+  padding: 20px;
+}
+
+.simulation-hero h3 {
+  margin: 6px 0 0;
+  font-size: 26px;
+}
+
+.simulation-hero p {
+  max-width: 760px;
+  margin: 10px 0 0;
+}
+
+.simulation-hero-status,
+.simulation-grid,
+.simulation-list {
+  display: grid;
+  gap: 10px;
+}
+
+.simulation-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.simulation-section {
+  display: grid;
+  gap: 14px;
+}
+
+.simulation-section-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.simulation-section-head > span {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  color: var(--cyan);
+  background: rgba(40, 196, 216, 0.1);
+  border: 1px solid rgba(40, 196, 216, 0.18);
+  border-radius: 8px;
+}
+
+.simulation-section h3 {
+  margin: 0;
+}
+
+.simulation-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  padding: 11px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.065);
+  border-radius: 8px;
+}
+
+.simulation-list strong {
+  display: block;
+  font-size: 14px;
+}
+
+.simulation-list p {
+  margin: 4px 0 0;
+  font-size: 13px;
+}
+
+.simulation-status {
+  color: #d8f8ff;
+  background: rgba(40, 196, 216, 0.13);
+  border: 1px solid rgba(40, 196, 216, 0.24);
+}
+
+.phantomcut-card {
+  border-color: rgba(229, 181, 75, 0.24);
+}
+
+.debug-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.debug-panel > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .empty-state {
   min-height: 170px;
   display: grid;
@@ -1972,7 +2230,9 @@ img {
   .approval-grid,
   .connection-grid,
   .pangolin-grid,
-  .access-grid {
+  .access-grid,
+  .truth-grid,
+  .simulation-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
@@ -2054,9 +2314,27 @@ img {
   .connection-grid,
   .pangolin-grid,
   .access-grid,
+  .truth-grid,
+  .simulation-grid,
+  .simulation-hero,
+  .ai-rule-columns,
   .access-hero,
   .guard-panel {
     grid-template-columns: 1fr;
+  }
+
+  .simulation-list article,
+  .status-line {
+    grid-template-columns: 1fr;
+  }
+
+  .status-line {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .status-line strong {
+    text-align: left;
   }
 
   .route-panel-head {

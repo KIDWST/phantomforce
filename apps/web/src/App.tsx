@@ -40,13 +40,15 @@ type Route =
   | "approvals"
   | "access"
   | "activity"
-  | "connections";
+  | "connections"
+  | "trainer";
 type ApprovalKind = "email" | "calendar" | "task";
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type ActivityLevel = "ok" | "info" | "warn";
 type ClientAccessStatus = "active" | "past_due" | "revoked";
 type PaymentStatus = "paid" | "due" | "failed";
 type MoneyDemoStage = "signed" | "paid" | "past_due" | "revoked" | "restored";
+type TruthState = "real" | "demo" | "stub" | "blocked";
 
 type EmailItem = {
   id: string;
@@ -105,6 +107,19 @@ type Connection = {
   description: string;
   status: "connected" | "ready" | "locked";
   scopes: string[];
+};
+
+type TruthLabel = {
+  label: string;
+  value: string;
+  state: TruthState;
+  detail: string;
+};
+
+type SimulationItem = {
+  title: string;
+  detail: string;
+  status?: string;
 };
 
 type ClientAccess = {
@@ -257,15 +272,20 @@ const initialSessions: AppSession[] = [
 ];
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
-  { id: "command", label: "Command", icon: <Command size={18} /> },
-  { id: "inbox", label: "Inbox", icon: <Inbox size={18} /> },
-  { id: "calendar", label: "Calendar", icon: <CalendarDays size={18} /> },
+  { id: "command", label: "Home", icon: <Command size={18} /> },
+  { id: "trainer", label: "Phantom AI", icon: <Sparkles size={18} /> },
+  { id: "inbox", label: "Leads", icon: <Inbox size={18} /> },
+  { id: "calendar", label: "Schedule", icon: <CalendarDays size={18} /> },
   { id: "tasks", label: "Tasks", icon: <SquareCheckBig size={18} /> },
   { id: "approvals", label: "Approvals", icon: <ShieldCheck size={18} /> },
-  { id: "access", label: "Access", icon: <KeyRound size={18} /> },
+  { id: "access", label: "Settings", icon: <KeyRound size={18} /> },
   { id: "activity", label: "Activity", icon: <Activity size={18} /> },
-  { id: "connections", label: "Connections", icon: <Link2 size={18} /> },
+  { id: "connections", label: "Status", icon: <Link2 size={18} /> },
 ];
+
+const mobileNavItems = navItems.filter((item) =>
+  ["command", "trainer", "approvals", "access", "activity"].includes(item.id),
+);
 
 const initialEmails: EmailItem[] = [
   {
@@ -467,6 +487,176 @@ const clientModuleCatalog = [
   "Documents",
   "Reports",
 ];
+
+const truthStatusLabels: TruthLabel[] = [
+  {
+    label: "Brain",
+    value: "Mock / Claude API Not Configured",
+    state: "demo",
+    detail:
+      "The dashboard assistant is rule-based in this app. Official Claude API routing is not implemented or proven here.",
+  },
+  {
+    label: "Hermes",
+    value: "Not Integrated / Ledger Stub",
+    state: "stub",
+    detail:
+      "Hermes is a design target for memory, context, ledger, summaries, and approvals. No app ledger API is wired yet.",
+  },
+  {
+    label: "Access",
+    value: "Demo Local / Owner Config-Gated / Pangolin Dry-Run",
+    state: "demo",
+    detail:
+      "Demo sessions and owner admin are local/config-gated. Pangolin status is read-only/dry-run unless separately proven live.",
+  },
+  {
+    label: "Actions",
+    value: "Approval Only / Live Disabled",
+    state: "real",
+    detail:
+      "The UI creates reviewable approval items. Sends, uploads, deploys, production, billing, and destructive actions are disabled.",
+  },
+  {
+    label: "Client Mode",
+    value: "Personal Training Simulation",
+    state: "demo",
+    detail:
+      "The trainer cockpit uses local sample data only. It is not a launched customer workspace or live billing environment.",
+  },
+  {
+    label: "Team Mode",
+    value: "Owner Only / Employees Disabled",
+    state: "blocked",
+    detail:
+      "Employee seats, delegated permissions, and staff workflows are intentionally blocked until access rules are implemented.",
+  },
+];
+
+const customerStatusLabels: TruthLabel[] = [
+  {
+    label: "Phantom AI",
+    value: "Demo assistant",
+    state: "demo",
+    detail:
+      "Phantom AI can summarize this local workspace and prepare approval-ready next steps. It is not executing live external actions.",
+  },
+  {
+    label: "Memory",
+    value: "Setup required",
+    state: "stub",
+    detail:
+      "Workspace history, rules, approval records, and context packets are planned but not yet connected as durable memory.",
+  },
+  {
+    label: "Actions",
+    value: "Approval only",
+    state: "real",
+    detail:
+      "Drafts and suggested actions stay in the approval queue until Jordan or the owner approves them.",
+  },
+  {
+    label: "Launch readiness",
+    value: "Blocked",
+    state: "blocked",
+    detail:
+      "Premium reasoning, memory ledger, audit trail, access gates, and billing proof must be finished before a real customer launch.",
+  },
+];
+
+const phantomAiStatus = {
+  availability: "Demo assistant",
+  memory: "Setup required",
+  fallback: "Background help may assist later; customers stay in Phantom AI",
+  approvalGate: "Approval gate visible for demo actions; live external actions disabled",
+  allowedSuggestions: [
+    "Prioritize leads, tasks, schedule gaps, and client follow-ups",
+    "Draft approval-ready messages and operational next steps",
+    "Summarize launch blockers and onboarding progress",
+  ],
+  approvalRequired: [
+    "Sending email, posting content, uploads, deploys, route changes, billing, credentials, deletes, or production changes",
+    "Any customer-facing claim that premium reasoning, memory, billing, access, or employee roles are live",
+  ],
+};
+
+const personalTrainingSimulation = {
+  owner: {
+    name: "Jordan West",
+    business: "West Loop Strength Lab",
+    market: "Chicago personal training",
+    mode: "Local demo simulation",
+  },
+  services: [
+    {
+      title: "Founder's Body Rebuild",
+      detail: "$497/mo hybrid coaching with weekly accountability and nutrition review.",
+      status: "demo package",
+    },
+    {
+      title: "Private Strength Sessions",
+      detail: "$125/session in-gym training for executives and busy parents.",
+      status: "demo package",
+    },
+    {
+      title: "Transformation Sprint",
+      detail: "8-week onboarding sprint with assessment, schedule, habit plan, and progress photos.",
+      status: "demo package",
+    },
+  ],
+  leads: [
+    { title: "Maya C.", detail: "Asked about morning private sessions and meal prep accountability.", status: "hot" },
+    { title: "Andre R.", detail: "Corporate referral wants a 6-week reset before travel season.", status: "warm" },
+    { title: "Priya S.", detail: "Instagram lead waiting on package comparison and start dates.", status: "new" },
+  ],
+  clients: [
+    { title: "Eli Morgan", detail: "Strength rebuild, Tue/Thu 7 AM, needs knee-friendly programming.", status: "active" },
+    { title: "Nina Patel", detail: "Fat-loss sprint, Mon/Wed 6 PM, weekly photo check due Friday.", status: "active" },
+    { title: "Carlos Rivera", detail: "Trial completed; needs approval to send membership offer.", status: "approval" },
+  ],
+  schedule: [
+    { title: "7:00 AM - Eli Morgan", detail: "Lower-body strength session with form video notes.", status: "confirmed" },
+    { title: "12:30 PM - Lead consult", detail: "Maya C. discovery call and package fit review.", status: "hold" },
+    { title: "6:00 PM - Nina Patel", detail: "Conditioning block and weekly measurement check.", status: "confirmed" },
+  ],
+  tasks: [
+    { title: "Draft Maya follow-up", detail: "Explain Founder's Body Rebuild and available start windows.", status: "today" },
+    { title: "Update Carlos offer", detail: "Prepare approval item before any email is sent.", status: "approval only" },
+    { title: "Compile weekly wins", detail: "Summarize check-ins for active clients without external posting.", status: "queued" },
+  ],
+  approvals: [
+    { title: "Send membership offer to Carlos", detail: "Email must stay pending until Jordan approves.", status: "pending" },
+    { title: "Publish transformation reel", detail: "Needs client consent and media review before upload/post.", status: "blocked" },
+    { title: "Activate payment link", detail: "Billing claims and payment changes are not live in this simulation.", status: "blocked" },
+  ],
+  contentCalendar: [
+    { title: "Monday", detail: "Coach POV: why founders need simple strength systems.", status: "draft" },
+    { title: "Wednesday", detail: "Client education carousel about protein and consistency.", status: "draft" },
+    { title: "Friday", detail: "Wins roundup requires approval and consent before posting.", status: "approval" },
+  ],
+  mediaRequests: [
+    { title: "Form-check clips", detail: "Optional short edits for client feedback, local/demo only.", status: "demo" },
+    { title: "Reel template", detail: "30-second transformation story format for review.", status: "planned" },
+    { title: "Testimonial capture", detail: "Consent and usage rights required before any publish workflow.", status: "blocked" },
+  ],
+  onboardingChecklist: [
+    { title: "Client profile", detail: "Offer, services, voice, and target persona captured in demo seed.", status: "done" },
+    { title: "Approval policy", detail: "External actions require Jordan or owner approval.", status: "done" },
+    { title: "Premium reasoning setup", detail: "Official customer-facing AI configuration is not implemented in this app.", status: "blocked" },
+    { title: "Memory ledger", detail: "Append-only memory and context ledger still need implementation.", status: "blocked" },
+  ],
+  launchBlockers: [
+    { title: "Premium reasoning setup", detail: "No official customer-facing premium reasoning route is wired or proven.", status: "blocked" },
+    { title: "Memory and audit ledger", detail: "No durable app memory, context compiler, or approval ledger exists yet.", status: "blocked" },
+    { title: "Production access rules", detail: "Employee roles, live routes, billing, and production gates need hard proof.", status: "blocked" },
+  ],
+  phantomCut: {
+    title: "PhantomCut Media Lab / Resolve add-on",
+    detail:
+      "Optional video/editor support for form checks, reels, and media-heavy clients. It is not required for the personal trainer core app.",
+    status: "available/demo/planned",
+  },
+};
 
 const API_BASE_URL = "http://127.0.0.1:5190";
 const MONEY_DEMO_CLIENT_ID = "client-money-demo";
@@ -1217,6 +1407,7 @@ function App() {
             disabled={!canManageAccess}
           >
             <option>PhantomForce Pilot</option>
+            <option>Personal Training Simulation</option>
             <option>ChicagoShots</option>
             <option>Sports Ops Demo</option>
             {!canManageAccess ? <option>{selectedOrg}</option> : null}
@@ -1242,10 +1433,18 @@ function App() {
         <div className="engine-card">
           <div>
             <span className="status-dot locked" />
-            <p>Falcon worker</p>
+            <p>Protected actions</p>
           </div>
           <strong>Private boundary</strong>
-          <small>Typed jobs later. No raw console, files, logs, or shell access in the client app.</small>
+          <small>Customers see approved outcomes, not raw tools, files, logs, or shell access.</small>
+        </div>
+        <div className="engine-card truth-rail-card">
+          <div>
+            <span className="status-dot locked" />
+            <p>Workspace status</p>
+          </div>
+          <strong>Setup required before live launch.</strong>
+          <small>Phantom AI is demo-mode. Memory is setup-required. External actions stay approval-only.</small>
         </div>
       </aside>
 
@@ -1291,11 +1490,12 @@ function App() {
           />
         ) : null}
         {route === "activity" ? <ActivityView activity={activity} /> : null}
-        {route === "connections" ? <ConnectionsView /> : null}
+        {route === "connections" ? <StatusView /> : null}
+        {route === "trainer" ? <TrainerSimulationView /> : null}
       </main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {navItems.slice(0, 5).map((item) => (
+        {mobileNavItems.map((item) => (
           <button
             key={item.id}
             className={route === item.id ? "active" : ""}
@@ -1402,7 +1602,7 @@ function Topbar({
   return (
     <header className="topbar">
       <div>
-        <span className="eyebrow">Live workspace</span>
+        <span className="eyebrow">Workspace</span>
         <h1>{selectedOrg}</h1>
         <span className={`session-chip ${activeSession.role}`}>
           {activeSession.role === "admin" ? "Admin access" : "Client workspace"}
@@ -1474,10 +1674,12 @@ function CommandCenter({
           <Metric icon={<CalendarDays size={18} />} label="Calendar items" value={stats.events} tone="blue" />
         </div>
 
+        <CustomerReadinessPanel />
+
         <section className="chat-card">
           <div className="section-head">
             <div>
-              <span className="eyebrow">Business assistant</span>
+              <span className="eyebrow">Phantom AI</span>
               <h3>Command thread</h3>
             </div>
             <span className="safe-pill">
@@ -1515,6 +1717,8 @@ function CommandCenter({
             <p>Clients get safe typed outcomes, not raw execution controls.</p>
           </div>
         </section>
+
+        <PhantomAiStatusPanel />
 
         <section className="panel">
           <div className="section-head compact">
@@ -1567,7 +1771,7 @@ function Metric({ icon, label, value, tone }: { icon: ReactNode; label: string; 
 
 function InboxView({ emails, createFollowUpPlan }: { emails: EmailItem[]; createFollowUpPlan: () => void }) {
   return (
-    <Page title="Inbox intelligence" kicker="Gmail" action={<button className="primary-small" onClick={createFollowUpPlan}><Sparkles size={16} /> Prepare follow-up</button>}>
+    <Page title="Leads and follow-ups" kicker="Leads" action={<button className="primary-small" onClick={createFollowUpPlan}><Sparkles size={16} /> Prepare follow-up</button>}>
       <div className="list-grid">
         {emails.map((email) => (
           <article className="record-card" key={email.id}>
@@ -1590,7 +1794,7 @@ function InboxView({ emails, createFollowUpPlan }: { emails: EmailItem[]; create
 
 function CalendarView({ events }: { events: CalendarEvent[] }) {
   return (
-    <Page title="Scheduling command" kicker="Calendar">
+    <Page title="Schedule" kicker="Sessions">
       <div className="timeline">
         {events.map((event) => (
           <article className="timeline-item" key={event.id}>
@@ -1727,7 +1931,7 @@ function AccessView({
     {
       id: "revoked",
       label: "Revoked",
-      detail: "Pangolin route plan disables access and the app blocks workspace requests.",
+      detail: "Private route plan disables access and the app blocks workspace requests.",
     },
     {
       id: "restored",
@@ -1737,16 +1941,15 @@ function AccessView({
   ];
 
   return (
-    <Page title="Client access control" kicker="Pangolin private gateway">
+    <Page title="Settings and access" kicker="Workspace access">
       <section className="access-hero">
         <div>
           <span className="eyebrow">Private business OS</span>
           <h3>Payment controls the doorway. PhantomForce controls the workspace.</h3>
           <p>
             {canManageAccess
-              ? "Clients get a simple dashboard. Jordan gets module entitlements, private routes, revocation, and audit history."
-              : "This client workspace only shows the modules and access state currently allowed by PhantomForce."}
-            {" "}Pangolin stays behind the glass as the access layer, not the product UI.
+              ? "Customers get a simple dashboard. Jordan gets module entitlements, private routes, revocation, and audit history."
+              : "This workspace only shows the modules and access state currently allowed by PhantomForce."}
           </p>
         </div>
         <div className="access-proof">
@@ -2073,40 +2276,283 @@ function AccessView({
   );
 }
 
-function ConnectionsView() {
+function StatusView() {
+  const [showDebug, setShowDebug] = useState(false);
+
   return (
-    <Page title="Connections and modules" kicker="Backend power">
-      <div className="connection-grid">
-        {connections.map((connection) => (
-          <article className={`connection-card ${connection.status}`} key={connection.id}>
-            <div className="record-top">
-              <h3>{connection.name}</h3>
-              <span className={`status-badge ${connection.status}`}>{connection.status}</span>
-            </div>
-            <p>{connection.description}</p>
-            <div className="scope-list">
-              {connection.scopes.map((scope) => (
-                <span key={scope}>{scope}</span>
-              ))}
-            </div>
-          </article>
-        ))}
-      </div>
-      <section className="module-panel">
+    <Page
+      title="Status"
+      kicker="Launch readiness"
+      action={<TruthBadge state="blocked" label="Needs setup" />}
+    >
+      <CustomerReadinessPanel />
+      <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Module registry</span>
-            <h3>One app, business-specific tools.</h3>
+            <span className="eyebrow">Customer-safe status</span>
+            <h3>Launch blockers stay visible without exposing the tool stack.</h3>
           </div>
         </div>
-        <div className="module-list">
-          {modules.map((module) => (
-            <span key={module}>{module}</span>
+        <div className="simulation-list">
+          {personalTrainingSimulation.launchBlockers.map((item) => (
+            <article key={`status-${item.title}`}>
+              <div>
+                <strong>{item.title}</strong>
+                <p>{item.detail}</p>
+              </div>
+              <span className="simulation-status">{item.status}</span>
+            </article>
           ))}
         </div>
       </section>
+      <section className="panel debug-panel">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Admin/debug</span>
+            <h3>Background workforce status</h3>
+          </div>
+          <button className="ghost-small" type="button" onClick={() => setShowDebug((value) => !value)}>
+            {showDebug ? "Hide debug" : "Show debug"}
+          </button>
+        </div>
+        <p>
+          This is for owner/support visibility only. Customers stay in PhantomForce and Phantom AI product language.
+        </p>
+        {showDebug ? (
+          <>
+            <AdminDebugStatusPanel />
+            <div className="connection-grid">
+              {connections.map((connection) => (
+                <article className={`connection-card ${connection.status}`} key={connection.id}>
+                  <div className="record-top">
+                    <h3>{connection.name}</h3>
+                    <span className={`status-badge ${connection.status}`}>{connection.status}</span>
+                  </div>
+                  <p>{connection.description}</p>
+                  <div className="scope-list">
+                    {connection.scopes.map((scope) => (
+                      <span key={scope}>{scope}</span>
+                    ))}
+                  </div>
+                </article>
+              ))}
+            </div>
+          </>
+        ) : null}
+      </section>
     </Page>
   );
+}
+
+function CustomerReadinessPanel() {
+  return (
+    <section className="panel truth-panel">
+      <div className="section-head">
+        <div>
+          <span className="eyebrow">PhantomForce status</span>
+          <h3>What the owner can safely trust today.</h3>
+        </div>
+        <TruthBadge state="demo" label="Demo / Local" />
+      </div>
+      <div className="truth-grid">
+        {customerStatusLabels.map((item) => (
+          <article className={`truth-item ${item.state}`} key={item.label}>
+            <div>
+              <span>{item.label}</span>
+              <TruthBadge state={item.state} label={item.value} />
+            </div>
+            <strong>{item.value}</strong>
+            <p>{item.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function AdminDebugStatusPanel() {
+  return (
+    <section className="panel truth-panel">
+      <div className="section-head">
+        <div>
+          <span className="eyebrow">Admin/debug truth status</span>
+          <h3>Raw implementation status for operator review.</h3>
+        </div>
+        <TruthBadge state="stub" label="Debug only" />
+      </div>
+      <div className="truth-grid">
+        {truthStatusLabels.map((item) => (
+          <article className={`truth-item ${item.state}`} key={item.label}>
+            <div>
+              <span>{item.label}</span>
+              <TruthBadge state={item.state} label={item.state} />
+            </div>
+            <strong>
+              {item.label}: {item.value}
+            </strong>
+            <p>{item.detail}</p>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PhantomAiStatusPanel() {
+  return (
+    <section className="panel phantom-ai-panel">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">Phantom AI status</span>
+          <h3>Assistant, memory, and approvals</h3>
+        </div>
+        <TruthBadge state="demo" label="Demo assistant" />
+      </div>
+      <div className="ai-status-list">
+        <StatusLine label="Phantom AI" value={phantomAiStatus.availability} />
+        <StatusLine label="Memory" value={phantomAiStatus.memory} />
+        <StatusLine label="Background help" value={phantomAiStatus.fallback} />
+        <StatusLine label="Approval gate" value={phantomAiStatus.approvalGate} />
+      </div>
+      <div className="ai-rule-columns">
+        <div>
+          <strong>Allowed to suggest</strong>
+          <ul>
+            {phantomAiStatus.allowedSuggestions.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+        </div>
+        <div>
+          <strong>Requires approval</strong>
+          <ul>
+            {phantomAiStatus.approvalRequired.map((rule) => (
+              <li key={rule}>{rule}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function TrainerSimulationView() {
+  const simulation = personalTrainingSimulation;
+  const [showDebug, setShowDebug] = useState(false);
+
+  return (
+    <Page
+      title="Personal training owner workspace"
+      kicker="Local demo data"
+      action={<TruthBadge state="demo" label="Demo / Local" />}
+    >
+      <section className="simulation-hero">
+        <div>
+          <span className="eyebrow">Owner/operator profile</span>
+          <h3>{simulation.owner.business}</h3>
+          <p>
+            {simulation.owner.name} - {simulation.owner.market}. This cockpit is a local-only simulation seed, not a live
+            customer deployment.
+          </p>
+        </div>
+        <div className="simulation-hero-status">
+          <StatusLine label="Mode" value={simulation.owner.mode} />
+          <StatusLine label="Team Mode" value="Owner Only / Employees Disabled" />
+          <StatusLine label="Actions" value="Approval Only / Live Disabled" />
+        </div>
+      </section>
+
+      <CustomerReadinessPanel />
+      <PhantomAiStatusPanel />
+
+      <div className="simulation-grid">
+        <SimulationSection icon={<Sparkles size={18} />} title="Services and packages" items={simulation.services} />
+        <SimulationSection icon={<Users size={18} />} title="Leads" items={simulation.leads} />
+        <SimulationSection icon={<UserRound size={18} />} title="Client roster" items={simulation.clients} />
+        <SimulationSection icon={<CalendarDays size={18} />} title="Today's schedule" items={simulation.schedule} />
+        <SimulationSection icon={<SquareCheckBig size={18} />} title="Tasks" items={simulation.tasks} />
+        <SimulationSection icon={<ShieldCheck size={18} />} title="Approvals queue" items={simulation.approvals} />
+        <SimulationSection icon={<FileText size={18} />} title="Content calendar" items={simulation.contentCalendar} />
+        <SimulationSection icon={<Play size={18} />} title="Media requests" items={simulation.mediaRequests} />
+        <SimulationSection icon={<Check size={18} />} title="Onboarding checklist" items={simulation.onboardingChecklist} />
+        <SimulationSection icon={<AlertTriangle size={18} />} title="Launch blockers" items={simulation.launchBlockers} />
+        <PhantomCutAddonCard />
+      </div>
+      <section className="panel debug-panel">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Admin/debug</span>
+            <h3>Implementation truth labels</h3>
+          </div>
+          <button className="ghost-small" type="button" onClick={() => setShowDebug((value) => !value)}>
+            {showDebug ? "Hide debug" : "Show debug"}
+          </button>
+        </div>
+        <p>
+          Debug labels name background systems for owner/support review only. The default owner workspace stays in
+          PhantomForce product language.
+        </p>
+        {showDebug ? <AdminDebugStatusPanel /> : null}
+      </section>
+    </Page>
+  );
+}
+
+function PhantomCutAddonCard() {
+  return (
+    <section className="module-panel simulation-section phantomcut-card">
+      <div className="simulation-section-head">
+        <span>
+          <Play size={18} />
+        </span>
+        <div>
+          <span className="eyebrow">Media Lab add-on</span>
+          <h3>{personalTrainingSimulation.phantomCut.title}</h3>
+        </div>
+      </div>
+      <p>{personalTrainingSimulation.phantomCut.detail}</p>
+      <div className="module-list">
+        <span>optional</span>
+        <span>not core app</span>
+        <span>{personalTrainingSimulation.phantomCut.status}</span>
+      </div>
+    </section>
+  );
+}
+
+function SimulationSection({ icon, title, items }: { icon: ReactNode; title: string; items: SimulationItem[] }) {
+  return (
+    <section className="module-panel simulation-section">
+      <div className="simulation-section-head">
+        <span>{icon}</span>
+        <h3>{title}</h3>
+      </div>
+      <div className="simulation-list">
+        {items.map((item) => (
+          <article key={`${title}-${item.title}`}>
+            <div>
+              <strong>{item.title}</strong>
+              <p>{item.detail}</p>
+            </div>
+            {item.status ? <span className="simulation-status">{item.status}</span> : null}
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function StatusLine({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="status-line">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function TruthBadge({ state, label }: { state: TruthState; label: string }) {
+  return <span className={`truth-badge ${state}`}>{label}</span>;
 }
 
 function Page({ title, kicker, action, children }: { title: string; kicker: string; action?: ReactNode; children: ReactNode }) {
