@@ -1368,6 +1368,13 @@ function LoginScreen({
           <KeyRound size={18} />
           Enter PhantomForce
         </button>
+        <p className="account-disclaimer">
+          By creating an account, you agree that PhantomForce provides software, automation tools, and AI-generated
+          assistance. You are responsible for reviewing and approving any outputs, decisions, messages, content, or
+          business actions taken through the platform. PhantomForce is not responsible for losses, missed opportunities,
+          incorrect decisions, or actions you choose to take based on platform suggestions. AI outputs may be inaccurate
+          and are not legal, financial, medical, or professional advice. See <a href="/terms">Terms</a> for details.
+        </p>
         <div className="login-rails">
           <p>
             <Lock size={16} />

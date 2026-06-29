@@ -1876,6 +1876,27 @@ img {
   font-weight: 900;
 }
 
+.account-disclaimer {
+  margin: 14px 0 0;
+  padding: 12px;
+  color: var(--soft);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.48;
+}
+
+.account-disclaimer a {
+  color: var(--cyan);
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.account-disclaimer a:hover {
+  text-decoration: underline;
+}
+
 .login-rails {
   display: grid;
   gap: 8px;
