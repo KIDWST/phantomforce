@@ -419,6 +419,12 @@ img {
   border: 1px solid var(--line);
 }
 
+.ghost-small.danger {
+  color: #ffd8de;
+  border-color: rgba(236, 47, 69, 0.32);
+  background: rgba(236, 47, 69, 0.08);
+}
+
 .metric-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -710,7 +716,7 @@ img {
 
 .hermes-preview-controls {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 160px) auto auto;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 160px) auto auto auto;
   gap: 10px;
   align-items: end;
 }
@@ -787,6 +793,91 @@ img {
 
 .approval-context {
   background: rgba(0, 0, 0, 0.14);
+}
+
+.approval-queue-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(229, 181, 75, 0.055);
+  border: 1px solid rgba(229, 181, 75, 0.18);
+  border-radius: 8px;
+}
+
+.approval-queue-counts {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.approval-queue-counts span {
+  padding: 8px 10px;
+  color: var(--soft);
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.approval-queue-list {
+  display: grid;
+  gap: 10px;
+}
+
+.approval-queue-record {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+}
+
+.approval-queue-record.blocked {
+  border-color: rgba(236, 47, 69, 0.22);
+}
+
+.approval-queue-record.stub {
+  border-color: rgba(229, 181, 75, 0.24);
+}
+
+.approval-queue-record.real {
+  border-color: rgba(56, 189, 125, 0.18);
+}
+
+.approval-queue-record span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.approval-queue-record strong {
+  display: block;
+  margin-top: 4px;
+}
+
+.approval-queue-record p {
+  margin: 6px 0 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.approval-queue-meta {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.approval-queue-meta span {
+  min-width: 0;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+  overflow-wrap: anywhere;
 }
 
 .context-preview {
@@ -2530,6 +2621,8 @@ img {
   .approval-summary-grid,
   .approval-meta-grid,
   .safety-flag-grid,
+  .approval-queue-counts,
+  .approval-queue-meta,
   .destination-grid,
   .simulation-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2632,6 +2725,8 @@ img {
   .approval-summary-grid,
   .approval-meta-grid,
   .safety-flag-grid,
+  .approval-queue-counts,
+  .approval-queue-meta,
   .destination-grid,
   .simulation-grid,
   .simulation-hero,

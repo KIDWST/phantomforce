@@ -376,6 +376,36 @@ type HermesContextPreview = {
   };
 };
 
+type ApprovalQueueRecordPreview = {
+  queue_id: string;
+  queued_at: string;
+  queue_status: "pending" | "blocked_preview" | "preview_only";
+  source: string;
+  approval: HermesContextPreview["approval_request"];
+  execution_disabled: boolean;
+  queue_safety: {
+    local_file_only: boolean;
+    redacted: boolean;
+    approval_execution_implemented: boolean;
+    live_action_allowed: boolean;
+    ledger_write_allowed: boolean;
+  };
+};
+
+type ApprovalQueuePreviewResponse = {
+  dry_run: boolean;
+  ledger_written: boolean;
+  live_provider_called: boolean;
+  approval_execution_implemented: boolean;
+  action_preview: HermesContextPreview["action_preview"];
+  approval_request: HermesContextPreview["approval_request"];
+  queue_write: {
+    queued: boolean;
+    reason: "queued" | "preview_only_not_queued" | "queue_not_requested";
+    record: ApprovalQueueRecordPreview | null;
+  };
+};
+
 type AppSession = {
   id: string;
   label: string;
@@ -2922,8 +2952,21 @@ function formatSafetyFlag(flag: string) {
   return flag.replace(/_/g, " ");
 }
 
+function queueRecordState(record: ApprovalQueueRecordPreview): TruthState {
+  if (record.queue_status === "blocked_preview" || record.approval.risk_level === "critical") return "blocked";
+  if (record.queue_status === "pending" || record.approval.risk_level === "medium") return "stub";
+  return "real";
+}
+
 function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: boolean) => Record<string, string> }) {
   const [records, setRecords] = useState<HermesLedgerRecordPreview[]>([]);
+  const [queueRecords, setQueueRecords] = useState<ApprovalQueueRecordPreview[]>([]);
+  const [queueCounts, setQueueCounts] = useState({
+    pending: 0,
+    blockedPreview: 0,
+    previewOnly: 0,
+    malformedLines: 0,
+  });
   const [preview, setPreview] = useState<HermesContextPreview | null>(null);
   const [previewText, setPreviewText] = useState(
     "Summarize today's safest trainer follow-ups without sending, posting, uploading, or changing billing.",
@@ -2932,6 +2975,32 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [sensitivityLevel, setSensitivityLevel] = useState("low");
   const [historyStatus, setHistoryStatus] = useState("Not loaded");
   const [previewStatus, setPreviewStatus] = useState("Not loaded");
+  const [queueStatus, setQueueStatus] = useState("Not loaded");
+
+  function buildPreviewPayload(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
+    return {
+      tenant_id: "demo-trainer",
+      business_name: personalTrainingSimulation.owner.business,
+      request_id: `ui-preview-${Date.now()}`,
+      task_type: task,
+      sensitivity_level: sensitivity,
+      user_request: text,
+      business_summary:
+        "Owner-only personal training demo workspace. Employees disabled. External actions approval-only.",
+      module_data: [
+        {
+          module: "Tasks",
+          summary: "Today includes local demo tasks and approval-only follow-ups.",
+          items: personalTrainingSimulation.tasks.slice(0, 3),
+        },
+        {
+          module: "Approvals",
+          summary: "Approvals are review items only; no sends, uploads, billing, or production actions execute.",
+          items: personalTrainingSimulation.approvals.slice(0, 3),
+        },
+      ],
+    };
+  }
 
   async function refreshHistory() {
     setHistoryStatus("Loading redacted ledger history...");
@@ -2956,6 +3025,44 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     }
   }
 
+  async function refreshApprovalQueue() {
+    setQueueStatus("Loading local approval queue...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/approvals/queue?limit=8`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setQueueRecords([]);
+        setQueueStatus("Admin approval queue unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as {
+        queue?: {
+          pending_count?: number;
+          blocked_preview_count?: number;
+          preview_only_count?: number;
+          malformed_lines?: number;
+        };
+        records?: ApprovalQueueRecordPreview[];
+      };
+      const nextRecords = Array.isArray(data.records) ? data.records : [];
+      setQueueRecords(nextRecords);
+      setQueueCounts({
+        pending: data.queue?.pending_count ?? 0,
+        blockedPreview: data.queue?.blocked_preview_count ?? 0,
+        previewOnly: data.queue?.preview_only_count ?? 0,
+        malformedLines: data.queue?.malformed_lines ?? 0,
+      });
+      setQueueStatus(nextRecords.length ? "Local approval queue loaded" : "No queued approval previews yet");
+    } catch {
+      setQueueRecords([]);
+      setQueueStatus("Backend offline");
+    }
+  }
+
   async function runContextPreview(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     setPreviewStatus("Running dry-run preview...");
 
@@ -2963,28 +3070,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
       const response = await fetch(`${API_BASE_URL}/phantom-ai/context-preview`, {
         method: "POST",
         headers: sessionHeaders(true),
-        body: JSON.stringify({
-          tenant_id: "demo-trainer",
-          business_name: personalTrainingSimulation.owner.business,
-          request_id: `ui-preview-${Date.now()}`,
-          task_type: task,
-          sensitivity_level: sensitivity,
-          user_request: text,
-          business_summary:
-            "Owner-only personal training demo workspace. Employees disabled. External actions approval-only.",
-          module_data: [
-            {
-              module: "Tasks",
-              summary: "Today includes local demo tasks and approval-only follow-ups.",
-              items: personalTrainingSimulation.tasks.slice(0, 3),
-            },
-            {
-              module: "Approvals",
-              summary: "Approvals are review items only; no sends, uploads, billing, or production actions execute.",
-              items: personalTrainingSimulation.approvals.slice(0, 3),
-            },
-          ],
-        }),
+        body: JSON.stringify(buildPreviewPayload(text, task, sensitivity)),
       });
 
       if (!response.ok) {
@@ -3002,8 +3088,41 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     }
   }
 
+  async function queueCurrentApprovalPreview() {
+    setQueueStatus("Queueing preview-only approval object...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/approvals/preview`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          ...buildPreviewPayload(previewText, taskType, sensitivityLevel),
+          queue_approval: true,
+        }),
+      });
+
+      if (!response.ok) {
+        setQueueStatus("Approval queue write unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as ApprovalQueuePreviewResponse;
+      if (data.queue_write.queued) {
+        setQueueStatus("Approval preview queued locally. Execution remains disabled.");
+      } else if (data.queue_write.reason === "preview_only_not_queued") {
+        setQueueStatus("Safe preview was not queued. No approval is required.");
+      } else {
+        setQueueStatus("Queue write was not requested.");
+      }
+      await refreshApprovalQueue();
+    } catch {
+      setQueueStatus("Backend offline");
+    }
+  }
+
   useEffect(() => {
     void refreshHistory();
+    void refreshApprovalQueue();
     void runContextPreview();
   }, []);
 
@@ -3061,6 +3180,9 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           <button className="ghost-small" type="button" onClick={() => void refreshHistory()}>
             Refresh ledger
           </button>
+          <button className="ghost-small danger" type="button" onClick={() => void queueCurrentApprovalPreview()}>
+            Queue preview
+          </button>
         </div>
       </form>
 
@@ -3099,6 +3221,69 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           detail="This panel only previews approval status. It cannot execute sends, posts, billing, deletes, deploys, or provider work."
           state="stub"
         />
+        <ProviderStatusCard
+          label="Approval queue"
+          value={queueStatus}
+          detail="Queue writes are local JSONL only. No approval can execute from this queue."
+          state="stub"
+        />
+      </div>
+
+      <div className="approval-queue-panel">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Approval Queue</span>
+            <h3>Local preview queue</h3>
+          </div>
+          <TruthBadge state="stub" label="Execution disabled" />
+        </div>
+        <p className="execution-disabled-banner">
+          Preview/queue only - no live action can run. This queue cannot approve, reject, send, post, upload, delete,
+          bill, deploy, or call a provider.
+        </p>
+        <div className="approval-queue-counts">
+          <span>Pending: {queueCounts.pending}</span>
+          <span>Blocked previews: {queueCounts.blockedPreview}</span>
+          <span>Preview-only: {queueCounts.previewOnly}</span>
+          <span>Malformed skipped: {queueCounts.malformedLines}</span>
+        </div>
+        {queueRecords.length ? (
+          <div className="approval-queue-list">
+            {queueRecords.map((record) => (
+              <article className={`approval-queue-record ${queueRecordState(record)}`} key={record.queue_id}>
+                <div>
+                  <span>{record.queue_status.replace(/_/g, " ")}</span>
+                  <strong>{record.approval.summary}</strong>
+                  <p>{record.approval.approval_reason}</p>
+                </div>
+                <div className="approval-queue-meta">
+                  <span>ID: {record.approval.approval_id}</span>
+                  <span>Action: {record.approval.action_type}</span>
+                  <span>Risk: {record.approval.risk_level}</span>
+                  <span>Status: {record.approval.status}</span>
+                  <span>Created: {record.approval.created_at}</span>
+                  <span>Expires: {record.approval.expires_at ?? "Not applicable"}</span>
+                  <span>Tokens: {record.approval.estimated_impact.estimated_tokens}</span>
+                  <span>Budget: {record.approval.estimated_impact.budget_status.replace(/_/g, " ")}</span>
+                  <span>Execution disabled: {record.execution_disabled ? "yes" : "no"}</span>
+                  <span>Live action allowed: {record.queue_safety.live_action_allowed ? "yes" : "no"}</span>
+                </div>
+                <div className="safety-flag-grid" aria-label="Queued approval safety flags">
+                  {Object.entries(record.approval.safety_flags).map(([flag, enabled]) => (
+                    <span className={enabled ? "enabled" : "disabled"} key={flag}>
+                      {formatSafetyFlag(flag)}: {enabled ? "yes" : "no"}
+                    </span>
+                  ))}
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="access-note">
+            No queued approval previews yet. Use Queue preview to store the current risky preview locally without
+            executing it.
+          </p>
+        )}
       </div>
 
       {preview ? (

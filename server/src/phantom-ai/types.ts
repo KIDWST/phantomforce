@@ -6,6 +6,7 @@ export type ApprovalStatus = "not_required" | "pending" | "approved" | "rejected
 export type ActionPreviewStatus = "safe" | "pending_approval" | "blocked" | "destructive" | "live_provider_required";
 export type ApprovalRequestStatus = "preview-only" | "pending" | "blocked" | "approved" | "rejected" | "expired";
 export type ApprovalRiskLevel = "low" | "medium" | "high" | "critical";
+export type ApprovalQueueStatus = "pending" | "blocked_preview" | "preview_only";
 
 export type HermesLedgerRecord = {
   timestamp: string;
@@ -196,6 +197,28 @@ export type ApprovalRequestPreview = {
     high_sensitivity: boolean;
   };
   execution_disabled: true;
+};
+
+export type ApprovalQueueRecord = {
+  queue_id: string;
+  queued_at: string;
+  queue_status: ApprovalQueueStatus;
+  source: "admin-preview";
+  approval: ApprovalRequestPreview;
+  execution_disabled: true;
+  queue_safety: {
+    local_file_only: true;
+    redacted: true;
+    approval_execution_implemented: false;
+    live_action_allowed: false;
+    ledger_write_allowed: false;
+  };
+};
+
+export type ApprovalQueueWriteResult = {
+  queued: boolean;
+  reason: "queued" | "preview_only_not_queued" | "queue_not_requested";
+  record: ApprovalQueueRecord | null;
 };
 
 export type ModelRouterPreviewResult = {

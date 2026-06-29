@@ -57,6 +57,13 @@ import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
 import {
+  getApprovalQueueFileStatus,
+  normalizeApprovalQueueLimit,
+  persistApprovalQueuePreview,
+  readApprovalQueueRecords,
+  redactApprovalRequestPreview,
+} from "./phantom-ai/approval-queue.js";
+import {
   getHermesLedgerStatus,
   readRedactedHermesLedgerRecords,
   redactHermesLedgerRecord,
@@ -67,12 +74,7 @@ import {
   previewModelRouterFoundation,
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
-import type {
-  ActorRole,
-  ApprovalRequestPreview,
-  ContextModuleData,
-  SensitivityLevel,
-} from "./phantom-ai/types.js";
+import type { ActorRole, ApprovalQueueWriteResult, ContextModuleData, SensitivityLevel } from "./phantom-ai/types.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -319,29 +321,6 @@ function buildModelRouterRequestFromBody(
   };
 }
 
-function redactApprovalRequestPreview(approvalRequest: ApprovalRequestPreview): ApprovalRequestPreview {
-  return {
-    ...approvalRequest,
-    action_type: redactSensitiveText(approvalRequest.action_type),
-    summary: redactSensitiveText(approvalRequest.summary),
-    approval_reason: redactSensitiveText(approvalRequest.approval_reason),
-    requested_by: {
-      ...approvalRequest.requested_by,
-      actor_user_id: redactSensitiveText(approvalRequest.requested_by.actor_user_id),
-    },
-    tenant_context: {
-      tenant_id: redactSensitiveText(approvalRequest.tenant_context.tenant_id),
-      business_name: redactSensitiveText(approvalRequest.tenant_context.business_name),
-      request_id: redactSensitiveText(approvalRequest.tenant_context.request_id),
-    },
-    estimated_impact: {
-      ...approvalRequest.estimated_impact,
-      model_id: redactSensitiveText(approvalRequest.estimated_impact.model_id),
-    },
-    redacted_context_preview: redactSensitiveText(approvalRequest.redacted_context_preview),
-  };
-}
-
 app.get("/phantom-ai/provider-status", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -408,6 +387,35 @@ app.get("/phantom-ai/hermes-ledger/tail", async (request, reply) => {
   };
 });
 
+app.get("/phantom-ai/approvals/queue", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { limit?: string } | undefined;
+  const limit = normalizeApprovalQueueLimit(query?.limit);
+  const queueStatus = await getApprovalQueueFileStatus();
+  const queue = await readApprovalQueueRecords({ limit });
+
+  return {
+    ok: true,
+    session,
+    limit,
+    queue: {
+      path: queueStatus.queuePath,
+      exists: queueStatus.exists,
+      bytes: queueStatus.bytes,
+      malformed_lines: queue.malformed_lines,
+      pending_count: queue.records.filter((record) => record.queue_status === "pending").length,
+      blocked_preview_count: queue.records.filter((record) => record.queue_status === "blocked_preview").length,
+      preview_only_count: queue.records.filter((record) => record.queue_status === "preview_only").length,
+    },
+    records: queue.records,
+  };
+});
+
 app.post("/phantom-ai/context-preview", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -448,6 +456,69 @@ app.post("/phantom-ai/context-preview", async (request, reply) => {
     context: {
       compact_context: redactSensitiveText(result.context_packet.compact_context),
       user_request_summary: redactSensitiveText(result.context_packet.user_request_summary),
+      context_chars: result.context_packet.context_chars,
+      estimated_tokens: result.context_packet.estimated_tokens,
+      raw_context_chars: result.context_packet.raw_context_chars,
+      compression_ratio: result.context_packet.compression_ratio,
+    },
+  };
+});
+
+app.post("/phantom-ai/approvals/preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+    queue_approval?: unknown;
+    queue_preview_only?: unknown;
+  };
+  const result = previewModelRouterFoundation(buildModelRouterRequestFromBody(body, session, "approval-preview"));
+  const queueRequested = body.queue_approval === true;
+  const queueWrite: ApprovalQueueWriteResult = queueRequested
+    ? await persistApprovalQueuePreview(result.approval_request, {
+        allowPreviewOnly: body.queue_preview_only === true,
+      })
+    : {
+        queued: false,
+        reason: "queue_not_requested",
+        record: null,
+      };
+
+  return {
+    ok: true,
+    session,
+    dry_run: result.dry_run,
+    ledger_written: result.ledger_written,
+    live_provider_called: result.live_provider_called,
+    approval_execution_implemented: false,
+    decision: {
+      ...result.decision,
+      risks: result.decision.risks.map((risk) => redactSensitiveText(risk)),
+      next_action: redactSensitiveText(result.decision.next_action),
+    },
+    action_preview: {
+      ...result.action_preview,
+      reasons: result.action_preview.reasons.map((reason) => redactSensitiveText(reason)),
+      next_action: redactSensitiveText(result.action_preview.next_action),
+    },
+    approval_request: redactApprovalRequestPreview(result.approval_request),
+    queue_write: {
+      ...queueWrite,
+      record: queueWrite.record,
+    },
+    context: {
       context_chars: result.context_packet.context_chars,
       estimated_tokens: result.context_packet.estimated_tokens,
       raw_context_chars: result.context_packet.raw_context_chars,
