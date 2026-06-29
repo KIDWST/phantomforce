@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 
 import { redactSensitiveText } from "./hermes-ledger.js";
+import {
+  buildOpenRouterGlmAdapterDryRunPreview,
+  OPENROUTER_GLM_PROVIDER_ID,
+} from "./providers/openrouter-adapter.js";
 import type {
   ProviderInvocationFirewallInput,
   ProviderInvocationFirewallResult,
@@ -101,6 +105,19 @@ export function evaluateProviderInvocationFirewall(
   const contextSummary = redactSensitiveText(input.redacted_context_summary).slice(0, MAX_CONTEXT_SUMMARY_CHARS);
   const requiredBeforeLive = buildRequiredBeforeLive(input, readinessRoute, blockedReasons);
   const readinessConfigured = Boolean(readinessRoute?.configured);
+  const openRouterAdapter =
+    input.requested_route === OPENROUTER_GLM_PROVIDER_ID
+      ? buildOpenRouterGlmAdapterDryRunPreview({
+          requestId: input.approval_request.tenant_context.request_id,
+          redactedPromptSummary: contextSummary,
+          estimatedTokens: input.estimated_tokens,
+          estimatedCostUsd: input.estimated_cost_usd,
+          providerPolicy: input.policy_result,
+          readinessRoute,
+          firewallBlockedReasons: blockedReasons,
+          firewallRequiredBeforeLive: requiredBeforeLive,
+        })
+      : null;
 
   return {
     invocation_id: createInvocationId(input),
@@ -134,6 +151,7 @@ export function evaluateProviderInvocationFirewall(
       queue_written: false,
       approval_executed: false,
     },
+    openrouter_adapter: openRouterAdapter,
     client_safe_summary: "Phantom AI previewed this request safely. No external AI call or live action was taken.",
     admin_debug_summary: redactSensitiveText(
       `Invocation ${input.requested_route}/${input.requested_model_id} blocked. Policy allowed=false; readiness configured=${readinessConfigured}; approval=${input.approval_request.status}.`,

@@ -407,6 +407,46 @@ export type ProviderInvocationFirewallInput = {
   readiness_result: ProviderReadinessReport;
 };
 
+export type OpenRouterGlmAdapterDryRunResult = {
+  provider_id: "openrouter_glm";
+  model_id: "z-ai/glm-5.2";
+  adapter_status: "blocked_dry_run";
+  request_id: string;
+  redacted_prompt_summary: string;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  live_call_allowed: false;
+  execution_disabled: true;
+  blocked_reason: string;
+  required_before_live: string[];
+  dry_run_response: {
+    provider_called: false;
+    network_call_performed: false;
+    http_request_prepared: false;
+    output_text: string;
+    raw_response: null;
+  };
+  admin_debug_summary: string;
+  client_safe_summary: string;
+  safety_flags: {
+    dry_run_only: true;
+    live_call_allowed: false;
+    execution_disabled: true;
+    provider_called: false;
+    network_call_performed: false;
+    http_request_prepared: false;
+    raw_secret_exposed: false;
+    raw_prompt_returned: false;
+    raw_response_stored: false;
+    ledger_written: false;
+    queue_written: false;
+    approval_executed: false;
+    policy_route_allowed: false;
+    readiness_live_call_allowed: false;
+    admin_only: true;
+  };
+};
+
 export type ProviderInvocationFirewallResult = {
   invocation_id: string;
   status: "blocked";
@@ -439,6 +479,7 @@ export type ProviderInvocationFirewallResult = {
     queue_written: false;
     approval_executed: false;
   };
+  openrouter_adapter: OpenRouterGlmAdapterDryRunResult | null;
   client_safe_summary: string;
   admin_debug_summary: string;
   safety_flags: {

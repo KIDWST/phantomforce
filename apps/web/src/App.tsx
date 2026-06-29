@@ -407,6 +407,30 @@ type ProviderReadinessStatusResponse = {
   secrets_stored: boolean;
 };
 
+type OpenRouterGlmAdapterDryRunResult = {
+  provider_id: "openrouter_glm";
+  model_id: "z-ai/glm-5.2";
+  adapter_status: "blocked_dry_run";
+  request_id: string;
+  redacted_prompt_summary: string;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  live_call_allowed: false;
+  execution_disabled: true;
+  blocked_reason: string;
+  required_before_live: string[];
+  dry_run_response: {
+    provider_called: false;
+    network_call_performed: false;
+    http_request_prepared: false;
+    output_text: string;
+    raw_response: null;
+  };
+  admin_debug_summary: string;
+  client_safe_summary: string;
+  safety_flags: Record<string, boolean>;
+};
+
 type ProviderInvocationFirewallResult = {
   invocation_id: string;
   status: "blocked";
@@ -439,6 +463,7 @@ type ProviderInvocationFirewallResult = {
     queue_written: false;
     approval_executed: false;
   };
+  openrouter_adapter: OpenRouterGlmAdapterDryRunResult | null;
   client_safe_summary: string;
   admin_debug_summary: string;
   safety_flags: Record<string, boolean>;
@@ -3487,6 +3512,54 @@ function ProviderInvocationFirewallPanel({ invocation }: { invocation: ProviderI
           state="demo"
         />
       </div>
+      {invocation.openrouter_adapter ? (
+        <div className="context-preview">
+          <div className="section-head compact">
+            <div>
+              <span className="eyebrow">OpenRouter / GLM adapter</span>
+              <h3>Dry-run skeleton for future worker route</h3>
+            </div>
+            <TruthBadge state="stub" label="Adapter skeleton" />
+          </div>
+          <p className="execution-disabled-banner">
+            OPENROUTER ADAPTER DRY-RUN: model {invocation.openrouter_adapter.model_id}, no live provider call, no HTTP
+            request prepared, and no raw provider response exists.
+          </p>
+          <div className="provider-grid">
+            <ProviderStatusCard
+              label="Adapter status"
+              value={invocation.openrouter_adapter.adapter_status.replace(/_/g, " ")}
+              detail={invocation.openrouter_adapter.blocked_reason}
+              state="stub"
+            />
+            <ProviderStatusCard
+              label="Model"
+              value={invocation.openrouter_adapter.model_id}
+              detail={`Provider id: ${invocation.openrouter_adapter.provider_id}. Request: ${invocation.openrouter_adapter.request_id}.`}
+              state="demo"
+            />
+            <ProviderStatusCard
+              label="HTTP request"
+              value={invocation.openrouter_adapter.dry_run_response.http_request_prepared ? "Prepared" : "Not prepared"}
+              detail={invocation.openrouter_adapter.dry_run_response.output_text}
+              state={invocation.openrouter_adapter.dry_run_response.http_request_prepared ? "blocked" : "real"}
+            />
+            <ProviderStatusCard
+              label="Provider called"
+              value={invocation.openrouter_adapter.dry_run_response.provider_called ? "Yes" : "No"}
+              detail={invocation.openrouter_adapter.admin_debug_summary}
+              state={invocation.openrouter_adapter.dry_run_response.provider_called ? "blocked" : "real"}
+            />
+          </div>
+          <div className="safety-flag-grid" aria-label="OpenRouter adapter safety flags">
+            {Object.entries(invocation.openrouter_adapter.safety_flags).map(([flag, enabled]) => (
+              <span className={enabled ? "enabled" : "disabled"} key={flag}>
+                {formatSafetyFlag(flag)}: {enabled ? "yes" : "no"}
+              </span>
+            ))}
+          </div>
+        </div>
+      ) : null}
       <div className="context-preview">
         <div className="section-head compact">
           <div>
@@ -3556,7 +3629,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [providerReadiness, setProviderReadiness] = useState<ProviderReadinessReport | null>(null);
   const [providerInvocation, setProviderInvocation] = useState<ProviderInvocationFirewallResult | null>(null);
   const [previewText, setPreviewText] = useState(
-    "Summarize today's safest trainer follow-ups without sending, posting, uploading, or changing billing.",
+    "Summarize today's safest trainer follow-up priorities for owner review only.",
   );
   const [taskType, setTaskType] = useState("content_idea_summary");
   const [sensitivityLevel, setSensitivityLevel] = useState("low");
