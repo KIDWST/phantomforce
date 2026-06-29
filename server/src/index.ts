@@ -82,6 +82,7 @@ import {
   evaluateProviderBudgetPolicy,
   getProviderBudgetPolicyStatus,
 } from "./phantom-ai/provider-policy.js";
+import { getProviderReadinessReport } from "./phantom-ai/provider-readiness.js";
 import type {
   ActorRole,
   ApprovalQueueTransitionStatus,
@@ -386,6 +387,23 @@ app.get("/phantom-ai/provider-policy/status", async (request, reply) => {
     execution_disabled: true,
     live_provider_called: false,
     approval_execution_implemented: false,
+    secrets_stored: false,
+  };
+});
+
+app.get("/phantom-ai/provider-readiness", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    readiness: getProviderReadinessReport(),
+    live_provider_called: false,
+    execution_disabled: true,
     secrets_stored: false,
   };
 });

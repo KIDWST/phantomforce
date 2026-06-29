@@ -204,6 +204,41 @@ export type ProviderPolicyEvaluationResult = {
   };
 };
 
+export type ProviderReadinessRouteId = "mock" | "openrouter_glm" | "claude" | "local" | "byok";
+export type ProviderReadinessRouteStatus = "configured" | "needs_config" | "disabled";
+
+export type ProviderReadinessRoute = {
+  id: ProviderReadinessRouteId;
+  label: string;
+  configured: boolean;
+  status: ProviderReadinessRouteStatus;
+  live_call_allowed: false;
+  is_default_safe_route: boolean;
+  missing: string[];
+  detail: string;
+};
+
+export type ProviderReadinessReport = {
+  checked_at: string;
+  router_mode: ModelRouterMode;
+  live_providers_globally_enabled: boolean;
+  production_ready: false;
+  any_live_route_configured: boolean;
+  recommended_route: "mock";
+  routes: ProviderReadinessRoute[];
+  required_before_live: string[];
+  client_safe_summary: string;
+  admin_debug_summary: string;
+  safety_flags: {
+    live_provider_call_allowed: false;
+    execution_disabled: true;
+    dry_run_only: true;
+    secrets_stored: false;
+    admin_only: true;
+    not_production: true;
+  };
+};
+
 export type ModelRouterRequest = {
   tenant_id: string;
   business_name: string;
