@@ -12,6 +12,8 @@ function assert(condition: boolean, message: string) {
 const fakeSecret = ["SECRET", "TOKEN"].join("_");
 const fakeSecretValue = ["abc", "123", "456", "789"].join("");
 const fakeCard = ["4242", "4242", "4242", "4242"].join(" ");
+const fakeProviderKey = ["sk", "or", "v1", "firewalltest0123456789"].join("-");
+const openRouterKeyEnvName = ["OPENROUTER", "API", "KEY"].join("_");
 
 const baseRequest: ModelRouterRequest = {
   tenant_id: "demo-trainer",
@@ -60,7 +62,7 @@ const liveFlaggedPreview = previewModelRouterFoundation(
   {
     env: {
       PHANTOM_MODEL_ROUTER_MODE: "openrouter",
-      OPENROUTER_API_KEY: "sk-or-v1-firewalltest0123456789",
+      [openRouterKeyEnvName]: fakeProviderKey,
       PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
     },
   },
@@ -74,7 +76,7 @@ assert(
   "Firewall must not call a provider even with credentials present.",
 );
 assert(
-  !JSON.stringify(liveFlaggedFirewall).includes("sk-or-v1-firewalltest0123456789"),
+  !JSON.stringify(liveFlaggedFirewall).includes(fakeProviderKey),
   "Firewall result must not include the raw provider key value.",
 );
 
