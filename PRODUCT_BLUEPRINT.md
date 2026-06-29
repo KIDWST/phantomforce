@@ -135,14 +135,16 @@ The default customer Status view should show readiness in plain language: Ready,
 - no secret exposure
 - no public deployment or route changes from the simulation patch
 
-## Smallest Safe UI Patch
+## Patch 3A Cockpit Structure
 
-The next UI patch should:
+The app structure should now treat these as first-class PWA destinations:
 
-- foreground PhantomForce and Phantom AI in customer-facing copy
-- move raw provider/tool-stack status into admin/debug/status areas
-- keep admin/debug closed by default, even for the owner-only simulation
-- add the personal-training simulation seed as local demo data
-- make approval-only behavior visible
-- show PhantomCut as optional Media Lab add-on
-- avoid package changes, backend route changes, public exposure, and production actions
+- Content
+- Media Lab
+- Offers
+
+These must remain foreground product modules, not buried debug data. Content should show recommended posts, raw ideas, drafts, approval state, and placeholder platform status. Media Lab should show media requests, deliverables, upload/delivery placeholders, and PhantomCut as optional add-on. Offers should show packages, offer recommendations, pricing drafts, and approval status.
+
+## Next Safe Patch
+
+After the first-class cockpit destinations exist, the next safe patch should be Hermes JSONL memory/ledger design and implementation. That patch should still avoid Claude API wiring until official configuration and approval rules are ready.

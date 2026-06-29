@@ -1,5 +1,4 @@
 import {
-  Activity,
   AlertTriangle,
   ArrowRight,
   Bell,
@@ -37,6 +36,9 @@ type Route =
   | "inbox"
   | "calendar"
   | "tasks"
+  | "content"
+  | "media"
+  | "offers"
   | "approvals"
   | "access"
   | "activity"
@@ -49,6 +51,7 @@ type ClientAccessStatus = "active" | "past_due" | "revoked";
 type PaymentStatus = "paid" | "due" | "failed";
 type MoneyDemoStage = "signed" | "paid" | "past_due" | "revoked" | "restored";
 type TruthState = "real" | "demo" | "stub" | "blocked";
+type ResultMode = "recommended" | "all";
 
 type EmailItem = {
   id: string;
@@ -274,18 +277,16 @@ const initialSessions: AppSession[] = [
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Home", icon: <Command size={18} /> },
   { id: "trainer", label: "Phantom AI", icon: <Sparkles size={18} /> },
-  { id: "inbox", label: "Leads", icon: <Inbox size={18} /> },
+  { id: "inbox", label: "Leads & Clients", icon: <Users size={18} /> },
   { id: "calendar", label: "Schedule", icon: <CalendarDays size={18} /> },
   { id: "tasks", label: "Tasks", icon: <SquareCheckBig size={18} /> },
+  { id: "content", label: "Content", icon: <FileText size={18} /> },
+  { id: "media", label: "Media Lab", icon: <Play size={18} /> },
+  { id: "offers", label: "Offers", icon: <Zap size={18} /> },
   { id: "approvals", label: "Approvals", icon: <ShieldCheck size={18} /> },
   { id: "access", label: "Settings", icon: <KeyRound size={18} /> },
-  { id: "activity", label: "Activity", icon: <Activity size={18} /> },
   { id: "connections", label: "Status", icon: <Link2 size={18} /> },
 ];
-
-const mobileNavItems = navItems.filter((item) =>
-  ["command", "trainer", "approvals", "access", "activity"].includes(item.id),
-);
 
 const initialEmails: EmailItem[] = [
   {
@@ -634,10 +635,41 @@ const personalTrainingSimulation = {
     { title: "Wednesday", detail: "Client education carousel about protein and consistency.", status: "draft" },
     { title: "Friday", detail: "Wins roundup requires approval and consent before posting.", status: "approval" },
   ],
+  contentIdeas: [
+    { title: "Protein reset checklist", detail: "Raw carousel idea for busy owners who skip breakfast.", status: "raw idea" },
+    { title: "Founder's 20-minute lift", detail: "Short-form post showing a simple hotel-gym strength session.", status: "recommended" },
+    { title: "Client win story", detail: "Transformation narrative requires consent before any public post.", status: "approval" },
+    { title: "Meal prep Sunday", detail: "Behind-the-scenes education post for accountability coaching.", status: "queued" },
+  ],
+  contentDrafts: [
+    { title: "Maya consult follow-up post", detail: "Draft educational caption, no prospect details included.", status: "pending approval" },
+    { title: "Friday wins roundup", detail: "Requires client consent and owner review before publishing.", status: "blocked" },
+    { title: "Founder strength myth", detail: "Draft only; platform posting is not wired.", status: "draft" },
+  ],
   mediaRequests: [
     { title: "Form-check clips", detail: "Optional short edits for client feedback, local/demo only.", status: "demo" },
     { title: "Reel template", detail: "30-second transformation story format for review.", status: "planned" },
     { title: "Testimonial capture", detail: "Consent and usage rights required before any publish workflow.", status: "blocked" },
+  ],
+  mediaDeliverables: [
+    { title: "Form-check cutdown", detail: "Coach review clip for internal client feedback.", status: "queued" },
+    { title: "Transformation reel draft", detail: "Storyboard only; no upload or publish workflow is live.", status: "approval" },
+    { title: "Testimonial prep sheet", detail: "Shot list and consent checklist for a future media day.", status: "planned" },
+  ],
+  mediaPlaceholders: [
+    { title: "Uploads", detail: "File upload intake is not wired in this simulation.", status: "placeholder" },
+    { title: "Delivery links", detail: "External delivery and posting are disabled until approval gates exist.", status: "disabled" },
+    { title: "Client consent vault", detail: "Consent storage is a launch blocker, not live storage.", status: "blocked" },
+  ],
+  offerRecommendations: [
+    { title: "Lead Maya into Founder's Body Rebuild", detail: "Best match: accountability plus morning-session availability.", status: "recommended" },
+    { title: "Offer Carlos a 90-day private training upgrade", detail: "Prepare owner-approved email before any send.", status: "approval" },
+    { title: "Bundle nutrition review with Transformation Sprint", detail: "Demo recommendation for higher-retention package design.", status: "demo" },
+  ],
+  pricingDrafts: [
+    { title: "$497/mo hybrid coaching", detail: "Draft recurring package; billing activation is not live.", status: "draft" },
+    { title: "$125 private session", detail: "Simple session rate for owner review.", status: "draft" },
+    { title: "$1,997 8-week sprint", detail: "Premium transformation package, pending final scope approval.", status: "approval" },
   ],
   onboardingChecklist: [
     { title: "Client profile", detail: "Offer, services, voice, and target persona captured in demo seed.", status: "done" },
@@ -651,11 +683,17 @@ const personalTrainingSimulation = {
     { title: "Production access rules", detail: "Employee roles, live routes, billing, and production gates need hard proof.", status: "blocked" },
   ],
   phantomCut: {
-    title: "PhantomCut Media Lab / Resolve add-on",
+    title: "PhantomCut Media Lab add-on",
     detail:
       "Optional video/editor support for form checks, reels, and media-heavy clients. It is not required for the personal trainer core app.",
     status: "available/demo/planned",
   },
+  roleModel: [
+    { title: "Jordan / PhantomForce", detail: "Platform super-admin concept and final control layer.", status: "operator" },
+    { title: "Business owner", detail: "Admin only for this business workspace in the simulation.", status: "owner admin" },
+    { title: "Employees", detail: "Disabled/future until roles, audit, and permission rules are implemented.", status: "disabled" },
+    { title: "Client portal users", detail: "Optional/future. Trainer clients are roster records today, not portal accounts.", status: "future" },
+  ],
 };
 
 const API_BASE_URL = "http://127.0.0.1:5190";
@@ -1468,6 +1506,9 @@ function App() {
         {route === "inbox" ? <InboxView emails={emails} createFollowUpPlan={createFollowUpPlan} /> : null}
         {route === "calendar" ? <CalendarView events={events} /> : null}
         {route === "tasks" ? <TasksView tasks={tasks} completeTask={completeTask} /> : null}
+        {route === "content" ? <ContentView /> : null}
+        {route === "media" ? <MediaLabView /> : null}
+        {route === "offers" ? <OffersView /> : null}
         {route === "approvals" ? (
           <ApprovalsView approvals={approvals} approveAction={approveAction} rejectAction={rejectAction} />
         ) : null}
@@ -1495,7 +1536,7 @@ function App() {
       </main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {mobileNavItems.map((item) => (
+        {navItems.map((item) => (
           <button
             key={item.id}
             className={route === item.id ? "active" : ""}
@@ -1710,10 +1751,10 @@ function CommandCenter({
 
       <aside className="command-side">
         <section className="panel asset-panel">
-          <img src="/assets/falcon-stream.png" alt="Falcon powered workflow stream" />
+          <img src="/assets/falcon-stream.png" alt="Protected workflow stream" />
           <div>
             <span className="eyebrow">Backend power</span>
-            <h3>Falcon stays behind the glass.</h3>
+            <h3>Automation stays behind the glass.</h3>
             <p>Clients get safe typed outcomes, not raw execution controls.</p>
           </div>
         </section>
@@ -1770,24 +1811,30 @@ function Metric({ icon, label, value, tone }: { icon: ReactNode; label: string; 
 }
 
 function InboxView({ emails, createFollowUpPlan }: { emails: EmailItem[]; createFollowUpPlan: () => void }) {
+  const [mode, setMode] = useState<ResultMode>("recommended");
+  const followUpItems: SimulationItem[] = emails.map((email) => ({
+    title: email.subject,
+    detail: `${email.from} - ${email.preview}`,
+    status: email.status,
+  }));
+  const allItems = [...personalTrainingSimulation.leads, ...personalTrainingSimulation.clients, ...followUpItems];
+  const recommendedItems = allItems.filter((item) =>
+    ["hot", "approval", "needs-reply", "new"].includes(item.status ?? ""),
+  );
+  const visibleItems = mode === "recommended" ? recommendedItems : allItems;
+
   return (
-    <Page title="Leads and follow-ups" kicker="Leads" action={<button className="primary-small" onClick={createFollowUpPlan}><Sparkles size={16} /> Prepare follow-up</button>}>
-      <div className="list-grid">
-        {emails.map((email) => (
-          <article className="record-card" key={email.id}>
-            <div className="record-top">
-              <span className={`priority ${email.priority}`}>{email.priority}</span>
-              <small>{email.age}</small>
-            </div>
-            <h3>{email.subject}</h3>
-            <p>{email.preview}</p>
-            <div className="record-footer">
-              <span>{email.from}</span>
-              <b>{email.status}</b>
-            </div>
-          </article>
-        ))}
-      </div>
+    <Page title="Leads and clients" kicker="Lead intake" action={<button className="primary-small" onClick={createFollowUpPlan}><Sparkles size={16} /> Prepare follow-up</button>}>
+      <section className="module-panel simulation-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">AI filtered vs all results</span>
+            <h3>{mode === "recommended" ? "Phantom AI recommended" : "All leads, clients, and follow-ups"}</h3>
+          </div>
+          <ResultModeToggle mode={mode} setMode={setMode} />
+        </div>
+        <SimulationList items={visibleItems} />
+      </section>
     </Page>
   );
 }
@@ -1812,10 +1859,23 @@ function CalendarView({ events }: { events: CalendarEvent[] }) {
 }
 
 function TasksView({ tasks, completeTask }: { tasks: TaskItem[]; completeTask: (id: string) => void }) {
+  const [mode, setMode] = useState<ResultMode>("recommended");
+  const visibleTasks = mode === "recommended" ? tasks.filter((task) => task.status === "today") : tasks;
+
   return (
     <Page title="Task operations" kicker="Execution queue" action={<button className="ghost-small"><Plus size={16} /> New task</button>}>
+      <section className="module-panel simulation-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">AI filtered vs all results</span>
+            <h3>{mode === "recommended" ? "Today and high-leverage tasks" : "All task results"}</h3>
+          </div>
+          <ResultModeToggle mode={mode} setMode={setMode} />
+        </div>
+        <p>Phantom AI can recommend the next task to review, but completing or sending anything sensitive stays approval-only.</p>
+      </section>
       <div className="task-list">
-        {tasks.map((task) => (
+        {visibleTasks.map((task) => (
           <article className={`task-row ${task.status}`} key={task.id}>
             <button type="button" onClick={() => completeTask(task.id)} title="Complete task">
               <Check size={17} />
@@ -1841,11 +1901,29 @@ function ApprovalsView({
   approveAction: (id: string) => void;
   rejectAction: (id: string) => void;
 }) {
+  const [mode, setMode] = useState<ResultMode>("recommended");
+  const visibleApprovals =
+    mode === "recommended" ? approvals.filter((approval) => approval.status === "pending") : approvals;
+  const demoApprovals =
+    mode === "recommended"
+      ? personalTrainingSimulation.approvals.filter((approval) => approval.status === "pending")
+      : personalTrainingSimulation.approvals;
+
   return (
     <Page title="Approval cockpit" kicker="Human oversight">
-      {approvals.length ? (
+      <section className="module-panel simulation-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">AI filtered vs all results</span>
+            <h3>{mode === "recommended" ? "Pending approval queue" : "All approval records"}</h3>
+          </div>
+          <ResultModeToggle mode={mode} setMode={setMode} />
+        </div>
+        <p>External sends, uploads, posts, billing, credentials, and production changes stay blocked until approved.</p>
+      </section>
+      {visibleApprovals.length ? (
         <div className="approval-grid">
-          {approvals.map((approval) => (
+          {visibleApprovals.map((approval) => (
             <ApprovalCard
               key={approval.id}
               approval={approval}
@@ -1855,8 +1933,120 @@ function ApprovalsView({
           ))}
         </div>
       ) : (
-        <EmptyState icon={<ShieldCheck size={22} />} title="No approval cards yet" detail="Approval cards appear when PhantomForce proposes an external or sensitive action." />
+        <section className="module-panel simulation-section">
+          <div className="simulation-section-head">
+            <span>
+              <ShieldCheck size={18} />
+            </span>
+            <h3>Demo approval queue</h3>
+          </div>
+          <SimulationList items={demoApprovals} />
+        </section>
       )}
+    </Page>
+  );
+}
+
+function ContentView() {
+  const [mode, setMode] = useState<ResultMode>("recommended");
+  const recommendedContent = [
+    ...personalTrainingSimulation.contentIdeas.filter((item) => ["recommended", "approval"].includes(item.status ?? "")),
+    ...personalTrainingSimulation.contentCalendar.filter((item) => item.status === "approval"),
+  ];
+  const allContent = [...personalTrainingSimulation.contentCalendar, ...personalTrainingSimulation.contentIdeas];
+  const visibleContent = mode === "recommended" ? recommendedContent : allContent;
+  const platformPlaceholders: SimulationItem[] = [
+    { title: "Instagram", detail: "Draft planning only. Posting is not wired.", status: "placeholder" },
+    { title: "Email newsletter", detail: "Ideas can be queued, but sends require approval and future wiring.", status: "placeholder" },
+    { title: "Short-form video", detail: "Publish and upload actions are disabled in this simulation.", status: "approval only" },
+  ];
+
+  return (
+    <Page title="Content" kicker="Calendar and drafts" action={<TruthBadge state="real" label="Approval only" />}>
+      <section className="module-panel simulation-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">AI filtered vs all results</span>
+            <h3>{mode === "recommended" ? "Recommended posts" : "All content ideas and calendar items"}</h3>
+          </div>
+          <ResultModeToggle mode={mode} setMode={setMode} />
+        </div>
+        <SimulationList items={visibleContent} />
+      </section>
+
+      <div className="destination-grid">
+        <SimulationSection icon={<CalendarDays size={18} />} title="Content calendar" items={personalTrainingSimulation.contentCalendar} />
+        <SimulationSection icon={<FileText size={18} />} title="Raw content queue" items={personalTrainingSimulation.contentIdeas} />
+        <SimulationSection icon={<ShieldCheck size={18} />} title="Drafts pending approval" items={personalTrainingSimulation.contentDrafts} />
+        <SimulationSection icon={<AlertTriangle size={18} />} title="Platform status placeholders" items={platformPlaceholders} />
+      </div>
+    </Page>
+  );
+}
+
+function MediaLabView() {
+  return (
+    <Page title="Media Lab" kicker="Requests and delivery" action={<TruthBadge state="demo" label="Optional add-on" />}>
+      <section className="simulation-hero">
+        <div>
+          <span className="eyebrow">Media workflow</span>
+          <h3>Video and asset work stays an add-on to the owner cockpit.</h3>
+          <p>
+            Media Lab helps track requests, drafts, consent, and delivery status. Uploads, delivery links, and external
+            publishing are placeholders until approval and storage gates are implemented.
+          </p>
+        </div>
+        <div className="simulation-hero-status">
+          <StatusLine label="Uploads" value="Placeholder / not wired" />
+          <StatusLine label="Delivery" value="Approval required" />
+          <StatusLine label="Core app" value="Leads, schedule, offers, tasks, approvals" />
+        </div>
+      </section>
+
+      <div className="destination-grid">
+        <SimulationSection icon={<Play size={18} />} title="Media requests" items={personalTrainingSimulation.mediaRequests} />
+        <SimulationSection icon={<SquareCheckBig size={18} />} title="Deliverables and workflow status" items={personalTrainingSimulation.mediaDeliverables} />
+        <SimulationSection icon={<AlertTriangle size={18} />} title="Uploads and delivery placeholders" items={personalTrainingSimulation.mediaPlaceholders} />
+        <PhantomCutAddonCard />
+      </div>
+    </Page>
+  );
+}
+
+function OffersView() {
+  const [mode, setMode] = useState<ResultMode>("recommended");
+  const allOfferItems = [
+    ...personalTrainingSimulation.services,
+    ...personalTrainingSimulation.offerRecommendations,
+    ...personalTrainingSimulation.pricingDrafts,
+  ];
+  const recommendedOfferItems = personalTrainingSimulation.offerRecommendations.filter((item) =>
+    ["recommended", "approval"].includes(item.status ?? ""),
+  );
+  const visibleOfferItems = mode === "recommended" ? recommendedOfferItems : allOfferItems;
+  const approvalItems = personalTrainingSimulation.approvals.filter((item) =>
+    item.title.toLowerCase().includes("offer") || item.title.toLowerCase().includes("payment"),
+  );
+
+  return (
+    <Page title="Offers" kicker="Packages and pricing" action={<TruthBadge state="demo" label="Demo packages" />}>
+      <section className="module-panel simulation-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">AI filtered vs all results</span>
+            <h3>{mode === "recommended" ? "Offer recommendations" : "All packages, recommendations, and drafts"}</h3>
+          </div>
+          <ResultModeToggle mode={mode} setMode={setMode} />
+        </div>
+        <SimulationList items={visibleOfferItems} />
+      </section>
+
+      <div className="destination-grid">
+        <SimulationSection icon={<Sparkles size={18} />} title="Personal training packages" items={personalTrainingSimulation.services} />
+        <SimulationSection icon={<Zap size={18} />} title="Offer builder recommendations" items={personalTrainingSimulation.offerRecommendations} />
+        <SimulationSection icon={<FileText size={18} />} title="Pricing and package drafts" items={personalTrainingSimulation.pricingDrafts} />
+        <SimulationSection icon={<ShieldCheck size={18} />} title="Approval status" items={approvalItems} />
+      </div>
     </Page>
   );
 }
@@ -2442,8 +2632,8 @@ function TrainerSimulationView() {
 
   return (
     <Page
-      title="Personal training owner workspace"
-      kicker="Local demo data"
+      title="Phantom AI"
+      kicker="Personal training workspace"
       action={<TruthBadge state="demo" label="Demo / Local" />}
     >
       <section className="simulation-hero">
@@ -2472,11 +2662,9 @@ function TrainerSimulationView() {
         <SimulationSection icon={<CalendarDays size={18} />} title="Today's schedule" items={simulation.schedule} />
         <SimulationSection icon={<SquareCheckBig size={18} />} title="Tasks" items={simulation.tasks} />
         <SimulationSection icon={<ShieldCheck size={18} />} title="Approvals queue" items={simulation.approvals} />
-        <SimulationSection icon={<FileText size={18} />} title="Content calendar" items={simulation.contentCalendar} />
-        <SimulationSection icon={<Play size={18} />} title="Media requests" items={simulation.mediaRequests} />
+        <SimulationSection icon={<KeyRound size={18} />} title="Role model" items={simulation.roleModel} />
         <SimulationSection icon={<Check size={18} />} title="Onboarding checklist" items={simulation.onboardingChecklist} />
         <SimulationSection icon={<AlertTriangle size={18} />} title="Launch blockers" items={simulation.launchBlockers} />
-        <PhantomCutAddonCard />
       </div>
       <section className="panel debug-panel">
         <div className="section-head compact">
@@ -2527,18 +2715,51 @@ function SimulationSection({ icon, title, items }: { icon: ReactNode; title: str
         <span>{icon}</span>
         <h3>{title}</h3>
       </div>
-      <div className="simulation-list">
-        {items.map((item) => (
-          <article key={`${title}-${item.title}`}>
-            <div>
-              <strong>{item.title}</strong>
-              <p>{item.detail}</p>
-            </div>
-            {item.status ? <span className="simulation-status">{item.status}</span> : null}
-          </article>
-        ))}
-      </div>
+      <SimulationList items={items} />
     </section>
+  );
+}
+
+function SimulationList({ items }: { items: SimulationItem[] }) {
+  if (!items.length) {
+    return (
+      <EmptyState
+        icon={<Sparkles size={20} />}
+        title="No matching results"
+        detail="Switch to All results to see the full local demo list."
+      />
+    );
+  }
+
+  return (
+    <div className="simulation-list">
+      {items.map((item) => (
+        <article key={`${item.title}-${item.status ?? "item"}`}>
+          <div>
+            <strong>{item.title}</strong>
+            <p>{item.detail}</p>
+          </div>
+          {item.status ? <span className="simulation-status">{item.status}</span> : null}
+        </article>
+      ))}
+    </div>
+  );
+}
+
+function ResultModeToggle({ mode, setMode }: { mode: ResultMode; setMode: (mode: ResultMode) => void }) {
+  return (
+    <div className="result-toggle" aria-label="Result mode">
+      <button
+        className={mode === "recommended" ? "active" : ""}
+        type="button"
+        onClick={() => setMode("recommended")}
+      >
+        Phantom AI recommended
+      </button>
+      <button className={mode === "all" ? "active" : ""} type="button" onClick={() => setMode("all")}>
+        All results
+      </button>
+    </div>
   );
 }
 

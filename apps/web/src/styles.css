@@ -69,6 +69,7 @@ img {
   display: flex;
   flex-direction: column;
   gap: 18px;
+  overflow-y: auto;
   background: rgba(9, 12, 16, 0.92);
   border-right: 1px solid rgba(255, 255, 255, 0.07);
   backdrop-filter: blur(18px);
@@ -606,6 +607,33 @@ img {
 .phantom-ai-panel {
   display: grid;
   gap: 14px;
+}
+
+.result-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+}
+
+.result-toggle button {
+  min-height: 32px;
+  padding: 7px 10px;
+  color: var(--muted);
+  background: transparent;
+  border: 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.result-toggle button.active {
+  color: var(--text);
+  background: var(--panel-3);
 }
 
 .truth-grid {
@@ -1958,12 +1986,14 @@ img {
 }
 
 .simulation-hero-status,
+.destination-grid,
 .simulation-grid,
 .simulation-list {
   display: grid;
   gap: 10px;
 }
 
+.destination-grid,
 .simulation-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
@@ -2232,6 +2262,7 @@ img {
   .pangolin-grid,
   .access-grid,
   .truth-grid,
+  .destination-grid,
   .simulation-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -2266,8 +2297,8 @@ img {
     right: 10px;
     bottom: 10px;
     z-index: 20;
-    display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    display: flex;
+    overflow-x: auto;
     gap: 5px;
     padding: 6px;
     background: rgba(9, 12, 16, 0.94);
@@ -2275,9 +2306,11 @@ img {
     border-radius: 8px;
     box-shadow: var(--shadow);
     backdrop-filter: blur(18px);
+    scrollbar-width: thin;
   }
 
   .mobile-nav button {
+    flex: 0 0 82px;
     min-height: 54px;
     display: grid;
     place-items: center;
@@ -2290,6 +2323,13 @@ img {
   .mobile-nav button.active {
     color: white;
     background: var(--panel-2);
+  }
+
+  .mobile-nav button span {
+    max-width: 76px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
 }
 
@@ -2315,6 +2355,7 @@ img {
   .pangolin-grid,
   .access-grid,
   .truth-grid,
+  .destination-grid,
   .simulation-grid,
   .simulation-hero,
   .ai-rule-columns,
