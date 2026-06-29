@@ -40,6 +40,7 @@ The background workforce supports PhantomForce. It is not the product being sold
 - Local models: fallback, helper, compression, and token-saving layer.
 - PhantomCut: optional customer-visible Media Lab add-on; editor internals stay background.
 - Pangolin/access layer: access control and gating, not the app itself.
+- PhantomPlus: planned managed multi-agent runs inside PhantomForce, bounded by Hermes, budgets, max steps, runtime limits, tenant isolation, approval gates, pause/stop controls, and admin audit trail.
 - Jordan/PhantomForce: managed service operator and final control layer.
 
 ## Client-Facing Boundaries
@@ -81,6 +82,8 @@ These labels must be scoped to admin/support/status contexts. They must not beco
 - No fake billing, access, launch, or provider-readiness claims.
 - Do not implement customer-facing Claude through Claude Code OAuth/session reuse.
 - Customer-facing Claude must use official Claude API configuration only.
+- Do not run unbounded agent loops. Future PhantomPlus runs must have max steps, max cost, max runtime, approval gates, tenant isolation, and audit history.
+- Do not route high-sensitivity data to cheap third-party worker models by default.
 
 ## Product Patch Rule
 

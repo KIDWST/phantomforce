@@ -56,6 +56,9 @@ import { getBillingProviderStatus } from "./access/billing-provider.js";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
+import { getHermesLedgerStatus, readHermesLedgerRecords } from "./phantom-ai/hermes-ledger.js";
+import { getProviderSetupStatus, runModelRouterFoundation } from "./phantom-ai/model-router.js";
+import type { ActorRole, ContextModuleData, SensitivityLevel } from "./phantom-ai/types.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -213,6 +216,106 @@ app.get("/billing/status/read-only", async (request, reply) => {
     ok: true,
     session,
     status: getBillingProviderStatus(),
+  };
+});
+
+app.get("/phantom-ai/provider-status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const providerStatus = getProviderSetupStatus();
+  const ledgerStatus = await getHermesLedgerStatus();
+
+  return {
+    ok: true,
+    session,
+    status: {
+      ...providerStatus,
+      hermes: {
+        ...providerStatus.hermes,
+        ledger_path: ledgerStatus.ledgerPath,
+        ledger_exists: ledgerStatus.exists,
+        ledger_bytes: ledgerStatus.bytes,
+      },
+    },
+  };
+});
+
+app.get("/phantom-ai/hermes-ledger/tail", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { limit?: string } | undefined;
+  const parsedLimit = Number(query?.limit ?? 25);
+  const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 25;
+
+  return {
+    ok: true,
+    session,
+    records: await readHermesLedgerRecords({ limit }),
+  };
+});
+
+app.post("/phantom-ai/mock-route", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const sensitivityLevel: SensitivityLevel =
+    body.sensitivity_level === "medium" || body.sensitivity_level === "high" ? body.sensitivity_level : "low";
+  const actorRole: ActorRole = session.canManageAccess ? "platform_admin" : "business_owner";
+  const moduleData: ContextModuleData[] = Array.isArray(body.module_data)
+    ? (body.module_data as ContextModuleData[])
+    : [];
+  const result = await runModelRouterFoundation({
+    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id : "demo-trainer",
+    business_name: typeof body.business_name === "string" ? body.business_name : "West Loop Strength Lab",
+    actor_user_id: typeof body.actor_user_id === "string" ? body.actor_user_id : session.id,
+    actor_role: actorRole,
+    request_id: typeof body.request_id === "string" ? body.request_id : `mock-${Date.now()}`,
+    task_type: typeof body.task_type === "string" ? body.task_type : "summary",
+    sensitivity_level: sensitivityLevel,
+    user_request:
+      typeof body.user_request === "string"
+        ? body.user_request
+        : "Summarize local demo workspace state without executing external actions.",
+    business_summary:
+      typeof body.business_summary === "string"
+        ? body.business_summary
+        : "Owner-only personal training demo workspace. External actions approval-only.",
+    module_data: moduleData,
+  });
+
+  return {
+    ok: true,
+    session,
+    decision: result.decision,
+    context: {
+      context_chars: result.context_packet.context_chars,
+      estimated_tokens: result.context_packet.estimated_tokens,
+      raw_context_chars: result.context_packet.raw_context_chars,
+      compression_ratio: result.context_packet.compression_ratio,
+    },
+    ledger_record: result.ledger_record,
   };
 });
 

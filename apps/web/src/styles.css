@@ -604,9 +604,64 @@ img {
 }
 
 .truth-panel,
-.phantom-ai-panel {
+.phantom-ai-panel,
+.provider-setup-panel {
   display: grid;
   gap: 14px;
+}
+
+.provider-setup-panel > p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.provider-card {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+}
+
+.provider-card > div {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.provider-card span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.provider-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.provider-card.real {
+  border-color: rgba(89, 208, 133, 0.22);
+}
+
+.provider-card.stub {
+  border-color: rgba(229, 181, 75, 0.24);
+}
+
+.provider-card.blocked {
+  border-color: rgba(236, 47, 69, 0.24);
 }
 
 .result-toggle {
@@ -2262,6 +2317,7 @@ img {
   .pangolin-grid,
   .access-grid,
   .truth-grid,
+  .provider-grid,
   .destination-grid,
   .simulation-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2355,6 +2411,7 @@ img {
   .pangolin-grid,
   .access-grid,
   .truth-grid,
+  .provider-grid,
   .destination-grid,
   .simulation-grid,
   .simulation-hero,

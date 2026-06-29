@@ -145,6 +145,43 @@ The app structure should now treat these as first-class PWA destinations:
 
 These must remain foreground product modules, not buried debug data. Content should show recommended posts, raw ideas, drafts, approval state, and placeholder platform status. Media Lab should show media requests, deliverables, upload/delivery placeholders, and PhantomCut as optional add-on. Offers should show packages, offer recommendations, pricing drafts, and approval status.
 
+## Hermes And Model Router Foundation
+
+Hermes should now be implemented as a local-only JSONL ledger plus context compiler and model-router foundation.
+
+MVP requirements:
+
+- append-only local ledger at `.phantom/hermes-ledger.jsonl`
+- compact context packets instead of full history dumps
+- provider route records for mock, OpenRouter GLM, Claude API, local, or router
+- context size and estimated-token fields
+- estimated-cost fields where calculable
+- sensitivity level and approval status on every record
+- budget fields as planned/not-enforced until enforcement exists
+- OpenRouter GLM as cheap worker route only when configured
+- Claude API as premium route later, never via Claude Code OAuth
+- local fallback as private/helper path later
+
+High-sensitivity data must not route to cheap third-party worker models by default. Sends, posts, uploads, charges, deletes, deploys, credential changes, billing changes, and production touches must stay approval-only.
+
+## PhantomPlus Direction
+
+PhantomPlus is a planned premium tier for managed multi-agent runs inside PhantomForce. It is not implemented as a live loop in Patch 3B.
+
+Future PhantomPlus must be designed around:
+
+- Hermes agent-run ledger
+- max steps
+- max cost
+- max runtime
+- tenant isolation
+- provider routing
+- approval gates
+- pause/stop controls
+- admin audit trail
+
+Future agent roles may include Planner, Worker, Content, Lead, Schedule, Offer, Media, Reviewer, and Approval agents. They must not execute live actions without approval.
+
 ## Next Safe Patch
 
-After the first-class cockpit destinations exist, the next safe patch should be Hermes JSONL memory/ledger design and implementation. That patch should still avoid Claude API wiring until official configuration and approval rules are ready.
+After the Hermes/model-router foundation exists, the next safe patch should add a tiny admin-only Hermes history viewer and approval-aware context packet preview. Claude API wiring should still wait for official configuration and explicit approval.

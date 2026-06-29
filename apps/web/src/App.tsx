@@ -234,6 +234,55 @@ type ProductionReadinessReport = {
   gates: ReadinessGate[];
 };
 
+type ProviderSetupStatus = {
+  router_mode: "mock" | "openrouter" | "claude" | "local" | "router";
+  phantomforce_managed: {
+    status: "recommended";
+    detail: string;
+  };
+  openrouter_glm: {
+    configured: boolean;
+    status: "Configured" | "Not Configured";
+    model_id: string;
+    setup_required: boolean;
+    payment_setup_needed: boolean;
+    detail: string;
+  };
+  claude_api: {
+    configured: boolean;
+    status: "Configured" | "Not Configured";
+    detail: string;
+  };
+  local_fallback: {
+    available: boolean;
+    status: "Available" | "Not Available";
+    detail: string;
+  };
+  byok: {
+    enabled: boolean;
+    status: "Disabled" | "Future";
+    detail: string;
+  };
+  budget: {
+    status: "Planned / Not Enforced" | "Enforced";
+    default_tenant_budget_usd: number | null;
+    detail: string;
+  };
+  hermes: {
+    ledger_enabled: boolean;
+    context_compiler_enabled: boolean;
+    ledger_path: string;
+    ledger_exists?: boolean;
+    ledger_bytes?: number;
+    status: "Ledger Enabled / Context Compiler Enabled" | "Stub";
+  };
+  phantom_plus: {
+    status: "Planned";
+    detail: string;
+    agent_loop_status: "Not Implemented";
+  };
+};
+
 type AppSession = {
   id: string;
   label: string;
@@ -492,17 +541,17 @@ const clientModuleCatalog = [
 const truthStatusLabels: TruthLabel[] = [
   {
     label: "Brain",
-    value: "Mock / Claude API Not Configured",
+    value: "Mock / OpenRouter GLM / Claude API / Local / Router",
     state: "demo",
     detail:
-      "The dashboard assistant is rule-based in this app. Official Claude API routing is not implemented or proven here.",
+      "The dashboard assistant remains demo-first. Provider routing is status-only unless a server-side route is configured and approved.",
   },
   {
     label: "Hermes",
-    value: "Not Integrated / Ledger Stub",
-    state: "stub",
+    value: "Ledger Enabled / Context Compiler Enabled",
+    state: "real",
     detail:
-      "Hermes is a design target for memory, context, ledger, summaries, and approvals. No app ledger API is wired yet.",
+      "Hermes can write local JSONL records and compile compact context packets. It does not call external models.",
   },
   {
     label: "Access",
@@ -510,6 +559,13 @@ const truthStatusLabels: TruthLabel[] = [
     state: "demo",
     detail:
       "Demo sessions and owner admin are local/config-gated. Pangolin status is read-only/dry-run unless separately proven live.",
+  },
+  {
+    label: "Budget",
+    value: "Planned / Not Enforced",
+    state: "stub",
+    detail:
+      "Budget fields can be recorded with Hermes/provider status, but enforcement is not implemented in this patch.",
   },
   {
     label: "Actions",
@@ -699,6 +755,54 @@ const personalTrainingSimulation = {
 const API_BASE_URL = "http://127.0.0.1:5190";
 const MONEY_DEMO_CLIENT_ID = "client-money-demo";
 
+const defaultProviderSetupStatus: ProviderSetupStatus = {
+  router_mode: "mock",
+  phantomforce_managed: {
+    status: "recommended",
+    detail: "Default customer experience. Provider setup remains an owner/admin responsibility.",
+  },
+  openrouter_glm: {
+    configured: false,
+    status: "Not Configured",
+    model_id: "z-ai/glm-5.2",
+    setup_required: true,
+    payment_setup_needed: true,
+    detail:
+      "OpenRouter credits/API key required. Jordan must manually fund OpenRouter and add OPENROUTER_API_KEY to local server env.",
+  },
+  claude_api: {
+    configured: false,
+    status: "Not Configured",
+    detail: "Premium reasoning route is planned for official Claude API configuration later.",
+  },
+  local_fallback: {
+    available: false,
+    status: "Not Available",
+    detail: "No local fallback endpoint is configured for the server.",
+  },
+  byok: {
+    enabled: false,
+    status: "Disabled",
+    detail: "Bring Your Own Key remains advanced/future and is disabled by default.",
+  },
+  budget: {
+    status: "Planned / Not Enforced",
+    default_tenant_budget_usd: null,
+    detail: "Budget fields are planned; enforcement is not implemented in Patch 3B.",
+  },
+  hermes: {
+    ledger_enabled: false,
+    context_compiler_enabled: false,
+    ledger_path: ".phantom/hermes-ledger.jsonl",
+    status: "Stub",
+  },
+  phantom_plus: {
+    status: "Planned",
+    detail: "PhantomPlus will be bounded managed multi-agent runs inside PhantomForce. No loops are implemented.",
+    agent_loop_status: "Not Implemented",
+  },
+};
+
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
 }
@@ -730,6 +834,7 @@ function App() {
   const [pangolinPlan, setPangolinPlan] = useState<PangolinRoutePlan[]>([]);
   const [pangolinStatus, setPangolinStatus] = useState<PangolinReadOnlyStatus | null>(null);
   const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
+  const [providerSetupStatus, setProviderSetupStatus] = useState<ProviderSetupStatus>(defaultProviderSetupStatus);
   const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
   const [selectedOrg, setSelectedOrg] = useState("PhantomForce Pilot");
   const activeSession = useMemo(
@@ -933,6 +1038,30 @@ function App() {
     }
   }
 
+  async function refreshProviderSetupStatus() {
+    if (!canManageAccess) {
+      setProviderSetupStatus(defaultProviderSetupStatus);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/provider-status`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setProviderSetupStatus(defaultProviderSetupStatus);
+        return;
+      }
+
+      const data = (await response.json()) as { status?: ProviderSetupStatus };
+      setProviderSetupStatus(data.status ?? defaultProviderSetupStatus);
+    } catch {
+      addActivity("Provider setup offline", "Phantom AI provider status is waiting on the backend.", "warn");
+      setProviderSetupStatus(defaultProviderSetupStatus);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -958,9 +1087,11 @@ function App() {
     if (canManageAccess) {
       void refreshPangolinPlan();
       void refreshReadinessReport();
+      void refreshProviderSetupStatus();
     } else {
       setPangolinPlan([]);
       setReadinessReport(null);
+      setProviderSetupStatus(defaultProviderSetupStatus);
     }
 
     return () => {
@@ -1531,8 +1662,10 @@ function App() {
           />
         ) : null}
         {route === "activity" ? <ActivityView activity={activity} /> : null}
-        {route === "connections" ? <StatusView /> : null}
-        {route === "trainer" ? <TrainerSimulationView /> : null}
+        {route === "connections" ? (
+          <StatusView canManageAccess={canManageAccess} providerSetupStatus={providerSetupStatus} />
+        ) : null}
+        {route === "trainer" ? <TrainerSimulationView canManageAccess={canManageAccess} /> : null}
       </main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -2466,7 +2599,13 @@ function AccessView({
   );
 }
 
-function StatusView() {
+function StatusView({
+  canManageAccess,
+  providerSetupStatus,
+}: {
+  canManageAccess: boolean;
+  providerSetupStatus: ProviderSetupStatus;
+}) {
   const [showDebug, setShowDebug] = useState(false);
 
   return (
@@ -2476,6 +2615,7 @@ function StatusView() {
       action={<TruthBadge state="blocked" label="Needs setup" />}
     >
       <CustomerReadinessPanel />
+      {canManageAccess ? <ProviderSetupPanel status={providerSetupStatus} /> : null}
       <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
@@ -2495,41 +2635,43 @@ function StatusView() {
           ))}
         </div>
       </section>
-      <section className="panel debug-panel">
-        <div className="section-head compact">
-          <div>
-            <span className="eyebrow">Admin/debug</span>
-            <h3>Background workforce status</h3>
-          </div>
-          <button className="ghost-small" type="button" onClick={() => setShowDebug((value) => !value)}>
-            {showDebug ? "Hide debug" : "Show debug"}
-          </button>
-        </div>
-        <p>
-          This is for owner/support visibility only. Customers stay in PhantomForce and Phantom AI product language.
-        </p>
-        {showDebug ? (
-          <>
-            <AdminDebugStatusPanel />
-            <div className="connection-grid">
-              {connections.map((connection) => (
-                <article className={`connection-card ${connection.status}`} key={connection.id}>
-                  <div className="record-top">
-                    <h3>{connection.name}</h3>
-                    <span className={`status-badge ${connection.status}`}>{connection.status}</span>
-                  </div>
-                  <p>{connection.description}</p>
-                  <div className="scope-list">
-                    {connection.scopes.map((scope) => (
-                      <span key={scope}>{scope}</span>
-                    ))}
-                  </div>
-                </article>
-              ))}
+      {canManageAccess ? (
+        <section className="panel debug-panel">
+          <div className="section-head compact">
+            <div>
+              <span className="eyebrow">Admin/debug</span>
+              <h3>Background workforce status</h3>
             </div>
-          </>
-        ) : null}
-      </section>
+            <button className="ghost-small" type="button" onClick={() => setShowDebug((value) => !value)}>
+              {showDebug ? "Hide debug" : "Show debug"}
+            </button>
+          </div>
+          <p>
+            This is for owner/support visibility only. Customers stay in PhantomForce and Phantom AI product language.
+          </p>
+          {showDebug ? (
+            <>
+              <AdminDebugStatusPanel />
+              <div className="connection-grid">
+                {connections.map((connection) => (
+                  <article className={`connection-card ${connection.status}`} key={connection.id}>
+                    <div className="record-top">
+                      <h3>{connection.name}</h3>
+                      <span className={`status-badge ${connection.status}`}>{connection.status}</span>
+                    </div>
+                    <p>{connection.description}</p>
+                    <div className="scope-list">
+                      {connection.scopes.map((scope) => (
+                        <span key={scope}>{scope}</span>
+                      ))}
+                    </div>
+                  </article>
+                ))}
+              </div>
+            </>
+          ) : null}
+        </section>
+      ) : null}
     </Page>
   );
 }
@@ -2557,6 +2699,107 @@ function CustomerReadinessPanel() {
         ))}
       </div>
     </section>
+  );
+}
+
+function ProviderSetupPanel({ status }: { status: ProviderSetupStatus }) {
+  const paymentNeeded = status.openrouter_glm.payment_setup_needed ? "Yes" : "No";
+
+  return (
+    <section className="panel provider-setup-panel">
+      <div className="section-head">
+        <div>
+          <span className="eyebrow">Admin setup</span>
+          <h3>Phantom AI provider and Hermes foundation.</h3>
+        </div>
+        <TruthBadge state="demo" label={`Brain: ${status.router_mode}`} />
+      </div>
+      <p>
+        Normal owners use Phantom AI. Provider setup, budget planning, and Hermes status stay in owner/admin setup.
+      </p>
+      <div className="provider-grid">
+        <ProviderStatusCard
+          label="PhantomForce Managed"
+          value="Recommended / Default"
+          detail={status.phantomforce_managed.detail}
+          state="real"
+        />
+        <ProviderStatusCard
+          label="OpenRouter GLM"
+          value={`${status.openrouter_glm.status} / ${status.openrouter_glm.model_id}`}
+          detail={status.openrouter_glm.detail}
+          state={status.openrouter_glm.configured ? "real" : "stub"}
+        />
+        <ProviderStatusCard
+          label="Claude API"
+          value={status.claude_api.status}
+          detail={status.claude_api.detail}
+          state={status.claude_api.configured ? "real" : "stub"}
+        />
+        <ProviderStatusCard
+          label="Local fallback"
+          value={status.local_fallback.status}
+          detail={status.local_fallback.detail}
+          state={status.local_fallback.available ? "real" : "stub"}
+        />
+        <ProviderStatusCard
+          label="Bring Your Own Key"
+          value={status.byok.status}
+          detail={status.byok.detail}
+          state="blocked"
+        />
+        <ProviderStatusCard
+          label="Budget cap"
+          value={status.budget.status}
+          detail={status.budget.detail}
+          state="stub"
+        />
+        <ProviderStatusCard
+          label="Payment/setup needed"
+          value={paymentNeeded}
+          detail="OpenRouter credits/API key must be added manually by Jordan; PhantomForce never stores card details here."
+          state={status.openrouter_glm.payment_setup_needed ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Hermes ledger"
+          value={status.hermes.ledger_enabled ? "Enabled" : "Disabled"}
+          detail={`${status.hermes.status}; path ${status.hermes.ledger_path}`}
+          state={status.hermes.ledger_enabled ? "real" : "stub"}
+        />
+        <ProviderStatusCard
+          label="Context compiler"
+          value={status.hermes.context_compiler_enabled ? "Enabled" : "Disabled"}
+          detail="Compiles compact packets for token saving. Full history is not dumped into models."
+          state={status.hermes.context_compiler_enabled ? "real" : "stub"}
+        />
+        <ProviderStatusCard
+          label="PhantomPlus"
+          value={status.phantom_plus.status}
+          detail={`${status.phantom_plus.detail} Agent loops: ${status.phantom_plus.agent_loop_status}.`}
+          state="stub"
+        />
+      </div>
+    </section>
+  );
+}
+
+function ProviderStatusCard({
+  label,
+  value,
+  detail,
+  state,
+}: {
+  label: string;
+  value: string;
+  detail: string;
+  state: TruthState;
+}) {
+  return (
+    <article className={`provider-card ${state}`}>
+      <span>{label}</span>
+      <strong>{value}</strong>
+      <p>{detail}</p>
+    </article>
   );
 }
 
@@ -2626,7 +2869,7 @@ function PhantomAiStatusPanel() {
   );
 }
 
-function TrainerSimulationView() {
+function TrainerSimulationView({ canManageAccess }: { canManageAccess: boolean }) {
   const simulation = personalTrainingSimulation;
   const [showDebug, setShowDebug] = useState(false);
 
@@ -2666,22 +2909,24 @@ function TrainerSimulationView() {
         <SimulationSection icon={<Check size={18} />} title="Onboarding checklist" items={simulation.onboardingChecklist} />
         <SimulationSection icon={<AlertTriangle size={18} />} title="Launch blockers" items={simulation.launchBlockers} />
       </div>
-      <section className="panel debug-panel">
-        <div className="section-head compact">
-          <div>
-            <span className="eyebrow">Admin/debug</span>
-            <h3>Implementation truth labels</h3>
+      {canManageAccess ? (
+        <section className="panel debug-panel">
+          <div className="section-head compact">
+            <div>
+              <span className="eyebrow">Admin/debug</span>
+              <h3>Implementation truth labels</h3>
+            </div>
+            <button className="ghost-small" type="button" onClick={() => setShowDebug((value) => !value)}>
+              {showDebug ? "Hide debug" : "Show debug"}
+            </button>
           </div>
-          <button className="ghost-small" type="button" onClick={() => setShowDebug((value) => !value)}>
-            {showDebug ? "Hide debug" : "Show debug"}
-          </button>
-        </div>
-        <p>
-          Debug labels name background systems for owner/support review only. The default owner workspace stays in
-          PhantomForce product language.
-        </p>
-        {showDebug ? <AdminDebugStatusPanel /> : null}
-      </section>
+          <p>
+            Debug labels name background systems for owner/support review only. The default owner workspace stays in
+            PhantomForce product language.
+          </p>
+          {showDebug ? <AdminDebugStatusPanel /> : null}
+        </section>
+      ) : null}
     </Page>
   );
 }
