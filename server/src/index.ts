@@ -73,6 +73,7 @@ import {
   redactHermesLedgerRecord,
   redactSensitiveText,
 } from "./phantom-ai/hermes-ledger.js";
+import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
   getProviderSetupStatus,
   previewModelRouterFoundation,
@@ -461,6 +462,45 @@ app.post("/phantom-ai/provider-invocation/preview", async (request, reply) => {
       raw_context_chars: result.context_packet.raw_context_chars,
       compression_ratio: result.context_packet.compression_ratio,
     },
+  };
+});
+
+app.post("/phantom-ai/live-smoke/preflight", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const result = previewModelRouterFoundation(
+    buildModelRouterRequestFromBody(body, session, "live-smoke-preflight"),
+  );
+  const preflight = await buildLiveSmokePreflightReport(result);
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    live_smoke_allowed: false,
+    execution_disabled: true,
+    provider_called: false,
+    network_call_performed: false,
+    ledger_written: false,
+    queue_written: false,
+    approval_executed: false,
+    approval_execution_implemented: false,
+    preflight,
   };
 });
 

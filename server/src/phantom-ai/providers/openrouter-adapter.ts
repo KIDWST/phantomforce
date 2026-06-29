@@ -46,6 +46,7 @@ export function buildOpenRouterGlmAdapterDryRunPreview(input: {
     ...input.firewallRequiredBeforeLive,
     ...(input.readinessRoute?.required_before_live ?? []),
     "Add a separate reviewed OpenRouter transport implementation.",
+    "Pass the admin-only live smoke preflight for budget, ledger, redaction, approval execution, and transport gates.",
     "Prove the transport passes provider policy with route_allowed true in a future approved patch.",
     "Keep provider details admin-only and keep customer UI in Phantom AI language.",
   ]);

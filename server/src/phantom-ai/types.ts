@@ -394,6 +394,97 @@ export type ApprovalQueueWriteResult = {
   record: ApprovalQueueRecord | null;
 };
 
+export type LiveSmokePreflightGateStatus = "pass" | "blocked" | "not_implemented";
+
+export type LiveSmokePreflightReport = {
+  preflight_id: string;
+  checked_at: string;
+  provider_route: ProviderRoute;
+  model_id: string;
+  status: "blocked";
+  live_smoke_allowed: false;
+  execution_disabled: true;
+  provider_called: false;
+  network_call_performed: false;
+  ledger_written: false;
+  queue_written: false;
+  approval_executed: false;
+  live_smoke_test_explicitly_approved: false;
+  budget_gate: {
+    status: LiveSmokePreflightGateStatus;
+    ready_for_live: false;
+    enforcement_mode: BudgetGuardEnforcementMode;
+    budget_status: BudgetGuardStatus;
+    policy_route_allowed: false;
+    estimated_tokens: number;
+    estimated_cost_usd: number | null;
+    monthly_budget_cap_usd: number;
+    daily_budget_cap_usd: number;
+    per_request_estimated_token_cap: number;
+    per_request_estimated_cost_cap_usd: number;
+    reasons: string[];
+  };
+  ledger_gate: {
+    status: LiveSmokePreflightGateStatus;
+    ready_for_live: false;
+    ledger_enabled: boolean;
+    ledger_exists: boolean;
+    ledger_bytes: number;
+    ledger_path: string;
+    live_request_record_required: true;
+    live_response_record_required: true;
+    redacted_record_required: true;
+    preflight_write_performed: false;
+    reason: string;
+  };
+  redaction_gate: {
+    status: LiveSmokePreflightGateStatus;
+    obvious_secret_redaction_passed: boolean;
+    request_redaction_required: true;
+    response_redaction_required: true;
+    raw_probe_returned: boolean;
+    raw_secret_returned: boolean;
+    ready_for_live_transport: false;
+    reason: string;
+  };
+  approval_execution_gate: {
+    status: LiveSmokePreflightGateStatus;
+    approval_execution_implemented: false;
+    execute_endpoint_expected_status: 404;
+    status_transitions_only: true;
+    live_action_allowed: false;
+    reason: string;
+  };
+  transport_gate: {
+    status: LiveSmokePreflightGateStatus;
+    ready_for_live_transport: false;
+    live_transport_configured: false;
+    live_transport_enabled: false;
+    firewall_permits_call: false;
+    dry_run_envelope_ready_for_send: false;
+    network_payload_prepared: false;
+    reason: string;
+  };
+  required_before_live_smoke_test: string[];
+  admin_debug_summary: string;
+  client_safe_summary: string;
+  safety_flags: {
+    admin_only: true;
+    dry_run_only: true;
+    live_smoke_allowed: false;
+    live_provider_call_allowed: false;
+    execution_disabled: true;
+    provider_called: false;
+    network_call_performed: false;
+    ledger_written: false;
+    queue_written: false;
+    approval_executed: false;
+    raw_secret_exposed: false;
+    raw_prompt_returned: false;
+    raw_response_stored: false;
+  };
+};
+
 export type ProviderInvocationFirewallInput = {
   requested_provider_id: string;
   requested_route: ProviderRoute;

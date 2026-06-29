@@ -518,6 +518,96 @@ type ProviderInvocationPreviewResponse = {
   provider_readiness: ProviderReadinessReport;
 };
 
+type LiveSmokePreflightGateStatus = "pass" | "blocked" | "not_implemented";
+
+type LiveSmokePreflightReport = {
+  preflight_id: string;
+  checked_at: string;
+  provider_route: string;
+  model_id: string;
+  status: "blocked";
+  live_smoke_allowed: false;
+  execution_disabled: true;
+  provider_called: false;
+  network_call_performed: false;
+  ledger_written: false;
+  queue_written: false;
+  approval_executed: false;
+  live_smoke_test_explicitly_approved: false;
+  budget_gate: {
+    status: LiveSmokePreflightGateStatus;
+    ready_for_live: false;
+    enforcement_mode: string;
+    budget_status: BudgetGuardStatus;
+    policy_route_allowed: false;
+    estimated_tokens: number;
+    estimated_cost_usd: number | null;
+    monthly_budget_cap_usd: number;
+    daily_budget_cap_usd: number;
+    per_request_estimated_token_cap: number;
+    per_request_estimated_cost_cap_usd: number;
+    reasons: string[];
+  };
+  ledger_gate: {
+    status: LiveSmokePreflightGateStatus;
+    ready_for_live: false;
+    ledger_enabled: boolean;
+    ledger_exists: boolean;
+    ledger_bytes: number;
+    ledger_path: string;
+    live_request_record_required: true;
+    live_response_record_required: true;
+    redacted_record_required: true;
+    preflight_write_performed: false;
+    reason: string;
+  };
+  redaction_gate: {
+    status: LiveSmokePreflightGateStatus;
+    obvious_secret_redaction_passed: boolean;
+    request_redaction_required: true;
+    response_redaction_required: true;
+    raw_probe_returned: boolean;
+    raw_secret_returned: boolean;
+    ready_for_live_transport: false;
+    reason: string;
+  };
+  approval_execution_gate: {
+    status: LiveSmokePreflightGateStatus;
+    approval_execution_implemented: false;
+    execute_endpoint_expected_status: 404;
+    status_transitions_only: true;
+    live_action_allowed: false;
+    reason: string;
+  };
+  transport_gate: {
+    status: LiveSmokePreflightGateStatus;
+    ready_for_live_transport: false;
+    live_transport_configured: false;
+    live_transport_enabled: false;
+    firewall_permits_call: false;
+    dry_run_envelope_ready_for_send: false;
+    network_payload_prepared: false;
+    reason: string;
+  };
+  required_before_live_smoke_test: string[];
+  admin_debug_summary: string;
+  client_safe_summary: string;
+  safety_flags: Record<string, boolean>;
+};
+
+type LiveSmokePreflightResponse = {
+  dry_run: boolean;
+  live_smoke_allowed: false;
+  execution_disabled: true;
+  provider_called: false;
+  network_call_performed: false;
+  ledger_written: false;
+  queue_written: false;
+  approval_executed: false;
+  approval_execution_implemented: false;
+  preflight: LiveSmokePreflightReport;
+};
+
 type HermesContextPreview = {
   dry_run: boolean;
   ledger_written: boolean;
@@ -3225,6 +3315,12 @@ function budgetGuardState(status: BudgetGuardStatus): TruthState {
   return "real";
 }
 
+function liveSmokeGateState(status: LiveSmokePreflightGateStatus): TruthState {
+  if (status === "pass") return "real";
+  if (status === "not_implemented") return "stub";
+  return "blocked";
+}
+
 function readinessRouteState(route: ProviderReadinessRoute): TruthState {
   if (route.live_call_allowed || route.enabled) return "blocked";
   if (route.id === "mock" && route.configured) return "real";
@@ -3709,6 +3805,108 @@ function ProviderInvocationFirewallPanel({ invocation }: { invocation: ProviderI
   );
 }
 
+function LiveSmokePreflightPanel({ preflight }: { preflight: LiveSmokePreflightReport | null }) {
+  if (!preflight) {
+    return (
+      <div className="provider-invocation-panel">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Live Smoke Preflight</span>
+            <h3>Admin-only safety gates</h3>
+          </div>
+          <TruthBadge state="demo" label="Not loaded" />
+        </div>
+        <p className="execution-disabled-banner">
+          Live smoke test preflight not loaded. Provider transport remains disabled and no smoke-test endpoint exists.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="provider-invocation-panel">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">Live Smoke Preflight</span>
+          <h3>Budget, ledger, redaction, approval, and transport gates</h3>
+        </div>
+        <TruthBadge state="blocked" label="No live smoke" />
+      </div>
+      <p className="execution-disabled-banner">
+        LIVE SMOKE PREFLIGHT: blocked. No provider call, no network request, no approval execution, no queue write, and
+        no Hermes ledger write occurred.
+      </p>
+      <div className="provider-grid">
+        <ProviderStatusCard
+          label="Smoke test"
+          value={preflight.live_smoke_allowed ? "Allowed" : "Blocked"}
+          detail={preflight.admin_debug_summary}
+          state="blocked"
+        />
+        <ProviderStatusCard
+          label="Budget gate"
+          value={preflight.budget_gate.status.replace(/_/g, " ")}
+          detail={`Budget ${preflight.budget_gate.budget_status}; enforcement ${preflight.budget_gate.enforcement_mode.replace(/_/g, " ")}.`}
+          state={liveSmokeGateState(preflight.budget_gate.status)}
+        />
+        <ProviderStatusCard
+          label="Ledger gate"
+          value={preflight.ledger_gate.status.replace(/_/g, " ")}
+          detail={preflight.ledger_gate.reason}
+          state={liveSmokeGateState(preflight.ledger_gate.status)}
+        />
+        <ProviderStatusCard
+          label="Redaction gate"
+          value={preflight.redaction_gate.status.replace(/_/g, " ")}
+          detail={preflight.redaction_gate.reason}
+          state={liveSmokeGateState(preflight.redaction_gate.status)}
+        />
+        <ProviderStatusCard
+          label="Approval execution"
+          value={preflight.approval_execution_gate.status.replace(/_/g, " ")}
+          detail={preflight.approval_execution_gate.reason}
+          state={liveSmokeGateState(preflight.approval_execution_gate.status)}
+        />
+        <ProviderStatusCard
+          label="Transport gate"
+          value={preflight.transport_gate.status.replace(/_/g, " ")}
+          detail={preflight.transport_gate.reason}
+          state={liveSmokeGateState(preflight.transport_gate.status)}
+        />
+      </div>
+      <div className="approval-queue-counts">
+        <span>Provider called: {preflight.provider_called ? "yes" : "no"}</span>
+        <span>Network: {preflight.network_call_performed ? "yes" : "no"}</span>
+        <span>Ledger write: {preflight.ledger_written ? "yes" : "no"}</span>
+        <span>Queue write: {preflight.queue_written ? "yes" : "no"}</span>
+        <span>Approval executed: {preflight.approval_executed ? "yes" : "no"}</span>
+        <span>Execute endpoint: expected {preflight.approval_execution_gate.execute_endpoint_expected_status}</span>
+      </div>
+      <div className="context-preview">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Required before smoke test</span>
+            <h3>Still blocked until every gate is real</h3>
+          </div>
+          <TruthBadge state="blocked" label="Jordan approval required later" />
+        </div>
+        <ul>
+          {preflight.required_before_live_smoke_test.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </div>
+      <div className="safety-flag-grid" aria-label="Live smoke preflight safety flags">
+        {Object.entries(preflight.safety_flags).map(([flag, enabled]) => (
+          <span className={enabled ? "enabled" : "disabled"} key={flag}>
+            {formatSafetyFlag(flag)}: {enabled ? "yes" : "no"}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: boolean) => Record<string, string> }) {
   const [records, setRecords] = useState<HermesLedgerRecordPreview[]>([]);
   const [queueRecords, setQueueRecords] = useState<ApprovalQueueRecordPreview[]>([]);
@@ -3728,6 +3926,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [providerPolicy, setProviderPolicy] = useState<ProviderPolicyPreview | null>(null);
   const [providerReadiness, setProviderReadiness] = useState<ProviderReadinessReport | null>(null);
   const [providerInvocation, setProviderInvocation] = useState<ProviderInvocationFirewallResult | null>(null);
+  const [liveSmokePreflight, setLiveSmokePreflight] = useState<LiveSmokePreflightReport | null>(null);
   const [previewText, setPreviewText] = useState(
     "Summarize today's safest trainer follow-up priorities for owner review only.",
   );
@@ -3739,6 +3938,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [policyStatus, setPolicyStatus] = useState("Not loaded");
   const [readinessStatus, setReadinessStatus] = useState("Not loaded");
   const [invocationStatus, setInvocationStatus] = useState("Not loaded");
+  const [liveSmokeStatus, setLiveSmokeStatus] = useState("Not loaded");
 
   function buildPreviewPayload(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     return {
@@ -3909,6 +4109,31 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     }
   }
 
+  async function refreshLiveSmokePreflight(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
+    setLiveSmokeStatus("Checking live smoke gates...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/live-smoke/preflight`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify(buildPreviewPayload(text, task, sensitivity)),
+      });
+
+      if (!response.ok) {
+        setLiveSmokePreflight(null);
+        setLiveSmokeStatus("Admin preflight unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as LiveSmokePreflightResponse;
+      setLiveSmokePreflight(data.preflight ?? null);
+      setLiveSmokeStatus(data.preflight?.live_smoke_allowed ? "Unsafe live route" : "Blocked / no live smoke");
+    } catch {
+      setLiveSmokePreflight(null);
+      setLiveSmokeStatus("Backend offline");
+    }
+  }
+
   async function runContextPreview(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     setPreviewStatus("Running dry-run preview...");
 
@@ -4011,12 +4236,14 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     void refreshProviderPolicy();
     void refreshProviderReadiness();
     void refreshProviderInvocation();
+    void refreshLiveSmokePreflight();
     void runContextPreview();
   }, []);
 
   function submitPreview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void runContextPreview();
+    void refreshLiveSmokePreflight();
   }
 
   return (
@@ -4038,6 +4265,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
         <TruthBadge state="real" label="Provider policy blocks live calls" />
         <TruthBadge state="real" label="Provider readiness masked" />
         <TruthBadge state="stub" label="Budget guard preview" />
+        <TruthBadge state="blocked" label="Live smoke blocked" />
         <TruthBadge state="real" label="No live provider call" />
         <TruthBadge state="stub" label="Approval execution not implemented" />
       </div>
@@ -4076,6 +4304,9 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           </button>
           <button className="ghost-small" type="button" onClick={() => void refreshProviderInvocation()}>
             Check firewall
+          </button>
+          <button className="ghost-small danger" type="button" onClick={() => void refreshLiveSmokePreflight()}>
+            Check smoke gates
           </button>
         </div>
       </form>
@@ -4161,9 +4392,20 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           }
           state={providerInvocation?.live_call_allowed ? "blocked" : "real"}
         />
+        <ProviderStatusCard
+          label="Live smoke preflight"
+          value={liveSmokeStatus}
+          detail={
+            liveSmokePreflight
+              ? liveSmokePreflight.admin_debug_summary
+              : "Admin-only preflight checks budget, ledger, redaction, approval execution, and transport gates."
+          }
+          state="blocked"
+        />
       </div>
 
       <ProviderInvocationFirewallPanel invocation={preview?.provider_invocation ?? providerInvocation} />
+      <LiveSmokePreflightPanel preflight={liveSmokePreflight} />
       <ProviderReadinessPanel readiness={preview?.provider_readiness ?? providerReadiness} />
       <ProviderPolicyGatePanel policy={preview?.provider_policy ?? providerPolicy} />
 
