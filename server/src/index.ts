@@ -73,6 +73,11 @@ import {
   redactHermesLedgerRecord,
   redactSensitiveText,
 } from "./phantom-ai/hermes-ledger.js";
+import {
+  normalizeHermesLiveReceiptStoreLimit,
+  persistHermesLiveReceiptPreview,
+  readHermesLiveReceiptStoreRecords,
+} from "./phantom-ai/hermes-live-receipt-store.js";
 import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-receipts.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
@@ -545,6 +550,79 @@ app.post("/phantom-ai/hermes-live-receipts/contract", async (request, reply) => 
     ready_for_send: false,
     approval_execution_implemented: false,
     receipt_contract,
+  };
+});
+
+app.post("/phantom-ai/hermes-live-receipts/persist-preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const result = previewModelRouterFoundation(
+    buildModelRouterRequestFromBody(body, session, "hermes-live-receipt-persist-preview"),
+  );
+  const preflight = await buildLiveSmokePreflightReport(result);
+  const receipt_contract = buildHermesLiveCallReceiptContract({
+    preview: result,
+    preflight,
+  });
+  const persistence = await persistHermesLiveReceiptPreview(receipt_contract);
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    local_dev_only: true,
+    provider_called: false,
+    network_call_performed: false,
+    ledger_written: false,
+    queue_written: false,
+    approval_executed: false,
+    ready_for_send: false,
+    external_ledger_written: false,
+    production_ledger_written: false,
+    production_write_allowed: false,
+    receipt_contract,
+    persistence,
+  };
+});
+
+app.get("/phantom-ai/hermes-live-receipts/history", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { limit?: string };
+  const history = await readHermesLiveReceiptStoreRecords({
+    limit: normalizeHermesLiveReceiptStoreLimit(query.limit),
+  });
+
+  return {
+    ok: true,
+    session,
+    local_dev_only: true,
+    provider_called: false,
+    network_call_performed: false,
+    ledger_written: false,
+    queue_written: false,
+    approval_executed: false,
+    ready_for_send: false,
+    history,
   };
 });
 

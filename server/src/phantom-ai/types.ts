@@ -658,6 +658,67 @@ export type HermesLiveCallReceiptContract = HermesLiveCallReceiptBlockedBooleans
   };
 };
 
+export type HermesLiveCallReceiptPersistedRecord = HermesLiveCallReceiptBlockedBooleans & {
+  record_id: string;
+  persisted_at: string;
+  store_kind: "local_dev_only_receipt_store";
+  store_version: 1;
+  contract_id: string;
+  correlation_id: string;
+  provider: HermesLiveCallReceiptProviderMetadata;
+  endpoint_contract: HermesLiveCallReceiptEndpointLinkage;
+  live_smoke_preflight_id: string;
+  budget_gate_status: LiveSmokePreflightGateStatus;
+  approval_gate_status: LiveSmokePreflightGateStatus;
+  request_receipt: HermesLiveCallRequestReceiptContract;
+  response_receipt: HermesLiveCallResponseReceiptContract;
+  redaction: HermesLiveCallRedactionProofFlags;
+  ledger_write_mode: "not_written_receipt_store_only";
+  queue_write_mode: "not_written_receipt_store_only";
+  approval_execution_mode: "not_implemented";
+  receipt_store_written: true;
+  external_ledger_written: false;
+  production_ledger_written: false;
+  production_write_allowed: false;
+  local_dev_only: true;
+  safety_flags: {
+    local_file_only: true;
+    redacted: true;
+    provider_called: false;
+    network_call_performed: false;
+    request_body_prepared: false;
+    ready_for_send: false;
+    ledger_written: false;
+    queue_written: false;
+    approval_executed: false;
+    production_write_allowed: false;
+    raw_secret_exposed: false;
+  };
+};
+
+export type HermesLiveCallReceiptPersistenceResult = {
+  persisted: boolean;
+  reason: "persisted_local_dev_only" | "production_write_blocked";
+  store_path: string;
+  record: HermesLiveCallReceiptPersistedRecord | null;
+  providerCalled: false;
+  networkCallPerformed: false;
+  ledgerWritten: false;
+  queueWritten: false;
+  approvalExecuted: false;
+  readyForSend: false;
+  external_ledger_written: false;
+  production_ledger_written: false;
+  production_write_allowed: false;
+};
+
+export type HermesLiveCallReceiptStoreReadResult = {
+  store_path: string;
+  limit: number;
+  records: HermesLiveCallReceiptPersistedRecord[];
+  malformed_lines: number;
+};
+
 export type ProviderInvocationFirewallInput = {
   requested_provider_id: string;
   requested_route: ProviderRoute;
