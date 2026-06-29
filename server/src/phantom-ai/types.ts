@@ -206,16 +206,36 @@ export type ProviderPolicyEvaluationResult = {
 
 export type ProviderReadinessRouteId = "mock" | "openrouter_glm" | "claude" | "local" | "byok";
 export type ProviderReadinessRouteStatus = "configured" | "needs_config" | "disabled";
+export type ProviderReadinessKeySource = "env" | "vault_planned" | "managed_planned" | "none";
 
 export type ProviderReadinessRoute = {
   id: ProviderReadinessRouteId;
   label: string;
+  client_safe_label: string;
+  client_safe_status: string;
   configured: boolean;
+  enabled: false;
   status: ProviderReadinessRouteStatus;
+  key_source: ProviderReadinessKeySource;
+  key_present: boolean;
+  key_preview: string;
+  model_id: string | null;
+  setup_required: boolean;
+  disabled_reason: string;
+  required_before_live: string[];
+  last_checked_at: string;
   live_call_allowed: false;
   is_default_safe_route: boolean;
   missing: string[];
   detail: string;
+  safety_flags: {
+    live_calls_allowed: false;
+    raw_secret_exposed: false;
+    secret_stored: false;
+    network_check_performed: false;
+    admin_only: true;
+    readiness_only: true;
+  };
 };
 
 export type ProviderReadinessReport = {

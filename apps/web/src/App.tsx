@@ -363,6 +363,50 @@ type ProviderPolicyStatusResponse = {
   secrets_stored: boolean;
 };
 
+type ProviderReadinessRoute = {
+  id: "mock" | "openrouter_glm" | "claude" | "local" | "byok";
+  label: string;
+  client_safe_label: string;
+  client_safe_status: string;
+  configured: boolean;
+  enabled: false;
+  status: "configured" | "needs_config" | "disabled";
+  key_source: "env" | "vault_planned" | "managed_planned" | "none";
+  key_present: boolean;
+  key_preview: string;
+  model_id: string | null;
+  setup_required: boolean;
+  disabled_reason: string;
+  required_before_live: string[];
+  last_checked_at: string;
+  live_call_allowed: false;
+  is_default_safe_route: boolean;
+  missing: string[];
+  detail: string;
+  safety_flags: Record<string, boolean>;
+};
+
+type ProviderReadinessReport = {
+  checked_at: string;
+  router_mode: ProviderSetupStatus["router_mode"];
+  live_providers_globally_enabled: boolean;
+  production_ready: false;
+  any_live_route_configured: boolean;
+  recommended_route: "mock";
+  routes: ProviderReadinessRoute[];
+  required_before_live: string[];
+  client_safe_summary: string;
+  admin_debug_summary: string;
+  safety_flags: Record<string, boolean>;
+};
+
+type ProviderReadinessStatusResponse = {
+  readiness: ProviderReadinessReport;
+  live_provider_called: boolean;
+  execution_disabled: boolean;
+  secrets_stored: boolean;
+};
+
 type HermesContextPreview = {
   dry_run: boolean;
   ledger_written: boolean;
@@ -425,6 +469,7 @@ type HermesContextPreview = {
     execution_disabled: boolean;
   };
   provider_policy: ProviderPolicyPreview;
+  provider_readiness: ProviderReadinessReport;
   context: {
     compact_context: string;
     user_request_summary: string;
@@ -483,6 +528,7 @@ type ApprovalQueuePreviewResponse = {
   action_preview: HermesContextPreview["action_preview"];
   approval_request: HermesContextPreview["approval_request"];
   provider_policy: ProviderPolicyPreview;
+  provider_readiness: ProviderReadinessReport;
   queue_write: {
     queued: boolean;
     reason: "queued" | "preview_only_not_queued" | "queue_not_requested";
@@ -3066,6 +3112,131 @@ function budgetGuardState(status: BudgetGuardStatus): TruthState {
   return "real";
 }
 
+function readinessRouteState(route: ProviderReadinessRoute): TruthState {
+  if (route.live_call_allowed || route.enabled) return "blocked";
+  if (route.id === "mock" && route.configured) return "real";
+  if (route.status === "configured") return "stub";
+  if (route.status === "disabled") return "blocked";
+  return "demo";
+}
+
+function ProviderReadinessPanel({ readiness }: { readiness: ProviderReadinessReport | null }) {
+  if (!readiness) {
+    return (
+      <div className="provider-readiness-panel">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Provider Readiness</span>
+            <h3>Admin-only setup status</h3>
+          </div>
+          <TruthBadge state="demo" label="Not loaded" />
+        </div>
+        <p className="execution-disabled-banner">
+          Readiness not loaded. No live provider calls can run from this app state.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="provider-readiness-panel">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">Provider Readiness</span>
+          <h3>Admin-only provider setup status</h3>
+        </div>
+        <TruthBadge state="real" label="Readiness/status only" />
+      </div>
+      <p className="execution-disabled-banner">
+        READINESS ONLY: key presence is boolean/masked, raw env values are not shown, and no provider network check or
+        live model call is performed.
+      </p>
+      <div className="provider-grid">
+        <ProviderStatusCard
+          label="Mock provider"
+          value="Available"
+          detail="The built-in preview route remains the recommended safe route."
+          state="real"
+        />
+        <ProviderStatusCard
+          label="Live provider calls"
+          value="Disabled"
+          detail={readiness.admin_debug_summary}
+          state="blocked"
+        />
+        <ProviderStatusCard
+          label="Any live route configured"
+          value={readiness.any_live_route_configured ? "Yes / disabled" : "No"}
+          detail="Configured only means prerequisites are present; execution is still disabled."
+          state={readiness.any_live_route_configured ? "stub" : "demo"}
+        />
+        <ProviderStatusCard
+          label="Production ready"
+          value={readiness.production_ready ? "Yes" : "No"}
+          detail="Provider readiness does not make PhantomForce production-ready."
+          state={readiness.production_ready ? "blocked" : "real"}
+        />
+      </div>
+      <div className="provider-readiness-list">
+        {readiness.routes.map((route) => (
+          <article className={`provider-readiness-record ${readinessRouteState(route)}`} key={route.id}>
+            <div className="record-top">
+              <div>
+                <span>{route.status.replace(/_/g, " ")}</span>
+                <strong>{route.label}</strong>
+                <p>{route.detail}</p>
+              </div>
+              <TruthBadge state={readinessRouteState(route)} label={route.live_call_allowed ? "Unsafe" : "No live call"} />
+            </div>
+            <div className="approval-queue-meta">
+              <span>Configured: {route.configured ? "yes" : "no"}</span>
+              <span>Enabled: {route.enabled ? "yes" : "no"}</span>
+              <span>Key source: {route.key_source.replace(/_/g, " ")}</span>
+              <span>Key present: {route.key_present ? "yes" : "no"}</span>
+              <span>Key preview: {route.key_preview}</span>
+              <span>Model: {route.model_id ?? "Not configured"}</span>
+              <span>Setup required: {route.setup_required ? "yes" : "no"}</span>
+              <span>Checked: {route.last_checked_at}</span>
+              <span>Client-safe: {route.client_safe_status}</span>
+              <span>Network check: {route.safety_flags.network_check_performed ? "yes" : "no"}</span>
+            </div>
+            <p className="access-note">{route.disabled_reason}</p>
+            {route.missing.length ? (
+              <div className="context-preview">
+                <div className="section-head compact">
+                  <div>
+                    <span className="eyebrow">Missing setup</span>
+                    <h3>{route.client_safe_label}</h3>
+                  </div>
+                </div>
+                <ul>
+                  {route.missing.map((item) => (
+                    <li key={item}>{item}</li>
+                  ))}
+                </ul>
+              </div>
+            ) : null}
+          </article>
+        ))}
+      </div>
+      <div className="context-preview">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Required before live calls</span>
+            <h3>Readiness checklist</h3>
+          </div>
+          <TruthBadge state="blocked" label="Still disabled" />
+        </div>
+        <ul>
+          {readiness.required_before_live.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 function ProviderPolicyGatePanel({ policy }: { policy: ProviderPolicyPreview | null }) {
   if (!policy) {
     return (
@@ -3191,6 +3362,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [transitionNotes, setTransitionNotes] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<HermesContextPreview | null>(null);
   const [providerPolicy, setProviderPolicy] = useState<ProviderPolicyPreview | null>(null);
+  const [providerReadiness, setProviderReadiness] = useState<ProviderReadinessReport | null>(null);
   const [previewText, setPreviewText] = useState(
     "Summarize today's safest trainer follow-ups without sending, posting, uploading, or changing billing.",
   );
@@ -3200,6 +3372,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [previewStatus, setPreviewStatus] = useState("Not loaded");
   const [queueStatus, setQueueStatus] = useState("Not loaded");
   const [policyStatus, setPolicyStatus] = useState("Not loaded");
+  const [readinessStatus, setReadinessStatus] = useState("Not loaded");
 
   function buildPreviewPayload(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     return {
@@ -3320,6 +3493,29 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     }
   }
 
+  async function refreshProviderReadiness() {
+    setReadinessStatus("Loading provider readiness...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/provider-readiness/status`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setProviderReadiness(null);
+        setReadinessStatus("Admin provider readiness unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as ProviderReadinessStatusResponse;
+      setProviderReadiness(data.readiness ?? null);
+      setReadinessStatus(data.readiness?.any_live_route_configured ? "Configured / live disabled" : "Mock only");
+    } catch {
+      setProviderReadiness(null);
+      setReadinessStatus("Backend offline");
+    }
+  }
+
   async function runContextPreview(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     setPreviewStatus("Running dry-run preview...");
 
@@ -3339,6 +3535,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
       const data = (await response.json()) as HermesContextPreview;
       setPreview(data);
       setProviderPolicy(data.provider_policy);
+      setProviderReadiness(data.provider_readiness);
       setPreviewStatus("Dry-run preview ready");
     } catch {
       setPreview(null);
@@ -3413,6 +3610,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     void refreshHistory();
     void refreshApprovalQueue();
     void refreshProviderPolicy();
+    void refreshProviderReadiness();
     void runContextPreview();
   }, []);
 
@@ -3438,6 +3636,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
         <TruthBadge state="real" label="Real ledger read" />
         <TruthBadge state="demo" label="Dry-run context preview" />
         <TruthBadge state="real" label="Provider policy blocks live calls" />
+        <TruthBadge state="real" label="Provider readiness masked" />
         <TruthBadge state="stub" label="Budget guard preview" />
         <TruthBadge state="real" label="No live provider call" />
         <TruthBadge state="stub" label="Approval execution not implemented" />
@@ -3539,8 +3738,19 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           }
           state={providerPolicy ? budgetGuardState(providerPolicy.budget.status) : "demo"}
         />
+        <ProviderStatusCard
+          label="Provider readiness"
+          value={readinessStatus}
+          detail={
+            providerReadiness
+              ? "Readiness is admin-only, masked, and status-only. No provider network check is performed."
+              : "Readiness endpoint is admin-only and does not expose raw configuration."
+          }
+          state="real"
+        />
       </div>
 
+      <ProviderReadinessPanel readiness={preview?.provider_readiness ?? providerReadiness} />
       <ProviderPolicyGatePanel policy={preview?.provider_policy ?? providerPolicy} />
 
       <div className="approval-queue-panel">

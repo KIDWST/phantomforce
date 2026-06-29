@@ -746,6 +746,42 @@ img {
   border-radius: 8px;
 }
 
+.provider-readiness-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(89, 208, 133, 0.045);
+  border: 1px solid rgba(89, 208, 133, 0.18);
+  border-radius: 8px;
+}
+
+.provider-readiness-list {
+  display: grid;
+  gap: 10px;
+}
+
+.provider-readiness-record {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+}
+
+.provider-readiness-record.real {
+  border-color: rgba(56, 189, 125, 0.18);
+}
+
+.provider-readiness-record.demo,
+.provider-readiness-record.stub {
+  border-color: rgba(229, 181, 75, 0.22);
+}
+
+.provider-readiness-record.blocked {
+  border-color: rgba(236, 47, 69, 0.22);
+}
+
 .execution-disabled-banner {
   margin: 0;
   padding: 12px;

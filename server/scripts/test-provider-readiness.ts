@@ -34,13 +34,22 @@ assert(defaultReport.safety_flags.not_production === true, "Report must flag not
 
 const mock = routeById(defaultReport, "mock");
 assert(mock.configured && mock.status === "configured", "Mock route must always be configured.");
+assert(mock.enabled === false, "Mock route should still be marked non-live.");
 assert(mock.is_default_safe_route, "Mock route must be the default safe route.");
 assert(mock.live_call_allowed === false, "Mock route must not allow a live call.");
+assert(mock.key_source === "none", "Mock route should not require a key source.");
+assert(mock.key_present === false, "Mock route should not report key presence.");
+assert(mock.key_preview === "not required", "Mock route should mark key preview as not required.");
+assert(mock.model_id === "phantomforce-mock-router", "Mock route should expose only safe model id.");
+assert(mock.setup_required === false, "Mock route should not require setup.");
+assert(mock.safety_flags.network_check_performed === false, "Readiness must not perform network checks.");
+assert(mock.safety_flags.raw_secret_exposed === false, "Readiness must not expose raw secrets.");
 
 assert(routeById(defaultReport, "openrouter_glm").status === "needs_config", "OpenRouter must need config by default.");
 assert(routeById(defaultReport, "claude").status === "needs_config", "Claude must need config by default.");
 assert(routeById(defaultReport, "local").status === "needs_config", "Local must need config by default.");
 assert(routeById(defaultReport, "byok").status === "disabled", "BYOK must stay disabled.");
+assert(routeById(defaultReport, "byok").configured === false, "BYOK must not read as configured.");
 assert(routeById(defaultReport, "openrouter_glm").missing.length > 0, "Unconfigured route must list missing items.");
 assert(
   !/openrouter|claude|local|byok/i.test(defaultReport.client_safe_summary),
@@ -59,6 +68,21 @@ const configuredReport = getProviderReadinessReport({
 assert(routeById(configuredReport, "openrouter_glm").configured, "OpenRouter should read as configured.");
 assert(routeById(configuredReport, "claude").configured, "Claude should read as configured.");
 assert(routeById(configuredReport, "local").configured, "Local should read as configured.");
+assert(routeById(configuredReport, "openrouter_glm").enabled === false, "OpenRouter must remain disabled.");
+assert(routeById(configuredReport, "claude").enabled === false, "Claude must remain disabled.");
+assert(routeById(configuredReport, "local").enabled === false, "Local fallback must remain disabled.");
+assert(routeById(configuredReport, "openrouter_glm").key_source === "env", "OpenRouter key source should be env.");
+assert(routeById(configuredReport, "claude").key_source === "env", "Claude key source should be env.");
+assert(routeById(configuredReport, "local").key_source === "env", "Local config source should be env.");
+assert(routeById(configuredReport, "openrouter_glm").key_present, "OpenRouter key presence should be true.");
+assert(routeById(configuredReport, "claude").key_present, "Claude key presence should be true.");
+assert(routeById(configuredReport, "local").key_present, "Local config presence should be true.");
+assert(
+  routeById(configuredReport, "openrouter_glm").key_preview.includes("[redacted]"),
+  "OpenRouter key preview must be masked.",
+);
+assert(routeById(configuredReport, "claude").key_preview.includes("[redacted]"), "Claude key preview must be masked.");
+assert(routeById(configuredReport, "local").key_preview.includes("[redacted]"), "Local preview must be masked.");
 assert(configuredReport.any_live_route_configured, "Configured env should report a live route present.");
 assert(configuredReport.production_ready === false, "Configured credentials still must not be production-ready.");
 assert(
@@ -66,6 +90,8 @@ assert(
   "No route may allow a live call even when configured.",
 );
 assert(routeById(configuredReport, "byok").status === "disabled", "BYOK must remain disabled even if enabled in env.");
+assert(routeById(configuredReport, "byok").key_source === "vault_planned", "BYOK should be vault-planned only.");
+assert(!routeById(configuredReport, "byok").key_present, "BYOK should not report customer key presence.");
 
 const serialized = JSON.stringify(configuredReport);
 assert(!serialized.includes(fakeOpenRouterKey), "Report must not include the raw OpenRouter key value.");
@@ -95,6 +121,8 @@ console.log(
       defaultAnyLiveRouteConfigured: defaultReport.any_live_route_configured,
       configuredAnyLiveRouteConfigured: configuredReport.any_live_route_configured,
       configuredProductionReady: configuredReport.production_ready,
+      configuredOpenRouterKeyPreview: routeById(configuredReport, "openrouter_glm").key_preview,
+      configuredClaudeKeyPreview: routeById(configuredReport, "claude").key_preview,
       secretsLeaked:
         serialized.includes(fakeOpenRouterKey) ||
         serialized.includes(fakeAnthropicKey) ||
