@@ -394,12 +394,81 @@ export type ApprovalQueueWriteResult = {
   record: ApprovalQueueRecord | null;
 };
 
+export type ProviderInvocationFirewallInput = {
+  requested_provider_id: string;
+  requested_route: ProviderRoute;
+  requested_model_id: string;
+  redacted_context_summary: string;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  action_classification: ActionPreviewStatus;
+  approval_request: ApprovalRequestPreview;
+  policy_result: ProviderPolicyEvaluationResult;
+  readiness_result: ProviderReadinessReport;
+};
+
+export type ProviderInvocationFirewallResult = {
+  invocation_id: string;
+  status: "blocked";
+  requested_provider_id: string;
+  requested_route: ProviderRoute;
+  requested_model_id: string;
+  redacted_context_summary: string;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  action_classification: ActionPreviewStatus;
+  policy_result: ProviderPolicyEvaluationResult;
+  readiness_result: ProviderReadinessReport;
+  readiness_route: ProviderReadinessRoute | null;
+  approval_requirement: {
+    approval_required: boolean;
+    approval_status: ApprovalRequestStatus;
+    risk_level: ApprovalRiskLevel;
+    reason: string;
+  };
+  live_call_allowed: false;
+  execution_disabled: true;
+  blocked_reason: string;
+  blocked_reasons: string[];
+  required_before_live: string[];
+  dry_run_result: {
+    provider_called: false;
+    network_call_performed: false;
+    output_text: string;
+    ledger_written: false;
+    queue_written: false;
+    approval_executed: false;
+  };
+  client_safe_summary: string;
+  admin_debug_summary: string;
+  safety_flags: {
+    live_call_allowed: false;
+    execution_disabled: true;
+    provider_called: false;
+    network_call_performed: false;
+    route_allowed: false;
+    readiness_configured: boolean;
+    readiness_live_call_allowed: false;
+    approval_required: boolean;
+    approval_execution_implemented: false;
+    raw_secret_exposed: false;
+    raw_context_stored: false;
+    raw_context_returned: false;
+    secrets_stored: false;
+    ledger_written: false;
+    queue_written: false;
+    dry_run_only: true;
+    admin_only: true;
+  };
+};
+
 export type ModelRouterPreviewResult = {
   decision: ModelRouterDecision;
   context_packet: HermesContextPacket;
   action_preview: ActionPreview;
   approval_request: ApprovalRequestPreview;
   provider_policy: ProviderPolicyEvaluationResult;
+  provider_invocation: ProviderInvocationFirewallResult;
   dry_run: true;
   ledger_written: false;
   live_provider_called: false;
@@ -411,5 +480,6 @@ export type ModelRouterRunResult = {
   action_preview: ActionPreview;
   approval_request: ApprovalRequestPreview;
   provider_policy: ProviderPolicyEvaluationResult;
+  provider_invocation: ProviderInvocationFirewallResult;
   ledger_record: HermesLedgerRecord;
 };

@@ -407,6 +407,54 @@ type ProviderReadinessStatusResponse = {
   secrets_stored: boolean;
 };
 
+type ProviderInvocationFirewallResult = {
+  invocation_id: string;
+  status: "blocked";
+  requested_provider_id: string;
+  requested_route: string;
+  requested_model_id: string;
+  redacted_context_summary: string;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  action_classification: string;
+  policy_result: ProviderPolicyPreview;
+  readiness_result: ProviderReadinessReport;
+  readiness_route: ProviderReadinessRoute | null;
+  approval_requirement: {
+    approval_required: boolean;
+    approval_status: "preview-only" | "pending" | "blocked" | "approved" | "rejected" | "expired";
+    risk_level: "low" | "medium" | "high" | "critical";
+    reason: string;
+  };
+  live_call_allowed: false;
+  execution_disabled: true;
+  blocked_reason: string;
+  blocked_reasons: string[];
+  required_before_live: string[];
+  dry_run_result: {
+    provider_called: false;
+    network_call_performed: false;
+    output_text: string;
+    ledger_written: false;
+    queue_written: false;
+    approval_executed: false;
+  };
+  client_safe_summary: string;
+  admin_debug_summary: string;
+  safety_flags: Record<string, boolean>;
+};
+
+type ProviderInvocationPreviewResponse = {
+  dry_run: boolean;
+  ledger_written: boolean;
+  queue_written: boolean;
+  live_provider_called: boolean;
+  approval_execution_implemented: boolean;
+  provider_invocation: ProviderInvocationFirewallResult;
+  provider_policy: ProviderPolicyPreview;
+  provider_readiness: ProviderReadinessReport;
+};
+
 type HermesContextPreview = {
   dry_run: boolean;
   ledger_written: boolean;
@@ -470,6 +518,7 @@ type HermesContextPreview = {
   };
   provider_policy: ProviderPolicyPreview;
   provider_readiness: ProviderReadinessReport;
+  provider_invocation: ProviderInvocationFirewallResult;
   context: {
     compact_context: string;
     user_request_summary: string;
@@ -529,6 +578,7 @@ type ApprovalQueuePreviewResponse = {
   approval_request: HermesContextPreview["approval_request"];
   provider_policy: ProviderPolicyPreview;
   provider_readiness: ProviderReadinessReport;
+  provider_invocation: ProviderInvocationFirewallResult;
   queue_write: {
     queued: boolean;
     reason: "queued" | "preview_only_not_queued" | "queue_not_requested";
@@ -3345,6 +3395,147 @@ function ProviderPolicyGatePanel({ policy }: { policy: ProviderPolicyPreview | n
   );
 }
 
+function ProviderInvocationFirewallPanel({ invocation }: { invocation: ProviderInvocationFirewallResult | null }) {
+  if (!invocation) {
+    return (
+      <div className="provider-invocation-panel">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Provider Invocation Firewall</span>
+            <h3>Admin-only provider call boundary</h3>
+          </div>
+          <TruthBadge state="demo" label="Not loaded" />
+        </div>
+        <p className="execution-disabled-banner">
+          Firewall preview not loaded. Live provider calls remain disabled, and no execution endpoint exists here.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="provider-invocation-panel">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">Provider Invocation Firewall</span>
+          <h3>Admin-only dry-run call boundary</h3>
+        </div>
+        <TruthBadge state={invocation.live_call_allowed ? "blocked" : "real"} label="Blocked / dry-run" />
+      </div>
+      <p className="execution-disabled-banner">
+        PROVIDER FIREWALL: no live provider call, no network request, no approval execution, no ledger write, and no
+        queue write can run from this preview.
+      </p>
+      <div className="debug-safety-strip">
+        <TruthBadge state="real" label="No live provider call" />
+        <TruthBadge state="real" label="Execution disabled" />
+        <TruthBadge state="real" label="Provider not called" />
+        <TruthBadge state="real" label="No raw context stored" />
+        <TruthBadge state="stub" label="Future boundary only" />
+      </div>
+      <div className="provider-grid">
+        <ProviderStatusCard
+          label="Firewall status"
+          value={invocation.status}
+          detail={invocation.blocked_reason}
+          state={invocation.live_call_allowed ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Requested route"
+          value={invocation.requested_route}
+          detail={`Model: ${invocation.requested_model_id}. Provider id: ${invocation.requested_provider_id}.`}
+          state="stub"
+        />
+        <ProviderStatusCard
+          label="Live call allowed"
+          value={invocation.live_call_allowed ? "Yes" : "No"}
+          detail={invocation.admin_debug_summary}
+          state={invocation.live_call_allowed ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Execution"
+          value={invocation.execution_disabled ? "Disabled" : "Unsafe"}
+          detail={invocation.dry_run_result.output_text}
+          state={invocation.execution_disabled ? "real" : "blocked"}
+        />
+        <ProviderStatusCard
+          label="Policy route"
+          value={invocation.policy_result.route_allowed ? "Allowed" : "Blocked"}
+          detail={invocation.policy_result.live_call_disabled_reason}
+          state={invocation.policy_result.route_allowed ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Readiness"
+          value={invocation.readiness_route?.status.replace(/_/g, " ") ?? "Missing"}
+          detail={invocation.readiness_route?.disabled_reason ?? "No readiness route matched this provider candidate."}
+          state={invocation.readiness_route?.configured ? "stub" : "demo"}
+        />
+        <ProviderStatusCard
+          label="Approval requirement"
+          value={
+            invocation.approval_requirement.approval_required
+              ? invocation.approval_requirement.approval_status
+              : "Not required"
+          }
+          detail={invocation.approval_requirement.reason || "Safe preview metadata only."}
+          state={invocation.approval_requirement.approval_required ? "stub" : "real"}
+        />
+        <ProviderStatusCard
+          label="Cost/tokens"
+          value={`${invocation.estimated_tokens} tokens`}
+          detail={`Estimated cost: $${invocation.estimated_cost_usd?.toFixed(4) ?? "unknown"}.`}
+          state="demo"
+        />
+      </div>
+      <div className="context-preview">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Blocked reasons</span>
+            <h3>Why no provider can run</h3>
+          </div>
+          <TruthBadge state="real" label="Always blocked today" />
+        </div>
+        <ul>
+          {invocation.blocked_reasons.map((reason) => (
+            <li key={reason}>{reason}</li>
+          ))}
+        </ul>
+      </div>
+      <div className="context-preview">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Required before live calls</span>
+            <h3>Future firewall checklist</h3>
+          </div>
+          <TruthBadge state="blocked" label="Not production ready" />
+        </div>
+        <ul>
+          {invocation.required_before_live.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </div>
+      <div className="context-preview">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Redacted context summary</span>
+            <h3>Stored only in this response</h3>
+          </div>
+          <TruthBadge state="real" label="Redacted" />
+        </div>
+        <pre>{invocation.redacted_context_summary || "No context summary returned."}</pre>
+      </div>
+      <div className="safety-flag-grid" aria-label="Provider invocation firewall safety flags">
+        {Object.entries(invocation.safety_flags).map(([flag, enabled]) => (
+          <span className={enabled ? "enabled" : "disabled"} key={flag}>
+            {formatSafetyFlag(flag)}: {enabled ? "yes" : "no"}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: boolean) => Record<string, string> }) {
   const [records, setRecords] = useState<HermesLedgerRecordPreview[]>([]);
   const [queueRecords, setQueueRecords] = useState<ApprovalQueueRecordPreview[]>([]);
@@ -3363,6 +3554,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [preview, setPreview] = useState<HermesContextPreview | null>(null);
   const [providerPolicy, setProviderPolicy] = useState<ProviderPolicyPreview | null>(null);
   const [providerReadiness, setProviderReadiness] = useState<ProviderReadinessReport | null>(null);
+  const [providerInvocation, setProviderInvocation] = useState<ProviderInvocationFirewallResult | null>(null);
   const [previewText, setPreviewText] = useState(
     "Summarize today's safest trainer follow-ups without sending, posting, uploading, or changing billing.",
   );
@@ -3373,6 +3565,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [queueStatus, setQueueStatus] = useState("Not loaded");
   const [policyStatus, setPolicyStatus] = useState("Not loaded");
   const [readinessStatus, setReadinessStatus] = useState("Not loaded");
+  const [invocationStatus, setInvocationStatus] = useState("Not loaded");
 
   function buildPreviewPayload(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     return {
@@ -3516,6 +3709,33 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     }
   }
 
+  async function refreshProviderInvocation(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
+    setInvocationStatus("Checking provider invocation firewall...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/provider-invocation/preview`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify(buildPreviewPayload(text, task, sensitivity)),
+      });
+
+      if (!response.ok) {
+        setProviderInvocation(null);
+        setInvocationStatus("Admin firewall preview unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as ProviderInvocationPreviewResponse;
+      setProviderInvocation(data.provider_invocation ?? null);
+      setProviderPolicy(data.provider_policy ?? data.provider_invocation?.policy_result ?? null);
+      setProviderReadiness(data.provider_readiness ?? data.provider_invocation?.readiness_result ?? null);
+      setInvocationStatus(data.provider_invocation?.live_call_allowed ? "Unsafe live route" : "Blocked / dry-run");
+    } catch {
+      setProviderInvocation(null);
+      setInvocationStatus("Backend offline");
+    }
+  }
+
   async function runContextPreview(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     setPreviewStatus("Running dry-run preview...");
 
@@ -3536,6 +3756,8 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
       setPreview(data);
       setProviderPolicy(data.provider_policy);
       setProviderReadiness(data.provider_readiness);
+      setProviderInvocation(data.provider_invocation);
+      setInvocationStatus(data.provider_invocation?.live_call_allowed ? "Unsafe live route" : "Blocked / dry-run");
       setPreviewStatus("Dry-run preview ready");
     } catch {
       setPreview(null);
@@ -3562,6 +3784,10 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
       }
 
       const data = (await response.json()) as ApprovalQueuePreviewResponse;
+      setProviderPolicy(data.provider_policy);
+      setProviderReadiness(data.provider_readiness);
+      setProviderInvocation(data.provider_invocation);
+      setInvocationStatus(data.provider_invocation?.live_call_allowed ? "Unsafe live route" : "Blocked / dry-run");
       if (data.queue_write.queued) {
         setQueueStatus("Approval preview queued locally. Execution remains disabled.");
       } else if (data.queue_write.reason === "preview_only_not_queued") {
@@ -3611,6 +3837,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     void refreshApprovalQueue();
     void refreshProviderPolicy();
     void refreshProviderReadiness();
+    void refreshProviderInvocation();
     void runContextPreview();
   }, []);
 
@@ -3673,6 +3900,9 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           </button>
           <button className="ghost-small danger" type="button" onClick={() => void queueCurrentApprovalPreview()}>
             Queue preview
+          </button>
+          <button className="ghost-small" type="button" onClick={() => void refreshProviderInvocation()}>
+            Check firewall
           </button>
         </div>
       </form>
@@ -3748,8 +3978,19 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           }
           state="real"
         />
+        <ProviderStatusCard
+          label="Provider firewall"
+          value={invocationStatus}
+          detail={
+            providerInvocation
+              ? providerInvocation.blocked_reason
+              : "Invocation firewall endpoint is admin-only and dry-run only."
+          }
+          state={providerInvocation?.live_call_allowed ? "blocked" : "real"}
+        />
       </div>
 
+      <ProviderInvocationFirewallPanel invocation={preview?.provider_invocation ?? providerInvocation} />
       <ProviderReadinessPanel readiness={preview?.provider_readiness ?? providerReadiness} />
       <ProviderPolicyGatePanel policy={preview?.provider_policy ?? providerPolicy} />
 

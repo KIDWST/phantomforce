@@ -416,6 +416,54 @@ app.get("/phantom-ai/provider-readiness", async (request, reply) => {
   return handleProviderReadinessStatus(request, reply);
 });
 
+app.post("/phantom-ai/provider-invocation/preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const result = previewModelRouterFoundation(
+    buildModelRouterRequestFromBody(body, session, "provider-invocation-preview"),
+  );
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    ledger_written: false,
+    queue_written: false,
+    live_provider_called: false,
+    approval_execution_implemented: false,
+    provider_invocation: result.provider_invocation,
+    provider_policy: result.provider_policy,
+    provider_readiness: result.provider_invocation.readiness_result,
+    action_preview: {
+      ...result.action_preview,
+      reasons: result.action_preview.reasons.map((reason) => redactSensitiveText(reason)),
+      next_action: redactSensitiveText(result.action_preview.next_action),
+    },
+    approval_requirement: result.provider_invocation.approval_requirement,
+    context: {
+      context_chars: result.context_packet.context_chars,
+      estimated_tokens: result.context_packet.estimated_tokens,
+      raw_context_chars: result.context_packet.raw_context_chars,
+      compression_ratio: result.context_packet.compression_ratio,
+    },
+  };
+});
+
 app.get("/phantom-ai/hermes-ledger/history", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -600,7 +648,8 @@ app.post("/phantom-ai/context-preview", async (request, reply) => {
     },
     approval_request: redactApprovalRequestPreview(result.approval_request),
     provider_policy: result.provider_policy,
-    provider_readiness: getProviderReadinessReport(),
+    provider_readiness: result.provider_invocation.readiness_result,
+    provider_invocation: result.provider_invocation,
     context: {
       compact_context: redactSensitiveText(result.context_packet.compact_context),
       user_request_summary: redactSensitiveText(result.context_packet.user_request_summary),
@@ -663,7 +712,8 @@ app.post("/phantom-ai/approvals/preview", async (request, reply) => {
     },
     approval_request: redactApprovalRequestPreview(result.approval_request),
     provider_policy: result.provider_policy,
-    provider_readiness: getProviderReadinessReport(),
+    provider_readiness: result.provider_invocation.readiness_result,
+    provider_invocation: result.provider_invocation,
     queue_write: {
       ...queueWrite,
       record: queueWrite.record,
@@ -710,7 +760,8 @@ app.post("/phantom-ai/mock-route", async (request, reply) => {
     ledger_record: redactHermesLedgerRecord(result.ledger_record),
     approval_request: redactApprovalRequestPreview(result.approval_request),
     provider_policy: result.provider_policy,
-    provider_readiness: getProviderReadinessReport(),
+    provider_readiness: result.provider_invocation.readiness_result,
+    provider_invocation: result.provider_invocation,
   };
 });
 

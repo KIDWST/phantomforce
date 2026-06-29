@@ -746,6 +746,15 @@ img {
   border-radius: 8px;
 }
 
+.provider-invocation-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  background: rgba(236, 47, 69, 0.06);
+  border: 1px solid rgba(236, 47, 69, 0.24);
+  border-radius: 8px;
+}
+
 .provider-readiness-panel {
   display: grid;
   gap: 12px;

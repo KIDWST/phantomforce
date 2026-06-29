@@ -3,6 +3,8 @@ import { createHash } from "node:crypto";
 import { compileHermesContext } from "./context-compiler.js";
 import { appendHermesLedgerRecord, redactSensitiveText, resolveHermesLedgerPath } from "./hermes-ledger.js";
 import { evaluateProviderBudgetPolicy } from "./provider-policy.js";
+import { evaluateProviderInvocationFirewall } from "./provider-invocation-firewall.js";
+import { getProviderReadinessReport } from "./provider-readiness.js";
 import type {
   ActionPreview,
   ApprovalRequestPreview,
@@ -391,6 +393,19 @@ export function previewModelRouterFoundation(
     contextPacket.compact_context,
     providerPolicy.budget.status,
   );
+  const providerReadiness = getProviderReadinessReport(options.env ?? process.env);
+  const providerInvocation = evaluateProviderInvocationFirewall({
+    requested_provider_id: decision.provider_route,
+    requested_route: decision.provider_route,
+    requested_model_id: decision.model_id,
+    redacted_context_summary: contextPacket.compact_context,
+    estimated_tokens: contextPacket.estimated_tokens,
+    estimated_cost_usd: decision.estimated_cost_usd,
+    action_classification: actionPreview.status,
+    approval_request: approvalRequest,
+    policy_result: providerPolicy,
+    readiness_result: providerReadiness,
+  });
 
   return {
     decision,
@@ -398,6 +413,7 @@ export function previewModelRouterFoundation(
     action_preview: actionPreview,
     approval_request: approvalRequest,
     provider_policy: providerPolicy,
+    provider_invocation: providerInvocation,
     dry_run: true,
     ledger_written: false,
     live_provider_called: false,
@@ -418,6 +434,7 @@ export async function runModelRouterFoundation(
     action_preview: actionPreview,
     approval_request: approvalRequest,
     provider_policy: providerPolicy,
+    provider_invocation: providerInvocation,
   } = preview;
 
   const ledgerRecord = {
@@ -455,6 +472,7 @@ export async function runModelRouterFoundation(
     action_preview: actionPreview,
     approval_request: approvalRequest,
     provider_policy: providerPolicy,
+    provider_invocation: providerInvocation,
     ledger_record: ledgerRecord,
   };
 }
