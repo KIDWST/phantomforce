@@ -7,6 +7,8 @@ export type ActionPreviewStatus = "safe" | "pending_approval" | "blocked" | "des
 export type ApprovalRequestStatus = "preview-only" | "pending" | "blocked" | "approved" | "rejected" | "expired";
 export type ApprovalRiskLevel = "low" | "medium" | "high" | "critical";
 export type ApprovalQueueStatus = "pending" | "blocked_preview" | "preview_only";
+export type ApprovalQueueReviewStatus = "unreviewed" | "reviewed" | "dismissed" | "needs_changes" | "expired" | "note_added";
+export type ApprovalQueueTransitionStatus = Exclude<ApprovalQueueReviewStatus, "unreviewed">;
 
 export type HermesLedgerRecord = {
   timestamp: string;
@@ -213,6 +215,41 @@ export type ApprovalQueueRecord = {
     live_action_allowed: false;
     ledger_write_allowed: false;
   };
+};
+
+export type ApprovalQueueTransitionRecord = {
+  transition_id: string;
+  queue_id: string;
+  from_status: ApprovalQueueReviewStatus;
+  to_status: ApprovalQueueTransitionStatus;
+  requested_by: {
+    actor_user_id: string;
+    actor_role: ActorRole;
+  };
+  timestamp: string;
+  note: string;
+  execution_disabled: true;
+  safety_flags: {
+    local_file_only: true;
+    redacted: true;
+    status_only: true;
+    approval_execution_implemented: false;
+    live_action_allowed: false;
+    ledger_write_allowed: false;
+  };
+};
+
+export type ApprovalQueueRecordWithTransitions = ApprovalQueueRecord & {
+  latest_review_status: ApprovalQueueReviewStatus;
+  transition_count: number;
+  latest_transition_at: string | null;
+  latest_transition: ApprovalQueueTransitionRecord | null;
+};
+
+export type ApprovalQueueTransitionWriteResult = {
+  transitioned: boolean;
+  transition: ApprovalQueueTransitionRecord;
+  record: ApprovalQueueRecordWithTransitions;
 };
 
 export type ApprovalQueueWriteResult = {

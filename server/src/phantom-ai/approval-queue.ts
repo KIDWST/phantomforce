@@ -5,8 +5,14 @@ import { fileURLToPath } from "node:url";
 
 import { redactSensitiveText } from "./hermes-ledger.js";
 import type {
+  ActorRole,
   ApprovalQueueRecord,
+  ApprovalQueueRecordWithTransitions,
+  ApprovalQueueReviewStatus,
   ApprovalQueueStatus,
+  ApprovalQueueTransitionRecord,
+  ApprovalQueueTransitionStatus,
+  ApprovalQueueTransitionWriteResult,
   ApprovalQueueWriteResult,
   ApprovalRequestPreview,
 } from "./types.js";
@@ -14,16 +20,56 @@ import type {
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
 const MAX_APPROVAL_QUEUE_LIMIT = 50;
+const MAX_APPROVAL_TRANSITION_LIMIT = 50;
+const MAX_TRANSITION_NOTE_CHARS = 500;
 
 export const DEFAULT_HERMES_APPROVAL_QUEUE_PATH = resolve(repoRoot, ".phantom", "hermes-approvals.jsonl");
+export const DEFAULT_HERMES_APPROVAL_TRANSITIONS_PATH = resolve(
+  repoRoot,
+  ".phantom",
+  "hermes-approval-transitions.jsonl",
+);
+export const ALLOWED_APPROVAL_TRANSITION_STATUSES: ApprovalQueueTransitionStatus[] = [
+  "reviewed",
+  "dismissed",
+  "needs_changes",
+  "expired",
+];
+
+const FORBIDDEN_APPROVAL_TRANSITION_PATTERN =
+  /(approve|approved|execution|execute|run|live|send|post|upload|deploy|delete|payment|charge|billing)/i;
 
 export function resolveHermesApprovalQueuePath(pathFromEnv = process.env.PHANTOM_HERMES_APPROVAL_QUEUE_PATH) {
   return pathFromEnv?.trim() ? resolve(pathFromEnv) : DEFAULT_HERMES_APPROVAL_QUEUE_PATH;
 }
 
+export function resolveHermesApprovalTransitionsPath(
+  pathFromEnv = process.env.PHANTOM_HERMES_APPROVAL_TRANSITIONS_PATH,
+) {
+  return pathFromEnv?.trim() ? resolve(pathFromEnv) : DEFAULT_HERMES_APPROVAL_TRANSITIONS_PATH;
+}
+
 export function normalizeApprovalQueueLimit(value: number | string | undefined, fallback = 25) {
   const parsedLimit = Number(value ?? fallback);
   return Number.isFinite(parsedLimit) ? Math.min(Math.max(Math.floor(parsedLimit), 1), MAX_APPROVAL_QUEUE_LIMIT) : fallback;
+}
+
+export function normalizeApprovalTransitionLimit(value: number | string | undefined, fallback = 50) {
+  const parsedLimit = Number(value ?? fallback);
+  return Number.isFinite(parsedLimit)
+    ? Math.min(Math.max(Math.floor(parsedLimit), 1), MAX_APPROVAL_TRANSITION_LIMIT)
+    : fallback;
+}
+
+export function parseApprovalTransitionStatus(value: unknown): ApprovalQueueTransitionStatus | null {
+  if (typeof value !== "string") return null;
+  return (ALLOWED_APPROVAL_TRANSITION_STATUSES as string[]).includes(value)
+    ? (value as ApprovalQueueTransitionStatus)
+    : null;
+}
+
+export function isForbiddenApprovalTransitionStatus(value: unknown) {
+  return typeof value === "string" && FORBIDDEN_APPROVAL_TRANSITION_PATTERN.test(value);
 }
 
 function redactValue<T>(value: T): T {
@@ -87,6 +133,33 @@ export function redactApprovalQueueRecord(record: ApprovalQueueRecord): Approval
     queue_safety: {
       local_file_only: true,
       redacted: true,
+      approval_execution_implemented: false,
+      live_action_allowed: false,
+      ledger_write_allowed: false,
+    },
+  };
+}
+
+export function redactApprovalQueueTransitionRecord(
+  record: ApprovalQueueTransitionRecord,
+): ApprovalQueueTransitionRecord {
+  const redacted = redactValue(record);
+
+  return {
+    ...redacted,
+    queue_id: redacted.queue_id.slice(0, 120),
+    from_status: redacted.from_status,
+    to_status: redacted.to_status,
+    requested_by: {
+      actor_user_id: redacted.requested_by.actor_user_id.slice(0, 120),
+      actor_role: redacted.requested_by.actor_role,
+    },
+    note: redacted.note.slice(0, MAX_TRANSITION_NOTE_CHARS),
+    execution_disabled: true,
+    safety_flags: {
+      local_file_only: true,
+      redacted: true,
+      status_only: true,
       approval_execution_implemented: false,
       live_action_allowed: false,
       ledger_write_allowed: false,
@@ -220,6 +293,213 @@ export async function readApprovalQueueRecords(
   }
 }
 
+function isApprovalQueueTransitionRecord(value: unknown): value is ApprovalQueueTransitionRecord {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Partial<ApprovalQueueTransitionRecord>;
+  return (
+    typeof record.transition_id === "string" &&
+    typeof record.queue_id === "string" &&
+    typeof record.timestamp === "string" &&
+    typeof record.to_status === "string" &&
+    record.execution_disabled === true
+  );
+}
+
+export async function readApprovalQueueTransitions(
+  options: { transitionsPath?: string; limit?: number | string } = {},
+): Promise<{
+  transitionsPath: string;
+  limit: number;
+  records: ApprovalQueueTransitionRecord[];
+  malformed_lines: number;
+}> {
+  const transitionsPath = options.transitionsPath ?? resolveHermesApprovalTransitionsPath();
+  const limit = normalizeApprovalTransitionLimit(options.limit);
+
+  try {
+    const raw = await readFile(transitionsPath, "utf8");
+    const records: ApprovalQueueTransitionRecord[] = [];
+    let malformedLines = 0;
+
+    for (const line of raw.split(/\r?\n/).filter(Boolean)) {
+      try {
+        const parsed = JSON.parse(line) as unknown;
+        if (isApprovalQueueTransitionRecord(parsed)) {
+          records.push(redactApprovalQueueTransitionRecord(parsed));
+        } else {
+          malformedLines += 1;
+        }
+      } catch {
+        malformedLines += 1;
+      }
+    }
+
+    return {
+      transitionsPath,
+      limit,
+      records: records.slice(-limit),
+      malformed_lines: malformedLines,
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return {
+        transitionsPath,
+        limit,
+        records: [],
+        malformed_lines: 0,
+      };
+    }
+
+    throw error;
+  }
+}
+
+function deriveRecordTransitions(
+  record: ApprovalQueueRecord,
+  transitions: ApprovalQueueTransitionRecord[],
+): ApprovalQueueRecordWithTransitions {
+  const recordTransitions = transitions
+    .filter((transition) => transition.queue_id === record.queue_id)
+    .sort((left, right) => left.timestamp.localeCompare(right.timestamp));
+  const latestTransition = recordTransitions.at(-1) ?? null;
+
+  return {
+    ...record,
+    latest_review_status: latestTransition?.to_status ?? "unreviewed",
+    transition_count: recordTransitions.length,
+    latest_transition_at: latestTransition?.timestamp ?? null,
+    latest_transition: latestTransition,
+  };
+}
+
+export async function readApprovalQueueWithTransitions(
+  options: {
+    queuePath?: string;
+    transitionsPath?: string;
+    limit?: number | string;
+  } = {},
+): Promise<{
+  queuePath: string;
+  transitionsPath: string;
+  limit: number;
+  transition_limit: number;
+  records: ApprovalQueueRecordWithTransitions[];
+  malformed_lines: number;
+  transition_malformed_lines: number;
+}> {
+  const queue = await readApprovalQueueRecords({
+    queuePath: options.queuePath,
+    limit: options.limit,
+  });
+  const transitions = await readApprovalQueueTransitions({
+    transitionsPath: options.transitionsPath,
+    limit: MAX_APPROVAL_TRANSITION_LIMIT,
+  });
+
+  return {
+    queuePath: queue.queuePath,
+    transitionsPath: transitions.transitionsPath,
+    limit: queue.limit,
+    transition_limit: transitions.limit,
+    records: queue.records.map((record) => deriveRecordTransitions(record, transitions.records)),
+    malformed_lines: queue.malformed_lines,
+    transition_malformed_lines: transitions.malformed_lines,
+  };
+}
+
+function createApprovalQueueTransitionId(
+  queueId: string,
+  toStatus: ApprovalQueueTransitionStatus,
+  timestamp: string,
+  note: string,
+) {
+  const digest = createHash("sha256").update(`${queueId}:${toStatus}:${timestamp}:${note}`).digest("hex").slice(0, 24);
+  return `transition-${digest}`;
+}
+
+export function createApprovalQueueTransitionRecord(options: {
+  queueId: string;
+  fromStatus: ApprovalQueueReviewStatus;
+  toStatus: ApprovalQueueTransitionStatus;
+  requestedBy: {
+    actor_user_id: string;
+    actor_role: ActorRole;
+  };
+  note?: string;
+  timestamp?: string;
+}): ApprovalQueueTransitionRecord {
+  const timestamp = options.timestamp ?? new Date().toISOString();
+  const note = redactSensitiveText(options.note ?? "").slice(0, MAX_TRANSITION_NOTE_CHARS);
+
+  return redactApprovalQueueTransitionRecord({
+    transition_id: createApprovalQueueTransitionId(options.queueId, options.toStatus, timestamp, note),
+    queue_id: options.queueId.slice(0, 120),
+    from_status: options.fromStatus,
+    to_status: options.toStatus,
+    requested_by: {
+      actor_user_id: redactSensitiveText(options.requestedBy.actor_user_id),
+      actor_role: options.requestedBy.actor_role,
+    },
+    timestamp,
+    note,
+    execution_disabled: true,
+    safety_flags: {
+      local_file_only: true,
+      redacted: true,
+      status_only: true,
+      approval_execution_implemented: false,
+      live_action_allowed: false,
+      ledger_write_allowed: false,
+    },
+  });
+}
+
+export async function appendApprovalQueueTransition(options: {
+  queueId: string;
+  toStatus: ApprovalQueueTransitionStatus;
+  requestedBy: {
+    actor_user_id: string;
+    actor_role: ActorRole;
+  };
+  note?: string;
+  queuePath?: string;
+  transitionsPath?: string;
+}): Promise<ApprovalQueueTransitionWriteResult | null> {
+  const queue = await readApprovalQueueWithTransitions({
+    queuePath: options.queuePath,
+    transitionsPath: options.transitionsPath,
+    limit: MAX_APPROVAL_QUEUE_LIMIT,
+  });
+  const existingRecord = queue.records.find((record) => record.queue_id === options.queueId);
+
+  if (!existingRecord) {
+    return null;
+  }
+
+  const transition = createApprovalQueueTransitionRecord({
+    queueId: existingRecord.queue_id,
+    fromStatus: existingRecord.latest_review_status,
+    toStatus: options.toStatus,
+    requestedBy: options.requestedBy,
+    note: options.note,
+  });
+  const transitionsPath = options.transitionsPath ?? resolveHermesApprovalTransitionsPath();
+  await mkdir(dirname(transitionsPath), { recursive: true });
+  await appendFile(transitionsPath, `${JSON.stringify(transition)}\n`, "utf8");
+
+  return {
+    transitioned: true,
+    transition,
+    record: {
+      ...existingRecord,
+      latest_review_status: transition.to_status,
+      transition_count: existingRecord.transition_count + 1,
+      latest_transition_at: transition.timestamp,
+      latest_transition: transition,
+    },
+  };
+}
+
 export async function getApprovalQueueFileStatus(options: { queuePath?: string } = {}) {
   const queuePath = options.queuePath ?? resolveHermesApprovalQueuePath();
 
@@ -237,6 +517,31 @@ export async function getApprovalQueueFileStatus(options: { queuePath?: string }
         enabled: true,
         exists: false,
         queuePath,
+        bytes: 0,
+      };
+    }
+
+    throw error;
+  }
+}
+
+export async function getApprovalTransitionFileStatus(options: { transitionsPath?: string } = {}) {
+  const transitionsPath = options.transitionsPath ?? resolveHermesApprovalTransitionsPath();
+
+  try {
+    const fileStat = await stat(transitionsPath);
+    return {
+      enabled: true,
+      exists: true,
+      transitionsPath,
+      bytes: fileStat.size,
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return {
+        enabled: true,
+        exists: false,
+        transitionsPath,
         bytes: 0,
       };
     }

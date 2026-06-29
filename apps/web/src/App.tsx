@@ -380,6 +380,30 @@ type ApprovalQueueRecordPreview = {
   queue_id: string;
   queued_at: string;
   queue_status: "pending" | "blocked_preview" | "preview_only";
+  latest_review_status: "unreviewed" | "reviewed" | "dismissed" | "needs_changes" | "expired" | "note_added";
+  transition_count: number;
+  latest_transition_at: string | null;
+  latest_transition: {
+    transition_id: string;
+    queue_id: string;
+    from_status: string;
+    to_status: "reviewed" | "dismissed" | "needs_changes" | "expired" | "note_added";
+    requested_by: {
+      actor_user_id: string;
+      actor_role: string;
+    };
+    timestamp: string;
+    note: string;
+    execution_disabled: boolean;
+    safety_flags: {
+      local_file_only: boolean;
+      redacted: boolean;
+      status_only: boolean;
+      approval_execution_implemented: boolean;
+      live_action_allowed: boolean;
+      ledger_write_allowed: boolean;
+    };
+  } | null;
   source: string;
   approval: HermesContextPreview["approval_request"];
   execution_disabled: boolean;
@@ -403,6 +427,20 @@ type ApprovalQueuePreviewResponse = {
     queued: boolean;
     reason: "queued" | "preview_only_not_queued" | "queue_not_requested";
     record: ApprovalQueueRecordPreview | null;
+  };
+};
+
+type ApprovalQueueTransitionTarget = "reviewed" | "dismissed" | "needs_changes" | "expired";
+
+type ApprovalQueueTransitionResponse = {
+  execution_disabled: boolean;
+  approval_execution_implemented: boolean;
+  live_provider_called: boolean;
+  ledger_written: boolean;
+  transition: {
+    transitioned: boolean;
+    transition: NonNullable<ApprovalQueueRecordPreview["latest_transition"]>;
+    record: ApprovalQueueRecordPreview;
   };
 };
 
@@ -2953,6 +2991,9 @@ function formatSafetyFlag(flag: string) {
 }
 
 function queueRecordState(record: ApprovalQueueRecordPreview): TruthState {
+  if (record.latest_review_status === "dismissed" || record.latest_review_status === "expired") return "blocked";
+  if (record.latest_review_status === "needs_changes") return "stub";
+  if (record.latest_review_status === "reviewed") return "real";
   if (record.queue_status === "blocked_preview" || record.approval.risk_level === "critical") return "blocked";
   if (record.queue_status === "pending" || record.approval.risk_level === "medium") return "stub";
   return "real";
@@ -2966,7 +3007,13 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     blockedPreview: 0,
     previewOnly: 0,
     malformedLines: 0,
+    transitionMalformedLines: 0,
+    reviewed: 0,
+    dismissed: 0,
+    needsChanges: 0,
+    expired: 0,
   });
+  const [transitionNotes, setTransitionNotes] = useState<Record<string, string>>({});
   const [preview, setPreview] = useState<HermesContextPreview | null>(null);
   const [previewText, setPreviewText] = useState(
     "Summarize today's safest trainer follow-ups without sending, posting, uploading, or changing billing.",
@@ -3045,6 +3092,11 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           blocked_preview_count?: number;
           preview_only_count?: number;
           malformed_lines?: number;
+          transition_malformed_lines?: number;
+          reviewed_count?: number;
+          dismissed_count?: number;
+          needs_changes_count?: number;
+          expired_count?: number;
         };
         records?: ApprovalQueueRecordPreview[];
       };
@@ -3055,6 +3107,11 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
         blockedPreview: data.queue?.blocked_preview_count ?? 0,
         previewOnly: data.queue?.preview_only_count ?? 0,
         malformedLines: data.queue?.malformed_lines ?? 0,
+        transitionMalformedLines: data.queue?.transition_malformed_lines ?? 0,
+        reviewed: data.queue?.reviewed_count ?? 0,
+        dismissed: data.queue?.dismissed_count ?? 0,
+        needsChanges: data.queue?.needs_changes_count ?? 0,
+        expired: data.queue?.expired_count ?? 0,
       });
       setQueueStatus(nextRecords.length ? "Local approval queue loaded" : "No queued approval previews yet");
     } catch {
@@ -3114,6 +3171,37 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
       } else {
         setQueueStatus("Queue write was not requested.");
       }
+      await refreshApprovalQueue();
+    } catch {
+      setQueueStatus("Backend offline");
+    }
+  }
+
+  async function transitionQueueRecord(queueId: string, status: ApprovalQueueTransitionTarget) {
+    setQueueStatus("Saving status-only queue transition...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/approvals/queue/${encodeURIComponent(queueId)}/status`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          status,
+          note: transitionNotes[queueId] ?? "",
+        }),
+      });
+
+      if (!response.ok) {
+        setQueueStatus("Queue transition unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as ApprovalQueueTransitionResponse;
+      if (data.execution_disabled && !data.approval_execution_implemented && !data.live_provider_called) {
+        setQueueStatus(`Status saved: ${data.transition.transition.to_status.replace(/_/g, " ")}. No action executed.`);
+      } else {
+        setQueueStatus("Unsafe transition response blocked by UI proof.");
+      }
+      setTransitionNotes((current) => ({ ...current, [queueId]: "" }));
       await refreshApprovalQueue();
     } catch {
       setQueueStatus("Backend offline");
@@ -3246,6 +3334,11 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           <span>Blocked previews: {queueCounts.blockedPreview}</span>
           <span>Preview-only: {queueCounts.previewOnly}</span>
           <span>Malformed skipped: {queueCounts.malformedLines}</span>
+          <span>Reviewed: {queueCounts.reviewed}</span>
+          <span>Dismissed: {queueCounts.dismissed}</span>
+          <span>Needs changes: {queueCounts.needsChanges}</span>
+          <span>Expired: {queueCounts.expired}</span>
+          <span>Transition malformed: {queueCounts.transitionMalformedLines}</span>
         </div>
         {queueRecords.length ? (
           <div className="approval-queue-list">
@@ -3261,6 +3354,9 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
                   <span>Action: {record.approval.action_type}</span>
                   <span>Risk: {record.approval.risk_level}</span>
                   <span>Status: {record.approval.status}</span>
+                  <span>Review: {record.latest_review_status.replace(/_/g, " ")}</span>
+                  <span>Transitions: {record.transition_count}</span>
+                  <span>Latest transition: {record.latest_transition_at ?? "None"}</span>
                   <span>Created: {record.approval.created_at}</span>
                   <span>Expires: {record.approval.expires_at ?? "Not applicable"}</span>
                   <span>Tokens: {record.approval.estimated_impact.estimated_tokens}</span>
@@ -3274,6 +3370,39 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
                       {formatSafetyFlag(flag)}: {enabled ? "yes" : "no"}
                     </span>
                   ))}
+                </div>
+                {record.latest_transition?.note ? (
+                  <p className="approval-transition-note">Latest note: {record.latest_transition.note}</p>
+                ) : null}
+                <div className="approval-transition-controls">
+                  <label>
+                    Status note
+                    <input
+                      value={transitionNotes[record.queue_id] ?? ""}
+                      onChange={(event) =>
+                        setTransitionNotes((current) => ({
+                          ...current,
+                          [record.queue_id]: event.target.value.slice(0, 500),
+                        }))
+                      }
+                      placeholder="Optional redacted review note"
+                    />
+                  </label>
+                  <div>
+                    <span>Status only - no execution</span>
+                    <button type="button" onClick={() => void transitionQueueRecord(record.queue_id, "reviewed")}>
+                      Mark reviewed
+                    </button>
+                    <button type="button" onClick={() => void transitionQueueRecord(record.queue_id, "dismissed")}>
+                      Dismiss
+                    </button>
+                    <button type="button" onClick={() => void transitionQueueRecord(record.queue_id, "needs_changes")}>
+                      Needs changes
+                    </button>
+                    <button type="button" onClick={() => void transitionQueueRecord(record.queue_id, "expired")}>
+                      Expire
+                    </button>
+                  </div>
                 </div>
               </article>
             ))}

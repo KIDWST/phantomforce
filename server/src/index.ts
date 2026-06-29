@@ -57,10 +57,14 @@ import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
 import {
+  appendApprovalQueueTransition,
   getApprovalQueueFileStatus,
+  getApprovalTransitionFileStatus,
+  isForbiddenApprovalTransitionStatus,
   normalizeApprovalQueueLimit,
+  parseApprovalTransitionStatus,
   persistApprovalQueuePreview,
-  readApprovalQueueRecords,
+  readApprovalQueueWithTransitions,
   redactApprovalRequestPreview,
 } from "./phantom-ai/approval-queue.js";
 import {
@@ -74,7 +78,13 @@ import {
   previewModelRouterFoundation,
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
-import type { ActorRole, ApprovalQueueWriteResult, ContextModuleData, SensitivityLevel } from "./phantom-ai/types.js";
+import type {
+  ActorRole,
+  ApprovalQueueTransitionStatus,
+  ApprovalQueueWriteResult,
+  ContextModuleData,
+  SensitivityLevel,
+} from "./phantom-ai/types.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -397,7 +407,8 @@ app.get("/phantom-ai/approvals/queue", async (request, reply) => {
   const query = request.query as { limit?: string } | undefined;
   const limit = normalizeApprovalQueueLimit(query?.limit);
   const queueStatus = await getApprovalQueueFileStatus();
-  const queue = await readApprovalQueueRecords({ limit });
+  const transitionStatus = await getApprovalTransitionFileStatus();
+  const queue = await readApprovalQueueWithTransitions({ limit });
 
   return {
     ok: true,
@@ -407,12 +418,87 @@ app.get("/phantom-ai/approvals/queue", async (request, reply) => {
       path: queueStatus.queuePath,
       exists: queueStatus.exists,
       bytes: queueStatus.bytes,
+      transitions_path: transitionStatus.transitionsPath,
+      transitions_exists: transitionStatus.exists,
+      transitions_bytes: transitionStatus.bytes,
       malformed_lines: queue.malformed_lines,
+      transition_malformed_lines: queue.transition_malformed_lines,
       pending_count: queue.records.filter((record) => record.queue_status === "pending").length,
       blocked_preview_count: queue.records.filter((record) => record.queue_status === "blocked_preview").length,
       preview_only_count: queue.records.filter((record) => record.queue_status === "preview_only").length,
+      reviewed_count: queue.records.filter((record) => record.latest_review_status === "reviewed").length,
+      dismissed_count: queue.records.filter((record) => record.latest_review_status === "dismissed").length,
+      needs_changes_count: queue.records.filter((record) => record.latest_review_status === "needs_changes").length,
+      expired_count: queue.records.filter((record) => record.latest_review_status === "expired").length,
     },
     records: queue.records,
+  };
+});
+
+app.post("/phantom-ai/approvals/queue/:queueId/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const params = request.params as { queueId?: string };
+  const body = (request.body ?? {}) as {
+    status?: unknown;
+    note?: unknown;
+  };
+  const queueId = typeof params.queueId === "string" ? params.queueId.slice(0, 120) : "";
+
+  if (!queueId) {
+    return reply.code(400).send({
+      ok: false,
+      error: "Missing approval queue id.",
+    });
+  }
+
+  if (isForbiddenApprovalTransitionStatus(body.status)) {
+    return reply.code(400).send({
+      ok: false,
+      error: "Execution-capable approval statuses are not allowed.",
+      allowed_statuses: ["reviewed", "dismissed", "needs_changes", "expired"] satisfies ApprovalQueueTransitionStatus[],
+    });
+  }
+
+  const toStatus = parseApprovalTransitionStatus(body.status);
+
+  if (!toStatus) {
+    return reply.code(400).send({
+      ok: false,
+      error: "Invalid approval queue review status.",
+      allowed_statuses: ["reviewed", "dismissed", "needs_changes", "expired"] satisfies ApprovalQueueTransitionStatus[],
+    });
+  }
+
+  const transition = await appendApprovalQueueTransition({
+    queueId,
+    toStatus,
+    requestedBy: {
+      actor_user_id: session.id,
+      actor_role: "platform_admin",
+    },
+    note: typeof body.note === "string" ? body.note.slice(0, 800) : "",
+  });
+
+  if (!transition) {
+    return reply.code(404).send({
+      ok: false,
+      error: "Approval queue record was not found in the local bounded queue window.",
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    transition,
+    execution_disabled: true,
+    approval_execution_implemented: false,
+    live_provider_called: false,
+    ledger_written: false,
   };
 });
 
