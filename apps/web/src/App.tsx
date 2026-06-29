@@ -2973,6 +2973,12 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
         This panel is admin-only. It reads redacted Hermes records and previews context, route, sensitivity, and
         approval metadata without writing to the ledger or calling a live provider.
       </p>
+      <div className="debug-safety-strip">
+        <TruthBadge state="real" label="Real ledger read" />
+        <TruthBadge state="demo" label="Dry-run context preview" />
+        <TruthBadge state="real" label="No live provider call" />
+        <TruthBadge state="stub" label="Approval execution not implemented" />
+      </div>
 
       <form className="hermes-preview-form" onSubmit={submitPreview}>
         <label>
@@ -3007,19 +3013,39 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
       </form>
 
       <div className="provider-grid">
-        <ProviderStatusCard label="History" value={historyStatus} detail={`${records.length} recent redacted records`} state="real" />
-        <ProviderStatusCard label="Preview" value={previewStatus} detail="No ledger write. No live provider call." state="demo" />
         <ProviderStatusCard
-          label="Ledger write"
+          label="Real ledger read"
+          value={historyStatus}
+          detail={
+            records.length
+              ? `${records.length} recent redacted records. Secret-like values are masked before display.`
+              : "Missing or empty ledger is safe and displays as an empty state."
+          }
+          state="real"
+        />
+        <ProviderStatusCard
+          label="Dry-run context preview"
+          value={previewStatus}
+          detail="Preview compiles context and metadata only. It does not write to Hermes."
+          state="demo"
+        />
+        <ProviderStatusCard
+          label="No ledger write"
           value={preview?.ledger_written ? "Yes" : "No"}
           detail="Context preview must never append records."
           state={preview?.ledger_written ? "blocked" : "real"}
         />
         <ProviderStatusCard
-          label="Live provider call"
+          label="No live provider call"
           value={preview?.live_provider_called ? "Yes" : "No"}
           detail="OpenRouter, Claude, and local model calls are disabled in this patch."
           state={preview?.live_provider_called ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Approval execution"
+          value="Not implemented"
+          detail="This panel only previews approval status. It cannot execute sends, posts, billing, deletes, deploys, or provider work."
+          state="stub"
         />
       </div>
 
@@ -3065,6 +3091,11 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
               </div>
               <TruthBadge state={actionPreviewState(preview.action_preview.status)} label={preview.action_preview.status} />
             </div>
+            {preview.action_preview.status === "blocked" || preview.action_preview.status === "destructive" ? (
+              <p className="blocked-preview-note">
+                Blocked preview only. Review the metadata and create an approval item later; this patch cannot execute it.
+              </p>
+            ) : null}
             <ul>
               {preview.action_preview.reasons.map((reason) => (
                 <li key={reason}>{reason}</li>
@@ -3098,7 +3129,10 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
             </article>
           ))
         ) : (
-          <p className="access-note">No Hermes records yet. Run a mock route to create local JSONL history.</p>
+          <p className="access-note">
+            No Hermes records yet or the local ledger file is missing. This is safe; history stays empty until a mock
+            route records local JSONL.
+          </p>
         )}
       </div>
     </section>
@@ -3320,7 +3354,11 @@ function StatusLine({ label, value }: { label: string; value: string }) {
 }
 
 function TruthBadge({ state, label }: { state: TruthState; label: string }) {
-  return <span className={`truth-badge ${state}`}>{label}</span>;
+  return (
+    <span aria-label={label} className={`truth-badge ${state}`}>
+      {label}
+    </span>
+  );
 }
 
 function Page({ title, kicker, action, children }: { title: string; kicker: string; action?: ReactNode; children: ReactNode }) {
