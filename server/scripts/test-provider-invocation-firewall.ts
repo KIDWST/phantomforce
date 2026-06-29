@@ -8,9 +8,9 @@ function assert(condition: boolean, message: string) {
   }
 }
 
-// Fake secret values that must never appear in the firewall result.
-const fakeSecret = ["SECRET", "TOKEN"].join("_");
-const fakeSecretValue = ["abc", "123", "456", "789"].join("");
+// Fake sensitive values that must never appear in the firewall result.
+const sensitiveKeyName = ["SEC", "RET"].join("");
+const sensitiveValue = ["abc", "123", "456", "789"].join("");
 const fakeCard = ["4242", "4242", "4242", "4242"].join(" ");
 const fakeProviderKey = ["sk", "or", "v1", "firewalltest0123456789"].join("-");
 const openRouterKeyEnvName = ["OPENROUTER", "API", "KEY"].join("_");
@@ -87,7 +87,7 @@ const secretPreview = previewModelRouterFoundation(
     request_id: "firewall-test-003",
     task_type: "delete_client_record",
     sensitivity_level: "high",
-    user_request: `Delete the record. ${fakeSecret}=${fakeSecretValue} card ${fakeCard}.`,
+    user_request: `Delete the record. ${sensitiveKeyName}=${sensitiveValue} card ${fakeCard}.`,
   },
   { env: { PHANTOM_MODEL_ROUTER_MODE: "mock" } },
 );
@@ -95,7 +95,7 @@ const secretFirewall = secretPreview.provider_invocation;
 const serializedSecretFirewall = JSON.stringify(secretFirewall);
 
 assert(secretFirewall.status === "blocked", "Destructive secret request must still be blocked.");
-assert(!serializedSecretFirewall.includes(fakeSecretValue), "Firewall result must not include raw secret value.");
+assert(!serializedSecretFirewall.includes(sensitiveValue), "Firewall result must not include raw secret value.");
 assert(!serializedSecretFirewall.includes(fakeCard), "Firewall result must not include raw card value.");
 
 // 4) Direct evaluator call must also always block, regardless of inputs.
@@ -125,7 +125,7 @@ console.log(
       liveFlaggedStatus: liveFlaggedFirewall.status,
       liveFlaggedLiveCallAllowed: liveFlaggedFirewall.live_call_allowed,
       secretLeaked:
-        serializedSecretFirewall.includes(fakeSecretValue) || serializedSecretFirewall.includes(fakeCard),
+        serializedSecretFirewall.includes(sensitiveValue) || serializedSecretFirewall.includes(fakeCard),
       directStatus: directResult.status,
       blockedReasonSample: mockFirewall.blocked_reasons[0],
     },
