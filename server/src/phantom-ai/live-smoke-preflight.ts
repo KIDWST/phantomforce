@@ -55,6 +55,7 @@ export async function buildLiveSmokePreflightReport(
     ...(adapter?.live_transport_readiness.required_before_live_smoke_test ?? []),
     "Budget enforcement must be implemented as a hard live guard, not preview metadata.",
     "Hermes must append a redacted request and response receipt around any live smoke test.",
+    "Hermes live-call receipt contract must be implemented before any request body can become sendable.",
     "Request and response redaction must run before transport payloads or UI/debug output can exist.",
     "Approval execution must be designed and separately reviewed; this preflight cannot approve or execute.",
     "OpenRouter payment or credits should not be requested until every local live-smoke gate passes.",

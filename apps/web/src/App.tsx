@@ -649,6 +649,96 @@ type LiveSmokePreflightResponse = {
   preflight: LiveSmokePreflightReport;
 };
 
+type HermesLiveCallReceiptContract = {
+  contract_id: string;
+  correlation_id: string;
+  status: "blocked_contract_only";
+  created_at: string;
+  provider: {
+    provider_id: "openrouter_glm";
+    provider_name: "OpenRouter";
+    model_id: "z-ai/glm-5.2";
+  };
+  endpoint_contract: {
+    endpoint: "https://openrouter.ai/api/v1/chat/completions";
+    method: "POST";
+    transport_contract_status: "disabled_contract_only";
+    transport_enabled: false;
+    network_client_implemented: false;
+  };
+  live_smoke_preflight_id: string;
+  budget_gate_status: LiveSmokePreflightGateStatus;
+  approval_gate_status: LiveSmokePreflightGateStatus;
+  request_receipt: {
+    receipt_id: string;
+    correlation_id: string;
+    receipt_kind: "redacted_provider_request";
+    ledger_append_required_before_live: true;
+    ledger_append_performed: false;
+    request_payload_prepared: false;
+    request_body_ready_for_send: false;
+    providerCalled: false;
+    networkCallPerformed: false;
+    ledgerWritten: false;
+    queueWritten: false;
+    approvalExecuted: false;
+    readyForSend: false;
+  };
+  response_receipt: {
+    receipt_id: string;
+    correlation_id: string;
+    receipt_kind: "redacted_provider_response";
+    response_status: "not_called";
+    ledger_append_required_before_live: true;
+    ledger_append_performed: false;
+    providerCalled: false;
+    networkCallPerformed: false;
+    ledgerWritten: false;
+    queueWritten: false;
+    approvalExecuted: false;
+    readyForSend: false;
+  };
+  redaction: {
+    fake_api_key_redacted: boolean;
+    fake_token_redacted: boolean;
+    fake_card_redacted: boolean;
+    fake_prompt_redacted: boolean;
+    raw_api_key_returned: false;
+    raw_token_returned: false;
+    raw_card_returned: false;
+    raw_prompt_returned: false;
+    request_redaction_required: true;
+    response_redaction_required: true;
+    response_redaction_contract_only: true;
+  };
+  ledger_write_mode: "not_written_contract_only";
+  queue_write_mode: "not_written_contract_only";
+  approval_execution_mode: "not_implemented";
+  required_before_live: string[];
+  admin_debug_summary: string;
+  client_safe_summary: string;
+  providerCalled: false;
+  networkCallPerformed: false;
+  ledgerWritten: false;
+  queueWritten: false;
+  approvalExecuted: false;
+  readyForSend: false;
+  safety_flags: Record<string, boolean>;
+};
+
+type HermesLiveCallReceiptContractResponse = {
+  dry_run: true;
+  contract_only: true;
+  provider_called: false;
+  network_call_performed: false;
+  ledger_written: false;
+  queue_written: false;
+  approval_executed: false;
+  ready_for_send: false;
+  approval_execution_implemented: false;
+  receipt_contract: HermesLiveCallReceiptContract;
+};
+
 type HermesContextPreview = {
   dry_run: boolean;
   ledger_written: boolean;
@@ -4004,6 +4094,121 @@ function LiveSmokePreflightPanel({ preflight }: { preflight: LiveSmokePreflightR
   );
 }
 
+function HermesLiveReceiptContractPanel({ contract }: { contract: HermesLiveCallReceiptContract | null }) {
+  if (!contract) {
+    return (
+      <div className="provider-invocation-panel">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Hermes Live Receipts</span>
+            <h3>Request/response receipt contract</h3>
+          </div>
+          <TruthBadge state="demo" label="Not loaded" />
+        </div>
+        <p className="execution-disabled-banner">
+          Receipt contract not loaded. Future live provider smoke tests still require redacted request and response
+          receipts before transport can turn on.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="provider-invocation-panel">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">Hermes Live Receipts</span>
+          <h3>Mandatory redacted request and response receipts</h3>
+        </div>
+        <TruthBadge state="blocked" label="Contract only" />
+      </div>
+      <p className="execution-disabled-banner">
+        HERMES RECEIPT CONTRACT: no provider call, no network request, no ledger write, no queue write, no approval
+        execution, and no sendable request body exists.
+      </p>
+      <div className="provider-grid">
+        <ProviderStatusCard
+          label="Contract"
+          value={contract.status.replace(/_/g, " ")}
+          detail={contract.admin_debug_summary}
+          state="blocked"
+        />
+        <ProviderStatusCard
+          label="Correlation"
+          value={contract.correlation_id}
+          detail={`Contract ${contract.contract_id}`}
+          state="demo"
+        />
+        <ProviderStatusCard
+          label="Provider/model"
+          value={`${contract.provider.provider_name} / ${contract.provider.model_id}`}
+          detail={`${contract.endpoint_contract.method} ${contract.endpoint_contract.endpoint}`}
+          state="stub"
+        />
+        <ProviderStatusCard
+          label="Request receipt"
+          value={contract.request_receipt.receipt_id}
+          detail={`Required before live: ${contract.request_receipt.ledger_append_required_before_live ? "yes" : "no"}. Written: ${contract.request_receipt.ledger_append_performed ? "yes" : "no"}.`}
+          state="blocked"
+        />
+        <ProviderStatusCard
+          label="Response receipt"
+          value={contract.response_receipt.receipt_id}
+          detail={`Status: ${contract.response_receipt.response_status}. Written: ${contract.response_receipt.ledger_append_performed ? "yes" : "no"}.`}
+          state="blocked"
+        />
+        <ProviderStatusCard
+          label="Redaction proof"
+          value={contract.redaction.fake_api_key_redacted && contract.redaction.fake_prompt_redacted ? "Passed" : "Blocked"}
+          detail="Fake API key, token, card, and prompt-like values must be redacted before live transport."
+          state={contract.redaction.fake_api_key_redacted && contract.redaction.fake_prompt_redacted ? "real" : "blocked"}
+        />
+        <ProviderStatusCard
+          label="Budget linkage"
+          value={contract.budget_gate_status.replace(/_/g, " ")}
+          detail={`Preflight ${contract.live_smoke_preflight_id}. Budget route allowed: no.`}
+          state={liveSmokeGateState(contract.budget_gate_status)}
+        />
+        <ProviderStatusCard
+          label="Approval linkage"
+          value={contract.approval_gate_status.replace(/_/g, " ")}
+          detail={`Approval execution mode: ${contract.approval_execution_mode.replace(/_/g, " ")}.`}
+          state={liveSmokeGateState(contract.approval_gate_status)}
+        />
+      </div>
+      <div className="approval-queue-counts">
+        <span>Provider called: {contract.providerCalled ? "yes" : "no"}</span>
+        <span>Network: {contract.networkCallPerformed ? "yes" : "no"}</span>
+        <span>Ledger write: {contract.ledgerWritten ? "yes" : "no"}</span>
+        <span>Queue write: {contract.queueWritten ? "yes" : "no"}</span>
+        <span>Approval executed: {contract.approvalExecuted ? "yes" : "no"}</span>
+        <span>Ready for send: {contract.readyForSend ? "yes" : "no"}</span>
+      </div>
+      <div className="context-preview">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Required before live receipts</span>
+            <h3>Still not live transport</h3>
+          </div>
+          <TruthBadge state="blocked" label="Ledger not written" />
+        </div>
+        <ul>
+          {contract.required_before_live.map((item) => (
+            <li key={item}>{item}</li>
+          ))}
+        </ul>
+      </div>
+      <div className="safety-flag-grid" aria-label="Hermes live receipt safety flags">
+        {Object.entries(contract.safety_flags).map(([flag, enabled]) => (
+          <span className={enabled ? "enabled" : "disabled"} key={flag}>
+            {formatSafetyFlag(flag)}: {enabled ? "yes" : "no"}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: boolean) => Record<string, string> }) {
   const [records, setRecords] = useState<HermesLedgerRecordPreview[]>([]);
   const [queueRecords, setQueueRecords] = useState<ApprovalQueueRecordPreview[]>([]);
@@ -4024,6 +4229,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [providerReadiness, setProviderReadiness] = useState<ProviderReadinessReport | null>(null);
   const [providerInvocation, setProviderInvocation] = useState<ProviderInvocationFirewallResult | null>(null);
   const [liveSmokePreflight, setLiveSmokePreflight] = useState<LiveSmokePreflightReport | null>(null);
+  const [hermesReceiptContract, setHermesReceiptContract] = useState<HermesLiveCallReceiptContract | null>(null);
   const [previewText, setPreviewText] = useState(
     "Summarize today's safest trainer follow-up priorities for owner review only.",
   );
@@ -4036,6 +4242,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [readinessStatus, setReadinessStatus] = useState("Not loaded");
   const [invocationStatus, setInvocationStatus] = useState("Not loaded");
   const [liveSmokeStatus, setLiveSmokeStatus] = useState("Not loaded");
+  const [receiptContractStatus, setReceiptContractStatus] = useState("Not loaded");
 
   function buildPreviewPayload(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     return {
@@ -4231,6 +4438,31 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     }
   }
 
+  async function refreshHermesReceiptContract(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
+    setReceiptContractStatus("Checking receipt contract...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/hermes-live-receipts/contract`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify(buildPreviewPayload(text, task, sensitivity)),
+      });
+
+      if (!response.ok) {
+        setHermesReceiptContract(null);
+        setReceiptContractStatus("Admin receipt contract unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as HermesLiveCallReceiptContractResponse;
+      setHermesReceiptContract(data.receipt_contract ?? null);
+      setReceiptContractStatus(data.receipt_contract?.status === "blocked_contract_only" ? "Blocked / contract only" : "Unsafe");
+    } catch {
+      setHermesReceiptContract(null);
+      setReceiptContractStatus("Backend offline");
+    }
+  }
+
   async function runContextPreview(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     setPreviewStatus("Running dry-run preview...");
 
@@ -4334,6 +4566,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     void refreshProviderReadiness();
     void refreshProviderInvocation();
     void refreshLiveSmokePreflight();
+    void refreshHermesReceiptContract();
     void runContextPreview();
   }, []);
 
@@ -4341,6 +4574,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
     event.preventDefault();
     void runContextPreview();
     void refreshLiveSmokePreflight();
+    void refreshHermesReceiptContract();
   }
 
   return (
@@ -4404,6 +4638,9 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           </button>
           <button className="ghost-small danger" type="button" onClick={() => void refreshLiveSmokePreflight()}>
             Check smoke gates
+          </button>
+          <button className="ghost-small" type="button" onClick={() => void refreshHermesReceiptContract()}>
+            Check receipts
           </button>
         </div>
       </form>
@@ -4499,10 +4736,21 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
           }
           state="blocked"
         />
+        <ProviderStatusCard
+          label="Hermes receipt contract"
+          value={receiptContractStatus}
+          detail={
+            hermesReceiptContract
+              ? hermesReceiptContract.admin_debug_summary
+              : "Future live calls must produce redacted request and response receipts before transport can turn on."
+          }
+          state="blocked"
+        />
       </div>
 
       <ProviderInvocationFirewallPanel invocation={preview?.provider_invocation ?? providerInvocation} />
       <LiveSmokePreflightPanel preflight={liveSmokePreflight} />
+      <HermesLiveReceiptContractPanel contract={hermesReceiptContract} />
       <ProviderReadinessPanel readiness={preview?.provider_readiness ?? providerReadiness} />
       <ProviderPolicyGatePanel policy={preview?.provider_policy ?? providerPolicy} />
 

@@ -73,6 +73,7 @@ import {
   redactHermesLedgerRecord,
   redactSensitiveText,
 } from "./phantom-ai/hermes-ledger.js";
+import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-receipts.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
   getProviderSetupStatus,
@@ -501,6 +502,49 @@ app.post("/phantom-ai/live-smoke/preflight", async (request, reply) => {
     approval_executed: false,
     approval_execution_implemented: false,
     preflight,
+  };
+});
+
+app.post("/phantom-ai/hermes-live-receipts/contract", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const result = previewModelRouterFoundation(
+    buildModelRouterRequestFromBody(body, session, "hermes-live-receipt-contract"),
+  );
+  const preflight = await buildLiveSmokePreflightReport(result);
+  const receipt_contract = buildHermesLiveCallReceiptContract({
+    preview: result,
+    preflight,
+  });
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    contract_only: true,
+    provider_called: false,
+    network_call_performed: false,
+    ledger_written: false,
+    queue_written: false,
+    approval_executed: false,
+    ready_for_send: false,
+    approval_execution_implemented: false,
+    receipt_contract,
   };
 });
 

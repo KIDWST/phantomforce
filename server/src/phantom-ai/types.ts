@@ -537,6 +537,127 @@ export type OpenRouterGlmTransportContract = {
   };
 };
 
+export type HermesLiveCallReceiptProviderMetadata = {
+  provider_id: "openrouter_glm";
+  provider_name: "OpenRouter";
+  model_id: "z-ai/glm-5.2";
+};
+
+export type HermesLiveCallReceiptEndpointLinkage = {
+  endpoint: OpenRouterGlmTransportContract["endpoint"];
+  method: OpenRouterGlmTransportContract["method"];
+  transport_contract_status: OpenRouterGlmTransportContract["contract_status"];
+  transport_enabled: false;
+  network_client_implemented: false;
+};
+
+export type HermesLiveCallReceiptGateLinkage = {
+  live_smoke_preflight_id: string;
+  live_smoke_preflight_status: LiveSmokePreflightReport["status"];
+  live_smoke_allowed: false;
+  budget_gate_status: LiveSmokePreflightGateStatus;
+  budget_policy_route_allowed: false;
+  approval_gate_status: LiveSmokePreflightGateStatus;
+  approval_execution_implemented: false;
+  approval_id: string;
+  approval_status: ApprovalRequestStatus;
+};
+
+export type HermesLiveCallRedactionProofFlags = {
+  fake_api_key_redacted: boolean;
+  fake_token_redacted: boolean;
+  fake_card_redacted: boolean;
+  fake_prompt_redacted: boolean;
+  raw_api_key_returned: false;
+  raw_token_returned: false;
+  raw_card_returned: false;
+  raw_prompt_returned: false;
+  request_redaction_required: true;
+  response_redaction_required: true;
+  response_redaction_contract_only: true;
+};
+
+export type HermesLiveCallReceiptBlockedBooleans = {
+  providerCalled: false;
+  networkCallPerformed: false;
+  ledgerWritten: false;
+  queueWritten: false;
+  approvalExecuted: false;
+  readyForSend: false;
+};
+
+export type HermesLiveCallRequestReceiptContract = HermesLiveCallReceiptBlockedBooleans & {
+  receipt_id: string;
+  correlation_id: string;
+  receipt_kind: "redacted_provider_request";
+  contract_status: "contract_only_blocked";
+  created_at: string;
+  provider: HermesLiveCallReceiptProviderMetadata;
+  endpoint_contract: HermesLiveCallReceiptEndpointLinkage;
+  gate_linkage: HermesLiveCallReceiptGateLinkage;
+  redaction: HermesLiveCallRedactionProofFlags;
+  redacted_request_summary: string;
+  redacted_context_preview: string;
+  request_payload_prepared: false;
+  request_body_ready_for_send: false;
+  raw_prompt_stored: false;
+  raw_api_key_stored: false;
+  ledger_append_required_before_live: true;
+  ledger_append_performed: false;
+};
+
+export type HermesLiveCallResponseReceiptContract = HermesLiveCallReceiptBlockedBooleans & {
+  receipt_id: string;
+  correlation_id: string;
+  receipt_kind: "redacted_provider_response";
+  contract_status: "contract_only_blocked";
+  created_at: string;
+  provider: HermesLiveCallReceiptProviderMetadata;
+  endpoint_contract: HermesLiveCallReceiptEndpointLinkage;
+  gate_linkage: HermesLiveCallReceiptGateLinkage;
+  redaction: HermesLiveCallRedactionProofFlags;
+  response_status: "not_called";
+  redacted_response_summary: string;
+  raw_response_stored: false;
+  provider_usage_recorded: false;
+  ledger_append_required_before_live: true;
+  ledger_append_performed: false;
+};
+
+export type HermesLiveCallReceiptContract = HermesLiveCallReceiptBlockedBooleans & {
+  contract_id: string;
+  correlation_id: string;
+  status: "blocked_contract_only";
+  created_at: string;
+  provider: HermesLiveCallReceiptProviderMetadata;
+  endpoint_contract: HermesLiveCallReceiptEndpointLinkage;
+  live_smoke_preflight_id: string;
+  budget_gate_status: LiveSmokePreflightGateStatus;
+  approval_gate_status: LiveSmokePreflightGateStatus;
+  request_receipt: HermesLiveCallRequestReceiptContract;
+  response_receipt: HermesLiveCallResponseReceiptContract;
+  redaction: HermesLiveCallRedactionProofFlags;
+  ledger_write_mode: "not_written_contract_only";
+  queue_write_mode: "not_written_contract_only";
+  approval_execution_mode: "not_implemented";
+  required_before_live: string[];
+  admin_debug_summary: string;
+  client_safe_summary: string;
+  safety_flags: {
+    admin_only: true;
+    contract_only: true;
+    provider_called: false;
+    network_call_performed: false;
+    ledger_written: false;
+    queue_written: false;
+    approval_executed: false;
+    ready_for_send: false;
+    raw_secret_exposed: false;
+    raw_prompt_returned: false;
+    raw_response_stored: false;
+  };
+};
+
 export type ProviderInvocationFirewallInput = {
   requested_provider_id: string;
   requested_route: ProviderRoute;
