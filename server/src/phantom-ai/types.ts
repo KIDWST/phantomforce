@@ -485,6 +485,58 @@ export type LiveSmokePreflightReport = {
   };
 };
 
+export type OpenRouterGlmTransportContract = {
+  provider_id: "openrouter_glm";
+  model_id: "z-ai/glm-5.2";
+  contract_status: "disabled_contract_only";
+  endpoint: "https://openrouter.ai/api/v1/chat/completions";
+  method: "POST";
+  auth_header_required: true;
+  auth_header_preview: "Authorization: Bearer [redacted]";
+  content_type: "application/json";
+  optional_headers: {
+    http_referer: "planned_admin_config_only";
+    x_title: "planned_admin_config_only";
+  };
+  request_body_shape: {
+    model: "z-ai/glm-5.2";
+    messages: "redacted_messages_required";
+    temperature: "optional_number";
+    max_tokens: "optional_number";
+  };
+  response_body_shape: {
+    choices: "provider_response_choices";
+    usage: "provider_usage_metadata";
+  };
+  transport_enabled: false;
+  live_call_allowed: false;
+  network_client_implemented: false;
+  request_body_prepared: false;
+  ready_for_send: false;
+  provider_called: false;
+  network_call_performed: false;
+  raw_api_key_returned: false;
+  raw_prompt_returned: false;
+  raw_response_stored: false;
+  payment_required_before_live: true;
+  payment_instruction_status: "not_requested";
+  payment_instruction: "Do not fund OpenRouter yet; finish budget, Hermes receipts, redaction, approval execution, and smoke approval first.";
+  required_before_enable: string[];
+  admin_debug_summary: string;
+  client_safe_summary: string;
+  safety_flags: {
+    admin_only: true;
+    contract_only: true;
+    live_call_allowed: false;
+    network_client_implemented: false;
+    provider_called: false;
+    raw_secret_exposed: false;
+    request_body_prepared: false;
+    ready_for_send: false;
+    payment_not_requested: true;
+  };
+};
+
 export type ProviderInvocationFirewallInput = {
   requested_provider_id: string;
   requested_route: ProviderRoute;
@@ -511,6 +563,7 @@ export type OpenRouterGlmAdapterDryRunResult = {
   execution_disabled: true;
   blocked_reason: string;
   required_before_live: string[];
+  transport_contract: OpenRouterGlmTransportContract;
   live_transport_readiness: {
     status: "blocked";
     ready_for_live_transport: false;

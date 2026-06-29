@@ -57,6 +57,7 @@ export async function buildLiveSmokePreflightReport(
     "Hermes must append a redacted request and response receipt around any live smoke test.",
     "Request and response redaction must run before transport payloads or UI/debug output can exist.",
     "Approval execution must be designed and separately reviewed; this preflight cannot approve or execute.",
+    "OpenRouter payment or credits should not be requested until every local live-smoke gate passes.",
     "Jordan must explicitly approve a one-time local admin-only smoke test after all gates pass.",
   ]);
   const transportReason =

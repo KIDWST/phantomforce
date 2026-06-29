@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   buildOpenRouterGlmAdapterDryRunPreview,
+  OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
   OPENROUTER_GLM_52_MODEL_ID,
 } from "../src/phantom-ai/providers/openrouter-adapter.js";
 import { previewModelRouterFoundation } from "../src/phantom-ai/model-router.js";
@@ -47,9 +48,9 @@ const source = await readFile(adapterSourcePath, "utf8");
 
 assert(!/\bfetch\s*\(/.test(source), "Live transport gate must not add fetch calls.");
 assert(!/\bhttps?\s*\.\s*request\b/.test(source), "Live transport gate must not add HTTP request calls.");
-assert(!/openrouter\.ai/i.test(source), "Live transport gate must not include a provider URL.");
 assert(!/axios\s*\(/i.test(source), "Live transport gate must not add axios calls.");
 assert(!/undici/i.test(source), "Live transport gate must not import undici.");
+assert(source.includes(OPENROUTER_CHAT_COMPLETIONS_ENDPOINT), "Live transport gate should expose disabled endpoint contract.");
 
 const preview = previewModelRouterFoundation(request, {
   env: {
@@ -70,6 +71,7 @@ assert(!preview.provider_policy.route_allowed, "Provider policy must keep route_
 
 const readiness = adapter.live_transport_readiness;
 const envelope = adapter.dry_run_request_envelope;
+const contract = adapter.transport_contract;
 
 assert(readiness.status === "blocked", "Live transport readiness must be blocked.");
 assert(readiness.ready_for_live_transport === false, "Live transport must not be ready.");
@@ -103,6 +105,16 @@ assert(envelope.contains_raw_prompt === false, "Envelope must not contain raw pr
 assert(adapter.dry_run_response.provider_called === false, "Adapter must not call provider.");
 assert(adapter.dry_run_response.network_call_performed === false, "Adapter must not call network.");
 assert(adapter.dry_run_response.http_request_prepared === false, "Adapter must not prepare HTTP request.");
+assert(contract.endpoint === OPENROUTER_CHAT_COMPLETIONS_ENDPOINT, "Contract should target OpenRouter chat completions.");
+assert(contract.model_id === OPENROUTER_GLM_52_MODEL_ID, "Contract should target GLM 5.2.");
+assert(contract.transport_enabled === false, "Contract transport must remain disabled.");
+assert(contract.network_client_implemented === false, "Contract must not implement a network client.");
+assert(contract.request_body_prepared === false, "Contract must not prepare a request body.");
+assert(contract.ready_for_send === false, "Contract must not be ready for send.");
+assert(contract.provider_called === false, "Contract must not call provider.");
+assert(contract.network_call_performed === false, "Contract must not call network.");
+assert(contract.raw_api_key_returned === false, "Contract must not return a raw API key.");
+assert(contract.payment_instruction_status === "not_requested", "Contract must not request payment yet.");
 
 const serializedAdapter = JSON.stringify(adapter);
 assert(!serializedAdapter.includes(fakeProviderKey), "Adapter must not expose raw provider key.");
@@ -128,6 +140,7 @@ assert(
   secretAdapter.dry_run_request_envelope.contains_raw_prompt === false,
   "Secret-bearing envelope must not include raw prompt.",
 );
+assert(secretAdapter.transport_contract.raw_prompt_returned === false, "Secret-bearing contract must not return raw prompt.");
 
 console.log(
   JSON.stringify(
@@ -144,6 +157,10 @@ console.log(
       smokeTestApproved: readiness.live_smoke_test_explicitly_approved,
       envelopeReadyForSend: envelope.ready_for_send,
       networkPayloadPrepared: envelope.network_payload_prepared,
+      contractEndpoint: contract.endpoint,
+      contractTransportEnabled: contract.transport_enabled,
+      networkClientImplemented: contract.network_client_implemented,
+      paymentInstructionStatus: contract.payment_instruction_status,
       providerCalled: adapter.dry_run_response.provider_called,
       networkCallPerformed: adapter.dry_run_response.network_call_performed,
       secretsLeaked:
@@ -153,7 +170,8 @@ console.log(
       sourceContainsTransport:
         /\bfetch\s*\(/.test(source) ||
         /\bhttps?\s*\.\s*request\b/.test(source) ||
-        /openrouter\.ai/i.test(source),
+        /axios\s*\(/i.test(source) ||
+        /undici/i.test(source),
     },
     null,
     2,

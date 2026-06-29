@@ -83,7 +83,7 @@ export function getProviderSetupStatus(env: NodeJS.ProcessEnv = process.env): Pr
       payment_setup_needed: !openRouterConfigured,
       detail: openRouterConfigured
         ? "Cheap worker route can be selected for low-risk tasks; no live call is made by this status check."
-        : "OpenRouter credits/API key required. Jordan must manually fund OpenRouter and add OPENROUTER_API_KEY to local server env.",
+        : "OpenRouter account/API key will be needed later. Do not fund OpenRouter until budget, Hermes receipts, redaction, approval execution, and smoke approval gates pass.",
     },
     claude_api: {
       configured: claudeConfigured,

@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 
 import {
   buildOpenRouterGlmAdapterDryRunPreview,
+  OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
   OPENROUTER_GLM_52_MODEL_ID,
   OPENROUTER_GLM_PROVIDER_ID,
 } from "../src/phantom-ai/providers/openrouter-adapter.js";
@@ -48,9 +49,9 @@ const source = await readFile(adapterSourcePath, "utf8");
 
 assert(!/\bfetch\s*\(/.test(source), "OpenRouter adapter skeleton must not contain fetch calls.");
 assert(!/\bhttps?\s*\.\s*request\b/.test(source), "OpenRouter adapter skeleton must not contain HTTP request calls.");
-assert(!/openrouter\.ai/i.test(source), "OpenRouter adapter skeleton must not contain a provider URL.");
 assert(!/axios\s*\(/i.test(source), "OpenRouter adapter skeleton must not contain axios calls.");
 assert(!/undici/i.test(source), "OpenRouter adapter skeleton must not import undici.");
+assert(source.includes(OPENROUTER_CHAT_COMPLETIONS_ENDPOINT), "Adapter should document the disabled OpenRouter endpoint contract.");
 
 const routedPreview = previewModelRouterFoundation(request, {
   env: {
@@ -71,6 +72,20 @@ assert(adapter !== null, "OpenRouter route should include adapter dry-run metada
 assert(adapter.provider_id === OPENROUTER_GLM_PROVIDER_ID, "Adapter provider id should be OpenRouter GLM.");
 assert(adapter.model_id === OPENROUTER_GLM_52_MODEL_ID, "Adapter model id should be GLM 5.2.");
 assert(adapter.adapter_status === "blocked_dry_run", "Adapter must be blocked dry-run only.");
+assert(
+  adapter.transport_contract.endpoint === OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
+  "Transport contract should target OpenRouter chat completions.",
+);
+assert(adapter.transport_contract.model_id === OPENROUTER_GLM_52_MODEL_ID, "Transport contract should use GLM 5.2.");
+assert(adapter.transport_contract.transport_enabled === false, "Transport contract must stay disabled.");
+assert(adapter.transport_contract.network_client_implemented === false, "Transport contract must not implement a network client.");
+assert(adapter.transport_contract.request_body_prepared === false, "Transport contract must not prepare request body.");
+assert(adapter.transport_contract.ready_for_send === false, "Transport contract must not be sendable.");
+assert(adapter.transport_contract.provider_called === false, "Transport contract must not call provider.");
+assert(adapter.transport_contract.network_call_performed === false, "Transport contract must not call network.");
+assert(adapter.transport_contract.raw_api_key_returned === false, "Transport contract must not return raw API key.");
+assert(adapter.transport_contract.payment_instruction_status === "not_requested", "Payment must not be requested yet.");
+assert(adapter.transport_contract.safety_flags.payment_not_requested === true, "Payment safety flag must stay true.");
 assert(adapter.live_call_allowed === false, "Adapter must never allow live calls.");
 assert(adapter.execution_disabled === true, "Adapter execution must remain disabled.");
 assert(adapter.dry_run_response.provider_called === false, "Adapter must not call provider.");
@@ -113,6 +128,7 @@ assert(!serializedSecretAdapter.includes(sensitiveValue), "Adapter must redact s
 assert(!serializedSecretAdapter.includes(cardLikeValue), "Adapter must redact card-like prompt values.");
 assert(secretAdapter.dry_run_response.provider_called === false, "Direct adapter preview must not call provider.");
 assert(secretAdapter.dry_run_response.network_call_performed === false, "Direct adapter preview must not call network.");
+assert(secretAdapter.transport_contract.raw_prompt_returned === false, "Transport contract must not return raw prompt.");
 assert(
   secretAdapter.dry_run_request_envelope.contains_raw_prompt === false,
   "Direct adapter envelope must not contain a raw prompt.",
@@ -129,6 +145,11 @@ console.log(
       providerCalled: adapter.dry_run_response.provider_called,
       networkCallPerformed: adapter.dry_run_response.network_call_performed,
       httpRequestPrepared: adapter.dry_run_response.http_request_prepared,
+      transportEndpoint: adapter.transport_contract.endpoint,
+      transportEnabled: adapter.transport_contract.transport_enabled,
+      networkClientImplemented: adapter.transport_contract.network_client_implemented,
+      requestBodyPrepared: adapter.transport_contract.request_body_prepared,
+      paymentInstructionStatus: adapter.transport_contract.payment_instruction_status,
       readyForLiveTransport: adapter.live_transport_readiness.ready_for_live_transport,
       envelopeReadyForSend: adapter.dry_run_request_envelope.ready_for_send,
       policyRouteAllowed: routedPreview.provider_policy.route_allowed,
@@ -139,7 +160,8 @@ console.log(
       sourceContainsTransport:
         /\bfetch\s*\(/.test(source) ||
         /\bhttps?\s*\.\s*request\b/.test(source) ||
-        /openrouter\.ai/i.test(source),
+        /axios\s*\(/i.test(source) ||
+        /undici/i.test(source),
     },
     null,
     2,

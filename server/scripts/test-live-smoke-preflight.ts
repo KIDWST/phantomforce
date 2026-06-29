@@ -108,6 +108,10 @@ try {
     preflight.required_before_live_smoke_test.some((item) => /approval execution/i.test(item)),
     "Preflight prerequisites must include approval execution.",
   );
+  assert(
+    preflight.required_before_live_smoke_test.some((item) => /payment|credits/i.test(item)),
+    "Preflight prerequisites must say payment/credits are not requested yet.",
+  );
 
   assert(!preflightJson.includes(fakeKey), "Preflight must not leak raw provider key.");
   assert(!preflightJson.includes(fakeSecret), "Preflight must not leak raw key-like probe.");

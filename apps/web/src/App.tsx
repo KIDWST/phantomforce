@@ -419,6 +419,47 @@ type OpenRouterGlmAdapterDryRunResult = {
   execution_disabled: true;
   blocked_reason: string;
   required_before_live: string[];
+  transport_contract: {
+    provider_id: "openrouter_glm";
+    model_id: "z-ai/glm-5.2";
+    contract_status: "disabled_contract_only";
+    endpoint: "https://openrouter.ai/api/v1/chat/completions";
+    method: "POST";
+    auth_header_required: true;
+    auth_header_preview: "Authorization: Bearer [redacted]";
+    content_type: "application/json";
+    optional_headers: {
+      http_referer: "planned_admin_config_only";
+      x_title: "planned_admin_config_only";
+    };
+    request_body_shape: {
+      model: "z-ai/glm-5.2";
+      messages: "redacted_messages_required";
+      temperature: "optional_number";
+      max_tokens: "optional_number";
+    };
+    response_body_shape: {
+      choices: "provider_response_choices";
+      usage: "provider_usage_metadata";
+    };
+    transport_enabled: false;
+    live_call_allowed: false;
+    network_client_implemented: false;
+    request_body_prepared: false;
+    ready_for_send: false;
+    provider_called: false;
+    network_call_performed: false;
+    raw_api_key_returned: false;
+    raw_prompt_returned: false;
+    raw_response_stored: false;
+    payment_required_before_live: true;
+    payment_instruction_status: "not_requested";
+    payment_instruction: string;
+    required_before_enable: string[];
+    admin_debug_summary: string;
+    client_safe_summary: string;
+    safety_flags: Record<string, boolean>;
+  };
   live_transport_readiness: {
     status: "blocked";
     ready_for_live_transport: false;
@@ -1238,7 +1279,7 @@ const defaultProviderSetupStatus: ProviderSetupStatus = {
     setup_required: true,
     payment_setup_needed: true,
     detail:
-      "OpenRouter credits/API key required. Jordan must manually fund OpenRouter and add OPENROUTER_API_KEY to local server env.",
+      "OpenRouter account/API key will be needed later. Do not fund OpenRouter until budget, Hermes receipts, redaction, approval execution, and smoke approval gates pass.",
   },
   claude_api: {
     configured: false,
@@ -3234,7 +3275,7 @@ function ProviderSetupPanel({ status }: { status: ProviderSetupStatus }) {
         <ProviderStatusCard
           label="Payment/setup needed"
           value={paymentNeeded}
-          detail="OpenRouter credits/API key must be added manually by Jordan; PhantomForce never stores card details here."
+          detail="Do not fund OpenRouter yet. PhantomForce never stores card details here, and payment waits until every live-smoke gate passes."
           state={status.openrouter_glm.payment_setup_needed ? "blocked" : "real"}
         />
         <ProviderStatusCard
@@ -3685,6 +3726,40 @@ function ProviderInvocationFirewallPanel({ invocation }: { invocation: ProviderI
               state={invocation.openrouter_adapter.dry_run_response.provider_called ? "blocked" : "real"}
             />
             <ProviderStatusCard
+              label="Transport contract"
+              value={invocation.openrouter_adapter.transport_contract.contract_status.replace(/_/g, " ")}
+              detail={`${invocation.openrouter_adapter.transport_contract.method} ${invocation.openrouter_adapter.transport_contract.endpoint}`}
+              state="stub"
+            />
+            <ProviderStatusCard
+              label="Contract model"
+              value={invocation.openrouter_adapter.transport_contract.request_body_shape.model}
+              detail="Future request body must use redacted messages only; no body is prepared today."
+              state="demo"
+            />
+            <ProviderStatusCard
+              label="Network client"
+              value={
+                invocation.openrouter_adapter.transport_contract.network_client_implemented
+                  ? "Implemented"
+                  : "Not implemented"
+              }
+              detail={invocation.openrouter_adapter.transport_contract.admin_debug_summary}
+              state={
+                invocation.openrouter_adapter.transport_contract.network_client_implemented ? "blocked" : "real"
+              }
+            />
+            <ProviderStatusCard
+              label="Payment"
+              value={
+                invocation.openrouter_adapter.transport_contract.payment_instruction_status === "not_requested"
+                  ? "Not requested"
+                  : "Required"
+              }
+              detail={invocation.openrouter_adapter.transport_contract.payment_instruction}
+              state="blocked"
+            />
+            <ProviderStatusCard
               label="Live transport"
               value={invocation.openrouter_adapter.live_transport_readiness.live_transport_enabled ? "Enabled" : "Disabled"}
               detail="Live transport is not configured or enabled; this adapter cannot send a provider request."
@@ -3732,6 +3807,28 @@ function ProviderInvocationFirewallPanel({ invocation }: { invocation: ProviderI
               detail={`Envelope ${invocation.openrouter_adapter.dry_run_request_envelope.envelope_id}; no network payload is prepared.`}
               state="demo"
             />
+            <ProviderStatusCard
+              label="Request body"
+              value={invocation.openrouter_adapter.transport_contract.request_body_prepared ? "Prepared" : "Not prepared"}
+              detail="No raw prompt, raw API key, or provider payload is returned by this contract."
+              state={invocation.openrouter_adapter.transport_contract.request_body_prepared ? "blocked" : "real"}
+            />
+          </div>
+          <div className="context-preview">
+            <div className="section-head compact">
+              <div>
+                <span className="eyebrow">OpenRouter GLM contract</span>
+                <h3>Contract only, no transport client</h3>
+              </div>
+              <TruthBadge state="blocked" label="Payment not requested" />
+            </div>
+            <div className="approval-queue-counts">
+              <span>Auth: {invocation.openrouter_adapter.transport_contract.auth_header_preview}</span>
+              <span>Content type: {invocation.openrouter_adapter.transport_contract.content_type}</span>
+              <span>Ready for send: {invocation.openrouter_adapter.transport_contract.ready_for_send ? "yes" : "no"}</span>
+              <span>Provider called: {invocation.openrouter_adapter.transport_contract.provider_called ? "yes" : "no"}</span>
+              <span>Network: {invocation.openrouter_adapter.transport_contract.network_call_performed ? "yes" : "no"}</span>
+            </div>
           </div>
           <div className="context-preview">
             <div className="section-head compact">
