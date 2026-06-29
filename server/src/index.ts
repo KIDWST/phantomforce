@@ -89,6 +89,7 @@ import {
   evaluateProviderBudgetPolicy,
   getProviderBudgetPolicyStatus,
 } from "./phantom-ai/provider-policy.js";
+import { evaluateProviderBudgetHardGateFromPolicy } from "./phantom-ai/provider-budget-hard-gate.js";
 import { getProviderReadinessReport } from "./phantom-ai/provider-readiness.js";
 import type {
   ActorRole,
@@ -385,16 +386,65 @@ app.get("/phantom-ai/provider-policy/status", async (request, reply) => {
     approval_required: false,
     provider_enabled: true,
   });
+  const hardBudgetGate = evaluateProviderBudgetHardGateFromPolicy({
+    tenant_id: "demo-trainer",
+    business_name: "West Loop Strength Lab",
+    provider_id: "openrouter_glm",
+    model_id: "z-ai/glm-5.2",
+    estimated_tokens: 0,
+    estimated_cost_usd: null,
+    approval_status: "pending",
+    policy_result: preview,
+  });
 
   return {
     ok: true,
     session,
     policy,
     preview,
+    hard_budget_gate: hardBudgetGate,
     execution_disabled: true,
     live_provider_called: false,
     approval_execution_implemented: false,
     secrets_stored: false,
+  };
+});
+
+app.post("/phantom-ai/provider-budget/hard-gate/preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const result = previewModelRouterFoundation(
+    buildModelRouterRequestFromBody(body, session, "provider-budget-hard-gate-preview"),
+  );
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    provider_called: false,
+    network_call_performed: false,
+    ledger_written: false,
+    queue_written: false,
+    approval_executed: false,
+    ready_for_send: false,
+    hard_budget_gate: result.provider_invocation.budget_hard_gate,
+    provider_invocation: result.provider_invocation,
+    provider_policy: result.provider_policy,
   };
 });
 

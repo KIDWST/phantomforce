@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { redactSensitiveText } from "./hermes-ledger.js";
+import { evaluateProviderBudgetHardGateFromPolicy } from "./provider-budget-hard-gate.js";
 import {
   buildOpenRouterGlmAdapterDryRunPreview,
   OPENROUTER_GLM_PROVIDER_ID,
@@ -101,9 +102,27 @@ export function evaluateProviderInvocationFirewall(
   input: ProviderInvocationFirewallInput,
 ): ProviderInvocationFirewallResult {
   const readinessRoute = findReadinessRoute(input);
-  const blockedReasons = getBlockedReasons(input, readinessRoute);
   const contextSummary = redactSensitiveText(input.redacted_context_summary).slice(0, MAX_CONTEXT_SUMMARY_CHARS);
-  const requiredBeforeLive = buildRequiredBeforeLive(input, readinessRoute, blockedReasons);
+  const budgetHardGate = evaluateProviderBudgetHardGateFromPolicy({
+    tenant_id: input.approval_request.tenant_context.tenant_id,
+    business_name: input.approval_request.tenant_context.business_name,
+    provider_id: input.requested_provider_id,
+    model_id: input.requested_model_id,
+    estimated_tokens: input.estimated_tokens,
+    estimated_cost_usd: input.estimated_cost_usd,
+    approval_status: input.approval_request.status,
+    policy_result: input.policy_result,
+    checked_at: input.readiness_result.checked_at,
+  });
+  const blockedReasons = uniqRedacted([
+    ...getBlockedReasons(input, readinessRoute),
+    "Provider budget hard gate is blocked and must pass before any future transport.",
+    ...budgetHardGate.blocked_reason_details,
+  ]);
+  const requiredBeforeLive = uniqRedacted([
+    ...buildRequiredBeforeLive(input, readinessRoute, blockedReasons),
+    ...budgetHardGate.required_before_transport,
+  ]);
   const readinessConfigured = Boolean(readinessRoute?.configured);
   const openRouterAdapter =
     input.requested_route === OPENROUTER_GLM_PROVIDER_ID
@@ -141,6 +160,7 @@ export function evaluateProviderInvocationFirewall(
       risk_level: input.approval_request.risk_level,
       reason: redactSensitiveText(input.approval_request.approval_reason),
     },
+    budget_hard_gate: budgetHardGate,
     live_call_allowed: false,
     execution_disabled: true,
     blocked_reason: blockedReasons[0] ?? "Provider invocation firewall blocked this preview.",

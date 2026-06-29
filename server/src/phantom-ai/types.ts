@@ -135,6 +135,78 @@ export type ProviderBudgetCaps = {
   per_request_estimated_cost_cap_usd: number;
 };
 
+export type ProviderBudgetHardGateReason =
+  | "cap_missing"
+  | "payment_not_confirmed"
+  | "budget_exceeded"
+  | "budget_not_approved"
+  | "cost_estimate_missing"
+  | "approval_execution_missing";
+
+export type ProviderBudgetHardGateInput = {
+  tenant_id: string;
+  business_name: string;
+  provider_id: string;
+  model_id: string;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  current_daily_spend_usd?: number;
+  current_monthly_spend_usd?: number;
+  budget_caps: ProviderBudgetCaps | null;
+  payment_status: "unknown" | "unpaid" | "paid";
+  budget_approved: boolean;
+  approval_status: ApprovalRequestStatus;
+  checked_at?: string;
+};
+
+export type ProviderBudgetHardGateContract = {
+  gate_id: string;
+  checked_at: string;
+  status: "blocked";
+  tenant_id: string;
+  business_name: string;
+  provider_id: string;
+  model_id: string;
+  route_allowed: false;
+  live_call_allowed: false;
+  hard_gate_passed: false;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  current_daily_spend_usd: number;
+  current_monthly_spend_usd: number;
+  budget_caps: ProviderBudgetCaps | null;
+  payment_status: "unknown" | "unpaid" | "paid";
+  budget_approved: boolean;
+  approval_status: ApprovalRequestStatus;
+  blocked_reasons: ProviderBudgetHardGateReason[];
+  blocked_reason_details: string[];
+  required_before_transport: string[];
+  machine_check: {
+    required_before_provider_transport: true;
+    required_status_before_transport: "pass";
+    current_status: "blocked";
+    bypass_allowed: false;
+    transport_must_reference_gate_id: string;
+    failure_code: "provider_budget_hard_gate_blocked";
+  };
+  client_safe_summary: string;
+  admin_debug_summary: string;
+  safety_flags: {
+    admin_only: true;
+    hard_gate: true;
+    contract_only: true;
+    route_allowed: false;
+    live_call_allowed: false;
+    provider_called: false;
+    network_call_performed: false;
+    payment_collected: false;
+    payment_setup_started: false;
+    billing_launched: false;
+    approval_execution_implemented: false;
+    raw_secret_exposed: false;
+  };
+};
+
 export type ProviderBudgetPolicyState = {
   live_providers_globally_enabled: boolean;
   managed_provider_mode: "phantomforce_managed_preview";
@@ -837,6 +909,7 @@ export type ProviderInvocationFirewallResult = {
     risk_level: ApprovalRiskLevel;
     reason: string;
   };
+  budget_hard_gate: ProviderBudgetHardGateContract;
   live_call_allowed: false;
   execution_disabled: true;
   blocked_reason: string;
