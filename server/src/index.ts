@@ -575,6 +575,12 @@ app.post("/actions/validate", async (request, reply) => {
 });
 
 app.post("/falcon/jobs/validate", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
   const parsed = FalconJobSchema.safeParse(request.body);
 
   if (!parsed.success) {
@@ -586,6 +592,7 @@ app.post("/falcon/jobs/validate", async (request, reply) => {
 
   return {
     ok: true,
+    session,
     jobType: parsed.data.type,
     requiresApproval: parsed.data.requiresApproval,
     broker: falconBroker.describe(),

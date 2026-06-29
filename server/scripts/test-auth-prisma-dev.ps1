@@ -152,11 +152,13 @@ try {
     }
 
     $serverEnv = @{
+      NODE_ENV = "test"
       PORT = "$serverPort"
       HOST = "127.0.0.1"
       DATABASE_URL = $databaseUrl
       PHANTOMFORCE_AUTH_PROVIDER = "prisma-dev"
       PHANTOMFORCE_ENABLE_DEMO_AUTH = "false"
+      PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER = "false"
       PHANTOMFORCE_ADMIN_EMAILS = "jordan@phantomforce.local"
       PHANTOMFORCE_SESSION_SECRET = "phantomforce-prisma-dev-auth-test-secret"
       PHANTOMFORCE_SERVER_LOGGER = "false"

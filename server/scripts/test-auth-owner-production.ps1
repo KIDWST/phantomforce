@@ -45,6 +45,7 @@ function Base-Env([hashtable]$overrides) {
     HOST = "127.0.0.1"
     PHANTOMFORCE_AUTH_PROVIDER = "owner-production"
     PHANTOMFORCE_ENABLE_DEMO_AUTH = "false"
+    PHANTOMFORCE_ACCESS_REPOSITORY = "json-file"
     PHANTOMFORCE_SESSION_SECRET = $strongSecret
     PHANTOMFORCE_OWNER_EMAIL = $ownerEmail
     PHANTOMFORCE_OWNER_LOGIN_KEY = $ownerKey
@@ -65,6 +66,8 @@ try {
   $demoLoginDisabled = $false
   $readinessOk = $false
   $authProductionReady = $false
+  $anonymousFalconRejected = $false
+  $ownerFalconValidationOk = $false
   $sessionCount = -1
 
   # ---- Happy path: owner-production boots in NODE_ENV=production ----
@@ -86,6 +89,25 @@ try {
 
     $sessions = Invoke-RestMethod -Uri "$serverUrl/sessions"
     $sessionCount = @($sessions.sessions).Count
+
+    $falconBody = @{
+      type = "falcon.health_check"
+      requiresApproval = $true
+      reversible = $true
+      rationale = "owner-production metadata validation only"
+      payload = @{}
+    } | ConvertTo-Json
+
+    try {
+      Invoke-RestMethod -Uri "$serverUrl/falcon/jobs/validate" -Method Post -Body $falconBody -ContentType "application/json" | Out-Null
+    } catch {
+      if ((Get-StatusCode $_) -eq 401) { $anonymousFalconRejected = $true }
+    }
+
+    $falconValidation = Invoke-RestMethod -Uri "$serverUrl/falcon/jobs/validate" -Method Post -Body $falconBody -ContentType "application/json" -Headers $headers
+    if ($falconValidation.ok -eq $true -and $falconValidation.jobType -eq "falcon.health_check" -and $falconValidation.session.canManageAccess -eq $true) {
+      $ownerFalconValidationOk = $true
+    }
 
     try {
       $badBody = @{ sessionId = "owner-admin"; ownerKey = "wrong-key" } | ConvertTo-Json
@@ -125,7 +147,7 @@ try {
   }
 
   $allOk = $booted -and $ownerLoginOk -and $wrongKeyRejected -and $demoLoginDisabled -and `
-    $readinessOk -and $authProductionReady -and ($sessionCount -eq 1) -and `
+    $readinessOk -and $authProductionReady -and $anonymousFalconRejected -and $ownerFalconValidationOk -and ($sessionCount -eq 1) -and `
     $weakSecretFailedClosed -and $missingKeyFailedClosed
 
   $summary = [pscustomobject]@{
@@ -136,6 +158,8 @@ try {
     demoLoginDisabled = $demoLoginDisabled
     readinessAdminOk = $readinessOk
     productionAuthGateReady = $authProductionReady
+    anonymousFalconRejected = $anonymousFalconRejected
+    ownerFalconValidationOk = $ownerFalconValidationOk
     ownerSessionCount = $sessionCount
     weakSecretFailedClosed = $weakSecretFailedClosed
     missingKeyFailedClosed = $missingKeyFailedClosed

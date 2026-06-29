@@ -462,7 +462,54 @@ Latest verification on 2026-06-25:
 - Verification (2026-06-25): `npm run typecheck` pass, `npm run build` pass,
   `test:auth:owner-production` pass (`ok:true`), `test:auth:production-fail-closed`
   pass (`failedClosed:true`), `test:access` pass (`ok:true`, `auditEvents=546`).
-  `test:auth:prisma-dev` and `test:access:postgres` not re-run (require Postgres).
+  `test:auth:prisma-dev` and `test:access:postgres` not re-run in that pass
+  because they require Postgres.
+
+## 2026-06-27 Verification / Test-Isolation Update
+
+- Codex sent the current proofread packet to Claude Cowork for background
+  review. If the Cowork task is still running, do not treat that as blocking
+  local progress; capture the review when it finishes.
+- `server/scripts/test-access-workflow-postgres.ps1` now pins child-process
+  `NODE_ENV=test`, `PHANTOMFORCE_AUTH_PROVIDER=demo`,
+  `PHANTOMFORCE_ENABLE_DEMO_AUTH=true`,
+  `PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER=false`, and clears forced
+  repository mode. This prevents the local production `.env` from leaking into
+  the Postgres/demo workflow test.
+- `server/scripts/test-auth-prisma-dev.ps1` now pins child-process
+  `NODE_ENV=test` and `PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER=false`. This
+  prevents the local production `.env` from making prisma-dev startup fail
+  closed during test runs.
+- `server/scripts/test-auth-owner-production.ps1` now pins
+  `PHANTOMFORCE_ACCESS_REPOSITORY=json-file` for the owner-auth test so local
+  `.env` Postgres settings do not make an auth-only test depend on a running
+  database.
+- Commands passed on 2026-06-27:
+  - `npm run typecheck`
+  - `npm run build`
+  - `npm run test:auth:owner-production --workspace @phantomforce/server`
+  - `npm run test:access --workspace @phantomforce/server`
+  - `npm run test:access:postgres --workspace @phantomforce/server`
+  - `npm run test:auth:production-fail-closed --workspace @phantomforce/server`
+  - `npm run test:auth:prisma-dev --workspace @phantomforce/server`
+  - `npm run test:access:postgres-fail-closed --workspace @phantomforce/server`
+- Current JSON access proof: `billingSourceBoundary=true`,
+  `auditContentAssertions=40`, `driverParitySuite=true`,
+  `malformedProvisioningFailClosed=true`, `storageSnapshotCreated=true`,
+  `pangolinDryRun=true`, `pangolinReadOnlyStatus=true`,
+  `falconJobValidationAdminGated=true`, `auditEvents=606`.
+- Current Postgres access proof: `repositoryDriver=prisma-postgres`,
+  `prismaWriteMode=enabled`, `failClosedOnPrismaError=true`,
+  `billingSourceBoundary=true`, `falconJobValidationAdminGated=true`,
+  `auditEvents=20`.
+- Claude proofread identified `/falcon/jobs/validate` as the highest-value
+  public-launch blocker. Codex implemented the gate: anonymous callers get
+  `401`, client sessions get `403`, admin/owner sessions can validate schemas,
+  and no Falcon execution/proxy behavior was added.
+- Current launch preflight record:
+  `C:\Users\jorda\Documents\PhantomForce-App\LAUNCH_PANGOLIN_PREFLIGHT.md`.
+  It records owner-production local verification, local Postgres launch
+  candidate, Falcon containment, and the not-applied Newt/Pangolin plan.
 
 ## Highest-Value Lane
 

@@ -206,6 +206,45 @@ Assert-HttpError `
   -Message "Client should not read billing source-of-truth status." `
   -Call { Invoke-Json -Uri "$baseUrl/billing/status/read-only" -Headers $sportsClientHeaders }
 
+$falconHealthCheckBody = @{
+  type = "falcon.health_check"
+  requiresApproval = $true
+  reversible = $true
+  rationale = "admin metadata validation only"
+  payload = @{}
+}
+
+Assert-HttpError `
+  -StatusCode 401 `
+  -Message "Anonymous callers should not validate Falcon jobs or read broker metadata." `
+  -Call {
+    Invoke-Json `
+      -Uri "$baseUrl/falcon/jobs/validate" `
+      -Method "Post" `
+      -Headers $noSessionHeaders `
+      -Body $falconHealthCheckBody
+  }
+
+Assert-HttpError `
+  -StatusCode 403 `
+  -Message "Client sessions should not validate Falcon jobs or read broker metadata." `
+  -Call {
+    Invoke-Json `
+      -Uri "$baseUrl/falcon/jobs/validate" `
+      -Method "Post" `
+      -Headers $sportsClientHeaders `
+      -Body $falconHealthCheckBody
+  }
+
+$falconValidation = Invoke-Json `
+  -Uri "$baseUrl/falcon/jobs/validate" `
+  -Method "Post" `
+  -Body $falconHealthCheckBody
+Assert-True ($falconValidation.ok -eq $true) "Admin should validate Falcon job schemas."
+Assert-True ($falconValidation.jobType -eq "falcon.health_check") "Falcon validation should report the job type."
+Assert-True ($falconValidation.requiresApproval -eq $true) "Falcon jobs should require approval."
+Assert-True ($falconValidation.session.canManageAccess -eq $true) "Falcon validation should return only to admin sessions."
+
 Assert-HttpError `
   -StatusCode 403 `
   -Message "Client should not propose access changes." `
@@ -1228,6 +1267,7 @@ $summary = [pscustomobject]@{
   malformedProvisioningFailClosed = $true
   storageSnapshotCreated = $true
   billingSourceBoundary = $true
+  falconJobValidationAdminGated = $true
   readinessLocalDemoReady = $readiness.report.localDemoReady
   readinessProductionReady = $readiness.report.productionReady
   pangolinDryRun = $true

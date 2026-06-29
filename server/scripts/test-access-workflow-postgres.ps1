@@ -96,9 +96,14 @@ try {
     }
 
     $serverEnv = @{
+      NODE_ENV = "test"
       PORT = "$serverPort"
       HOST = "127.0.0.1"
       DATABASE_URL = $databaseUrl
+      PHANTOMFORCE_AUTH_PROVIDER = "demo"
+      PHANTOMFORCE_ENABLE_DEMO_AUTH = "true"
+      PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER = "false"
+      PHANTOMFORCE_ACCESS_REPOSITORY = ""
       PHANTOMFORCE_SESSION_SECRET = "phantomforce-postgres-test-secret"
       PHANTOMFORCE_SERVER_LOGGER = "false"
     }

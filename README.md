@@ -33,6 +33,7 @@ npm run test:access:postgres --workspace @phantomforce/server
 npm run test:access:postgres-fail-closed --workspace @phantomforce/server
 npm run test:connector-boundary --workspace @phantomforce/server
 npm run test:auth:prisma-dev --workspace @phantomforce/server
+npm run test:auth:owner-production --workspace @phantomforce/server
 npm run test:auth:production-fail-closed --workspace @phantomforce/server
 ```
 
@@ -60,6 +61,11 @@ production still requires Postgres.
 - `PHANTOMFORCE_AUTH_PROVIDER=prisma-dev` uses `User`, `Org`, and
   `Membership` rows from Postgres to build signed local sessions. It is a
   development bridge toward production auth, not final OAuth.
+- `PHANTOMFORCE_AUTH_PROVIDER=owner-production` is the owner-controlled launch
+  auth candidate. It seeds one owner admin session, requires a strong
+  `PHANTOMFORCE_SESSION_SECRET`, `PHANTOMFORCE_OWNER_EMAIL`, and
+  `PHANTOMFORCE_OWNER_LOGIN_KEY`, disables demo auth, and exposes
+  `POST /auth/owner-login`.
 - `NODE_ENV=production` refuses to serve demo sessions and exits before
   `/health` responds.
 - `PHANTOMFORCE_SESSION_SECRET` must be a strong non-default value before any
@@ -68,6 +74,9 @@ production still requires Postgres.
 Run
 `npm run test:auth:prisma-dev --workspace @phantomforce/server` to prove
 Postgres-backed org identity can replace hardcoded demo sessions in dev/test,
+run
+`npm run test:auth:owner-production --workspace @phantomforce/server` to prove
+the owner launch auth path boots in production and fails closed on bad secrets,
 and run
 `npm run test:auth:production-fail-closed --workspace @phantomforce/server` to
 prove demo auth cannot be accidentally exposed as production auth.
@@ -144,10 +153,43 @@ prove demo auth cannot be accidentally exposed as production auth.
 - Latest local proof:
   - JSON fallback: `auditContentAssertions=40`, `driverParitySuite=true`,
     `malformedProvisioningFailClosed=true`, `storageSnapshotCreated=true`,
-    `billingSourceBoundary=true`, `auditEvents=506`.
+    `billingSourceBoundary=true`, `falconJobValidationAdminGated=true`,
+    `auditEvents=606`.
   - Prisma/Postgres: `auditContentAssertions=40`, `driverParitySuite=true`,
     `malformedProvisioningFailClosed=true`, `storageSnapshotCreated=true`,
-    `billingSourceBoundary=true`, `auditEvents=20`.
+    `billingSourceBoundary=true`, `falconJobValidationAdminGated=true`,
+    `auditEvents=20`.
 - Remaining production gates: billing source of truth, production Postgres
   config, real production auth, Pangolin read-only base URL verification, live
   OAuth connectors, and deployment target.
+
+## 2026-06-27 Verification Update
+
+- `npm run typecheck` passed.
+- `npm run build` passed.
+- `npm run test:auth:owner-production --workspace @phantomforce/server` passed
+  with production boot, owner login, wrong-key rejection, demo login disabled,
+  admin readiness access, one owner session, weak-secret fail-closed, and
+  missing-key fail-closed. It also proves anonymous Falcon validation is
+  rejected and owner Falcon validation is allowed.
+- `npm run test:access --workspace @phantomforce/server` passed with
+  `billingSourceBoundary=true`, `auditContentAssertions=40`,
+  `driverParitySuite=true`, `malformedProvisioningFailClosed=true`,
+  `storageSnapshotCreated=true`, `pangolinDryRun=true`,
+  `pangolinReadOnlyStatus=true`, `falconJobValidationAdminGated=true`, and
+  `auditEvents=606`.
+- `npm run test:access:postgres --workspace @phantomforce/server` passed with
+  `repositoryDriver=prisma-postgres`, `prismaWriteMode=enabled`,
+  `failClosedOnPrismaError=true`, `billingSourceBoundary=true`,
+  `falconJobValidationAdminGated=true`, and `auditEvents=20`.
+- `npm run test:auth:production-fail-closed --workspace @phantomforce/server`
+  passed.
+- `npm run test:auth:prisma-dev --workspace @phantomforce/server` passed.
+- `npm run test:access:postgres-fail-closed --workspace @phantomforce/server`
+  passed.
+- Test wrappers now pin child-process `NODE_ENV`, auth settings, and owner-auth
+  repository mode so the local production `.env` cannot leak into
+  demo/Postgres/prisma-dev/owner-production tests.
+- `/falcon/jobs/validate` is now admin-gated. Anonymous callers receive `401`,
+  client sessions receive `403`, and admin/owner sessions can validate schemas
+  without executing Falcon.
