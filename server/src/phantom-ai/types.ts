@@ -3,6 +3,7 @@ export type SensitivityLevel = "low" | "medium" | "high";
 export type ProviderRoute = "mock" | "openrouter_glm" | "claude" | "local" | "router";
 export type ModelRouterMode = "mock" | "openrouter" | "claude" | "local" | "router";
 export type ApprovalStatus = "not_required" | "pending" | "approved" | "rejected" | "blocked";
+export type ActionPreviewStatus = "safe" | "pending_approval" | "blocked" | "destructive" | "live_provider_required";
 
 export type HermesLedgerRecord = {
   timestamp: string;
@@ -145,8 +146,28 @@ export type ModelRouterDecision = {
   estimated_cost_usd: number | null;
 };
 
+export type ActionPreview = {
+  status: ActionPreviewStatus;
+  label: string;
+  approval_required: boolean;
+  live_execution_allowed: false;
+  safe_for_preview: boolean;
+  reasons: string[];
+  next_action: string;
+};
+
+export type ModelRouterPreviewResult = {
+  decision: ModelRouterDecision;
+  context_packet: HermesContextPacket;
+  action_preview: ActionPreview;
+  dry_run: true;
+  ledger_written: false;
+  live_provider_called: false;
+};
+
 export type ModelRouterRunResult = {
   decision: ModelRouterDecision;
   context_packet: HermesContextPacket;
+  action_preview: ActionPreview;
   ledger_record: HermesLedgerRecord;
 };

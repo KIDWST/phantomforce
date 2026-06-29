@@ -42,6 +42,48 @@ export async function readHermesLedgerRecords(
   }
 }
 
+export function redactSensitiveText(value: string) {
+  return value
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[redacted-key]")
+    .replace(/\bBearer\s+[A-Za-z0-9._-]{8,}\b/gi, "Bearer [redacted-token]")
+    .replace(
+      /\b([A-Z0-9_]*(?:API[_-]?KEY|PASSWORD|SECRET|TOKEN|AUTHORIZATION)[A-Z0-9_]*)\s*[:=]\s*("[^"]+"|'[^']+'|[^\s,;]+)/gi,
+      "$1=[redacted]",
+    )
+    .replace(
+      /\b(api[_ -]?key|password|secret|token|authorization)\s*[:=]\s*("[^"]+"|'[^']+'|[^\s,;]+)/gi,
+      "$1=[redacted]",
+    )
+    .replace(/\b(?:\d[ -]?){13,19}\b/g, "[redacted-number]");
+}
+
+function redactValue<T>(value: T): T {
+  if (typeof value === "string") {
+    return redactSensitiveText(value) as T;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactValue(item)) as T;
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, redactValue(item)]),
+    ) as T;
+  }
+
+  return value;
+}
+
+export function redactHermesLedgerRecord(record: HermesLedgerRecord) {
+  return redactValue(record);
+}
+
+export async function readRedactedHermesLedgerRecords(options: { ledgerPath?: string; limit?: number } = {}) {
+  const records = await readHermesLedgerRecords(options);
+  return records.map((record) => redactHermesLedgerRecord(record));
+}
+
 export async function getHermesLedgerStatus(options: { ledgerPath?: string } = {}) {
   const ledgerPath = options.ledgerPath ?? resolveHermesLedgerPath();
 
@@ -65,4 +107,3 @@ export async function getHermesLedgerStatus(options: { ledgerPath?: string } = {
     throw error;
   }
 }
-

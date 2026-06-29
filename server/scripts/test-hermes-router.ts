@@ -3,8 +3,13 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { compileHermesContext } from "../src/phantom-ai/context-compiler.js";
-import { readHermesLedgerRecords } from "../src/phantom-ai/hermes-ledger.js";
-import { DEFAULT_OPENROUTER_MODEL, getProviderSetupStatus, runModelRouterFoundation } from "../src/phantom-ai/model-router.js";
+import { readHermesLedgerRecords, redactSensitiveText } from "../src/phantom-ai/hermes-ledger.js";
+import {
+  DEFAULT_OPENROUTER_MODEL,
+  getProviderSetupStatus,
+  previewModelRouterFoundation,
+  runModelRouterFoundation,
+} from "../src/phantom-ai/model-router.js";
 import type { ContextModuleData, ModelRouterRequest } from "../src/phantom-ai/types.js";
 
 function assert(condition: boolean, message: string) {
@@ -116,14 +121,35 @@ try {
   assert(records.every((record) => record.tenant_id === "demo-trainer"), "Tenant id should be recorded.");
   assert(records.every((record) => record.context_chars > 0), "Context size should be recorded.");
 
+  const destructivePreview = previewModelRouterFoundation({
+    ...request,
+    request_id: "test-preview-001",
+    task_type: "delete_client_record",
+    user_request: "Delete the client record and use OPENROUTER_API_KEY=abc123456789.",
+  });
+
+  assert(destructivePreview.dry_run, "Preview should mark itself as dry-run.");
+  assert(!destructivePreview.ledger_written, "Preview must not write to Hermes.");
+  assert(!destructivePreview.live_provider_called, "Preview must not call a live provider.");
+  assert(destructivePreview.action_preview.status === "destructive", "Delete request should preview as destructive.");
+  assert(
+    redactSensitiveText(destructivePreview.context_packet.compact_context).includes("OPENROUTER_API_KEY=[redacted]"),
+    "Context preview redaction should mask key-like strings.",
+  );
+
+  const recordsAfterPreview = await readHermesLedgerRecords({ ledgerPath, limit: 10 });
+  assert(recordsAfterPreview.length === 2, "Dry-run preview should not append ledger records.");
+
   console.log(
     JSON.stringify(
       {
         ok: true,
         ledgerPath,
         records: records.length,
+        recordsAfterPreview: recordsAfterPreview.length,
         mockRoute: mockResult.decision.provider_route,
         highSensitivityRoute: highSensitivityResult.decision.provider_route,
+        destructivePreview: destructivePreview.action_preview.status,
         contextChars: contextPacket.context_chars,
         rawContextChars: contextPacket.raw_context_chars,
         openRouterModel: openRouterStatus.openrouter_glm.model_id,
@@ -135,4 +161,3 @@ try {
 } finally {
   await rm(tempDir, { recursive: true, force: true });
 }
-

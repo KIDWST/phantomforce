@@ -283,6 +283,60 @@ type ProviderSetupStatus = {
   };
 };
 
+type HermesLedgerRecordPreview = {
+  timestamp: string;
+  tenant_id: string;
+  business_name: string;
+  actor_user_id: string;
+  actor_role: string;
+  request_id: string;
+  task_type: string;
+  sensitivity_level: string;
+  provider_route: string;
+  model_id: string;
+  context_chars: number;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  user_request_summary: string;
+  result_summary: string;
+  approval_required: boolean;
+  approval_status: string;
+  risks: string[];
+  next_action: string;
+};
+
+type HermesContextPreview = {
+  dry_run: boolean;
+  ledger_written: boolean;
+  live_provider_called: boolean;
+  decision: {
+    provider_route: string;
+    model_id: string;
+    sensitivity_level: string;
+    approval_required: boolean;
+    approval_status: string;
+    risks: string[];
+    next_action: string;
+  };
+  action_preview: {
+    status: "safe" | "pending_approval" | "blocked" | "destructive" | "live_provider_required";
+    label: string;
+    approval_required: boolean;
+    live_execution_allowed: false;
+    safe_for_preview: boolean;
+    reasons: string[];
+    next_action: string;
+  };
+  context: {
+    compact_context: string;
+    user_request_summary: string;
+    context_chars: number;
+    estimated_tokens: number;
+    raw_context_chars: number;
+    compression_ratio: number;
+  };
+};
+
 type AppSession = {
   id: string;
   label: string;
@@ -1663,7 +1717,11 @@ function App() {
         ) : null}
         {route === "activity" ? <ActivityView activity={activity} /> : null}
         {route === "connections" ? (
-          <StatusView canManageAccess={canManageAccess} providerSetupStatus={providerSetupStatus} />
+          <StatusView
+            canManageAccess={canManageAccess}
+            providerSetupStatus={providerSetupStatus}
+            sessionHeaders={sessionHeaders}
+          />
         ) : null}
         {route === "trainer" ? <TrainerSimulationView canManageAccess={canManageAccess} /> : null}
       </main>
@@ -2602,9 +2660,11 @@ function AccessView({
 function StatusView({
   canManageAccess,
   providerSetupStatus,
+  sessionHeaders,
 }: {
   canManageAccess: boolean;
   providerSetupStatus: ProviderSetupStatus;
+  sessionHeaders: (json?: boolean) => Record<string, string>;
 }) {
   const [showDebug, setShowDebug] = useState(false);
 
@@ -2616,6 +2676,7 @@ function StatusView({
     >
       <CustomerReadinessPanel />
       {canManageAccess ? <ProviderSetupPanel status={providerSetupStatus} /> : null}
+      {canManageAccess ? <HermesRouterDebugPanel sessionHeaders={sessionHeaders} /> : null}
       <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
@@ -2800,6 +2861,247 @@ function ProviderStatusCard({
       <strong>{value}</strong>
       <p>{detail}</p>
     </article>
+  );
+}
+
+function actionPreviewState(status: HermesContextPreview["action_preview"]["status"]): TruthState {
+  if (status === "safe") return "real";
+  if (status === "pending_approval" || status === "live_provider_required") return "stub";
+  return "blocked";
+}
+
+function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: boolean) => Record<string, string> }) {
+  const [records, setRecords] = useState<HermesLedgerRecordPreview[]>([]);
+  const [preview, setPreview] = useState<HermesContextPreview | null>(null);
+  const [previewText, setPreviewText] = useState(
+    "Summarize today's safest trainer follow-ups without sending, posting, uploading, or changing billing.",
+  );
+  const [taskType, setTaskType] = useState("content_idea_summary");
+  const [sensitivityLevel, setSensitivityLevel] = useState("low");
+  const [historyStatus, setHistoryStatus] = useState("Not loaded");
+  const [previewStatus, setPreviewStatus] = useState("Not loaded");
+
+  async function refreshHistory() {
+    setHistoryStatus("Loading redacted ledger history...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/hermes-ledger/history?limit=8`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setRecords([]);
+        setHistoryStatus("Admin ledger history unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as { records?: HermesLedgerRecordPreview[] };
+      setRecords(Array.isArray(data.records) ? data.records : []);
+      setHistoryStatus(Array.isArray(data.records) && data.records.length ? "Redacted history loaded" : "No ledger records yet");
+    } catch {
+      setRecords([]);
+      setHistoryStatus("Backend offline");
+    }
+  }
+
+  async function runContextPreview(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
+    setPreviewStatus("Running dry-run preview...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/context-preview`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          tenant_id: "demo-trainer",
+          business_name: personalTrainingSimulation.owner.business,
+          request_id: `ui-preview-${Date.now()}`,
+          task_type: task,
+          sensitivity_level: sensitivity,
+          user_request: text,
+          business_summary:
+            "Owner-only personal training demo workspace. Employees disabled. External actions approval-only.",
+          module_data: [
+            {
+              module: "Tasks",
+              summary: "Today includes local demo tasks and approval-only follow-ups.",
+              items: personalTrainingSimulation.tasks.slice(0, 3),
+            },
+            {
+              module: "Approvals",
+              summary: "Approvals are review items only; no sends, uploads, billing, or production actions execute.",
+              items: personalTrainingSimulation.approvals.slice(0, 3),
+            },
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        setPreview(null);
+        setPreviewStatus("Preview unavailable");
+        return;
+      }
+
+      const data = (await response.json()) as HermesContextPreview;
+      setPreview(data);
+      setPreviewStatus("Dry-run preview ready");
+    } catch {
+      setPreview(null);
+      setPreviewStatus("Backend offline");
+    }
+  }
+
+  useEffect(() => {
+    void refreshHistory();
+    void runContextPreview();
+  }, []);
+
+  function submitPreview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    void runContextPreview();
+  }
+
+  return (
+    <section className="panel hermes-debug-panel">
+      <div className="section-head">
+        <div>
+          <span className="eyebrow">Admin/debug</span>
+          <h3>Hermes history and router preview.</h3>
+        </div>
+        <TruthBadge state="demo" label="Dry-run only" />
+      </div>
+      <p>
+        This panel is admin-only. It reads redacted Hermes records and previews context, route, sensitivity, and
+        approval metadata without writing to the ledger or calling a live provider.
+      </p>
+
+      <form className="hermes-preview-form" onSubmit={submitPreview}>
+        <label>
+          Preview request
+          <textarea value={previewText} onChange={(event) => setPreviewText(event.target.value)} rows={4} />
+        </label>
+        <div className="hermes-preview-controls">
+          <label>
+            Task type
+            <select value={taskType} onChange={(event) => setTaskType(event.target.value)}>
+              <option value="content_idea_summary">Content idea summary</option>
+              <option value="send_post_upload">Send/post/upload action</option>
+              <option value="delete_client_record">Delete client record</option>
+              <option value="billing_summary">Billing summary</option>
+            </select>
+          </label>
+          <label>
+            Sensitivity
+            <select value={sensitivityLevel} onChange={(event) => setSensitivityLevel(event.target.value)}>
+              <option value="low">Low</option>
+              <option value="medium">Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+          <button className="ghost-small" type="submit">
+            Run preview
+          </button>
+          <button className="ghost-small" type="button" onClick={() => void refreshHistory()}>
+            Refresh ledger
+          </button>
+        </div>
+      </form>
+
+      <div className="provider-grid">
+        <ProviderStatusCard label="History" value={historyStatus} detail={`${records.length} recent redacted records`} state="real" />
+        <ProviderStatusCard label="Preview" value={previewStatus} detail="No ledger write. No live provider call." state="demo" />
+        <ProviderStatusCard
+          label="Ledger write"
+          value={preview?.ledger_written ? "Yes" : "No"}
+          detail="Context preview must never append records."
+          state={preview?.ledger_written ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Live provider call"
+          value={preview?.live_provider_called ? "Yes" : "No"}
+          detail="OpenRouter, Claude, and local model calls are disabled in this patch."
+          state={preview?.live_provider_called ? "blocked" : "real"}
+        />
+      </div>
+
+      {preview ? (
+        <div className="hermes-preview-grid">
+          <article className="provider-card real">
+            <span>Selected route</span>
+            <strong>{preview.decision.provider_route}</strong>
+            <p>{preview.decision.next_action}</p>
+          </article>
+          <article className={`provider-card ${actionPreviewState(preview.action_preview.status)}`}>
+            <span>Approval preview</span>
+            <strong>{preview.action_preview.status.replace(/_/g, " ")}</strong>
+            <p>{preview.action_preview.label}</p>
+          </article>
+          <article className="provider-card stub">
+            <span>Context size</span>
+            <strong>
+              {preview.context.context_chars} / {preview.context.raw_context_chars} chars
+            </strong>
+            <p>{preview.context.estimated_tokens} estimated tokens in compact packet.</p>
+          </article>
+          <article className={`provider-card ${preview.decision.sensitivity_level === "high" ? "blocked" : "real"}`}>
+            <span>Sensitivity</span>
+            <strong>{preview.decision.sensitivity_level}</strong>
+            <p>Approval required: {preview.decision.approval_required ? "yes" : "no"}</p>
+          </article>
+          <div className="context-preview">
+            <div className="section-head compact">
+              <div>
+                <span className="eyebrow">Compact context packet</span>
+                <h3>Redacted preview payload</h3>
+              </div>
+              <TruthBadge state="demo" label="No model call" />
+            </div>
+            <pre>{preview.context.compact_context}</pre>
+          </div>
+          <div className="context-preview">
+            <div className="section-head compact">
+              <div>
+                <span className="eyebrow">Action rules</span>
+                <h3>Preview metadata</h3>
+              </div>
+              <TruthBadge state={actionPreviewState(preview.action_preview.status)} label={preview.action_preview.status} />
+            </div>
+            <ul>
+              {preview.action_preview.reasons.map((reason) => (
+                <li key={reason}>{reason}</li>
+              ))}
+            </ul>
+            <p>{preview.action_preview.next_action}</p>
+          </div>
+        </div>
+      ) : null}
+
+      <div className="ledger-history">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Hermes ledger</span>
+            <h3>Recent redacted records</h3>
+          </div>
+        </div>
+        {records.length ? (
+          records.map((record) => (
+            <article className="ledger-record" key={`${record.timestamp}-${record.request_id}`}>
+              <div>
+                <strong>{record.task_type}</strong>
+                <p>{record.user_request_summary}</p>
+              </div>
+              <div className="ledger-meta">
+                <span>{record.provider_route}</span>
+                <span>{record.sensitivity_level}</span>
+                <span>{record.approval_status}</span>
+                <span>{record.context_chars} chars</span>
+              </div>
+            </article>
+          ))
+        ) : (
+          <p className="access-note">No Hermes records yet. Run a mock route to create local JSONL history.</p>
+        )}
+      </div>
+    </section>
   );
 }
 

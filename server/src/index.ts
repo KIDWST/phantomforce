@@ -56,8 +56,17 @@ import { getBillingProviderStatus } from "./access/billing-provider.js";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
-import { getHermesLedgerStatus, readHermesLedgerRecords } from "./phantom-ai/hermes-ledger.js";
-import { getProviderSetupStatus, runModelRouterFoundation } from "./phantom-ai/model-router.js";
+import {
+  getHermesLedgerStatus,
+  readRedactedHermesLedgerRecords,
+  redactHermesLedgerRecord,
+  redactSensitiveText,
+} from "./phantom-ai/hermes-ledger.js";
+import {
+  getProviderSetupStatus,
+  previewModelRouterFoundation,
+  runModelRouterFoundation,
+} from "./phantom-ai/model-router.js";
 import type { ActorRole, ContextModuleData, SensitivityLevel } from "./phantom-ai/types.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
@@ -219,6 +228,92 @@ app.get("/billing/status/read-only", async (request, reply) => {
   };
 });
 
+function parseHermesRecordLimit(value: string | undefined) {
+  const parsedLimit = Number(value ?? 25);
+  return Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 50) : 25;
+}
+
+function parseSensitivityLevel(value: unknown): SensitivityLevel {
+  return value === "medium" || value === "high" ? value : "low";
+}
+
+function parseContextModuleData(value: unknown): ContextModuleData[] {
+  if (!Array.isArray(value)) return [];
+
+  return value.slice(0, 8).flatMap((module) => {
+    if (!module || typeof module !== "object") return [];
+    const source = module as {
+      module?: unknown;
+      summary?: unknown;
+      items?: unknown;
+    };
+
+    if (typeof source.module !== "string" || typeof source.summary !== "string") return [];
+
+    return [
+      {
+        module: source.module.slice(0, 80),
+        summary: source.summary.slice(0, 320),
+        items: Array.isArray(source.items)
+          ? source.items.slice(0, 5).flatMap((item) => {
+              if (!item || typeof item !== "object") return [];
+              const itemSource = item as { title?: unknown; status?: unknown; detail?: unknown };
+
+              if (typeof itemSource.title !== "string") return [];
+
+              return [
+                {
+                  title: itemSource.title.slice(0, 120),
+                  status: typeof itemSource.status === "string" ? itemSource.status.slice(0, 60) : undefined,
+                  detail: typeof itemSource.detail === "string" ? itemSource.detail.slice(0, 220) : undefined,
+                },
+              ];
+            })
+          : [],
+      },
+    ];
+  });
+}
+
+function buildModelRouterRequestFromBody(
+  body: {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  },
+  session: { id: string; canManageAccess: boolean },
+  requestIdPrefix: string,
+) {
+  const actorRole: ActorRole = session.canManageAccess ? "platform_admin" : "business_owner";
+
+  return {
+    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id.slice(0, 80) : "demo-trainer",
+    business_name:
+      typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "West Loop Strength Lab",
+    actor_user_id: typeof body.actor_user_id === "string" ? body.actor_user_id.slice(0, 80) : session.id,
+    actor_role: actorRole,
+    request_id:
+      typeof body.request_id === "string" ? body.request_id.slice(0, 120) : `${requestIdPrefix}-${Date.now()}`,
+    task_type: typeof body.task_type === "string" ? body.task_type.slice(0, 120) : "summary",
+    sensitivity_level: parseSensitivityLevel(body.sensitivity_level),
+    user_request:
+      typeof body.user_request === "string"
+        ? body.user_request.slice(0, 1600)
+        : "Summarize local demo workspace state without executing external actions.",
+    business_summary:
+      typeof body.business_summary === "string"
+        ? body.business_summary.slice(0, 900)
+        : "Owner-only personal training demo workspace. External actions approval-only.",
+    module_data: parseContextModuleData(body.module_data),
+  };
+}
+
 app.get("/phantom-ai/provider-status", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -244,6 +339,30 @@ app.get("/phantom-ai/provider-status", async (request, reply) => {
   };
 });
 
+app.get("/phantom-ai/hermes-ledger/history", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { limit?: string } | undefined;
+  const limit = parseHermesRecordLimit(query?.limit);
+  const ledgerStatus = await getHermesLedgerStatus();
+
+  return {
+    ok: true,
+    session,
+    limit,
+    ledger: {
+      path: ledgerStatus.ledgerPath,
+      exists: ledgerStatus.exists,
+      bytes: ledgerStatus.bytes,
+    },
+    records: await readRedactedHermesLedgerRecords({ limit }),
+  };
+});
+
 app.get("/phantom-ai/hermes-ledger/tail", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -252,13 +371,59 @@ app.get("/phantom-ai/hermes-ledger/tail", async (request, reply) => {
   }
 
   const query = request.query as { limit?: string } | undefined;
-  const parsedLimit = Number(query?.limit ?? 25);
-  const limit = Number.isFinite(parsedLimit) ? Math.min(Math.max(parsedLimit, 1), 100) : 25;
+  const limit = parseHermesRecordLimit(query?.limit);
 
   return {
     ok: true,
     session,
-    records: await readHermesLedgerRecords({ limit }),
+    records: await readRedactedHermesLedgerRecords({ limit }),
+  };
+});
+
+app.post("/phantom-ai/context-preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const result = previewModelRouterFoundation(buildModelRouterRequestFromBody(body, session, "preview"));
+
+  return {
+    ok: true,
+    session,
+    dry_run: result.dry_run,
+    ledger_written: result.ledger_written,
+    live_provider_called: result.live_provider_called,
+    decision: {
+      ...result.decision,
+      risks: result.decision.risks.map((risk) => redactSensitiveText(risk)),
+      next_action: redactSensitiveText(result.decision.next_action),
+    },
+    action_preview: {
+      ...result.action_preview,
+      reasons: result.action_preview.reasons.map((reason) => redactSensitiveText(reason)),
+      next_action: redactSensitiveText(result.action_preview.next_action),
+    },
+    context: {
+      compact_context: redactSensitiveText(result.context_packet.compact_context),
+      user_request_summary: redactSensitiveText(result.context_packet.user_request_summary),
+      context_chars: result.context_packet.context_chars,
+      estimated_tokens: result.context_packet.estimated_tokens,
+      raw_context_chars: result.context_packet.raw_context_chars,
+      compression_ratio: result.context_packet.compression_ratio,
+    },
   };
 });
 
@@ -280,30 +445,7 @@ app.post("/phantom-ai/mock-route", async (request, reply) => {
     business_summary?: unknown;
     module_data?: unknown;
   };
-  const sensitivityLevel: SensitivityLevel =
-    body.sensitivity_level === "medium" || body.sensitivity_level === "high" ? body.sensitivity_level : "low";
-  const actorRole: ActorRole = session.canManageAccess ? "platform_admin" : "business_owner";
-  const moduleData: ContextModuleData[] = Array.isArray(body.module_data)
-    ? (body.module_data as ContextModuleData[])
-    : [];
-  const result = await runModelRouterFoundation({
-    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id : "demo-trainer",
-    business_name: typeof body.business_name === "string" ? body.business_name : "West Loop Strength Lab",
-    actor_user_id: typeof body.actor_user_id === "string" ? body.actor_user_id : session.id,
-    actor_role: actorRole,
-    request_id: typeof body.request_id === "string" ? body.request_id : `mock-${Date.now()}`,
-    task_type: typeof body.task_type === "string" ? body.task_type : "summary",
-    sensitivity_level: sensitivityLevel,
-    user_request:
-      typeof body.user_request === "string"
-        ? body.user_request
-        : "Summarize local demo workspace state without executing external actions.",
-    business_summary:
-      typeof body.business_summary === "string"
-        ? body.business_summary
-        : "Owner-only personal training demo workspace. External actions approval-only.",
-    module_data: moduleData,
-  });
+  const result = await runModelRouterFoundation(buildModelRouterRequestFromBody(body, session, "mock"));
 
   return {
     ok: true,
@@ -315,7 +457,7 @@ app.post("/phantom-ai/mock-route", async (request, reply) => {
       raw_context_chars: result.context_packet.raw_context_chars,
       compression_ratio: result.context_packet.compression_ratio,
     },
-    ledger_record: result.ledger_record,
+    ledger_record: redactHermesLedgerRecord(result.ledger_record),
   };
 });
 

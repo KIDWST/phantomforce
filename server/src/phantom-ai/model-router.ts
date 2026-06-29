@@ -1,8 +1,10 @@
 import { compileHermesContext } from "./context-compiler.js";
 import { appendHermesLedgerRecord, resolveHermesLedgerPath } from "./hermes-ledger.js";
 import type {
+  ActionPreview,
   ModelRouterDecision,
   ModelRouterMode,
+  ModelRouterPreviewResult,
   ModelRouterRequest,
   ModelRouterRunResult,
   ProviderRoute,
@@ -25,6 +27,9 @@ const DEFAULT_APPROVAL_RESTRICTIONS = [
 
 const APPROVAL_TASK_PATTERN =
   /(send|post|upload|charge|billing|payment|card|delete|deploy|credential|secret|production|route change)/i;
+
+const DESTRUCTIVE_TASK_PATTERN =
+  /(charge|billing|payment|card|delete|destroy|remove|wipe|drop|deploy|migration|migrate|credential|secret|production|route change)/i;
 
 const HIGH_SENSITIVITY_PATTERN =
   /(credential|secret|api key|password|payment|billing|card|health|medical|minor|child|legal|financial|private record|diagnosis)/i;
@@ -119,6 +124,10 @@ function taskRequiresApproval(request: ModelRouterRequest) {
   return APPROVAL_TASK_PATTERN.test(`${request.task_type} ${request.user_request}`);
 }
 
+function taskLooksDestructive(request: ModelRouterRequest) {
+  return DESTRUCTIVE_TASK_PATTERN.test(`${request.task_type} ${request.user_request}`);
+}
+
 function chooseRoute(request: ModelRouterRequest, status: ProviderSetupStatus): ModelRouterDecision {
   const sensitivity = classifySensitivity(request);
   const approvalRequired = taskRequiresApproval(request);
@@ -171,13 +180,78 @@ function chooseRoute(request: ModelRouterRequest, status: ProviderSetupStatus): 
   };
 }
 
-export async function runModelRouterFoundation(
+function buildActionPreview(request: ModelRouterRequest, decision: ModelRouterDecision): ActionPreview {
+  if (taskLooksDestructive(request)) {
+    return {
+      status: "destructive",
+      label: "Destructive or production-like action",
+      approval_required: true,
+      live_execution_allowed: false,
+      safe_for_preview: true,
+      reasons: [
+        "The requested action touches billing, credentials, production, deploys, deletes, or destructive state.",
+        "Patch 3C only previews the decision. It does not execute the action.",
+      ],
+      next_action: "Create a pending approval item in a future patch; do not execute.",
+    };
+  }
+
+  if (decision.sensitivity_level === "high") {
+    return {
+      status: "blocked",
+      label: "Blocked for high sensitivity",
+      approval_required: true,
+      live_execution_allowed: false,
+      safe_for_preview: true,
+      reasons: [
+        "High-sensitivity data must not route to cheap third-party worker models by default.",
+        "A private/manual review path is required before any live provider work.",
+      ],
+      next_action: "Keep this as a redacted preview until a private approved route exists.",
+    };
+  }
+
+  if (decision.approval_required) {
+    return {
+      status: "pending_approval",
+      label: "Pending approval required",
+      approval_required: true,
+      live_execution_allowed: false,
+      safe_for_preview: true,
+      reasons: ["The request asks for an external or live action that needs explicit approval."],
+      next_action: "Show a pending approval preview; do not execute.",
+    };
+  }
+
+  if (decision.provider_route !== "mock") {
+    return {
+      status: "live_provider_required",
+      label: "Live provider required later",
+      approval_required: false,
+      live_execution_allowed: false,
+      safe_for_preview: true,
+      reasons: ["The router selected a non-mock route, but this patch does not call live providers."],
+      next_action: "Use this preview for review only; live provider wiring needs a separate approved patch.",
+    };
+  }
+
+  return {
+    status: "safe",
+    label: "Safe dry-run preview",
+    approval_required: false,
+    live_execution_allowed: false,
+    safe_for_preview: true,
+    reasons: ["The request can be previewed locally without live provider calls or external actions."],
+    next_action: "Review the context packet and ledger metadata before deeper integration.",
+  };
+}
+
+export function previewModelRouterFoundation(
   request: ModelRouterRequest,
   options: {
     env?: NodeJS.ProcessEnv;
-    ledgerPath?: string;
   } = {},
-): Promise<ModelRouterRunResult> {
+): ModelRouterPreviewResult {
   const status = getProviderSetupStatus(options.env ?? process.env);
   const decision = chooseRoute(request, status);
   const contextPacket = compileHermesContext({
@@ -193,6 +267,27 @@ export async function runModelRouterFoundation(
     relevant_rules: request.relevant_rules ?? DEFAULT_RULES,
     approval_restrictions: request.approval_restrictions ?? DEFAULT_APPROVAL_RESTRICTIONS,
   });
+  const actionPreview = buildActionPreview(request, decision);
+
+  return {
+    decision,
+    context_packet: contextPacket,
+    action_preview: actionPreview,
+    dry_run: true,
+    ledger_written: false,
+    live_provider_called: false,
+  };
+}
+
+export async function runModelRouterFoundation(
+  request: ModelRouterRequest,
+  options: {
+    env?: NodeJS.ProcessEnv;
+    ledgerPath?: string;
+  } = {},
+): Promise<ModelRouterRunResult> {
+  const preview = previewModelRouterFoundation(request, { env: options.env });
+  const { decision, context_packet: contextPacket, action_preview: actionPreview } = preview;
 
   const ledgerRecord = {
     timestamp: new Date().toISOString(),
@@ -226,7 +321,7 @@ export async function runModelRouterFoundation(
   return {
     decision,
     context_packet: contextPacket,
+    action_preview: actionPreview,
     ledger_record: ledgerRecord,
   };
 }
-
