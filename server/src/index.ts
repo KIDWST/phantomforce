@@ -82,6 +82,7 @@ import {
 import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-receipts.js";
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
+import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
 import {
   getHermesInteractionMemoryStoreStatus,
   normalizeHermesInteractionMemoryStoreLimit,
@@ -1532,6 +1533,30 @@ app.get("/phantom-ai/ops/chicagoshots/proposal-history/:id", async (request, rep
     payment_request_created: false,
     invoice_created: false,
   };
+});
+
+app.get("/phantom-ai/ops/context", async (request, reply) => {
+  // Embedded dashboard assistant context. Available to any authenticated
+  // session; standard/client sessions receive a redacted shell (no operator
+  // business records, no provider/debug internals).
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = (request.query ?? {}) as { module?: unknown; packet_id?: unknown };
+  const str = (value: unknown) => (typeof value === "string" ? value : undefined);
+
+  const context = await buildOpsDashboardContext({
+    isAdmin: session.canManageAccess,
+    tenantId: session.clientId ?? null,
+    actorUserId: session.id,
+    module: str(query.module) ?? null,
+    packetId: str(query.packet_id) ?? null,
+  });
+
+  return { ok: true, session, read_only: true, context };
 });
 
 app.get("/phantom-ai/ops/status", async (request, reply) => {
