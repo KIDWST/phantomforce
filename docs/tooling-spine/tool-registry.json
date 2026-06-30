@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1.0",
-  "status": "sprint_0_plan_only",
+  "status": "sprint_1_dry_run_preview",
   "base_head": "715712cf1e12643e20369ace8d7dd2946fc30972",
   "branch": "feature/tooling-spine-n8n-agentlab-sprint0-20260629",
   "rules": {
@@ -13,7 +13,19 @@
     "approval_execution_allowed": false,
     "production_ledger_writes_allowed": false,
     "queue_writes_allowed": false,
-    "external_write_actions_allowed": false
+    "external_write_actions_allowed": false,
+    "tool_execution_enabled": false,
+    "n8n_installed": false,
+    "n8n_running": false
+  },
+  "sprint_1": {
+    "contract": "dry_run_tool_lane_preview",
+    "preview_route": "POST /phantom-ai/tool-lane/preview (admin-only)",
+    "execution_disabled": true,
+    "would_run": false,
+    "n8n_installed": false,
+    "n8n_running": false,
+    "note": "Read-only registry loader plus admin-only dry-run preview. No tool, workflow, or n8n runtime executes; no public webhooks or credentials are added; all tools remain planned/blocked until a later sprint explicitly approves execution."
   },
   "tools": [
     {
