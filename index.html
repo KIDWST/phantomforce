@@ -3,6 +3,12 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <script>
+      // Force HTTPS on the live domain (belt-and-suspenders alongside GitHub Pages "Enforce HTTPS").
+      if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
+        location.replace("https://" + location.host + location.pathname + location.search + location.hash);
+      }
+    </script>
     <title>PhantomForce</title>
     <meta name="description" content="Meet PhantomForce — the private cyber AI that runs your business. Just speak to it." />
     <meta property="og:title" content="PhantomForce" />
@@ -14,6 +20,7 @@
     <link rel="canonical" href="https://phantomforce.online/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
     <link rel="stylesheet" href="void.css?v=11" />
   </head>

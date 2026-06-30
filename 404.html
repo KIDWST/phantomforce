@@ -1,0 +1,48 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Lost in the void · PhantomForce</title>
+    <meta name="theme-color" content="#02060a" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      :root { --neon: #41ffa1; }
+      * { box-sizing: border-box; }
+      html, body { height: 100%; margin: 0; }
+      body {
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 18px; text-align: center; padding: 8vh 22px;
+        background:
+          radial-gradient(40% 40% at 50% 42%, rgba(65, 255, 161, 0.14), transparent 60%),
+          radial-gradient(120% 90% at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.72) 100%), #02060a;
+        color: #eafff2; font-family: "Space Grotesk", system-ui, sans-serif;
+      }
+      .ghost { width: 110px; filter: drop-shadow(0 0 16px rgba(65, 255, 161, 0.5)); animation: bob 5s ease-in-out infinite; }
+      @keyframes bob { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-12px) rotate(3deg); } }
+      h1 { font-size: clamp(60px, 14vw, 120px); margin: 0; letter-spacing: -0.05em;
+        background: linear-gradient(180deg, #fff, #b8ffd8 60%, #41ffa1);
+        -webkit-background-clip: text; background-clip: text; color: transparent; }
+      p { margin: 0; color: #8fbfa6; font-size: clamp(15px, 2.4vw, 19px); max-width: 460px; }
+      a {
+        margin-top: 8px; display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+        padding: 14px 26px; border-radius: 999px; color: #02140b;
+        background: linear-gradient(120deg, var(--neon), #15d97f);
+        font: 600 12px "DM Mono", monospace, sans-serif; letter-spacing: 0.08em; text-transform: uppercase;
+        box-shadow: 0 0 30px rgba(65, 255, 161, 0.4); transition: box-shadow 0.25s, transform 0.2s;
+      }
+      a:hover { box-shadow: 0 0 48px rgba(65, 255, 161, 0.65); transform: translateY(-1px); }
+    </style>
+  </head>
+  <body>
+    <svg class="ghost" viewBox="0 0 120 132" aria-hidden="true">
+      <path d="M60 14 C36 14 24 33 24 57 L24 108 L34 98 L44 108 L54 98 L64 108 L74 98 L84 108 L96 98 L96 57 C96 33 84 14 60 14 Z"
+            fill="none" stroke="#41ffa1" stroke-width="3" stroke-linejoin="round" />
+      <path d="M40 56 Q47 62 54 56" fill="none" stroke="#d6ffec" stroke-width="3" stroke-linecap="round" />
+      <path d="M66 56 Q73 62 80 56" fill="none" stroke="#d6ffec" stroke-width="3" stroke-linecap="round" />
+    </svg>
+    <h1>404</h1>
+    <p>This page slipped into the void. Even PhantomForce can't find it.</p>
+    <a href="/">take me back →</a>
+  </body>
+</html>
