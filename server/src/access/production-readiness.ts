@@ -4,6 +4,7 @@ import { accessRepository } from "./access-repository.js";
 import { getBillingProviderStatus } from "./billing-provider.js";
 import { checkPangolinReadOnlyStatus } from "./pangolin-status.js";
 import { getAccessAuthConfiguration } from "./session.js";
+import { getSalesConnectorStatus } from "../connectors/sales-connector.js";
 
 export type ProductionReadinessGate = {
   id: string;
@@ -41,6 +42,7 @@ export async function buildProductionReadinessReport(): Promise<ProductionReadin
   const repository = accessRepository.info();
   const auth = getAccessAuthConfiguration();
   const billing = getBillingProviderStatus();
+  const salesConnector = getSalesConnectorStatus();
   const pangolinStatus = await checkPangolinReadOnlyStatus();
   const actionTypes = Object.keys(ACTION_SCHEMAS);
   const accessActionContractsReady = [
@@ -139,6 +141,13 @@ export async function buildProductionReadinessReport(): Promise<ProductionReadin
         ? "Deployment target is configured."
         : "No deployment target is configured for a client-facing production app.",
       `PHANTOMFORCE_DEPLOYMENT_TARGET=${process.env.PHANTOMFORCE_DEPLOYMENT_TARGET ?? "unset"}`,
+    ),
+    gate(
+      "sales_connector_onboarding",
+      "Sales connector onboarding",
+      "needs_config",
+      "Sales connector is intentionally planned/disabled: no live CRM/lead provider, no credentials, no external send. Implement a typed connector + approval-gated import and explicitly enable before any live use.",
+      `connector=${salesConnector.connector}; status=${salesConnector.status}; enabled=${salesConnector.enabled}; live=${salesConnector.live}; external_send=${salesConnector.external_send}`,
     ),
   ];
 

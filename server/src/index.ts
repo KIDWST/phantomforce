@@ -83,6 +83,7 @@ import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-rec
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
+import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import {
   getHermesInteractionMemoryStoreStatus,
   normalizeHermesInteractionMemoryStoreLimit,
@@ -1557,6 +1558,18 @@ app.get("/phantom-ai/ops/context", async (request, reply) => {
   });
 
   return { ok: true, session, read_only: true, context };
+});
+
+app.get("/phantom-ai/ops/sales-connector/status", async (request, reply) => {
+  // Admin-only. Sales connector is intentionally planned/disabled pre-live:
+  // no credentials, no external send, no live action.
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return { ok: true, session, read_only: true, sales_connector: getSalesConnectorStatus() };
 });
 
 app.get("/phantom-ai/ops/status", async (request, reply) => {
