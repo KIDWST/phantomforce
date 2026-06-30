@@ -79,6 +79,7 @@ import {
   readHermesLiveReceiptStoreRecords,
 } from "./phantom-ai/hermes-live-receipt-store.js";
 import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-receipts.js";
+import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
@@ -1020,6 +1021,53 @@ app.post("/phantom-ai/approvals/queue/:queueId/status", async (request, reply) =
     approval_execution_implemented: false,
     live_provider_called: false,
     ledger_written: false,
+  };
+});
+
+app.post("/phantom-ai/hermes/interaction-memory/preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    actor_user_id?: unknown;
+    task_id?: unknown;
+    interaction_type?: unknown;
+    summary?: unknown;
+    metadata?: unknown;
+  };
+  const metadata =
+    body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+      ? (body.metadata as Record<string, string | number | boolean | null>)
+      : undefined;
+  const memory_preview = buildHermesInteractionMemoryPreview({
+    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id : session.id,
+    actor_user_id: typeof body.actor_user_id === "string" ? body.actor_user_id : session.id,
+    task_id: typeof body.task_id === "string" ? body.task_id : null,
+    interaction_type: typeof body.interaction_type === "string" ? body.interaction_type : "phantom_ai_activity",
+    summary: typeof body.summary === "string" ? body.summary : "",
+    metadata,
+  });
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    ledger_write_preview_only: true,
+    provider_request_body_created: false,
+    provider_called: false,
+    network_call_performed: false,
+    queue_written: false,
+    approval_executed: false,
+    production_ledger_write: false,
+    live_call_allowed: false,
+    execution_disabled: true,
+    ready_for_send: false,
+    provider_transport_allowed: false,
+    memory_preview,
   };
 });
 
