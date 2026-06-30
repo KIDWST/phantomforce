@@ -90,6 +90,7 @@ import {
   readHermesInteractionMemoryStoreRecords,
 } from "./phantom-ai/hermes-interaction-memory-store.js";
 import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
+import { buildToolLanePreview } from "./phantom-ai/tool-lane.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
   getProviderSetupStatus,
@@ -1233,6 +1234,38 @@ app.get("/phantom-ai/hermes/interaction-memory/history", async (request, reply) 
     execution_disabled: true,
     ready_for_send: false,
     provider_transport_allowed: false,
+  };
+});
+
+app.post("/phantom-ai/tool-lane/preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as { tool_id?: unknown };
+  const preview = await buildToolLanePreview({
+    toolId: typeof body.tool_id === "string" ? body.tool_id : null,
+  });
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    execution_disabled: true,
+    would_run: false,
+    n8n_started: false,
+    public_webhook_opened: false,
+    credentials_used: false,
+    external_call_performed: false,
+    network_call_performed: false,
+    workflow_executed: false,
+    provider_called: false,
+    approval_executed: false,
+    queue_written: false,
+    production_ledger_written: false,
+    preview,
   };
 });
 

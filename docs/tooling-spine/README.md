@@ -68,6 +68,24 @@ Some safety language already exists in README, CLAUDE notes, Phantom AI code, UI
 - Adding credentials or credential templates that imply real secrets should be filled in.
 - Executing sends, uploads, posts, live provider calls, queue actions, production ledger writes, or approval execution.
 
+## Sprint 1 (implemented): dry-run Tool Lane preview
+
+The smallest safe step is implemented and proof-tested. No n8n install/runtime,
+no webhooks, no credentials, no execution.
+
+- `server/src/phantom-ai/tool-lane.ts`: read-only `loadToolRegistry()` (reads and
+  validates `docs/tooling-spine/tool-registry.json`) and `buildToolLanePreview()`
+  which returns a dry-run "would-run" descriptor.
+- `POST /phantom-ai/tool-lane/preview` (admin-only): returns the selected tool's
+  `allowed_mode` + `blocked_actions` with `execution_disabled: true` and
+  `would_run: false`. Unknown tool id returns a safe `unknown_tool` blocked
+  response; a missing registry fails closed (`registry_unavailable`). Nothing is
+  executed; no provider/network/credential/webhook/queue/ledger/approval action
+  occurs.
+- Proof: `server/scripts/test-tool-lane-preview.ts` plus a runtime auth proof
+  (401 unauth / 403 non-admin / 200 admin) with `/phantom-ai/approvals/execute`
+  remaining 404.
+
 ## Move To Later Phases
 
 - Actual n8n local install and inactive workflow import.
