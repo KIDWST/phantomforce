@@ -3415,6 +3415,7 @@ function App() {
             rejectAction={rejectAction}
             emails={emails}
             events={events}
+            setRoute={setRoute}
           />
         ) : null}
         {route === "inbox" ? <InboxView emails={emails} createFollowUpPlan={createFollowUpPlan} /> : null}
@@ -3602,6 +3603,7 @@ function CommandCenter({
   rejectAction,
   emails,
   events,
+  setRoute,
 }: {
   messages: Message[];
   commandText: string;
@@ -3620,19 +3622,71 @@ function CommandCenter({
   rejectAction: (id: string) => void;
   emails: EmailItem[];
   events: CalendarEvent[];
+  setRoute: (route: Route) => void;
 }) {
   const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
   const aiProviderLabel =
     aiProvider === "glm_5_2" ? "GLM 5.2" : aiProvider === "claude_cli" ? "Claude CLI" : "Codex operator";
+  const nextActions = [
+    {
+      title: "Reply to lead",
+      detail: "Draft the response and approval card.",
+      meta: `${stats.urgent} waiting`,
+      icon: <Mail size={20} />,
+      tone: "danger",
+      action: createFollowUpPlan,
+      cta: "Draft reply",
+    },
+    {
+      title: "Book setup call",
+      detail: "Create the 15-minute call script.",
+      meta: `${stats.events} calendar items`,
+      icon: <CalendarDays size={20} />,
+      tone: "blue",
+      action: () =>
+        setCommandText(
+          "Draft a 15-minute setup call plan for the next interested lead. Include two time windows, what to ask, and what to send after.",
+        ),
+      cta: "Prep booking",
+    },
+    {
+      title: "Quote the sprint",
+      detail: "Pick Starter, Core, or Pro.",
+      meta: "$750 / $1,500 / $2,500",
+      icon: <Zap size={20} />,
+      tone: "gold",
+      action: () =>
+        setCommandText(
+          "Turn the current lead into a quote recommendation. Choose $750 Starter, $1,500 Core, or $2,500 Pro and explain the next step.",
+        ),
+      cta: "Build quote",
+    },
+    {
+      title: "Create content",
+      detail: "Open captions, posts, and proof assets.",
+      meta: "ChicagoShots + Media Lab",
+      icon: <FileText size={20} />,
+      tone: "green",
+      action: () => setRoute("content"),
+      cta: "Open content",
+    },
+  ];
+  const workflowSteps = [
+    { label: "Lead", value: stats.urgent, icon: <Users size={18} /> },
+    { label: "Quote", value: "$1.5k", icon: <FileText size={18} /> },
+    { label: "Book", value: stats.events, icon: <CalendarDays size={18} /> },
+    { label: "Approve", value: stats.pending, icon: <ShieldCheck size={18} /> },
+    { label: "Deliver", value: "Sprint", icon: <Check size={18} /> },
+  ];
   return (
     <div className="command-layout">
       <section className="command-main">
         <div className="hero-command">
           <div>
             <span className="eyebrow">AI command center</span>
-            <h2>Sell, schedule, create, and follow up from one cockpit.</h2>
+            <h2>Pick the next move. PhantomForce builds the action.</h2>
             <p>
-              PhantomForce organizes the work that makes money: leads, proposals, bookings, content, media, and approvals.
+              Turn a lead into a reply, quote, booking, content plan, or approved client action without digging through status panels.
             </p>
           </div>
           <button className="demo-button" type="button" onClick={createFollowUpPlan}>
@@ -3641,14 +3695,58 @@ function CommandCenter({
           </button>
         </div>
 
-        <div className="metric-grid">
-          <Metric icon={<Mail size={18} />} label="Follow-ups" value={stats.urgent} tone="danger" />
-          <Metric icon={<ShieldCheck size={18} />} label="Approvals" value={stats.pending} tone="gold" />
-          <Metric icon={<SquareCheckBig size={18} />} label="Today tasks" value={stats.today} tone="green" />
-          <Metric icon={<CalendarDays size={18} />} label="Calendar items" value={stats.events} tone="blue" />
-        </div>
+        <section className="action-board" aria-label="Next actions">
+          <div className="section-head compact">
+            <div>
+              <span className="eyebrow">Do this next</span>
+              <h3>Money actions, not status reports.</h3>
+            </div>
+            <span>{stats.today} tasks today</span>
+          </div>
+          <div className="action-card-grid">
+            {nextActions.map((action) => (
+              <button className={`action-tile ${action.tone}`} type="button" onClick={action.action} key={action.title}>
+                <span className="action-icon">{action.icon}</span>
+                <strong>{action.title}</strong>
+                <small>{action.detail}</small>
+                <em>{action.meta}</em>
+                <b>
+                  {action.cta}
+                  <ArrowRight size={15} />
+                </b>
+              </button>
+            ))}
+          </div>
+        </section>
 
-        <CustomerReadinessPanel />
+        <section className="workflow-board" aria-label="Workflow">
+          {workflowSteps.map((step, index) => (
+            <article className="workflow-step" key={step.label}>
+              <span>{step.icon}</span>
+              <strong>{step.label}</strong>
+              <em>{step.value}</em>
+              {index < workflowSteps.length - 1 ? <ArrowRight size={16} /> : null}
+            </article>
+          ))}
+        </section>
+
+        <section className="proof-strip" aria-label="Action proof">
+          <article>
+            <Sparkles size={18} />
+            <strong>Phantom AI</strong>
+            <span>Drafts the next move</span>
+          </article>
+          <article>
+            <ShieldCheck size={18} />
+            <strong>Approval gate</strong>
+            <span>Nothing external without you</span>
+          </article>
+          <article>
+            <Play size={18} />
+            <strong>Media Lab</strong>
+            <span>Creative workflow ready</span>
+          </article>
+        </section>
 
         <section className="chat-card">
           <div className="section-head">
@@ -3719,11 +3817,38 @@ function CommandCenter({
           </div>
         </section>
 
-        <PhantomAiStatusPanel
-          canManageAccess={canManageAccess}
-          opsStatus={phantomAiOpsStatus}
-          sessionHeaders={sessionHeaders}
-        />
+        <section className="panel next-move-panel">
+          <div className="section-head compact">
+            <div>
+              <span className="eyebrow">Launch controls</span>
+              <h3>Open the tool you need.</h3>
+            </div>
+          </div>
+          <div className="launch-control-grid">
+            <button type="button" onClick={() => setRoute("inbox")}>
+              <Inbox size={17} />
+              Pipeline
+            </button>
+            <button type="button" onClick={() => setRoute("offers")}>
+              <Zap size={17} />
+              Offers
+            </button>
+            <button type="button" onClick={() => setRoute("media")}>
+              <Play size={17} />
+              Media
+            </button>
+            <button type="button" onClick={() => setRoute("calendar")}>
+              <CalendarDays size={17} />
+              Bookings
+            </button>
+            {canManageAccess ? (
+              <button type="button" onClick={() => setRoute("access")}>
+                <KeyRound size={17} />
+                Access
+              </button>
+            ) : null}
+          </div>
+        </section>
 
         <section className="panel">
           <div className="section-head compact">
@@ -3759,18 +3884,6 @@ function CommandCenter({
         </section>
       </aside>
     </div>
-  );
-}
-
-function Metric({ icon, label, value, tone }: { icon: ReactNode; label: string; value: number; tone: string }) {
-  return (
-    <article className={`metric ${tone}`}>
-      <span>{icon}</span>
-      <div>
-        <strong>{value}</strong>
-        <p>{label}</p>
-      </div>
-    </article>
   );
 }
 
