@@ -2055,7 +2055,7 @@ function chicagoShotsProposalStatusLabel(status: ChicagoShotsProposalHistoryFilt
 }
 
 function chicagoShotsProposalStatusClass(status: ChicagoShotsProposalStatus) {
-  return status;
+  return `status-${status.replace(/_/g, "-")}`;
 }
 
 function makeId(prefix: string) {
@@ -6381,7 +6381,7 @@ function ChicagoShotsLeadIntakePanel({
                 key={record.id}
                 onClick={() => setSelectedProposalRecord(record)}
               >
-                <span className={`proposal-status-badge ${record.status}`}>
+                <span className={`proposal-status-badge ${chicagoShotsProposalStatusClass(record.status)}`}>
                   {chicagoShotsProposalStatusLabels[record.status]}
                 </span>
                 <strong>{record.client_name}</strong>
