@@ -1,6 +1,6 @@
 {
   "schema_version": "0.1.0",
-  "status": "sprint_1_dry_run_preview",
+  "status": "acceleration_sprint_a_local_scaffold",
   "base_head": "715712cf1e12643e20369ace8d7dd2946fc30972",
   "branch": "feature/tooling-spine-n8n-agentlab-sprint0-20260629",
   "rules": {
@@ -15,8 +15,18 @@
     "queue_writes_allowed": false,
     "external_write_actions_allowed": false,
     "tool_execution_enabled": false,
+    "n8n_scaffolded": true,
     "n8n_installed": false,
     "n8n_running": false
+  },
+  "acceleration_sprint_a": {
+    "contract": "local_n8n_scaffold_and_dry_run_workflow",
+    "scaffold_path": "ops/n8n",
+    "local_url": "http://127.0.0.1:5678",
+    "execution_disabled": true,
+    "would_run": false,
+    "workflow_draft": "ops/n8n/workflows/chicagoshots-lead-intake-dry-run.json",
+    "note": "n8n may be started locally on 127.0.0.1 only. The ChicagoShots workflow is inactive and dry-run only. No public webhooks, credentials, external actions, provider calls, approval execution, queue writes, or production ledger writes are allowed."
   },
   "sprint_1": {
     "contract": "dry_run_tool_lane_preview",
@@ -31,9 +41,9 @@
     {
       "id": "n8n",
       "display_name": "n8n",
-      "path_or_repo": "future local-only install; not present in Sprint 0",
-      "intended_role": "approval-gated local automation worker for boring tasks",
-      "allowed_mode": "planned_only",
+      "path_or_repo": "ops/n8n",
+      "intended_role": "local-only automation worker scaffold for dry-run internal workflows",
+      "allowed_mode": "local_scaffold_dry_run_only",
       "blocked_actions": [
         "public_webhooks",
         "credential_storage",
@@ -49,7 +59,7 @@
         "approval_execution",
         "destructive_source_media_change"
       ],
-      "next_phase": "Write OpenSpec proposal and local-only inactive worker scaffold plan before any runtime setup."
+      "next_phase": "Use local health/status checks and inactive workflow drafts before any approval-gated execution design."
     },
     {
       "id": "openspec",

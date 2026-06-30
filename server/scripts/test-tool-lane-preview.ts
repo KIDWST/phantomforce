@@ -42,6 +42,16 @@ assert(n8n.blocked_actions.length > 0, "n8n must report blocked actions.");
 assert(n8n.blocked_actions.includes("public_webhooks"), "n8n blocked actions must include public_webhooks.");
 assert(n8n.blocked_actions.includes("active_workflows"), "n8n blocked actions must include active_workflows.");
 assert(typeof n8n.reason === "string" && n8n.reason.length > 0, "n8n preview must give a reason.");
+assert(n8n.n8n_status.n8n_scaffolded === true, "n8n scaffold should be detected.");
+assert(n8n.n8n_status.n8n_host === "127.0.0.1", "n8n status must stay localhost-only.");
+assert(n8n.n8n_status.n8n_port === 5678, "n8n status should prefer port 5678.");
+assert(n8n.n8n_status.n8n_local_url === "http://127.0.0.1:5678", "n8n status should expose local URL.");
+assert(n8n.n8n_status.public_webhooks_allowed === false, "n8n status must not allow public webhooks.");
+assert(n8n.n8n_status.credentials_configured === false, "n8n status must not report credentials.");
+assert(
+  n8n.n8n_status.workflow_drafts.some((draft) => draft.id === "chicagoshots_lead_intake_dry_run" && draft.exists),
+  "n8n status should include the ChicagoShots workflow draft.",
+);
 assert(n8n.safety_flags.n8n_started === false, "n8n must not be started.");
 assert(n8n.safety_flags.public_webhook_opened === false, "No public webhook opened.");
 assert(n8n.safety_flags.credentials_used === false, "No credentials used.");
@@ -91,6 +101,9 @@ console.log(
       n8nExecutionDisabled: n8n.execution_disabled,
       n8nWouldRun: n8n.would_run,
       n8nAllowedMode: n8n.allowed_mode,
+      n8nScaffolded: n8n.n8n_status.n8n_scaffolded,
+      n8nRunning: n8n.n8n_status.n8n_running,
+      n8nLocalUrl: n8n.n8n_status.n8n_local_url,
       unknownStatus: unknown.status,
       missingRegistryStatus: missing.status,
       anyWouldRun: registry.tools.some((t) => false),

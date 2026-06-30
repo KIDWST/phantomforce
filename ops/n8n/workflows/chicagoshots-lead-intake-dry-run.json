@@ -1,0 +1,221 @@
+{
+  "name": "ChicagoShots Lead Intake Dry Run",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger - dry run only",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -720,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "lead-source",
+              "name": "lead_source",
+              "value": "sample internal ChicagoShots lead",
+              "type": "string"
+            },
+            {
+              "id": "lead-name",
+              "name": "lead_name",
+              "value": "Sample Coach",
+              "type": "string"
+            },
+            {
+              "id": "lead-need",
+              "name": "lead_need",
+              "value": "team media day plus private gallery setup",
+              "type": "string"
+            },
+            {
+              "id": "dry-run",
+              "name": "dry_run",
+              "value": true,
+              "type": "boolean"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "lead-intake-sample",
+      "name": "Lead Intake Sample",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "task-title",
+              "name": "task_title",
+              "value": "Review ChicagoShots lead: {{$json.lead_name}}",
+              "type": "string"
+            },
+            {
+              "id": "task-detail",
+              "name": "task_detail",
+              "value": "Confirm fit, prep setup sprint angle, and decide whether to offer a 15 minute call.",
+              "type": "string"
+            },
+            {
+              "id": "task-status",
+              "name": "task_status",
+              "value": "draft_only_not_created",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "task-draft",
+      "name": "Task Draft",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "follow-up-draft",
+              "name": "follow_up_draft",
+              "value": "Saw your team may need media plus smoother booking and follow-up. I built a small ops/content setup sprint that could help. Worth a 15 minute look?",
+              "type": "string"
+            },
+            {
+              "id": "send-status",
+              "name": "send_status",
+              "value": "draft_only_not_sent",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "follow-up-draft",
+      "name": "Follow-up Draft",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "approval-preview",
+              "name": "approval_preview",
+              "value": "Preview only. Jordan must approve manually before any future action path exists.",
+              "type": "string"
+            },
+            {
+              "id": "workflow-execution",
+              "name": "workflow_execution",
+              "value": "dry_run_manual_preview_only",
+              "type": "string"
+            },
+            {
+              "id": "blocked-actions",
+              "name": "blocked_actions",
+              "value": "no send, no post, no public hook, no credentials, no queue write, no ledger write",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "approval-preview",
+      "name": "Approval Preview",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        240,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger - dry run only": {
+      "main": [
+        [
+          {
+            "node": "Lead Intake Sample",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Lead Intake Sample": {
+      "main": [
+        [
+          {
+            "node": "Task Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Task Draft": {
+      "main": [
+        [
+          {
+            "node": "Follow-up Draft",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Follow-up Draft": {
+      "main": [
+        [
+          {
+            "node": "Approval Preview",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveExecutionProgress": false,
+    "saveManualExecutions": false
+  },
+  "pinData": {},
+  "meta": {
+    "phantomforce": {
+      "workflow_id": "chicagoshots_lead_intake_dry_run",
+      "mode": "dry_run_manual_preview_only",
+      "public_webhooks_allowed": false,
+      "credentials_allowed": false,
+      "external_actions_allowed": false,
+      "approval_execution_allowed": false,
+      "queue_writes_allowed": false,
+      "production_ledger_writes_allowed": false
+    }
+  }
+}
