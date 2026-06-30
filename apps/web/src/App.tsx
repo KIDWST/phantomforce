@@ -1,6 +1,7 @@
 import {
   AlertTriangle,
   ArrowRight,
+  BarChart3,
   Bell,
   Bot,
   CalendarDays,
@@ -1248,15 +1249,15 @@ const initialSessions: AppSession[] = [
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Home", icon: <Command size={18} /> },
-  { id: "inbox", label: "Pipeline", icon: <Users size={18} /> },
-  { id: "offers", label: "Offers", icon: <Zap size={18} /> },
-  { id: "content", label: "Content", icon: <FileText size={18} /> },
-  { id: "media", label: "Media Lab", icon: <Play size={18} /> },
-  { id: "calendar", label: "Schedule", icon: <CalendarDays size={18} /> },
-  { id: "tasks", label: "Tasks", icon: <SquareCheckBig size={18} /> },
-  { id: "approvals", label: "Approvals", icon: <ShieldCheck size={18} /> },
-  { id: "access", label: "Settings", icon: <KeyRound size={18} /> },
-  { id: "connections", label: "Status", icon: <Link2 size={18} /> },
+  { id: "inbox", label: "Leads", icon: <Users size={18} /> },
+  { id: "offers", label: "Money", icon: <Zap size={18} /> },
+  { id: "content", label: "Create", icon: <FileText size={18} /> },
+  { id: "media", label: "Video", icon: <Play size={18} /> },
+  { id: "calendar", label: "Bookings", icon: <CalendarDays size={18} /> },
+  { id: "tasks", label: "Work", icon: <SquareCheckBig size={18} /> },
+  { id: "approvals", label: "Review", icon: <ShieldCheck size={18} /> },
+  { id: "access", label: "Access", icon: <KeyRound size={18} /> },
+  { id: "connections", label: "System", icon: <Link2 size={18} /> },
 ];
 
 const validRouteIds = new Set<Route>(navItems.map((item) => item.id));
@@ -1364,7 +1365,7 @@ const initialActivity: ActivityItem[] = [
   {
     id: "act-3",
     title: "Private controls protected",
-    detail: "Developer tools, credentials, logs, and provider settings stay out of the client workspace.",
+    detail: "Developer tools, credentials, logs, and engine settings stay out of the client workspace.",
     time: "8:58 AM",
     level: "warn",
   },
@@ -1396,7 +1397,7 @@ const connections: Connection[] = [
   },
   {
     id: "falcon",
-    name: "Falcon private worker",
+    name: "Private action engine",
     description: "Future typed backend jobs. No raw command execution in the client app.",
     status: "locked",
     scopes: ["Typed jobs only", "Staff diagnostics", "Kill switch"],
@@ -1471,6 +1472,12 @@ function normalizeClientAccessRecord(record: ClientAccess): ClientAccess {
   return record;
 }
 
+function phantomAiModeLabel(choice: AiProviderChoice): string {
+  if (choice === "glm_5_2") return "Deep thinking";
+  if (choice === "claude_cli") return "Second opinion";
+  return "Auto";
+}
+
 function normalizePangolinRoutePlan(plan: PangolinRoutePlan): PangolinRoutePlan {
   if (plan.clientId === "client-sports-demo") {
     return {
@@ -1507,19 +1514,19 @@ const modules = [
   "AI Command",
   "Email",
   "Calendar",
-  "Tasks",
-  "Approvals",
+  "Work",
+  "Review",
   "Activity",
   "Contacts",
   "Documents",
-  "Falcon Worker",
+  "Private engine",
 ];
 
 const clientModuleCatalog = [
   "Command",
   "Calendar",
-  "Tasks",
-  "Approvals",
+  "Work",
+  "Review",
   "Contacts",
   "Content",
   "Activity",
@@ -1529,18 +1536,18 @@ const clientModuleCatalog = [
 
 const truthStatusLabels: TruthLabel[] = [
   {
-    label: "Brain",
-    value: "Mock / OpenRouter GLM / Claude API / Local / Router",
+    label: "PhantomAI",
+    value: "Unified AI workspace",
     state: "demo",
     detail:
-      "The dashboard assistant remains demo-first. Provider routing is status-only unless a server-side route is explicitly configured.",
+      "Users interact with PhantomAI only. Model routing, tools, and backend internals stay behind the product surface.",
   },
   {
-    label: "Hermes",
-    value: "Ledger Enabled / Context Compiler Enabled",
+    label: "Memory",
+    value: "Local context active",
     state: "real",
     detail:
-      "Hermes can write local JSONL records and compile compact context packets. It does not call external models.",
+      "Workspace context and receipts can be stored locally without exposing raw backend systems to users.",
   },
   {
     label: "Access",
@@ -1550,11 +1557,11 @@ const truthStatusLabels: TruthLabel[] = [
       "Local sessions and owner admin are config-gated. Pangolin status is inspection-only unless separately proven live.",
   },
   {
-    label: "Budget",
-    value: "Planned / Not Enforced",
+    label: "Spend",
+    value: "Controlled",
     state: "stub",
     detail:
-      "Budget fields can be recorded with Hermes/provider status, but enforcement is not implemented in this patch.",
+      "Live paid generation remains gated until each capability is explicitly enabled.",
   },
   {
     label: "Actions",
@@ -1643,7 +1650,7 @@ const personalTrainingSimulation = {
     },
     {
       title: "$2,500 Pro Buildout",
-      detail: "Messy workflow rescue with dashboard/app planning, automations, Media Lab support, and retainer path.",
+      detail: "Messy workflow rescue with dashboard/app planning, automations, video support, and retainer path.",
       status: "pro",
     },
   ],
@@ -1665,7 +1672,7 @@ const personalTrainingSimulation = {
   tasks: [
     { title: "Review priority proposal packet", detail: "Confirm scope and mark sent manually after Jordan sends it.", status: "today" },
     { title: "Prepare Core Sprint follow-up", detail: "Draft short reply and price anchor for review.", status: "ready" },
-    { title: "Package proof/demo link", detail: "Attach THE FORCE / PhantomCut proof only where accurate.", status: "queued" },
+    { title: "Package proof/demo link", detail: "Attach THE FORCE / video proof only where accurate.", status: "queued" },
   ],
   approvals: [
     { title: "Send Core Sprint follow-up", detail: "Email draft is ready; Jordan sends it manually.", status: "pending" },
@@ -1675,7 +1682,7 @@ const personalTrainingSimulation = {
   contentCalendar: [
     { title: "Monday", detail: "Why small businesses need an ops system before more random apps.", status: "draft" },
     { title: "Wednesday", detail: "ChicagoShots media-day package: sports clips, photos, and delivery structure.", status: "draft" },
-    { title: "Friday", detail: "Media Lab proof clip needs a final check before posting.", status: "review" },
+    { title: "Friday", detail: "Video proof clip needs a final check before posting.", status: "review" },
   ],
   contentIdeas: [
     { title: "Ops + Content Setup Sprint", detail: "Simple explainer for the $1,500 Core Sprint.", status: "recommended" },
@@ -1695,7 +1702,7 @@ const personalTrainingSimulation = {
   ],
   mediaDeliverables: [
     { title: "Highlight cutdown", detail: "Short-form clip workflow for review and delivery.", status: "queued" },
-    { title: "Generated creative proof", detail: "Media Lab output proof; no autonomous posting.", status: "review" },
+    { title: "Generated creative proof", detail: "Creative output proof; no autonomous posting.", status: "review" },
     { title: "Media day checklist", detail: "Shot list, consent checklist, and delivery plan.", status: "planned" },
   ],
   mediaPlaceholders: [
@@ -1714,10 +1721,10 @@ const personalTrainingSimulation = {
     { title: "$2,500 Pro", detail: "Expanded system/dashboard/media workflow.", status: "option" },
   ],
   onboardingChecklist: [
-    { title: "Business surfaces", detail: "PhantomForce, ChicagoShots, Media Lab, and offer ladder are aligned.", status: "done" },
+    { title: "Business surfaces", detail: "PhantomForce, ChicagoShots, video output, and offer ladder are aligned.", status: "done" },
     { title: "Send controls", detail: "External actions require an explicit final click.", status: "done" },
     { title: "Send adapter", detail: "Next build step before real email/test sends.", status: "required" },
-    { title: "Client-safe dashboard mode", detail: "Developer/provider internals stay off the normal cockpit.", status: "done" },
+    { title: "Client-safe dashboard mode", detail: "Developer and engine internals stay off the normal cockpit.", status: "done" },
   ],
   launchBlockers: [
     { title: "Send adapter", detail: "Real sending needs allowlist, confirmation phrase, and audit receipts.", status: "required" },
@@ -1725,7 +1732,7 @@ const personalTrainingSimulation = {
     { title: "Client delivery proof", detail: "Use real deliverables before claiming autonomous production.", status: "required" },
   ],
   phantomCut: {
-    title: "PhantomCut Media Lab add-on",
+    title: "Video Studio add-on",
     detail:
       "Optional video/editor support for reels, sports clips, creative proofs, and media-heavy clients.",
     status: "available/proof-backed/planned",
@@ -2723,7 +2730,7 @@ function App() {
       const data = (await response.json()) as { status?: ProviderSetupStatus };
       setProviderSetupStatus(data.status ?? defaultProviderSetupStatus);
     } catch {
-      addActivity("Provider setup offline", "Phantom AI provider status is waiting on the backend.", "warn");
+      addActivity("AI setup offline", "PhantomAI system status is waiting on the backend.", "warn");
       setProviderSetupStatus(defaultProviderSetupStatus);
     }
   }
@@ -2874,9 +2881,8 @@ function App() {
     setRoute("command");
   }
 
-  async function submitCommand(event: FormEvent) {
-    event.preventDefault();
-    const text = commandText.trim();
+  async function runPhantomCommand(rawText: string) {
+    const text = rawText.trim();
     if (!text) return;
     const lower = text.toLowerCase();
     setCommandText("");
@@ -2932,8 +2938,7 @@ function App() {
         });
         const data = (await response.json().catch(() => null)) as PhantomAiChatResponse | null;
         const content =
-          data?.message?.content ?? data?.error ?? "Phantom AI could not reach the selected backend lane.";
-        const laneLabel = data?.admin_model_label ?? (canManageAccess ? "Phantom AI" : "Client Phantom AI");
+          data?.message?.content ?? data?.error ?? "PhantomAI could not reach the selected mode.";
 
         setMessages((current) => [
           ...current,
@@ -2946,7 +2951,7 @@ function App() {
         addActivity(
           "Phantom AI replied",
           canManageAccess
-            ? `${laneLabel} answered with Hermes context${data?.hermes?.ledger_written ? " and a ledger receipt" : ""}.`
+            ? `PhantomAI answered in ${phantomAiModeLabel(aiProvider).toLowerCase()} mode${data?.hermes?.ledger_written ? " and saved a local receipt" : ""}.`
             : "Client-safe guidance returned without exposing admin tools.",
           "ok",
         );
@@ -2990,6 +2995,11 @@ function App() {
             "I can help with that. I can brief the day, prioritize leads, prepare replies, build quotes, organize tasks, and stage booking actions for your final click.",
       },
     ]);
+  }
+
+  async function submitCommand(event: FormEvent) {
+    event.preventDefault();
+    await runPhantomCommand(commandText);
   }
 
   function approveAction(id: string) {
@@ -3409,6 +3419,7 @@ function App() {
             phantomAiOpsStatus={phantomAiOpsStatus}
             sessionHeaders={sessionHeaders}
             createFollowUpPlan={createFollowUpPlan}
+            runPhantomCommand={runPhantomCommand}
             stats={stats}
             approvals={approvals}
             approveAction={approveAction}
@@ -3597,6 +3608,7 @@ function CommandCenter({
   phantomAiOpsStatus,
   sessionHeaders,
   createFollowUpPlan,
+  runPhantomCommand,
   stats,
   approvals,
   approveAction,
@@ -3616,6 +3628,7 @@ function CommandCenter({
   phantomAiOpsStatus: PhantomAiOpsStatus;
   sessionHeaders: (json?: boolean) => Record<string, string>;
   createFollowUpPlan: () => void;
+  runPhantomCommand: (text: string) => Promise<void>;
   stats: { urgent: number; pending: number; today: number; events: number };
   approvals: Approval[];
   approveAction: (id: string) => void;
@@ -3625,58 +3638,60 @@ function CommandCenter({
   setRoute: (route: Route) => void;
 }) {
   const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
-  const aiProviderLabel =
-    aiProvider === "glm_5_2" ? "GLM 5.2" : aiProvider === "claude_cli" ? "Claude CLI" : "Codex operator";
+  const aiProviderLabel = phantomAiModeLabel(aiProvider);
   const nextActions = [
     {
-      title: "Reply to lead",
-      detail: "Draft the response and review card.",
+      title: "Write the reply",
+      detail: "PhantomAI drafts the message and next click.",
       meta: `${stats.urgent} waiting`,
       icon: <Mail size={20} />,
       tone: "danger",
       action: createFollowUpPlan,
-      cta: "Draft reply",
+      cta: "Ask now",
     },
     {
-      title: "Book setup call",
-      detail: "Create the 15-minute call script.",
+      title: "Book the call",
+      detail: "Get times, agenda, and follow-up copy.",
       meta: `${stats.events} calendar items`,
       icon: <CalendarDays size={20} />,
       tone: "blue",
       action: () =>
-        setCommandText(
+        void runPhantomCommand(
           "Draft a 15-minute setup call plan for the next interested lead. Include two time windows, what to ask, and what to send after.",
         ),
-      cta: "Prep booking",
+      cta: "Ask now",
     },
     {
-      title: "Quote the sprint",
-      detail: "Pick Starter, Core, or Pro.",
+      title: "Price the sprint",
+      detail: "Choose the package and write the pitch.",
       meta: "$750 / $1,500 / $2,500",
       icon: <Zap size={20} />,
       tone: "gold",
       action: () =>
-        setCommandText(
+        void runPhantomCommand(
           "Turn the current lead into a quote recommendation. Choose $750 Starter, $1,500 Core, or $2,500 Pro and explain the next step.",
         ),
-      cta: "Build quote",
+      cta: "Ask now",
     },
     {
-      title: "Create content",
-      detail: "Open captions, posts, and proof assets.",
-      meta: "ChicagoShots + Media Lab",
+      title: "Make an asset",
+      detail: "Turn the idea into a post, deck, doc, or video plan.",
+      meta: "Content + video",
       icon: <FileText size={20} />,
       tone: "green",
-      action: () => setRoute("content"),
-      cta: "Open content",
+      action: () =>
+        void runPhantomCommand(
+          "Create the best client-ready artifact for the current opportunity: choose a doc, one-page proposal, content plan, or video concept and build the first draft.",
+        ),
+      cta: "Ask now",
     },
   ];
   const workflowSteps = [
-    { label: "Lead", value: stats.urgent, icon: <Users size={18} /> },
-    { label: "Quote", value: "$1.5k", icon: <FileText size={18} /> },
-    { label: "Book", value: stats.events, icon: <CalendarDays size={18} /> },
+    { label: "Ask", value: "1", icon: <Sparkles size={18} /> },
+    { label: "Build", value: "artifact", icon: <FileText size={18} /> },
+    { label: "Preview", value: "card", icon: <SquareCheckBig size={18} /> },
     { label: "Confirm", value: stats.pending, icon: <ShieldCheck size={18} /> },
-    { label: "Deliver", value: "Sprint", icon: <Check size={18} /> },
+    { label: "Send", value: "manual", icon: <Send size={18} /> },
   ];
   return (
     <div className="command-layout">
@@ -3684,24 +3699,52 @@ function CommandCenter({
         <div className="hero-command">
           <div>
             <span className="eyebrow">AI command center</span>
-            <h2>Pick the next move. PhantomForce builds the action.</h2>
+            <h2>Ask PhantomAI for the finished thing.</h2>
             <p>
-              Turn a lead into a reply, quote, booking, content plan, or client action without digging through status panels.
+              Replies, quotes, bookings, docs, content plans, and video concepts start from one command. The modules are where the finished work lands.
             </p>
           </div>
           <button className="demo-button" type="button" onClick={createFollowUpPlan}>
             <Play size={18} />
-            Prepare next action
+            Ask PhantomAI
           </button>
         </div>
+
+        <section className="outcome-rail" aria-label="PhantomAI output types">
+          <article>
+            <Mail size={18} />
+            <strong>Reply</strong>
+            <span>ready-to-send draft</span>
+          </article>
+          <article>
+            <FileText size={18} />
+            <strong>Doc</strong>
+            <span>proposal or brief</span>
+          </article>
+          <article>
+            <CalendarDays size={18} />
+            <strong>Booking</strong>
+            <span>call plan + times</span>
+          </article>
+          <article>
+            <BarChart3 size={18} />
+            <strong>Sheet</strong>
+            <span>pipeline or quote table</span>
+          </article>
+          <article>
+            <Play size={18} />
+            <strong>Video</strong>
+            <span>creative prompt + proof</span>
+          </article>
+        </section>
 
         <section className="action-board" aria-label="Next actions">
           <div className="section-head compact">
             <div>
               <span className="eyebrow">Do this next</span>
-              <h3>Money actions, not status reports.</h3>
+              <h3>Ask once. Get the artifact.</h3>
             </div>
-            <span>{stats.today} tasks today</span>
+            <span>{stats.today} work items</span>
           </div>
           <div className="action-card-grid">
             {nextActions.map((action) => (
@@ -3734,7 +3777,7 @@ function CommandCenter({
           <article>
             <Sparkles size={18} />
             <strong>Phantom AI</strong>
-            <span>Drafts the next move</span>
+            <span>Builds the outcome</span>
           </article>
           <article>
             <ShieldCheck size={18} />
@@ -3743,8 +3786,8 @@ function CommandCenter({
           </article>
           <article>
             <Play size={18} />
-            <strong>Media Lab</strong>
-            <span>Creative workflow ready</span>
+            <strong>Creative engine</strong>
+            <span>Video lives here</span>
           </article>
         </section>
 
@@ -3757,7 +3800,7 @@ function CommandCenter({
             {canManageAccess ? (
               <span className="safe-pill admin-operator-pill">
                 <Command size={15} />
-                Admin: {aiProviderLabel}
+                Mode: {aiProviderLabel}
               </span>
             ) : (
               <span className="safe-pill">
@@ -3776,16 +3819,16 @@ function CommandCenter({
           </div>
           <form className="command-form" onSubmit={submitCommand}>
             {canManageAccess ? (
-              <label aria-label="Admin Phantom AI model lane" className="llm-select lane-readout model-select">
+              <label aria-label="PhantomAI mode" className="llm-select lane-readout model-select">
                 <Bot size={15} />
                 <select
                   value={aiProvider}
                   onChange={(event) => setAiProvider(event.target.value as AiProviderChoice)}
                   disabled={phantomAiBusy}
                 >
-                  <option value="codex">Codex operator</option>
-                  <option value="glm_5_2">GLM 5.2</option>
-                  <option value="claude_cli">Claude CLI</option>
+                  <option value="codex">Auto</option>
+                  <option value="glm_5_2">Deeper thinking</option>
+                  <option value="claude_cli">Second opinion</option>
                 </select>
               </label>
             ) : (
@@ -3797,7 +3840,7 @@ function CommandCenter({
             <input
               value={commandText}
               onChange={(event) => setCommandText(event.target.value)}
-              placeholder="Ask PhantomForce to brief, reply, schedule, or handle a follow-up..."
+              placeholder="Ask for the finished thing: reply, quote, booking plan, doc, deck, content, or video..."
               disabled={phantomAiBusy}
             />
             <button type="submit" title="Send command" disabled={phantomAiBusy}>
@@ -3821,21 +3864,21 @@ function CommandCenter({
           <div className="section-head compact">
             <div>
               <span className="eyebrow">Launch controls</span>
-              <h3>Open the tool you need.</h3>
+              <h3>Jump to the result area.</h3>
             </div>
           </div>
           <div className="launch-control-grid">
             <button type="button" onClick={() => setRoute("inbox")}>
               <Inbox size={17} />
-              Pipeline
+              Leads
             </button>
             <button type="button" onClick={() => setRoute("offers")}>
               <Zap size={17} />
-              Offers
+              Money
             </button>
             <button type="button" onClick={() => setRoute("media")}>
               <Play size={17} />
-              Media
+              Video
             </button>
             <button type="button" onClick={() => setRoute("calendar")}>
               <CalendarDays size={17} />
@@ -3940,16 +3983,25 @@ function TasksView({ tasks, completeTask }: { tasks: TaskItem[]; completeTask: (
   const visibleTasks = mode === "recommended" ? tasks.filter((task) => task.status === "today") : tasks;
 
   return (
-    <Page title="Task operations" kicker="Execution queue" action={<button className="ghost-small"><Plus size={16} /> New task</button>}>
+    <Page
+      title="Work queue"
+      kicker="PhantomAI outcomes"
+      action={
+        <span className="safe-pill">
+          <Sparkles size={15} />
+          Ask creates work
+        </span>
+      }
+    >
       <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
-            <span className="eyebrow">AI filtered vs all results</span>
-            <h3>{mode === "recommended" ? "Today and high-leverage tasks" : "All task results"}</h3>
+            <span className="eyebrow">Generated work</span>
+            <h3>{mode === "recommended" ? "Today and high-leverage outcomes" : "All work results"}</h3>
           </div>
           <ResultModeToggle mode={mode} setMode={setMode} />
         </div>
-        <p>Phantom AI can recommend the next task, draft the work, and stage sensitive actions for a final click.</p>
+        <p>Do not create work here manually. Ask PhantomAI on Home; this tab is where the resulting tasks, drafts, and follow-ups are tracked.</p>
       </section>
       <div className="task-list">
         {visibleTasks.map((task) => (
@@ -4015,7 +4067,7 @@ function ApprovalsView({
             <span>
               <ShieldCheck size={18} />
             </span>
-            <h3>Approval queue</h3>
+            <h3>Command review</h3>
           </div>
           <SimulationList items={demoApprovals} />
         </section>
@@ -4027,8 +4079,8 @@ function ApprovalsView({
 function ContentView() {
   const [mode, setMode] = useState<ResultMode>("recommended");
   const recommendedContent = [
-    ...personalTrainingSimulation.contentIdeas.filter((item) => ["recommended", "approval"].includes(item.status ?? "")),
-    ...personalTrainingSimulation.contentCalendar.filter((item) => item.status === "approval"),
+    ...personalTrainingSimulation.contentIdeas.filter((item) => ["recommended", "review"].includes(item.status ?? "")),
+    ...personalTrainingSimulation.contentCalendar.filter((item) => item.status === "review"),
   ];
   const allContent = [...personalTrainingSimulation.contentCalendar, ...personalTrainingSimulation.contentIdeas];
   const visibleContent = mode === "recommended" ? recommendedContent : allContent;
@@ -4039,12 +4091,12 @@ function ContentView() {
   ];
 
   return (
-    <Page title="Content" kicker="Calendar and drafts" action={<TruthBadge state="real" label="Draft-first" />}>
+    <Page title="Create" kicker="Posts, briefs, and assets" action={<TruthBadge state="real" label="Draft-first" />}>
       <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
             <span className="eyebrow">AI filtered vs all results</span>
-            <h3>{mode === "recommended" ? "Recommended posts" : "All content ideas and calendar items"}</h3>
+            <h3>{mode === "recommended" ? "PhantomAI recommended outputs" : "All content ideas and calendar items"}</h3>
           </div>
           <ResultModeToggle mode={mode} setMode={setMode} />
         </div>
@@ -4053,7 +4105,7 @@ function ContentView() {
 
       <div className="destination-grid">
         <SimulationSection icon={<CalendarDays size={18} />} title="Content calendar" items={personalTrainingSimulation.contentCalendar} />
-        <SimulationSection icon={<FileText size={18} />} title="Raw content queue" items={personalTrainingSimulation.contentIdeas} />
+        <SimulationSection icon={<FileText size={18} />} title="Output ideas" items={personalTrainingSimulation.contentIdeas} />
         <SimulationSection icon={<ShieldCheck size={18} />} title="Drafts ready to review" items={personalTrainingSimulation.contentDrafts} />
         <SimulationSection icon={<AlertTriangle size={18} />} title="Platform send status" items={platformPlaceholders} />
       </div>
@@ -4063,20 +4115,20 @@ function ContentView() {
 
 function MediaLabView() {
   return (
-    <Page title="Media Lab" kicker="Requests and delivery" action={<TruthBadge state="real" label="Proof-backed add-on" />}>
+    <Page title="Video Studio" kicker="Creative output" action={<TruthBadge state="real" label="Proof-backed" />}>
       <section className="simulation-hero">
         <div>
-          <span className="eyebrow">Media workflow</span>
-          <h3>Video and asset work stays an add-on to the owner cockpit.</h3>
+          <span className="eyebrow">Creative engine</span>
+          <h3>Ask for the video plan. PhantomAI prepares the cut path.</h3>
           <p>
-            Media Lab helps track requests, drafts, consent, and delivery status. Uploads, delivery links, and external
-            publishing stay behind final-click controls until storage and delivery flows are connected.
+            Track requests, drafts, consent, proof clips, and delivery status without exposing generation tools or raw
+            upload controls.
           </p>
         </div>
         <div className="simulation-hero-status">
           <StatusLine label="Uploads" value="Final click" />
           <StatusLine label="Delivery" value="Confirm first" />
-          <StatusLine label="Core app" value="Leads, schedule, offers, tasks, review queue" />
+          <StatusLine label="Core app" value="Leads, bookings, money, work, review" />
         </div>
       </section>
 
@@ -4084,7 +4136,7 @@ function MediaLabView() {
         <SimulationSection icon={<Play size={18} />} title="Media requests" items={personalTrainingSimulation.mediaRequests} />
         <SimulationSection icon={<SquareCheckBig size={18} />} title="Deliverables and workflow status" items={personalTrainingSimulation.mediaDeliverables} />
         <SimulationSection icon={<AlertTriangle size={18} />} title="Uploads and delivery status" items={personalTrainingSimulation.mediaPlaceholders} />
-        <PhantomCutAddonCard />
+        <VideoEngineAddonCard />
       </div>
     </Page>
   );
@@ -4098,7 +4150,7 @@ function OffersView() {
     ...personalTrainingSimulation.pricingDrafts,
   ];
   const recommendedOfferItems = personalTrainingSimulation.offerRecommendations.filter((item) =>
-    ["recommended", "approval"].includes(item.status ?? ""),
+    ["recommended", "option"].includes(item.status ?? ""),
   );
   const visibleOfferItems = mode === "recommended" ? recommendedOfferItems : allOfferItems;
   const approvalItems = personalTrainingSimulation.approvals.filter((item) =>
@@ -7507,7 +7559,7 @@ function ChicagoShotsLeadIntakePanel({
   );
 }
 
-function PhantomCutAddonCard() {
+function VideoEngineAddonCard() {
   return (
     <section className="module-panel simulation-section phantomcut-card">
       <div className="simulation-section-head">
@@ -7515,8 +7567,8 @@ function PhantomCutAddonCard() {
           <Play size={18} />
         </span>
         <div>
-          <span className="eyebrow">Media Lab add-on</span>
-          <h3>{personalTrainingSimulation.phantomCut.title}</h3>
+          <span className="eyebrow">Video capability</span>
+          <h3>Controlled creative generation</h3>
         </div>
       </div>
       <p>{personalTrainingSimulation.phantomCut.detail}</p>
