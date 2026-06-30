@@ -75,6 +75,8 @@ button, input { font: inherit; color: inherit; }
 .phantom.dead .eyes-live { opacity: 0; }
 .phantom.dead .eyes-x path { opacity: 1; }
 .phantom.dead .mouth { opacity: 0; }
+.phantom-tongue { fill: #ff86a6; opacity: 0; transition: opacity 0.25s; }
+.phantom.dead .phantom-tongue { opacity: 1; }
 .eyes-live { transition: opacity 0.2s, transform 0.16s ease-out; }
 
 @keyframes hover { 0%, 100% { transform: translateY(0) rotate(-2deg); } 50% { transform: translateY(-10px) rotate(2deg); } }
