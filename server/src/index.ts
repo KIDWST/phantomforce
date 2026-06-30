@@ -1290,6 +1290,112 @@ app.post("/phantom-ai/ops/chicagoshots/lead-intake/preview", async (request, rep
   };
 });
 
+app.get("/phantom-ai/ops/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const [providerStatus, ledgerStatus, interactionMemoryStatus, toolLaneStatus] = await Promise.all([
+    Promise.resolve(getProviderSetupStatus()),
+    getHermesLedgerStatus(),
+    getHermesInteractionMemoryStoreStatus(),
+    buildToolLanePreview({ toolId: "n8n" }),
+  ]);
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    generated_at: new Date().toISOString(),
+    status: {
+      product_status: "Online - protected",
+      hermes: {
+        ready: providerStatus.hermes.ledger_enabled && providerStatus.hermes.context_compiler_enabled,
+        status: providerStatus.hermes.status,
+        ledger_enabled: providerStatus.hermes.ledger_enabled,
+        context_compiler_enabled: providerStatus.hermes.context_compiler_enabled,
+        ledger_exists: ledgerStatus.exists,
+        ledger_bytes: ledgerStatus.bytes,
+        interaction_memory_store_enabled: interactionMemoryStatus.enabled,
+        interaction_memory_store_exists: interactionMemoryStatus.exists,
+        interaction_memory_store_bytes: interactionMemoryStatus.bytes,
+        local_dev_only: interactionMemoryStatus.local_dev_only,
+        production_write_allowed: interactionMemoryStatus.production_write_allowed,
+      },
+      glm_worker: {
+        configured: providerStatus.openrouter_glm.configured,
+        model_id: providerStatus.openrouter_glm.model_id,
+        live_transport_enabled: providerStatus.openrouter_glm.live_transport_enabled,
+        live_call_ready: providerStatus.openrouter_glm.live_call_ready,
+        status: providerStatus.openrouter_glm.live_call_ready ? "ready" : "gated_or_off",
+        key_present_masked_boolean: providerStatus.openrouter_glm.configured,
+        setup_required: providerStatus.openrouter_glm.setup_required,
+        payment_setup_needed: providerStatus.openrouter_glm.payment_setup_needed,
+        detail: providerStatus.openrouter_glm.live_call_ready
+          ? "GLM worker lane is admin-selected and live flags are enabled."
+          : "GLM worker lane is gated/off unless admin env flags and provider readiness are enabled.",
+      },
+      tool_lane_status: {
+        status: toolLaneStatus.status,
+        selected_tool_id: toolLaneStatus.selected_tool?.id ?? toolLaneStatus.requested_tool_id,
+        selected_tool_name: toolLaneStatus.selected_tool?.display_name ?? null,
+        allowed_mode: toolLaneStatus.allowed_mode,
+        execution_disabled: toolLaneStatus.execution_disabled,
+        would_run: toolLaneStatus.would_run,
+        reason: toolLaneStatus.reason,
+        blocked_actions: toolLaneStatus.blocked_actions,
+      },
+      n8n: {
+        n8n_scaffolded: toolLaneStatus.n8n_status.n8n_scaffolded,
+        n8n_running: toolLaneStatus.n8n_status.n8n_running,
+        n8n_local_url: toolLaneStatus.n8n_status.n8n_local_url,
+        n8n_host: toolLaneStatus.n8n_status.n8n_host,
+        n8n_port: toolLaneStatus.n8n_status.n8n_port,
+        health_check: toolLaneStatus.n8n_status.health_check,
+        workflow_drafts: toolLaneStatus.n8n_status.workflow_drafts.map((workflow) => ({
+          id: workflow.id,
+          exists: workflow.exists,
+          active: workflow.active,
+        })),
+        public_webhooks_allowed: toolLaneStatus.n8n_status.public_webhooks_allowed,
+        credentials_configured: toolLaneStatus.n8n_status.credentials_configured,
+      },
+      chicagoshots_ops: {
+        available: true,
+        route: "POST /phantom-ai/ops/chicagoshots/lead-intake/preview",
+        workflow_preview_enabled: true,
+        dry_run_only: true,
+        provider_called: false,
+        external_send: false,
+        queue_written: false,
+        approval_executed: false,
+      },
+      safety_flags: {
+        approvals_execute_absent: true,
+        execution_disabled: true,
+        external_sends_disabled: true,
+        queue_writes_disabled: true,
+        production_ledger_writes_disabled: true,
+        provider_called: false,
+        live_provider_called: false,
+        provider_request_body_created: false,
+        provider_transport_allowed: false,
+        external_api_call_performed: false,
+        workflow_executed: false,
+        n8n_started: false,
+        public_webhook_opened: false,
+        credentials_used: false,
+        approval_executed: false,
+        queue_written: false,
+        production_ledger_written: false,
+        localhost_status_check_performed: toolLaneStatus.n8n_status.health_check === "localhost_tcp_probe",
+      },
+    },
+  };
+});
+
 app.post("/phantom-ai/tool-lane/preview", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 

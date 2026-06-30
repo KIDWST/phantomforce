@@ -287,6 +287,89 @@ type ProviderSetupStatus = {
   };
 };
 
+type PhantomAiOpsStatus = {
+  product_status: string;
+  hermes: {
+    ready: boolean;
+    status: string;
+    ledger_enabled: boolean;
+    context_compiler_enabled: boolean;
+    ledger_exists: boolean;
+    ledger_bytes: number;
+    interaction_memory_store_enabled: boolean;
+    interaction_memory_store_exists: boolean;
+    interaction_memory_store_bytes: number;
+    local_dev_only: boolean;
+    production_write_allowed: boolean;
+  };
+  glm_worker: {
+    configured: boolean;
+    model_id: string;
+    live_transport_enabled: boolean;
+    live_call_ready: boolean;
+    status: "ready" | "gated_or_off";
+    key_present_masked_boolean: boolean;
+    setup_required: boolean;
+    payment_setup_needed: boolean;
+    detail: string;
+  };
+  tool_lane_status: {
+    status: string;
+    selected_tool_id: string | null;
+    selected_tool_name: string | null;
+    allowed_mode: string | null;
+    execution_disabled: boolean;
+    would_run: boolean;
+    reason: string;
+    blocked_actions: string[];
+  };
+  n8n: {
+    n8n_scaffolded: boolean;
+    n8n_running: boolean;
+    n8n_local_url: string;
+    n8n_host: string;
+    n8n_port: number;
+    health_check: string;
+    workflow_drafts: Array<{
+      id: string;
+      exists: boolean;
+      active: boolean;
+    }>;
+    public_webhooks_allowed: boolean;
+    credentials_configured: boolean;
+  };
+  chicagoshots_ops: {
+    available: boolean;
+    route: string;
+    workflow_preview_enabled: boolean;
+    dry_run_only: boolean;
+    provider_called: boolean;
+    external_send: boolean;
+    queue_written: boolean;
+    approval_executed: boolean;
+  };
+  safety_flags: {
+    approvals_execute_absent: boolean;
+    execution_disabled: boolean;
+    external_sends_disabled: boolean;
+    queue_writes_disabled: boolean;
+    production_ledger_writes_disabled: boolean;
+    provider_called: boolean;
+    live_provider_called: boolean;
+    provider_request_body_created: boolean;
+    provider_transport_allowed: boolean;
+    external_api_call_performed: boolean;
+    workflow_executed: boolean;
+    n8n_started: boolean;
+    public_webhook_opened: boolean;
+    credentials_used: boolean;
+    approval_executed: boolean;
+    queue_written: boolean;
+    production_ledger_written: boolean;
+    localhost_status_check_performed: boolean;
+  };
+};
+
 type PhantomAiChatResponse = {
   ok: boolean;
   provider_choice: AiProviderChoice;
@@ -1434,6 +1517,85 @@ const defaultProviderSetupStatus: ProviderSetupStatus = {
   },
 };
 
+const defaultPhantomAiOpsStatus: PhantomAiOpsStatus = {
+  product_status: "Online - protected",
+  hermes: {
+    ready: false,
+    status: "Status unavailable",
+    ledger_enabled: false,
+    context_compiler_enabled: false,
+    ledger_exists: false,
+    ledger_bytes: 0,
+    interaction_memory_store_enabled: false,
+    interaction_memory_store_exists: false,
+    interaction_memory_store_bytes: 0,
+    local_dev_only: true,
+    production_write_allowed: false,
+  },
+  glm_worker: {
+    configured: false,
+    model_id: "z-ai/glm-5.2",
+    live_transport_enabled: false,
+    live_call_ready: false,
+    status: "gated_or_off",
+    key_present_masked_boolean: false,
+    setup_required: true,
+    payment_setup_needed: true,
+    detail: "GLM worker lane is gated/off unless admin env flags and provider readiness are enabled.",
+  },
+  tool_lane_status: {
+    status: "dry_run_preview",
+    selected_tool_id: "n8n",
+    selected_tool_name: "n8n",
+    allowed_mode: "dry_run_only",
+    execution_disabled: true,
+    would_run: false,
+    reason: "Tool lane status is waiting on the backend. Nothing can run.",
+    blocked_actions: [],
+  },
+  n8n: {
+    n8n_scaffolded: false,
+    n8n_running: false,
+    n8n_local_url: "http://127.0.0.1:5678",
+    n8n_host: "127.0.0.1",
+    n8n_port: 5678,
+    health_check: "not_checked",
+    workflow_drafts: [],
+    public_webhooks_allowed: false,
+    credentials_configured: false,
+  },
+  chicagoshots_ops: {
+    available: false,
+    route: "POST /phantom-ai/ops/chicagoshots/lead-intake/preview",
+    workflow_preview_enabled: false,
+    dry_run_only: true,
+    provider_called: false,
+    external_send: false,
+    queue_written: false,
+    approval_executed: false,
+  },
+  safety_flags: {
+    approvals_execute_absent: true,
+    execution_disabled: true,
+    external_sends_disabled: true,
+    queue_writes_disabled: true,
+    production_ledger_writes_disabled: true,
+    provider_called: false,
+    live_provider_called: false,
+    provider_request_body_created: false,
+    provider_transport_allowed: false,
+    external_api_call_performed: false,
+    workflow_executed: false,
+    n8n_started: false,
+    public_webhook_opened: false,
+    credentials_used: false,
+    approval_executed: false,
+    queue_written: false,
+    production_ledger_written: false,
+    localhost_status_check_performed: false,
+  },
+};
+
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
 }
@@ -1466,6 +1628,8 @@ function App() {
   const [pangolinStatus, setPangolinStatus] = useState<PangolinReadOnlyStatus | null>(null);
   const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
   const [providerSetupStatus, setProviderSetupStatus] = useState<ProviderSetupStatus>(defaultProviderSetupStatus);
+  const [phantomAiOpsStatus, setPhantomAiOpsStatus] =
+    useState<PhantomAiOpsStatus>(defaultPhantomAiOpsStatus);
   const [aiProvider, setAiProvider] = useState<AiProviderChoice>("phantom");
   const [phantomAiBusy, setPhantomAiBusy] = useState(false);
   const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
@@ -1695,6 +1859,30 @@ function App() {
     }
   }
 
+  async function refreshPhantomAiOpsStatus() {
+    if (!canManageAccess) {
+      setPhantomAiOpsStatus(defaultPhantomAiOpsStatus);
+      return;
+    }
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/ops/status`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setPhantomAiOpsStatus(defaultPhantomAiOpsStatus);
+        return;
+      }
+
+      const data = (await response.json()) as { status?: PhantomAiOpsStatus };
+      setPhantomAiOpsStatus(data.status ?? defaultPhantomAiOpsStatus);
+    } catch {
+      addActivity("Phantom AI ops status offline", "Admin ops dashboard is waiting on the backend.", "warn");
+      setPhantomAiOpsStatus(defaultPhantomAiOpsStatus);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -1721,10 +1909,12 @@ function App() {
       void refreshPangolinPlan();
       void refreshReadinessReport();
       void refreshProviderSetupStatus();
+      void refreshPhantomAiOpsStatus();
     } else {
       setPangolinPlan([]);
       setReadinessReport(null);
       setProviderSetupStatus(defaultProviderSetupStatus);
+      setPhantomAiOpsStatus(defaultPhantomAiOpsStatus);
     }
 
     return () => {
@@ -2327,6 +2517,7 @@ function App() {
             setAiProvider={setAiProvider}
             phantomAiBusy={phantomAiBusy}
             canManageAccess={canManageAccess}
+            phantomAiOpsStatus={phantomAiOpsStatus}
             createFollowUpPlan={() => createFollowUpPlan("demo")}
             stats={stats}
             approvals={approvals}
@@ -2371,7 +2562,9 @@ function App() {
             sessionHeaders={sessionHeaders}
           />
         ) : null}
-        {route === "trainer" ? <TrainerSimulationView canManageAccess={canManageAccess} /> : null}
+        {route === "trainer" ? (
+          <TrainerSimulationView canManageAccess={canManageAccess} phantomAiOpsStatus={phantomAiOpsStatus} />
+        ) : null}
       </main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -2513,6 +2706,7 @@ function CommandCenter({
   setAiProvider,
   phantomAiBusy,
   canManageAccess,
+  phantomAiOpsStatus,
   createFollowUpPlan,
   stats,
   approvals,
@@ -2529,6 +2723,7 @@ function CommandCenter({
   setAiProvider: (value: AiProviderChoice) => void;
   phantomAiBusy: boolean;
   canManageAccess: boolean;
+  phantomAiOpsStatus: PhantomAiOpsStatus;
   createFollowUpPlan: () => void;
   stats: { urgent: number; pending: number; today: number; events: number };
   approvals: Approval[];
@@ -2617,7 +2812,7 @@ function CommandCenter({
           </div>
         </section>
 
-        <PhantomAiStatusPanel />
+        <PhantomAiStatusPanel canManageAccess={canManageAccess} opsStatus={phantomAiOpsStatus} />
 
         <section className="panel">
           <div className="section-head compact">
@@ -5174,45 +5369,135 @@ function AdminDebugStatusPanel() {
   );
 }
 
-function PhantomAiStatusPanel() {
+function PhantomAiStatusPanel({
+  canManageAccess = false,
+  opsStatus = defaultPhantomAiOpsStatus,
+}: {
+  canManageAccess?: boolean;
+  opsStatus?: PhantomAiOpsStatus;
+}) {
+  if (!canManageAccess) {
+    return (
+      <section className="panel phantom-ai-panel">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Phantom AI status</span>
+            <h3>Assistant, memory, and approvals</h3>
+          </div>
+          <TruthBadge state="demo" label="Protected" />
+        </div>
+        <div className="ai-status-list">
+          <StatusLine label="Phantom AI" value={phantomAiStatus.availability} />
+          <StatusLine label="Memory" value={phantomAiStatus.memory} />
+          <StatusLine label="Background help" value="Managed by PhantomForce" />
+          <StatusLine label="Approval gate" value="External actions blocked until approved" />
+        </div>
+        <div className="ai-rule-columns">
+          <div>
+            <strong>Allowed to suggest</strong>
+            <ul>
+              {phantomAiStatus.allowedSuggestions.map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
+            </ul>
+          </div>
+          <div>
+            <strong>Requires approval</strong>
+            <ul>
+              {phantomAiStatus.approvalRequired.map((rule) => (
+                <li key={rule}>{rule}</li>
+              ))}
+            </ul>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  const hermesValue = opsStatus.hermes.ready
+    ? "Ledger + context compiler enabled"
+    : "Setup required";
+  const memoryStoreValue = opsStatus.hermes.interaction_memory_store_enabled
+    ? opsStatus.hermes.interaction_memory_store_exists
+      ? `Local memory store present (${opsStatus.hermes.interaction_memory_store_bytes} bytes)`
+      : "Local memory store ready / empty"
+    : "Memory store unavailable";
+  const glmValue = opsStatus.glm_worker.live_call_ready
+    ? `Ready: ${opsStatus.glm_worker.model_id}`
+    : `Gated/off: ${opsStatus.glm_worker.model_id}`;
+  const n8nValue = opsStatus.n8n.n8n_running
+    ? `Running at ${opsStatus.n8n.n8n_local_url}`
+    : opsStatus.n8n.n8n_scaffolded
+      ? `Available locally at ${opsStatus.n8n.n8n_local_url}`
+      : "Scaffold not detected";
+  const safetyValue =
+    opsStatus.safety_flags.execution_disabled &&
+    opsStatus.safety_flags.external_sends_disabled &&
+    opsStatus.safety_flags.queue_writes_disabled &&
+    opsStatus.safety_flags.production_ledger_writes_disabled
+      ? "External actions blocked"
+      : "Review safety gates";
+
   return (
     <section className="panel phantom-ai-panel">
       <div className="section-head compact">
         <div>
-          <span className="eyebrow">Phantom AI status</span>
-          <h3>Assistant, memory, and approvals</h3>
+          <span className="eyebrow">Admin ops dashboard</span>
+          <h3>Live local system state</h3>
         </div>
-        <TruthBadge state="demo" label="Demo assistant" />
+        <TruthBadge state="real" label="Real status" />
       </div>
       <div className="ai-status-list">
-        <StatusLine label="Phantom AI" value={phantomAiStatus.availability} />
-        <StatusLine label="Memory" value={phantomAiStatus.memory} />
-        <StatusLine label="Background help" value={phantomAiStatus.fallback} />
-        <StatusLine label="Approval gate" value={phantomAiStatus.approvalGate} />
+        <StatusLine label="Phantom AI" value={opsStatus.product_status} />
+        <StatusLine label="Hermes" value={hermesValue} />
+        <StatusLine label="Memory store" value={memoryStoreValue} />
+        <StatusLine label="GLM 5.2 worker" value={glmValue} />
+        <StatusLine label="n8n local worker" value={n8nValue} />
+        <StatusLine
+          label="ChicagoShots"
+          value={opsStatus.chicagoshots_ops.available ? "Workflow ready" : "Workflow unavailable"}
+        />
+        <StatusLine label="Safety state" value={safetyValue} />
       </div>
-      <div className="ai-rule-columns">
+      <div className="ai-rule-columns ops-rule-columns">
         <div>
-          <strong>Allowed to suggest</strong>
+          <strong>Current gates</strong>
           <ul>
-            {phantomAiStatus.allowedSuggestions.map((rule) => (
-              <li key={rule}>{rule}</li>
-            ))}
+            <li>GLM worker: {opsStatus.glm_worker.live_call_ready ? "ready" : "gated/off unless enabled"}</li>
+            <li>Tool lane: {opsStatus.tool_lane_status.status}</li>
+            <li>n8n scaffolded: {opsStatus.n8n.n8n_scaffolded ? "true" : "false"}</li>
+            <li>ChicagoShots preview: {opsStatus.chicagoshots_ops.dry_run_only ? "dry-run only" : "review"}</li>
           </ul>
         </div>
         <div>
-          <strong>Requires approval</strong>
+          <strong>Blocked actions</strong>
           <ul>
-            {phantomAiStatus.approvalRequired.map((rule) => (
-              <li key={rule}>{rule}</li>
-            ))}
+            <li>Approvals execute endpoint: {opsStatus.safety_flags.approvals_execute_absent ? "absent" : "review"}</li>
+            <li>Execution disabled: {opsStatus.safety_flags.execution_disabled ? "true" : "false"}</li>
+            <li>Queue writes disabled: {opsStatus.safety_flags.queue_writes_disabled ? "true" : "false"}</li>
+            <li>
+              Production ledger writes disabled:{" "}
+              {opsStatus.safety_flags.production_ledger_writes_disabled ? "true" : "false"}
+            </li>
+            <li>External sends disabled: {opsStatus.safety_flags.external_sends_disabled ? "true" : "false"}</li>
           </ul>
         </div>
       </div>
+      <p className="ops-status-note">
+        Read-only localhost/admin status. No provider call, n8n workflow execution, approval execution, queue write, or
+        production ledger write is performed by this dashboard.
+      </p>
     </section>
   );
 }
 
-function TrainerSimulationView({ canManageAccess }: { canManageAccess: boolean }) {
+function TrainerSimulationView({
+  canManageAccess,
+  phantomAiOpsStatus = defaultPhantomAiOpsStatus,
+}: {
+  canManageAccess: boolean;
+  phantomAiOpsStatus?: PhantomAiOpsStatus;
+}) {
   const simulation = personalTrainingSimulation;
   const [showDebug, setShowDebug] = useState(false);
 
@@ -5239,7 +5524,7 @@ function TrainerSimulationView({ canManageAccess }: { canManageAccess: boolean }
       </section>
 
       <CustomerReadinessPanel />
-      <PhantomAiStatusPanel />
+      <PhantomAiStatusPanel canManageAccess={canManageAccess} opsStatus={phantomAiOpsStatus} />
 
       <div className="simulation-grid">
         <SimulationSection icon={<Sparkles size={18} />} title="Services and packages" items={simulation.services} />

@@ -1263,6 +1263,17 @@ img {
   padding-left: 18px;
 }
 
+.ops-status-note {
+  margin: 0;
+  padding: 10px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+  background: rgba(89, 208, 133, 0.08);
+  border: 1px solid rgba(89, 208, 133, 0.16);
+  border-radius: 8px;
+}
+
 .asset-panel {
   overflow: hidden;
   padding: 0;
