@@ -7,6 +7,7 @@ import {
   Check,
   Clock3,
   Command,
+  Copy,
   FileText,
   Inbox,
   KeyRound,
@@ -383,7 +384,16 @@ type ChicagoShotsLeadForm = {
   notes: string;
 };
 
+type ChicagoShotsLeadPreset = {
+  id: string;
+  label: string;
+  detail: string;
+  form: ChicagoShotsLeadForm;
+};
+
 type ChicagoShotsLeadIntakePacket = {
+  preview_id: string;
+  prepared_at: string;
   normalized_lead: {
     tenant_id: string;
     client_name: string;
@@ -1673,6 +1683,117 @@ const defaultChicagoShotsLeadForm: ChicagoShotsLeadForm = {
   urgency: "",
   notes: "",
 };
+
+const chicagoShotsLeadPresets: ChicagoShotsLeadPreset[] = [
+  {
+    id: "sports-highlight",
+    label: "Sports highlight inquiry",
+    detail: "Team action gallery + short social clips",
+    form: {
+      client_name: "Coach Ramirez",
+      contact: "coach@example.com",
+      event_type: "sports tournament",
+      date_time: "Saturday afternoon",
+      location: "South Loop fieldhouse",
+      requested_service: "team action photos and highlight clips",
+      budget_rate: "$1,200 target",
+      source_platform: "Instagram DM",
+      urgency: "high",
+      notes: "Parent booster group wants fast action coverage, a small gallery, and social-ready clips for top plays.",
+    },
+  },
+  {
+    id: "real-estate-listing",
+    label: "Real estate listing media",
+    detail: "MLS stills + optional walkthrough video",
+    form: {
+      client_name: "Taylor Brooks",
+      contact: "taylor@homes.example",
+      event_type: "real estate listing",
+      date_time: "Thursday morning",
+      location: "West Loop condo",
+      requested_service: "property photos and walkthrough video",
+      budget_rate: "$750-$1,000",
+      source_platform: "Referral",
+      urgency: "medium",
+      notes: "Listing goes live next week. Needs bright interior photos, exterior shots, and optional vertical walkthrough.",
+    },
+  },
+  {
+    id: "event-wedding",
+    label: "Event / wedding coverage",
+    detail: "Timeline, gallery, teaser, approval-ready reply",
+    form: {
+      client_name: "Maria Lopez",
+      contact: "maria@example.com",
+      event_type: "wedding",
+      date_time: "August 15 at 4 PM",
+      location: "Lincoln Park Conservatory",
+      requested_service: "ceremony coverage and reception highlights",
+      budget_rate: "$3,500",
+      source_platform: "Website form",
+      urgency: "high",
+      notes: "Outdoor ceremony, reception nearby, wants full gallery and a short teaser for family.",
+    },
+  },
+];
+
+function formatChicagoShotsFollowUpDraft(packet: ChicagoShotsLeadIntakePacket) {
+  return [
+    `Subject: ${packet.follow_up_draft.subject}`,
+    "",
+    packet.follow_up_draft.body,
+    "",
+    "Status: Preview only. Jordan must review before any manual use.",
+  ].join("\n");
+}
+
+function formatChicagoShotsDeliverables(packet: ChicagoShotsLeadIntakePacket) {
+  return [
+    `ChicagoShots deliverables - ${packet.recommended_service_package.name}`,
+    `Client: ${packet.normalized_lead.client_name || "New lead"}`,
+    "",
+    ...packet.deliverables_checklist.map((item, index) => `${index + 1}. ${item}`),
+    "",
+    "Status: Preview only. No queue write. No ledger write.",
+  ].join("\n");
+}
+
+function formatChicagoShotsIntakePacket(packet: ChicagoShotsLeadIntakePacket) {
+  return [
+    "ChicagoShots intake packet",
+    `Preview ID: ${packet.preview_id}`,
+    `Prepared: ${packet.prepared_at}`,
+    "",
+    "Lead",
+    `Client: ${packet.normalized_lead.client_name || "New lead"}`,
+    `Contact: ${packet.normalized_lead.contact || "Not provided"}`,
+    `Category: ${packet.normalized_lead.event_category}`,
+    `Event: ${packet.normalized_lead.event_type || "Not provided"}`,
+    `Date/time: ${packet.normalized_lead.date_time || "Not provided"}`,
+    `Location: ${packet.normalized_lead.location || "Not provided"}`,
+    `Budget/rate: ${packet.normalized_lead.budget_rate || "Not provided"}`,
+    `Source: ${packet.normalized_lead.source_platform || "Not provided"}`,
+    `Urgency: ${packet.normalized_lead.urgency}`,
+    `Notes: ${packet.normalized_lead.notes || "None"}`,
+    "",
+    "Recommended package",
+    `${packet.recommended_service_package.name}: ${packet.recommended_service_package.rationale}`,
+    `Add-ons: ${packet.recommended_service_package.suggested_addons.join(", ") || "None"}`,
+    "",
+    "Task draft",
+    `${packet.task_draft.title} (${packet.task_draft.priority}, due ${packet.task_draft.suggested_due})`,
+    ...packet.task_draft.steps.map((step, index) => `${index + 1}. ${step}`),
+    "",
+    formatChicagoShotsDeliverables(packet),
+    "",
+    "Follow-up draft",
+    formatChicagoShotsFollowUpDraft(packet),
+    "",
+    "Safety",
+    "Preview only. No send. No queue write. No ledger write.",
+  ].join("\n");
+}
 
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
@@ -5592,14 +5713,37 @@ function ChicagoShotsLeadIntakePanel({
   const [leadPreview, setLeadPreview] = useState<ChicagoShotsLeadIntakePacket | null>(null);
   const [leadBusy, setLeadBusy] = useState(false);
   const [leadError, setLeadError] = useState("");
+  const [copiedLeadText, setCopiedLeadText] = useState("");
 
   function updateLeadField(field: keyof ChicagoShotsLeadForm, value: string) {
     setLeadForm((current) => ({ ...current, [field]: value }));
   }
 
+  function applyPreset(preset: ChicagoShotsLeadPreset) {
+    setLeadForm(preset.form);
+    setLeadPreview(null);
+    setLeadError("");
+    setCopiedLeadText("");
+  }
+
+  async function copyLeadText(label: string, text: string) {
+    setLeadError("");
+    if (!navigator.clipboard?.writeText) {
+      setLeadError("Clipboard is not available in this browser. Select the draft text manually.");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopiedLeadText(label);
+    } catch {
+      setLeadError("Clipboard copy was blocked by the browser. Select the draft text manually.");
+    }
+  }
+
   async function generateIntakePreview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setLeadError("");
+    setCopiedLeadText("");
 
     if (!sessionHeaders) {
       setLeadError("Admin session is not available. Sign in as Jordan / PhantomForce Admin.");
@@ -5658,6 +5802,20 @@ function ChicagoShotsLeadIntakePanel({
           <h3>Lead intake preview</h3>
         </div>
         <TruthBadge state="real" label="Admin only" />
+      </div>
+      <div className="lead-status-strip" aria-label="ChicagoShots preview safety status">
+        <span>Preview only</span>
+        <span>No send</span>
+        <span>No queue write</span>
+        <span>No ledger write</span>
+      </div>
+      <div className="lead-preset-row" aria-label="ChicagoShots lead presets">
+        {chicagoShotsLeadPresets.map((preset) => (
+          <button className="lead-preset-button" type="button" key={preset.id} onClick={() => applyPreset(preset)}>
+            <strong>{preset.label}</strong>
+            <span>{preset.detail}</span>
+          </button>
+        ))}
       </div>
       <form className="lead-intake-form" onSubmit={generateIntakePreview}>
         <label>
@@ -5762,9 +5920,36 @@ function ChicagoShotsLeadIntakePanel({
       </form>
 
       {leadError ? <p className="operator-error">{leadError}</p> : null}
+      {copiedLeadText ? <p className="operator-copy-status">Copied {copiedLeadText}.</p> : null}
 
       {leadPreview ? (
         <div className="lead-preview-output">
+          <div className="lead-copy-actions" aria-label="Copy ChicagoShots intake outputs">
+            <button
+              className="ghost-small"
+              type="button"
+              onClick={() => void copyLeadText("follow-up draft", formatChicagoShotsFollowUpDraft(leadPreview))}
+            >
+              <Copy size={15} />
+              Copy follow-up draft
+            </button>
+            <button
+              className="ghost-small"
+              type="button"
+              onClick={() => void copyLeadText("deliverables checklist", formatChicagoShotsDeliverables(leadPreview))}
+            >
+              <Copy size={15} />
+              Copy deliverables checklist
+            </button>
+            <button
+              className="ghost-small"
+              type="button"
+              onClick={() => void copyLeadText("full intake packet", formatChicagoShotsIntakePacket(leadPreview))}
+            >
+              <Copy size={15} />
+              Copy full intake packet
+            </button>
+          </div>
           <article className="operator-result-card">
             <span className="eyebrow">Normalized lead</span>
             <StatusLine label="Client" value={leadPreview.normalized_lead.client_name} />
