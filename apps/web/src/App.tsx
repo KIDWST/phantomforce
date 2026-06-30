@@ -41,6 +41,7 @@ type Route =
   | "tasks"
   | "content"
   | "media"
+  | "site"
   | "offers"
   | "approvals"
   | "access"
@@ -1229,26 +1230,34 @@ type AppSession = {
 const AUTHORIZATION_HEADER = "Authorization";
 const OWNER_ORG_NAME = "PhantomForce";
 const DEFAULT_CLIENT_WORKSPACE_ID = "client-chicagoshots";
-const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-sports-demo", "client-past-due"]);
+const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-past-due"]);
 
 const initialSessions: AppSession[] = [
   {
     id: "admin-jordan",
-    label: "Jordan Admin",
+    label: "Jordan (admin)",
     role: "admin",
     canManageAccess: true,
   },
   {
-    id: "client-sports-demo",
-    label: "Test Client",
+    id: "client-chicagoshots",
+    label: "ChicagoShots (client)",
     role: "client",
-    clientId: "client-sports-demo",
+    clientId: "client-chicagoshots",
+    canManageAccess: false,
+  },
+  {
+    id: "client-past-due",
+    label: "The Force (client)",
+    role: "client",
+    clientId: "client-past-due",
     canManageAccess: false,
   },
 ];
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Home", icon: <Command size={18} /> },
+  { id: "site", label: "Site Studio", icon: <FileText size={18} /> },
   { id: "inbox", label: "Leads", icon: <Users size={18} /> },
   { id: "offers", label: "Money", icon: <Zap size={18} /> },
   { id: "content", label: "Create", icon: <FileText size={18} /> },
@@ -2445,7 +2454,7 @@ function App() {
   const canManageAccess = activeSession.canManageAccess;
   const visibleNavItems = useMemo(() => {
     if (canManageAccess) return navItems;
-    return navItems.filter((item) => item.id !== "access" && item.id !== "connections");
+    return navItems.filter((item) => item.id !== "access" && item.id !== "connections" && item.id !== "site");
   }, [canManageAccess]);
   const visibleClientAccess = useMemo(() => {
     if (canManageAccess) return clientAccess;
@@ -2469,7 +2478,7 @@ function App() {
   );
 
   useEffect(() => {
-    if (!canManageAccess && (route === "access" || route === "connections")) {
+    if (!canManageAccess && (route === "access" || route === "connections" || route === "site")) {
       setRoute("command");
     }
   }, [canManageAccess, route]);
@@ -2486,7 +2495,7 @@ function App() {
 
   async function signIn(sessionId: string, preferredRoute: Route = "command") {
     const session = initialSessions.find((item) => item.id === sessionId) ?? initialSessions[0];
-    const allowedRoute = session.canManageAccess || (preferredRoute !== "access" && preferredRoute !== "connections")
+    const allowedRoute = session.canManageAccess || (preferredRoute !== "access" && preferredRoute !== "connections" && preferredRoute !== "site")
       ? preferredRoute
       : "command";
     setActiveSessionId(session.id);
@@ -3434,6 +3443,9 @@ function App() {
         {route === "tasks" ? <TasksView tasks={tasks} completeTask={completeTask} /> : null}
         {route === "content" ? <ContentView /> : null}
         {route === "media" ? <MediaLabView /> : null}
+        {route === "site" && canManageAccess ? (
+          <SiteStudioView pangolinPlan={pangolinPlan} pangolinStatus={pangolinStatus} />
+        ) : null}
         {route === "offers" ? <OffersView /> : null}
         {route === "approvals" ? (
           <ApprovalsView approvals={approvals} approveAction={approveAction} rejectAction={rejectAction} />
@@ -3462,6 +3474,8 @@ function App() {
             canManageAccess={canManageAccess}
             providerSetupStatus={providerSetupStatus}
             sessionHeaders={sessionHeaders}
+            pangolinPlan={pangolinPlan}
+            pangolinStatus={pangolinStatus}
           />
         ) : null}
       </main>
@@ -3685,6 +3699,18 @@ function CommandCenter({
         ),
       cta: "Ask now",
     },
+    {
+      title: "Customize my site",
+      detail: "Propose copy, sections, or design for your private site.",
+      meta: "Preview + approve",
+      icon: <Sparkles size={20} />,
+      tone: "violet",
+      action: () =>
+        void runPhantomCommand(
+          "Propose updates to my PhantomForce website: suggest copy, sections, or design changes as a preview I can review and approve before anything goes live. Keep everything private to my business.",
+        ),
+      cta: "Ask now",
+    },
   ];
   const workflowSteps = [
     { label: "Ask", value: "1", icon: <Sparkles size={18} /> },
@@ -3698,15 +3724,15 @@ function CommandCenter({
       <section className="command-main">
         <div className="hero-command">
           <div>
-            <span className="eyebrow">AI command center</span>
-            <h2>Ask PhantomAI for the finished thing.</h2>
+            <span className="eyebrow">PhantomAI · your superuser</span>
+            <h2>Command anything. It's done.</h2>
             <p>
-              Replies, quotes, bookings, docs, content plans, and video concepts start from one command. The modules are where the finished work lands.
+              One private AI that runs your business — drafts, deals, docs, video, even your website. Smarter than a generic chatbot because it's wired into your operation, and nothing leaves without you.
             </p>
           </div>
           <button className="demo-button" type="button" onClick={createFollowUpPlan}>
-            <Play size={18} />
-            Ask PhantomAI
+            <Sparkles size={18} />
+            Command PhantomAI
           </button>
         </div>
 
@@ -4180,6 +4206,145 @@ function OffersView() {
   );
 }
 
+function SiteStudioView({
+  pangolinPlan,
+  pangolinStatus,
+}: {
+  pangolinPlan: PangolinRoutePlan[];
+  pangolinStatus: PangolinReadOnlyStatus | null;
+}) {
+  const [siteDraft, setSiteDraft] = useState({
+    hero: "PhantomForce builds the system behind your business.",
+    subhead:
+      "Ask PhantomAI for replies, quotes, bookings, docs, content, and video plans from one owner cockpit.",
+    offer: "Start with an Ops + Content Setup Sprint: $750 Starter, $1,500 Core, or $2,500 Pro.",
+    cta: "Book a 15-minute setup call",
+  });
+  const [previewOpen, setPreviewOpen] = useState(true);
+
+  function updateDraft(key: keyof typeof siteDraft, value: string) {
+    setSiteDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  return (
+    <Page title="Site Studio" kicker="Admin operating system" action={<TruthBadge state="stub" label="Draft / preview" />}>
+      <section className="simulation-hero">
+        <div>
+          <span className="eyebrow">Website Control</span>
+          <h3>Edit the public story from inside PhantomForce.</h3>
+          <p>
+            This is the safe admin surface for site copy, offer positioning, and launch preview. Publishing stays gated
+            until a real deploy path is explicitly connected.
+          </p>
+        </div>
+        <div className="simulation-hero-status">
+          <StatusLine label="Draft edits" value="Local only" />
+          <StatusLine label="Preview" value={previewOpen ? "Visible" : "Hidden"} />
+          <StatusLine label="Publish" value="Gated / off" />
+        </div>
+      </section>
+
+      <section className="module-panel simulation-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Ask-to-site control</span>
+            <h3>Website copy draft</h3>
+          </div>
+          <TruthBadge state="stub" label="No live publish" />
+        </div>
+        <div className="lead-intake-form">
+          <label>
+            Hero headline
+            <input value={siteDraft.hero} onChange={(event) => updateDraft("hero", event.target.value)} />
+          </label>
+          <label className="lead-notes-field">
+            Supporting copy
+            <textarea value={siteDraft.subhead} onChange={(event) => updateDraft("subhead", event.target.value)} />
+          </label>
+          <label className="lead-notes-field">
+            Offer line
+            <textarea value={siteDraft.offer} onChange={(event) => updateDraft("offer", event.target.value)} />
+          </label>
+          <label>
+            CTA
+            <input value={siteDraft.cta} onChange={(event) => updateDraft("cta", event.target.value)} />
+          </label>
+          <div className="lead-intake-actions">
+            <button className="primary-action" type="button" onClick={() => setPreviewOpen(true)}>
+              <Sparkles size={16} />
+              Preview changes
+            </button>
+            <button className="ghost-small" type="button" onClick={() => setPreviewOpen(false)}>
+              Hide preview
+            </button>
+            <button className="ghost-small" type="button" disabled title="Publishing requires a separate approved deploy gate.">
+              <Lock size={15} />
+              Publish gated
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div className="destination-grid">
+        {previewOpen ? (
+          <article className="operator-result-card">
+            <span className="eyebrow">Public site preview</span>
+            <h4>{siteDraft.hero}</h4>
+            <p>{siteDraft.subhead}</p>
+            <p className="draft-copy">{siteDraft.offer}</p>
+            <button className="primary-small" type="button" disabled>
+              {siteDraft.cta}
+            </button>
+          </article>
+        ) : null}
+        <PangolinSummaryPanel pangolinPlan={pangolinPlan} pangolinStatus={pangolinStatus} />
+        <article className="operator-result-card">
+          <span className="eyebrow">Admin OS rule</span>
+          <h4>Draft here. Confirm before anything leaves.</h4>
+          <ul>
+            <li>No public publish from this pass.</li>
+            <li>No DNS, Pangolin, deploy, billing, or email mutation.</li>
+            <li>Future publish should create a review card with diff, target, and rollback.</li>
+          </ul>
+        </article>
+      </div>
+    </Page>
+  );
+}
+
+function PangolinSummaryPanel({
+  pangolinPlan,
+  pangolinStatus,
+}: {
+  pangolinPlan: PangolinRoutePlan[];
+  pangolinStatus: PangolinReadOnlyStatus | null;
+}) {
+  const enabledRoutes = pangolinPlan.filter((plan) => plan.desiredState === "enabled").length;
+  const readOnlyRoutes = pangolinPlan.filter((plan) => plan.desiredState === "read_only").length;
+  const disabledRoutes = pangolinPlan.filter((plan) => plan.desiredState === "disabled").length;
+
+  return (
+    <article className="operator-result-card">
+      <span className="eyebrow">Private Route Control · Pangolin</span>
+      <h4>Payment controls the doorway. PhantomForce controls the workspace.</h4>
+      <p>
+        Payment/access state controls private-route reachability. PhantomForce controls which modules and actions users
+        get after they enter.
+      </p>
+      <StatusLine label="Live instance" value={pangolinStatus?.status ?? "unconfigured"} />
+      <StatusLine label="Enabled routes" value={String(enabledRoutes)} />
+      <StatusLine label="Read-only routes" value={String(readOnlyRoutes)} />
+      <StatusLine label="Disabled routes" value={String(disabledRoutes)} />
+      <StatusLine label="Live changes" value="Off" />
+      <p className="route-note">
+        {pangolinStatus?.configured
+          ? pangolinStatus.reason
+          : "Set PANGOLIN_READONLY_BASE_URL for read-only live instance verification."}
+      </p>
+    </article>
+  );
+}
+
 function ActivityView({ activity }: { activity: ActivityItem[] }) {
   return (
     <Page title="Activity and audit" kicker="Traceability">
@@ -4597,10 +4762,14 @@ function StatusView({
   canManageAccess,
   providerSetupStatus,
   sessionHeaders,
+  pangolinPlan,
+  pangolinStatus,
 }: {
   canManageAccess: boolean;
   providerSetupStatus: ProviderSetupStatus;
   sessionHeaders: (json?: boolean) => Record<string, string>;
+  pangolinPlan: PangolinRoutePlan[];
+  pangolinStatus: PangolinReadOnlyStatus | null;
 }) {
   const [showDebug, setShowDebug] = useState(false);
 
@@ -4612,6 +4781,7 @@ function StatusView({
     >
       <CustomerReadinessPanel />
       {canManageAccess ? <ProviderSetupPanel status={providerSetupStatus} /> : null}
+      {canManageAccess ? <PangolinSummaryPanel pangolinPlan={pangolinPlan} pangolinStatus={pangolinStatus} /> : null}
       {canManageAccess ? <HermesRouterDebugPanel sessionHeaders={sessionHeaders} /> : null}
       <section className="module-panel simulation-section">
         <div className="section-head">
