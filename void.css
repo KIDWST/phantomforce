@@ -65,47 +65,10 @@ button, input { font: inherit; color: inherit; }
 .presence {
   position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: clamp(12px, 2.2vh, 22px);
-  padding: 32vh 22px 4vh; text-align: center; pointer-events: none;
+  padding: clamp(28px, 6vh, 70px) 22px clamp(28px, 6vh, 70px); text-align: center; pointer-events: none;
   transition: padding 0.5s ease;
 }
 .presence > * { pointer-events: auto; }
-
-/* ===== docked command widget ===== */
-.dock {
-  position: fixed; left: 50%; top: 16px; transform: translateX(-50%);
-  width: min(580px, 94vw); z-index: 6; overflow: hidden;
-  background: rgba(5, 14, 11, 0.62); border: 1px solid rgba(65, 255, 161, 0.22); border-radius: 20px;
-  -webkit-backdrop-filter: blur(18px) saturate(120%); backdrop-filter: blur(18px) saturate(120%);
-  box-shadow: 0 12px 54px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(65, 255, 161, 0.05), 0 0 44px rgba(65, 255, 161, 0.08);
-  text-align: left; animation: dockIn 0.95s cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-@keyframes dockIn { from { transform: translate(-50%, -130%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
-.dock-bar {
-  display: flex; align-items: center; justify-content: space-between; gap: 10px;
-  padding: 11px 14px 11px 16px; cursor: pointer; user-select: none;
-  border-bottom: 1px solid rgba(65, 255, 161, 0.1);
-}
-.dock-id { display: inline-flex; align-items: center; gap: 9px; font: 600 11px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #cdebd9; }
-.dock-id em { color: #04140b; font-style: normal; font-size: 8.5px; padding: 2px 8px; border-radius: 999px; background: var(--neon); letter-spacing: 0.1em; }
-.dock-live { width: 7px; height: 7px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 8px var(--neon), 0 0 16px var(--neon); animation: pulseLive 2s ease-in-out infinite; }
-@keyframes pulseLive { 50% { opacity: 0.35; } }
-.dock-toggle { background: none; border: 0; cursor: pointer; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 9px; transition: background 0.2s; }
-.dock-toggle:hover { background: rgba(65, 255, 161, 0.1); }
-.dock-chevron { width: 9px; height: 9px; border-right: 2px solid var(--neon); border-bottom: 2px solid var(--neon); transform: translateY(-2px) rotate(45deg); transition: transform 0.35s ease; }
-.dock.min .dock-chevron { transform: translateY(2px) rotate(-135deg); }
-.dock-body {
-  display: flex; flex-direction: column; gap: 12px; padding: 15px 16px 16px;
-  max-height: 58vh; opacity: 1; overflow: hidden;
-  transition: max-height 0.45s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.3s ease, padding 0.45s ease;
-}
-.dock.min .dock-body { max-height: 0; opacity: 0; padding-top: 0; padding-bottom: 0; }
-.dock .say { min-height: 2.2em; max-height: 28vh; overflow-y: auto; display: block; text-align: left; }
-.dock .say-line { font-size: clamp(16px, 3vw, 25px); }
-.dock .say-line.user { font-size: clamp(14px, 2.2vw, 18px); }
-.dock .orbits { justify-content: flex-start; max-width: none; }
-.dock .speak { width: 100%; }
-.dock .summon { align-self: flex-start; }
-@media (prefers-reduced-motion: reduce) { .dock, .dock-live { animation: none !important; } }
 
 /* ---------- the cyber-phantom ---------- */
 .phantom { width: clamp(120px, 17vh, 188px); margin-bottom: 4px; cursor: pointer; animation: hover 6s ease-in-out infinite; }
