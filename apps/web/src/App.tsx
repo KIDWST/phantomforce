@@ -6121,7 +6121,7 @@ function PhantomAiStatusPanel({
           <span className="eyebrow">Admin ops dashboard</span>
           <h3>Live local system state</h3>
         </div>
-        <TruthBadge state="real" label="Real status" />
+        <TruthBadge state="real" label="Live Internal Pilot" />
       </div>
       <div className="ai-status-list">
         <StatusLine label="Phantom AI" value={opsStatus.product_status} />

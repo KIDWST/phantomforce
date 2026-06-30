@@ -99,6 +99,9 @@ function assistantPosture() {
     available: true,
     approval_gated: true,
     draft_mode: "local_deterministic",
+    mode: "live_internal_pilot",
+    mode_label: "Live Internal Pilot",
+    external_sends: "manual_only",
   } as const;
 }
 

@@ -47,6 +47,8 @@ try {
   assert(admin.redacted_for_role === false, "admin not redacted");
   assert(admin.current_module === "leads", "module echoed");
   assert(admin.assistant.embedded === true && admin.assistant.separate_app === false, "assistant embedded, not separate app");
+  assert(admin.assistant.mode === "live_internal_pilot", "assistant mode is live_internal_pilot");
+  assert(admin.assistant.external_sends === "manual_only", "external sends are manual only");
   assert(admin.available_actions.length === EMBEDDED_OPS_ACTIONS.length && admin.available_actions.length === 5, "5 embedded actions");
   assert(admin.chicagoshots !== null, "admin gets chicagoshots context");
   assert(admin.memory !== null && admin.memory!.has_memory === true && admin.memory!.recalled_count >= 1, "admin gets tenant memory");
