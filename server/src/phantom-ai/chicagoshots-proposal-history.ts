@@ -11,6 +11,7 @@ const repoRoot = resolve(moduleDir, "../../..");
 const MAX_HISTORY_LIMIT = 50;
 const MAX_MARKDOWN_CHARS = 18_000;
 const MAX_SUMMARY_CHARS = 1_200;
+const PROPOSAL_STATUSES = ["draft", "sent_manually", "follow_up_needed", "won", "lost"] as const;
 
 export const DEFAULT_CHICAGOSHOTS_PROPOSAL_HISTORY_PATH = resolve(
   repoRoot,
@@ -32,19 +33,29 @@ export type ChicagoShotsProposalHistorySafetyFlags = {
   raw_secret_exposed: false;
 };
 
+export type ChicagoShotsProposalStatus = (typeof PROPOSAL_STATUSES)[number];
+
+export type ChicagoShotsProposalStatusCounts = Record<ChicagoShotsProposalStatus, number> & {
+  total: number;
+};
+
 export type ChicagoShotsProposalHistoryRecord = {
   id: string;
   created_at: string;
+  status: ChicagoShotsProposalStatus;
+  status_updated_at: string;
   store_kind: "local_admin_only_chicagoshots_proposal_history";
   store_version: 1;
   source_preview_id: string;
   client_name: string;
   event_type: string;
   package: string;
+  recommended_package: string;
   recommended_price_range: string;
   delivery_timeline: string;
   follow_up_channel: string;
   quote_draft: ChicagoShotsLeadIntakePreview["quote_draft"];
+  client_ready_proposal: string;
   proposal_summary: string;
   exported_markdown: string;
   safety_flags: ChicagoShotsProposalHistorySafetyFlags;
@@ -64,6 +75,8 @@ export type ChicagoShotsProposalHistoryReadResult = {
   store_path: string;
   limit: number;
   records: ChicagoShotsProposalHistoryRecord[];
+  status_counts: ChicagoShotsProposalStatusCounts;
+  total_count: number;
   malformed_lines: number;
 };
 
@@ -88,6 +101,12 @@ export function normalizeChicagoShotsProposalHistoryLimit(value: number | string
   return Number.isFinite(parsedLimit)
     ? Math.min(Math.max(Math.floor(parsedLimit), 1), MAX_HISTORY_LIMIT)
     : fallback;
+}
+
+export function normalizeChicagoShotsProposalStatus(value: unknown): ChicagoShotsProposalStatus | null {
+  return typeof value === "string" && (PROPOSAL_STATUSES as readonly string[]).includes(value)
+    ? (value as ChicagoShotsProposalStatus)
+    : null;
 }
 
 function isLocalProposalHistoryWriteAllowed(env: NodeJS.ProcessEnv | Record<string, string | undefined>) {
@@ -116,6 +135,28 @@ function safetyFlags(): ChicagoShotsProposalHistorySafetyFlags {
     invoice_created: false,
     raw_secret_exposed: false,
   };
+}
+
+function emptyStatusCounts(): ChicagoShotsProposalStatusCounts {
+  return {
+    total: 0,
+    draft: 0,
+    sent_manually: 0,
+    follow_up_needed: 0,
+    won: 0,
+    lost: 0,
+  };
+}
+
+function countStatuses(records: ChicagoShotsProposalHistoryRecord[]): ChicagoShotsProposalStatusCounts {
+  const counts = emptyStatusCounts();
+
+  for (const record of records) {
+    counts.total += 1;
+    counts[record.status] += 1;
+  }
+
+  return counts;
 }
 
 function assertPacketStillSafe(packet: ChicagoShotsLeadIntakePreview) {
@@ -167,6 +208,7 @@ function redactQuoteDraft(
 export function createChicagoShotsProposalHistoryRecord(input: {
   packet: ChicagoShotsLeadIntakePreview;
   proposalSummary: string;
+  clientReadyProposal?: string;
   exportedMarkdown: string;
   createdAt?: string;
 }): ChicagoShotsProposalHistoryRecord {
@@ -178,25 +220,39 @@ export function createChicagoShotsProposalHistoryRecord(input: {
   const proposalSummary =
     cleanMultiline(input.proposalSummary, MAX_SUMMARY_CHARS) ||
     clean(input.packet.quote_draft.summary, MAX_SUMMARY_CHARS);
+  const clientReadyProposal = cleanMultiline(
+    input.clientReadyProposal || input.exportedMarkdown,
+    MAX_MARKDOWN_CHARS,
+  );
   const exportedMarkdown = cleanMultiline(input.exportedMarkdown, MAX_MARKDOWN_CHARS);
+
+  if (!clientReadyProposal) {
+    throw new Error("ChicagoShots proposal history requires a client-ready proposal.");
+  }
 
   if (!exportedMarkdown) {
     throw new Error("ChicagoShots proposal history requires exported markdown.");
   }
 
+  const recommendedPackage = clean(input.packet.recommended_service_package.name) || "General Inquiry";
+
   return {
     id: createHistoryId(input.packet),
     created_at: createdAt,
+    status: "draft",
+    status_updated_at: createdAt,
     store_kind: "local_admin_only_chicagoshots_proposal_history",
     store_version: 1,
     source_preview_id: input.packet.preview_id,
     client_name: clean(input.packet.normalized_lead.client_name) || "New ChicagoShots lead",
     event_type: clean(input.packet.normalized_lead.event_type || input.packet.normalized_lead.requested_service),
-    package: clean(input.packet.recommended_service_package.name) || "General Inquiry",
+    package: recommendedPackage,
+    recommended_package: recommendedPackage,
     recommended_price_range: clean(input.packet.recommended_price_range, 160),
     delivery_timeline: clean(input.packet.delivery_timeline, 360),
     follow_up_channel: clean(input.packet.follow_up_draft.channel_hint, 80),
     quote_draft: redactQuoteDraft(input.packet.quote_draft),
+    client_ready_proposal: clientReadyProposal,
     proposal_summary: proposalSummary,
     exported_markdown: exportedMarkdown,
     safety_flags: safetyFlags(),
@@ -205,12 +261,27 @@ export function createChicagoShotsProposalHistoryRecord(input: {
   };
 }
 
-function isChicagoShotsProposalHistoryRecord(value: unknown): value is ChicagoShotsProposalHistoryRecord {
-  if (!value || typeof value !== "object") return false;
+function normalizeStoredProposalHistoryRecord(value: unknown): ChicagoShotsProposalHistoryRecord | null {
+  if (!value || typeof value !== "object") return null;
   const record = value as Partial<ChicagoShotsProposalHistoryRecord>;
   const flags = record.safety_flags as Partial<ChicagoShotsProposalHistorySafetyFlags> | undefined;
+  const status = normalizeChicagoShotsProposalStatus(record.status) ?? "draft";
+  const statusUpdatedAt =
+    typeof record.status_updated_at === "string" && record.status_updated_at.trim()
+      ? record.status_updated_at
+      : typeof record.created_at === "string"
+        ? record.created_at
+        : "";
+  const recommendedPackage =
+    typeof record.recommended_package === "string" && record.recommended_package.trim()
+      ? record.recommended_package
+      : record.package;
+  const clientReadyProposal =
+    typeof record.client_ready_proposal === "string" && record.client_ready_proposal.trim()
+      ? record.client_ready_proposal
+      : record.exported_markdown;
 
-  return (
+  if (
     typeof record.id === "string" &&
     typeof record.created_at === "string" &&
     record.store_kind === "local_admin_only_chicagoshots_proposal_history" &&
@@ -218,6 +289,8 @@ function isChicagoShotsProposalHistoryRecord(value: unknown): value is ChicagoSh
     record.production_write_allowed === false &&
     typeof record.client_name === "string" &&
     typeof record.package === "string" &&
+    typeof recommendedPackage === "string" &&
+    typeof clientReadyProposal === "string" &&
     typeof record.exported_markdown === "string" &&
     flags?.external_send === false &&
     flags.provider_called === false &&
@@ -227,7 +300,20 @@ function isChicagoShotsProposalHistoryRecord(value: unknown): value is ChicagoSh
     flags.production_ledger_write === false &&
     flags.payment_request_created === false &&
     flags.invoice_created === false
-  );
+  ) {
+    return {
+      ...record,
+      status,
+      status_updated_at: statusUpdatedAt,
+      recommended_package: recommendedPackage,
+      client_ready_proposal: clientReadyProposal,
+      safety_flags: safetyFlags(),
+      local_dev_only: true,
+      production_write_allowed: false,
+    } as ChicagoShotsProposalHistoryRecord;
+  }
+
+  return null;
 }
 
 export async function persistChicagoShotsProposalHistoryRecord(
@@ -277,8 +363,10 @@ export async function readChicagoShotsProposalHistoryRecords(
       try {
         const parsed = JSON.parse(line) as unknown;
 
-        if (isChicagoShotsProposalHistoryRecord(parsed)) {
-          byId.set(parsed.id, parsed);
+        const normalizedRecord = normalizeStoredProposalHistoryRecord(parsed);
+
+        if (normalizedRecord) {
+          byId.set(normalizedRecord.id, normalizedRecord);
         } else {
           malformedLines += 1;
         }
@@ -287,8 +375,11 @@ export async function readChicagoShotsProposalHistoryRecords(
       }
     }
 
-    const records = Array.from(byId.values())
-      .sort((left, right) => left.created_at.localeCompare(right.created_at))
+    const allRecords = Array.from(byId.values()).sort((left, right) =>
+      left.created_at.localeCompare(right.created_at),
+    );
+    const statusCounts = countStatuses(allRecords);
+    const records = allRecords
       .slice(-limit)
       .reverse();
 
@@ -296,6 +387,8 @@ export async function readChicagoShotsProposalHistoryRecords(
       store_path: storePath,
       limit,
       records,
+      status_counts: statusCounts,
+      total_count: allRecords.length,
       malformed_lines: malformedLines,
     };
   } catch (error) {
@@ -304,12 +397,54 @@ export async function readChicagoShotsProposalHistoryRecords(
         store_path: storePath,
         limit,
         records: [],
+        status_counts: emptyStatusCounts(),
+        total_count: 0,
         malformed_lines: 0,
       };
     }
 
     throw error;
   }
+}
+
+export async function updateChicagoShotsProposalHistoryRecordStatus(
+  id: string,
+  status: ChicagoShotsProposalStatus,
+  options: {
+    storePath?: string;
+    env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+    updatedAt?: string;
+  } = {},
+) {
+  const current = await readChicagoShotsProposalHistoryRecordById(id, { storePath: options.storePath });
+
+  if (!current) {
+    return {
+      found: false,
+      persistence: null,
+      record: null,
+    };
+  }
+
+  const updatedAt = options.updatedAt ?? new Date().toISOString();
+  const updated: ChicagoShotsProposalHistoryRecord = {
+    ...current,
+    status,
+    status_updated_at: updatedAt,
+    safety_flags: safetyFlags(),
+    local_dev_only: true,
+    production_write_allowed: false,
+  };
+  const persistence = await persistChicagoShotsProposalHistoryRecord(updated, {
+    storePath: options.storePath,
+    env: options.env,
+  });
+
+  return {
+    found: true,
+    persistence,
+    record: persistence.record,
+  };
 }
 
 export async function readChicagoShotsProposalHistoryRecordById(

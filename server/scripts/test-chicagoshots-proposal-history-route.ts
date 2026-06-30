@@ -38,8 +38,11 @@ type SaveResponse = {
   record: {
     id: string;
     client_name: string;
+    status: string;
     package: string;
+    recommended_package: string;
     recommended_price_range: string;
+    client_ready_proposal: string;
     exported_markdown: string;
     safety_flags: {
       external_send: false;
@@ -56,7 +59,31 @@ type SaveResponse = {
 
 type HistoryResponse = {
   ok: boolean;
-  records: Array<{ id: string }>;
+  records: Array<{ id: string; status: string }>;
+  summary_counts: {
+    total: number;
+    draft: number;
+    sent_manually: number;
+    follow_up_needed: number;
+    won: number;
+    lost: number;
+  };
+};
+
+type StatusUpdateResponse = {
+  ok: boolean;
+  status: string;
+  record: SaveResponse["record"] & {
+    status_updated_at: string;
+  };
+  provider_called: false;
+  external_send: false;
+  n8n_executed: false;
+  approval_executed: false;
+  queue_written: false;
+  production_ledger_write: false;
+  payment_request_created: false;
+  invoice_created: false;
 };
 
 try {
@@ -132,6 +159,14 @@ try {
     "",
     "Preview only. No send. No payment request. No invoice. No queue write. No ledger write.",
   ].join("\n");
+  const clientReadyProposal = [
+    "# ChicagoShots Proposal Draft",
+    "",
+    "Prepared for: Coach Ramirez",
+    "Project: sports tournament",
+    "",
+    "Quote range: $750-$1,500",
+  ].join("\n");
   const save = await app.inject({
     method: "POST",
     url: "/phantom-ai/ops/chicagoshots/proposal-history/save",
@@ -139,6 +174,7 @@ try {
     payload: JSON.stringify({
       packet: previewBody.lead,
       proposal_summary: "Coach Ramirez - Sports / Action",
+      client_ready_proposal: clientReadyProposal,
       exported_markdown: exportedMarkdown,
     }),
   });
@@ -146,7 +182,10 @@ try {
   const saveBody = parseJson<SaveResponse>(save.payload);
   assert(saveBody.ok === true, "Save response should be ok.");
   assert(saveBody.record.client_name === "Coach Ramirez", "Saved record should keep client name.");
+  assert(saveBody.record.status === "draft", "Saved record should start as draft.");
   assert(saveBody.record.package === "Sports / Action", "Saved record should keep package.");
+  assert(saveBody.record.recommended_package === "Sports / Action", "Saved record should expose recommended_package.");
+  assert(saveBody.record.client_ready_proposal.includes("Quote range"), "Saved record should include client_ready_proposal.");
   assert(saveBody.record.safety_flags.external_send === false, "Saved record must not send externally.");
   assert(saveBody.record.safety_flags.provider_called === false, "Saved record must not call providers.");
   assert(saveBody.record.safety_flags.n8n_executed === false, "Saved record must not execute n8n.");
@@ -164,6 +203,90 @@ try {
   assert(history.statusCode === 200, "Admin history list after save should return 200.");
   const historyBody = parseJson<HistoryResponse>(history.payload);
   assert(historyBody.records.some((record) => record.id === saveBody.record.id), "History list should include saved packet.");
+  assert(historyBody.summary_counts.total === 1, "History response should include total saved count.");
+  assert(historyBody.summary_counts.draft === 1, "History response should count draft proposals.");
+
+  const unauthStatusUpdate = await app.inject({
+    method: "PATCH",
+    url: `/phantom-ai/ops/chicagoshots/proposal-history/${saveBody.record.id}/status`,
+    headers: {
+      "Content-Type": "application/json",
+    },
+    payload: JSON.stringify({ status: "follow_up_needed" }),
+  });
+  assert(unauthStatusUpdate.statusCode === 401, "Unauthenticated status update should return 401.");
+
+  const clientStatusUpdate = await app.inject({
+    method: "PATCH",
+    url: `/phantom-ai/ops/chicagoshots/proposal-history/${saveBody.record.id}/status`,
+    headers: {
+      Authorization: `Bearer ${clientToken}`,
+      "Content-Type": "application/json",
+    },
+    payload: JSON.stringify({ status: "follow_up_needed" }),
+  });
+  assert(clientStatusUpdate.statusCode === 403, "Client/non-admin status update should return 403.");
+
+  const invalidStatusUpdate = await app.inject({
+    method: "PATCH",
+    url: `/phantom-ai/ops/chicagoshots/proposal-history/${saveBody.record.id}/status`,
+    headers: adminHeaders,
+    payload: JSON.stringify({ status: "emailed_automatically" }),
+  });
+  assert(invalidStatusUpdate.statusCode === 400, "Invalid proposal status should return 400.");
+
+  const sentUpdate = await app.inject({
+    method: "PATCH",
+    url: `/phantom-ai/ops/chicagoshots/proposal-history/${saveBody.record.id}/status`,
+    headers: adminHeaders,
+    payload: JSON.stringify({ status: "sent_manually" }),
+  });
+  assert(sentUpdate.statusCode === 200, "Admin sent-manually status update should return 200.");
+  const sentBody = parseJson<StatusUpdateResponse>(sentUpdate.payload);
+  assert(sentBody.status === "sent_manually", "Status update response should show sent manually.");
+  assert(sentBody.provider_called === false, "Sent-manually status update must not call providers.");
+  assert(sentBody.external_send === false, "Sent-manually status update must not send externally.");
+  assert(sentBody.payment_request_created === false, "Sent-manually status update must not create payment requests.");
+  assert(sentBody.invoice_created === false, "Sent-manually status update must not create invoices.");
+
+  const followUpUpdate = await app.inject({
+    method: "PATCH",
+    url: `/phantom-ai/ops/chicagoshots/proposal-history/${saveBody.record.id}/status`,
+    headers: adminHeaders,
+    payload: JSON.stringify({ status: "follow_up_needed" }),
+  });
+  assert(followUpUpdate.statusCode === 200, "Admin status update should return 200.");
+  const followUpBody = parseJson<StatusUpdateResponse>(followUpUpdate.payload);
+  assert(followUpBody.status === "follow_up_needed", "Status update response should show follow-up needed.");
+  assert(followUpBody.provider_called === false, "Status update must not call providers.");
+  assert(followUpBody.external_send === false, "Status update must not send externally.");
+  assert(followUpBody.n8n_executed === false, "Status update must not execute n8n.");
+  assert(followUpBody.approval_executed === false, "Status update must not execute approvals.");
+  assert(followUpBody.queue_written === false, "Status update must not write queues.");
+  assert(followUpBody.production_ledger_write === false, "Status update must not write production ledgers.");
+  assert(followUpBody.payment_request_created === false, "Status update must not create payment requests.");
+  assert(followUpBody.invoice_created === false, "Status update must not create invoices.");
+
+  const wonUpdate = await app.inject({
+    method: "PATCH",
+    url: `/phantom-ai/ops/chicagoshots/proposal-history/${saveBody.record.id}/status`,
+    headers: adminHeaders,
+    payload: JSON.stringify({ status: "won" }),
+  });
+  assert(wonUpdate.statusCode === 200, "Admin won status update should return 200.");
+  const wonBody = parseJson<StatusUpdateResponse>(wonUpdate.payload);
+  assert(wonBody.status === "won", "Status update response should show won.");
+
+  const updatedHistory = await app.inject({
+    method: "GET",
+    url: "/phantom-ai/ops/chicagoshots/proposal-history",
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  assert(updatedHistory.statusCode === 200, "Admin history after status update should return 200.");
+  const updatedHistoryBody = parseJson<HistoryResponse>(updatedHistory.payload);
+  assert(updatedHistoryBody.records.some((record) => record.id === saveBody.record.id && record.status === "won"), "History list should show latest won status.");
+  assert(updatedHistoryBody.summary_counts.won === 1, "History response should count won proposals.");
+  assert(updatedHistoryBody.summary_counts.draft === 0, "History response should remove replaced draft count.");
 
   const byId = await app.inject({
     method: "GET",
@@ -188,11 +311,22 @@ try {
         clientStatus: clientHistory.statusCode,
         adminStatus: emptyHistory.statusCode,
         saveStatus: save.statusCode,
+        unauthStatusUpdateStatus: unauthStatusUpdate.statusCode,
+        clientStatusUpdateStatus: clientStatusUpdate.statusCode,
+        invalidStatusUpdateStatus: invalidStatusUpdate.statusCode,
+        sentUpdateStatus: sentUpdate.statusCode,
+        followUpUpdateStatus: followUpUpdate.statusCode,
+        wonUpdateStatus: wonUpdate.statusCode,
         byIdStatus: byId.statusCode,
         approvalsExecuteStatus: executeRoute.statusCode,
         savedId: saveBody.record.id,
         client: saveBody.record.client_name,
         package: saveBody.record.package,
+        currentStatus: wonBody.status,
+        totalSaved: updatedHistoryBody.summary_counts.total,
+        wonCount: updatedHistoryBody.summary_counts.won,
+        recommendedPackage: saveBody.record.recommended_package,
+        clientReadyProposal: saveBody.record.client_ready_proposal.includes("Quote range"),
         providerCalled: saveBody.record.safety_flags.provider_called,
         externalSend: saveBody.record.safety_flags.external_send,
         n8nExecuted: saveBody.record.safety_flags.n8n_executed,

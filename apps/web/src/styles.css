@@ -1417,10 +1417,59 @@ img {
   gap: 8px;
 }
 
+.proposal-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.proposal-filter-row,
+.proposal-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.proposal-status-select {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.proposal-status-select select {
+  width: min(100%, 260px);
+  min-height: 38px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+}
+
+.proposal-filter-button {
+  min-height: 32px;
+  padding: 6px 10px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.proposal-filter-button.active,
+.proposal-status-action.active {
+  color: var(--text);
+  border-color: rgba(40, 196, 216, 0.44);
+  background: rgba(40, 196, 216, 0.1);
+}
+
 .proposal-history-item {
   display: grid;
   gap: 4px;
-  min-height: 76px;
+  min-height: 92px;
   padding: 10px;
   color: var(--text);
   text-align: left;
@@ -1446,6 +1495,37 @@ img {
   color: var(--muted);
   font-size: 12px;
   line-height: 1.35;
+}
+
+.proposal-status-badge {
+  width: fit-content;
+  padding: 3px 7px;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.2;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+.proposal-status-badge.status-sent-manually {
+  border-color: rgba(40, 196, 216, 0.38);
+  background: rgba(40, 196, 216, 0.1);
+}
+
+.proposal-status-badge.status-follow-up-needed {
+  border-color: rgba(255, 197, 92, 0.42);
+  background: rgba(255, 197, 92, 0.1);
+}
+
+.proposal-status-badge.status-won {
+  border-color: rgba(85, 214, 153, 0.42);
+  background: rgba(85, 214, 153, 0.1);
+}
+
+.proposal-status-badge.status-lost {
+  border-color: rgba(255, 110, 110, 0.42);
+  background: rgba(255, 110, 110, 0.1);
 }
 
 .proposal-history-detail {
@@ -2987,7 +3067,8 @@ img {
   .approval-queue-meta,
   .approval-transition-controls,
   .destination-grid,
-  .simulation-grid {
+  .simulation-grid,
+  .proposal-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 

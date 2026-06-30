@@ -96,9 +96,11 @@ import {
   createChicagoShotsProposalHistoryRecord,
   getChicagoShotsProposalHistoryStatus,
   normalizeChicagoShotsProposalHistoryLimit,
+  normalizeChicagoShotsProposalStatus,
   persistChicagoShotsProposalHistoryRecord,
   readChicagoShotsProposalHistoryRecordById,
   readChicagoShotsProposalHistoryRecords,
+  updateChicagoShotsProposalHistoryRecordStatus,
 } from "./phantom-ai/chicagoshots-proposal-history.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
@@ -1309,6 +1311,7 @@ app.post("/phantom-ai/ops/chicagoshots/proposal-history/save", async (request, r
     packet?: unknown;
     lead?: unknown;
     proposal_summary?: unknown;
+    client_ready_proposal?: unknown;
     exported_markdown?: unknown;
   };
 
@@ -1317,6 +1320,7 @@ app.post("/phantom-ai/ops/chicagoshots/proposal-history/save", async (request, r
     const record = createChicagoShotsProposalHistoryRecord({
       packet: packet as Parameters<typeof createChicagoShotsProposalHistoryRecord>[0]["packet"],
       proposalSummary: typeof body.proposal_summary === "string" ? body.proposal_summary : "",
+      clientReadyProposal: typeof body.client_ready_proposal === "string" ? body.client_ready_proposal : "",
       exportedMarkdown: typeof body.exported_markdown === "string" ? body.exported_markdown : "",
     });
     const persistence = await persistChicagoShotsProposalHistoryRecord(record);
@@ -1395,9 +1399,95 @@ app.get("/phantom-ai/ops/chicagoshots/proposal-history", async (request, reply) 
       production_write_allowed: status.production_write_allowed,
       malformed_lines: history.malformed_lines,
       returned_count: history.records.length,
+      total_count: history.total_count,
       limit: history.limit,
     },
+    summary_counts: history.status_counts,
     records: history.records,
+    provider_called: false,
+    network_call_performed: false,
+    external_send: false,
+    n8n_executed: false,
+    approval_executed: false,
+    queue_written: false,
+    production_ledger_write: false,
+    payment_request_created: false,
+    invoice_created: false,
+  };
+});
+
+app.patch("/phantom-ai/ops/chicagoshots/proposal-history/:id/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const params = request.params as { id: string };
+  const body = (request.body ?? {}) as { status?: unknown };
+  const status = normalizeChicagoShotsProposalStatus(body.status);
+
+  if (!status) {
+    return reply.code(400).send({
+      ok: false,
+      session,
+      error: "Unsupported ChicagoShots proposal status.",
+      allowed_statuses: ["draft", "sent_manually", "follow_up_needed", "won", "lost"],
+      provider_called: false,
+      network_call_performed: false,
+      external_send: false,
+      n8n_executed: false,
+      approval_executed: false,
+      queue_written: false,
+      production_ledger_write: false,
+      payment_request_created: false,
+      invoice_created: false,
+    });
+  }
+
+  const result = await updateChicagoShotsProposalHistoryRecordStatus(params.id, status);
+
+  if (!result.found) {
+    return reply.code(404).send({
+      ok: false,
+      session,
+      error: "ChicagoShots proposal history record not found.",
+      provider_called: false,
+      network_call_performed: false,
+      external_send: false,
+      n8n_executed: false,
+      approval_executed: false,
+      queue_written: false,
+      production_ledger_write: false,
+      payment_request_created: false,
+      invoice_created: false,
+    });
+  }
+
+  if (!result.persistence?.persisted || !result.record) {
+    return reply.code(403).send({
+      ok: false,
+      session,
+      error: "ChicagoShots proposal status updates are blocked in production mode.",
+      persistence: result.persistence,
+      provider_called: false,
+      network_call_performed: false,
+      external_send: false,
+      n8n_executed: false,
+      approval_executed: false,
+      queue_written: false,
+      production_ledger_write: false,
+      payment_request_created: false,
+      invoice_created: false,
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    record: result.record,
+    status: result.record.status,
+    status_updated_at: result.record.status_updated_at,
     provider_called: false,
     network_call_performed: false,
     external_send: false,
@@ -1523,6 +1613,7 @@ app.get("/phantom-ai/ops/status", async (request, reply) => {
           "POST /phantom-ai/ops/chicagoshots/proposal-history/save",
           "GET /phantom-ai/ops/chicagoshots/proposal-history",
           "GET /phantom-ai/ops/chicagoshots/proposal-history/:id",
+          "PATCH /phantom-ai/ops/chicagoshots/proposal-history/:id/status",
         ],
         workflow_preview_enabled: true,
         proposal_history_enabled: true,

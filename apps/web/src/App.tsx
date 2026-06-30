@@ -463,17 +463,27 @@ type ChicagoShotsLeadIntakePacket = {
   safety_flags: Record<string, boolean>;
 };
 
+type ChicagoShotsProposalStatus = "draft" | "sent_manually" | "follow_up_needed" | "won" | "lost";
+type ChicagoShotsProposalHistoryFilter = "all" | ChicagoShotsProposalStatus;
+type ChicagoShotsProposalStatusCounts = Record<ChicagoShotsProposalStatus, number> & {
+  total: number;
+};
+
 type ChicagoShotsProposalHistoryRecord = {
   id: string;
   created_at: string;
+  status: ChicagoShotsProposalStatus;
+  status_updated_at: string;
   source_preview_id: string;
   client_name: string;
   event_type: string;
   package: string;
+  recommended_package: string;
   recommended_price_range: string;
   delivery_timeline: string;
   follow_up_channel: string;
   quote_draft: ChicagoShotsLeadIntakePacket["quote_draft"];
+  client_ready_proposal: string;
   proposal_summary: string;
   exported_markdown: string;
   safety_flags: Record<string, boolean>;
@@ -484,10 +494,17 @@ type ChicagoShotsProposalHistoryRecord = {
 type ChicagoShotsProposalHistoryListResponse = {
   ok?: boolean;
   records?: ChicagoShotsProposalHistoryRecord[];
+  summary_counts?: ChicagoShotsProposalStatusCounts;
   error?: string;
 };
 
 type ChicagoShotsProposalHistorySaveResponse = {
+  ok?: boolean;
+  record?: ChicagoShotsProposalHistoryRecord;
+  error?: string;
+};
+
+type ChicagoShotsProposalStatusUpdateResponse = {
   ok?: boolean;
   record?: ChicagoShotsProposalHistoryRecord;
   error?: string;
@@ -1981,6 +1998,64 @@ function chicagoShotsSavedPacketFileName(record: ChicagoShotsProposalHistoryReco
     .slice(0, 48);
   const dateSlug = record.created_at.slice(0, 10) || "saved";
   return `chicagoshots-proposal-${slug || "lead"}-${dateSlug}.md`;
+}
+
+const chicagoShotsProposalStatusLabels: Record<ChicagoShotsProposalStatus, string> = {
+  draft: "Draft",
+  sent_manually: "Sent manually",
+  follow_up_needed: "Follow-up needed",
+  won: "Won",
+  lost: "Lost",
+};
+
+const chicagoShotsProposalStatusOptions: ChicagoShotsProposalStatus[] = [
+  "draft",
+  "sent_manually",
+  "follow_up_needed",
+  "won",
+  "lost",
+];
+
+const chicagoShotsProposalHistoryFilters: ChicagoShotsProposalHistoryFilter[] = [
+  "all",
+  "draft",
+  "follow_up_needed",
+  "won",
+  "lost",
+];
+
+const defaultChicagoShotsProposalStatusCounts: ChicagoShotsProposalStatusCounts = {
+  total: 0,
+  draft: 0,
+  sent_manually: 0,
+  follow_up_needed: 0,
+  won: 0,
+  lost: 0,
+};
+
+function countChicagoShotsProposalStatuses(records: ChicagoShotsProposalHistoryRecord[]): ChicagoShotsProposalStatusCounts {
+  return records.reduce(
+    (counts, record) => ({
+      ...counts,
+      total: counts.total + 1,
+      [record.status]: counts[record.status] + 1,
+    }),
+    { ...defaultChicagoShotsProposalStatusCounts },
+  );
+}
+
+function chicagoShotsProposalBody(record: ChicagoShotsProposalHistoryRecord) {
+  return record.client_ready_proposal || record.exported_markdown;
+}
+
+function chicagoShotsProposalStatusLabel(status: ChicagoShotsProposalHistoryFilter) {
+  if (status === "all") return "All";
+  if (status === "draft") return "Drafts";
+  return chicagoShotsProposalStatusLabels[status];
+}
+
+function chicagoShotsProposalStatusClass(status: ChicagoShotsProposalStatus) {
+  return status;
 }
 
 function makeId(prefix: string) {
@@ -5906,6 +5981,10 @@ function ChicagoShotsLeadIntakePanel({
   const [selectedProposalRecord, setSelectedProposalRecord] = useState<ChicagoShotsProposalHistoryRecord | null>(null);
   const [proposalHistoryBusy, setProposalHistoryBusy] = useState(false);
   const [proposalHistoryStatus, setProposalHistoryStatus] = useState("");
+  const [proposalHistoryFilter, setProposalHistoryFilter] = useState<ChicagoShotsProposalHistoryFilter>("all");
+  const [proposalHistoryCounts, setProposalHistoryCounts] =
+    useState<ChicagoShotsProposalStatusCounts>(defaultChicagoShotsProposalStatusCounts);
+  const hasSessionHeaders = Boolean(sessionHeaders);
 
   function updateLeadField(field: keyof ChicagoShotsLeadForm, value: string) {
     setLeadForm((current) => ({ ...current, [field]: value }));
@@ -5921,7 +6000,7 @@ function ChicagoShotsLeadIntakePanel({
   useEffect(() => {
     if (!sessionHeaders) return;
     void loadProposalHistory();
-  }, [sessionHeaders]);
+  }, [hasSessionHeaders]);
 
   async function copyLeadText(label: string, text: string) {
     setLeadError("");
@@ -5961,7 +6040,7 @@ function ChicagoShotsLeadIntakePanel({
 
     setProposalHistoryBusy(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/phantom-ai/ops/chicagoshots/proposal-history?limit=8`, {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/ops/chicagoshots/proposal-history?limit=50`, {
         headers: sessionHeaders(),
       });
       const data = (await response.json().catch(() => null)) as ChicagoShotsProposalHistoryListResponse | null;
@@ -5972,8 +6051,11 @@ function ChicagoShotsLeadIntakePanel({
       }
 
       setProposalHistory(data.records);
+      setProposalHistoryCounts(data.summary_counts ?? countChicagoShotsProposalStatuses(data.records));
       if (selectedProposalRecord && !data.records.some((record) => record.id === selectedProposalRecord.id)) {
         setSelectedProposalRecord(null);
+      } else if (selectedProposalRecord) {
+        setSelectedProposalRecord(data.records.find((record) => record.id === selectedProposalRecord.id) ?? selectedProposalRecord);
       }
       setProposalHistoryStatus(data.records.length ? "Loaded recent proposal packets." : "No saved proposal packets yet.");
     } catch {
@@ -5990,6 +6072,7 @@ function ChicagoShotsLeadIntakePanel({
     }
 
     const exportedMarkdown = formatChicagoShotsIntakePacket(packet);
+    const clientReadyProposal = formatChicagoShotsClientReadyProposal(packet);
     const proposalSummary = formatChicagoShotsProposalSummary(packet);
 
     try {
@@ -5999,6 +6082,7 @@ function ChicagoShotsLeadIntakePanel({
         body: JSON.stringify({
           packet,
           proposal_summary: proposalSummary,
+          client_ready_proposal: clientReadyProposal,
           exported_markdown: exportedMarkdown,
         }),
       });
@@ -6009,11 +6093,52 @@ function ChicagoShotsLeadIntakePanel({
         return;
       }
 
-      setProposalHistory((current) => [data.record!, ...current.filter((record) => record.id !== data.record!.id)].slice(0, 8));
+      setProposalHistory((current) => {
+        const next = [data.record!, ...current.filter((record) => record.id !== data.record!.id)].slice(0, 50);
+        setProposalHistoryCounts(countChicagoShotsProposalStatuses(next));
+        return next;
+      });
       setSelectedProposalRecord(data.record);
       setProposalHistoryStatus(options.silent ? "Saved generated packet to local history." : "Saved proposal packet locally.");
     } catch {
       setProposalHistoryStatus("Proposal packet could not be saved to the local backend.");
+    }
+  }
+
+  async function updateProposalPacketStatus(record: ChicagoShotsProposalHistoryRecord, status: ChicagoShotsProposalStatus) {
+    if (!sessionHeaders) {
+      setLeadError("Admin session is not available. Sign in as Jordan / PhantomForce Admin.");
+      return;
+    }
+
+    setProposalHistoryBusy(true);
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/phantom-ai/ops/chicagoshots/proposal-history/${encodeURIComponent(record.id)}/status`,
+        {
+          method: "PATCH",
+          headers: sessionHeaders(true),
+          body: JSON.stringify({ status }),
+        },
+      );
+      const data = (await response.json().catch(() => null)) as ChicagoShotsProposalStatusUpdateResponse | null;
+
+      if (!response.ok || !data?.record) {
+        setProposalHistoryStatus(data?.error ?? "Proposal status could not be updated locally.");
+        return;
+      }
+
+      setProposalHistory((current) => {
+        const next = [data.record!, ...current.filter((item) => item.id !== data.record!.id)].slice(0, 50);
+        setProposalHistoryCounts(countChicagoShotsProposalStatuses(next));
+        return next;
+      });
+      setSelectedProposalRecord(data.record);
+      setProposalHistoryStatus(`Status updated: ${chicagoShotsProposalStatusLabels[data.record.status]}. No message was sent.`);
+    } catch {
+      setProposalHistoryStatus("Proposal status update could not reach the local backend.");
+    } finally {
+      setProposalHistoryBusy(false);
     }
   }
 
@@ -6077,6 +6202,9 @@ function ChicagoShotsLeadIntakePanel({
         ["Raw secret exposed", leadPreview.safety_flags.raw_secret_exposed],
       ]
     : [];
+  const visibleProposalHistory = proposalHistory.filter((record) =>
+    proposalHistoryFilter === "all" ? true : record.status === proposalHistoryFilter,
+  );
 
   return (
     <section className="lead-intake-panel">
@@ -6226,15 +6354,36 @@ function ChicagoShotsLeadIntakePanel({
           <span>No payment</span>
           <span>No ledger write</span>
         </div>
-        {proposalHistory.length ? (
+        <div className="proposal-summary-grid" aria-label="ChicagoShots proposal pipeline counts">
+          <StatusLine label="Total saved" value={String(proposalHistoryCounts.total)} />
+          <StatusLine label="Drafts" value={String(proposalHistoryCounts.draft)} />
+          <StatusLine label="Follow-up needed" value={String(proposalHistoryCounts.follow_up_needed)} />
+          <StatusLine label="Won" value={String(proposalHistoryCounts.won)} />
+        </div>
+        <div className="proposal-filter-row" aria-label="ChicagoShots proposal filters">
+          {chicagoShotsProposalHistoryFilters.map((value) => (
+            <button
+              className={`proposal-filter-button${proposalHistoryFilter === value ? " active" : ""}`}
+              type="button"
+              key={value}
+              onClick={() => setProposalHistoryFilter(value as ChicagoShotsProposalHistoryFilter)}
+            >
+              {chicagoShotsProposalStatusLabel(value)}
+            </button>
+          ))}
+        </div>
+        {visibleProposalHistory.length ? (
           <div className="proposal-history-list">
-            {proposalHistory.map((record) => (
+            {visibleProposalHistory.map((record) => (
               <button
                 className={`proposal-history-item${selectedProposalRecord?.id === record.id ? " active" : ""}`}
                 type="button"
                 key={record.id}
                 onClick={() => setSelectedProposalRecord(record)}
               >
+                <span className={`proposal-status-badge ${record.status}`}>
+                  {chicagoShotsProposalStatusLabels[record.status]}
+                </span>
                 <strong>{record.client_name}</strong>
                 <span>{record.package}</span>
                 <span>{record.created_at.slice(0, 10)} - {record.recommended_price_range}</span>
@@ -6242,22 +6391,70 @@ function ChicagoShotsLeadIntakePanel({
             ))}
           </div>
         ) : (
-          <p className="ops-status-note">Generate an intake preview to save the first local proposal packet.</p>
+          <p className="ops-status-note">
+            {proposalHistory.length
+              ? "No proposal packets match this filter."
+              : "Generate an intake preview to save the first local proposal packet."}
+          </p>
         )}
         {selectedProposalRecord ? (
           <article className="operator-result-card proposal-history-detail">
             <span className="eyebrow">Saved packet</span>
             <h4>{selectedProposalRecord.client_name} - {selectedProposalRecord.package}</h4>
+            <StatusLine label="Status" value={chicagoShotsProposalStatusLabels[selectedProposalRecord.status]} />
             <StatusLine label="Created" value={selectedProposalRecord.created_at} />
+            <StatusLine label="Status updated" value={selectedProposalRecord.status_updated_at} />
             <StatusLine label="Range" value={selectedProposalRecord.recommended_price_range} />
             <StatusLine label="Timeline" value={selectedProposalRecord.delivery_timeline} />
             <StatusLine label="Channel" value={selectedProposalRecord.follow_up_channel} />
             <p>{selectedProposalRecord.proposal_summary}</p>
+            <label className="proposal-status-select">
+              Status
+              <select
+                value={selectedProposalRecord.status}
+                onChange={(event) =>
+                  void updateProposalPacketStatus(
+                    selectedProposalRecord,
+                    event.target.value as ChicagoShotsProposalStatus,
+                  )
+                }
+                disabled={proposalHistoryBusy}
+              >
+                {chicagoShotsProposalStatusOptions.map((status) => (
+                  <option value={status} key={status}>
+                    {chicagoShotsProposalStatusLabels[status]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <div className="proposal-status-actions" aria-label="ChicagoShots proposal status actions">
+              {chicagoShotsProposalStatusOptions.map((status) => (
+                <button
+                  className={`ghost-small proposal-status-action${selectedProposalRecord.status === status ? " active" : ""}`}
+                  type="button"
+                  key={status}
+                  onClick={() => void updateProposalPacketStatus(selectedProposalRecord, status)}
+                  disabled={proposalHistoryBusy || selectedProposalRecord.status === status}
+                >
+                  {status === "sent_manually"
+                    ? "Mark sent manually"
+                    : status === "follow_up_needed"
+                      ? "Mark follow-up needed"
+                      : status === "won"
+                        ? "Mark won"
+                        : status === "lost"
+                          ? "Mark lost"
+                          : "Mark draft"}
+                </button>
+              ))}
+            </div>
             <div className="lead-copy-actions">
               <button
                 className="ghost-small"
                 type="button"
-                onClick={() => void copyLeadText("saved client-ready proposal", selectedProposalRecord.exported_markdown)}
+                onClick={() =>
+                  void copyLeadText("saved client-ready proposal", chicagoShotsProposalBody(selectedProposalRecord))
+                }
               >
                 <Copy size={15} />
                 Copy client-ready proposal
