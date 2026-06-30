@@ -1048,7 +1048,7 @@ const initialMessages: Message[] = [
     id: "msg-1",
     role: "assistant",
     content:
-      "PhantomForce is online. I found one urgent client follow-up, two scheduling opportunities, and one approval-ready action. Ask me to handle the day, schedule a call, draft replies, or clean up the inbox.",
+      "PhantomForce is online - protected. I found one urgent client follow-up, two scheduling opportunities, and one approval-ready action. Ask me to handle the day, schedule a call, draft replies, or clean up the inbox.",
   },
 ];
 
@@ -1194,10 +1194,10 @@ const truthStatusLabels: TruthLabel[] = [
 const customerStatusLabels: TruthLabel[] = [
   {
     label: "Phantom AI",
-    value: "Demo assistant",
+    value: "Online - protected",
     state: "demo",
     detail:
-      "Phantom AI can summarize this local workspace and prepare approval-ready next steps. It is not executing live external actions.",
+      "Phantom AI can summarize the workspace and prepare approval-ready next steps while keeping private data out of customer-visible plumbing.",
   },
   {
     label: "Memory",
@@ -1223,9 +1223,9 @@ const customerStatusLabels: TruthLabel[] = [
 ];
 
 const phantomAiStatus = {
-  availability: "Demo assistant",
+  availability: "Online - protected",
   memory: "Setup required",
-  fallback: "Background help may assist later; customers stay in Phantom AI",
+  fallback: "Private APIs save lives; provider details stay behind Phantom AI",
   approvalGate: "Approval gate visible for demo actions; live external actions disabled",
   allowedSuggestions: [
     "Prioritize leads, tasks, schedule gaps, and client follow-ups",
@@ -1379,7 +1379,7 @@ const defaultProviderSetupStatus: ProviderSetupStatus = {
   local_fallback: {
     available: false,
     status: "Not Available",
-    detail: "No local fallback endpoint is configured for the server.",
+    detail: "Private APIs save lives. Model routing stays behind Phantom AI instead of exposing backend plumbing.",
   },
   byok: {
     enabled: false,
@@ -3292,7 +3292,7 @@ function CustomerReadinessPanel() {
           <span className="eyebrow">PhantomForce status</span>
           <h3>What the owner can safely trust today.</h3>
         </div>
-        <TruthBadge state="demo" label="Demo / Local" />
+        <TruthBadge state="demo" label="Online - protected" />
       </div>
       <div className="truth-grid">
         {customerStatusLabels.map((item) => (
@@ -3345,9 +3345,9 @@ function ProviderSetupPanel({ status }: { status: ProviderSetupStatus }) {
           state={status.claude_api.configured ? "real" : "stub"}
         />
         <ProviderStatusCard
-          label="Local fallback"
-          value={status.local_fallback.status}
-          detail={status.local_fallback.detail}
+          label="Private API lane"
+          value="Private APIs save lives"
+          detail="Model routing stays private behind Phantom AI. Customers see protected assistance, not infrastructure details."
           state={status.local_fallback.available ? "real" : "stub"}
         />
         <ProviderStatusCard
@@ -3648,7 +3648,7 @@ function ProviderPolicyGatePanel({ policy }: { policy: ProviderPolicyPreview | n
         <ProviderStatusCard
           label="Managed mode"
           value={policy.policy.managed_provider_mode.replace(/_/g, " ")}
-          detail={`BYOK: ${policy.policy.byok_status.replace(/_/g, " ")}. Local fallback: ${policy.policy.local_fallback_status.replace(/_/g, " ")}.`}
+          detail={`BYOK: ${policy.policy.byok_status.replace(/_/g, " ")}. Private API lane: ${policy.policy.local_fallback_status.replace(/_/g, " ")}.`}
           state="demo"
         />
       </div>
@@ -4671,7 +4671,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
         <ProviderStatusCard
           label="No live provider call"
           value={preview?.live_provider_called ? "Yes" : "No"}
-          detail="OpenRouter, Claude, and local model calls are disabled in this patch."
+          detail="Private API routes stay blocked in this preview; Phantom AI does not leak provider plumbing to customers."
           state={preview?.live_provider_called ? "blocked" : "real"}
         />
         <ProviderStatusCard

@@ -167,15 +167,15 @@ function deriveRoutes(setup: ProviderSetupStatus, env: NodeJS.ProcessEnv, lastCh
     }),
     buildRoute({
       id: "local",
-      label: "Local/private fallback route",
-      clientSafeLabel: "Private fallback route",
+      label: "Private API lane",
+      clientSafeLabel: "Private API lane",
       clientSafeStatus: localAvailable ? "Configured for future admin use" : "Planned / not configured",
       configured: localAvailable,
       status: localAvailable ? "configured" : "needs_config",
       keySource: localConfigPresent ? "env" : "none",
       keyPresent: localConfigPresent,
-      keyPreview: maskedKeyPreview(localConfigPresent, "local config"),
-      modelId: localAvailable ? "local-fallback-configured-later" : null,
+      keyPreview: maskedKeyPreview(localConfigPresent, "private route config"),
+      modelId: localAvailable ? "private-api-configured-later" : null,
       setupRequired: !localAvailable,
       disabledReason: liveDisabledReason,
       requiredBeforeLive: providerRequiredBeforeLive,
@@ -183,10 +183,10 @@ function deriveRoutes(setup: ProviderSetupStatus, env: NodeJS.ProcessEnv, lastCh
       isDefaultSafeRoute: false,
       missing: localAvailable
         ? []
-        : ["A local model endpoint (for example OLLAMA_BASE_URL) or PHANTOM_LOCAL_MODEL_AVAILABLE=true."],
+        : ["Private API route is not configured for this server yet."],
       detail: localAvailable
-        ? "Local endpoint is referenced for future private/offline use; live calls remain globally disabled."
-        : "No local fallback endpoint is configured for the server.",
+        ? "Private API route is referenced for future protected use; live calls remain globally disabled."
+        : "Private APIs save lives. No private route is configured for this server yet.",
     }),
     buildRoute({
       id: "byok",

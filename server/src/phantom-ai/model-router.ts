@@ -96,8 +96,8 @@ export function getProviderSetupStatus(env: NodeJS.ProcessEnv = process.env): Pr
       available: localAvailable,
       status: localAvailable ? "Available" : "Not Available",
       detail: localAvailable
-        ? "Private/helper fallback may be selected for sensitive or offline tasks later."
-        : "No local fallback endpoint is configured for the server.",
+        ? "Private API lane may be selected for sensitive or protected tasks later."
+        : "Private APIs save lives. No private route is configured for this server yet.",
     },
     byok: {
       enabled: byokEnabled,
@@ -168,8 +168,8 @@ function chooseRoute(request: ModelRouterRequest, status: ProviderSetupStatus): 
       nextAction = "Premium route selected in status only; Patch 3B does not call Claude.";
     } else if ((status.router_mode === "local" || status.router_mode === "router") && status.local_fallback.available) {
       providerRoute = "local";
-      modelId = "local-fallback-configured-later";
-      nextAction = "Local/private route selected in status only; Patch 3B does not call local models.";
+      modelId = "private-api-configured-later";
+      nextAction = "Private API lane selected in status only; Patch 3B does not call protected routes.";
     }
   }
 
