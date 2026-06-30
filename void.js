@@ -181,13 +181,25 @@ async function initEntity() {
     camera.position.set(0, 0, 7.6);
     const root = new THREE.Group(); scene.add(root);
 
-    const N = smallScreen ? 1500 : 2600;
+    // a ghost made of light: dome head, body, scalloped bottom fringe (a 3D
+    // surface of revolution so it reads as a ghost from any angle).
+    const N = smallScreen ? 1800 : 3000;
     const base = new Float32Array(N * 3), pos = new Float32Array(N * 3);
+    const GA = 2.399963229728653;
     for (let k = 0; k < N; k++) {
-      const y = 1 - (k / (N - 1)) * 2, r = Math.sqrt(Math.max(0, 1 - y * y)), phi = k * 2.399963229728653;
-      const x = Math.cos(phi) * r, z = Math.sin(phi) * r;
+      const v = k / (N - 1);                 // 0 = top, 1 = bottom
+      const ang = k * GA;
+      const R = v < 0.34 ? Math.sin((v / 0.34) * (Math.PI / 2)) * 0.95 : 0.95;
+      let y = 1.12 - v * 2.24;               // top ~+1.12 -> bottom ~-1.12
+      if (v > 0.72) {                        // wavy fringe at the bottom
+        const f = (v - 0.72) / 0.28;
+        y += f * 0.44 * (0.5 + 0.5 * Math.sin(ang * 5));
+      }
+      const rr = R * (0.8 + 0.2 * (((k * 9301) % 233) / 233));   // a little volume
+      const x = Math.cos(ang) * rr;
+      const z = Math.sin(ang) * rr * 0.72;   // slightly flatter front-to-back
       base[k * 3] = x; base[k * 3 + 1] = y; base[k * 3 + 2] = z;
-      pos[k * 3] = x * 2; pos[k * 3 + 1] = y * 2; pos[k * 3 + 2] = z * 2;
+      pos[k * 3] = x; pos[k * 3 + 1] = y; pos[k * 3 + 2] = z;
     }
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     const ent = new THREE.Points(geo, new THREE.PointsMaterial({ color: new THREE.Color(0x41ffa1), size: 0.035, sizeAttenuation: true, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false }));
