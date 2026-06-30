@@ -23,15 +23,40 @@ async function askPhantom(message) {
   finally { clearTimeout(timer); }
   return null;
 }
+const pick = (arr) => arr[Math.floor(Math.random() * arr.length)];
 function localReply(text) {
-  const s = (text || "").toLowerCase();
-  if (/lead|inquir|prospect|follow/.test(s)) return "Leads get captured, answered, and chased automatically — nothing slips.";
-  if (/sched|book|calendar|remind|appoint/.test(s)) return "Bookings, reminders, and changes get handled without the back-and-forth.";
-  if (/repl|email|message|comm|text|dm/.test(s)) return "Replies are drafted the second they're needed — you approve, it sends.";
-  if (/quote|price|money|invoice|pay|sales|deal/.test(s)) return "Quotes, follow-ups, and the money trail get drafted and tracked.";
-  if (/content|video|post|deck|doc|social|website|site/.test(s)) return "Posts, docs, decks, and video get generated on command — private to you.";
-  if (/privat|secure|safe|data|risk|malware|scam|phish/.test(s)) return "I watch the risks — scams, leaks, deadlines — and keep it all inside your business.";
-  return "Tell me the task that's eating your hours and I'll take it off your plate.";
+  const s = (text || "").toLowerCase().trim();
+  if (/^(hi|hey|hello|yo|sup|howdy|hiya|wassup|good (morning|evening|afternoon))\b/.test(s) || /^(what'?s up|hey phantom|hello phantom)/.test(s))
+    return pick([
+      "Hey. I'm PhantomForce — I run the boring half of your business so you don't. What's eating your time?",
+      "Hello. Point me at the chaos — leads, messages, scheduling — and watch it go quiet.",
+      "Hey there. I never sleep, never forget, and nothing leaves without you. What do you need handled?",
+    ]);
+  if (/who are you|what are you|your name|who'?s this|what is this/.test(s))
+    return pick([
+      "I'm PhantomForce — a private AI that runs your operations. The operator you couldn't afford to hire.",
+      "PhantomForce. I quietly run the day-to-day of a business — privately, for you alone.",
+    ]);
+  if (/what can you do|what do you do|how do you (help|work)|capabilit|feature/.test(s))
+    return pick([
+      "I chase leads, draft your replies, book the jobs, build proposals, even make content — all approved by you.",
+      "I handle the flood — messages, follow-ups, scheduling, quotes, content — so you do the work you love.",
+    ]);
+  if (/thank|thanks|cheers|appreciate/.test(s)) return "Anytime. And this is just a taste — imagine it running 24/7.";
+  if (/how much|price|cost|pricing|expensive|afford|free/.test(s)) return "Less than the hours you're bleeding. Your operator works out the exact number with you.";
+  if (/real|legit|trust|fake|believe|prove/.test(s)) return "Real, and private. Nothing trains anyone else, nothing sends without you.";
+  if (/lead|inquir|prospect|follow.?up|chase/.test(s)) return pick(["Every lead captured, answered, and chased — nothing slips.", "Leads stop falling through. I catch them, reply, and keep following up."]);
+  if (/sched|book|calendar|remind|appoint|reschedul/.test(s)) return pick(["Bookings, reminders, and changes — handled without the back-and-forth.", "Your calendar runs itself. I book, remind, and reshuffle."]);
+  if (/repl|email|message|inbox|comm|\btext\b|\bdm\b|whatsapp|messenger/.test(s)) return pick(["Replies drafted the second they're needed — you approve, I send.", "I clear the inbox: answers waiting for one tap from you."]);
+  if (/quote|invoic|money|\bpay\b|sales|deal|proposal/.test(s)) return pick(["Quotes, proposals, and the money trail — drafted and tracked.", "I turn an inquiry into a quote and chase the payment."]);
+  if (/content|video|post|deck|\bdoc\b|social|website|\bsite\b|reel|tiktok|instagram/.test(s)) return pick(["Posts, docs, decks, and video — generated on command, private to you.", "Need content? I'll draft the post, the doc, even the video concept."]);
+  if (/privat|secure|protect|data|risk|malware|phish|threat|hack|scam/.test(s)) return pick(["I watch the risks — scams, leaks, deadlines — and keep it locked inside your business.", "Protection's built in: I flag the scams and threats before they cost you."]);
+  if (/help|stuck|overwhelm|too much|\bbusy\b|stress|no time|drowning/.test(s)) return pick(["That's exactly what I'm for. Tell me the one thing stealing your hours.", "Breathe. Hand me the part you dread and it's handled."]);
+  return pick([
+    "I hear you. Tell me the part of your business that never stops — that's where I start.",
+    "Got it. Point me at the task you keep putting off and watch it disappear.",
+    "Say the thing eating your day — leads, messages, money, content — and I'll take it.",
+  ]);
 }
 
 /* ---------------- conversation ---------------- */
@@ -138,6 +163,8 @@ function initConversation() {
     if (b) advance(b.dataset.answer);
   });
   // Typed input = general live assistant (GLM 5.2 when configured; local responder otherwise).
+  let typed = 0;
+  const FREE_LIMIT = 5; // feel the power, then crave the full thing
   form?.addEventListener("submit", (e) => {
     e.preventDefault();
     const v = (input?.value || "").trim();
@@ -145,16 +172,27 @@ function initConversation() {
     input.value = "";
     hint?.classList.add("gone");
     speak(v, "user");
+    typed += 1;
     window.setTimeout(() => {
       speak("· · ·", "thinking");
       flare();
       askPhantom(v).then((ai) => {
+        // live brain enforces its own per-day cap
         if (ai && ai.limited) {
           speak(ai.message || "That's your free questions for now — summon an operator to go deeper.");
           if (summon) summon.hidden = false;
           return;
         }
-        window.setTimeout(() => speak(ai && ai.reply ? ai.reply : localReply(v)), reduceMotion ? 120 : 540);
+        if (ai && ai.reply) { window.setTimeout(() => speak(ai.reply), reduceMotion ? 120 : 540); return; }
+        // free local responder: reactive, then capped to pull them in
+        window.setTimeout(() => {
+          if (typed > FREE_LIMIT) {
+            speak("That's a taste of what I do. The full version runs 24/7, privately, for your whole business — summon your operator.");
+            if (summon) summon.hidden = false;
+          } else {
+            speak(localReply(v));
+          }
+        }, reduceMotion ? 120 : 540);
       });
     }, reduceMotion ? 80 : 320);
   });
