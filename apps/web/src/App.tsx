@@ -1639,7 +1639,9 @@ const personalTrainingSimulation = {
   ],
 };
 
-const API_BASE_URL = "http://127.0.0.1:5190";
+const API_BASE_URL =
+  (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL?.replace(/\/$/, "") ??
+  "http://127.0.0.1:5190";
 const MONEY_DEMO_CLIENT_ID = "client-money-demo";
 
 const defaultProviderSetupStatus: ProviderSetupStatus = {
