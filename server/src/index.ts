@@ -91,6 +91,7 @@ import {
 } from "./phantom-ai/hermes-interaction-memory-store.js";
 import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
 import { buildToolLanePreview } from "./phantom-ai/tool-lane.js";
+import { buildChicagoShotsLeadIntakePreview } from "./phantom-ai/ops-workflow.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
   getProviderSetupStatus,
@@ -1234,6 +1235,58 @@ app.get("/phantom-ai/hermes/interaction-memory/history", async (request, reply) 
     execution_disabled: true,
     ready_for_send: false,
     provider_transport_allowed: false,
+  };
+});
+
+app.post("/phantom-ai/ops/chicagoshots/lead-intake/preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    actor_user_id?: unknown;
+    client_name?: unknown;
+    contact?: unknown;
+    event_type?: unknown;
+    date_time?: unknown;
+    location?: unknown;
+    requested_service?: unknown;
+    budget_rate?: unknown;
+    notes?: unknown;
+    source_platform?: unknown;
+    urgency?: unknown;
+  };
+  const str = (v: unknown) => (typeof v === "string" ? v : undefined);
+  const lead = await buildChicagoShotsLeadIntakePreview({
+    tenant_id: str(body.tenant_id) ?? "chicagoshots",
+    actor_user_id: str(body.actor_user_id) ?? session.id,
+    client_name: str(body.client_name),
+    contact: str(body.contact),
+    event_type: str(body.event_type),
+    date_time: str(body.date_time),
+    location: str(body.location),
+    requested_service: str(body.requested_service),
+    budget_rate: str(body.budget_rate),
+    notes: str(body.notes),
+    source_platform: str(body.source_platform),
+    urgency: str(body.urgency),
+  });
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    provider_called: false,
+    network_call_performed: false,
+    external_send: false,
+    would_send: false,
+    approval_executed: false,
+    queue_written: false,
+    production_ledger_write: false,
+    lead,
   };
 });
 
