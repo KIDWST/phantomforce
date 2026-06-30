@@ -385,6 +385,16 @@ function initRiskRadar() {
   window.setInterval(spawn, 1300);
 }
 
-function boot() { initConversation(); initEntity(); initPhantomMoods(); initRiskRadar(); }
+function initDock() {
+  const dock = document.querySelector("[data-dock]");
+  const bar = document.querySelector("[data-dock-toggle]");
+  if (!dock || !bar) return;
+  bar.addEventListener("click", () => {
+    dock.classList.toggle("min");
+    const btn = bar.querySelector(".dock-toggle");
+    if (btn) btn.setAttribute("aria-label", dock.classList.contains("min") ? "Expand assistant" : "Minimize assistant");
+  });
+}
+function boot() { initConversation(); initEntity(); initPhantomMoods(); initRiskRadar(); initDock(); }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
 else boot();

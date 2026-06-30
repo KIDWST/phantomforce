@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="void.css?v=11" />
+    <link rel="stylesheet" href="void.css?v=12" />
   </head>
   <body>
     <canvas class="void-canvas" data-void aria-hidden="true"></canvas>
@@ -70,24 +70,27 @@
       </div>
 
       <p class="wordmark" data-wordmark>PHANTOMFORCE</p>
-
-      <div class="say" data-say aria-live="polite">
-        <p class="say-line">I'm a private cyber-AI that runs your business. Point me at what's eating your time.</p>
-      </div>
-
-      <div class="orbits" data-orbits></div>
-
-      <form class="speak" data-speak>
-        <span class="speak-caret" aria-hidden="true">›</span>
-        <input type="text" data-speak-input autocomplete="off" spellcheck="false" placeholder="or just say it…" aria-label="Speak to PhantomForce" />
-      </form>
-
-      <a class="summon" hidden data-summon href="mailto:demo@phantomforce.online">
-        summon my operator <span>→</span>
-      </a>
     </main>
 
-    <p class="hint" data-hint>tap a thought · or type anything</p>
-    <script type="module" src="void.js?v=11"></script>
+    <!-- docked command widget -->
+    <section class="dock" data-dock aria-label="PhantomForce assistant">
+      <header class="dock-bar" data-dock-toggle>
+        <span class="dock-id"><i class="dock-live" aria-hidden="true"></i> PhantomForce <em>online</em></span>
+        <button type="button" class="dock-toggle" aria-label="Minimize assistant"><i class="dock-chevron" aria-hidden="true"></i></button>
+      </header>
+      <div class="dock-body">
+        <div class="say" data-say aria-live="polite">
+          <p class="say-line">I'm a private cyber-AI that runs your business. Point me at what's eating your time.</p>
+        </div>
+        <div class="orbits" data-orbits></div>
+        <form class="speak" data-speak>
+          <span class="speak-caret" aria-hidden="true">›</span>
+          <input type="text" data-speak-input autocomplete="off" spellcheck="false" placeholder="ask phantomforce…" aria-label="Speak to PhantomForce" />
+        </form>
+        <a class="summon" hidden data-summon href="mailto:demo@phantomforce.online">summon my operator <span>→</span></a>
+      </div>
+    </section>
+    <p class="hint" data-hint hidden></p>
+    <script type="module" src="void.js?v=12"></script>
   </body>
 </html>
