@@ -51,8 +51,12 @@ body::after {
   from { background-position: 0 0, 0 0, 0 0, 0 0; }
   to { background-position: 0 0, 0 0, 0 38px, 38px 0; }
 }
-/* keep real app content above the backdrop */
-.app-shell { position: relative; z-index: 2; }
+/* keep real app content above the backdrop + ambient entity */
+#root { position: relative; z-index: 1; }
+.app-shell { position: relative; z-index: 2; background: transparent; }
+/* let the living entity glow through the cockpit: dim the grid a touch */
+body::before { opacity: 0.7; }
+[data-void-bg] { mix-blend-mode: screen; }
 
 /* ---------- typography: neon glow ---------- */
 h1, h2 {
