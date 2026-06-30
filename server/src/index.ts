@@ -80,6 +80,12 @@ import {
 } from "./phantom-ai/hermes-live-receipt-store.js";
 import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-receipts.js";
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
+import {
+  getHermesInteractionMemoryStoreStatus,
+  normalizeHermesInteractionMemoryStoreLimit,
+  persistHermesInteractionMemoryPreview,
+  readHermesInteractionMemoryStoreRecords,
+} from "./phantom-ai/hermes-interaction-memory-store.js";
 import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
@@ -1024,6 +1030,32 @@ app.post("/phantom-ai/approvals/queue/:queueId/status", async (request, reply) =
   };
 });
 
+function buildHermesInteractionMemoryPreviewFromBody(
+  body: {
+    tenant_id?: unknown;
+    actor_user_id?: unknown;
+    task_id?: unknown;
+    interaction_type?: unknown;
+    summary?: unknown;
+    metadata?: unknown;
+  },
+  session: { id: string },
+) {
+  const metadata =
+    body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
+      ? (body.metadata as Record<string, string | number | boolean | null>)
+      : undefined;
+
+  return buildHermesInteractionMemoryPreview({
+    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id : session.id,
+    actor_user_id: typeof body.actor_user_id === "string" ? body.actor_user_id : session.id,
+    task_id: typeof body.task_id === "string" ? body.task_id : null,
+    interaction_type: typeof body.interaction_type === "string" ? body.interaction_type : "phantom_ai_activity",
+    summary: typeof body.summary === "string" ? body.summary : "",
+    metadata,
+  });
+}
+
 app.post("/phantom-ai/hermes/interaction-memory/preview", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -1039,18 +1071,7 @@ app.post("/phantom-ai/hermes/interaction-memory/preview", async (request, reply)
     summary?: unknown;
     metadata?: unknown;
   };
-  const metadata =
-    body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
-      ? (body.metadata as Record<string, string | number | boolean | null>)
-      : undefined;
-  const memory_preview = buildHermesInteractionMemoryPreview({
-    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id : session.id,
-    actor_user_id: typeof body.actor_user_id === "string" ? body.actor_user_id : session.id,
-    task_id: typeof body.task_id === "string" ? body.task_id : null,
-    interaction_type: typeof body.interaction_type === "string" ? body.interaction_type : "phantom_ai_activity",
-    summary: typeof body.summary === "string" ? body.summary : "",
-    metadata,
-  });
+  const memory_preview = buildHermesInteractionMemoryPreviewFromBody(body, session);
 
   return {
     ok: true,
@@ -1068,6 +1089,100 @@ app.post("/phantom-ai/hermes/interaction-memory/preview", async (request, reply)
     ready_for_send: false,
     provider_transport_allowed: false,
     memory_preview,
+  };
+});
+
+app.post("/phantom-ai/hermes/interaction-memory/persist-preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    actor_user_id?: unknown;
+    task_id?: unknown;
+    interaction_type?: unknown;
+    summary?: unknown;
+    metadata?: unknown;
+  };
+  const memory_preview = buildHermesInteractionMemoryPreviewFromBody(body, session);
+  const persistence = await persistHermesInteractionMemoryPreview(memory_preview);
+
+  return {
+    ok: true,
+    session,
+    local_dev_only: true,
+    memory_preview,
+    persistence,
+    provider_request_body_created: false,
+    provider_called: false,
+    network_call_performed: false,
+    hermes_ledger_written: false,
+    external_ledger_written: false,
+    production_ledger_written: false,
+    production_write_allowed: false,
+    queue_written: false,
+    approval_executed: false,
+    live_call_allowed: false,
+    execution_disabled: true,
+    ready_for_send: false,
+    provider_transport_allowed: false,
+  };
+});
+
+app.get("/phantom-ai/hermes/interaction-memory/history", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as {
+    limit?: string;
+    tenant_id?: string;
+    actor_user_id?: string;
+    task_id?: string;
+    interaction_type?: string;
+  } | undefined;
+  const limit = normalizeHermesInteractionMemoryStoreLimit(query?.limit);
+  const status = await getHermesInteractionMemoryStoreStatus();
+  const history = await readHermesInteractionMemoryStoreRecords({
+    limit,
+    tenantId: query?.tenant_id,
+    actorUserId: query?.actor_user_id,
+    taskId: query?.task_id,
+    interactionType: query?.interaction_type,
+  });
+
+  return {
+    ok: true,
+    session,
+    store: {
+      path: status.store_path,
+      exists: status.exists,
+      bytes: status.bytes,
+      local_dev_only: status.local_dev_only,
+      production_write_allowed: status.production_write_allowed,
+      malformed_lines: history.malformed_lines,
+      returned_count: history.records.length,
+      limit: history.limit,
+    },
+    records: history.records,
+    provider_request_body_created: false,
+    provider_called: false,
+    network_call_performed: false,
+    hermes_ledger_written: false,
+    external_ledger_written: false,
+    production_ledger_written: false,
+    production_write_allowed: false,
+    queue_written: false,
+    approval_executed: false,
+    live_call_allowed: false,
+    execution_disabled: true,
+    ready_for_send: false,
+    provider_transport_allowed: false,
   };
 });
 
