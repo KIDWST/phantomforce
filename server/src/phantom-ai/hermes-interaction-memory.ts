@@ -27,6 +27,8 @@ const MAX_SCOPE_ID_CHARS = 120;
 const MAX_METADATA_KEYS = 12;
 const MAX_METADATA_KEY_CHARS = 60;
 const MAX_METADATA_VALUE_CHARS = 200;
+const SENSITIVE_METADATA_KEY_PATTERN =
+  /(api[_-]?key|authorization|bearer|card|cc|credit|password|secret|token)/i;
 
 export const PHANTOM_AI_INTERACTION_SOURCE = "phantom_ai_interaction" as const;
 
@@ -116,6 +118,14 @@ function redactBounded(value: string, maxChars: number) {
   return redactSensitiveText(value).slice(0, maxChars);
 }
 
+function redactMetadataValue(rawKey: string, value: string) {
+  if (SENSITIVE_METADATA_KEY_PATTERN.test(rawKey)) {
+    return "[redacted]";
+  }
+
+  return redactBounded(value, MAX_METADATA_VALUE_CHARS);
+}
+
 function scopeId(value: string | null | undefined): string | null {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
@@ -141,7 +151,7 @@ function boundMetadata(metadata: HermesInteractionMemoryInput["metadata"]): {
     if (!key) continue;
     const stringified =
       rawValue === null || rawValue === undefined ? "" : typeof rawValue === "string" ? rawValue : String(rawValue);
-    out[key] = redactBounded(stringified, MAX_METADATA_VALUE_CHARS);
+    out[key] = redactMetadataValue(rawKey, stringified);
   }
 
   return { metadata: out, dropped };

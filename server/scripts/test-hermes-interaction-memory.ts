@@ -26,6 +26,7 @@ const fakeTokenValue = ["token", "interaction", "0123456789"].join("-");
 const fakeCardValue = ["4242", "4242", "4242", "4242"].join(" ");
 const fakePasswordValue = ["PASSWORD", "super-secret-demo"].join("=");
 const longPromptBlob = "raw prompt body ".repeat(60); // ~960 chars, must be bounded
+const sensitiveMetadataKey = ["to", "ken"].join("");
 
 // 1) Primary preview for tenant-a / owner-a / task-1 with secrets + oversized input.
 const preview = buildHermesInteractionMemoryPreview({
@@ -34,9 +35,13 @@ const preview = buildHermesInteractionMemoryPreview({
   task_id: "task-1",
   interaction_type: "content_idea_summary",
   summary: `${longPromptBlob} api_key=${fakeApiKeyValue} Bearer ${fakeTokenValue} card ${fakeCardValue} ${fakePasswordValue}`,
-  metadata: Object.fromEntries(
-    Array.from({ length: 30 }, (_, index) => [`key_${index}`, `value-${index} api_key=${fakeApiKeyValue}`]),
-  ),
+  metadata: {
+    [sensitiveMetadataKey]: fakeTokenValue,
+    secret_note: "plain-secret-like-value",
+    ...Object.fromEntries(
+      Array.from({ length: 30 }, (_, index) => [`key_${index}`, `value-${index} api_key=${fakeApiKeyValue}`]),
+    ),
+  },
 });
 const previewJson = JSON.stringify(preview);
 
@@ -71,6 +76,14 @@ assert(
 assert(
   !Object.values(preview.record.metadata).some((value) => value.includes(fakeApiKeyValue)),
   "Metadata values must be redacted.",
+);
+assert(
+  preview.record.metadata[sensitiveMetadataKey] === "[redacted]",
+  "Sensitive metadata key values must be fully redacted.",
+);
+assert(
+  !previewJson.includes("plain-secret-like-value"),
+  "Sensitive metadata values must be redacted even when the value itself has no recognizable pattern.",
 );
 
 // Preview-only ledger + all blocked safety flags.
