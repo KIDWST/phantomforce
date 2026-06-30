@@ -84,6 +84,7 @@ import {
   getHermesInteractionMemoryStoreStatus,
   normalizeHermesInteractionMemoryStoreLimit,
   persistHermesInteractionMemoryPreview,
+  recordHermesInteractionMemoryFromRun,
   readHermesInteractionMemoryStoreRecords,
 } from "./phantom-ai/hermes-interaction-memory-store.js";
 import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
@@ -1394,6 +1395,7 @@ app.post("/phantom-ai/mock-route", async (request, reply) => {
     module_data?: unknown;
   };
   const result = await runModelRouterFoundation(buildModelRouterRequestFromBody(body, session, "mock"));
+  const interaction_memory = await recordHermesInteractionMemoryFromRun(result);
 
   return {
     ok: true,
@@ -1410,6 +1412,7 @@ app.post("/phantom-ai/mock-route", async (request, reply) => {
     provider_policy: result.provider_policy,
     provider_readiness: result.provider_invocation.readiness_result,
     provider_invocation: result.provider_invocation,
+    interaction_memory,
   };
 });
 

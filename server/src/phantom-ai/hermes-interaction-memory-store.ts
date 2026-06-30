@@ -4,7 +4,9 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { redactSensitiveText } from "./hermes-ledger.js";
+import { buildHermesInteractionMemoryPreview } from "./hermes-interaction-memory.js";
 import type { HermesInteractionMemoryPreview, HermesInteractionMemoryRecordPreview } from "./hermes-interaction-memory.js";
+import type { ModelRouterRunResult } from "./types.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
@@ -110,6 +112,23 @@ export type HermesInteractionMemoryStoreStatus = {
   bytes: number;
   local_dev_only: true;
   production_write_allowed: false;
+};
+
+export type HermesInteractionMemoryRecordOnRunResult = {
+  memory_preview: HermesInteractionMemoryPreview;
+  persistence: HermesInteractionMemoryStorePersistenceResult;
+  provider_request_body_created: false;
+  provider_called: false;
+  network_call_performed: false;
+  hermes_interaction_memory_store_written: boolean;
+  queue_written: false;
+  approval_executed: false;
+  production_ledger_written: false;
+  production_write_allowed: false;
+  live_call_allowed: false;
+  execution_disabled: true;
+  ready_for_send: false;
+  provider_transport_allowed: false;
 };
 
 const blockedStoreFlags = {
@@ -291,6 +310,63 @@ export async function persistHermesInteractionMemoryPreview(
     reason: "persisted_local_dev_only",
     store_path: storePath,
     record,
+  };
+}
+
+function summarizeRunForMemory(run: ModelRouterRunResult) {
+  const record = run.ledger_record;
+  const segment = (value: string, maxChars: number) => redactSensitiveText(value).replace(/\s+/g, " ").trim().slice(0, maxChars);
+  const lines = [
+    `Task: ${segment(record.task_type, 40)}`,
+    `Approval: ${segment(record.approval_status, 16)}`,
+    `Next action: ${segment(record.next_action, 50)}`,
+    `Request summary: ${segment(record.user_request_summary, 55)}`,
+    `Result: ${segment(record.result_summary, 55)}`,
+  ];
+
+  return redactSensitiveText(lines.join(" | "));
+}
+
+export async function recordHermesInteractionMemoryFromRun(
+  run: ModelRouterRunResult,
+  options: {
+    storePath?: string;
+    env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+    persistedAt?: string;
+    now?: string;
+  } = {},
+): Promise<HermesInteractionMemoryRecordOnRunResult> {
+  const record = run.ledger_record;
+  const memoryPreview = buildHermesInteractionMemoryPreview(
+    {
+      tenant_id: record.tenant_id,
+      actor_user_id: record.actor_user_id,
+      task_id: record.parent_task_id ?? record.request_id,
+      interaction_type: record.task_type,
+      summary: summarizeRunForMemory(run),
+      metadata: {
+        approval_status: record.approval_status,
+        approval_required: record.approval_required,
+        sensitivity_level: record.sensitivity_level,
+        provider_called: run.provider_invocation.dry_run_result.provider_called,
+        network_call_performed: run.provider_invocation.dry_run_result.network_call_performed,
+        ready_for_send: run.provider_invocation.live_call_allowed,
+        execution_disabled: run.provider_invocation.execution_disabled,
+      },
+    },
+    { now: options.now },
+  );
+  const persistence = await persistHermesInteractionMemoryPreview(memoryPreview, {
+    storePath: options.storePath,
+    env: options.env,
+    persistedAt: options.persistedAt,
+  });
+
+  return {
+    ...blockedStoreFlags,
+    memory_preview: memoryPreview,
+    persistence,
+    hermes_interaction_memory_store_written: persistence.persisted,
   };
 }
 
