@@ -79,6 +79,7 @@ import {
   readHermesLiveReceiptStoreRecords,
 } from "./phantom-ai/hermes-live-receipt-store.js";
 import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-receipts.js";
+import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
   getProviderSetupStatus,
@@ -1022,6 +1023,56 @@ app.post("/phantom-ai/approvals/queue/:queueId/status", async (request, reply) =
   };
 });
 
+app.post("/phantom-ai/hermes/memory-context/preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const normalized = buildModelRouterRequestFromBody(body, session, "hermes-memory-context");
+  const memory_context = await buildHermesMemoryContextPreview({
+    tenant_id: normalized.tenant_id,
+    business_name: normalized.business_name,
+    actor_user_id: normalized.actor_user_id,
+    request_id: normalized.request_id,
+    task_type: normalized.task_type,
+    sensitivity_level: normalized.sensitivity_level,
+    user_request: normalized.user_request,
+    business_summary: normalized.business_summary,
+    module_data: normalized.module_data,
+  });
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    provider_request_body_created: false,
+    provider_transport_allowed: false,
+    live_call_allowed: false,
+    execution_disabled: true,
+    ready_for_send: false,
+    provider_called: false,
+    network_call_performed: false,
+    ledger_written: false,
+    queue_written: false,
+    approval_executed: false,
+    production_ledger_write: false,
+    memory_context,
+  };
+});
+
 app.post("/phantom-ai/context-preview", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -1040,7 +1091,20 @@ app.post("/phantom-ai/context-preview", async (request, reply) => {
     business_summary?: unknown;
     module_data?: unknown;
   };
-  const result = previewModelRouterFoundation(buildModelRouterRequestFromBody(body, session, "preview"));
+  const normalized = buildModelRouterRequestFromBody(body, session, "preview");
+  const result = previewModelRouterFoundation(normalized);
+  const memoryContext = await buildHermesMemoryContextPreview({
+    tenant_id: normalized.tenant_id,
+    business_name: normalized.business_name,
+    actor_user_id: normalized.actor_user_id,
+    request_id: normalized.request_id,
+    task_type: normalized.task_type,
+    sensitivity_level: result.decision.sensitivity_level,
+    provider_route: result.decision.provider_route,
+    user_request: normalized.user_request,
+    business_summary: normalized.business_summary,
+    module_data: normalized.module_data,
+  });
 
   return {
     ok: true,
@@ -1062,13 +1126,22 @@ app.post("/phantom-ai/context-preview", async (request, reply) => {
     provider_policy: result.provider_policy,
     provider_readiness: result.provider_invocation.readiness_result,
     provider_invocation: result.provider_invocation,
+    memory_context: memoryContext,
     context: {
-      compact_context: redactSensitiveText(result.context_packet.compact_context),
+      compact_context: redactSensitiveText(memoryContext.augmented_context_preview),
+      base_compact_context: redactSensitiveText(result.context_packet.compact_context),
       user_request_summary: redactSensitiveText(result.context_packet.user_request_summary),
-      context_chars: result.context_packet.context_chars,
-      estimated_tokens: result.context_packet.estimated_tokens,
+      context_chars: memoryContext.augmented_context_chars,
+      estimated_tokens: Math.ceil(memoryContext.augmented_context_chars / 4),
+      base_context_chars: result.context_packet.context_chars,
+      base_estimated_tokens: result.context_packet.estimated_tokens,
       raw_context_chars: result.context_packet.raw_context_chars,
       compression_ratio: result.context_packet.compression_ratio,
+      hermes_memory_recalled: memoryContext.memory.recalled_count,
+      provider_request_body_created: false,
+      live_call_allowed: false,
+      execution_disabled: true,
+      ready_for_send: false,
     },
   };
 });
