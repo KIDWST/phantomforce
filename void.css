@@ -1,0 +1,135 @@
+/* PhantomForce — the void. A living AI entity, not a website.
+   Full-screen, no scroll, no chrome. Everything floats in space. */
+
+:root {
+  --neon: #41ffa1;
+  --neon-2: #1ef0ff;
+  --ink: #eafff2;
+  --dim: #5f8f77;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; height: 100%; width: 100%;
+  background: #02060a; color: var(--ink);
+  font-family: "Space Grotesk", system-ui, sans-serif;
+  overflow: hidden; overscroll-behavior: none;
+}
+body { position: fixed; inset: 0; }
+button, input { font: inherit; color: inherit; }
+
+/* ---------- the void ---------- */
+.void-canvas { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 2.4s ease; }
+.void-canvas.lit { opacity: 1; }
+.void-fallback {
+  position: fixed; inset: 0; z-index: -1;
+  background:
+    radial-gradient(40% 40% at 50% 46%, rgba(65, 255, 161, 0.16), transparent 60%),
+    radial-gradient(70% 70% at 50% 50%, rgba(30, 240, 255, 0.05), transparent 60%),
+    #02060a;
+  animation: breathe 7s ease-in-out infinite;
+}
+.vignette {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 50%, transparent 40%, rgba(0, 0, 0, 0.7) 100%);
+}
+@keyframes breathe { 50% { opacity: 0.78; } }
+
+/* ---------- the entity's presence ---------- */
+.presence {
+  position: fixed; inset: 0; z-index: 3;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  gap: clamp(14px, 2.4vh, 26px); padding: 6vh 22px;
+  text-align: center; pointer-events: none;
+}
+.presence > * { pointer-events: auto; }
+
+.sigil {
+  margin: 0; font-size: clamp(44px, 8vh, 80px); line-height: 1;
+  filter: drop-shadow(0 0 22px rgba(65, 255, 161, 0.7));
+  animation: hover 6s ease-in-out infinite;
+}
+@keyframes hover { 0%, 100% { transform: translateY(0) rotate(-3deg); } 50% { transform: translateY(-10px) rotate(3deg); } }
+
+.wordmark {
+  margin: 0; font: 500 clamp(11px, 1.5vw, 14px) "DM Mono", monospace;
+  letter-spacing: 0.62em; text-indent: 0.62em; color: var(--dim);
+  text-shadow: 0 0 18px rgba(65, 255, 161, 0.3);
+  animation: pulseDim 5s ease-in-out infinite;
+}
+@keyframes pulseDim { 50% { opacity: 0.55; } }
+
+/* what the entity says — materializes in space */
+.say { max-width: 760px; min-height: 2.6em; display: grid; place-items: center; }
+.say-line {
+  margin: 0; font-weight: 400; font-size: clamp(22px, 4.4vw, 46px); line-height: 1.18;
+  letter-spacing: -0.02em;
+  background: linear-gradient(180deg, #ffffff, #b8ffd8 60%, #41ffa1);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  text-shadow: 0 0 40px rgba(65, 255, 161, 0.12);
+  animation: emerge 0.9s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.say-line.user {
+  font-size: clamp(16px, 2.6vw, 24px); color: var(--dim);
+  background: none; -webkit-text-fill-color: var(--dim); opacity: 0.85; letter-spacing: 0.02em;
+}
+.say-line.thinking { color: var(--neon); -webkit-text-fill-color: var(--neon); background: none; }
+@keyframes emerge { from { opacity: 0; transform: translateY(12px); filter: blur(6px); } to { opacity: 1; transform: none; filter: blur(0); } }
+
+/* orbiting thoughts */
+.orbits { display: flex; flex-wrap: wrap; gap: 10px 14px; justify-content: center; max-width: 640px; }
+.orbits button {
+  padding: 9px 16px; border-radius: 999px; cursor: pointer;
+  border: 1px solid rgba(65, 255, 161, 0.28); background: rgba(65, 255, 161, 0.04);
+  font: 500 13px "DM Mono", monospace; letter-spacing: 0.04em; color: var(--ink);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+  transition: border-color 0.25s, background 0.25s, transform 0.2s, box-shadow 0.25s;
+  animation: drift 9s ease-in-out infinite;
+}
+.orbits button:nth-child(2) { animation-delay: 1.2s; }
+.orbits button:nth-child(3) { animation-delay: 2.4s; }
+.orbits button:nth-child(4) { animation-delay: 3.6s; }
+.orbits button:hover {
+  border-color: var(--neon); background: rgba(65, 255, 161, 0.12);
+  transform: translateY(-2px); box-shadow: 0 0 24px rgba(65, 255, 161, 0.25);
+}
+@keyframes drift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+/* the one solid UI: your voice */
+.speak {
+  display: flex; align-items: center; gap: 12px; width: min(560px, 90vw);
+  padding: 14px 20px; border-radius: 999px;
+  background: rgba(4, 12, 9, 0.5); border: 1px solid rgba(65, 255, 161, 0.3);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
+  box-shadow: 0 0 40px rgba(65, 255, 161, 0.12), inset 0 0 22px rgba(65, 255, 161, 0.05);
+  transition: border-color 0.3s, box-shadow 0.3s;
+}
+.speak:focus-within { border-color: var(--neon); box-shadow: 0 0 60px rgba(65, 255, 161, 0.3); }
+.speak-caret { color: var(--neon); font-size: 20px; text-shadow: 0 0 12px var(--neon); animation: blink 1.2s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0.2; } }
+.speak input {
+  flex: 1; background: none; border: 0; outline: none; font-size: 16px; letter-spacing: 0.01em;
+}
+.speak input::placeholder { color: var(--dim); }
+
+.summon {
+  display: inline-flex; align-items: center; gap: 9px; margin-top: 4px;
+  padding: 13px 24px; border-radius: 999px;
+  background: linear-gradient(120deg, var(--neon), #15d97f); color: #02140b;
+  font: 600 12px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase;
+  text-decoration: none; box-shadow: 0 0 36px rgba(65, 255, 161, 0.45);
+  animation: emerge 0.8s ease both;
+}
+.summon span { transition: transform 0.2s; }
+.summon:hover span { transform: translateX(4px); }
+
+.hint {
+  position: fixed; left: 0; right: 0; bottom: 22px; z-index: 3; margin: 0; text-align: center;
+  font: 400 11px "DM Mono", monospace; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim);
+  opacity: 0.6; pointer-events: none; transition: opacity 0.5s;
+}
+.hint.gone { opacity: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .void-fallback, .sigil, .wordmark, .orbits button, .speak-caret, .say-line { animation: none !important; }
+  .void-canvas { display: none; }
+}

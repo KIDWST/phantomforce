@@ -2,154 +2,64 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>PhantomForce — Just ask. It's handled.</title>
-    <meta
-      name="description"
-      content="PhantomForce is the AI that runs your operations. Ask for anything — leads, follow-ups, scheduling, documents — and it's handled."
-    />
-    <meta property="og:title" content="PhantomForce — Just ask. It's handled." />
-    <meta property="og:description" content="The AI operating layer for your business. Ask for anything. It's handled." />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <title>PhantomForce</title>
+    <meta name="description" content="Meet PhantomForce — the private AI that runs your business. Just speak to it." />
+    <meta property="og:title" content="PhantomForce" />
+    <meta property="og:description" content="The private AI that runs your business. Speak to it." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://phantomforce.online/" />
-    <meta name="theme-color" content="#04070a" />
+    <meta name="theme-color" content="#02060a" />
     <link rel="canonical" href="https://phantomforce.online/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&display=swap"
+      href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="app2040.css?v=1" />
+    <link rel="stylesheet" href="void.css?v=1" />
   </head>
   <body>
-    <div class="bg-fallback" aria-hidden="true"></div>
-    <canvas class="bg-canvas" data-bg-canvas aria-hidden="true"></canvas>
-    <div class="bg-grain" aria-hidden="true"></div>
-    <div class="cursor-glow" data-cursor aria-hidden="true"></div>
+    <!-- the void -->
+    <canvas class="void-canvas" data-void aria-hidden="true"></canvas>
+    <div class="void-fallback" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
 
-    <a class="skip-link" href="#ask">Skip to chat</a>
+    <!-- the entity's presence: text materializes in space -->
+    <main class="presence" id="main">
+      <p class="sigil" data-sigil>👻</p>
+      <p class="wordmark" data-wordmark>PHANTOMFORCE</p>
 
-    <header class="appbar" data-appbar>
-      <a class="brand" href="#top" aria-label="PhantomForce home">
-        <span class="brand-ghost">👻</span>
-        <span class="brand-name">PhantomForce</span>
+      <div class="say" data-say aria-live="polite">
+        <p class="say-line" data-say-line>I'm the private AI that runs your business. What's eating your time?</p>
+      </div>
+
+      <div class="orbits" data-orbits>
+        <button type="button" data-answer="I run a service business">service business</button>
+        <button type="button" data-answer="I run a sports organization">sports org</button>
+        <button type="button" data-answer="I run a media company">media</button>
+        <button type="button" data-answer="Something else">something else</button>
+      </div>
+
+      <form class="speak" data-speak>
+        <span class="speak-caret" aria-hidden="true">›</span>
+        <input
+          type="text"
+          data-speak-input
+          autocomplete="off"
+          spellcheck="false"
+          placeholder="speak to phantomforce…"
+          aria-label="Speak to PhantomForce"
+        />
+      </form>
+
+      <a class="summon" hidden data-summon href="mailto:demo@phantomforce.online">
+        summon my operator <span>→</span>
       </a>
-      <nav class="appbar-nav" aria-label="Primary">
-        <a href="#how">How it works</a>
-        <a href="#proof">What it handles</a>
-      </nav>
-      <a class="pill-cta" href="#ask">Open the app <span>→</span></a>
-    </header>
-
-    <main id="top">
-      <!-- HERO = the app. One chat. -->
-      <section class="stage" id="ask">
-        <p class="kicker"><span class="dot"></span> AI operations · live</p>
-        <h1 class="stage-title" data-tilt>
-          <span class="t-layer" aria-hidden="true">Just ask.<br />It's handled.</span>
-          <span class="t-main">Just ask.<br />It's handled.</span>
-        </h1>
-        <p class="stage-sub">
-          PhantomForce is the AI that runs your business operations. Tell it what you
-          need — it does the work.
-        </p>
-
-        <div class="chat" data-chat>
-          <div class="chat-thread" data-thread aria-live="polite">
-            <div class="msg ai">
-              <span class="msg-avatar">👻</span>
-              <div class="bubble">
-                Hey — I'm PhantomForce. What's eating your time right now? I'll build you a
-                plan to take it off your plate.
-              </div>
-            </div>
-          </div>
-          <div class="chat-chips" data-chips>
-            <button type="button" data-answer="I run a service business">Service business</button>
-            <button type="button" data-answer="I run a sports organization">Sports organization</button>
-            <button type="button" data-answer="I run a media company">Media / content</button>
-            <button type="button" data-answer="Something else">Something else</button>
-          </div>
-          <form class="chat-input" data-chat-form>
-            <input
-              type="text"
-              data-chat-text
-              autocomplete="off"
-              placeholder="Ask PhantomForce anything…"
-              aria-label="Ask PhantomForce anything"
-            />
-            <button type="submit" aria-label="Send">→</button>
-          </form>
-          <div class="chat-plan" hidden data-plan>
-            <p class="kicker">Your starting plan</p>
-            <h3 data-plan-title>Start with lead response and follow-up.</h3>
-            <ul data-plan-list></ul>
-            <a class="pill-cta solid" data-plan-link href="mailto:demo@phantomforce.online">
-              Get my free plan <span>→</span>
-            </a>
-            <small>Opens your email. Nothing is sent automatically.</small>
-          </div>
-        </div>
-
-        <div class="stage-proof">
-          <span><b>Every lead</b> captured</span>
-          <span><b>Every follow-up</b> sent</span>
-          <span><b>Every priority</b> clear</span>
-        </div>
-      </section>
-
-      <!-- condensed: what it handles -->
-      <section class="band" id="proof">
-        <p class="kicker">What it handles</p>
-        <h2>You ask. It does the work.</h2>
-        <div class="cards">
-          <article data-reveal>
-            <span class="c-ico">⚡</span>
-            <h3>Leads &amp; follow-up</h3>
-            <p>Every inquiry captured, answered, and chased — nothing slips.</p>
-          </article>
-          <article data-reveal>
-            <span class="c-ico">🗓️</span>
-            <h3>Scheduling</h3>
-            <p>Bookings, reminders, and changes handled without the back-and-forth.</p>
-          </article>
-          <article data-reveal>
-            <span class="c-ico">📄</span>
-            <h3>Docs, decks &amp; media</h3>
-            <p>Ask for a document, proposal, or video — it's generated and ready.</p>
-          </article>
-          <article data-reveal>
-            <span class="c-ico">🧠</span>
-            <h3>Your daily brief</h3>
-            <p>One clear view of what needs you today. Decisions stay yours.</p>
-          </article>
-        </div>
-      </section>
-
-      <!-- condensed: how it works (3 beats) -->
-      <section class="band tight" id="how">
-        <p class="kicker">How it works</p>
-        <h2>Three steps. No manual work.</h2>
-        <div class="steps">
-          <article data-reveal><b>01</b><h3>Ask</h3><p>Tell PhantomForce what you need, in plain words.</p></article>
-          <article data-reveal><b>02</b><h3>It works</h3><p>The AI handles it behind the scenes — approvals stay with you.</p></article>
-          <article data-reveal><b>03</b><h3>Done</h3><p>You get the result. Your time comes back.</p></article>
-        </div>
-      </section>
-
-      <section class="closer">
-        <h2>Stop running your business from your head.</h2>
-        <a class="pill-cta solid big" href="#ask">Ask PhantomForce <span>→</span></a>
-      </section>
     </main>
 
-    <footer class="foot">
-      <span class="brand"><span class="brand-ghost">👻</span><span class="brand-name">PhantomForce</span></span>
-      <p>More time. Better follow-up. Clearer operations.</p>
-      <p>© 2026 PhantomForce</p>
-    </footer>
+    <p class="hint" data-hint>type anything · or tap a thought</p>
 
-    <script type="module" src="app2040.js?v=1"></script>
+    <script type="module" src="void.js?v=1"></script>
   </body>
 </html>
