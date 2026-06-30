@@ -8,6 +8,7 @@ import {
   Clock3,
   Command,
   Copy,
+  Download,
   FileText,
   Inbox,
   KeyRound,
@@ -1748,6 +1749,20 @@ function formatChicagoShotsFollowUpDraft(packet: ChicagoShotsLeadIntakePacket) {
   ].join("\n");
 }
 
+function formatChicagoShotsClientSummary(packet: ChicagoShotsLeadIntakePacket) {
+  return [
+    `${packet.normalized_lead.client_name || "New ChicagoShots lead"} - ${packet.recommended_service_package.name}`,
+    `Contact: ${packet.normalized_lead.contact || "Not provided"}`,
+    `Need: ${packet.normalized_lead.requested_service || packet.normalized_lead.event_type || "Not provided"}`,
+    `When/location: ${packet.normalized_lead.date_time || "TBD"} / ${packet.normalized_lead.location || "TBD"}`,
+    `Budget: ${packet.normalized_lead.budget_rate || "Not provided"}`,
+    `Urgency: ${packet.normalized_lead.urgency}`,
+    `Next step: ${packet.task_draft.steps[0] ?? "Review lead and confirm scope."}`,
+    "",
+    "Preview only. No send. No queue write. No ledger write.",
+  ].join("\n");
+}
+
 function formatChicagoShotsDeliverables(packet: ChicagoShotsLeadIntakePacket) {
   return [
     `ChicagoShots deliverables - ${packet.recommended_service_package.name}`,
@@ -1761,38 +1776,65 @@ function formatChicagoShotsDeliverables(packet: ChicagoShotsLeadIntakePacket) {
 
 function formatChicagoShotsIntakePacket(packet: ChicagoShotsLeadIntakePacket) {
   return [
-    "ChicagoShots intake packet",
-    `Preview ID: ${packet.preview_id}`,
-    `Prepared: ${packet.prepared_at}`,
+    "# ChicagoShots intake packet",
     "",
-    "Lead",
-    `Client: ${packet.normalized_lead.client_name || "New lead"}`,
-    `Contact: ${packet.normalized_lead.contact || "Not provided"}`,
-    `Category: ${packet.normalized_lead.event_category}`,
-    `Event: ${packet.normalized_lead.event_type || "Not provided"}`,
-    `Date/time: ${packet.normalized_lead.date_time || "Not provided"}`,
-    `Location: ${packet.normalized_lead.location || "Not provided"}`,
-    `Budget/rate: ${packet.normalized_lead.budget_rate || "Not provided"}`,
-    `Source: ${packet.normalized_lead.source_platform || "Not provided"}`,
-    `Urgency: ${packet.normalized_lead.urgency}`,
-    `Notes: ${packet.normalized_lead.notes || "None"}`,
+    `- Preview ID: ${packet.preview_id}`,
+    `- Prepared: ${packet.prepared_at}`,
+    `- Status: Preview only`,
+    `- External send: No`,
+    `- Queue write: No`,
+    `- Ledger write: No`,
     "",
-    "Recommended package",
+    "## Client summary",
+    "",
+    formatChicagoShotsClientSummary(packet),
+    "",
+    "## Lead",
+    "",
+    `- Client: ${packet.normalized_lead.client_name || "New lead"}`,
+    `- Contact: ${packet.normalized_lead.contact || "Not provided"}`,
+    `- Category: ${packet.normalized_lead.event_category}`,
+    `- Event: ${packet.normalized_lead.event_type || "Not provided"}`,
+    `- Date/time: ${packet.normalized_lead.date_time || "Not provided"}`,
+    `- Location: ${packet.normalized_lead.location || "Not provided"}`,
+    `- Budget/rate: ${packet.normalized_lead.budget_rate || "Not provided"}`,
+    `- Source: ${packet.normalized_lead.source_platform || "Not provided"}`,
+    `- Urgency: ${packet.normalized_lead.urgency}`,
+    `- Notes: ${packet.normalized_lead.notes || "None"}`,
+    "",
+    "## Recommended package",
+    "",
     `${packet.recommended_service_package.name}: ${packet.recommended_service_package.rationale}`,
     `Add-ons: ${packet.recommended_service_package.suggested_addons.join(", ") || "None"}`,
     "",
-    "Task draft",
+    "## Task draft",
+    "",
     `${packet.task_draft.title} (${packet.task_draft.priority}, due ${packet.task_draft.suggested_due})`,
     ...packet.task_draft.steps.map((step, index) => `${index + 1}. ${step}`),
     "",
+    "## Deliverables",
+    "",
     formatChicagoShotsDeliverables(packet),
     "",
-    "Follow-up draft",
+    "## Follow-up draft",
+    "",
     formatChicagoShotsFollowUpDraft(packet),
     "",
-    "Safety",
+    "## Safety",
+    "",
     "Preview only. No send. No queue write. No ledger write.",
   ].join("\n");
+}
+
+function chicagoShotsPacketFileName(packet: ChicagoShotsLeadIntakePacket) {
+  const base = packet.normalized_lead.client_name || packet.recommended_service_package.name || packet.preview_id;
+  const slug = base
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)/g, "")
+    .slice(0, 48);
+  const dateSlug = packet.prepared_at.slice(0, 10) || "preview";
+  return `chicagoshots-intake-${slug || "lead"}-${dateSlug}.md`;
 }
 
 function makeId(prefix: string) {
@@ -5734,10 +5776,25 @@ function ChicagoShotsLeadIntakePanel({
     }
     try {
       await navigator.clipboard.writeText(text);
-      setCopiedLeadText(label);
+      setCopiedLeadText(`Copied ${label}.`);
     } catch {
       setLeadError("Clipboard copy was blocked by the browser. Select the draft text manually.");
     }
+  }
+
+  function downloadLeadPacket(packet: ChicagoShotsLeadIntakePacket) {
+    setLeadError("");
+    const packetText = formatChicagoShotsIntakePacket(packet);
+    const blob = new Blob([packetText], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = chicagoShotsPacketFileName(packet);
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    setCopiedLeadText("Downloaded intake packet.");
   }
 
   async function generateIntakePreview(event: FormEvent<HTMLFormElement>) {
@@ -5920,11 +5977,23 @@ function ChicagoShotsLeadIntakePanel({
       </form>
 
       {leadError ? <p className="operator-error">{leadError}</p> : null}
-      {copiedLeadText ? <p className="operator-copy-status">Copied {copiedLeadText}.</p> : null}
+      {copiedLeadText ? <p className="operator-copy-status">{copiedLeadText}</p> : null}
 
       {leadPreview ? (
         <div className="lead-preview-output">
           <div className="lead-copy-actions" aria-label="Copy ChicagoShots intake outputs">
+            <button className="ghost-small" type="button" onClick={() => downloadLeadPacket(leadPreview)}>
+              <Download size={15} />
+              Download intake packet
+            </button>
+            <button
+              className="ghost-small"
+              type="button"
+              onClick={() => void copyLeadText("client summary", formatChicagoShotsClientSummary(leadPreview))}
+            >
+              <Copy size={15} />
+              Copy client summary
+            </button>
             <button
               className="ghost-small"
               type="button"
