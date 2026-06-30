@@ -1829,22 +1829,73 @@ function formatChicagoShotsProposalSummary(packet: ChicagoShotsLeadIntakePacket)
   ].join("\n");
 }
 
+function formatChicagoShotsClientReadyProposal(packet: ChicagoShotsLeadIntakePacket) {
+  const clientName = packet.normalized_lead.client_name || "ChicagoShots client";
+  const eventName = packet.normalized_lead.event_type || packet.normalized_lead.requested_service || "media project";
+  return [
+    "# ChicagoShots Proposal Draft",
+    "",
+    `Prepared for: ${clientName}`,
+    `Project: ${eventName}`,
+    `Date/time: ${packet.normalized_lead.date_time || "To be confirmed"}`,
+    `Location: ${packet.normalized_lead.location || "To be confirmed"}`,
+    "",
+    "## Project Summary",
+    "",
+    packet.quote_draft.summary,
+    "",
+    "## Recommended Package",
+    "",
+    `${packet.recommended_service_package.name}: ${packet.recommended_service_package.rationale}`,
+    "",
+    "## Quote Range",
+    "",
+    packet.recommended_price_range,
+    "",
+    "## Deliverables",
+    "",
+    ...packet.deliverables_checklist.map((item) => `- ${item}`),
+    "",
+    "## Delivery Timeline",
+    "",
+    packet.delivery_timeline,
+    "",
+    "## Payment Terms",
+    "",
+    packet.payment_terms_note,
+    "",
+    "## Optional Add-ons",
+    "",
+    ...packet.upsell_options.map((item) => `- ${item}`),
+    "",
+    "## Follow-up Draft",
+    "",
+    packet.follow_up_draft.body,
+  ].join("\n");
+}
+
 function formatChicagoShotsIntakePacket(packet: ChicagoShotsLeadIntakePacket) {
   return [
-    "# ChicagoShots intake packet",
+    formatChicagoShotsClientReadyProposal(packet),
+    "",
+    "---",
+    "",
+    "# Internal Operator Notes",
     "",
     `- Preview ID: ${packet.preview_id}`,
     `- Prepared: ${packet.prepared_at}`,
-    `- Status: Preview only`,
+    `- Status: Preview only / manual-send only`,
     `- External send: No`,
+    `- Payment request: No`,
+    `- Invoice: No`,
     `- Queue write: No`,
     `- Ledger write: No`,
     "",
-    "## Client summary",
+    "## Internal client summary",
     "",
     formatChicagoShotsClientSummary(packet),
     "",
-    "## Lead",
+    "## Internal lead notes",
     "",
     `- Client: ${packet.normalized_lead.client_name || "New lead"}`,
     `- Contact: ${packet.normalized_lead.contact || "Not provided"}`,
@@ -1857,31 +1908,27 @@ function formatChicagoShotsIntakePacket(packet: ChicagoShotsLeadIntakePacket) {
     `- Urgency: ${packet.normalized_lead.urgency}`,
     `- Notes: ${packet.normalized_lead.notes || "None"}`,
     "",
-    "## Recommended package",
-    "",
-    `${packet.recommended_service_package.name}: ${packet.recommended_service_package.rationale}`,
-    `Add-ons: ${packet.recommended_service_package.suggested_addons.join(", ") || "None"}`,
-    "",
-    "## Quote / proposal draft",
+    "## Internal quote details",
     "",
     formatChicagoShotsQuoteDraft(packet),
     "",
-    "## Task draft",
+    "## Operator task draft",
     "",
     `${packet.task_draft.title} (${packet.task_draft.priority}, due ${packet.task_draft.suggested_due})`,
     ...packet.task_draft.steps.map((step, index) => `${index + 1}. ${step}`),
     "",
-    "## Deliverables",
+    "## Approval preview",
     "",
-    formatChicagoShotsDeliverables(packet),
+    `- Status: ${packet.approval_preview.status}`,
+    `- Risk: ${packet.approval_preview.risk_level}`,
+    `- Execution disabled: ${packet.approval_preview.execution_disabled ? "true" : "false"}`,
+    `- Summary: ${packet.approval_preview.summary}`,
     "",
-    "## Follow-up draft",
+    "## Safety flags",
     "",
-    formatChicagoShotsFollowUpDraft(packet),
+    ...Object.entries(packet.safety_flags).map(([key, value]) => `- ${key}: ${value ? "true" : "false"}`),
     "",
-    "## Safety",
-    "",
-    "Preview only. No send. No queue write. No ledger write.",
+    "Preview only. No send. No payment request. No invoice. No queue write. No ledger write.",
   ].join("\n");
 }
 
@@ -5922,6 +5969,7 @@ function ChicagoShotsLeadIntakePanel({
       <div className="lead-status-strip" aria-label="ChicagoShots preview safety status">
         <span>Preview only</span>
         <span>No send</span>
+        <span>No invoice</span>
         <span>No queue write</span>
         <span>No ledger write</span>
       </div>
@@ -6076,6 +6124,16 @@ function ChicagoShotsLeadIntakePanel({
             >
               <Copy size={15} />
               Copy proposal summary
+            </button>
+            <button
+              className="ghost-small"
+              type="button"
+              onClick={() =>
+                void copyLeadText("client-ready proposal", formatChicagoShotsClientReadyProposal(leadPreview))
+              }
+            >
+              <Copy size={15} />
+              Copy client-ready proposal
             </button>
             <button
               className="ghost-small"
