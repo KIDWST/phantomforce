@@ -91,6 +91,8 @@ export type ProviderSetupStatus = {
     model_id: string;
     setup_required: boolean;
     payment_setup_needed: boolean;
+    live_transport_enabled: boolean;
+    live_call_ready: boolean;
     detail: string;
   };
   claude_api: {
@@ -100,7 +102,7 @@ export type ProviderSetupStatus = {
   };
   local_fallback: {
     available: boolean;
-    status: "Available" | "Not Available";
+    status: "Available" | "Not Available" | "Protected" | "Planned";
     detail: string;
   };
   byok: {

@@ -103,6 +103,7 @@ type Message = {
   role: "user" | "assistant";
   content: string;
 };
+type AiProviderChoice = "phantom" | "openrouter_glm";
 
 type Connection = {
   id: string;
@@ -246,6 +247,8 @@ type ProviderSetupStatus = {
     model_id: string;
     setup_required: boolean;
     payment_setup_needed: boolean;
+    live_transport_enabled: boolean;
+    live_call_ready: boolean;
     detail: string;
   };
   claude_api: {
@@ -255,7 +258,7 @@ type ProviderSetupStatus = {
   };
   local_fallback: {
     available: boolean;
-    status: "Available" | "Not Available";
+    status: "Available" | "Not Available" | "Protected" | "Planned";
     detail: string;
   };
   byok: {
@@ -281,6 +284,30 @@ type ProviderSetupStatus = {
     detail: string;
     agent_loop_status: "Not Implemented";
   };
+};
+
+type PhantomAiChatResponse = {
+  ok: boolean;
+  provider_choice: AiProviderChoice;
+  model_id: string;
+  message?: {
+    role: "assistant";
+    content: string;
+  };
+  openrouter?: {
+    status: "blocked" | "called" | "error";
+    blocked_reason: string | null;
+    error_message: string | null;
+    provider_called: boolean;
+    network_call_performed: boolean;
+  };
+  live_provider_called: boolean;
+  network_call_performed: boolean;
+  provider_request_body_created: boolean;
+  approval_executed: boolean;
+  queue_written: boolean;
+  external_action_executed: boolean;
+  error?: string;
 };
 
 type HermesLedgerRecordPreview = {
@@ -1368,6 +1395,8 @@ const defaultProviderSetupStatus: ProviderSetupStatus = {
     model_id: "z-ai/glm-5.2",
     setup_required: true,
     payment_setup_needed: true,
+    live_transport_enabled: false,
+    live_call_ready: false,
     detail:
       "OpenRouter account/API key will be needed later. Do not fund OpenRouter until budget, Hermes receipts, redaction, approval execution, and smoke approval gates pass.",
   },
@@ -1424,6 +1453,8 @@ function App() {
   const [sessionToken, setSessionToken] = useState("");
   const [commandText, setCommandText] = useState("");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
+  const [aiProvider, setAiProvider] = useState<AiProviderChoice>("phantom");
+  const [phantomAiBusy, setPhantomAiBusy] = useState(false);
   const [emails, setEmails] = useState(initialEmails);
   const [events, setEvents] = useState(initialEvents);
   const [tasks, setTasks] = useState(initialTasks);
@@ -1776,12 +1807,77 @@ function App() {
     setRoute("command");
   }
 
-  function submitCommand(event: FormEvent) {
+  async function submitCommand(event: FormEvent) {
     event.preventDefault();
     const text = commandText.trim();
     if (!text) return;
     setCommandText("");
     setMessages((current) => [...current, { id: makeId("msg-user"), role: "user", content: text }]);
+
+    if (aiProvider === "openrouter_glm") {
+      setPhantomAiBusy(true);
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/phantom-ai/chat`, {
+          method: "POST",
+          headers: sessionHeaders(true),
+          body: JSON.stringify({
+            provider: "openrouter_glm",
+            message: text,
+            tenant_id: activeSession.clientId ?? "demo-trainer",
+            business_name: selectedOrg,
+            actor_user_id: activeSession.id,
+            request_id: `chat-${Date.now()}`,
+            task_type: "content_idea_summary",
+            sensitivity_level: "low",
+            business_summary:
+              "Owner command center request. External actions, sends, uploads, billing, deletes, deploys, and credential changes require approval.",
+            module_data: [
+              {
+                module: "Command Center",
+                summary: "Current local workspace state for Phantom AI response.",
+                items: [
+                  { title: "Pending approvals", status: String(stats.pending), detail: "Review before external action." },
+                  { title: "Follow-ups", status: String(stats.urgent), detail: "Prioritize owner-safe next steps." },
+                  { title: "Today tasks", status: String(stats.today), detail: "Summarize operational priorities." },
+                ],
+              },
+            ],
+          }),
+        });
+        const data = (await response.json().catch(() => null)) as PhantomAiChatResponse | null;
+        const content =
+          data?.message?.content ?? data?.error ?? "Phantom AI could not reach the selected backend lane.";
+
+        setMessages((current) => [
+          ...current,
+          {
+            id: makeId("msg-assistant"),
+            role: "assistant",
+            content,
+          },
+        ]);
+        addActivity(
+          data?.live_provider_called ? "GLM 5.2 responded" : "GLM 5.2 setup blocked",
+          data?.openrouter?.blocked_reason ?? data?.openrouter?.error_message ?? "OpenRouter lane returned through Phantom AI.",
+          data?.live_provider_called ? "ok" : "warn",
+        );
+      } catch {
+        setMessages((current) => [
+          ...current,
+          {
+            id: makeId("msg-assistant"),
+            role: "assistant",
+            content: "Phantom AI could not reach the backend OpenRouter lane. Check the server and env setup.",
+          },
+        ]);
+        addActivity("OpenRouter lane offline", "The Phantom AI backend did not answer.", "warn");
+      } finally {
+        setPhantomAiBusy(false);
+      }
+
+      return;
+    }
 
     const lower = text.toLowerCase();
     if (lower.includes("schedule") || lower.includes("follow") || lower.includes("handle") || lower.includes("email")) {
@@ -2226,6 +2322,10 @@ function App() {
             commandText={commandText}
             setCommandText={setCommandText}
             submitCommand={submitCommand}
+            aiProvider={aiProvider}
+            setAiProvider={setAiProvider}
+            phantomAiBusy={phantomAiBusy}
+            canManageAccess={canManageAccess}
             createFollowUpPlan={() => createFollowUpPlan("demo")}
             stats={stats}
             approvals={approvals}
@@ -2408,6 +2508,10 @@ function CommandCenter({
   commandText,
   setCommandText,
   submitCommand,
+  aiProvider,
+  setAiProvider,
+  phantomAiBusy,
+  canManageAccess,
   createFollowUpPlan,
   stats,
   approvals,
@@ -2420,6 +2524,10 @@ function CommandCenter({
   commandText: string;
   setCommandText: (value: string) => void;
   submitCommand: (event: FormEvent) => void;
+  aiProvider: AiProviderChoice;
+  setAiProvider: (value: AiProviderChoice) => void;
+  phantomAiBusy: boolean;
+  canManageAccess: boolean;
   createFollowUpPlan: () => void;
   stats: { urgent: number; pending: number; today: number; events: number };
   approvals: Approval[];
@@ -2475,13 +2583,24 @@ function CommandCenter({
             ))}
           </div>
           <form className="command-form" onSubmit={submitCommand}>
+            <select
+              aria-label="Phantom AI lane"
+              className="llm-select"
+              value={aiProvider}
+              onChange={(event) => setAiProvider(event.target.value as AiProviderChoice)}
+              disabled={phantomAiBusy}
+            >
+              <option value="phantom">Phantom AI protected</option>
+              {canManageAccess ? <option value="openrouter_glm">GLM 5.2 (OpenRouter)</option> : null}
+            </select>
             <input
               value={commandText}
               onChange={(event) => setCommandText(event.target.value)}
               placeholder="Ask PhantomForce to brief, reply, schedule, or handle a follow-up..."
+              disabled={phantomAiBusy}
             />
-            <button type="submit" title="Send command">
-              <Send size={18} />
+            <button type="submit" title="Send command" disabled={phantomAiBusy}>
+              {phantomAiBusy ? <RefreshCcw size={18} /> : <Send size={18} />}
             </button>
           </form>
         </section>
@@ -3312,6 +3431,7 @@ function CustomerReadinessPanel() {
 
 function ProviderSetupPanel({ status }: { status: ProviderSetupStatus }) {
   const paymentNeeded = status.openrouter_glm.payment_setup_needed ? "Yes" : "No";
+  const glmReady = status.openrouter_glm.live_call_ready ? "Ready" : "Blocked";
 
   return (
     <section className="panel provider-setup-panel">
@@ -3337,6 +3457,12 @@ function ProviderSetupPanel({ status }: { status: ProviderSetupStatus }) {
           value={`${status.openrouter_glm.status} / ${status.openrouter_glm.model_id}`}
           detail={status.openrouter_glm.detail}
           state={status.openrouter_glm.configured ? "real" : "stub"}
+        />
+        <ProviderStatusCard
+          label="GLM 5.2 live lane"
+          value={glmReady}
+          detail={`Transport flag: ${status.openrouter_glm.live_transport_enabled ? "on" : "off"}. Admin chat can use GLM only when key, live providers, and transport are all enabled.`}
+          state={status.openrouter_glm.live_call_ready ? "real" : "blocked"}
         />
         <ProviderStatusCard
           label="Claude API"
@@ -5093,7 +5219,7 @@ function TrainerSimulationView({ canManageAccess }: { canManageAccess: boolean }
     <Page
       title="Phantom AI"
       kicker="Personal training workspace"
-      action={<TruthBadge state="demo" label="Demo / Local" />}
+      action={<TruthBadge state="demo" label="Online - protected" />}
     >
       <section className="simulation-hero">
         <div>

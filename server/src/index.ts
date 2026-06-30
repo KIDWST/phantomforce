@@ -68,6 +68,7 @@ import {
   redactApprovalRequestPreview,
 } from "./phantom-ai/approval-queue.js";
 import {
+  appendHermesLedgerRecord,
   getHermesLedgerStatus,
   readRedactedHermesLedgerRecords,
   redactHermesLedgerRecord,
@@ -95,6 +96,7 @@ import {
   previewModelRouterFoundation,
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
+import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
 import { evaluateProviderLiveReceiptLedgerContract } from "./phantom-ai/provider-live-receipt-ledger-contract.js";
 import {
   evaluateProviderBudgetPolicy,
@@ -385,6 +387,10 @@ function buildModelRouterRequestFromBody(
         : "Owner-only personal training demo workspace. External actions approval-only.",
     module_data: parseContextModuleData(body.module_data),
   };
+}
+
+function parsePhantomAiChatProvider(value: unknown) {
+  return value === "openrouter_glm" ? "openrouter_glm" : "phantom";
 }
 
 app.get("/phantom-ai/provider-status", async (request, reply) => {
@@ -1415,6 +1421,162 @@ app.post("/phantom-ai/approvals/preview", async (request, reply) => {
       raw_context_chars: result.context_packet.raw_context_chars,
       compression_ratio: result.context_packet.compression_ratio,
     },
+  };
+});
+
+app.post("/phantom-ai/chat", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    provider?: unknown;
+    message?: unknown;
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const providerChoice = parsePhantomAiChatProvider(body.provider);
+
+  if (providerChoice === "openrouter_glm" && !session.canManageAccess) {
+    return reply.code(403).send({
+      ok: false,
+      error: "OpenRouter GLM 5.2 is admin-only in this local setup.",
+      provider_choice: providerChoice,
+      provider_called: false,
+      network_call_performed: false,
+      approval_executed: false,
+      queue_written: false,
+    });
+  }
+
+  const normalized = buildModelRouterRequestFromBody(
+    {
+      ...body,
+      user_request: typeof body.message === "string" ? body.message : body.message ?? body.task_type,
+      task_type: typeof body.task_type === "string" ? body.task_type : "content_idea_summary",
+    },
+    session,
+    "phantom-ai-chat",
+  );
+
+  if (providerChoice === "openrouter_glm") {
+    const routerEnv = {
+      ...process.env,
+      PHANTOM_MODEL_ROUTER_MODE: "openrouter",
+    } as NodeJS.ProcessEnv;
+    const preview = previewModelRouterFoundation(normalized, { env: routerEnv });
+    const memoryContext = await buildHermesMemoryContextPreview({
+      tenant_id: normalized.tenant_id,
+      business_name: normalized.business_name,
+      actor_user_id: normalized.actor_user_id,
+      request_id: normalized.request_id,
+      task_type: normalized.task_type,
+      sensitivity_level: preview.decision.sensitivity_level,
+      provider_route: "openrouter_glm",
+      user_request: normalized.user_request,
+      business_summary: normalized.business_summary,
+      module_data: normalized.module_data,
+    });
+    const openrouter = await callOpenRouterGlm52({
+      requestId: normalized.request_id,
+      userMessage: normalized.user_request,
+      compactContext: memoryContext.augmented_context_preview,
+      sensitivityLevel: preview.decision.sensitivity_level,
+      approvalRequired: preview.decision.approval_required,
+      estimatedTokens: Math.ceil(memoryContext.augmented_context_chars / 4),
+    });
+    const ledgerRecord = {
+      timestamp: new Date().toISOString(),
+      tenant_id: normalized.tenant_id,
+      business_name: normalized.business_name,
+      actor_user_id: normalized.actor_user_id,
+      actor_role: normalized.actor_role,
+      request_id: normalized.request_id,
+      task_type: normalized.task_type,
+      sensitivity_level: preview.decision.sensitivity_level,
+      provider_route: "openrouter_glm" as const,
+      model_id: openrouter.model_id,
+      context_chars: memoryContext.augmented_context_chars,
+      estimated_tokens: Math.ceil(memoryContext.augmented_context_chars / 4),
+      estimated_cost_usd: null,
+      user_request_summary: memoryContext.base_context.user_request_summary,
+      result_summary: redactSensitiveText(
+        openrouter.status === "called"
+          ? `OpenRouter GLM 5.2 responded: ${openrouter.output_text.slice(0, 300)}`
+          : `OpenRouter GLM 5.2 ${openrouter.status}: ${
+              openrouter.blocked_reason ?? openrouter.error_message ?? "No model response."
+            }`,
+      ),
+      approval_required: preview.decision.approval_required,
+      approval_status: preview.decision.approval_status,
+      risks: [
+        ...preview.decision.risks,
+        openrouter.provider_called
+          ? "Live OpenRouter provider call executed by explicit admin-selected PhantomAI route."
+          : "OpenRouter provider call did not execute.",
+      ],
+      next_action: openrouter.provider_called
+        ? "Review the GLM 5.2 response inside Phantom AI before taking any external action."
+        : "Configure OpenRouter env gates/key or choose the protected Phantom AI route.",
+    };
+
+    await appendHermesLedgerRecord(ledgerRecord);
+
+    return {
+      ok: true,
+      session,
+      provider_choice: providerChoice,
+      model_id: openrouter.model_id,
+      message: {
+        role: "assistant",
+        content: openrouter.output_text,
+      },
+      openrouter,
+      memory_context: {
+        recalled_count: memoryContext.memory.recalled_count,
+        context_chars: memoryContext.augmented_context_chars,
+        provider_request_body_created: openrouter.request_body_prepared,
+      },
+      ledger_record: redactHermesLedgerRecord(ledgerRecord),
+      live_provider_called: openrouter.provider_called,
+      network_call_performed: openrouter.network_call_performed,
+      provider_request_body_created: openrouter.request_body_prepared,
+      approval_executed: false,
+      queue_written: false,
+      external_action_executed: false,
+    };
+  }
+
+  const result = await runModelRouterFoundation(normalized);
+  const interaction_memory = await recordHermesInteractionMemoryFromRun(result);
+
+  return {
+    ok: true,
+    session,
+    provider_choice: providerChoice,
+    model_id: result.decision.model_id,
+    message: {
+      role: "assistant",
+      content:
+        "I prepared a protected Phantom AI summary and recorded it to Hermes. No external model, provider, or action ran.",
+    },
+    decision: result.decision,
+    ledger_record: redactHermesLedgerRecord(result.ledger_record),
+    interaction_memory,
+    live_provider_called: false,
+    network_call_performed: false,
+    provider_request_body_created: false,
+    approval_executed: false,
+    queue_written: false,
+    external_action_executed: false,
   };
 });
 
