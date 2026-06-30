@@ -2670,7 +2670,7 @@ function App() {
     setCommandText("");
     setMessages((current) => [...current, { id: makeId("msg-user"), role: "user", content: text }]);
 
-    if (aiProvider === "openrouter_glm") {
+    if (aiProvider === "openrouter_glm" || aiProvider === "phantom") {
       setPhantomAiBusy(true);
 
       try {
@@ -2678,7 +2678,7 @@ function App() {
           method: "POST",
           headers: sessionHeaders(true),
           body: JSON.stringify({
-            provider: "openrouter_glm",
+            provider: aiProvider,
             message: text,
             tenant_id: activeSession.clientId ?? "demo-trainer",
             business_name: selectedOrg,
@@ -2714,9 +2714,15 @@ function App() {
           },
         ]);
         addActivity(
-          data?.live_provider_called ? "GLM 5.2 worker responded" : "GLM 5.2 worker blocked",
-          data?.openrouter?.blocked_reason ?? data?.openrouter?.error_message ?? "Phantom AI worker lane returned safely.",
-          data?.live_provider_called ? "ok" : "warn",
+          aiProvider === "openrouter_glm"
+            ? data?.live_provider_called
+              ? "GLM 5.2 worker responded"
+              : "GLM 5.2 worker blocked"
+            : "Phantom AI protected lane recorded",
+          data?.openrouter?.blocked_reason ??
+            data?.openrouter?.error_message ??
+            "Phantom AI backend returned safely through the protected lane.",
+          data?.live_provider_called || aiProvider === "phantom" ? "ok" : "warn",
         );
       } catch {
         setMessages((current) => [
@@ -2724,15 +2730,22 @@ function App() {
           {
             id: makeId("msg-assistant"),
             role: "assistant",
-            content: "Phantom AI could not reach the protected GLM worker lane. Check the server and env setup.",
+            content:
+              aiProvider === "openrouter_glm"
+                ? "Phantom AI could not reach the protected GLM worker lane. Check the server and env setup."
+                : "Phantom AI could not reach the protected backend lane. I can still prepare local approval-only actions.",
           },
         ]);
-        addActivity("GLM worker lane offline", "The Phantom AI backend did not answer.", "warn");
+        addActivity(
+          aiProvider === "openrouter_glm" ? "GLM worker lane offline" : "Phantom AI backend offline",
+          "The Phantom AI backend did not answer.",
+          "warn",
+        );
       } finally {
         setPhantomAiBusy(false);
       }
 
-      return;
+      if (aiProvider === "openrouter_glm") return;
     }
 
     const lower = text.toLowerCase();

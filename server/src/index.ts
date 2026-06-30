@@ -2049,6 +2049,14 @@ app.post("/phantom-ai/chat", async (request, reply) => {
 
   const result = await runModelRouterFoundation(normalized);
   const interactionMemory = await recordHermesInteractionMemoryFromRun(result);
+  const protectedResponse = [
+    `Phantom AI handled this through the protected ${result.decision.provider_route} lane for ${normalized.business_name}.`,
+    `${result.action_preview.label}: ${result.action_preview.next_action}`,
+    result.decision.risks.length
+      ? `Safety notes: ${result.decision.risks.map((risk) => redactSensitiveText(risk)).join(" ")}`
+      : "Safety notes: no live provider, send, upload, queue execution, or approval execution ran.",
+    "I recorded the interaction to Hermes so the dashboard can keep building memory without exposing raw tools or secrets.",
+  ].join("\n\n");
 
   return {
     ok: true,
@@ -2057,8 +2065,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     model_id: result.decision.model_id,
     message: {
       role: "assistant",
-      content:
-        "I prepared a protected Phantom AI summary and recorded it to Hermes. No external model, provider, or action ran.",
+      content: protectedResponse,
     },
     decision: result.decision,
     ledger_record: redactHermesLedgerRecord(result.ledger_record),
