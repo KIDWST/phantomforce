@@ -1,6 +1,11 @@
 import { createHash } from "node:crypto";
 
 import { redactSensitiveText } from "./hermes-ledger.js";
+import {
+  buildProviderBudgetApprovalRecordContract,
+  buildProviderFundingRecordContract,
+  evaluateProviderFundingApprovalContract,
+} from "./provider-funding-approval-contract.js";
 import type {
   ProviderBudgetCaps,
   ProviderBudgetHardGateContract,
@@ -117,6 +122,34 @@ function detailForReason(reason: ProviderBudgetHardGateReason) {
   }
 }
 
+function buildFundingRecordFromHardGateInput(input: ProviderBudgetHardGateInput) {
+  if (!input.budget_caps) return null;
+
+  return buildProviderFundingRecordContract({
+    tenant_id: input.tenant_id,
+    provider_id: input.provider_id,
+    model_id: input.model_id,
+    funding_state: input.payment_status === "paid" ? "funded" : "unfunded",
+    funded_budget_cap_usd: input.budget_caps.per_request_estimated_cost_cap_usd,
+    current_daily_spend_usd: input.current_daily_spend_usd,
+    current_monthly_spend_usd: input.current_monthly_spend_usd,
+  });
+}
+
+function buildApprovalRecordFromHardGateInput(input: ProviderBudgetHardGateInput) {
+  if (!input.budget_approved || !input.budget_caps) return null;
+
+  return buildProviderBudgetApprovalRecordContract({
+    tenant_id: input.tenant_id,
+    provider_id: input.provider_id,
+    model_id: input.model_id,
+    approval_state: "approved",
+    approved_budget_cap_usd: input.budget_caps.per_request_estimated_cost_cap_usd,
+    approved_by: "admin-contract-preview",
+    approved_at: input.checked_at ?? null,
+  });
+}
+
 export function evaluateProviderBudgetHardGate(
   input: ProviderBudgetHardGateInput,
 ): ProviderBudgetHardGateContract {
@@ -126,6 +159,20 @@ export function evaluateProviderBudgetHardGate(
   const estimatedCostUsd = normalizeCost(input.estimated_cost_usd);
   const currentDailySpendUsd = normalizeMoney(input.current_daily_spend_usd);
   const currentMonthlySpendUsd = normalizeMoney(input.current_monthly_spend_usd);
+  const fundingRecord = buildFundingRecordFromHardGateInput(input);
+  const approvalRecord = buildApprovalRecordFromHardGateInput(input);
+  const fundingApprovalContract = evaluateProviderFundingApprovalContract({
+    tenant_id: input.tenant_id,
+    business_name: input.business_name,
+    provider_id: input.provider_id,
+    model_id: input.model_id,
+    estimated_tokens: estimatedTokens,
+    estimated_cost_usd: estimatedCostUsd,
+    budget_caps: input.budget_caps,
+    funding_record: fundingRecord,
+    approval_record: approvalRecord,
+    checked_at: checkedAt,
+  });
   const blockedReasons = getBlockedReasons({
     budgetCaps: input.budget_caps,
     estimatedTokens,
@@ -162,6 +209,7 @@ export function evaluateProviderBudgetHardGate(
     payment_status: input.payment_status,
     budget_approved: input.budget_approved,
     approval_status: input.approval_status,
+    funding_approval_contract: fundingApprovalContract,
     blocked_reasons: blockedReasons,
     blocked_reason_details: blockedReasons.map((reason) => redactSensitiveText(detailForReason(reason))),
     required_before_transport: requiredBeforeTransport,

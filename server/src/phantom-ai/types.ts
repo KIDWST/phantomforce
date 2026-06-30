@@ -143,6 +143,117 @@ export type ProviderBudgetHardGateReason =
   | "cost_estimate_missing"
   | "approval_execution_missing";
 
+export type ProviderFundingApprovalState = "missing" | "unfunded" | "funded";
+export type ProviderBudgetApprovalState = "missing" | "not_approved" | "approved";
+export type ProviderFundingApprovalContractStatus = "blocked" | "preflight_allowed_transport_disabled";
+export type ProviderFundingApprovalBlockedReason =
+  | "funding_record_missing"
+  | "funding_not_confirmed"
+  | "budget_approval_missing"
+  | "cost_estimate_missing"
+  | "estimated_cost_exceeds_cap"
+  | "daily_cap_exceeded"
+  | "monthly_cap_exceeded";
+
+export type ProviderFundingRecordContract = {
+  funding_id: string;
+  tenant_id: string;
+  provider_id: string;
+  model_id: string;
+  funding_state: ProviderFundingApprovalState;
+  funded_budget_cap_usd: number | null;
+  current_daily_spend_usd: number;
+  current_monthly_spend_usd: number;
+  source: "missing" | "admin_contract_preview";
+  local_dev_only: true;
+  payment_collected: false;
+};
+
+export type ProviderBudgetApprovalRecordContract = {
+  approval_id: string;
+  tenant_id: string;
+  provider_id: string;
+  model_id: string;
+  approval_state: ProviderBudgetApprovalState;
+  approved_budget_cap_usd: number | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  local_dev_only: true;
+  approval_execution_implemented: false;
+};
+
+export type ProviderFundingApprovalContractInput = {
+  tenant_id: string;
+  business_name: string;
+  provider_id: string;
+  model_id: string;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  budget_caps: ProviderBudgetCaps | null;
+  funding_record: ProviderFundingRecordContract | null;
+  approval_record: ProviderBudgetApprovalRecordContract | null;
+  checked_at?: string;
+};
+
+export type ProviderFundingApprovalContract = {
+  contract_id: string;
+  checked_at: string;
+  status: ProviderFundingApprovalContractStatus;
+  tenant_id: string;
+  business_name: string;
+  provider_id: string;
+  model_id: string;
+  estimated_tokens: number;
+  estimated_cost_usd: number | null;
+  funding_record_present: boolean;
+  explicit_funded_budget_state: boolean;
+  explicit_budget_approval_state: boolean;
+  funding_state: ProviderFundingApprovalState;
+  approval_state: ProviderBudgetApprovalState;
+  effective_per_request_cap_usd: number | null;
+  current_daily_spend_usd: number;
+  current_monthly_spend_usd: number;
+  funding_preflight_allowed: boolean;
+  provider_transport_allowed: false;
+  live_call_allowed: false;
+  execution_disabled: true;
+  ready_for_send: false;
+  blocked_reasons: ProviderFundingApprovalBlockedReason[];
+  blocked_reason_details: string[];
+  required_before_transport: string[];
+  funding_record: ProviderFundingRecordContract | null;
+  approval_record: ProviderBudgetApprovalRecordContract | null;
+  machine_check: {
+    required_before_provider_transport: true;
+    required_contract_status_before_transport: "preflight_allowed_transport_disabled";
+    current_status: ProviderFundingApprovalContractStatus;
+    transport_must_reference_contract_id: string;
+    bypass_allowed: false;
+    transport_still_disabled_after_preflight: true;
+    failure_code: "provider_funding_approval_blocked" | "provider_transport_not_implemented";
+  };
+  client_safe_summary: string;
+  admin_debug_summary: string;
+  safety_flags: {
+    admin_only: true;
+    contract_only: true;
+    funding_preflight_allowed: boolean;
+    provider_transport_allowed: false;
+    live_call_allowed: false;
+    provider_called: false;
+    network_call_performed: false;
+    payment_collected: false;
+    payment_setup_started: false;
+    billing_launched: false;
+    approval_execution_implemented: false;
+    queue_execution_implemented: false;
+    production_ledger_written: false;
+    request_body_prepared: false;
+    ready_for_send: false;
+    raw_secret_exposed: false;
+  };
+};
+
 export type ProviderBudgetHardGateInput = {
   tenant_id: string;
   business_name: string;
@@ -178,6 +289,7 @@ export type ProviderBudgetHardGateContract = {
   payment_status: "unknown" | "unpaid" | "paid";
   budget_approved: boolean;
   approval_status: ApprovalRequestStatus;
+  funding_approval_contract: ProviderFundingApprovalContract;
   blocked_reasons: ProviderBudgetHardGateReason[];
   blocked_reason_details: string[];
   required_before_transport: string[];

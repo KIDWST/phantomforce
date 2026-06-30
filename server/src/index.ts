@@ -89,7 +89,15 @@ import {
   evaluateProviderBudgetPolicy,
   getProviderBudgetPolicyStatus,
 } from "./phantom-ai/provider-policy.js";
-import { evaluateProviderBudgetHardGateFromPolicy } from "./phantom-ai/provider-budget-hard-gate.js";
+import {
+  evaluateProviderBudgetHardGate,
+  evaluateProviderBudgetHardGateFromPolicy,
+} from "./phantom-ai/provider-budget-hard-gate.js";
+import {
+  buildProviderBudgetApprovalRecordContract,
+  buildProviderFundingRecordContract,
+  evaluateProviderFundingApprovalContract,
+} from "./phantom-ai/provider-funding-approval-contract.js";
 import { getProviderReadinessReport } from "./phantom-ai/provider-readiness.js";
 import type {
   ActorRole,
@@ -265,6 +273,17 @@ function parseHermesRecordLimit(value: string | undefined) {
 
 function parseSensitivityLevel(value: unknown): SensitivityLevel {
   return value === "medium" || value === "high" ? value : "low";
+}
+
+function parseNonNegativeNumber(value: unknown, fallback: number) {
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function parseNullableNonNegativeNumber(value: unknown, fallback: number | null) {
+  if (value === null || value === "missing") return null;
+  const parsed = typeof value === "number" ? value : typeof value === "string" ? Number(value) : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
 function parseContextModuleData(value: unknown): ContextModuleData[] {
@@ -445,6 +464,107 @@ app.post("/phantom-ai/provider-budget/hard-gate/preview", async (request, reply)
     hard_budget_gate: result.provider_invocation.budget_hard_gate,
     provider_invocation: result.provider_invocation,
     provider_policy: result.provider_policy,
+  };
+});
+
+app.post("/phantom-ai/provider-funding/approval-contract/preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    funding_record_present?: unknown;
+    funding_state?: unknown;
+    funding_cap_usd?: unknown;
+    current_daily_spend_usd?: unknown;
+    current_monthly_spend_usd?: unknown;
+    approval_record_present?: unknown;
+    approval_state?: unknown;
+    approval_cap_usd?: unknown;
+    approved_by?: unknown;
+    approved_at?: unknown;
+    estimated_tokens?: unknown;
+    estimated_cost_usd?: unknown;
+  };
+  const tenantId = typeof body.tenant_id === "string" ? body.tenant_id.slice(0, 80) : "demo-trainer";
+  const businessName =
+    typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "West Loop Strength Lab";
+  const providerId = "openrouter_glm";
+  const modelId = "z-ai/glm-5.2";
+  const policy = getProviderBudgetPolicyStatus();
+  const fundingState = body.funding_state === "funded" ? "funded" : "unfunded";
+  const approvalState = body.approval_state === "approved" ? "approved" : "not_approved";
+  const fundingRecord =
+    body.funding_record_present === true
+      ? buildProviderFundingRecordContract({
+          tenant_id: tenantId,
+          provider_id: providerId,
+          model_id: modelId,
+          funding_state: fundingState,
+          funded_budget_cap_usd: parseNullableNonNegativeNumber(body.funding_cap_usd, 0),
+          current_daily_spend_usd: parseNonNegativeNumber(body.current_daily_spend_usd, 0),
+          current_monthly_spend_usd: parseNonNegativeNumber(body.current_monthly_spend_usd, 0),
+        })
+      : null;
+  const approvalRecord =
+    body.approval_record_present === true
+      ? buildProviderBudgetApprovalRecordContract({
+          tenant_id: tenantId,
+          provider_id: providerId,
+          model_id: modelId,
+          approval_state: approvalState,
+          approved_budget_cap_usd: parseNullableNonNegativeNumber(body.approval_cap_usd, 0),
+          approved_by: typeof body.approved_by === "string" ? body.approved_by.slice(0, 80) : session.id,
+          approved_at: typeof body.approved_at === "string" ? body.approved_at.slice(0, 80) : null,
+        })
+      : null;
+  const estimatedTokens = parseNonNegativeNumber(body.estimated_tokens, 1200);
+  const estimatedCostUsd = parseNullableNonNegativeNumber(body.estimated_cost_usd, null);
+  const fundingApprovalContract = evaluateProviderFundingApprovalContract({
+    tenant_id: tenantId,
+    business_name: businessName,
+    provider_id: providerId,
+    model_id: modelId,
+    estimated_tokens: estimatedTokens,
+    estimated_cost_usd: estimatedCostUsd,
+    budget_caps: policy.budget_guard.caps,
+    funding_record: fundingRecord,
+    approval_record: approvalRecord,
+  });
+  const hardBudgetGate = evaluateProviderBudgetHardGate({
+    tenant_id: tenantId,
+    business_name: businessName,
+    provider_id: providerId,
+    model_id: modelId,
+    estimated_tokens: estimatedTokens,
+    estimated_cost_usd: estimatedCostUsd,
+    current_daily_spend_usd: fundingRecord?.current_daily_spend_usd,
+    current_monthly_spend_usd: fundingRecord?.current_monthly_spend_usd,
+    budget_caps: policy.budget_guard.caps,
+    payment_status: fundingState === "funded" && fundingRecord ? "paid" : "unpaid",
+    budget_approved: approvalState === "approved" && Boolean(approvalRecord),
+    approval_status: approvalState === "approved" ? "approved" : "pending",
+  });
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    contract_only: true,
+    provider_called: false,
+    network_call_performed: false,
+    ledger_written: false,
+    queue_written: false,
+    approval_executed: false,
+    payment_collected: false,
+    production_ledger_written: false,
+    ready_for_send: false,
+    funding_approval_contract: fundingApprovalContract,
+    hard_budget_gate: hardBudgetGate,
   };
 });
 

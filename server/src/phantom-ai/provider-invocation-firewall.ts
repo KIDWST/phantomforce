@@ -117,10 +117,13 @@ export function evaluateProviderInvocationFirewall(
   const blockedReasons = uniqRedacted([
     ...getBlockedReasons(input, readinessRoute),
     "Provider budget hard gate is blocked and must pass before any future transport.",
+    "Provider funding approval contract must pass preflight before any future transport.",
+    ...budgetHardGate.funding_approval_contract.blocked_reason_details,
     ...budgetHardGate.blocked_reason_details,
   ]);
   const requiredBeforeLive = uniqRedacted([
     ...buildRequiredBeforeLive(input, readinessRoute, blockedReasons),
+    ...budgetHardGate.funding_approval_contract.required_before_transport,
     ...budgetHardGate.required_before_transport,
   ]);
   const readinessConfigured = Boolean(readinessRoute?.configured);
