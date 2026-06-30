@@ -903,6 +903,176 @@ export type HermesLiveCallReceiptStoreReadResult = {
   malformed_lines: number;
 };
 
+export type ProviderLiveReceiptLedgerState =
+  | "blocked_no_ledger_write"
+  | "preflight_allowed_transport_disabled"
+  | "future_transport_attempt_requires_receipt"
+  | "future_provider_result_requires_transport_proof"
+  | "production_ledger_write_disabled";
+
+export type ProviderLiveReceiptLedgerOperation =
+  | "preflight_preview"
+  | "future_transport_attempt"
+  | "future_provider_result"
+  | "production_ledger_write";
+
+export type ProviderLiveReceiptLedgerBlockedReason =
+  | "readiness_not_passed"
+  | "funding_not_passed"
+  | "approval_not_passed"
+  | "budget_not_passed"
+  | "cost_estimate_missing"
+  | "redaction_not_passed"
+  | "receipt_contract_missing"
+  | "future_transport_receipt_fields_missing"
+  | "future_transport_receipt_fields_unsafe"
+  | "transport_proof_missing"
+  | "production_ledger_write_disabled";
+
+export type ProviderLiveReceiptLedgerTransportProof = {
+  transport_proof_id: string;
+  provider_route: ProviderRoute;
+  model_id: string;
+  correlation_id: string;
+  request_receipt_id: string;
+  response_receipt_id: string;
+  provider_call_confirmed: boolean;
+  network_call_confirmed: boolean;
+  request_redacted: true;
+  response_redacted: true;
+  raw_secret_exposed: false;
+};
+
+export type ProviderLiveReceiptLedgerContractInput = {
+  tenant_id: string;
+  business_name: string;
+  provider_route: ProviderRoute;
+  model_id: string;
+  requested_operation: ProviderLiveReceiptLedgerOperation;
+  readiness_passed: boolean;
+  budget_passed: boolean;
+  funding_approval_contract: ProviderFundingApprovalContract | null;
+  approval_snapshot: ApprovalRequestPreview | null;
+  estimated_cost_usd: number | null;
+  redaction: HermesLiveCallRedactionProofFlags | null;
+  receipt_contract: HermesLiveCallReceiptContract | null;
+  transport_proof: ProviderLiveReceiptLedgerTransportProof | null;
+  production_ledger_write_requested?: boolean;
+  checked_at?: string;
+};
+
+export type ProviderLiveReceiptLedgerContract = {
+  contract_id: string;
+  checked_at: string;
+  state: ProviderLiveReceiptLedgerState;
+  requested_operation: ProviderLiveReceiptLedgerOperation;
+  tenant_id: string;
+  business_name: string;
+  provider_route: ProviderRoute;
+  model_id: string;
+  estimated_cost_usd: number | null;
+  readiness_passed: boolean;
+  budget_passed: boolean;
+  funding_passed: boolean;
+  approval_passed: boolean;
+  cost_estimate_present: boolean;
+  redaction_passed: boolean;
+  receipt_contract_present: boolean;
+  preflight_audit_preview_allowed: boolean;
+  completed_live_call_receipt_allowed: false;
+  provider_result_record_allowed: false;
+  production_ledger_write_allowed: false;
+  local_dev_preview_allowed: true;
+  provider_called: false;
+  network_call_performed: false;
+  provider_transport_allowed: false;
+  live_call_allowed: false;
+  execution_disabled: true;
+  ready_for_send: false;
+  ledger_written: false;
+  production_ledger_written: false;
+  queue_written: false;
+  approval_executed: false;
+  blocked_reasons: ProviderLiveReceiptLedgerBlockedReason[];
+  blocked_reason_details: string[];
+  allowed_ledger_record_kinds: Array<"redacted_preflight_audit_preview">;
+  blocked_ledger_record_kinds: Array<
+    "completed_live_call_receipt" | "provider_result" | "production_live_call_ledger_write"
+  >;
+  future_transport_attempt_contract: {
+    required: true;
+    contract_status: "requirements_defined_transport_disabled" | "blocked_missing_or_unsafe_fields";
+    receipt_required_before_send: true;
+    redacted_request_receipt_required: true;
+    redacted_response_receipt_required: true;
+    budget_snapshot_required: true;
+    funding_snapshot_required: true;
+    approval_snapshot_required: true;
+    estimated_cost_required: true;
+    redaction_status_required: true;
+    missing_required_fields: string[];
+    unsafe_fields: string[];
+    request_body_prepared: false;
+    ready_for_send: false;
+  };
+  future_provider_result_contract: {
+    transport_proof_required: true;
+    transport_proof_present: boolean;
+    provider_result_record_allowed: false;
+    blocked_reason: string;
+  };
+  production_ledger_contract: {
+    production_write_requested: boolean;
+    production_write_allowed: false;
+    blocked_reason: string;
+  };
+  receipt_contract_summary: {
+    contract_id: string | null;
+    correlation_id: string | null;
+    request_receipt_id: string | null;
+    response_receipt_id: string | null;
+    live_smoke_preflight_id: string | null;
+  };
+  machine_check: {
+    required_before_provider_transport: true;
+    required_before_completed_live_receipt: true;
+    current_state: ProviderLiveReceiptLedgerState;
+    expected_preflight_state_before_future_transport: "preflight_allowed_transport_disabled";
+    completed_receipt_requires_transport_proof: true;
+    production_ledger_write_disabled: true;
+    transport_must_reference_contract_id: string;
+    bypass_allowed: false;
+    failure_code:
+      | "provider_live_receipt_ledger_blocked"
+      | "provider_transport_receipt_requirements_only"
+      | "provider_result_transport_proof_missing"
+      | "production_ledger_write_disabled";
+  };
+  client_safe_summary: string;
+  admin_debug_summary: string;
+  safety_flags: {
+    admin_only: true;
+    contract_only: true;
+    provider_called: false;
+    network_call_performed: false;
+    provider_transport_allowed: false;
+    live_call_allowed: false;
+    execution_disabled: true;
+    ready_for_send: false;
+    ledger_written: false;
+    production_ledger_written: false;
+    queue_written: false;
+    approval_executed: false;
+    payment_collected: false;
+    request_body_prepared: false;
+    completed_receipt_allowed: false;
+    provider_result_record_allowed: false;
+    raw_secret_exposed: false;
+    raw_prompt_returned: false;
+    raw_response_stored: false;
+  };
+};
+
 export type ProviderInvocationFirewallInput = {
   requested_provider_id: string;
   requested_route: ProviderRoute;

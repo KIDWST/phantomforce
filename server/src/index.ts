@@ -85,6 +85,7 @@ import {
   previewModelRouterFoundation,
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
+import { evaluateProviderLiveReceiptLedgerContract } from "./phantom-ai/provider-live-receipt-ledger-contract.js";
 import {
   evaluateProviderBudgetPolicy,
   getProviderBudgetPolicyStatus,
@@ -104,6 +105,7 @@ import type {
   ApprovalQueueTransitionStatus,
   ApprovalQueueWriteResult,
   ContextModuleData,
+  ProviderLiveReceiptLedgerOperation,
   SensitivityLevel,
 } from "./phantom-ai/types.js";
 
@@ -273,6 +275,18 @@ function parseHermesRecordLimit(value: string | undefined) {
 
 function parseSensitivityLevel(value: unknown): SensitivityLevel {
   return value === "medium" || value === "high" ? value : "low";
+}
+
+function parseLiveReceiptLedgerOperation(value: unknown): ProviderLiveReceiptLedgerOperation {
+  if (
+    value === "future_transport_attempt" ||
+    value === "future_provider_result" ||
+    value === "production_ledger_write"
+  ) {
+    return value;
+  }
+
+  return "preflight_preview";
 }
 
 function parseNonNegativeNumber(value: unknown, fallback: number) {
@@ -720,6 +734,72 @@ app.post("/phantom-ai/hermes-live-receipts/contract", async (request, reply) => 
     ready_for_send: false,
     approval_execution_implemented: false,
     receipt_contract,
+  };
+});
+
+app.post("/phantom-ai/provider-live-receipts/ledger-contract", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+    requested_operation?: unknown;
+    production_ledger_write_requested?: unknown;
+  };
+  const result = previewModelRouterFoundation(
+    buildModelRouterRequestFromBody(body, session, "provider-live-receipt-ledger-contract"),
+  );
+  const preflight = await buildLiveSmokePreflightReport(result);
+  const receipt_contract = buildHermesLiveCallReceiptContract({
+    preview: result,
+    preflight,
+  });
+  const ledger_contract = evaluateProviderLiveReceiptLedgerContract({
+    tenant_id: result.context_packet.tenant_id,
+    business_name: result.context_packet.business_name,
+    provider_route: result.decision.provider_route,
+    model_id: result.decision.model_id,
+    requested_operation: parseLiveReceiptLedgerOperation(body.requested_operation),
+    readiness_passed: false,
+    budget_passed: false,
+    funding_approval_contract: result.provider_invocation.budget_hard_gate.funding_approval_contract,
+    approval_snapshot: result.approval_request,
+    estimated_cost_usd: result.decision.estimated_cost_usd,
+    redaction: receipt_contract.redaction,
+    receipt_contract,
+    transport_proof: null,
+    production_ledger_write_requested: body.production_ledger_write_requested === true,
+  });
+
+  return {
+    ok: true,
+    session,
+    dry_run: true,
+    contract_only: true,
+    provider_called: false,
+    network_call_performed: false,
+    provider_transport_allowed: false,
+    live_call_allowed: false,
+    execution_disabled: true,
+    ready_for_send: false,
+    ledger_written: false,
+    production_ledger_written: false,
+    queue_written: false,
+    approval_executed: false,
+    payment_collected: false,
+    receipt_contract,
+    ledger_contract,
   };
 });
 
