@@ -408,6 +408,46 @@ function parsePhantomAiChatProvider(value: unknown) {
   return value === "openrouter_glm" ? "openrouter_glm" : "phantom";
 }
 
+function getSendReadinessStatus() {
+  return {
+    status: "planned_disabled" as const,
+    send_enabled: false,
+    send_route_present: false,
+    approval_required: true,
+    manual_operator_confirmation_required: true,
+    automatic_send_allowed: false,
+    bulk_send_allowed: false,
+    queue_execution_allowed: false,
+    test_allowlist_required: true,
+    test_allowlist_configured: false,
+    credentials_configured: false,
+    credentials_status: "not_configured_no_secret_read" as const,
+    external_send: false,
+    provider_called: false,
+    n8n_executed: false,
+    approval_execution: false,
+    queue_write: false,
+    production_ledger_write: false,
+    audit_receipt_required: true,
+    audit_receipt_written: false,
+    architecture: [
+      "Draft only inside PhantomForce.",
+      "Owner approval required before any external send route can exist.",
+      "Manual operator confirmation required for one allowed test recipient.",
+      "No automatic send, bulk send, queue execution, or n8n execution.",
+      "No credentials may be committed or printed.",
+      "A redacted audit receipt is required after any future approved send.",
+    ],
+    next_required_before_send: [
+      "Implement a separate approval-gated send adapter.",
+      "Add a local test-recipient allowlist.",
+      "Add a one-message explicit confirmation phrase.",
+      "Add redacted receipt storage for every send attempt.",
+      "Run test-only delivery to approved Jordan-owned recipients before any client use.",
+    ],
+  };
+}
+
 app.get("/phantom-ai/provider-status", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -1572,6 +1612,24 @@ app.get("/phantom-ai/ops/sales-connector/status", async (request, reply) => {
   return { ok: true, session, read_only: true, sales_connector: getSalesConnectorStatus() };
 });
 
+app.get("/phantom-ai/ops/send-readiness/status", async (request, reply) => {
+  // Admin-only checkpoint for the future approved-send architecture. This is
+  // status-only and never creates a send request, provider call, queue item, or
+  // credential lookup.
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    send_readiness: getSendReadinessStatus(),
+  };
+});
+
 app.get("/phantom-ai/ops/status", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -1663,6 +1721,7 @@ app.get("/phantom-ai/ops/status", async (request, reply) => {
         queue_written: false,
         approval_executed: false,
       },
+      send_readiness: getSendReadinessStatus(),
       safety_flags: {
         approvals_execute_absent: true,
         execution_disabled: true,

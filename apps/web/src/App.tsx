@@ -350,6 +350,30 @@ type PhantomAiOpsStatus = {
     queue_written: boolean;
     approval_executed: boolean;
   };
+  send_readiness: {
+    status: "planned_disabled";
+    send_enabled: boolean;
+    send_route_present: boolean;
+    approval_required: boolean;
+    manual_operator_confirmation_required: boolean;
+    automatic_send_allowed: boolean;
+    bulk_send_allowed: boolean;
+    queue_execution_allowed: boolean;
+    test_allowlist_required: boolean;
+    test_allowlist_configured: boolean;
+    credentials_configured: boolean;
+    credentials_status: "not_configured_no_secret_read";
+    external_send: boolean;
+    provider_called: boolean;
+    n8n_executed: boolean;
+    approval_execution: boolean;
+    queue_write: boolean;
+    production_ledger_write: boolean;
+    audit_receipt_required: boolean;
+    audit_receipt_written: boolean;
+    architecture: string[];
+    next_required_before_send: string[];
+  };
   safety_flags: {
     approvals_execute_absent: boolean;
     execution_disabled: boolean;
@@ -1750,6 +1774,38 @@ const defaultPhantomAiOpsStatus: PhantomAiOpsStatus = {
     external_send: false,
     queue_written: false,
     approval_executed: false,
+  },
+  send_readiness: {
+    status: "planned_disabled",
+    send_enabled: false,
+    send_route_present: false,
+    approval_required: true,
+    manual_operator_confirmation_required: true,
+    automatic_send_allowed: false,
+    bulk_send_allowed: false,
+    queue_execution_allowed: false,
+    test_allowlist_required: true,
+    test_allowlist_configured: false,
+    credentials_configured: false,
+    credentials_status: "not_configured_no_secret_read",
+    external_send: false,
+    provider_called: false,
+    n8n_executed: false,
+    approval_execution: false,
+    queue_write: false,
+    production_ledger_write: false,
+    audit_receipt_required: true,
+    audit_receipt_written: false,
+    architecture: [
+      "Draft only inside PhantomForce.",
+      "Owner approval required before any external send route can exist.",
+      "Manual operator confirmation required for one allowed test recipient.",
+    ],
+    next_required_before_send: [
+      "Implement a separate approval-gated send adapter.",
+      "Add a local test-recipient allowlist.",
+      "Add redacted receipt storage for every send attempt.",
+    ],
   },
   safety_flags: {
     approvals_execute_absent: true,
@@ -6148,6 +6204,10 @@ function PhantomAiStatusPanel({
           label="ChicagoShots"
           value={opsStatus.chicagoshots_ops.available ? "Workflow ready" : "Workflow unavailable"}
         />
+        <StatusLine
+          label="Send readiness"
+          value={opsStatus.send_readiness.send_enabled ? "Enabled" : "Draft-only / disabled"}
+        />
         <StatusLine label="Safety state" value={safetyValue} />
       </div>
       <div className="ai-rule-columns ops-rule-columns">
@@ -6158,6 +6218,7 @@ function PhantomAiStatusPanel({
             <li>Tool lane: {opsStatus.tool_lane_status.status}</li>
             <li>n8n scaffolded: {opsStatus.n8n.n8n_scaffolded ? "true" : "false"}</li>
             <li>ChicagoShots preview: {opsStatus.chicagoshots_ops.dry_run_only ? "dry-run only" : "review"}</li>
+            <li>Send route present: {opsStatus.send_readiness.send_route_present ? "true" : "false"}</li>
           </ul>
         </div>
         <div>
@@ -6171,6 +6232,8 @@ function PhantomAiStatusPanel({
               {opsStatus.safety_flags.production_ledger_writes_disabled ? "true" : "false"}
             </li>
             <li>External sends disabled: {opsStatus.safety_flags.external_sends_disabled ? "true" : "false"}</li>
+            <li>Test allowlist required: {opsStatus.send_readiness.test_allowlist_required ? "true" : "false"}</li>
+            <li>Audit receipt required: {opsStatus.send_readiness.audit_receipt_required ? "true" : "false"}</li>
           </ul>
         </div>
       </div>
