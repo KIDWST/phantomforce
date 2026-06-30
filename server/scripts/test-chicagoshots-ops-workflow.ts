@@ -72,6 +72,16 @@ try {
   assert(wedding.approval_preview.status === "preview-only", "Approval must be preview-only.");
   assert(wedding.approval_preview.execution_disabled === true, "Approval execution must be disabled.");
   assert(wedding.approval_preview.requires_approval_before_send === true, "Send must require approval.");
+  assert(wedding.quote_draft.title.includes("Maria"), "Quote draft should name the lead.");
+  assert(wedding.recommended_price_range === "$2,500-$4,500", "Wedding quote should use the wedding/event range.");
+  assert(wedding.quote_draft.recommended_price_range === wedding.recommended_price_range, "Quote range should mirror top-level range.");
+  assert(wedding.delivery_timeline.includes("wedding gallery"), "Wedding quote should include a delivery timeline.");
+  assert(wedding.upsell_options.includes("second shooter"), "Wedding quote should include useful upsells.");
+  assert(wedding.payment_terms_note.includes("No payment request"), "Quote terms must not create a payment request.");
+  assert(wedding.payment_terms_note.includes("invoice"), "Quote terms must explicitly avoid invoice creation.");
+  assert(wedding.quote_draft.would_send === false, "Quote draft must not be sendable.");
+  assert(wedding.quote_draft.payment_request_created === false, "Quote draft must not create payment requests.");
+  assert(wedding.quote_draft.invoice_created === false, "Quote draft must not create invoices.");
 
   // Redaction: no raw secret/card anywhere.
   assert(!weddingJson.includes(fakeApiKeyValue), "No raw API key may appear.");
@@ -98,6 +108,12 @@ try {
     );
     assert(p.recommended_service_package.id === expected, `${eventType}/${service} should map to ${expected}.`);
     assert(p.deliverables_checklist.length > 0, `${expected} must have deliverables.`);
+    assert(p.quote_draft.line_items.length >= 3, `${expected} must include quote line items.`);
+    assert(p.recommended_price_range.length > 0, `${expected} must include a recommended price range.`);
+    assert(p.delivery_timeline.length > 0, `${expected} must include a delivery timeline.`);
+    assert(p.upsell_options.length > 0, `${expected} must include upsell options.`);
+    assert(p.quote_draft.payment_request_created === false, `${expected} must not create payment requests.`);
+    assert(p.quote_draft.invoice_created === false, `${expected} must not create invoices.`);
     assert(p.safety_flags.would_send === false, "would_send must stay false.");
     assert(p.safety_flags.provider_called === false, "provider_called must stay false.");
   }
@@ -124,6 +140,10 @@ try {
       {
         ok: true,
         package: wedding.recommended_service_package.id,
+        quoteRange: wedding.recommended_price_range,
+        quoteWouldSend: wedding.quote_draft.would_send,
+        paymentRequestCreated: wedding.quote_draft.payment_request_created,
+        invoiceCreated: wedding.quote_draft.invoice_created,
         urgency: wedding.task_draft.priority,
         deliverables: wedding.deliverables_checklist.length,
         followUpChannel: wedding.follow_up_draft.channel_hint,

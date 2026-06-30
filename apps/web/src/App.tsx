@@ -415,6 +415,23 @@ type ChicagoShotsLeadIntakePacket = {
     rationale: string;
     suggested_addons: string[];
   };
+  quote_draft: {
+    title: string;
+    summary: string;
+    line_items: string[];
+    recommended_price_range: string;
+    payment_terms_note: string;
+    delivery_timeline: string;
+    upsell_options: string[];
+    assumptions: string[];
+    would_send: false;
+    payment_request_created: false;
+    invoice_created: false;
+  };
+  recommended_price_range: string;
+  payment_terms_note: string;
+  delivery_timeline: string;
+  upsell_options: string[];
   task_draft: {
     title: string;
     priority: string;
@@ -1774,6 +1791,44 @@ function formatChicagoShotsDeliverables(packet: ChicagoShotsLeadIntakePacket) {
   ].join("\n");
 }
 
+function formatChicagoShotsQuoteDraft(packet: ChicagoShotsLeadIntakePacket) {
+  return [
+    packet.quote_draft.title,
+    "",
+    packet.quote_draft.summary,
+    "",
+    `Recommended range: ${packet.recommended_price_range}`,
+    `Delivery timeline: ${packet.delivery_timeline}`,
+    `Payment terms: ${packet.payment_terms_note}`,
+    "",
+    "Line items:",
+    ...packet.quote_draft.line_items.map((item, index) => `${index + 1}. ${item}`),
+    "",
+    "Upsell options:",
+    ...packet.upsell_options.map((item, index) => `${index + 1}. ${item}`),
+    "",
+    "Assumptions:",
+    ...packet.quote_draft.assumptions.map((item, index) => `${index + 1}. ${item}`),
+    "",
+    "Status: Preview only. No send. No payment request. No invoice. No queue write. No ledger write.",
+  ].join("\n");
+}
+
+function formatChicagoShotsProposalSummary(packet: ChicagoShotsLeadIntakePacket) {
+  return [
+    `${packet.normalized_lead.client_name || "New ChicagoShots lead"} - ${packet.recommended_service_package.name}`,
+    `Quote range: ${packet.recommended_price_range}`,
+    `Timeline: ${packet.delivery_timeline}`,
+    `Package fit: ${packet.recommended_service_package.rationale}`,
+    `Primary deliverables: ${packet.deliverables_checklist.join(", ")}`,
+    `Upsells: ${packet.upsell_options.join(", ") || "None"}`,
+    "",
+    packet.payment_terms_note,
+    "",
+    "Preview only. Jordan must review before manual client use.",
+  ].join("\n");
+}
+
 function formatChicagoShotsIntakePacket(packet: ChicagoShotsLeadIntakePacket) {
   return [
     "# ChicagoShots intake packet",
@@ -1806,6 +1861,10 @@ function formatChicagoShotsIntakePacket(packet: ChicagoShotsLeadIntakePacket) {
     "",
     `${packet.recommended_service_package.name}: ${packet.recommended_service_package.rationale}`,
     `Add-ons: ${packet.recommended_service_package.suggested_addons.join(", ") || "None"}`,
+    "",
+    "## Quote / proposal draft",
+    "",
+    formatChicagoShotsQuoteDraft(packet),
     "",
     "## Task draft",
     "",
@@ -6005,6 +6064,22 @@ function ChicagoShotsLeadIntakePanel({
             <button
               className="ghost-small"
               type="button"
+              onClick={() => void copyLeadText("quote draft", formatChicagoShotsQuoteDraft(leadPreview))}
+            >
+              <Copy size={15} />
+              Copy quote draft
+            </button>
+            <button
+              className="ghost-small"
+              type="button"
+              onClick={() => void copyLeadText("proposal summary", formatChicagoShotsProposalSummary(leadPreview))}
+            >
+              <Copy size={15} />
+              Copy proposal summary
+            </button>
+            <button
+              className="ghost-small"
+              type="button"
               onClick={() => void copyLeadText("deliverables checklist", formatChicagoShotsDeliverables(leadPreview))}
             >
               <Copy size={15} />
@@ -6032,6 +6107,20 @@ function ChicagoShotsLeadIntakePanel({
             <h4>{leadPreview.recommended_service_package.name}</h4>
             <p>{leadPreview.recommended_service_package.rationale}</p>
             <small>Add-ons: {leadPreview.recommended_service_package.suggested_addons.join(", ") || "None"}</small>
+          </article>
+          <article className="operator-result-card">
+            <span className="eyebrow">Quote / proposal</span>
+            <h4>{leadPreview.quote_draft.title}</h4>
+            <StatusLine label="Range" value={leadPreview.recommended_price_range} />
+            <StatusLine label="Timeline" value={leadPreview.delivery_timeline} />
+            <p>{leadPreview.quote_draft.summary}</p>
+            <small>{leadPreview.payment_terms_note}</small>
+            <ul>
+              {leadPreview.quote_draft.line_items.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <small>Upsells: {leadPreview.upsell_options.join(", ") || "None"}</small>
           </article>
           <article className="operator-result-card">
             <span className="eyebrow">Task draft</span>

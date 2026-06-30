@@ -68,6 +68,23 @@ export type ChicagoShotsLeadIntakePreview = {
     rationale: string;
     suggested_addons: string[];
   };
+  quote_draft: {
+    title: string;
+    summary: string;
+    line_items: string[];
+    recommended_price_range: string;
+    payment_terms_note: string;
+    delivery_timeline: string;
+    upsell_options: string[];
+    assumptions: string[];
+    would_send: false;
+    payment_request_created: false;
+    invoice_created: false;
+  };
+  recommended_price_range: string;
+  payment_terms_note: string;
+  delivery_timeline: string;
+  upsell_options: string[];
   task_draft: {
     title: string;
     priority: Urgency;
@@ -194,6 +211,96 @@ function classifyPackage(eventType: string, requestedService: string): {
   };
 }
 
+function quotePricingForPackage(pkg: ReturnType<typeof classifyPackage>, eventType: string): {
+  recommendedPriceRange: string;
+  deliveryTimeline: string;
+  upsellOptions: string[];
+} {
+  const hay = `${eventType} ${pkg.name}`.toLowerCase();
+  switch (pkg.id) {
+    case "sports_action":
+      return {
+        recommendedPriceRange: "$750-$1,500",
+        deliveryTimeline: "Proof gallery in 3-5 business days; rush social cuts in 24-48 hours if Jordan approves.",
+        upsellOptions: ["rush turnaround", "social-cut pack", "team composites"],
+      };
+    case "event_coverage":
+      return {
+        recommendedPriceRange: /wedding/.test(hay) ? "$2,500-$4,500" : "$1,200-$2,500",
+        deliveryTimeline: /wedding/.test(hay)
+          ? "Preview set in 3-5 business days; full wedding gallery in 2-4 weeks after selections."
+          : "Preview set in 3-5 business days; edited event gallery in 7-10 business days.",
+        upsellOptions: ["second shooter", "same-day teaser", "highlight reel", "printed album"],
+      };
+    case "real_estate_media":
+      return {
+        recommendedPriceRange: "$500-$1,200",
+        deliveryTimeline: "MLS-ready stills in 24-72 hours after the shoot; video add-ons follow after approval.",
+        upsellOptions: ["video walkthrough", "drone exterior", "twilight set"],
+      };
+    case "brand_content":
+      return {
+        recommendedPriceRange: "$1,500-$3,500",
+        deliveryTimeline: "First edited set in 5-7 business days; final licensed assets after client approval.",
+        upsellOptions: ["short-form video", "usage license", "monthly content retainer"],
+      };
+    case "portrait_session":
+      return {
+        recommendedPriceRange: "$350-$900",
+        deliveryTimeline: "Proofs in 3-5 business days; final retouched selections after client picks.",
+        upsellOptions: ["extra outfit changes", "retouch package", "rush delivery"],
+      };
+    case "general_inquiry":
+    default:
+      return {
+        recommendedPriceRange: "$500-$2,500 after scope confirmation",
+        deliveryTimeline: "Timeline confirmed after a short discovery call and approved scope.",
+        upsellOptions: ["discovery call", "custom quote", "monthly content support"],
+      };
+  }
+}
+
+function buildQuoteDraft(input: {
+  clientName: string;
+  pkg: ReturnType<typeof classifyPackage>;
+  eventType: string;
+  dateTime: string;
+  location: string;
+  budgetRate: string;
+}): ChicagoShotsLeadIntakePreview["quote_draft"] {
+  const quote = quotePricingForPackage(input.pkg, input.eventType);
+  const client = input.clientName || "New lead";
+  const scope = input.eventType || input.pkg.name;
+  const lineItems = [
+    `${input.pkg.name} base coverage for ${scope}`,
+    `Included delivery: ${input.pkg.deliverables.join("; ")}`,
+    input.dateTime ? `Requested date/time: ${input.dateTime}` : "Date/time: confirm before quoting final price",
+    input.location ? `Location: ${input.location}` : "Location: confirm before quoting final price",
+  ];
+  if (input.budgetRate) {
+    lineItems.push(`Client-stated budget/rate: ${input.budgetRate}`);
+  }
+
+  return {
+    title: `${input.pkg.name} quote draft for ${client}`,
+    summary: `${input.pkg.name} is the recommended starting package. Suggested range is ${quote.recommendedPriceRange}; Jordan should confirm scope before sending a final quote.`,
+    line_items: lineItems,
+    recommended_price_range: quote.recommendedPriceRange,
+    payment_terms_note:
+      "Quote draft only. Typical terms: deposit to hold the date, remaining balance before final delivery. No payment request or invoice has been created.",
+    delivery_timeline: quote.deliveryTimeline,
+    upsell_options: quote.upsellOptions,
+    assumptions: [
+      "Jordan reviews and approves any price before manual client use.",
+      "Final price depends on shoot length, location, usage rights, turnaround, and add-ons.",
+      "This draft does not send a message, create an invoice, or request payment.",
+    ],
+    would_send: false,
+    payment_request_created: false,
+    invoice_created: false,
+  };
+}
+
 function suggestedDue(urgency: Urgency): string {
   if (urgency === "high") return "within 4 hours";
   if (urgency === "medium") return "within 24 hours";
@@ -250,6 +357,16 @@ export async function buildChicagoShotsLeadIntakePreview(
   const urgency = classifyUrgency(input.urgency);
   const pkg = classifyPackage(eventType, requestedService);
   const dateTime = clean(input.date_time);
+  const location = clean(input.location);
+  const budgetRate = clean(input.budget_rate);
+  const quoteDraft = buildQuoteDraft({
+    clientName,
+    pkg,
+    eventType,
+    dateTime,
+    location,
+    budgetRate,
+  });
 
   // Read-only Hermes memory context (tenant + optional operator scope).
   const recall = await recallHermesInteractionMemory({
@@ -272,9 +389,9 @@ export async function buildChicagoShotsLeadIntakePreview(
       event_type: eventType,
       event_category: pkg.category,
       date_time: dateTime,
-      location: clean(input.location),
+      location,
       requested_service: requestedService,
-      budget_rate: clean(input.budget_rate),
+      budget_rate: budgetRate,
       source_platform: clean(input.source_platform),
       urgency,
       notes: clean(input.notes, MAX_TEXT),
@@ -285,6 +402,11 @@ export async function buildChicagoShotsLeadIntakePreview(
       rationale: pkg.rationale,
       suggested_addons: pkg.addons,
     },
+    quote_draft: quoteDraft,
+    recommended_price_range: quoteDraft.recommended_price_range,
+    payment_terms_note: quoteDraft.payment_terms_note,
+    delivery_timeline: quoteDraft.delivery_timeline,
+    upsell_options: quoteDraft.upsell_options,
     task_draft: {
       title: `Follow up: ${clientName || "new lead"} — ${pkg.name}`,
       priority: urgency,
