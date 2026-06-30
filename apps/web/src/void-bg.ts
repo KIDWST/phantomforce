@@ -144,8 +144,42 @@ async function initVoidBg(): Promise<void> {
   }
 }
 
+/* Ambient threat radar: a faint reminder of the risks PhantomForce watches,
+   drifting in the periphery behind the cockpit. Subtle by design. */
+function initCockpitRadar(): void {
+  if (reduceMotion) return;
+  if (document.querySelector("[data-cockpit-radar]")) return;
+  const field = document.createElement("div");
+  field.setAttribute("data-cockpit-radar", "");
+  field.setAttribute("aria-hidden", "true");
+  Object.assign(field.style, {
+    position: "fixed", inset: "0", zIndex: "0", pointerEvents: "none", overflow: "hidden",
+  } as CSSStyleDeclaration);
+  document.body.appendChild(field);
+
+  const risks = ["phishing", "data leak", "scam", "malware", "late invoice", "missed follow-up", "chargeback", "spam", "downtime", "compliance", "deadline", "double-booking"];
+  const spawn = () => {
+    if (document.hidden) return;
+    const ping = document.createElement("div");
+    ping.className = "cockpit-ping";
+    const right = Math.random() < 0.5;
+    ping.style.left = (right ? 80 + Math.random() * 16 : 4 + Math.random() * 14) + "%";
+    ping.style.top = 14 + Math.random() * 72 + "%";
+    const dot = document.createElement("span"); dot.className = "d";
+    const label = document.createElement("span"); label.className = "l";
+    label.textContent = risks[Math.floor(Math.random() * risks.length)];
+    ping.append(dot, label);
+    field.appendChild(ping);
+    requestAnimationFrame(() => ping.classList.add("on"));
+    window.setTimeout(() => ping.classList.remove("on"), 3000);
+    window.setTimeout(() => ping.remove(), 4000);
+  };
+  window.setInterval(spawn, 2600);
+}
+
+function boot(): void { void initVoidBg(); initCockpitRadar(); }
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", () => void initVoidBg());
+  document.addEventListener("DOMContentLoaded", boot);
 } else {
-  void initVoidBg();
+  boot();
 }
