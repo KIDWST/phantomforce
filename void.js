@@ -45,12 +45,24 @@ function initConversation() {
   const captured = [];
   let beat = 0;
 
+  let typeTimer = 0;
   const speak = (text, cls = "") => {
+    window.clearTimeout(typeTimer);
     const p = document.createElement("p");
     p.className = `say-line ${cls}`.trim();
-    p.textContent = text;
     say.replaceChildren(p);
-    if (cls !== "user") { flare(); phantom && (phantom.style.filter = ""); }
+    if (cls === "user" || cls === "thinking" || reduceMotion) {
+      p.textContent = text;
+    } else {
+      // typewriter: the entity speaks
+      let i = 0;
+      const tick = () => {
+        p.textContent = text.slice(0, i);
+        if (i++ < text.length) typeTimer = window.setTimeout(tick, 15 + Math.random() * 24);
+      };
+      tick();
+    }
+    if (cls !== "user") flare();
   };
   const setOrbits = (list) => {
     orbits.replaceChildren(...list.map((t, i) => {

@@ -59,7 +59,8 @@ button, input { font: inherit; color: inherit; }
 .phantom-layer { transform-origin: 60px 60px; transition: transform 0.55s cubic-bezier(0.34, 1.56, 0.64, 1); animation: glitch 7s steps(1) infinite; }
 .phantom-body { fill: url(#pbody); stroke: url(#pstroke); stroke-width: 1.6; stroke-linejoin: round; }
 .phantom-scan rect { fill: var(--neon); opacity: 0.1; animation: scan 4.5s linear infinite; }
-.phantom-eye { fill: #d6ffec; transition: fill 0.3s, transform 0.3s; }
+.phantom-eye { fill: #d6ffec; transition: fill 0.3s, transform 0.3s; animation: blinkEye 5.5s ease-in-out infinite; }
+@keyframes blinkEye { 0%, 92%, 100% { opacity: 1; } 95% { opacity: 0.12; } 98% { opacity: 1; } }
 .eyes-x path { fill: none; stroke: #d6ffec; stroke-width: 3.4; stroke-linecap: round; opacity: 0; transition: opacity 0.2s; }
 .mouth { fill: none; stroke: var(--neon); stroke-width: 2.4; stroke-linecap: round; transition: opacity 0.3s; filter: drop-shadow(0 0 4px rgba(65, 255, 161, 0.6)); }
 .mouth-happy { opacity: 0; }
@@ -146,6 +147,6 @@ button, input { font: inherit; color: inherit; }
 .hint.gone { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .void-fallback, .phantom, .phantom-layer, .phantom-scan rect, .wordmark, .orbits button, .speak-caret, .say-line, .risk-dot, .riskfield::before { animation: none !important; }
+  .void-fallback, .phantom, .phantom-layer, .phantom-scan rect, .phantom-eye, .wordmark, .orbits button, .speak-caret, .say-line, .risk-dot, .riskfield::before { animation: none !important; }
   .void-canvas { display: none; }
 }
