@@ -3504,12 +3504,12 @@ function LoginScreen({
           </div>
           <div>
             <strong>PhantomForce AI</strong>
-            <span>Business command app</span>
+            <span>AI business command center</span>
           </div>
         </div>
-        <h1>Run the business from one command center.</h1>
+        <h1>Ask once. Get the finished work.</h1>
         <p>
-          Email, scheduling, review queue, tasks, activity history, and AI-assisted operations in one mobile-ready product.
+          Ask PhantomAI for the finished thing - replies, quotes, bookings, docs, and video - then confirm what leaves. One login, one mobile-ready business brain.
         </p>
         <div className="hero-asset">
           <img src="/assets/operator-core.png" alt="PhantomForce operator interface preview" />
