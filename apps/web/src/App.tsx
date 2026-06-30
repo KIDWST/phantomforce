@@ -1217,6 +1217,20 @@ const initialSessions: AppSession[] = [
     clientId: "client-chicagoshots",
     canManageAccess: false,
   },
+  {
+    id: "client-sports-demo",
+    label: "Sports Ops Demo client",
+    role: "client",
+    clientId: "client-sports-demo",
+    canManageAccess: false,
+  },
+  {
+    id: "client-past-due",
+    label: "Past Due Pilot client",
+    role: "client",
+    clientId: "client-past-due",
+    canManageAccess: false,
+  },
 ];
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
@@ -1231,6 +1245,12 @@ const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "access", label: "Settings", icon: <KeyRound size={18} /> },
   { id: "connections", label: "Status", icon: <Link2 size={18} /> },
 ];
+
+const validRouteIds = new Set<Route>(navItems.map((item) => item.id));
+
+function parsePreviewRoute(value: string | null): Route {
+  return value && validRouteIds.has(value as Route) ? (value as Route) : "command";
+}
 
 const initialEmails: EmailItem[] = [
   {
@@ -1382,6 +1402,30 @@ const initialClientAccess: ClientAccess[] = [
     privateRoute: "app.phantomforce.online/chicagoshots",
     modules: ["Command", "Content", "Tasks", "Approvals", "Activity"],
     lastAudit: "Access confirmed for partner workspace",
+  },
+  {
+    id: "client-sports-demo",
+    business: "Sports Ops Demo",
+    owner: "Client Owner",
+    plan: "$2,000 Team Media Day",
+    paymentStatus: "paid",
+    accessStatus: "active",
+    gateway: "Pangolin",
+    privateRoute: "app.phantomforce.online/sports-ops-demo",
+    modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts"],
+    lastAudit: "Deposit paid; workspace active",
+  },
+  {
+    id: "client-past-due",
+    business: "Past Due Pilot",
+    owner: "Client Owner",
+    plan: "$1,250/mo Ops Support",
+    paymentStatus: "failed",
+    accessStatus: "revoked",
+    gateway: "Pangolin",
+    privateRoute: "app.phantomforce.online/past-due-pilot",
+    modules: ["Command", "Tasks", "Reports"],
+    lastAudit: "Payment failed; private route revoked",
   },
 ];
 
@@ -2290,6 +2334,7 @@ function moduleTestId(clientId: string, moduleKey: string) {
 function App() {
   const [route, setRoute] = useState<Route>("command");
   const [signedIn, setSignedIn] = useState(false);
+  const [previewLinkApplied, setPreviewLinkApplied] = useState(false);
   const [activeSessionId, setActiveSessionId] = useState("admin-jordan");
   const [sessionToken, setSessionToken] = useState("");
   const [commandText, setCommandText] = useState("");
@@ -2342,8 +2387,11 @@ function App() {
     return headers;
   }
 
-  async function signIn(sessionId: string) {
+  async function signIn(sessionId: string, preferredRoute: Route = "command") {
     const session = initialSessions.find((item) => item.id === sessionId) ?? initialSessions[0];
+    const allowedRoute = session.canManageAccess || (preferredRoute !== "access" && preferredRoute !== "connections")
+      ? preferredRoute
+      : "command";
     setActiveSessionId(session.id);
     setSelectedOrg(session.clientId ? session.label.replace(" client", "") : "PhantomForce Pilot");
     setSessionToken("");
@@ -2366,8 +2414,21 @@ function App() {
     }
 
     setSignedIn(true);
-    setRoute("command");
+    setRoute(allowedRoute);
   }
+
+  useEffect(() => {
+    if (previewLinkApplied || signedIn) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const sessionId = params.get("session");
+    const previewSession = initialSessions.find((session) => session.id === sessionId);
+
+    if (!previewSession) return;
+
+    setPreviewLinkApplied(true);
+    void signIn(previewSession.id, parsePreviewRoute(params.get("view")));
+  }, [previewLinkApplied, signedIn]);
 
   async function refreshWorkspaceModule(clientId: string, moduleKey?: string) {
     if (!moduleKey) {
@@ -2692,16 +2753,18 @@ function App() {
     setCommandText("");
     setMessages((current) => [...current, { id: makeId("msg-user"), role: "user", content: text }]);
 
-    if (
-      lower.includes("schedule") ||
-      lower.includes("follow") ||
-      lower.includes("handle") ||
-      lower.includes("email") ||
-      lower.includes("reply") ||
-      lower.includes("book") ||
-      lower.includes("quote") ||
-      lower.includes("proposal")
-    ) {
+    const requestsExternalAction =
+      /\b(send|email|dm|text|post|upload)\b.*\b(to|them|client|lead|prospect|gmail|instagram|facebook|youtube)\b/.test(
+        lower,
+      ) ||
+      lower.includes("send it") ||
+      lower.includes("send this") ||
+      lower.includes("create calendar") ||
+      lower.includes("put it on my calendar") ||
+      lower.includes("handle the follow-up") ||
+      /\b(schedule|book)\b.*\b(call|meeting|appointment|calendar|with|client|lead|prospect)\b/.test(lower);
+
+    if (requestsExternalAction) {
       createFollowUpPlan();
       return;
     }

@@ -34,8 +34,17 @@ const DEFAULT_APPROVAL_RESTRICTIONS = [
   "Demo mode may draft or classify work, but live execution is disabled.",
 ];
 
-const APPROVAL_TASK_PATTERN =
-  /(send|post|upload|charge|billing|payment|card|delete|deploy|credential|secret|production|route change)/i;
+const EXPLICIT_EXTERNAL_ACTION_PATTERN =
+  /\b(send|email|dm|text|post|upload)\b.*\b(to|them|client|lead|prospect|gmail|instagram|facebook|youtube|externally|now)\b|\b(send|email|dm|text|post|upload) (it|this|that|the)\b/i;
+
+const APPROVAL_ONLY_ACTION_PATTERN =
+  /(charge|billing|payment|card|delete|deploy|credential|secret|production|route change)/i;
+
+const ADVICE_OR_DRAFT_PATTERN =
+  /\b(what should i|what do i|what can i|help me|draft|write|prepare|compose|suggest|recommend|give me|create a draft)\b/i;
+
+const EXPLICIT_EXECUTION_PATTERN =
+  /\b(send|email|dm|text|post|upload)\b.*\b(now|for me|on my behalf|go ahead|actually send|without approval|right now)\b|\b(send|email|dm|text|post|upload) (it|this|that|the)\b/i;
 
 const DESTRUCTIVE_TASK_PATTERN =
   /(charge|billing|payment|card|delete|destroy|remove|wipe|drop|deploy|migration|migrate|credential|secret|production|route change)/i;
@@ -137,7 +146,10 @@ function classifySensitivity(request: ModelRouterRequest): SensitivityLevel {
 }
 
 function taskRequiresApproval(request: ModelRouterRequest) {
-  return APPROVAL_TASK_PATTERN.test(`${request.task_type} ${request.user_request}`);
+  const text = `${request.task_type} ${request.user_request}`;
+  if (APPROVAL_ONLY_ACTION_PATTERN.test(text)) return true;
+  if (ADVICE_OR_DRAFT_PATTERN.test(text) && !EXPLICIT_EXECUTION_PATTERN.test(text)) return false;
+  return EXPLICIT_EXTERNAL_ACTION_PATTERN.test(text) || APPROVAL_ONLY_ACTION_PATTERN.test(text);
 }
 
 function taskLooksDestructive(request: ModelRouterRequest) {

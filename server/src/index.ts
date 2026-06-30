@@ -411,13 +411,12 @@ function parsePhantomAiChatProvider(value: unknown) {
 function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string) {
   const lower = userRequest.toLowerCase();
   const business = businessName.trim() || "PhantomForce";
-  const safetyNote = "No email, post, upload, billing action, or production change was executed.";
 
   if (/^(hi|hello|hey|yo|phantom)\b/.test(lower.trim())) {
     return [
-      `I am here for ${business}.`,
-      "Use me to prioritize leads, draft replies, prepare quote/booking steps, organize ChicagoShots work, and turn the next move into approval-ready action.",
-      safetyNote,
+      `I'm here for ${business}.`,
+      "Tell me what you want moved: leads, quote, schedule, content, ChicagoShots media, PhantomCut proof, website/app work, or backend ops.",
+      "If it needs to leave the dashboard, I will draft it first and hold it for approval.",
     ].join("\n\n");
   }
 
@@ -428,7 +427,6 @@ function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string)
       "2. Review the ChicagoShots proposal packet and mark the status: draft, sent manually, follow-up needed, won, or lost.",
       "3. Prepare one Core Sprint follow-up around the $1,500 offer, with $750 Starter as the fallback.",
       "4. Keep Media Lab/PhantomCut proof private unless the prospect asks for examples.",
-      safetyNote,
     ].join("\n");
   }
 
@@ -439,7 +437,6 @@ function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string)
       "- $1,500 Core Sprint: default offer for ops + content setup.",
       "- $2,500 Pro: messy workflows, dashboards, media, or heavier delivery.",
       "For retainers, start at $300/mo unless the client only needs light follow-up support.",
-      safetyNote,
     ].join("\n");
   }
 
@@ -451,15 +448,13 @@ function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string)
       "3. Draft the follow-up manually.",
       "4. Track status in proposal history before any external send.",
       "Media Lab and PhantomCut are proof-backed support tools, not autonomous posting tools.",
-      safetyNote,
     ].join("\n");
   }
 
   return [
-    `For ${business}, the next useful move is to turn this into an owner-approved action.`,
-    "I can help draft the reply, outline the quote, prepare a booking step, organize the proposal status, or summarize the next three revenue actions.",
-    "Ask: \"prepare the follow-up\", \"brief today\", \"draft the quote\", or \"what should I send?\"",
-    safetyNote,
+    `Got it. For ${business}, I would turn that into a concrete next step instead of leaving it as a vague note.`,
+    "I can draft the reply, outline the quote, prepare a booking step, organize the proposal status, or summarize the next three revenue actions.",
+    "Give me the tone you want: direct, premium, casual, aggressive, short, or client-ready.",
   ].join("\n\n");
 }
 
@@ -2074,7 +2069,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     "chat",
   );
 
-  if (providerChoice === "openrouter_glm") {
+  const providerStatus = getProviderSetupStatus(process.env);
+  const shouldTryGlmChat = providerChoice === "openrouter_glm" || providerStatus.openrouter_glm.configured;
+
+  if (shouldTryGlmChat) {
     const preview = previewModelRouterFoundation(normalized, {
       env: {
         ...process.env,
@@ -2094,15 +2092,24 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       module_data: normalized.module_data,
     });
     const approvalRequired = preview.decision.approval_required || preview.action_preview.approval_required;
-    const openrouter = await callOpenRouterGlm52({
-      requestId: normalized.request_id,
-      businessName: normalized.business_name,
-      taskType: normalized.task_type,
-      userMessage: normalized.user_request,
-      compactContext: memoryContext.augmented_context_preview,
-      sensitivityLevel: preview.decision.sensitivity_level,
-      approvalRequired,
-    });
+    const openrouter = await callOpenRouterGlm52(
+      {
+        requestId: normalized.request_id,
+        businessName: normalized.business_name,
+        taskType: normalized.task_type,
+        userMessage: normalized.user_request,
+        compactContext: memoryContext.augmented_context_preview,
+        sensitivityLevel: preview.decision.sensitivity_level,
+        approvalRequired,
+      },
+      {
+        env: {
+          ...process.env,
+          PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
+          PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
+        },
+      },
+    );
     const ledgerRecord: HermesLedgerRecord = {
       timestamp: new Date().toISOString(),
       tenant_id: normalized.tenant_id,
@@ -2135,10 +2142,46 @@ app.post("/phantom-ai/chat", async (request, reply) => {
 
     await appendHermesLedgerRecord(ledgerRecord);
 
-    return {
+    if (!openrouter.provider_called || !openrouter.output_text.trim()) {
+      if (providerChoice === "openrouter_glm") {
+        return {
+          ok: true,
+          session,
+          provider_choice: "phantom",
+          model_id: "phantomforce-managed-fallback",
+          message: {
+            role: "assistant",
+            content: buildPhantomAiWorkspaceReply(normalized.user_request, normalized.business_name),
+          },
+          openrouter: {
+            status: openrouter.status,
+            blocked_reason: openrouter.blocked_reason,
+            error_message: openrouter.error_message,
+            provider_called: openrouter.provider_called,
+            network_call_performed: openrouter.network_call_performed,
+          },
+          memory_context: {
+            scope: memoryContext.scope,
+            recalled_memory_count: memoryContext.memory.recalled_count,
+            compact_context_chars: memoryContext.augmented_context_chars,
+            redaction: memoryContext.redaction,
+          },
+          ledger_record: redactHermesLedgerRecord(ledgerRecord),
+          provider_request_body_created: openrouter.request_body_prepared,
+          live_provider_called: false,
+          network_call_performed: openrouter.network_call_performed,
+          approval_executed: false,
+          queue_written: false,
+          external_action_executed: false,
+        };
+      }
+    }
+
+    if (openrouter.provider_called && openrouter.output_text.trim()) {
+      return {
       ok: true,
       session,
-      provider_choice: providerChoice,
+      provider_choice: "phantom",
       model_id: openrouter.model_id,
       message: {
         role: "assistant",
@@ -2158,7 +2201,8 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       approval_executed: false,
       queue_written: false,
       external_action_executed: false,
-    };
+      };
+    }
   }
 
   const result = await runModelRouterFoundation(normalized);
