@@ -65,21 +65,21 @@ button, input { font: inherit; color: inherit; }
 .presence {
   position: fixed; inset: 0; z-index: 3; display: flex; flex-direction: column;
   align-items: center; justify-content: center; gap: clamp(12px, 2.2vh, 22px);
-  padding: 4vh 22px 32vh; text-align: center; pointer-events: none;
+  padding: 32vh 22px 4vh; text-align: center; pointer-events: none;
   transition: padding 0.5s ease;
 }
 .presence > * { pointer-events: auto; }
 
 /* ===== docked command widget ===== */
 .dock {
-  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%);
+  position: fixed; left: 50%; top: 16px; transform: translateX(-50%);
   width: min(580px, 94vw); z-index: 6; overflow: hidden;
   background: rgba(5, 14, 11, 0.62); border: 1px solid rgba(65, 255, 161, 0.22); border-radius: 20px;
   -webkit-backdrop-filter: blur(18px) saturate(120%); backdrop-filter: blur(18px) saturate(120%);
-  box-shadow: 0 -12px 54px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(65, 255, 161, 0.05), 0 0 44px rgba(65, 255, 161, 0.08);
+  box-shadow: 0 12px 54px rgba(0, 0, 0, 0.5), 0 0 0 1px rgba(65, 255, 161, 0.05), 0 0 44px rgba(65, 255, 161, 0.08);
   text-align: left; animation: dockIn 0.95s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-@keyframes dockIn { from { transform: translate(-50%, 130%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
+@keyframes dockIn { from { transform: translate(-50%, -130%); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
 .dock-bar {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 11px 14px 11px 16px; cursor: pointer; user-select: none;
