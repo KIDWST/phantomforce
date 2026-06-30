@@ -158,17 +158,19 @@ button, input { font: inherit; color: inherit; }
   box-shadow: 0 0 36px rgba(65, 255, 161, 0.1), inset 0 0 22px rgba(65, 255, 161, 0.05);
   transition: border-color 0.3s, box-shadow 0.3s;
 }
-/* Claude-Code-style effort shimmer running around the bar */
+/* a gleam of light that sweeps AROUND the border (no spinning shape) */
+@property --gleam { syntax: "<angle>"; inherits: false; initial-value: 0deg; }
 .speak::before {
   content: ""; position: absolute; inset: -1.5px; border-radius: 999px; padding: 1.6px;
-  background: conic-gradient(from 0deg, transparent 0deg, #41ffa1 60deg, #1ef0ff 120deg, #d6ffec 175deg, transparent 250deg, transparent 360deg);
+  --gleam: 0deg;
+  background: conic-gradient(from var(--gleam), rgba(65, 255, 161, 0) 0deg, #41ffa1 50deg, #1ef0ff 100deg, #d6ffec 140deg, rgba(65, 255, 161, 0) 220deg, rgba(65, 255, 161, 0) 360deg);
   -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
   -webkit-mask-composite: xor; mask-composite: exclude;
-  animation: speakShimmer 4.5s linear infinite; opacity: 0.7; pointer-events: none;
+  animation: gleamSweep 5s linear infinite; opacity: 0.85; pointer-events: none;
 }
-.speak:focus-within::before { opacity: 1; animation-duration: 2.1s; }
+.speak:focus-within::before { animation-duration: 2.4s; opacity: 1; }
 .speak > * { position: relative; z-index: 1; }
-@keyframes speakShimmer { to { transform: rotate(360deg); } }
+@keyframes gleamSweep { to { --gleam: 360deg; } }
 .speak:focus-within { border-color: var(--neon); box-shadow: 0 0 56px rgba(65, 255, 161, 0.3); }
 .speak-caret { color: var(--neon); font-size: 20px; text-shadow: 0 0 12px var(--neon); animation: blink 1.2s steps(1) infinite; }
 @keyframes blink { 50% { opacity: 0.2; } }
