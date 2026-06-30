@@ -3263,6 +3263,11 @@ img {
     grid-template-columns: 1fr;
   }
 
+  .proposal-priority-card {
+    grid-template-columns: 1fr;
+    align-items: stretch;
+  }
+
   .mobile-nav {
     position: fixed;
     left: 10px;
@@ -3341,6 +3346,8 @@ img {
   .phantom-ai-context-grid,
   .phantom-ai-artifact-grid,
   .proposal-history-list,
+  .proposal-history-tools,
+  .proposal-summary-grid,
   .ai-rule-columns,
   .access-hero,
   .guard-panel {
