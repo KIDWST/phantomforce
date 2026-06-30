@@ -1470,8 +1470,73 @@ img {
 
 .proposal-summary-grid {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
+}
+
+.proposal-priority-card {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: linear-gradient(135deg, rgba(85, 214, 153, 0.09), rgba(40, 196, 216, 0.07));
+  border: 1px solid rgba(85, 214, 153, 0.18);
+  border-radius: 8px;
+}
+
+.proposal-priority-card strong,
+.proposal-priority-card p {
+  margin: 0;
+}
+
+.proposal-priority-card p {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.proposal-priority-badge,
+.proposal-priority-mini {
+  width: fit-content;
+  padding: 3px 7px;
+  color: var(--text);
+  font-size: 11px;
+  line-height: 1.2;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+.proposal-priority-badge.priority-follow-up-now,
+.proposal-priority-mini.priority-follow-up-now {
+  border-color: rgba(255, 197, 92, 0.48);
+  background: rgba(255, 197, 92, 0.12);
+}
+
+.proposal-priority-badge.priority-send-now,
+.proposal-priority-mini.priority-send-now {
+  border-color: rgba(40, 196, 216, 0.44);
+  background: rgba(40, 196, 216, 0.1);
+}
+
+.proposal-priority-badge.priority-watch-reply,
+.proposal-priority-mini.priority-watch-reply {
+  border-color: rgba(164, 129, 255, 0.44);
+  background: rgba(164, 129, 255, 0.1);
+}
+
+.proposal-priority-badge.priority-delivery-ready,
+.proposal-priority-mini.priority-delivery-ready {
+  border-color: rgba(85, 214, 153, 0.44);
+  background: rgba(85, 214, 153, 0.1);
+}
+
+.proposal-priority-badge.priority-closed-lost,
+.proposal-priority-mini.priority-closed-lost {
+  border-color: rgba(255, 110, 110, 0.38);
+  background: rgba(255, 110, 110, 0.08);
 }
 
 .proposal-filter-row,
@@ -1546,7 +1611,7 @@ img {
 .proposal-history-item {
   display: grid;
   gap: 4px;
-  min-height: 92px;
+  min-height: 124px;
   padding: 10px;
   color: var(--text);
   text-align: left;
@@ -1607,6 +1672,26 @@ img {
 
 .proposal-history-detail {
   overflow: hidden;
+}
+
+.proposal-next-action-box {
+  display: grid;
+  gap: 4px;
+  padding: 9px;
+  background: rgba(40, 196, 216, 0.06);
+  border: 1px solid rgba(40, 196, 216, 0.14);
+  border-radius: 8px;
+}
+
+.proposal-next-action-box strong,
+.proposal-next-action-box p {
+  margin: 0;
+}
+
+.proposal-next-action-box p {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .proposal-packet-preview {
