@@ -544,6 +544,31 @@ and show in the web app from the API.
 - Gmail, Calendar, and Falcon execution stay behind typed contracts until the
   local spine is proven.
 
+## 2026-06-29 Gated Live Provider Posture Update
+
+PhantomForce is no longer "no-live-provider ever." The correct posture is now
+**no live provider by default.**
+
+- A gated GLM 5.2 worker lane may exist in source-truth, but only behind ALL of
+  these explicit gates simultaneously:
+  - `OPENROUTER_API_KEY` present (server-side env only)
+  - `PHANTOM_LIVE_PROVIDERS_ENABLED=true`
+  - `PHANTOM_OPENROUTER_TRANSPORT_ENABLED=true`
+  - admin-only access (`/phantom-ai/chat` GLM path returns 403 for non-admin)
+- With any gate off (the default), the lane is blocked: no provider call, no
+  network call, no sendable request body. This is proof-tested by
+  `server/scripts/test-openrouter-glm52-chat.ts` (default-blocked + fake-fetch
+  path; no real provider call in tests).
+- API keys must never be pasted into chat or committed. Env files stay gitignored
+  (`.env`, `.env.*`, `.env.local`). No raw key may be printed, logged, or stored.
+- Any exposed key must be rotated/revoked immediately by Jordan.
+- Live smoke tests must be one-prompt, admin-only, run with the live flags set
+  only for that single prompt, then ports stopped and `PHANTOM_LIVE_PROVIDERS_ENABLED`
+  / `PHANTOM_OPENROUTER_TRANSPORT_ENABLED` returned to `false` afterward.
+- Approval execution, queue writes, production ledger writes, and external write
+  actions (email/calendar/upload/post/payment/delete/deploy) remain blocked
+  unless separately approved. `/phantom-ai/approvals/execute` stays absent (404).
+
 ## Approval Required
 
 Ask Jordan before:
