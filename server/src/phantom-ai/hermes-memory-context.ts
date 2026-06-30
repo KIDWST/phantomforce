@@ -1,16 +1,19 @@
 import { compileHermesContext } from "./context-compiler.js";
 import { redactSensitiveText } from "./hermes-ledger.js";
+import { recallHermesInteractionMemory } from "./hermes-interaction-recall.js";
+import type { HermesInteractionRecallItem } from "./hermes-interaction-recall.js";
 import { recallHermesMemory } from "./hermes-memory-recall.js";
 import type { HermesMemoryItem, HermesMemoryRecallScope } from "./hermes-memory-recall.js";
 import type { ContextModuleData, HermesContextPacket, ProviderRoute, SensitivityLevel } from "./types.js";
 
-// Phase 1b: wire Hermes per-user memory recall into PhantomAI context
+// Phase 1b/1g: wire Hermes per-user memory recall into PhantomAI context
 // preparation. Before any future AI response is prepared, PhantomAI compiles
-// the current request context AND recalls the tenant/user/task memory from the
-// Hermes ledger, producing a memory-augmented context preview.
+// the current request context AND recalls the tenant/user/task memory from
+// BOTH the Hermes ledger (1a) and the dedicated PhantomAI interaction memory
+// store (1f), producing a memory-augmented context preview.
 //
 // Hard boundaries (same dry-run/local ladder):
-// - READ ONLY memory: recall never writes; context compile is pure.
+// - READ ONLY memory: both recalls never write; context compile is pure.
 // - NO provider request body, NO transport, NO network client, NO live call.
 // - REDACTED + BOUNDED + tenant-scoped at every step.
 // - OpenRouter/GLM transport stays blocked (flags below are hard literals).
@@ -54,6 +57,16 @@ export type HermesMemoryContextPreview = {
     compact_memory: string;
     items: HermesMemoryItem[];
   };
+  interaction_memory: {
+    source: "hermes_interaction_memory_store";
+    store_path: string;
+    scanned_records: number;
+    matched_records: number;
+    recalled_count: number;
+    has_memory: boolean;
+    compact_memory: string;
+    items: HermesInteractionRecallItem[];
+  };
   augmented_context_preview: string;
   augmented_context_chars: number;
   redaction: {
@@ -87,20 +100,34 @@ export type HermesMemoryContextPreview = {
   };
 };
 
-function buildAugmentedContext(base: HermesContextPacket, compactMemory: string): string {
-  const memorySection = redactSensitiveText(compactMemory).slice(0, MAX_MEMORY_SECTION_CHARS);
+function buildAugmentedContext(
+  base: HermesContextPacket,
+  ledgerCompactMemory: string,
+  interactionCompactMemory: string,
+): string {
+  const ledgerSection = redactSensitiveText(ledgerCompactMemory).slice(0, MAX_MEMORY_SECTION_CHARS);
+  const interactionSection = redactSensitiveText(interactionCompactMemory).slice(0, MAX_MEMORY_SECTION_CHARS);
   const combined = [
     base.compact_context,
     "",
     "Recalled Hermes memory (per-user, redacted):",
-    memorySection,
+    ledgerSection,
+    "",
+    "Recalled PhantomAI interaction memory (per-user, redacted):",
+    interactionSection,
   ].join("\n");
   return redactSensitiveText(combined).slice(0, MAX_AUGMENTED_CONTEXT_CHARS);
 }
 
 export async function buildHermesMemoryContextPreview(
   input: HermesMemoryContextInput,
-  options: { ledgerPath?: string; recallLimit?: number | string; now?: string } = {},
+  options: {
+    ledgerPath?: string;
+    recallLimit?: number | string;
+    storePath?: string;
+    interactionRecallLimit?: number | string;
+    now?: string;
+  } = {},
 ): Promise<HermesMemoryContextPreview> {
   const preparedAt = options.now ?? new Date().toISOString();
 
@@ -110,6 +137,16 @@ export async function buildHermesMemoryContextPreview(
     taskType: input.task_type,
     limit: options.recallLimit,
     ledgerPath: options.ledgerPath,
+    now: preparedAt,
+  });
+
+  // Phase 1g: also recall from the dedicated interaction memory store, scoped
+  // to the same tenant + user (strict isolation). Read-only; empty is fine.
+  const interactionRecall = await recallHermesInteractionMemory({
+    tenantId: input.tenant_id,
+    actorUserId: input.actor_user_id,
+    limit: options.interactionRecallLimit ?? options.recallLimit,
+    storePath: options.storePath,
     now: preparedAt,
   });
 
@@ -127,7 +164,7 @@ export async function buildHermesMemoryContextPreview(
     approval_restrictions: input.approval_restrictions ?? [],
   });
 
-  const augmentedContext = buildAugmentedContext(base, recall.compact_memory);
+  const augmentedContext = buildAugmentedContext(base, recall.compact_memory, interactionRecall.compact_memory);
 
   return {
     prepared_at: preparedAt,
@@ -149,6 +186,16 @@ export async function buildHermesMemoryContextPreview(
       has_memory: recall.has_memory,
       compact_memory: recall.compact_memory,
       items: recall.items,
+    },
+    interaction_memory: {
+      source: "hermes_interaction_memory_store",
+      store_path: interactionRecall.store_path,
+      scanned_records: interactionRecall.scanned_records,
+      matched_records: interactionRecall.matched_records,
+      recalled_count: interactionRecall.returned_records,
+      has_memory: interactionRecall.has_memory,
+      compact_memory: interactionRecall.compact_memory,
+      items: interactionRecall.items,
     },
     augmented_context_preview: augmentedContext,
     augmented_context_chars: augmentedContext.length,
