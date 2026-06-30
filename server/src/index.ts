@@ -92,6 +92,14 @@ import {
 import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
 import { buildToolLanePreview } from "./phantom-ai/tool-lane.js";
 import { buildChicagoShotsLeadIntakePreview } from "./phantom-ai/ops-workflow.js";
+import {
+  createChicagoShotsProposalHistoryRecord,
+  getChicagoShotsProposalHistoryStatus,
+  normalizeChicagoShotsProposalHistoryLimit,
+  persistChicagoShotsProposalHistoryRecord,
+  readChicagoShotsProposalHistoryRecordById,
+  readChicagoShotsProposalHistoryRecords,
+} from "./phantom-ai/chicagoshots-proposal-history.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
   getProviderSetupStatus,
@@ -1290,6 +1298,152 @@ app.post("/phantom-ai/ops/chicagoshots/lead-intake/preview", async (request, rep
   };
 });
 
+app.post("/phantom-ai/ops/chicagoshots/proposal-history/save", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    packet?: unknown;
+    lead?: unknown;
+    proposal_summary?: unknown;
+    exported_markdown?: unknown;
+  };
+
+  try {
+    const packet = body.packet ?? body.lead;
+    const record = createChicagoShotsProposalHistoryRecord({
+      packet: packet as Parameters<typeof createChicagoShotsProposalHistoryRecord>[0]["packet"],
+      proposalSummary: typeof body.proposal_summary === "string" ? body.proposal_summary : "",
+      exportedMarkdown: typeof body.exported_markdown === "string" ? body.exported_markdown : "",
+    });
+    const persistence = await persistChicagoShotsProposalHistoryRecord(record);
+
+    if (!persistence.persisted) {
+      return reply.code(403).send({
+        ok: false,
+        session,
+        error: "ChicagoShots proposal history writes are blocked in production mode.",
+        persistence,
+      });
+    }
+
+    return {
+      ok: true,
+      session,
+      store: {
+        path: persistence.store_path,
+        local_dev_only: true,
+        admin_only: true,
+        production_write_allowed: false,
+      },
+      record,
+      safety_flags: persistence.safety_flags,
+      provider_called: false,
+      network_call_performed: false,
+      external_send: false,
+      n8n_executed: false,
+      approval_executed: false,
+      queue_written: false,
+      production_ledger_write: false,
+      payment_request_created: false,
+      invoice_created: false,
+    };
+  } catch (error) {
+    return reply.code(400).send({
+      ok: false,
+      session,
+      error: (error as Error).message,
+      provider_called: false,
+      network_call_performed: false,
+      external_send: false,
+      n8n_executed: false,
+      approval_executed: false,
+      queue_written: false,
+      production_ledger_write: false,
+      payment_request_created: false,
+      invoice_created: false,
+    });
+  }
+});
+
+app.get("/phantom-ai/ops/chicagoshots/proposal-history", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { limit?: string } | undefined;
+  const limit = normalizeChicagoShotsProposalHistoryLimit(query?.limit);
+  const [status, history] = await Promise.all([
+    getChicagoShotsProposalHistoryStatus(),
+    readChicagoShotsProposalHistoryRecords({ limit }),
+  ]);
+
+  return {
+    ok: true,
+    session,
+    store: {
+      path: status.store_path,
+      exists: status.exists,
+      bytes: status.bytes,
+      local_dev_only: status.local_dev_only,
+      admin_only: status.admin_only,
+      production_write_allowed: status.production_write_allowed,
+      malformed_lines: history.malformed_lines,
+      returned_count: history.records.length,
+      limit: history.limit,
+    },
+    records: history.records,
+    provider_called: false,
+    network_call_performed: false,
+    external_send: false,
+    n8n_executed: false,
+    approval_executed: false,
+    queue_written: false,
+    production_ledger_write: false,
+    payment_request_created: false,
+    invoice_created: false,
+  };
+});
+
+app.get("/phantom-ai/ops/chicagoshots/proposal-history/:id", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const params = request.params as { id: string };
+  const record = await readChicagoShotsProposalHistoryRecordById(params.id);
+
+  if (!record) {
+    return reply.code(404).send({
+      ok: false,
+      session,
+      error: "ChicagoShots proposal history record not found.",
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    record,
+    provider_called: false,
+    network_call_performed: false,
+    external_send: false,
+    n8n_executed: false,
+    approval_executed: false,
+    queue_written: false,
+    production_ledger_write: false,
+    payment_request_created: false,
+    invoice_created: false,
+  };
+});
+
 app.get("/phantom-ai/ops/status", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -1365,10 +1519,18 @@ app.get("/phantom-ai/ops/status", async (request, reply) => {
       chicagoshots_ops: {
         available: true,
         route: "POST /phantom-ai/ops/chicagoshots/lead-intake/preview",
+        history_routes: [
+          "POST /phantom-ai/ops/chicagoshots/proposal-history/save",
+          "GET /phantom-ai/ops/chicagoshots/proposal-history",
+          "GET /phantom-ai/ops/chicagoshots/proposal-history/:id",
+        ],
         workflow_preview_enabled: true,
+        proposal_history_enabled: true,
+        proposal_history_local_only: true,
         dry_run_only: true,
         provider_called: false,
         external_send: false,
+        n8n_executed: false,
         queue_written: false,
         approval_executed: false,
       },
@@ -2204,10 +2366,14 @@ app.post("/falcon/jobs/validate", async (request, reply) => {
   };
 });
 
-try {
-  await app.listen({ host, port });
-  app.log.info(`PhantomForce server listening on http://${host}:${port}`);
-} catch (error) {
-  app.log.error(error);
-  process.exit(1);
+export { app };
+
+if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
+  try {
+    await app.listen({ host, port });
+    app.log.info(`PhantomForce server listening on http://${host}:${port}`);
+  } catch (error) {
+    app.log.error(error);
+    process.exit(1);
+  }
 }

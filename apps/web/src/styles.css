@@ -1397,6 +1397,73 @@ img {
   gap: 10px;
 }
 
+.proposal-history-panel {
+  display: grid;
+  gap: 10px;
+  padding: 11px;
+  background: rgba(0, 0, 0, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+}
+
+.proposal-history-panel .section-head h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.proposal-history-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.proposal-history-item {
+  display: grid;
+  gap: 4px;
+  min-height: 76px;
+  padding: 10px;
+  color: var(--text);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.proposal-history-item.active {
+  border-color: rgba(40, 196, 216, 0.42);
+  background: rgba(40, 196, 216, 0.08);
+}
+
+.proposal-history-item strong {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proposal-history-item span {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.proposal-history-detail {
+  overflow: hidden;
+}
+
+.proposal-packet-preview {
+  max-height: 280px;
+  overflow: auto;
+  margin: 0;
+  padding: 10px;
+  color: var(--muted);
+  white-space: pre-wrap;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+}
+
 .operator-result-card {
   display: grid;
   gap: 8px;
@@ -3027,6 +3094,7 @@ img {
   .destination-grid,
   .simulation-grid,
   .simulation-hero,
+  .proposal-history-list,
   .ai-rule-columns,
   .access-hero,
   .guard-panel {
