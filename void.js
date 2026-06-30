@@ -1,14 +1,37 @@
-/* PhantomForce — the void. A living AI entity you speak to. Defensive; never throws. */
+/* PhantomForce — the void. Click-first cyber entity you can also speak to. */
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const smallScreen = window.matchMedia("(max-width: 720px)").matches;
 const lerp = (a, b, t) => a + (b - a) * t;
-
-/* shared pulse signal the entity reads when it "speaks" */
 const pulse = { v: 0 };
 const flare = () => { pulse.v = 1; };
 
-/* ---------------- conversation (no backend, guided) ---------------- */
+/* Live brain: set this to your deployed Cloudflare Worker URL to switch the
+   input from the local responder to live GLM 5.2 (server-side key, 5-prompt
+   daily cap + token limit enforced in the Worker). Empty = local responder. */
+const AI_ENDPOINT = "";
+async function askPhantom(message) {
+  if (!AI_ENDPOINT) return null;
+  try {
+    const r = await fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }) });
+    const d = await r.json();
+    if (d && (d.error === "limit" || d.error === "busy")) return { limited: true, message: d.message };
+    if (d && d.reply) return { reply: String(d.reply).slice(0, 320) };
+  } catch { /* unreachable -> fall back */ }
+  return null;
+}
+function localReply(text) {
+  const s = (text || "").toLowerCase();
+  if (/lead|inquir|prospect|follow/.test(s)) return "Leads get captured, answered, and chased automatically — nothing slips.";
+  if (/sched|book|calendar|remind|appoint/.test(s)) return "Bookings, reminders, and changes get handled without the back-and-forth.";
+  if (/repl|email|message|comm|text|dm/.test(s)) return "Replies are drafted the second they're needed — you approve, it sends.";
+  if (/quote|price|money|invoice|pay|sales|deal/.test(s)) return "Quotes, follow-ups, and the money trail get drafted and tracked.";
+  if (/content|video|post|deck|doc|social|website|site/.test(s)) return "Posts, docs, decks, and video get generated on command — private to you.";
+  if (/privat|secure|safe|data|risk|malware|scam|phish/.test(s)) return "I watch the risks — scams, leaks, deadlines — and keep it all inside your business.";
+  return "Tell me the task that's eating your hours and I'll take it off your plate.";
+}
+
+/* ---------------- conversation ---------------- */
 function initConversation() {
   const say = document.querySelector("[data-say]");
   const orbits = document.querySelector("[data-orbits]");
@@ -16,72 +39,113 @@ function initConversation() {
   const input = document.querySelector("[data-speak-input]");
   const summon = document.querySelector("[data-summon]");
   const hint = document.querySelector("[data-hint]");
-  if (!say || !form) return;
+  const phantom = document.querySelector("[data-phantom]");
+  if (!say || !orbits) return;
 
-  const steps = [
-    { line: (a) => `A ${a.toLowerCase()}. I can run that. What should I take off your plate first?`, orbits: ["Lead response", "Scheduling & reminders", "Client communication", "Docs & reporting"] },
-    { line: () => `Done. I've shaped an operator around how you work — private to your business, nothing leaves without you.`, orbits: [], final: true },
-  ];
-  const answers = [];
-  let i = 0;
+  const captured = [];
+  let beat = 0;
 
   const speak = (text, cls = "") => {
     const p = document.createElement("p");
     p.className = `say-line ${cls}`.trim();
     p.textContent = text;
     say.replaceChildren(p);
-    if (!cls) flare();
-  };
-  const think = (then) => {
-    speak("· · ·", "thinking");
-    flare();
-    window.setTimeout(then, reduceMotion ? 240 : 820);
+    if (cls !== "user") { flare(); phantom && (phantom.style.filter = ""); }
   };
   const setOrbits = (list) => {
-    orbits.replaceChildren(
-      ...list.map((t) => { const b = document.createElement("button"); b.type = "button"; b.dataset.answer = t; b.textContent = t.toLowerCase(); return b; }),
-    );
-    orbits.hidden = list.length === 0;
+    orbits.replaceChildren(...list.map((t, i) => {
+      const b = document.createElement("button");
+      b.type = "button"; b.dataset.answer = t; b.textContent = t;
+      b.style.animationDelay = `${i * 60}ms`;
+      return b;
+    }));
   };
+  const think = (then) => { speak("· · ·", "thinking"); flare(); window.setTimeout(then, reduceMotion ? 220 : 760); };
 
   const finish = () => {
-    orbits.hidden = true;
+    setOrbits([]);
     if (!summon) return;
-    const body = [
-      `Business: ${answers[0] || "Not provided"}`,
-      `First priority: ${answers[1] || "Not provided"}`,
-    ].join("\n");
-    summon.href = `mailto:demo@phantomforce.online?subject=${encodeURIComponent("Build my PhantomForce operator")}&body=${encodeURIComponent(body)}`;
+    summon.href = `mailto:demo@phantomforce.online?subject=${encodeURIComponent("Build my PhantomForce operator")}&body=${encodeURIComponent(captured.map((c, i) => `(${i + 1}) ${c}`).join("\n"))}`;
     summon.hidden = false;
   };
 
-  const answer = (text) => {
-    answers.push(text);
-    hint?.classList.add("gone");
-    speak(text, "user");
-    const step = steps[i];
-    i += 1;
-    window.setTimeout(() => {
-      think(() => {
-        speak(step.line(text));
-        if (step.final) finish();
-        else setOrbits(step.orbits);
-      });
-    }, reduceMotion ? 120 : 520);
+  // beat content
+  const businessReply = (t) => {
+    const s = t.toLowerCase();
+    if (/serv|trade|clean|repair|contract|plumb|landsc/.test(s)) return "A service business. I'll capture every lead, book the work, and chase the follow-ups you forget.";
+    if (/sport|team|league|coach|athlet|gym/.test(s)) return "A sports org. I'll run registrations, schedules, and parent comms so you stop living in your phone.";
+    if (/media|content|creator|photo|video|film|market/.test(s)) return "Media. I'll keep shoots, clients, and deliverables moving — and spin up content and video on command.";
+    if (/shop|store|ecom|commerce|product|brand/.test(s)) return "E-commerce. I'll handle orders, replies, and the busywork between sales.";
+    return "Locked in. Now — what's the part that actually steals your hours?";
+  };
+  const drainReply = (t) => {
+    const s = t.toLowerCase();
+    if (/lead|inquir|prospect|follow/.test(s)) return "Done. Every lead captured, answered, and followed up — nothing slips.";
+    if (/sched|book|calendar|remind|appoint/.test(s)) return "Done. Bookings, reminders, and changes handled without the back-and-forth.";
+    if (/repl|email|message|comm|text|dm/.test(s)) return "Done. Drafted replies ready the second they're needed — you approve, I send.";
+    if (/quote|price|money|invoice|pay|sales|deal/.test(s)) return "Done. Quotes, follow-ups, and the money trail — drafted and tracked.";
+    if (/content|video|post|deck|doc|social|website|site/.test(s)) return "Done. Posts, docs, decks, video, even your site — generated on command, private to you.";
+    return "Done. I'll fold that into your operator and handle it.";
   };
 
-  orbits?.addEventListener("click", (e) => {
+  const advance = (text) => {
+    captured.push(text);
+    hint?.classList.add("gone");
+    speak(text, "user");
+    const lower = text.toLowerCase();
+
+    window.setTimeout(() => think(() => {
+      if (beat === 0) {
+        speak(businessReply(text));
+        setOrbits(["Chasing leads", "Scheduling", "Replying to people", "Quotes & money", "Content & video"]);
+        beat = 1;
+      } else if (beat === 1) {
+        speak(drainReply(text));
+        setOrbits(["Build my operator", "How private is this?", "What can't it do?"]);
+        beat = 2;
+      } else {
+        if (/privat|secure|safe|data/.test(lower)) {
+          speak("Everything stays inside your business. It trains no one else. Nothing leaves without you.");
+          setOrbits(["Build my operator", "What can't it do?"]);
+        } else if (/can.?t|limit|won.?t|risk/.test(lower)) {
+          speak("It won't send, post, spend, or sign without your say. You stay in control — always.");
+          setOrbits(["Build my operator", "How private is this?"]);
+        } else {
+          speak("Then it's settled. I've shaped an operator around how you work.");
+          finish();
+        }
+      }
+    }), reduceMotion ? 100 : 480);
+  };
+
+  orbits.addEventListener("click", (e) => {
     const b = e.target.closest("[data-answer]");
-    if (b) answer(b.dataset.answer);
+    if (b) advance(b.dataset.answer);
   });
-  form.addEventListener("submit", (e) => {
+  // Typed input = general live assistant (GLM 5.2 when configured; local responder otherwise).
+  form?.addEventListener("submit", (e) => {
     e.preventDefault();
     const v = (input?.value || "").trim();
     if (!v) return;
     input.value = "";
-    if (i >= steps.length) { speak("Your operator is ready — summon it below and we'll take it from here."); return; }
-    answer(v);
+    hint?.classList.add("gone");
+    speak(v, "user");
+    window.setTimeout(() => {
+      speak("· · ·", "thinking");
+      flare();
+      askPhantom(v).then((ai) => {
+        if (ai && ai.limited) {
+          speak(ai.message || "That's your free questions for now — summon an operator to go deeper.");
+          if (summon) summon.hidden = false;
+          return;
+        }
+        window.setTimeout(() => speak(ai && ai.reply ? ai.reply : localReply(v)), reduceMotion ? 120 : 540);
+      });
+    }, reduceMotion ? 80 : 320);
   });
+
+  // first set of thoughts
+  setOrbits(["Service business", "Sports org", "Media / creator", "E-commerce", "Something else"]);
 }
 
 /* ---------------- the entity (WebGL) ---------------- */
@@ -98,50 +162,29 @@ async function initEntity() {
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, smallScreen ? 1.2 : 1.6));
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 100);
-    camera.position.set(0, 0, 7.4);
-    const root = new THREE.Group();
-    scene.add(root);
+    camera.position.set(0, 0, 7.6);
+    const root = new THREE.Group(); scene.add(root);
 
-    // The phantom: points on a sphere that breathe with noise.
-    const N = smallScreen ? 1400 : 2600;
-    const base = new Float32Array(N * 3);
-    const pos = new Float32Array(N * 3);
+    const N = smallScreen ? 1500 : 2600;
+    const base = new Float32Array(N * 3), pos = new Float32Array(N * 3);
     for (let k = 0; k < N; k++) {
-      const y = 1 - (k / (N - 1)) * 2;
-      const r = Math.sqrt(Math.max(0, 1 - y * y));
-      const phi = k * 2.399963229728653; // golden angle
+      const y = 1 - (k / (N - 1)) * 2, r = Math.sqrt(Math.max(0, 1 - y * y)), phi = k * 2.399963229728653;
       const x = Math.cos(phi) * r, z = Math.sin(phi) * r;
       base[k * 3] = x; base[k * 3 + 1] = y; base[k * 3 + 2] = z;
       pos[k * 3] = x * 2; pos[k * 3 + 1] = y * 2; pos[k * 3 + 2] = z * 2;
     }
-    const geo = new THREE.BufferGeometry();
-    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const ent = new THREE.Points(geo, new THREE.PointsMaterial({
-      color: new THREE.Color(0x41ffa1), size: 0.035, sizeAttenuation: true,
-      transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false,
-    }));
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const ent = new THREE.Points(geo, new THREE.PointsMaterial({ color: new THREE.Color(0x41ffa1), size: 0.035, sizeAttenuation: true, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false }));
     root.add(ent);
-
-    // bright inner core
-    const core = new THREE.Mesh(
-      new THREE.IcosahedronGeometry(0.55, 1),
-      new THREE.MeshBasicMaterial({ color: 0xb9ffe0, transparent: true, opacity: 0.5, wireframe: true }),
-    );
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), new THREE.MeshBasicMaterial({ color: 0xb9ffe0, transparent: true, opacity: 0.5, wireframe: true }));
     root.add(core);
-
-    // faint starfield
-    const SF = 800; const sf = new Float32Array(SF * 3);
-    for (let k = 0; k < SF; k++) {
-      sf[k * 3] = (Math.random() - 0.5) * 30;
-      sf[k * 3 + 1] = (Math.random() - 0.5) * 20;
-      sf[k * 3 + 2] = (Math.random() - 0.5) * 20 - 6;
-    }
+    const SF = 800, sf = new Float32Array(SF * 3);
+    for (let k = 0; k < SF; k++) { sf[k * 3] = (Math.random() - 0.5) * 30; sf[k * 3 + 1] = (Math.random() - 0.5) * 20; sf[k * 3 + 2] = (Math.random() - 0.5) * 20 - 6; }
     const sgeo = new THREE.BufferGeometry(); sgeo.setAttribute("position", new THREE.BufferAttribute(sf, 3));
     scene.add(new THREE.Points(sgeo, new THREE.PointsMaterial({ color: 0x1ef0ff, size: 0.03, transparent: true, opacity: 0.4 })));
 
     const resize = () => { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
     resize(); window.addEventListener("resize", resize, { passive: true });
-
     let px = 0, py = 0, cpx = 0, cpy = 0;
     window.addEventListener("pointermove", (e) => { px = e.clientX / innerWidth - 0.5; py = e.clientY / innerHeight - 0.5; }, { passive: true });
     let running = true;
@@ -160,22 +203,63 @@ async function initEntity() {
         attr.array[j] = base[j] * s; attr.array[j + 1] = base[j + 1] * s; attr.array[j + 2] = base[j + 2] * s;
       }
       attr.needsUpdate = true;
-      ent.material.opacity = 0.8 + pulse.v * 0.2;
-      ent.material.size = 0.035 + pulse.v * 0.02;
+      ent.material.opacity = 0.82 + pulse.v * 0.18; ent.material.size = 0.035 + pulse.v * 0.02;
       core.rotation.x += 0.003; core.rotation.y += 0.004;
-      core.scale.setScalar(1 + pulse.v * 0.5);
-      core.material.opacity = 0.4 + pulse.v * 0.5;
+      core.scale.setScalar(1 + pulse.v * 0.5); core.material.opacity = 0.4 + pulse.v * 0.5;
       cpx = lerp(cpx, px, 0.04); cpy = lerp(cpy, py, 0.04);
-      root.rotation.y = t * 0.05 + cpx * 0.6;
-      root.rotation.x = cpy * 0.4;
-      renderer.render(scene, camera);
-      requestAnimationFrame(frame);
+      root.rotation.y = t * 0.05 + cpx * 0.6; root.rotation.x = cpy * 0.4;
+      renderer.render(scene, camera); requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
     canvas.classList.add("lit");
   } catch {}
 }
 
-function boot() { initConversation(); initEntity(); }
+/* ---------------- phantom moods + play dead ---------------- */
+function initPhantomMoods() {
+  const phantom = document.querySelector("[data-phantom]");
+  if (!phantom) return;
+  let idle = 0;
+  window.addEventListener("pointermove", () => {
+    if (phantom.classList.contains("dead")) return;
+    phantom.classList.add("happy");
+    window.clearTimeout(idle);
+    idle = window.setTimeout(() => phantom.classList.remove("happy"), 1100);
+  }, { passive: true });
+  phantom.addEventListener("click", () => {
+    if (phantom.classList.contains("dead")) return;
+    phantom.classList.remove("happy");
+    phantom.classList.add("dead");
+    flare();
+    window.setTimeout(() => phantom.classList.remove("dead"), 1500);
+  });
+}
+
+/* ---------------- threat radar: risks a business faces ---------------- */
+function initRiskRadar() {
+  const field = document.querySelector("[data-riskfield]");
+  if (!field || reduceMotion) return;
+  const risks = ["emails", "malware", "data leaks", "scams", "law updates", "chargebacks", "missed follow-ups", "late invoices", "no-shows", "phishing", "spam", "bad reviews", "downtime", "compliance", "deadlines", "double-bookings"];
+  const spawn = () => {
+    if (document.hidden) return;
+    const ping = document.createElement("div");
+    ping.className = "risk-ping";
+    const right = Math.random() < 0.5;
+    ping.style.left = (right ? 72 + Math.random() * 22 : 6 + Math.random() * 22) + "%";
+    ping.style.top = 12 + Math.random() * 76 + "%";
+    const dot = document.createElement("span"); dot.className = "risk-dot";
+    const label = document.createElement("span"); label.className = "risk-label";
+    label.textContent = risks[Math.floor(Math.random() * risks.length)];
+    ping.append(dot, label);
+    field.appendChild(ping);
+    requestAnimationFrame(() => ping.classList.add("on"));
+    window.setTimeout(() => ping.classList.remove("on"), 3200);
+    window.setTimeout(() => ping.remove(), 4200);
+  };
+  for (let i = 0; i < 3; i++) window.setTimeout(spawn, i * 850);
+  window.setInterval(spawn, 1700);
+}
+
+function boot() { initConversation(); initEntity(); initPhantomMoods(); initRiskRadar(); }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
 else boot();

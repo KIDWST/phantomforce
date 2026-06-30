@@ -1,0 +1,12 @@
+name = "phantomforce-ai"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+# Rate-limit / counter store. Create it once, then paste the id below:
+#   npx wrangler kv namespace create PF_KV
+kv_namespaces = [
+  { binding = "PF_KV", id = "PASTE_YOUR_KV_NAMESPACE_ID_HERE" }
+]
+
+# The OpenRouter key is NOT stored here. Set it as a secret:
+#   npx wrangler secret put OPENROUTER_API_KEY
