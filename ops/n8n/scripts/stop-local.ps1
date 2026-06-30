@@ -35,12 +35,35 @@ if ($processInfo.CommandLine -notmatch "n8n") {
   throw "Refusing to stop PID $targetPid because it does not look like an n8n process."
 }
 
-Stop-Process -Id $targetPid -Force -ErrorAction Stop
+$allProcesses = @(Get-CimInstance Win32_Process)
+$processIdsToStop = New-Object System.Collections.Generic.List[int]
+$processIdsToStop.Add($targetPid)
+
+do {
+  $added = $false
+  foreach ($candidate in $allProcesses) {
+    $candidatePid = [int]$candidate.ProcessId
+    if ($processIdsToStop.Contains($candidatePid)) {
+      continue
+    }
+
+    if ($processIdsToStop.Contains([int]$candidate.ParentProcessId)) {
+      $processIdsToStop.Add($candidatePid)
+      $added = $true
+    }
+  }
+} while ($added)
+
+foreach ($processIdToStop in @($processIdsToStop | Sort-Object -Descending)) {
+  Stop-Process -Id $processIdToStop -Force -ErrorAction SilentlyContinue
+}
+
 Remove-Item -LiteralPath $pidPath -Force
 
 [pscustomobject]@{
   ok = $true
   stopped = $true
   pid = $targetPid
+  stopped_process_ids = @($processIdsToStop)
   pid_path = $pidPath
 } | ConvertTo-Json -Compress
