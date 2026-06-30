@@ -64,6 +64,9 @@ function parseBudget(value: string | undefined) {
 export function getProviderSetupStatus(env: NodeJS.ProcessEnv = process.env): ProviderSetupStatus {
   const routerMode = normalizeMode(env.PHANTOM_MODEL_ROUTER_MODE);
   const openRouterConfigured = hasValue(env.OPENROUTER_API_KEY);
+  const liveProvidersEnabled = env.PHANTOM_LIVE_PROVIDERS_ENABLED === "true";
+  const openRouterTransportEnabled = env.PHANTOM_OPENROUTER_TRANSPORT_ENABLED === "true";
+  const openRouterLiveReady = openRouterConfigured && liveProvidersEnabled && openRouterTransportEnabled;
   const claudeConfigured = hasValue(env.ANTHROPIC_API_KEY);
   const localAvailable = hasValue(env.OLLAMA_BASE_URL) || env.PHANTOM_LOCAL_MODEL_AVAILABLE === "true";
   const byokEnabled = env.PHANTOM_ALLOW_BYOK === "true";
@@ -81,9 +84,13 @@ export function getProviderSetupStatus(env: NodeJS.ProcessEnv = process.env): Pr
       model_id: modelId,
       setup_required: !openRouterConfigured,
       payment_setup_needed: !openRouterConfigured,
-      detail: openRouterConfigured
-        ? "Cheap worker route can be selected for low-risk tasks; no live call is made by this status check."
-        : "OpenRouter account/API key will be needed later. Do not fund OpenRouter until budget, Hermes receipts, redaction, approval execution, and smoke approval gates pass.",
+      live_transport_enabled: openRouterTransportEnabled,
+      live_call_ready: openRouterLiveReady,
+      detail: openRouterLiveReady
+        ? "GLM 5.2 is ready for admin-selected low-risk Phantom AI chat through OpenRouter."
+        : openRouterConfigured
+          ? "OpenRouter key is configured. Set live provider and OpenRouter transport flags to enable GLM 5.2 chat."
+        : "OpenRouter account/API key is required before GLM 5.2 can run through Phantom AI.",
     },
     claude_api: {
       configured: claudeConfigured,

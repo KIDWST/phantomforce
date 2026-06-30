@@ -68,6 +68,7 @@ import {
   redactApprovalRequestPreview,
 } from "./phantom-ai/approval-queue.js";
 import {
+  appendHermesLedgerRecord,
   getHermesLedgerStatus,
   readRedactedHermesLedgerRecords,
   redactHermesLedgerRecord,
@@ -95,6 +96,7 @@ import {
   previewModelRouterFoundation,
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
+import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
 import { evaluateProviderLiveReceiptLedgerContract } from "./phantom-ai/provider-live-receipt-ledger-contract.js";
 import {
   evaluateProviderBudgetPolicy,
@@ -115,6 +117,7 @@ import type {
   ApprovalQueueTransitionStatus,
   ApprovalQueueWriteResult,
   ContextModuleData,
+  HermesLedgerRecord,
   ProviderLiveReceiptLedgerOperation,
   SensitivityLevel,
 } from "./phantom-ai/types.js";
@@ -385,6 +388,10 @@ function buildModelRouterRequestFromBody(
         : "Owner-only personal training demo workspace. External actions approval-only.",
     module_data: parseContextModuleData(body.module_data),
   };
+}
+
+function parsePhantomAiChatProvider(value: unknown) {
+  return value === "openrouter_glm" ? "openrouter_glm" : "phantom";
 }
 
 app.get("/phantom-ai/provider-status", async (request, reply) => {
@@ -1415,6 +1422,167 @@ app.post("/phantom-ai/approvals/preview", async (request, reply) => {
       raw_context_chars: result.context_packet.raw_context_chars,
       compression_ratio: result.context_packet.compression_ratio,
     },
+  };
+});
+
+app.post("/phantom-ai/chat", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    provider?: unknown;
+    message?: unknown;
+    tenant_id?: unknown;
+    business_name?: unknown;
+    actor_user_id?: unknown;
+    request_id?: unknown;
+    task_type?: unknown;
+    sensitivity_level?: unknown;
+    user_request?: unknown;
+    business_summary?: unknown;
+    module_data?: unknown;
+  };
+  const providerChoice = parsePhantomAiChatProvider(body.provider);
+
+  if (providerChoice === "openrouter_glm" && !session.canManageAccess) {
+    return reply.code(403).send({
+      ok: false,
+      error: "OpenRouter GLM is admin-only in this local setup.",
+      provider_choice: providerChoice,
+      provider_called: false,
+      network_call_performed: false,
+      approval_executed: false,
+      queue_written: false,
+    });
+  }
+
+  const userMessage =
+    typeof body.message === "string" && body.message.trim()
+      ? body.message
+      : typeof body.user_request === "string"
+        ? body.user_request
+        : "Summarize the current PhantomForce workspace.";
+  const normalized = buildModelRouterRequestFromBody(
+    {
+      ...body,
+      user_request: userMessage,
+    },
+    session,
+    "chat",
+  );
+
+  if (providerChoice === "openrouter_glm") {
+    const preview = previewModelRouterFoundation(normalized, {
+      env: {
+        ...process.env,
+        PHANTOM_MODEL_ROUTER_MODE: "openrouter",
+      },
+    });
+    const memoryContext = await buildHermesMemoryContextPreview({
+      tenant_id: normalized.tenant_id,
+      business_name: normalized.business_name,
+      actor_user_id: normalized.actor_user_id,
+      request_id: normalized.request_id,
+      task_type: normalized.task_type,
+      sensitivity_level: preview.decision.sensitivity_level,
+      provider_route: "openrouter_glm",
+      user_request: normalized.user_request,
+      business_summary: normalized.business_summary,
+      module_data: normalized.module_data,
+    });
+    const approvalRequired = preview.decision.approval_required || preview.action_preview.approval_required;
+    const openrouter = await callOpenRouterGlm52({
+      requestId: normalized.request_id,
+      businessName: normalized.business_name,
+      taskType: normalized.task_type,
+      userMessage: normalized.user_request,
+      compactContext: memoryContext.augmented_context_preview,
+      sensitivityLevel: preview.decision.sensitivity_level,
+      approvalRequired,
+    });
+    const ledgerRecord: HermesLedgerRecord = {
+      timestamp: new Date().toISOString(),
+      tenant_id: normalized.tenant_id,
+      business_name: normalized.business_name,
+      actor_user_id: normalized.actor_user_id,
+      actor_role: normalized.actor_role,
+      request_id: normalized.request_id,
+      task_type: normalized.task_type,
+      sensitivity_level: preview.decision.sensitivity_level,
+      provider_route: "openrouter_glm",
+      model_id: openrouter.model_id,
+      context_chars: memoryContext.augmented_context_chars,
+      estimated_tokens: Math.ceil(memoryContext.augmented_context_chars / 4),
+      estimated_cost_usd: null,
+      user_request_summary: redactSensitiveText(normalized.user_request).replace(/\s+/g, " ").slice(0, 240),
+      result_summary: redactSensitiveText(
+        openrouter.provider_called
+          ? "GLM 5.2 responded through OpenRouter for an admin-selected Phantom AI chat."
+          : `GLM 5.2 did not run: ${openrouter.blocked_reason ?? openrouter.error_message ?? "blocked"}`,
+      ).slice(0, 360),
+      approval_required: approvalRequired,
+      approval_status: approvalRequired ? "pending" : "not_required",
+      risks: preview.decision.risks.map((risk) => redactSensitiveText(risk)).slice(0, 8),
+      next_action: openrouter.provider_called
+        ? "Review the GLM 5.2 draft inside Phantom AI. External actions still require approval."
+        : "Finish OpenRouter server setup, then retry the admin-selected GLM 5.2 lane.",
+      agent_run_id: `phantom-ai-chat-${normalized.request_id}`,
+      parent_task_id: normalized.request_id,
+    };
+
+    await appendHermesLedgerRecord(ledgerRecord);
+
+    return {
+      ok: true,
+      session,
+      provider_choice: providerChoice,
+      model_id: openrouter.model_id,
+      message: {
+        role: "assistant",
+        content: openrouter.output_text,
+      },
+      openrouter,
+      memory_context: {
+        scope: memoryContext.scope,
+        recalled_memory_count: memoryContext.memory.recalled_count,
+        compact_context_chars: memoryContext.augmented_context_chars,
+        redaction: memoryContext.redaction,
+      },
+      ledger_record: redactHermesLedgerRecord(ledgerRecord),
+      provider_request_body_created: openrouter.request_body_prepared,
+      live_provider_called: openrouter.provider_called,
+      network_call_performed: openrouter.network_call_performed,
+      approval_executed: false,
+      queue_written: false,
+      external_action_executed: false,
+    };
+  }
+
+  const result = await runModelRouterFoundation(normalized);
+  const interactionMemory = await recordHermesInteractionMemoryFromRun(result);
+
+  return {
+    ok: true,
+    session,
+    provider_choice: providerChoice,
+    model_id: result.decision.model_id,
+    message: {
+      role: "assistant",
+      content:
+        "I prepared a protected Phantom AI summary and recorded it to Hermes. No external model, provider, or action ran.",
+    },
+    decision: result.decision,
+    ledger_record: redactHermesLedgerRecord(result.ledger_record),
+    interaction_memory: interactionMemory,
+    provider_request_body_created: false,
+    live_provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    queue_written: false,
+    external_action_executed: false,
   };
 });
 
