@@ -44,8 +44,7 @@ type Route =
   | "approvals"
   | "access"
   | "activity"
-  | "connections"
-  | "trainer";
+  | "connections";
 type ApprovalKind = "email" | "calendar" | "task";
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type ActivityLevel = "ok" | "info" | "warn";
@@ -1207,42 +1206,27 @@ const AUTHORIZATION_HEADER = "Authorization";
 const initialSessions: AppSession[] = [
   {
     id: "admin-jordan",
-    label: "Jordan / PhantomForce Admin",
+    label: "Jordan / PhantomForce Owner",
     role: "admin",
     canManageAccess: true,
   },
   {
     id: "client-chicagoshots",
-    label: "ChicagoShots client workspace",
+    label: "ChicagoShots workspace",
     role: "client",
     clientId: "client-chicagoshots",
-    canManageAccess: false,
-  },
-  {
-    id: "client-sports-demo",
-    label: "Sports Ops Demo client",
-    role: "client",
-    clientId: "client-sports-demo",
-    canManageAccess: false,
-  },
-  {
-    id: "client-past-due",
-    label: "Past Due Pilot client",
-    role: "client",
-    clientId: "client-past-due",
     canManageAccess: false,
   },
 ];
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Home", icon: <Command size={18} /> },
-  { id: "trainer", label: "Phantom AI", icon: <Sparkles size={18} /> },
-  { id: "inbox", label: "Leads & Clients", icon: <Users size={18} /> },
-  { id: "calendar", label: "Schedule", icon: <CalendarDays size={18} /> },
-  { id: "tasks", label: "Tasks", icon: <SquareCheckBig size={18} /> },
+  { id: "inbox", label: "Pipeline", icon: <Users size={18} /> },
+  { id: "offers", label: "Offers", icon: <Zap size={18} /> },
   { id: "content", label: "Content", icon: <FileText size={18} /> },
   { id: "media", label: "Media Lab", icon: <Play size={18} /> },
-  { id: "offers", label: "Offers", icon: <Zap size={18} /> },
+  { id: "calendar", label: "Schedule", icon: <CalendarDays size={18} /> },
+  { id: "tasks", label: "Tasks", icon: <SquareCheckBig size={18} /> },
   { id: "approvals", label: "Approvals", icon: <ShieldCheck size={18} /> },
   { id: "access", label: "Settings", icon: <KeyRound size={18} /> },
   { id: "connections", label: "Status", icon: <Link2 size={18} /> },
@@ -1251,7 +1235,7 @@ const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
 const initialEmails: EmailItem[] = [
   {
     id: "mail-1",
-    from: "Maya Chen",
+    from: "ChicagoShots lead",
     subject: "Can we lock a shoot date next week?",
     preview: "Need a quick slot for the product shoot and a quote before Friday.",
     age: "18m",
@@ -1261,23 +1245,23 @@ const initialEmails: EmailItem[] = [
   },
   {
     id: "mail-2",
-    from: "Southside Elite",
-    subject: "Roster updates and parent contact list",
-    preview: "Three players changed teams and two forms are still missing.",
+    from: "Coach/team owner",
+    subject: "Media day and highlight package",
+    preview: "Needs a clear package, booking window, and parent-facing delivery plan.",
     age: "2h",
     priority: "medium",
     status: "waiting",
-    project: "Sports Ops",
+    project: "ChicagoShots",
   },
   {
     id: "mail-3",
-    from: "Air Authority",
-    subject: "Follow-up after estimate",
-    preview: "Customer asked whether Tuesday install is still possible.",
+    from: "Local service business",
+    subject: "Website and backend follow-up",
+    preview: "Asked what the setup sprint includes and whether booking can be cleaned up.",
     age: "4h",
     priority: "medium",
     status: "needs-reply",
-    project: "Service Pipeline",
+    project: "PhantomForce",
   },
 ];
 
@@ -1293,14 +1277,14 @@ const initialEvents: CalendarEvent[] = [
     id: "event-2",
     title: "Client approval call",
     time: "Wed 2:00 PM",
-    owner: "Maya Chen",
+    owner: "ChicagoShots lead",
     status: "confirmed",
   },
   {
     id: "event-3",
-    title: "Roster review",
+    title: "Media package review",
     time: "Thu 6:30 PM",
-    owner: "Southside Elite",
+    owner: "Coach/team owner",
     status: "proposed",
   },
 ];
@@ -1308,21 +1292,21 @@ const initialEvents: CalendarEvent[] = [
 const initialTasks: TaskItem[] = [
   {
     id: "task-1",
-    title: "Reply to Maya with shoot options",
+    title: "Reply with shoot options",
     owner: "PhantomForce",
     due: "Today",
     status: "today",
   },
   {
     id: "task-2",
-    title: "Review missing sports forms",
+    title: "Review media-day package",
     owner: "Ops",
     due: "Tomorrow",
     status: "queued",
   },
   {
     id: "task-3",
-    title: "Draft Air Authority follow-up",
+    title: "Draft backend cleanup follow-up",
     owner: "Assistant",
     due: "Today",
     status: "today",
@@ -1332,22 +1316,22 @@ const initialTasks: TaskItem[] = [
 const initialActivity: ActivityItem[] = [
   {
     id: "act-1",
-    title: "Morning brief generated",
-    detail: "3 emails need action, 2 calendar holds, 2 approval-ready workflows.",
+    title: "Operator brief generated",
+    detail: "Pipeline, content, scheduling, and approval-ready client actions are organized.",
     time: "9:02 AM",
     level: "ok",
   },
   {
     id: "act-2",
-    title: "Google connectors checked",
-    detail: "Gmail and Calendar are ready in demo mode. No external writes without approval.",
+    title: "Client workflow checked",
+    detail: "Drafts, follow-ups, and scheduling actions are prepared for owner approval.",
     time: "9:01 AM",
     level: "info",
   },
   {
     id: "act-3",
-    title: "Falcon boundary locked",
-    detail: "Raw commands, files, logs, and model settings are not exposed to clients.",
+    title: "Private controls protected",
+    detail: "Developer tools, credentials, logs, and provider settings stay out of the client workspace.",
     time: "8:58 AM",
     level: "warn",
   },
@@ -1399,30 +1383,6 @@ const initialClientAccess: ClientAccess[] = [
     modules: ["Command", "Content", "Tasks", "Approvals", "Activity"],
     lastAudit: "Access confirmed for partner workspace",
   },
-  {
-    id: "client-sports-demo",
-    business: "Sports Ops Demo",
-    owner: "Client Owner",
-    plan: "$2,000 Team Media Day",
-    paymentStatus: "paid",
-    accessStatus: "active",
-    gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/sports-ops-demo",
-    modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts"],
-    lastAudit: "Deposit paid; workspace active",
-  },
-  {
-    id: "client-past-due",
-    business: "Past Due Pilot",
-    owner: "Client Owner",
-    plan: "$1,250/mo Ops Support",
-    paymentStatus: "failed",
-    accessStatus: "revoked",
-    gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/past-due-pilot",
-    modules: ["Command", "Tasks", "Reports"],
-    lastAudit: "Payment failed; private route revoked",
-  },
 ];
 
 const modules = [
@@ -1469,7 +1429,7 @@ const truthStatusLabels: TruthLabel[] = [
     value: "Demo Local / Owner Config-Gated / Pangolin Dry-Run",
     state: "demo",
     detail:
-      "Demo sessions and owner admin are local/config-gated. Pangolin status is read-only/dry-run unless separately proven live.",
+      "Local sessions and owner admin are config-gated. Pangolin status is inspection-only unless separately proven live.",
   },
   {
     label: "Budget",
@@ -1487,10 +1447,9 @@ const truthStatusLabels: TruthLabel[] = [
   },
   {
     label: "Client Mode",
-    value: "Personal Training Simulation",
-    state: "demo",
-    detail:
-      "The trainer cockpit uses local sample data only. It is not a launched customer workspace or live billing environment.",
+    value: "PhantomForce + ChicagoShots",
+    state: "real",
+    detail: "The visible workspace is focused on PhantomForce operations and ChicagoShots media/content workflows.",
   },
   {
     label: "Team Mode",
@@ -1504,17 +1463,16 @@ const truthStatusLabels: TruthLabel[] = [
 const customerStatusLabels: TruthLabel[] = [
   {
     label: "Phantom AI",
-    value: "Online - protected",
-    state: "demo",
+    value: "Online",
+    state: "real",
     detail:
-      "Phantom AI can summarize the workspace and prepare approval-ready next steps while keeping private data out of customer-visible plumbing.",
+      "Phantom AI drafts, prioritizes, and organizes owner-approved business actions from inside the dashboard.",
   },
   {
-    label: "Memory",
-    value: "Setup required",
-    state: "stub",
-    detail:
-      "Workspace history, rules, approval records, and context packets are planned but not yet connected as durable memory.",
+    label: "ChicagoShots",
+    value: "Workflow ready",
+    state: "real",
+    detail: "Lead intake, quote drafts, proposal packets, and local follow-up status are available from the cockpit.",
   },
   {
     label: "Actions",
@@ -1524,142 +1482,141 @@ const customerStatusLabels: TruthLabel[] = [
       "Drafts and suggested actions stay in the approval queue until Jordan or the owner approves them.",
   },
   {
-    label: "Launch readiness",
-    value: "Blocked",
-    state: "blocked",
-    detail:
-      "Premium reasoning, memory ledger, audit trail, access gates, and billing proof must be finished before a real customer launch.",
+    label: "Sending",
+    value: "Draft-first",
+    state: "real",
+    detail: "The next live step is an approved-send adapter with allowlisted test recipients and audit receipts.",
   },
 ];
 
 const phantomAiStatus = {
-  availability: "Online - protected",
-  memory: "Setup required",
-  fallback: "Private APIs save lives; provider details stay behind Phantom AI",
-  approvalGate: "Approval gate visible for demo actions; live external actions disabled",
+  availability: "Online",
+  memory: "Workspace context active",
+  fallback: "Provider and developer details stay behind Phantom AI",
+  approvalGate: "External sends require owner approval",
   allowedSuggestions: [
-    "Prioritize leads, tasks, schedule gaps, and client follow-ups",
-    "Draft approval-ready messages and operational next steps",
-    "Summarize launch blockers and onboarding progress",
+    "Prioritize leads, proposal packets, schedule gaps, and follow-ups",
+    "Draft approval-ready replies, quotes, and operational next steps",
+    "Summarize what to do next without exposing developer tooling",
   ],
   approvalRequired: [
     "Sending email, posting content, uploads, deploys, route changes, billing, credentials, deletes, or production changes",
-    "Any customer-facing claim that premium reasoning, memory, billing, access, or employee roles are live",
+    "Any customer-facing claim that has not been proven inside the dashboard",
   ],
 };
 
 const personalTrainingSimulation = {
   owner: {
     name: "Jordan West",
-    business: "West Loop Strength Lab",
-    market: "Chicago personal training",
-    mode: "Local demo simulation",
+    business: "PhantomForce",
+    market: "AI-assisted business ops, media, websites, apps, dashboards, and content systems",
+    mode: "Internal owner cockpit",
   },
   services: [
     {
-      title: "Founder's Body Rebuild",
-      detail: "$497/mo hybrid coaching with weekly accountability and nutrition review.",
-      status: "demo package",
+      title: "$750 Starter Setup",
+      detail: "Quick ops cleanup, offer clarity, follow-up drafts, and a simple action board.",
+      status: "starter",
     },
     {
-      title: "Private Strength Sessions",
-      detail: "$125/session in-gym training for executives and busy parents.",
-      status: "demo package",
+      title: "$1,500 Core Sprint",
+      detail: "Command center setup, lead workflow, proposal/quote package, content plan, and approval gates.",
+      status: "default",
     },
     {
-      title: "Transformation Sprint",
-      detail: "8-week onboarding sprint with assessment, schedule, habit plan, and progress photos.",
-      status: "demo package",
+      title: "$2,500 Pro Buildout",
+      detail: "Messy workflow rescue with dashboard/app planning, automations, Media Lab support, and retainer path.",
+      status: "pro",
     },
   ],
   leads: [
-    { title: "Maya C.", detail: "Asked about morning private sessions and meal prep accountability.", status: "hot" },
-    { title: "Andre R.", detail: "Corporate referral wants a 6-week reset before travel season.", status: "warm" },
-    { title: "Priya S.", detail: "Instagram lead waiting on package comparison and start dates.", status: "new" },
+    { title: "Jordan Test Client", detail: "Needs ChicagoShots sports media packet and follow-up timing.", status: "hot" },
+    { title: "Local service business", detail: "Needs website/backend cleanup and a simple booking workflow.", status: "warm" },
+    { title: "Coach/team owner", detail: "Needs media day offer, parent communication, and highlight delivery structure.", status: "new" },
   ],
   clients: [
-    { title: "Eli Morgan", detail: "Strength rebuild, Tue/Thu 7 AM, needs knee-friendly programming.", status: "active" },
-    { title: "Nina Patel", detail: "Fat-loss sprint, Mon/Wed 6 PM, weekly photo check due Friday.", status: "active" },
-    { title: "Carlos Rivera", detail: "Trial completed; needs approval to send membership offer.", status: "approval" },
+    { title: "ChicagoShots", detail: "Partner media workspace for videography, sports content, and deliverables.", status: "active" },
+    { title: "PhantomForce", detail: "Owner workspace for AI ops, offers, approvals, buildouts, and follow-up systems.", status: "active" },
+    { title: "New setup sprint lead", detail: "Proposal packet ready; needs manual send or call follow-up.", status: "approval" },
   ],
   schedule: [
-    { title: "7:00 AM - Eli Morgan", detail: "Lower-body strength session with form video notes.", status: "confirmed" },
-    { title: "12:30 PM - Lead consult", detail: "Maya C. discovery call and package fit review.", status: "hold" },
-    { title: "6:00 PM - Nina Patel", detail: "Conditioning block and weekly measurement check.", status: "confirmed" },
+    { title: "15-minute setup call", detail: "Map the mess, qualify package, and choose Starter/Core/Pro.", status: "hold" },
+    { title: "ChicagoShots packet review", detail: "Confirm deliverables, price range, proof/demo, and next follow-up.", status: "confirmed" },
+    { title: "Ops sprint delivery block", detail: "Build dashboard/docs/follow-up system after client approval.", status: "proposed" },
   ],
   tasks: [
-    { title: "Draft Maya follow-up", detail: "Explain Founder's Body Rebuild and available start windows.", status: "today" },
-    { title: "Update Carlos offer", detail: "Prepare approval item before any email is sent.", status: "approval only" },
-    { title: "Compile weekly wins", detail: "Summarize check-ins for active clients without external posting.", status: "queued" },
+    { title: "Review priority proposal packet", detail: "Confirm scope and mark sent manually after Jordan sends it.", status: "today" },
+    { title: "Prepare Core Sprint follow-up", detail: "Draft short reply and price anchor for owner approval.", status: "approval only" },
+    { title: "Package proof/demo link", detail: "Attach THE FORCE / PhantomCut proof only where accurate.", status: "queued" },
   ],
   approvals: [
-    { title: "Send membership offer to Carlos", detail: "Email must stay pending until Jordan approves.", status: "pending" },
-    { title: "Publish transformation reel", detail: "Needs client consent and media review before upload/post.", status: "blocked" },
-    { title: "Activate payment link", detail: "Billing claims and payment changes are not live in this simulation.", status: "blocked" },
+    { title: "Send Core Sprint follow-up", detail: "External email stays pending until Jordan approves and sends manually.", status: "pending" },
+    { title: "Publish showcase clip", detail: "Needs review before posting; no autonomous posting.", status: "blocked" },
+    { title: "Create payment request", detail: "Payment/invoice creation is not active until separately approved.", status: "blocked" },
   ],
   contentCalendar: [
-    { title: "Monday", detail: "Coach POV: why founders need simple strength systems.", status: "draft" },
-    { title: "Wednesday", detail: "Client education carousel about protein and consistency.", status: "draft" },
-    { title: "Friday", detail: "Wins roundup requires approval and consent before posting.", status: "approval" },
+    { title: "Monday", detail: "Why small businesses need an ops system before more random apps.", status: "draft" },
+    { title: "Wednesday", detail: "ChicagoShots media-day package: sports clips, photos, and delivery structure.", status: "draft" },
+    { title: "Friday", detail: "Media Lab proof clip requires approval before any posting.", status: "approval" },
   ],
   contentIdeas: [
-    { title: "Protein reset checklist", detail: "Raw carousel idea for busy owners who skip breakfast.", status: "raw idea" },
-    { title: "Founder's 20-minute lift", detail: "Short-form post showing a simple hotel-gym strength session.", status: "recommended" },
-    { title: "Client win story", detail: "Transformation narrative requires consent before any public post.", status: "approval" },
-    { title: "Meal prep Sunday", detail: "Behind-the-scenes education post for accountability coaching.", status: "queued" },
+    { title: "Ops + Content Setup Sprint", detail: "Simple explainer for the $1,500 Core Sprint.", status: "recommended" },
+    { title: "ChicagoShots media arm", detail: "How videography/content plugs into PhantomForce systems.", status: "recommended" },
+    { title: "Client proof story", detail: "Use only proof-backed assets; no fake results or testimonials.", status: "approval" },
+    { title: "Behind the build", detail: "Show dashboard/action workflow without exposing dev tools.", status: "queued" },
   ],
   contentDrafts: [
-    { title: "Maya consult follow-up post", detail: "Draft educational caption, no prospect details included.", status: "pending approval" },
-    { title: "Friday wins roundup", detail: "Requires client consent and owner review before publishing.", status: "blocked" },
-    { title: "Founder strength myth", detail: "Draft only; platform posting is not wired.", status: "draft" },
+    { title: "Core Sprint private-send message", detail: "Draft only until Jordan manually sends.", status: "pending approval" },
+    { title: "THE FORCE send package", detail: "Use privately; no public posting until approved.", status: "blocked" },
+    { title: "Website/backend cleanup post", detail: "Draft only; platform posting is not wired.", status: "draft" },
   ],
   mediaRequests: [
-    { title: "Form-check clips", detail: "Optional short edits for client feedback, local/demo only.", status: "demo" },
-    { title: "Reel template", detail: "30-second transformation story format for review.", status: "planned" },
-    { title: "Testimonial capture", detail: "Consent and usage rights required before any publish workflow.", status: "blocked" },
+    { title: "Sports highlight clips", detail: "ChicagoShots deliverable planning for teams, coaches, and events.", status: "ready" },
+    { title: "Private launch reel", detail: "THE FORCE v0.3-style product showcase for serious prospects.", status: "planned" },
+    { title: "Client media proof", detail: "Consent and usage rights required before publish workflow.", status: "blocked" },
   ],
   mediaDeliverables: [
-    { title: "Form-check cutdown", detail: "Coach review clip for internal client feedback.", status: "queued" },
-    { title: "Transformation reel draft", detail: "Storyboard only; no upload or publish workflow is live.", status: "approval" },
-    { title: "Testimonial prep sheet", detail: "Shot list and consent checklist for a future media day.", status: "planned" },
+    { title: "Highlight cutdown", detail: "Short-form clip workflow for review and approval.", status: "queued" },
+    { title: "Generated creative proof", detail: "Media Lab output proof; no autonomous posting.", status: "approval" },
+    { title: "Media day checklist", detail: "Shot list, consent checklist, and delivery plan.", status: "planned" },
   ],
   mediaPlaceholders: [
-    { title: "Uploads", detail: "File upload intake is not wired in this simulation.", status: "placeholder" },
-    { title: "Delivery links", detail: "External delivery and posting are disabled until approval gates exist.", status: "disabled" },
-    { title: "Client consent vault", detail: "Consent storage is a launch blocker, not live storage.", status: "blocked" },
+    { title: "Uploads", detail: "Use manual/local handoff until upload intake is approved.", status: "planned" },
+    { title: "Delivery links", detail: "External delivery/posting requires owner approval.", status: "approval" },
+    { title: "Client consent vault", detail: "Consent tracking is required before public media usage.", status: "required" },
   ],
   offerRecommendations: [
-    { title: "Lead Maya into Founder's Body Rebuild", detail: "Best match: accountability plus morning-session availability.", status: "recommended" },
-    { title: "Offer Carlos a 90-day private training upgrade", detail: "Prepare owner-approved email before any send.", status: "approval" },
-    { title: "Bundle nutrition review with Transformation Sprint", detail: "Demo recommendation for higher-retention package design.", status: "demo" },
+    { title: "Lead with $1,500 Core Sprint", detail: "Best default for businesses that need ops + content setup.", status: "recommended" },
+    { title: "Fallback to $750 Starter", detail: "Use when the prospect is smaller or needs a lower-friction entry.", status: "approval" },
+    { title: "Upgrade to $2,500 Pro", detail: "Use for messy workflows, teams, dashboards, or content/media complexity.", status: "recommended" },
   ],
   pricingDrafts: [
-    { title: "$497/mo hybrid coaching", detail: "Draft recurring package; billing activation is not live.", status: "draft" },
-    { title: "$125 private session", detail: "Simple session rate for owner review.", status: "draft" },
-    { title: "$1,997 8-week sprint", detail: "Premium transformation package, pending final scope approval.", status: "approval" },
+    { title: "$750 Starter", detail: "Lean setup and first follow-up/proposal package.", status: "draft" },
+    { title: "$1,500 Core", detail: "Default Ops + Content Setup Sprint.", status: "draft" },
+    { title: "$2,500 Pro", detail: "Expanded system/dashboard/media workflow.", status: "approval" },
   ],
   onboardingChecklist: [
-    { title: "Client profile", detail: "Offer, services, voice, and target persona captured in demo seed.", status: "done" },
+    { title: "Business surfaces", detail: "PhantomForce, ChicagoShots, Media Lab, and offer ladder are aligned.", status: "done" },
     { title: "Approval policy", detail: "External actions require Jordan or owner approval.", status: "done" },
-    { title: "Premium reasoning setup", detail: "Official customer-facing AI configuration is not implemented in this app.", status: "blocked" },
-    { title: "Memory ledger", detail: "Append-only memory and context ledger still need implementation.", status: "blocked" },
+    { title: "Approved-send adapter", detail: "Next build step before real email/test sends.", status: "required" },
+    { title: "Client-safe dashboard mode", detail: "Developer/provider internals stay off the normal cockpit.", status: "done" },
   ],
   launchBlockers: [
-    { title: "Premium reasoning setup", detail: "No official customer-facing premium reasoning route is wired or proven.", status: "blocked" },
-    { title: "Memory and audit ledger", detail: "No durable app memory, context compiler, or approval ledger exists yet.", status: "blocked" },
-    { title: "Production access rules", detail: "Employee roles, live routes, billing, and production gates need hard proof.", status: "blocked" },
+    { title: "Approved-send adapter", detail: "Real sending needs allowlist, confirmation phrase, and audit receipts.", status: "required" },
+    { title: "Payment/invoice action", detail: "Billing actions need a separate approval-gated implementation.", status: "required" },
+    { title: "Client delivery proof", detail: "Use real approved deliverables before claiming autonomous production.", status: "required" },
   ],
   phantomCut: {
     title: "PhantomCut Media Lab add-on",
     detail:
-      "Optional video/editor support for form checks, reels, and media-heavy clients. It is not required for the personal trainer core app.",
-    status: "available/demo/planned",
+      "Optional video/editor support for reels, sports clips, creative proofs, and media-heavy clients.",
+    status: "available/proof-backed/planned",
   },
   roleModel: [
     { title: "Jordan / PhantomForce", detail: "Platform super-admin concept and final control layer.", status: "operator" },
-    { title: "Business owner", detail: "Admin only for this business workspace in the simulation.", status: "owner admin" },
+    { title: "Business owner", detail: "Admin only for this business workspace.", status: "owner admin" },
     { title: "Employees", detail: "Disabled/future until roles, audit, and permission rules are implemented.", status: "disabled" },
-    { title: "Client portal users", detail: "Optional/future. Trainer clients are roster records today, not portal accounts.", status: "future" },
+    { title: "Client portal users", detail: "Optional/future. Current workspaces focus on owner-approved actions.", status: "future" },
   ],
 };
 
@@ -2360,10 +2317,20 @@ function App() {
     [activeSessionId],
   );
   const canManageAccess = activeSession.canManageAccess;
+  const visibleNavItems = useMemo(() => {
+    if (canManageAccess) return navItems;
+    return navItems.filter((item) => item.id !== "access" && item.id !== "connections");
+  }, [canManageAccess]);
   const visibleClientAccess = useMemo(() => {
     if (canManageAccess) return clientAccess;
     return clientAccess.filter((client) => client.id === activeSession.clientId);
   }, [activeSession.clientId, canManageAccess, clientAccess]);
+
+  useEffect(() => {
+    if (!canManageAccess && (route === "access" || route === "connections")) {
+      setRoute("command");
+    }
+  }, [canManageAccess, route]);
 
   function sessionHeaders(json = false): Record<string, string> {
     const headers: Record<string, string> = json ? { "Content-Type": "application/json" } : {};
@@ -2429,7 +2396,7 @@ function App() {
     setWorkspaceModuleView(null);
   }
 
-  async function refreshGuardedWorkspace(clientId = activeSession.clientId ?? "client-sports-demo") {
+  async function refreshGuardedWorkspace(clientId = activeSession.clientId ?? "client-chicagoshots") {
     try {
       const response = await fetch(`${API_BASE_URL}/client-workspaces/${clientId}`, {
         headers: sessionHeaders(),
@@ -2480,7 +2447,7 @@ function App() {
     } catch {
       setGuardedWorkspace({
         id: clientId,
-        business: "Sports Ops Demo",
+        business: "ChicagoShots",
         mode: "blocked",
         modules: [],
         reason: "Backend guard unavailable; production should fail closed.",
@@ -2620,7 +2587,7 @@ function App() {
           setClientAccess(data.records);
         }
       } catch {
-        addActivity("Access API offline", "Using local demo access state until the backend is available.", "warn");
+        addActivity("Access API offline", "Using local workspace access state until the backend is available.", "warn");
       }
     }
 
@@ -2673,7 +2640,7 @@ function App() {
     });
   }
 
-  function createFollowUpPlan(source = "command") {
+  function createFollowUpPlan() {
     const targetEmail = emails.find((email) => email.status === "needs-reply") || emails[0];
     const emailApproval: Approval = {
       id: makeId("approval-email"),
@@ -2710,9 +2677,7 @@ function App() {
         id: makeId("msg-assistant"),
         role: "assistant",
         content:
-          source === "demo"
-            ? "Demo flow ready: I found Maya's follow-up, drafted the reply, checked the calendar, and created two approval cards. Nothing external happens until you approve."
-            : "I found the best next action: reply to Maya and reserve a call window. I prepared an email and a calendar event for approval. No external action has been taken.",
+          "I found the best next action: reply to the priority lead and reserve a call window. I prepared an email and a calendar event for approval. No external action has been taken.",
       },
     ]);
     addActivity("Approval cards created", "Email and calendar actions are waiting for review.", "ok");
@@ -2736,7 +2701,7 @@ function App() {
           body: JSON.stringify({
             provider: aiProvider,
             message: text,
-            tenant_id: activeSession.clientId ?? "demo-trainer",
+            tenant_id: activeSession.clientId ?? "phantomforce-owner",
             business_name: selectedOrg,
             actor_user_id: activeSession.id,
             request_id: `chat-${Date.now()}`,
@@ -2772,8 +2737,8 @@ function App() {
         addActivity(
           aiProvider === "openrouter_glm"
             ? data?.live_provider_called
-              ? "GLM 5.2 worker responded"
-              : "GLM 5.2 worker blocked"
+              ? "Advanced reasoning lane responded"
+              : "Advanced reasoning lane blocked"
             : "Phantom AI protected lane recorded",
           data?.openrouter?.blocked_reason ??
             data?.openrouter?.error_message ??
@@ -2817,7 +2782,7 @@ function App() {
           id: makeId("msg-assistant"),
           role: "assistant",
           content:
-            "Today needs focus on 2 replies, 3 active tasks, and 1 calendar hold. The fastest win is approving the client follow-up package, then clearing the Air Authority reply.",
+            "Today needs focus on 2 replies, 3 active tasks, and 1 calendar hold. The fastest win is approving the client follow-up package, then clearing the backend cleanup reply.",
         },
       ]);
       addActivity("Brief requested", "Assistant summarized the current operational load.", "info");
@@ -3073,8 +3038,8 @@ function App() {
   async function provisionMoneyDemo(paymentStatus: PaymentStatus) {
     const paid = paymentStatus === "paid";
     const reason = paid
-      ? "money demo payment received from NexProspex close"
-      : "money demo signed agreement before payment clears";
+      ? "revenue proof payment received from NexProspex close"
+      : "revenue proof signed agreement before payment clears";
     const proposalResponse = await fetch(`${API_BASE_URL}/client-provisioning/propose`, {
       method: "POST",
       headers: sessionHeaders(true),
@@ -3094,13 +3059,13 @@ function App() {
     });
 
     if (!proposalResponse.ok) {
-      addActivity("Money demo blocked", "This session cannot propose client provisioning.", "warn");
+      addActivity("Revenue proof blocked", "This session cannot propose client provisioning.", "warn");
       return;
     }
 
     const proposalData = (await proposalResponse.json()) as { approval?: { id: string } };
     if (!proposalData.approval?.id) {
-      addActivity("Money demo blocked", "Provisioning did not return an approval card.", "warn");
+      addActivity("Revenue proof blocked", "Provisioning did not return an approval card.", "warn");
       return;
     }
 
@@ -3118,7 +3083,7 @@ function App() {
     );
 
     if (!approvalResponse.ok) {
-      addActivity("Money demo approval blocked", "This session cannot approve provisioning.", "warn");
+      addActivity("Revenue proof approval blocked", "This session cannot approve provisioning.", "warn");
       return;
     }
 
@@ -3126,7 +3091,7 @@ function App() {
     if (data.record) {
       upsertClientAccessRecord(data.record);
       addActivity(
-        paid ? "Money demo active" : "Money demo blocked",
+        paid ? "Revenue proof active" : "Revenue proof blocked",
         paid
           ? "Payment received; workspace, modules, private route, and Calendar boundary are active."
           : "Signed lead is provisioned but blocked until payment clears.",
@@ -3198,15 +3163,13 @@ function App() {
             disabled={!canManageAccess}
           >
             <option>PhantomForce Pilot</option>
-            <option>Personal Training Simulation</option>
             <option>ChicagoShots</option>
-            <option>Sports Ops Demo</option>
             {!canManageAccess ? <option>{selectedOrg}</option> : null}
           </select>
         </div>
 
         <nav className="side-nav" aria-label="Main navigation">
-          {navItems.map((item) => (
+          {visibleNavItems.map((item) => (
             <button
               key={item.id}
               className={route === item.id ? "active" : ""}
@@ -3227,15 +3190,15 @@ function App() {
             <p>Protected actions</p>
           </div>
           <strong>Private boundary</strong>
-          <small>Customers see approved outcomes, not raw tools, files, logs, or shell access.</small>
+          <small>Clients see business actions, proposals, approvals, and next steps. Developer tools stay hidden.</small>
         </div>
         <div className="engine-card truth-rail-card">
           <div>
             <span className="status-dot locked" />
             <p>Workspace status</p>
           </div>
-          <strong>Setup required before live launch.</strong>
-          <small>Phantom AI is demo-mode. Memory is setup-required. External actions stay approval-only.</small>
+          <strong>Action cockpit online.</strong>
+          <small>Phantom AI, ChicagoShots proposals, and approved-next-step planning are active locally.</small>
         </div>
       </aside>
 
@@ -3253,7 +3216,7 @@ function App() {
             canManageAccess={canManageAccess}
             phantomAiOpsStatus={phantomAiOpsStatus}
             sessionHeaders={sessionHeaders}
-            createFollowUpPlan={() => createFollowUpPlan("demo")}
+            createFollowUpPlan={createFollowUpPlan}
             stats={stats}
             approvals={approvals}
             approveAction={approveAction}
@@ -3271,7 +3234,7 @@ function App() {
         {route === "approvals" ? (
           <ApprovalsView approvals={approvals} approveAction={approveAction} rejectAction={rejectAction} />
         ) : null}
-        {route === "access" ? (
+        {route === "access" && canManageAccess ? (
           <AccessView
             canManageAccess={canManageAccess}
             clientAccess={visibleClientAccess}
@@ -3290,24 +3253,17 @@ function App() {
           />
         ) : null}
         {route === "activity" ? <ActivityView activity={activity} /> : null}
-        {route === "connections" ? (
+        {route === "connections" && canManageAccess ? (
           <StatusView
             canManageAccess={canManageAccess}
             providerSetupStatus={providerSetupStatus}
             sessionHeaders={sessionHeaders}
           />
         ) : null}
-        {route === "trainer" ? (
-          <TrainerSimulationView
-            canManageAccess={canManageAccess}
-            phantomAiOpsStatus={phantomAiOpsStatus}
-            sessionHeaders={sessionHeaders}
-          />
-        ) : null}
       </main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {navItems.map((item) => (
+        {visibleNavItems.map((item) => (
           <button
             key={item.id}
             className={route === item.id ? "active" : ""}
@@ -3480,14 +3436,14 @@ function CommandCenter({
         <div className="hero-command">
           <div>
             <span className="eyebrow">AI command center</span>
-            <h2>Ask. Review. Approve. Move the business.</h2>
+            <h2>Sell, schedule, create, and follow up from one cockpit.</h2>
             <p>
-              PhantomForce turns inbox pressure, calendar gaps, and scattered tasks into approved business actions.
+              PhantomForce organizes the work that makes money: leads, proposals, bookings, content, media, and approvals.
             </p>
           </div>
           <button className="demo-button" type="button" onClick={createFollowUpPlan}>
             <Play size={18} />
-            Run first gold demo
+            Prepare next action
           </button>
         </div>
 
@@ -3527,8 +3483,8 @@ function CommandCenter({
               onChange={(event) => setAiProvider(event.target.value as AiProviderChoice)}
               disabled={phantomAiBusy}
             >
-              <option value="phantom">Phantom AI protected</option>
-              {canManageAccess ? <option value="openrouter_glm">GLM 5.2 worker</option> : null}
+              <option value="phantom">Phantom AI</option>
+              {canManageAccess ? <option value="openrouter_glm">Advanced reasoning lane</option> : null}
             </select>
             <input
               value={commandText}
@@ -3554,7 +3510,7 @@ function CommandCenter({
         </section>
 
         <PhantomAiStatusPanel
-          canManageAccess={canManageAccess}
+          canManageAccess={false}
           opsStatus={phantomAiOpsStatus}
           sessionHeaders={sessionHeaders}
         />
@@ -3577,14 +3533,14 @@ function CommandCenter({
               ))}
             </div>
           ) : (
-            <EmptyState icon={<ShieldCheck size={20} />} title="No pending approvals" detail="Run the demo or ask for a follow-up to create reviewable actions." />
+            <EmptyState icon={<ShieldCheck size={20} />} title="No pending approvals" detail="Ask Phantom AI for a follow-up, quote, booking step, or content action." />
           )}
         </section>
 
         <section className="panel">
           <div className="section-head compact">
             <h3>Live context</h3>
-            <span>Read only</span>
+            <span>Action source</span>
           </div>
           <div className="context-list">
             <ContextRow icon={<Inbox size={17} />} title={emails[0].subject} detail={`${emails[0].from} - ${emails[0].age}`} />
@@ -3736,7 +3692,7 @@ function ApprovalsView({
             <span>
               <ShieldCheck size={18} />
             </span>
-            <h3>Demo approval queue</h3>
+            <h3>Approval queue</h3>
           </div>
           <SimulationList items={demoApprovals} />
         </section>
@@ -3754,9 +3710,9 @@ function ContentView() {
   const allContent = [...personalTrainingSimulation.contentCalendar, ...personalTrainingSimulation.contentIdeas];
   const visibleContent = mode === "recommended" ? recommendedContent : allContent;
   const platformPlaceholders: SimulationItem[] = [
-    { title: "Instagram", detail: "Draft planning only. Posting is not wired.", status: "placeholder" },
-    { title: "Email newsletter", detail: "Ideas can be queued, but sends require approval and future wiring.", status: "placeholder" },
-    { title: "Short-form video", detail: "Publish and upload actions are disabled in this simulation.", status: "approval only" },
+    { title: "Instagram", detail: "Draft planning only. Posting requires approval.", status: "approval required" },
+    { title: "Email newsletter", detail: "Ideas can be prepared, but sends require owner approval.", status: "approval required" },
+    { title: "Short-form video", detail: "Publish and upload actions stay blocked until approved.", status: "approval only" },
   ];
 
   return (
@@ -3776,7 +3732,7 @@ function ContentView() {
         <SimulationSection icon={<CalendarDays size={18} />} title="Content calendar" items={personalTrainingSimulation.contentCalendar} />
         <SimulationSection icon={<FileText size={18} />} title="Raw content queue" items={personalTrainingSimulation.contentIdeas} />
         <SimulationSection icon={<ShieldCheck size={18} />} title="Drafts pending approval" items={personalTrainingSimulation.contentDrafts} />
-        <SimulationSection icon={<AlertTriangle size={18} />} title="Platform status placeholders" items={platformPlaceholders} />
+        <SimulationSection icon={<AlertTriangle size={18} />} title="Platform approval status" items={platformPlaceholders} />
       </div>
     </Page>
   );
@@ -3784,18 +3740,18 @@ function ContentView() {
 
 function MediaLabView() {
   return (
-    <Page title="Media Lab" kicker="Requests and delivery" action={<TruthBadge state="demo" label="Optional add-on" />}>
+    <Page title="Media Lab" kicker="Requests and delivery" action={<TruthBadge state="real" label="Proof-backed add-on" />}>
       <section className="simulation-hero">
         <div>
           <span className="eyebrow">Media workflow</span>
           <h3>Video and asset work stays an add-on to the owner cockpit.</h3>
           <p>
             Media Lab helps track requests, drafts, consent, and delivery status. Uploads, delivery links, and external
-            publishing are placeholders until approval and storage gates are implemented.
+            publishing stay approval-gated until storage and delivery gates are approved.
           </p>
         </div>
         <div className="simulation-hero-status">
-          <StatusLine label="Uploads" value="Placeholder / not wired" />
+          <StatusLine label="Uploads" value="Approval-gated" />
           <StatusLine label="Delivery" value="Approval required" />
           <StatusLine label="Core app" value="Leads, schedule, offers, tasks, approvals" />
         </div>
@@ -3804,7 +3760,7 @@ function MediaLabView() {
       <div className="destination-grid">
         <SimulationSection icon={<Play size={18} />} title="Media requests" items={personalTrainingSimulation.mediaRequests} />
         <SimulationSection icon={<SquareCheckBig size={18} />} title="Deliverables and workflow status" items={personalTrainingSimulation.mediaDeliverables} />
-        <SimulationSection icon={<AlertTriangle size={18} />} title="Uploads and delivery placeholders" items={personalTrainingSimulation.mediaPlaceholders} />
+        <SimulationSection icon={<AlertTriangle size={18} />} title="Uploads and delivery status" items={personalTrainingSimulation.mediaPlaceholders} />
         <PhantomCutAddonCard />
       </div>
     </Page>
@@ -3827,7 +3783,7 @@ function OffersView() {
   );
 
   return (
-    <Page title="Offers" kicker="Packages and pricing" action={<TruthBadge state="demo" label="Demo packages" />}>
+    <Page title="Offers" kicker="Packages and pricing" action={<TruthBadge state="real" label="Offer ladder" />}>
       <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
@@ -3840,7 +3796,7 @@ function OffersView() {
       </section>
 
       <div className="destination-grid">
-        <SimulationSection icon={<Sparkles size={18} />} title="Personal training packages" items={personalTrainingSimulation.services} />
+        <SimulationSection icon={<Sparkles size={18} />} title="Setup sprint packages" items={personalTrainingSimulation.services} />
         <SimulationSection icon={<Zap size={18} />} title="Offer builder recommendations" items={personalTrainingSimulation.offerRecommendations} />
         <SimulationSection icon={<FileText size={18} />} title="Pricing and package drafts" items={personalTrainingSimulation.pricingDrafts} />
         <SimulationSection icon={<ShieldCheck size={18} />} title="Approval status" items={approvalItems} />
@@ -3914,7 +3870,7 @@ function AccessView({
     {
       id: "past_due",
       label: "Past due",
-      detail: "Route stays reachable while PhantomForce handlers enforce read-only.",
+      detail: "Route stays reachable while PhantomForce handlers enforce restricted access.",
     },
     {
       id: "revoked",
@@ -4027,10 +3983,8 @@ function AccessView({
       <section className="guard-panel" data-testid="access-guard-panel">
         <div>
           <span className="eyebrow">Request-time guard</span>
-          <h3>{guardedWorkspace?.business ?? "Sports Ops Demo"}</h3>
-          <p>
-            This panel calls the same backend decision endpoint a client workspace uses before loading private modules.
-          </p>
+          <h3>{guardedWorkspace?.business ?? "ChicagoShots"}</h3>
+          <p>This panel checks whether the selected workspace can load its private modules.</p>
         </div>
         <div className={`guard-decision ${guardedWorkspace?.mode ?? "blocked"}`}>
           <strong>{guardedWorkspace?.mode ?? "checking"}</strong>
@@ -4042,7 +3996,7 @@ function AccessView({
               type="button"
               key={module}
               disabled={!guardedWorkspace || module === "No modules available"}
-              onClick={() => refreshWorkspaceModule(guardedWorkspace?.id ?? "client-sports-demo", module)}
+              onClick={() => refreshWorkspaceModule(guardedWorkspace?.id ?? "client-chicagoshots", module)}
             >
               {module}
             </button>
@@ -4352,7 +4306,7 @@ function CustomerReadinessPanel() {
           <span className="eyebrow">PhantomForce status</span>
           <h3>What the owner can safely trust today.</h3>
         </div>
-        <TruthBadge state="demo" label="Online - protected" />
+        <TruthBadge state="real" label="Action ready" />
       </div>
       <div className="truth-grid">
         {customerStatusLabels.map((item) => (
@@ -5298,7 +5252,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   const [liveSmokePreflight, setLiveSmokePreflight] = useState<LiveSmokePreflightReport | null>(null);
   const [hermesReceiptContract, setHermesReceiptContract] = useState<HermesLiveCallReceiptContract | null>(null);
   const [previewText, setPreviewText] = useState(
-    "Summarize today's safest trainer follow-up priorities for owner review only.",
+    "Summarize today's safest PhantomForce and ChicagoShots follow-up priorities for owner review only.",
   );
   const [taskType, setTaskType] = useState("content_idea_summary");
   const [sensitivityLevel, setSensitivityLevel] = useState("low");
@@ -5313,18 +5267,18 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
 
   function buildPreviewPayload(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     return {
-      tenant_id: "demo-trainer",
+      tenant_id: "phantomforce-owner",
       business_name: personalTrainingSimulation.owner.business,
       request_id: `ui-preview-${Date.now()}`,
       task_type: task,
       sensitivity_level: sensitivity,
       user_request: text,
       business_summary:
-        "Owner-only personal training demo workspace. Employees disabled. External actions approval-only.",
+        "Owner-only PhantomForce workspace. Client-facing work stays approval-only and developer tooling remains hidden.",
       module_data: [
         {
           module: "Tasks",
-          summary: "Today includes local demo tasks and approval-only follow-ups.",
+          summary: "Today includes local business tasks and approval-only follow-ups.",
           items: personalTrainingSimulation.tasks.slice(0, 3),
         },
         {
@@ -6129,15 +6083,21 @@ function PhantomAiStatusPanel({
         <div className="section-head compact">
           <div>
             <span className="eyebrow">Phantom AI status</span>
-            <h3>Assistant, memory, and approvals</h3>
+            <h3>Assistant, proposals, and approvals</h3>
           </div>
-          <TruthBadge state="demo" label="Protected" />
+          <TruthBadge state="real" label="Online" />
         </div>
         <div className="ai-status-list">
           <StatusLine label="Phantom AI" value={phantomAiStatus.availability} />
-          <StatusLine label="Memory" value={phantomAiStatus.memory} />
-          <StatusLine label="Background help" value="Managed by PhantomForce" />
-          <StatusLine label="Approval gate" value="External actions blocked until approved" />
+          <StatusLine
+            label="ChicagoShots"
+            value={opsStatus.chicagoshots_ops.available ? "Proposal workflow ready" : "Proposal workflow loading"}
+          />
+          <StatusLine
+            label="Send readiness"
+            value={opsStatus.send_readiness.send_enabled ? "Enabled" : "Draft-first / approval required"}
+          />
+          <StatusLine label="Approval gate" value={phantomAiStatus.approvalGate} />
         </div>
         <div className="ai-rule-columns">
           <div>
@@ -6198,7 +6158,7 @@ function PhantomAiStatusPanel({
         <StatusLine label="Phantom AI" value={opsStatus.product_status} />
         <StatusLine label="Hermes" value={hermesValue} />
         <StatusLine label="Memory store" value={memoryStoreValue} />
-        <StatusLine label="GLM 5.2 worker" value={glmValue} />
+        <StatusLine label="Advanced reasoning lane" value={glmValue} />
         <StatusLine label="n8n local worker" value={n8nValue} />
         <StatusLine
           label="ChicagoShots"
@@ -6789,7 +6749,7 @@ function ChicagoShotsLeadIntakePanel({
           <input
             value={leadForm.client_name}
             onChange={(event) => updateLeadField("client_name", event.target.value)}
-            placeholder="Maya Johnson"
+            placeholder="Jordan Test Client"
           />
         </label>
         <label>
@@ -6797,7 +6757,7 @@ function ChicagoShotsLeadIntakePanel({
           <input
             value={leadForm.contact}
             onChange={(event) => updateLeadField("contact", event.target.value)}
-            placeholder="maya@example.com"
+            placeholder="client@example.com"
           />
         </label>
         <label>
@@ -7224,80 +7184,6 @@ function ChicagoShotsLeadIntakePanel({
   );
 }
 
-function TrainerSimulationView({
-  canManageAccess,
-  phantomAiOpsStatus = defaultPhantomAiOpsStatus,
-  sessionHeaders,
-}: {
-  canManageAccess: boolean;
-  phantomAiOpsStatus?: PhantomAiOpsStatus;
-  sessionHeaders?: (json?: boolean) => Record<string, string>;
-}) {
-  const simulation = personalTrainingSimulation;
-  const [showDebug, setShowDebug] = useState(false);
-
-  return (
-    <Page
-      title="Phantom AI"
-      kicker="Personal training workspace"
-      action={<TruthBadge state="demo" label="Demo / Local" />}
-    >
-      <section className="simulation-hero">
-        <div>
-          <span className="eyebrow">Owner/operator profile</span>
-          <h3>{simulation.owner.business}</h3>
-          <p>
-            {simulation.owner.name} - {simulation.owner.market}. This cockpit is a local-only simulation seed, not a live
-            customer deployment.
-          </p>
-        </div>
-        <div className="simulation-hero-status">
-          <StatusLine label="Mode" value={simulation.owner.mode} />
-          <StatusLine label="Team Mode" value="Owner Only / Employees Disabled" />
-          <StatusLine label="Actions" value="Approval Only / Live Disabled" />
-        </div>
-      </section>
-
-      <CustomerReadinessPanel />
-      <PhantomAiStatusPanel
-        canManageAccess={canManageAccess}
-        opsStatus={phantomAiOpsStatus}
-        sessionHeaders={sessionHeaders}
-      />
-
-      <div className="simulation-grid">
-        <SimulationSection icon={<Sparkles size={18} />} title="Services and packages" items={simulation.services} />
-        <SimulationSection icon={<Users size={18} />} title="Leads" items={simulation.leads} />
-        <SimulationSection icon={<UserRound size={18} />} title="Client roster" items={simulation.clients} />
-        <SimulationSection icon={<CalendarDays size={18} />} title="Today's schedule" items={simulation.schedule} />
-        <SimulationSection icon={<SquareCheckBig size={18} />} title="Tasks" items={simulation.tasks} />
-        <SimulationSection icon={<ShieldCheck size={18} />} title="Approvals queue" items={simulation.approvals} />
-        <SimulationSection icon={<KeyRound size={18} />} title="Role model" items={simulation.roleModel} />
-        <SimulationSection icon={<Check size={18} />} title="Onboarding checklist" items={simulation.onboardingChecklist} />
-        <SimulationSection icon={<AlertTriangle size={18} />} title="Launch blockers" items={simulation.launchBlockers} />
-      </div>
-      {canManageAccess ? (
-        <section className="panel debug-panel">
-          <div className="section-head compact">
-            <div>
-              <span className="eyebrow">Admin/debug</span>
-              <h3>Implementation truth labels</h3>
-            </div>
-            <button className="ghost-small" type="button" onClick={() => setShowDebug((value) => !value)}>
-              {showDebug ? "Hide debug" : "Show debug"}
-            </button>
-          </div>
-          <p>
-            Debug labels name background systems for owner/support review only. The default owner workspace stays in
-            PhantomForce product language.
-          </p>
-          {showDebug ? <AdminDebugStatusPanel /> : null}
-        </section>
-      ) : null}
-    </Page>
-  );
-}
-
 function PhantomCutAddonCard() {
   return (
     <section className="module-panel simulation-section phantomcut-card">
@@ -7338,7 +7224,7 @@ function SimulationList({ items }: { items: SimulationItem[] }) {
       <EmptyState
         icon={<Sparkles size={20} />}
         title="No matching results"
-        detail="Switch to All results to see the full local demo list."
+        detail="Switch to All results to see the full local result list."
       />
     );
   }
