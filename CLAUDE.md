@@ -546,8 +546,8 @@ and show in the web app from the API.
 
 ## 2026-06-29 Gated Live Provider Posture Update
 
-PhantomForce is no longer "no-live-provider ever." The correct posture is now
-**no live provider by default.**
+PhantomForce is no-live-provider by default, not no-live-provider forever. The
+correct posture is now **no live provider by default.**
 
 - A gated GLM 5.2 worker lane may exist in source-truth, but only behind ALL of
   these explicit gates simultaneously:
