@@ -370,6 +370,71 @@ type PhantomAiOpsStatus = {
   };
 };
 
+type ChicagoShotsLeadForm = {
+  client_name: string;
+  contact: string;
+  event_type: string;
+  date_time: string;
+  location: string;
+  requested_service: string;
+  budget_rate: string;
+  source_platform: string;
+  urgency: string;
+  notes: string;
+};
+
+type ChicagoShotsLeadIntakePacket = {
+  normalized_lead: {
+    tenant_id: string;
+    client_name: string;
+    contact: string;
+    event_type: string;
+    event_category: string;
+    date_time: string;
+    location: string;
+    requested_service: string;
+    budget_rate: string;
+    source_platform: string;
+    urgency: string;
+    notes: string;
+  };
+  recommended_service_package: {
+    id: string;
+    name: string;
+    rationale: string;
+    suggested_addons: string[];
+  };
+  task_draft: {
+    title: string;
+    priority: string;
+    suggested_due: string;
+    steps: string[];
+  };
+  deliverables_checklist: string[];
+  follow_up_draft: {
+    channel_hint: string;
+    subject: string;
+    body: string;
+    would_send: false;
+  };
+  approval_preview: {
+    action_type: string;
+    status: string;
+    risk_level: string;
+    summary: string;
+    requires_approval_before_send: boolean;
+    execution_disabled: boolean;
+    would_send: false;
+  };
+  memory_context_used: {
+    source: string;
+    recalled_count: number;
+    has_memory: boolean;
+    compact_memory: string;
+  };
+  safety_flags: Record<string, boolean>;
+};
+
 type PhantomAiChatResponse = {
   ok: boolean;
   provider_choice: AiProviderChoice;
@@ -1596,6 +1661,19 @@ const defaultPhantomAiOpsStatus: PhantomAiOpsStatus = {
   },
 };
 
+const defaultChicagoShotsLeadForm: ChicagoShotsLeadForm = {
+  client_name: "",
+  contact: "",
+  event_type: "",
+  date_time: "",
+  location: "",
+  requested_service: "",
+  budget_rate: "",
+  source_platform: "",
+  urgency: "",
+  notes: "",
+};
+
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
 }
@@ -2518,6 +2596,7 @@ function App() {
             phantomAiBusy={phantomAiBusy}
             canManageAccess={canManageAccess}
             phantomAiOpsStatus={phantomAiOpsStatus}
+            sessionHeaders={sessionHeaders}
             createFollowUpPlan={() => createFollowUpPlan("demo")}
             stats={stats}
             approvals={approvals}
@@ -2563,7 +2642,11 @@ function App() {
           />
         ) : null}
         {route === "trainer" ? (
-          <TrainerSimulationView canManageAccess={canManageAccess} phantomAiOpsStatus={phantomAiOpsStatus} />
+          <TrainerSimulationView
+            canManageAccess={canManageAccess}
+            phantomAiOpsStatus={phantomAiOpsStatus}
+            sessionHeaders={sessionHeaders}
+          />
         ) : null}
       </main>
 
@@ -2707,6 +2790,7 @@ function CommandCenter({
   phantomAiBusy,
   canManageAccess,
   phantomAiOpsStatus,
+  sessionHeaders,
   createFollowUpPlan,
   stats,
   approvals,
@@ -2724,6 +2808,7 @@ function CommandCenter({
   phantomAiBusy: boolean;
   canManageAccess: boolean;
   phantomAiOpsStatus: PhantomAiOpsStatus;
+  sessionHeaders: (json?: boolean) => Record<string, string>;
   createFollowUpPlan: () => void;
   stats: { urgent: number; pending: number; today: number; events: number };
   approvals: Approval[];
@@ -2812,7 +2897,11 @@ function CommandCenter({
           </div>
         </section>
 
-        <PhantomAiStatusPanel canManageAccess={canManageAccess} opsStatus={phantomAiOpsStatus} />
+        <PhantomAiStatusPanel
+          canManageAccess={canManageAccess}
+          opsStatus={phantomAiOpsStatus}
+          sessionHeaders={sessionHeaders}
+        />
 
         <section className="panel">
           <div className="section-head compact">
@@ -5372,9 +5461,11 @@ function AdminDebugStatusPanel() {
 function PhantomAiStatusPanel({
   canManageAccess = false,
   opsStatus = defaultPhantomAiOpsStatus,
+  sessionHeaders,
 }: {
   canManageAccess?: boolean;
   opsStatus?: PhantomAiOpsStatus;
+  sessionHeaders?: (json?: boolean) => Record<string, string>;
 }) {
   if (!canManageAccess) {
     return (
@@ -5483,6 +5574,7 @@ function PhantomAiStatusPanel({
           </ul>
         </div>
       </div>
+      <ChicagoShotsLeadIntakePanel sessionHeaders={sessionHeaders} />
       <p className="ops-status-note">
         Read-only localhost/admin status. No provider call, n8n workflow execution, approval execution, queue write, or
         production ledger write is performed by this dashboard.
@@ -5491,12 +5583,257 @@ function PhantomAiStatusPanel({
   );
 }
 
+function ChicagoShotsLeadIntakePanel({
+  sessionHeaders,
+}: {
+  sessionHeaders?: (json?: boolean) => Record<string, string>;
+}) {
+  const [leadForm, setLeadForm] = useState<ChicagoShotsLeadForm>(defaultChicagoShotsLeadForm);
+  const [leadPreview, setLeadPreview] = useState<ChicagoShotsLeadIntakePacket | null>(null);
+  const [leadBusy, setLeadBusy] = useState(false);
+  const [leadError, setLeadError] = useState("");
+
+  function updateLeadField(field: keyof ChicagoShotsLeadForm, value: string) {
+    setLeadForm((current) => ({ ...current, [field]: value }));
+  }
+
+  async function generateIntakePreview(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setLeadError("");
+
+    if (!sessionHeaders) {
+      setLeadError("Admin session is not available. Sign in as Jordan / PhantomForce Admin.");
+      return;
+    }
+
+    setLeadBusy(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/ops/chicagoshots/lead-intake/preview`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          tenant_id: "chicagoshots",
+          ...leadForm,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        lead?: ChicagoShotsLeadIntakePacket;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !data?.lead) {
+        setLeadPreview(null);
+        setLeadError(data?.error ?? "ChicagoShots intake preview is unavailable.");
+        return;
+      }
+
+      setLeadPreview(data.lead);
+    } catch {
+      setLeadPreview(null);
+      setLeadError("ChicagoShots intake preview could not reach the local backend.");
+    } finally {
+      setLeadBusy(false);
+    }
+  }
+
+  const safetyRows = leadPreview
+    ? [
+        ["Provider call", leadPreview.safety_flags.provider_called],
+        ["Network call", leadPreview.safety_flags.network_call_performed],
+        ["External send", leadPreview.safety_flags.external_send],
+        ["Would send", leadPreview.safety_flags.would_send],
+        ["Approval executed", leadPreview.safety_flags.approval_executed],
+        ["Queue written", leadPreview.safety_flags.queue_written],
+        ["Production ledger write", leadPreview.safety_flags.production_ledger_write],
+        ["Raw secret exposed", leadPreview.safety_flags.raw_secret_exposed],
+      ]
+    : [];
+
+  return (
+    <section className="lead-intake-panel">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">ChicagoShots operator</span>
+          <h3>Lead intake preview</h3>
+        </div>
+        <TruthBadge state="real" label="Admin only" />
+      </div>
+      <form className="lead-intake-form" onSubmit={generateIntakePreview}>
+        <label>
+          Client name
+          <input
+            value={leadForm.client_name}
+            onChange={(event) => updateLeadField("client_name", event.target.value)}
+            placeholder="Maya Johnson"
+          />
+        </label>
+        <label>
+          Contact
+          <input
+            value={leadForm.contact}
+            onChange={(event) => updateLeadField("contact", event.target.value)}
+            placeholder="maya@example.com"
+          />
+        </label>
+        <label>
+          Event type
+          <input
+            value={leadForm.event_type}
+            onChange={(event) => updateLeadField("event_type", event.target.value)}
+            placeholder="Corporate event"
+          />
+        </label>
+        <label>
+          Date/time
+          <input
+            value={leadForm.date_time}
+            onChange={(event) => updateLeadField("date_time", event.target.value)}
+            placeholder="July 18, 2026 at 6 PM"
+          />
+        </label>
+        <label>
+          Location
+          <input
+            value={leadForm.location}
+            onChange={(event) => updateLeadField("location", event.target.value)}
+            placeholder="River North, Chicago"
+          />
+        </label>
+        <label>
+          Requested service
+          <input
+            value={leadForm.requested_service}
+            onChange={(event) => updateLeadField("requested_service", event.target.value)}
+            placeholder="Event coverage and same-day teaser"
+          />
+        </label>
+        <label>
+          Budget/rate
+          <input
+            value={leadForm.budget_rate}
+            onChange={(event) => updateLeadField("budget_rate", event.target.value)}
+            placeholder="$1,500 budget"
+          />
+        </label>
+        <label>
+          Source/platform
+          <input
+            value={leadForm.source_platform}
+            onChange={(event) => updateLeadField("source_platform", event.target.value)}
+            placeholder="Instagram DM"
+          />
+        </label>
+        <label>
+          Urgency
+          <select value={leadForm.urgency} onChange={(event) => updateLeadField("urgency", event.target.value)}>
+            <option value="">Auto-classify</option>
+            <option value="high">High</option>
+            <option value="medium">Medium</option>
+            <option value="low">Low</option>
+          </select>
+        </label>
+        <label className="lead-notes-field">
+          Notes
+          <textarea
+            value={leadForm.notes}
+            onChange={(event) => updateLeadField("notes", event.target.value)}
+            placeholder="Paste the raw lead notes here. Secrets and sensitive values are redacted server-side."
+          />
+        </label>
+        <div className="lead-intake-actions">
+          <button className="primary-action" type="submit" disabled={leadBusy}>
+            <Sparkles size={16} />
+            {leadBusy ? "Generating..." : "Generate Intake Preview"}
+          </button>
+          <button
+            className="ghost-small"
+            type="button"
+            onClick={() => {
+              setLeadForm(defaultChicagoShotsLeadForm);
+              setLeadPreview(null);
+              setLeadError("");
+            }}
+            disabled={leadBusy}
+          >
+            Clear
+          </button>
+        </div>
+      </form>
+
+      {leadError ? <p className="operator-error">{leadError}</p> : null}
+
+      {leadPreview ? (
+        <div className="lead-preview-output">
+          <article className="operator-result-card">
+            <span className="eyebrow">Normalized lead</span>
+            <StatusLine label="Client" value={leadPreview.normalized_lead.client_name} />
+            <StatusLine label="Contact" value={leadPreview.normalized_lead.contact} />
+            <StatusLine label="Category" value={leadPreview.normalized_lead.event_category} />
+            <StatusLine label="Urgency" value={leadPreview.normalized_lead.urgency} />
+            <p>{leadPreview.normalized_lead.notes}</p>
+          </article>
+          <article className="operator-result-card">
+            <span className="eyebrow">Recommended package</span>
+            <h4>{leadPreview.recommended_service_package.name}</h4>
+            <p>{leadPreview.recommended_service_package.rationale}</p>
+            <small>Add-ons: {leadPreview.recommended_service_package.suggested_addons.join(", ") || "None"}</small>
+          </article>
+          <article className="operator-result-card">
+            <span className="eyebrow">Task draft</span>
+            <h4>{leadPreview.task_draft.title}</h4>
+            <StatusLine label="Priority" value={leadPreview.task_draft.priority} />
+            <StatusLine label="Suggested due" value={leadPreview.task_draft.suggested_due} />
+            <ul>
+              {leadPreview.task_draft.steps.map((step) => (
+                <li key={step}>{step}</li>
+              ))}
+            </ul>
+          </article>
+          <article className="operator-result-card">
+            <span className="eyebrow">Deliverables</span>
+            <ul>
+              {leadPreview.deliverables_checklist.map((item) => (
+                <li key={item}>{item}</li>
+              ))}
+            </ul>
+          </article>
+          <article className="operator-result-card">
+            <span className="eyebrow">Follow-up draft</span>
+            <StatusLine label="Channel" value={leadPreview.follow_up_draft.channel_hint} />
+            <h4>{leadPreview.follow_up_draft.subject}</h4>
+            <p className="draft-copy">{leadPreview.follow_up_draft.body}</p>
+          </article>
+          <article className="operator-result-card">
+            <span className="eyebrow">Approval preview</span>
+            <StatusLine label="Status" value={leadPreview.approval_preview.status} />
+            <StatusLine label="Risk" value={leadPreview.approval_preview.risk_level} />
+            <StatusLine
+              label="Execution disabled"
+              value={leadPreview.approval_preview.execution_disabled ? "true" : "false"}
+            />
+            <p>{leadPreview.approval_preview.summary}</p>
+          </article>
+          <article className="operator-result-card safety-output-card">
+            <span className="eyebrow">Safety flags</span>
+            {safetyRows.map(([label, value]) => (
+              <StatusLine key={String(label)} label={String(label)} value={value ? "true" : "false"} />
+            ))}
+          </article>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
 function TrainerSimulationView({
   canManageAccess,
   phantomAiOpsStatus = defaultPhantomAiOpsStatus,
+  sessionHeaders,
 }: {
   canManageAccess: boolean;
   phantomAiOpsStatus?: PhantomAiOpsStatus;
+  sessionHeaders?: (json?: boolean) => Record<string, string>;
 }) {
   const simulation = personalTrainingSimulation;
   const [showDebug, setShowDebug] = useState(false);
@@ -5524,7 +5861,11 @@ function TrainerSimulationView({
       </section>
 
       <CustomerReadinessPanel />
-      <PhantomAiStatusPanel canManageAccess={canManageAccess} opsStatus={phantomAiOpsStatus} />
+      <PhantomAiStatusPanel
+        canManageAccess={canManageAccess}
+        opsStatus={phantomAiOpsStatus}
+        sessionHeaders={sessionHeaders}
+      />
 
       <div className="simulation-grid">
         <SimulationSection icon={<Sparkles size={18} />} title="Services and packages" items={simulation.services} />
