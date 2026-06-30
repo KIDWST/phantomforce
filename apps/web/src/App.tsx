@@ -1308,7 +1308,7 @@ const initialEvents: CalendarEvent[] = [
   },
   {
     id: "event-2",
-    title: "Client approval call",
+    title: "Client decision call",
     time: "Wed 2:00 PM",
     owner: "ChicagoShots lead",
     status: "confirmed",
@@ -1350,14 +1350,14 @@ const initialActivity: ActivityItem[] = [
   {
     id: "act-1",
     title: "Operator brief generated",
-    detail: "Pipeline, content, scheduling, and approval-ready client actions are organized.",
+    detail: "Pipeline, content, scheduling, and client next steps are organized.",
     time: "9:02 AM",
     level: "ok",
   },
   {
     id: "act-2",
     title: "Client workflow checked",
-    detail: "Drafts, follow-ups, and scheduling actions are prepared for owner approval.",
+    detail: "Drafts, follow-ups, and scheduling actions are ready to review or send.",
     time: "9:01 AM",
     level: "info",
   },
@@ -1375,7 +1375,7 @@ const initialMessages: Message[] = [
     id: "msg-1",
     role: "assistant",
     content:
-      "PhantomForce is online - protected. I found one urgent client follow-up, two scheduling opportunities, and one approval-ready action. Ask me to handle the day, schedule a call, draft replies, or clean up the inbox.",
+      "PhantomForce is online. I found one urgent follow-up, two booking opportunities, and a quote path. Tell me what to do: reply, book, quote, create content, or clean up the day.",
   },
 ];
 
@@ -1383,16 +1383,16 @@ const connections: Connection[] = [
   {
     id: "gmail",
     name: "Google Gmail",
-    description: "Read inbox, identify follow-ups, draft replies, and send only after approval.",
+    description: "Read inbox, identify follow-ups, draft replies, and prepare sends for final confirmation.",
     status: "connected",
-    scopes: ["Read mail", "Draft mail", "Send with approval"],
+    scopes: ["Read mail", "Draft mail", "Confirm before send"],
   },
   {
     id: "calendar",
     name: "Google Calendar",
-    description: "Check availability, propose meeting times, and create events after approval.",
+    description: "Check availability, propose meeting times, and stage booking actions.",
     status: "connected",
-    scopes: ["Read calendar", "Create with approval"],
+    scopes: ["Read calendar", "Stage booking"],
   },
   {
     id: "falcon",
@@ -1533,7 +1533,7 @@ const truthStatusLabels: TruthLabel[] = [
     value: "Mock / OpenRouter GLM / Claude API / Local / Router",
     state: "demo",
     detail:
-      "The dashboard assistant remains demo-first. Provider routing is status-only unless a server-side route is configured and approved.",
+      "The dashboard assistant remains demo-first. Provider routing is status-only unless a server-side route is explicitly configured.",
   },
   {
     label: "Hermes",
@@ -1558,10 +1558,10 @@ const truthStatusLabels: TruthLabel[] = [
   },
   {
     label: "Actions",
-    value: "Approval Only / Live Disabled",
+    value: "Review Queue / Live Sends Off",
     state: "real",
     detail:
-      "The UI creates reviewable approval items. Sends, uploads, deploys, production, billing, and destructive actions are disabled.",
+      "The UI prepares work for review. External sends, uploads, deploys, billing, and destructive actions stay off until explicitly connected.",
   },
   {
     label: "Client Mode",
@@ -1584,7 +1584,7 @@ const customerStatusLabels: TruthLabel[] = [
     value: "Online",
     state: "real",
     detail:
-      "Phantom AI drafts, prioritizes, and organizes owner-approved business actions from inside the dashboard.",
+      "Phantom AI drafts, prioritizes, and organizes business actions from inside the dashboard.",
   },
   {
     label: "ChicagoShots",
@@ -1594,16 +1594,16 @@ const customerStatusLabels: TruthLabel[] = [
   },
   {
     label: "Actions",
-    value: "Approval only",
+    value: "Review queue",
     state: "real",
     detail:
-      "Drafts and suggested actions stay in the approval queue until Jordan or the owner approves them.",
+      "Drafts and suggested actions stay visible until Jordan confirms, edits, or sends them.",
   },
   {
     label: "Sending",
     value: "Draft-first",
     state: "real",
-    detail: "The next live step is an approved-send adapter with allowlisted test recipients and audit receipts.",
+    detail: "The next live step is a confirmed-send adapter with allowlisted test recipients and audit receipts.",
   },
 ];
 
@@ -1611,10 +1611,10 @@ const phantomAiStatus = {
   availability: "Online",
   memory: "Workspace context active",
   fallback: "Provider and developer details stay behind Phantom AI",
-  approvalGate: "External sends require owner approval",
+  approvalGate: "Confirm before external send",
   allowedSuggestions: [
     "Prioritize leads, proposal packets, schedule gaps, and follow-ups",
-    "Draft approval-ready replies, quotes, and operational next steps",
+    "Draft replies, quotes, booking plans, and operational next steps",
     "Summarize what to do next without exposing developer tooling",
   ],
   approvalRequired: [
@@ -1638,7 +1638,7 @@ const personalTrainingSimulation = {
     },
     {
       title: "$1,500 Core Sprint",
-      detail: "Command center setup, lead workflow, proposal/quote package, content plan, and approval gates.",
+      detail: "Command center setup, lead workflow, proposal/quote package, content plan, and delivery handoff.",
       status: "default",
     },
     {
@@ -1654,38 +1654,38 @@ const personalTrainingSimulation = {
   ],
   clients: [
     { title: "ChicagoShots", detail: "Partner media workspace for videography, sports content, and deliverables.", status: "active" },
-    { title: "PhantomForce", detail: "Owner workspace for AI ops, offers, approvals, buildouts, and follow-up systems.", status: "active" },
-    { title: "New setup sprint lead", detail: "Proposal packet ready; needs manual send or call follow-up.", status: "approval" },
+    { title: "PhantomForce", detail: "Owner workspace for AI ops, offers, buildouts, and follow-up systems.", status: "active" },
+    { title: "New setup sprint lead", detail: "Proposal packet ready; send manually or book the call.", status: "ready" },
   ],
   schedule: [
     { title: "15-minute setup call", detail: "Map the mess, qualify package, and choose Starter/Core/Pro.", status: "hold" },
     { title: "ChicagoShots packet review", detail: "Confirm deliverables, price range, proof/demo, and next follow-up.", status: "confirmed" },
-    { title: "Ops sprint delivery block", detail: "Build dashboard/docs/follow-up system after client approval.", status: "proposed" },
+    { title: "Ops sprint delivery block", detail: "Build dashboard/docs/follow-up system after the client says yes.", status: "proposed" },
   ],
   tasks: [
     { title: "Review priority proposal packet", detail: "Confirm scope and mark sent manually after Jordan sends it.", status: "today" },
-    { title: "Prepare Core Sprint follow-up", detail: "Draft short reply and price anchor for owner approval.", status: "approval only" },
+    { title: "Prepare Core Sprint follow-up", detail: "Draft short reply and price anchor for review.", status: "ready" },
     { title: "Package proof/demo link", detail: "Attach THE FORCE / PhantomCut proof only where accurate.", status: "queued" },
   ],
   approvals: [
-    { title: "Send Core Sprint follow-up", detail: "External email stays pending until Jordan approves and sends manually.", status: "pending" },
+    { title: "Send Core Sprint follow-up", detail: "Email draft is ready; Jordan sends it manually.", status: "pending" },
     { title: "Publish showcase clip", detail: "Needs review before posting; no autonomous posting.", status: "blocked" },
-    { title: "Create payment request", detail: "Payment/invoice creation is not active until separately approved.", status: "blocked" },
+    { title: "Create payment request", detail: "Payment/invoice creation is not active until separately connected.", status: "blocked" },
   ],
   contentCalendar: [
     { title: "Monday", detail: "Why small businesses need an ops system before more random apps.", status: "draft" },
     { title: "Wednesday", detail: "ChicagoShots media-day package: sports clips, photos, and delivery structure.", status: "draft" },
-    { title: "Friday", detail: "Media Lab proof clip requires approval before any posting.", status: "approval" },
+    { title: "Friday", detail: "Media Lab proof clip needs a final check before posting.", status: "review" },
   ],
   contentIdeas: [
     { title: "Ops + Content Setup Sprint", detail: "Simple explainer for the $1,500 Core Sprint.", status: "recommended" },
     { title: "ChicagoShots media arm", detail: "How videography/content plugs into PhantomForce systems.", status: "recommended" },
-    { title: "Client proof story", detail: "Use only proof-backed assets; no fake results or testimonials.", status: "approval" },
+    { title: "Client proof story", detail: "Use only proof-backed assets; no fake results or testimonials.", status: "review" },
     { title: "Behind the build", detail: "Show dashboard/action workflow without exposing dev tools.", status: "queued" },
   ],
   contentDrafts: [
-    { title: "Core Sprint private-send message", detail: "Draft only until Jordan manually sends.", status: "pending approval" },
-    { title: "THE FORCE send package", detail: "Use privately; no public posting until approved.", status: "blocked" },
+    { title: "Core Sprint private-send message", detail: "Draft only until Jordan manually sends.", status: "ready" },
+    { title: "THE FORCE send package", detail: "Use privately; public posting is off.", status: "blocked" },
     { title: "Website/backend cleanup post", detail: "Draft only; platform posting is not wired.", status: "draft" },
   ],
   mediaRequests: [
@@ -1694,35 +1694,35 @@ const personalTrainingSimulation = {
     { title: "Client media proof", detail: "Consent and usage rights required before publish workflow.", status: "blocked" },
   ],
   mediaDeliverables: [
-    { title: "Highlight cutdown", detail: "Short-form clip workflow for review and approval.", status: "queued" },
-    { title: "Generated creative proof", detail: "Media Lab output proof; no autonomous posting.", status: "approval" },
+    { title: "Highlight cutdown", detail: "Short-form clip workflow for review and delivery.", status: "queued" },
+    { title: "Generated creative proof", detail: "Media Lab output proof; no autonomous posting.", status: "review" },
     { title: "Media day checklist", detail: "Shot list, consent checklist, and delivery plan.", status: "planned" },
   ],
   mediaPlaceholders: [
-    { title: "Uploads", detail: "Use manual/local handoff until upload intake is approved.", status: "planned" },
-    { title: "Delivery links", detail: "External delivery/posting requires owner approval.", status: "approval" },
+    { title: "Uploads", detail: "Use manual/local handoff until upload intake is connected.", status: "planned" },
+    { title: "Delivery links", detail: "External delivery/posting needs final confirmation.", status: "review" },
     { title: "Client consent vault", detail: "Consent tracking is required before public media usage.", status: "required" },
   ],
   offerRecommendations: [
     { title: "Lead with $1,500 Core Sprint", detail: "Best default for businesses that need ops + content setup.", status: "recommended" },
-    { title: "Fallback to $750 Starter", detail: "Use when the prospect is smaller or needs a lower-friction entry.", status: "approval" },
+    { title: "Fallback to $750 Starter", detail: "Use when the prospect is smaller or needs a lower-friction entry.", status: "option" },
     { title: "Upgrade to $2,500 Pro", detail: "Use for messy workflows, teams, dashboards, or content/media complexity.", status: "recommended" },
   ],
   pricingDrafts: [
     { title: "$750 Starter", detail: "Lean setup and first follow-up/proposal package.", status: "draft" },
     { title: "$1,500 Core", detail: "Default Ops + Content Setup Sprint.", status: "draft" },
-    { title: "$2,500 Pro", detail: "Expanded system/dashboard/media workflow.", status: "approval" },
+    { title: "$2,500 Pro", detail: "Expanded system/dashboard/media workflow.", status: "option" },
   ],
   onboardingChecklist: [
     { title: "Business surfaces", detail: "PhantomForce, ChicagoShots, Media Lab, and offer ladder are aligned.", status: "done" },
-    { title: "Approval policy", detail: "External actions require Jordan or owner approval.", status: "done" },
-    { title: "Approved-send adapter", detail: "Next build step before real email/test sends.", status: "required" },
+    { title: "Send controls", detail: "External actions require an explicit final click.", status: "done" },
+    { title: "Send adapter", detail: "Next build step before real email/test sends.", status: "required" },
     { title: "Client-safe dashboard mode", detail: "Developer/provider internals stay off the normal cockpit.", status: "done" },
   ],
   launchBlockers: [
-    { title: "Approved-send adapter", detail: "Real sending needs allowlist, confirmation phrase, and audit receipts.", status: "required" },
-    { title: "Payment/invoice action", detail: "Billing actions need a separate approval-gated implementation.", status: "required" },
-    { title: "Client delivery proof", detail: "Use real approved deliverables before claiming autonomous production.", status: "required" },
+    { title: "Send adapter", detail: "Real sending needs allowlist, confirmation phrase, and audit receipts.", status: "required" },
+    { title: "Payment/invoice action", detail: "Billing actions need a separate confirmed implementation.", status: "required" },
+    { title: "Client delivery proof", detail: "Use real deliverables before claiming autonomous production.", status: "required" },
   ],
   phantomCut: {
     title: "PhantomCut Media Lab add-on",
@@ -1734,7 +1734,7 @@ const personalTrainingSimulation = {
     { title: "Jordan / PhantomForce", detail: "Platform super-admin concept and final control layer.", status: "operator" },
     { title: "Business owner", detail: "Admin only for this business workspace.", status: "owner admin" },
     { title: "Employees", detail: "Disabled/future until roles, audit, and permission rules are implemented.", status: "disabled" },
-    { title: "Client portal users", detail: "Optional/future. Current workspaces focus on owner-approved actions.", status: "future" },
+    { title: "Client portal users", detail: "Optional/future. Current workspaces focus on scoped client actions.", status: "future" },
   ],
 };
 
@@ -2867,10 +2867,10 @@ function App() {
         id: makeId("msg-assistant"),
         role: "assistant",
         content:
-          "I found the best next action: reply to the priority lead and reserve a call window. I prepared an email and a calendar event for approval. No external action has been taken.",
+          "I found the best next action: reply to the priority lead and reserve a call window. I prepared an email draft and a booking card for your final click. No external action has been taken.",
       },
     ]);
-    addActivity("Approval cards created", "Email and calendar actions are waiting for review.", "ok");
+    addActivity("Review cards created", "Email and calendar actions are ready to confirm.", "ok");
     setRoute("command");
   }
 
@@ -2916,14 +2916,14 @@ function App() {
             task_type: "content_idea_summary",
             sensitivity_level: "low",
             business_summary:
-              "Owner command center request. External actions, sends, uploads, billing, deletes, deploys, and credential changes require approval.",
+              "Owner command center request. External actions, sends, uploads, billing, deletes, deploys, and credential changes require explicit confirmation.",
             module_data: [
               {
                 module: "Command Center",
                 summary: "Current local workspace state for Phantom AI response.",
                 items: [
-                  { title: "Pending approvals", status: String(stats.pending), detail: "Review before external action." },
-                  { title: "Follow-ups", status: String(stats.urgent), detail: "Prioritize owner-safe next steps." },
+                  { title: "Needs confirmation", status: String(stats.pending), detail: "Review before external action." },
+                  { title: "Follow-ups", status: String(stats.urgent), detail: "Prioritize next steps." },
                   { title: "Today tasks", status: String(stats.today), detail: "Summarize operational priorities." },
                 ],
               },
@@ -2958,7 +2958,7 @@ function App() {
             id: makeId("msg-assistant"),
             role: "assistant",
             content:
-              "Phantom AI could not reach the backend. I can still prepare local approval-only actions from the dashboard.",
+              "Phantom AI could not reach the backend. I can still prepare local drafts, booking cards, quotes, and tasks from the dashboard.",
           },
         ]);
         addActivity("Phantom AI backend offline", "The Phantom AI backend did not answer.", "warn");
@@ -2974,7 +2974,7 @@ function App() {
           id: makeId("msg-assistant"),
           role: "assistant",
           content:
-            "Today needs focus on 2 replies, 3 active tasks, and 1 calendar hold. The fastest win is approving the client follow-up package, then clearing the backend cleanup reply.",
+            "Today needs focus on 2 replies, 3 active tasks, and 1 calendar hold. The fastest win is confirming the client follow-up package, then clearing the backend cleanup reply.",
         },
       ]);
       addActivity("Brief requested", "Assistant summarized the current operational load.", "info");
@@ -2987,7 +2987,7 @@ function App() {
           id: makeId("msg-assistant"),
           role: "assistant",
           content:
-            "I can help with that. I can brief the day, prioritize leads, create approval cards, organize tasks, prepare quotes, and draft email/calendar actions for review.",
+            "I can help with that. I can brief the day, prioritize leads, prepare replies, build quotes, organize tasks, and stage booking actions for your final click.",
       },
     ]);
   }
@@ -3034,7 +3034,7 @@ function App() {
       ]);
     }
 
-    addActivity("Approved action executed", approval.title, "ok");
+    addActivity("Confirmed action completed", approval.title, "ok");
   }
 
   function rejectAction(id: string) {
@@ -3379,10 +3379,10 @@ function App() {
         <div className="engine-card">
           <div>
             <span className="status-dot locked" />
-            <p>Protected actions</p>
+            <p>Workspace controls</p>
           </div>
-          <strong>Private boundary</strong>
-          <small>Clients see business actions, proposals, approvals, and next steps. Developer tools stay hidden.</small>
+          <strong>Client side stays clean.</strong>
+          <small>Clients see actions, proposals, next steps, and deliverables. Developer tools stay hidden.</small>
         </div>
         <div className="engine-card truth-rail-card">
           <div>
@@ -3390,7 +3390,7 @@ function App() {
             <p>Workspace status</p>
           </div>
           <strong>Action cockpit online.</strong>
-          <small>Phantom AI, ChicagoShots proposals, and approved-next-step planning are active locally.</small>
+          <small>Phantom AI, ChicagoShots proposals, and next-step planning are active locally.</small>
         </div>
       </aside>
 
@@ -3498,7 +3498,7 @@ function LoginScreen({
         </div>
         <h1>Run the business from one command center.</h1>
         <p>
-          Email, scheduling, approvals, tasks, activity history, and AI-assisted operations in one mobile-ready product.
+          Email, scheduling, review queue, tasks, activity history, and AI-assisted operations in one mobile-ready product.
         </p>
         <div className="hero-asset">
           <img src="/assets/operator-core.png" alt="PhantomForce operator interface preview" />
@@ -3543,7 +3543,7 @@ function LoginScreen({
           </p>
           <p>
             <ShieldCheck size={16} />
-            Actions stay approval-gated behind the business dashboard.
+            External actions stay behind final-click controls inside the business dashboard.
           </p>
         </div>
       </section>
@@ -3630,7 +3630,7 @@ function CommandCenter({
   const nextActions = [
     {
       title: "Reply to lead",
-      detail: "Draft the response and approval card.",
+      detail: "Draft the response and review card.",
       meta: `${stats.urgent} waiting`,
       icon: <Mail size={20} />,
       tone: "danger",
@@ -3675,7 +3675,7 @@ function CommandCenter({
     { label: "Lead", value: stats.urgent, icon: <Users size={18} /> },
     { label: "Quote", value: "$1.5k", icon: <FileText size={18} /> },
     { label: "Book", value: stats.events, icon: <CalendarDays size={18} /> },
-    { label: "Approve", value: stats.pending, icon: <ShieldCheck size={18} /> },
+    { label: "Confirm", value: stats.pending, icon: <ShieldCheck size={18} /> },
     { label: "Deliver", value: "Sprint", icon: <Check size={18} /> },
   ];
   return (
@@ -3686,7 +3686,7 @@ function CommandCenter({
             <span className="eyebrow">AI command center</span>
             <h2>Pick the next move. PhantomForce builds the action.</h2>
             <p>
-              Turn a lead into a reply, quote, booking, content plan, or approved client action without digging through status panels.
+              Turn a lead into a reply, quote, booking, content plan, or client action without digging through status panels.
             </p>
           </div>
           <button className="demo-button" type="button" onClick={createFollowUpPlan}>
@@ -3738,8 +3738,8 @@ function CommandCenter({
           </article>
           <article>
             <ShieldCheck size={18} />
-            <strong>Approval gate</strong>
-            <span>Nothing external without you</span>
+            <strong>Send control</strong>
+            <span>You choose what leaves</span>
           </article>
           <article>
             <Play size={18} />
@@ -3868,7 +3868,7 @@ function CommandCenter({
               ))}
             </div>
           ) : (
-            <EmptyState icon={<ShieldCheck size={20} />} title="No pending approvals" detail="Ask Phantom AI for a follow-up, quote, booking step, or content action." />
+            <EmptyState icon={<ShieldCheck size={20} />} title="No pending commands" detail="Ask Phantom AI for a follow-up, quote, booking step, or content action." />
           )}
         </section>
 
@@ -3949,7 +3949,7 @@ function TasksView({ tasks, completeTask }: { tasks: TaskItem[]; completeTask: (
           </div>
           <ResultModeToggle mode={mode} setMode={setMode} />
         </div>
-        <p>Phantom AI can recommend the next task to review, but completing or sending anything sensitive stays approval-only.</p>
+        <p>Phantom AI can recommend the next task, draft the work, and stage sensitive actions for a final click.</p>
       </section>
       <div className="task-list">
         {visibleTasks.map((task) => (
@@ -3987,16 +3987,16 @@ function ApprovalsView({
       : personalTrainingSimulation.approvals;
 
   return (
-    <Page title="Approval cockpit" kicker="Human oversight">
+    <Page title="Review queue" kicker="Pending commands">
       <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
             <span className="eyebrow">AI filtered vs all results</span>
-            <h3>{mode === "recommended" ? "Pending approval queue" : "All approval records"}</h3>
+            <h3>{mode === "recommended" ? "Needs your final click" : "All review records"}</h3>
           </div>
           <ResultModeToggle mode={mode} setMode={setMode} />
         </div>
-        <p>External sends, uploads, posts, billing, credentials, and production changes stay blocked until approved.</p>
+        <p>Bookings, sends, uploads, billing, credentials, and production changes sit here until you confirm them.</p>
       </section>
       {visibleApprovals.length ? (
         <div className="approval-grid">
@@ -4033,13 +4033,13 @@ function ContentView() {
   const allContent = [...personalTrainingSimulation.contentCalendar, ...personalTrainingSimulation.contentIdeas];
   const visibleContent = mode === "recommended" ? recommendedContent : allContent;
   const platformPlaceholders: SimulationItem[] = [
-    { title: "Instagram", detail: "Draft planning only. Posting requires approval.", status: "approval required" },
-    { title: "Email newsletter", detail: "Ideas can be prepared, but sends require owner approval.", status: "approval required" },
-    { title: "Short-form video", detail: "Publish and upload actions stay blocked until approved.", status: "approval only" },
+    { title: "Instagram", detail: "Draft planning only. Posting needs a final click.", status: "final check" },
+    { title: "Email newsletter", detail: "Ideas can be prepared; sends need confirmation.", status: "final check" },
+    { title: "Short-form video", detail: "Publish and upload actions stay off until connected.", status: "not connected" },
   ];
 
   return (
-    <Page title="Content" kicker="Calendar and drafts" action={<TruthBadge state="real" label="Approval only" />}>
+    <Page title="Content" kicker="Calendar and drafts" action={<TruthBadge state="real" label="Draft-first" />}>
       <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
@@ -4054,8 +4054,8 @@ function ContentView() {
       <div className="destination-grid">
         <SimulationSection icon={<CalendarDays size={18} />} title="Content calendar" items={personalTrainingSimulation.contentCalendar} />
         <SimulationSection icon={<FileText size={18} />} title="Raw content queue" items={personalTrainingSimulation.contentIdeas} />
-        <SimulationSection icon={<ShieldCheck size={18} />} title="Drafts pending approval" items={personalTrainingSimulation.contentDrafts} />
-        <SimulationSection icon={<AlertTriangle size={18} />} title="Platform approval status" items={platformPlaceholders} />
+        <SimulationSection icon={<ShieldCheck size={18} />} title="Drafts ready to review" items={personalTrainingSimulation.contentDrafts} />
+        <SimulationSection icon={<AlertTriangle size={18} />} title="Platform send status" items={platformPlaceholders} />
       </div>
     </Page>
   );
@@ -4070,13 +4070,13 @@ function MediaLabView() {
           <h3>Video and asset work stays an add-on to the owner cockpit.</h3>
           <p>
             Media Lab helps track requests, drafts, consent, and delivery status. Uploads, delivery links, and external
-            publishing stay approval-gated until storage and delivery gates are approved.
+            publishing stay behind final-click controls until storage and delivery flows are connected.
           </p>
         </div>
         <div className="simulation-hero-status">
-          <StatusLine label="Uploads" value="Approval-gated" />
-          <StatusLine label="Delivery" value="Approval required" />
-          <StatusLine label="Core app" value="Leads, schedule, offers, tasks, approvals" />
+          <StatusLine label="Uploads" value="Final click" />
+          <StatusLine label="Delivery" value="Confirm first" />
+          <StatusLine label="Core app" value="Leads, schedule, offers, tasks, review queue" />
         </div>
       </section>
 
@@ -4122,7 +4122,7 @@ function OffersView() {
         <SimulationSection icon={<Sparkles size={18} />} title="Setup sprint packages" items={personalTrainingSimulation.services} />
         <SimulationSection icon={<Zap size={18} />} title="Offer builder recommendations" items={personalTrainingSimulation.offerRecommendations} />
         <SimulationSection icon={<FileText size={18} />} title="Pricing and package drafts" items={personalTrainingSimulation.pricingDrafts} />
-        <SimulationSection icon={<ShieldCheck size={18} />} title="Approval status" items={approvalItems} />
+        <SimulationSection icon={<ShieldCheck size={18} />} title="Review status" items={approvalItems} />
       </div>
     </Page>
   );
@@ -4257,7 +4257,7 @@ function AccessView({
           <div className="money-demo-proof">
             <span>{moneyDemoClient?.privateRoute ?? "app.phantomforce.online/money-demo-athletics"}</span>
             <span>Calendar credential ref: local-demo:{MONEY_DEMO_CLIENT_ID}:calendar</span>
-            <span>Approval and audit required</span>
+            <span>Confirmation and audit required</span>
           </div>
           <div className="demo-boundary-strip" data-testid="money-demo-production-boundary">
             <strong>{readinessReport?.localDemoReady ? "Local demo verified" : "Demo gates checking"}</strong>
@@ -6406,7 +6406,7 @@ function PhantomAiStatusPanel({
         <div className="section-head compact">
           <div>
             <span className="eyebrow">Phantom AI status</span>
-            <h3>Assistant, proposals, and approvals</h3>
+            <h3>Assistant, proposals, and send controls</h3>
           </div>
           <TruthBadge state="real" label="Online" />
         </div>
@@ -6418,9 +6418,9 @@ function PhantomAiStatusPanel({
           />
           <StatusLine
             label="Send readiness"
-            value={opsStatus.send_readiness.send_enabled ? "Enabled" : "Draft-first / approval required"}
+            value={opsStatus.send_readiness.send_enabled ? "Enabled" : "Draft-first / confirmation required"}
           />
-          <StatusLine label="Approval gate" value={phantomAiStatus.approvalGate} />
+          <StatusLine label="Send control" value={phantomAiStatus.approvalGate} />
         </div>
         <div className="ai-rule-columns">
           <div>
@@ -6432,7 +6432,7 @@ function PhantomAiStatusPanel({
             </ul>
           </div>
           <div>
-            <strong>Requires approval</strong>
+            <strong>Needs final click</strong>
             <ul>
               {phantomAiStatus.approvalRequired.map((rule) => (
                 <li key={rule}>{rule}</li>
@@ -7657,11 +7657,11 @@ function ApprovalCard({
         <div className="approval-actions">
           <button type="button" className="approve" onClick={() => approveAction(approval.id)}>
             <Check size={16} />
-            Approve
+            Confirm
           </button>
           <button type="button" className="reject" onClick={() => rejectAction(approval.id)}>
             <X size={16} />
-            Reject
+            Skip
           </button>
         </div>
       ) : null}
