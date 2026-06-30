@@ -34,8 +34,8 @@ function devIdentitySeeds() {
     },
     {
       userId: "db-user-client-sports-demo",
-      email: "owner@sports-ops-demo.local",
-      name: "Sports Ops Demo Owner",
+      email: "owner@test-client.local",
+      name: "Test Client Owner",
       orgId: "client-sports-demo",
       role: "member" as MembershipRole,
     },

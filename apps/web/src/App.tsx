@@ -36,6 +36,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
 type Route =
   | "command"
+  | "agents"
   | "inbox"
   | "calendar"
   | "tasks"
@@ -1230,7 +1231,8 @@ type AppSession = {
 const AUTHORIZATION_HEADER = "Authorization";
 const OWNER_ORG_NAME = "PhantomForce";
 const DEFAULT_CLIENT_WORKSPACE_ID = "client-chicagoshots";
-const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-past-due"]);
+const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-sports-demo", "client-past-due"]);
+const ADMIN_ONLY_ROUTES = new Set<Route>(["agents", "site", "access", "connections"]);
 
 const initialSessions: AppSession[] = [
   {
@@ -1240,23 +1242,17 @@ const initialSessions: AppSession[] = [
     canManageAccess: true,
   },
   {
-    id: "client-chicagoshots",
-    label: "ChicagoShots (client)",
+    id: "client-sports-demo",
+    label: "Test Client",
     role: "client",
-    clientId: "client-chicagoshots",
-    canManageAccess: false,
-  },
-  {
-    id: "client-past-due",
-    label: "The Force (client)",
-    role: "client",
-    clientId: "client-past-due",
+    clientId: "client-sports-demo",
     canManageAccess: false,
   },
 ];
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Home", icon: <Command size={18} /> },
+  { id: "agents", label: "Agents", icon: <Bot size={18} /> },
   { id: "site", label: "Site Studio", icon: <FileText size={18} /> },
   { id: "inbox", label: "Leads", icon: <Users size={18} /> },
   { id: "offers", label: "Money", icon: <Zap size={18} /> },
@@ -1639,7 +1635,7 @@ const phantomAiStatus = {
   ],
 };
 
-const personalTrainingSimulation = {
+const businessOpsSimulation = {
   owner: {
     name: "Jordan West",
     business: "PhantomForce",
@@ -2454,7 +2450,7 @@ function App() {
   const canManageAccess = activeSession.canManageAccess;
   const visibleNavItems = useMemo(() => {
     if (canManageAccess) return navItems;
-    return navItems.filter((item) => item.id !== "access" && item.id !== "connections" && item.id !== "site");
+    return navItems.filter((item) => !ADMIN_ONLY_ROUTES.has(item.id));
   }, [canManageAccess]);
   const visibleClientAccess = useMemo(() => {
     if (canManageAccess) return clientAccess;
@@ -2478,7 +2474,7 @@ function App() {
   );
 
   useEffect(() => {
-    if (!canManageAccess && (route === "access" || route === "connections" || route === "site")) {
+    if (!canManageAccess && ADMIN_ONLY_ROUTES.has(route)) {
       setRoute("command");
     }
   }, [canManageAccess, route]);
@@ -2495,7 +2491,7 @@ function App() {
 
   async function signIn(sessionId: string, preferredRoute: Route = "command") {
     const session = initialSessions.find((item) => item.id === sessionId) ?? initialSessions[0];
-    const allowedRoute = session.canManageAccess || (preferredRoute !== "access" && preferredRoute !== "connections" && preferredRoute !== "site")
+    const allowedRoute = session.canManageAccess || !ADMIN_ONLY_ROUTES.has(preferredRoute)
       ? preferredRoute
       : "command";
     setActiveSessionId(session.id);
@@ -2893,9 +2889,24 @@ function App() {
   async function runPhantomCommand(rawText: string) {
     const text = rawText.trim();
     if (!text) return;
-    const lower = text.toLowerCase();
     setCommandText("");
     setMessages((current) => [...current, { id: makeId("msg-user"), role: "user", content: text }]);
+
+    if (!canManageAccess) {
+      setMessages((current) => [
+        ...current,
+        {
+          id: makeId("msg-assistant"),
+          role: "assistant",
+          content:
+            "This client workspace is in demo mode. You can see how PhantomForce prepares replies, quotes, bookings, content, and approvals, but the real operator console and infrastructure stay private.",
+        },
+      ]);
+      addActivity("Client operator demo protected", "No operator endpoint was called for this client session.", "info");
+      return;
+    }
+
+    const lower = text.toLowerCase();
 
     const requestsExternalAction =
       /\b(send|email|dm|text|post|upload)\b.*\b(to|them|client|lead|prospect|gmail|instagram|facebook|youtube)\b/.test(
@@ -3438,6 +3449,17 @@ function App() {
             setRoute={setRoute}
           />
         ) : null}
+        {route === "agents" && canManageAccess ? (
+          <AgentControlCenter
+            aiProvider={aiProvider}
+            setAiProvider={setAiProvider}
+            phantomAiBusy={phantomAiBusy}
+            runPhantomCommand={runPhantomCommand}
+            setRoute={setRoute}
+            pangolinPlan={pangolinPlan}
+            pangolinStatus={pangolinStatus}
+          />
+        ) : null}
         {route === "inbox" ? <InboxView emails={emails} createFollowUpPlan={createFollowUpPlan} /> : null}
         {route === "calendar" ? <CalendarView events={events} /> : null}
         {route === "tasks" ? <TasksView tasks={tasks} completeTask={completeTask} /> : null}
@@ -3653,6 +3675,11 @@ function CommandCenter({
 }) {
   const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
   const aiProviderLabel = phantomAiModeLabel(aiProvider);
+
+  if (!canManageAccess) {
+    return <ClientOperatorDemoDashboard />;
+  }
+
   const nextActions = [
     {
       title: "Write the reply",
@@ -3733,6 +3760,10 @@ function CommandCenter({
           <button className="demo-button" type="button" onClick={createFollowUpPlan}>
             <Sparkles size={18} />
             Command PhantomAI
+          </button>
+          <button className="ghost-small" type="button" onClick={() => setRoute("agents")}>
+            <Bot size={16} />
+            Agent Control
           </button>
         </div>
 
@@ -3906,6 +3937,10 @@ function CommandCenter({
               <Play size={17} />
               Video
             </button>
+            <button type="button" onClick={() => setRoute("agents")}>
+              <Bot size={17} />
+              Agents
+            </button>
             <button type="button" onClick={() => setRoute("calendar")}>
               <CalendarDays size={17} />
               Bookings
@@ -3956,6 +3991,145 @@ function CommandCenter({
   );
 }
 
+const clientOperatorDemoFlow = [
+  {
+    title: "Lead intake",
+    detail: "A new lead or business request lands in one clear workspace.",
+    icon: <Inbox size={18} />,
+  },
+  {
+    title: "Recommended package",
+    detail: "PhantomForce suggests the best service path without exposing engine internals.",
+    icon: <Zap size={18} />,
+  },
+  {
+    title: "Quote/proposal draft",
+    detail: "The operator prepares a client-ready draft for human review.",
+    icon: <FileText size={18} />,
+  },
+  {
+    title: "Approval gate",
+    detail: "Nothing sends, posts, books, or bills until the business owner approves.",
+    icon: <ShieldCheck size={18} />,
+  },
+];
+
+const clientDemoOutcomes = [
+  "Reply drafts",
+  "Quote summaries",
+  "Booking plans",
+  "Task checklists",
+  "Content ideas",
+  "Proposal packets",
+];
+
+const privateInfrastructureList = [
+  "Internal operator console",
+  "Private keys and model routing",
+  "Workflow worker layer",
+  "Security scan controls",
+  "Local files and logs",
+  "Admin debug/status panels",
+];
+
+function ClientOperatorDemoDashboard() {
+  return (
+    <div className="client-operator-demo" data-testid="client-operator-demo">
+      <section className="client-demo-hero">
+        <div>
+          <span className="eyebrow">Operator demo</span>
+          <h2>See the system. Do not touch the engine.</h2>
+          <p>
+            This is the customer-safe PhantomForce preview: the business outcome is visible, but Jordan's private
+            infrastructure, local tools, agent stack, and security controls stay behind the wall.
+          </p>
+        </div>
+        <div className="client-demo-lock">
+          <Lock size={20} />
+          <strong>Demo mode</strong>
+          <span>No commands, no sends, no infrastructure access</span>
+        </div>
+      </section>
+
+      <section className="client-demo-status-strip" aria-label="Client demo safety status">
+        <span>Preview only</span>
+        <span>No operator endpoint</span>
+        <span>No backend model call</span>
+        <span>No background execution</span>
+        <span>No private logs</span>
+      </section>
+
+      <section className="client-demo-flow" aria-label="Demo operator flow">
+        {clientOperatorDemoFlow.map((step, index) => (
+          <article className="client-demo-flow-card" key={step.title}>
+            <span>{step.icon}</span>
+            <small>Step {index + 1}</small>
+            <strong>{step.title}</strong>
+            <p>{step.detail}</p>
+          </article>
+        ))}
+      </section>
+
+      <section className="client-demo-grid">
+        <article className="client-demo-card">
+          <span className="eyebrow">What customers see</span>
+          <h3>Business-ready output lanes</h3>
+          <div className="client-demo-chip-grid">
+            {clientDemoOutcomes.map((item) => (
+              <span key={item}>{item}</span>
+            ))}
+          </div>
+        </article>
+
+        <article className="client-demo-card private">
+          <span className="eyebrow">What stays private</span>
+          <h3>Infrastructure is not the product UI</h3>
+          <ul>
+            {privateInfrastructureList.map((item) => (
+              <li key={item}>{item}</li>
+            ))}
+          </ul>
+        </article>
+      </section>
+
+      <section className="client-demo-window" aria-label="Locked operator preview">
+        <div className="client-demo-window-head">
+          <span />
+          <span />
+          <span />
+          <strong>PhantomForce client workspace preview</strong>
+        </div>
+        <div className="client-demo-output-grid">
+          <article>
+            <Mail size={17} />
+            <strong>Follow-up draft</strong>
+            <p>Prepared for review. Owner approves before anything leaves.</p>
+          </article>
+          <article>
+            <CalendarDays size={17} />
+            <strong>Booking plan</strong>
+            <p>Agenda and windows staged. No calendar mutation from demo.</p>
+          </article>
+          <article>
+            <BarChart3 size={17} />
+            <strong>Quote lane</strong>
+            <p>Package guidance appears here without payment or invoice actions.</p>
+          </article>
+          <article>
+            <Play size={17} />
+            <strong>Media workflow</strong>
+            <p>Creative direction can be previewed; generation tools stay private.</p>
+          </article>
+        </div>
+        <button className="primary-action locked-demo-button" type="button" disabled>
+          <Lock size={17} />
+          Operator actions locked in demo
+        </button>
+      </section>
+    </div>
+  );
+}
+
 function InboxView({ emails, createFollowUpPlan }: { emails: EmailItem[]; createFollowUpPlan: () => void }) {
   const [mode, setMode] = useState<ResultMode>("recommended");
   const followUpItems: SimulationItem[] = emails.map((email) => ({
@@ -3963,7 +4137,7 @@ function InboxView({ emails, createFollowUpPlan }: { emails: EmailItem[]; create
     detail: `${email.from} - ${email.preview}`,
     status: email.status,
   }));
-  const allItems = [...personalTrainingSimulation.leads, ...personalTrainingSimulation.clients, ...followUpItems];
+  const allItems = [...businessOpsSimulation.leads, ...businessOpsSimulation.clients, ...followUpItems];
   const recommendedItems = allItems.filter((item) =>
     ["hot", "approval", "needs-reply", "new"].includes(item.status ?? ""),
   );
@@ -4061,8 +4235,8 @@ function ApprovalsView({
     mode === "recommended" ? approvals.filter((approval) => approval.status === "pending") : approvals;
   const demoApprovals =
     mode === "recommended"
-      ? personalTrainingSimulation.approvals.filter((approval) => approval.status === "pending")
-      : personalTrainingSimulation.approvals;
+      ? businessOpsSimulation.approvals.filter((approval) => approval.status === "pending")
+      : businessOpsSimulation.approvals;
 
   return (
     <Page title="Review queue" kicker="Pending commands">
@@ -4105,10 +4279,10 @@ function ApprovalsView({
 function ContentView() {
   const [mode, setMode] = useState<ResultMode>("recommended");
   const recommendedContent = [
-    ...personalTrainingSimulation.contentIdeas.filter((item) => ["recommended", "review"].includes(item.status ?? "")),
-    ...personalTrainingSimulation.contentCalendar.filter((item) => item.status === "review"),
+    ...businessOpsSimulation.contentIdeas.filter((item) => ["recommended", "review"].includes(item.status ?? "")),
+    ...businessOpsSimulation.contentCalendar.filter((item) => item.status === "review"),
   ];
-  const allContent = [...personalTrainingSimulation.contentCalendar, ...personalTrainingSimulation.contentIdeas];
+  const allContent = [...businessOpsSimulation.contentCalendar, ...businessOpsSimulation.contentIdeas];
   const visibleContent = mode === "recommended" ? recommendedContent : allContent;
   const platformPlaceholders: SimulationItem[] = [
     { title: "Instagram", detail: "Draft planning only. Posting needs a final click.", status: "final check" },
@@ -4130,9 +4304,9 @@ function ContentView() {
       </section>
 
       <div className="destination-grid">
-        <SimulationSection icon={<CalendarDays size={18} />} title="Content calendar" items={personalTrainingSimulation.contentCalendar} />
-        <SimulationSection icon={<FileText size={18} />} title="Output ideas" items={personalTrainingSimulation.contentIdeas} />
-        <SimulationSection icon={<ShieldCheck size={18} />} title="Drafts ready to review" items={personalTrainingSimulation.contentDrafts} />
+        <SimulationSection icon={<CalendarDays size={18} />} title="Content calendar" items={businessOpsSimulation.contentCalendar} />
+        <SimulationSection icon={<FileText size={18} />} title="Output ideas" items={businessOpsSimulation.contentIdeas} />
+        <SimulationSection icon={<ShieldCheck size={18} />} title="Drafts ready to review" items={businessOpsSimulation.contentDrafts} />
         <SimulationSection icon={<AlertTriangle size={18} />} title="Platform send status" items={platformPlaceholders} />
       </div>
     </Page>
@@ -4159,9 +4333,9 @@ function MediaLabView() {
       </section>
 
       <div className="destination-grid">
-        <SimulationSection icon={<Play size={18} />} title="Media requests" items={personalTrainingSimulation.mediaRequests} />
-        <SimulationSection icon={<SquareCheckBig size={18} />} title="Deliverables and workflow status" items={personalTrainingSimulation.mediaDeliverables} />
-        <SimulationSection icon={<AlertTriangle size={18} />} title="Uploads and delivery status" items={personalTrainingSimulation.mediaPlaceholders} />
+        <SimulationSection icon={<Play size={18} />} title="Media requests" items={businessOpsSimulation.mediaRequests} />
+        <SimulationSection icon={<SquareCheckBig size={18} />} title="Deliverables and workflow status" items={businessOpsSimulation.mediaDeliverables} />
+        <SimulationSection icon={<AlertTriangle size={18} />} title="Uploads and delivery status" items={businessOpsSimulation.mediaPlaceholders} />
         <VideoEngineAddonCard />
       </div>
     </Page>
@@ -4171,15 +4345,15 @@ function MediaLabView() {
 function OffersView() {
   const [mode, setMode] = useState<ResultMode>("recommended");
   const allOfferItems = [
-    ...personalTrainingSimulation.services,
-    ...personalTrainingSimulation.offerRecommendations,
-    ...personalTrainingSimulation.pricingDrafts,
+    ...businessOpsSimulation.services,
+    ...businessOpsSimulation.offerRecommendations,
+    ...businessOpsSimulation.pricingDrafts,
   ];
-  const recommendedOfferItems = personalTrainingSimulation.offerRecommendations.filter((item) =>
+  const recommendedOfferItems = businessOpsSimulation.offerRecommendations.filter((item) =>
     ["recommended", "option"].includes(item.status ?? ""),
   );
   const visibleOfferItems = mode === "recommended" ? recommendedOfferItems : allOfferItems;
-  const approvalItems = personalTrainingSimulation.approvals.filter((item) =>
+  const approvalItems = businessOpsSimulation.approvals.filter((item) =>
     item.title.toLowerCase().includes("offer") || item.title.toLowerCase().includes("payment"),
   );
 
@@ -4197,10 +4371,233 @@ function OffersView() {
       </section>
 
       <div className="destination-grid">
-        <SimulationSection icon={<Sparkles size={18} />} title="Setup sprint packages" items={personalTrainingSimulation.services} />
-        <SimulationSection icon={<Zap size={18} />} title="Offer builder recommendations" items={personalTrainingSimulation.offerRecommendations} />
-        <SimulationSection icon={<FileText size={18} />} title="Pricing and package drafts" items={personalTrainingSimulation.pricingDrafts} />
+        <SimulationSection icon={<Sparkles size={18} />} title="Setup sprint packages" items={businessOpsSimulation.services} />
+        <SimulationSection icon={<Zap size={18} />} title="Offer builder recommendations" items={businessOpsSimulation.offerRecommendations} />
+        <SimulationSection icon={<FileText size={18} />} title="Pricing and package drafts" items={businessOpsSimulation.pricingDrafts} />
         <SimulationSection icon={<ShieldCheck size={18} />} title="Review status" items={approvalItems} />
+      </div>
+    </Page>
+  );
+}
+
+function AgentControlCenter({
+  aiProvider,
+  setAiProvider,
+  phantomAiBusy,
+  runPhantomCommand,
+  setRoute,
+  pangolinPlan,
+  pangolinStatus,
+}: {
+  aiProvider: AiProviderChoice;
+  setAiProvider: (value: AiProviderChoice) => void;
+  phantomAiBusy: boolean;
+  runPhantomCommand: (text: string) => Promise<void>;
+  setRoute: (route: Route) => void;
+  pangolinPlan: PangolinRoutePlan[];
+  pangolinStatus: PangolinReadOnlyStatus | null;
+}) {
+  const [agentCommand, setAgentCommand] = useState(
+    "Audit the dashboard like my admin operating system. Tell me what is broken, what to fix first, and what you can directly prepare.",
+  );
+  const activeLane = phantomAiModeLabel(aiProvider);
+  const enabledRoutes = pangolinPlan.filter((plan) => plan.desiredState === "enabled").length;
+  const disabledRoutes = pangolinPlan.filter((plan) => plan.desiredState === "disabled").length;
+  const controlActions = [
+    {
+      title: "Audit this app",
+      detail: "Find broken UX, stale labels, blocked workflows, and launch blockers.",
+      icon: <Search size={18} />,
+      prompt:
+        "Audit the current PhantomForce dashboard as an admin operating system. Identify broken UX, stale labels, blocked workflows, and the next fixes. Do not send, deploy, or mutate external systems.",
+    },
+    {
+      title: "Change the website",
+      detail: "Draft website copy or layout changes and send them to Site Studio preview.",
+      icon: <FileText size={18} />,
+      prompt:
+        "Prepare a Site Studio update for PhantomForce: rewrite the public site hero, offer section, and CTA. Keep it as a private draft/preview only.",
+    },
+    {
+      title: "Check Pangolin",
+      detail: "Explain which private routes are enabled, disabled, and unverified.",
+      icon: <KeyRound size={18} />,
+      prompt:
+        "Explain the current Pangolin route plan in plain English. List enabled, disabled, and unverified routes, then tell me what must be configured before live route control.",
+    },
+    {
+      title: "Prepare a quote",
+      detail: "Pick Starter/Core/Pro and generate the client-ready pitch.",
+      icon: <Zap size={18} />,
+      prompt:
+        "Use the current PhantomForce offer ladder to prepare a client-ready quote. Choose $750 Starter, $1,500 Core, or $2,500 Pro and write the next-step message.",
+    },
+    {
+      title: "Make a media plan",
+      detail: "Turn a client into a ChicagoShots + Media Lab content path.",
+      icon: <Play size={18} />,
+      prompt:
+        "Create a ChicagoShots and PhantomForce Media Lab content plan for a sports/team/client lead. Include deliverables, timeline, price path, and what proof to show.",
+    },
+    {
+      title: "Brief Claude",
+      detail: "Write a strict report-only Claude review prompt.",
+      icon: <MessageSquare size={18} />,
+      prompt:
+        "Draft a report-only Claude review prompt for this dashboard. Ask Claude to judge UI, usability, functionality, truthfulness, and whether it is ready to proceed. Claude must not edit files.",
+    },
+  ];
+
+  function submitAgentCommand(event: FormEvent) {
+    event.preventDefault();
+    void runPhantomCommand(agentCommand);
+  }
+
+  return (
+    <Page
+      title="Agent Control Center"
+      kicker="Admin operating system"
+      action={<TruthBadge state="real" label="Admin only" />}
+    >
+      <section className="simulation-hero">
+        <div>
+          <span className="eyebrow">Operator app</span>
+          <h3>Control the agents from here.</h3>
+          <p>
+            This is the private console for directing PhantomAI, Codex-style local work, GLM reasoning, Claude review,
+            Hermes memory, Site Studio, and Pangolin route planning from one place.
+          </p>
+        </div>
+        <div className="simulation-hero-status">
+          <StatusLine label="Active lane" value={activeLane} />
+          <StatusLine label="Client access" value="Hidden" />
+          <StatusLine label="External mutation" value="Off" />
+        </div>
+      </section>
+
+      <section className="module-panel simulation-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Agent lane</span>
+            <h3>Choose how PhantomAI thinks</h3>
+          </div>
+          <TruthBadge state="real" label={activeLane} />
+        </div>
+        <div className="action-card-grid">
+          {[
+            { value: "codex" as AiProviderChoice, label: "Auto / operator", detail: "Best default for local app work." },
+            { value: "glm_5_2" as AiProviderChoice, label: "Deep thinking", detail: "Use for strategy, copy, and reasoning." },
+            { value: "claude_cli" as AiProviderChoice, label: "Second opinion", detail: "Use for review when Claude CLI is available." },
+          ].map((lane) => (
+            <button
+              className={`action-tile ${aiProvider === lane.value ? "green" : "blue"}`}
+              key={lane.value}
+              type="button"
+              onClick={() => setAiProvider(lane.value)}
+              disabled={phantomAiBusy}
+            >
+              <span className="action-icon">
+                <Bot size={18} />
+              </span>
+              <strong>{lane.label}</strong>
+              <small>{lane.detail}</small>
+              <em>{aiProvider === lane.value ? "Selected" : "Click to switch"}</em>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section className="module-panel simulation-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Command pad</span>
+            <h3>Tell the agents what to do</h3>
+          </div>
+          <TruthBadge state="real" label="Runs through PhantomAI" />
+        </div>
+        <form className="lead-intake-form" onSubmit={submitAgentCommand}>
+          <label className="lead-notes-field">
+            Admin command
+            <textarea value={agentCommand} onChange={(event) => setAgentCommand(event.target.value)} />
+          </label>
+          <div className="lead-intake-actions">
+            <button className="primary-action" type="submit" disabled={phantomAiBusy || !agentCommand.trim()}>
+              {phantomAiBusy ? <RefreshCcw size={16} /> : <Command size={16} />}
+              Run through PhantomAI
+            </button>
+            <button className="ghost-small" type="button" onClick={() => setRoute("site")}>
+              <FileText size={15} />
+              Open Site Studio
+            </button>
+            <button className="ghost-small" type="button" onClick={() => setRoute("connections")}>
+              <Link2 size={15} />
+              System
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="action-board" aria-label="Agent actions">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Direct controls</span>
+            <h3>Click an outcome, not a tool.</h3>
+          </div>
+          <span>{controlActions.length} actions</span>
+        </div>
+        <div className="action-card-grid">
+          {controlActions.map((action) => (
+            <button
+              className="action-tile violet"
+              type="button"
+              key={action.title}
+              onClick={() => void runPhantomCommand(action.prompt)}
+              disabled={phantomAiBusy}
+            >
+              <span className="action-icon">{action.icon}</span>
+              <strong>{action.title}</strong>
+              <small>{action.detail}</small>
+              <b>
+                Run
+                <ArrowRight size={15} />
+              </b>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <div className="destination-grid">
+        <article className="operator-result-card">
+          <span className="eyebrow">Hermes memory</span>
+          <h4>Receipts and context stay in the backend.</h4>
+          <p>
+            PhantomAI can use workspace context and interaction receipts without exposing raw keys, logs, or provider
+            plumbing to clients.
+          </p>
+          <StatusLine label="Memory lane" value="Backend" />
+          <StatusLine label="Client visibility" value="None" />
+        </article>
+        <article className="operator-result-card">
+          <span className="eyebrow">Local control</span>
+          <h4>Admin can direct local work. Clients cannot.</h4>
+          <p>
+            File, repo, dashboard, and operator tasks belong here. Customer workspaces receive finished artifacts,
+            drafts, and approvals only.
+          </p>
+          <StatusLine label="Admin tools" value="Available" />
+          <StatusLine label="Client tools" value="Blocked" />
+        </article>
+        <article className="operator-result-card">
+          <span className="eyebrow">Pangolin route map</span>
+          <h4>
+            {enabledRoutes} enabled, {disabledRoutes} disabled.
+          </h4>
+          <p>
+            Pangolin is the private doorway layer. PhantomForce decides what each workspace can do after a user enters.
+          </p>
+          <StatusLine label="Live instance" value={pangolinStatus?.status ?? "unconfigured"} />
+          <StatusLine label="Live changes" value="Off" />
+        </article>
       </div>
     </Page>
   );
@@ -4791,7 +5188,7 @@ function StatusView({
           </div>
         </div>
         <div className="simulation-list">
-          {personalTrainingSimulation.launchBlockers.map((item) => (
+          {businessOpsSimulation.launchBlockers.map((item) => (
             <article key={`status-${item.title}`}>
               <div>
                 <strong>{item.title}</strong>
@@ -5813,7 +6210,7 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
   function buildPreviewPayload(text = previewText, task = taskType, sensitivity = sensitivityLevel) {
     return {
       tenant_id: "phantomforce-owner",
-      business_name: personalTrainingSimulation.owner.business,
+      business_name: businessOpsSimulation.owner.business,
       request_id: `ui-preview-${Date.now()}`,
       task_type: task,
       sensitivity_level: sensitivity,
@@ -5824,12 +6221,12 @@ function HermesRouterDebugPanel({ sessionHeaders }: { sessionHeaders: (json?: bo
         {
           module: "Tasks",
           summary: "Today includes local business tasks and approval-only follow-ups.",
-          items: personalTrainingSimulation.tasks.slice(0, 3),
+          items: businessOpsSimulation.tasks.slice(0, 3),
         },
         {
           module: "Approvals",
           summary: "Approvals are review items only; no sends, uploads, billing, or production actions execute.",
-          items: personalTrainingSimulation.approvals.slice(0, 3),
+          items: businessOpsSimulation.approvals.slice(0, 3),
         },
       ],
     };
@@ -7741,11 +8138,11 @@ function VideoEngineAddonCard() {
           <h3>Controlled creative generation</h3>
         </div>
       </div>
-      <p>{personalTrainingSimulation.phantomCut.detail}</p>
+      <p>{businessOpsSimulation.phantomCut.detail}</p>
       <div className="module-list">
         <span>optional</span>
         <span>not core app</span>
-        <span>{personalTrainingSimulation.phantomCut.status}</span>
+        <span>{businessOpsSimulation.phantomCut.status}</span>
       </div>
     </section>
   );

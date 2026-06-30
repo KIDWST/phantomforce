@@ -68,6 +68,36 @@ function normalizeConnectorCredentials(record: ClientAccessRecord): ClientAccess
   };
 }
 
+function normalizeClientAccessRecord(record: ClientAccessRecord): ClientAccessRecord {
+  if (record.id === "client-sports-demo") {
+    return normalizeConnectorCredentials({
+      ...record,
+      business: "Test Client",
+      owner: record.owner === "Client Owner" || record.owner === "Sports Ops Demo Owner" ? "Demo Client" : record.owner,
+      plan: record.plan === "$2,000 Team Media Day" ? "Test client workspace" : record.plan,
+      privateRoute:
+        record.privateRoute === "app.phantomforce.online/sports-ops-demo"
+          ? "app.phantomforce.online/test-client"
+          : record.privateRoute,
+      lastAudit: record.lastAudit.replace(/Sports Ops Demo/g, "Test Client"),
+    });
+  }
+
+  if (record.id === "client-past-due") {
+    return normalizeConnectorCredentials({
+      ...record,
+      business: "The Force",
+      privateRoute:
+        record.privateRoute === "app.phantomforce.online/past-due-pilot"
+          ? "app.phantomforce.online/the-force"
+          : record.privateRoute,
+      lastAudit: record.lastAudit.replace(/Past Due Pilot/g, "The Force"),
+    });
+  }
+
+  return normalizeConnectorCredentials(record);
+}
+
 export const seedClientAccessRecords: ClientAccessRecord[] = [
   {
     id: "client-chicagoshots",
@@ -84,13 +114,13 @@ export const seedClientAccessRecords: ClientAccessRecord[] = [
   },
   {
     id: "client-sports-demo",
-    business: "Sports Ops Demo",
-    owner: "Client Owner",
-    plan: "$2,000 Team Media Day",
+    business: "Test Client",
+    owner: "Demo Client",
+    plan: "Test client workspace",
     paymentStatus: "paid",
     accessStatus: "active",
     gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/sports-ops-demo",
+    privateRoute: "app.phantomforce.online/test-client",
     modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts"],
     connectorCredentials: buildDefaultConnectorCredentials("client-sports-demo", [
       "Command",
@@ -129,7 +159,7 @@ export async function initializeClientAccessState() {
   clientAccessRecords.clear();
 
   for (const record of records) {
-    clientAccessRecords.set(record.id, normalizeConnectorCredentials(record));
+    clientAccessRecords.set(record.id, normalizeClientAccessRecord(record));
   }
 
   initialized = true;

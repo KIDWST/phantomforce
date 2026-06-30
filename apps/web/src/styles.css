@@ -890,6 +890,205 @@ img {
   border-color: rgba(179, 126, 255, 0.32);
 }
 
+.client-operator-demo {
+  display: grid;
+  gap: 14px;
+}
+
+.client-demo-hero,
+.client-demo-grid,
+.client-demo-flow,
+.client-demo-output-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.client-demo-hero {
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 280px);
+  align-items: stretch;
+  padding: 18px;
+  background:
+    linear-gradient(135deg, rgba(40, 196, 216, 0.14), rgba(89, 208, 133, 0.08)),
+    rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+}
+
+.client-demo-hero h2,
+.client-demo-hero p,
+.client-demo-card h3,
+.client-demo-card p,
+.client-demo-card ul,
+.client-demo-flow-card p,
+.client-demo-window p {
+  margin: 0;
+}
+
+.client-demo-hero h2 {
+  margin-bottom: 8px;
+  font-size: 30px;
+  line-height: 1.08;
+}
+
+.client-demo-hero p,
+.client-demo-flow-card p,
+.client-demo-card li,
+.client-demo-window p {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.client-demo-lock {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-height: 150px;
+  padding: 14px;
+  color: #dffbea;
+  background: rgba(89, 208, 133, 0.08);
+  border: 1px solid rgba(89, 208, 133, 0.18);
+  border-radius: 8px;
+}
+
+.client-demo-lock svg {
+  color: var(--green);
+}
+
+.client-demo-lock span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.client-demo-status-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.client-demo-status-strip span,
+.client-demo-chip-grid span {
+  padding: 7px 9px;
+  color: #c9f5d4;
+  background: rgba(89, 208, 133, 0.08);
+  border: 1px solid rgba(89, 208, 133, 0.16);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.client-demo-flow {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.client-demo-flow-card,
+.client-demo-card,
+.client-demo-window {
+  padding: 14px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+}
+
+.client-demo-flow-card {
+  display: grid;
+  gap: 8px;
+}
+
+.client-demo-flow-card > span {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  color: var(--cyan);
+  background: rgba(40, 196, 216, 0.1);
+  border: 1px solid rgba(40, 196, 216, 0.18);
+  border-radius: 8px;
+}
+
+.client-demo-flow-card small {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.client-demo-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+.client-demo-card {
+  display: grid;
+  gap: 10px;
+}
+
+.client-demo-card.private {
+  border-color: rgba(236, 47, 69, 0.18);
+  background: rgba(236, 47, 69, 0.055);
+}
+
+.client-demo-card ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 18px;
+}
+
+.client-demo-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.client-demo-window {
+  display: grid;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.2);
+}
+
+.client-demo-window-head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.client-demo-window-head span {
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.client-demo-window-head strong {
+  margin-left: 6px;
+  font-size: 13px;
+}
+
+.client-demo-output-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+.client-demo-output-grid article {
+  display: grid;
+  gap: 7px;
+  padding: 10px;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 8px;
+}
+
+.client-demo-output-grid svg {
+  color: var(--cyan);
+}
+
+.locked-demo-button {
+  justify-self: start;
+  opacity: 0.78;
+  cursor: not-allowed;
+}
+
 .command-form .lane-readout svg {
   color: var(--cyan);
 }
@@ -3664,7 +3863,11 @@ img {
   .proposal-summary-grid,
   .ai-rule-columns,
   .access-hero,
-  .guard-panel {
+  .guard-panel,
+  .client-demo-hero,
+  .client-demo-flow,
+  .client-demo-grid,
+  .client-demo-output-grid {
     grid-template-columns: 1fr;
   }
 

@@ -34,7 +34,7 @@ const enableLocalSessionLogin = enableDemoAuth || enablePrismaDevAuth || enableO
 const demoSessions: AccessSession[] = [
   {
     id: "admin-jordan",
-    label: "Jordan Admin",
+    label: "Jordan (admin)",
     role: "admin",
     canManageAccess: true,
     visibleOnLogin: true,
