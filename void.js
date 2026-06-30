@@ -219,18 +219,33 @@ async function initEntity() {
 function initPhantomMoods() {
   const phantom = document.querySelector("[data-phantom]");
   if (!phantom) return;
+  const eyes = phantom.querySelector(".eyes-live");
   let idle = 0;
-  window.addEventListener("pointermove", () => {
+  // eyes that track the cursor (smoothed)
+  let ex = 0, ey = 0, tex = 0, tey = 0, eraf = 0;
+  const animateEyes = () => {
+    ex = lerp(ex, tex, 0.2); ey = lerp(ey, tey, 0.2);
+    if (eyes) eyes.setAttribute("transform", `translate(${ex.toFixed(2)} ${ey.toFixed(2)})`);
+    eraf = (Math.abs(ex - tex) > 0.01 || Math.abs(ey - tey) > 0.01) ? requestAnimationFrame(animateEyes) : 0;
+  };
+  window.addEventListener("pointermove", (e) => {
     if (phantom.classList.contains("dead")) return;
     phantom.classList.add("happy");
     window.clearTimeout(idle);
     idle = window.setTimeout(() => phantom.classList.remove("happy"), 1100);
+    const r = phantom.getBoundingClientRect();
+    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+    tex = Math.max(-3.6, Math.min(3.6, ((e.clientX - cx) / (r.width / 2 || 1)) * 3.6));
+    tey = Math.max(-2.6, Math.min(2.6, ((e.clientY - cy) / (r.height / 2 || 1)) * 3.0));
+    if (!eraf) eraf = requestAnimationFrame(animateEyes);
   }, { passive: true });
   phantom.addEventListener("click", () => {
     if (phantom.classList.contains("dead")) return;
     phantom.classList.remove("happy");
     phantom.classList.add("dead");
     flare();
+    tex = 0; tey = 0;
+    if (!eraf) eraf = requestAnimationFrame(animateEyes);
     window.setTimeout(() => phantom.classList.remove("dead"), 1500);
   });
 }
