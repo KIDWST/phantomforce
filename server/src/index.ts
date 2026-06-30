@@ -383,9 +383,9 @@ function buildModelRouterRequestFromBody(
   const actorRole: ActorRole = session.canManageAccess ? "platform_admin" : "business_owner";
 
   return {
-    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id.slice(0, 80) : "demo-trainer",
+    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id.slice(0, 80) : "phantomforce-owner",
     business_name:
-      typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "West Loop Strength Lab",
+      typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "PhantomForce",
     actor_user_id: typeof body.actor_user_id === "string" ? body.actor_user_id.slice(0, 80) : session.id,
     actor_role: actorRole,
     request_id:
@@ -395,17 +395,72 @@ function buildModelRouterRequestFromBody(
     user_request:
       typeof body.user_request === "string"
         ? body.user_request.slice(0, 1600)
-        : "Summarize local demo workspace state without executing external actions.",
+        : "Summarize the PhantomForce workspace and recommend the next safe business action.",
     business_summary:
       typeof body.business_summary === "string"
         ? body.business_summary.slice(0, 900)
-        : "Owner-only personal training demo workspace. External actions approval-only.",
+        : "Owner-only PhantomForce workspace. External actions approval-only.",
     module_data: parseContextModuleData(body.module_data),
   };
 }
 
 function parsePhantomAiChatProvider(value: unknown) {
   return value === "openrouter_glm" ? "openrouter_glm" : "phantom";
+}
+
+function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string) {
+  const lower = userRequest.toLowerCase();
+  const business = businessName.trim() || "PhantomForce";
+  const safetyNote = "No email, post, upload, billing action, or production change was executed.";
+
+  if (/^(hi|hello|hey|yo|phantom)\b/.test(lower.trim())) {
+    return [
+      `I am here for ${business}.`,
+      "Use me to prioritize leads, draft replies, prepare quote/booking steps, organize ChicagoShots work, and turn the next move into approval-ready action.",
+      safetyNote,
+    ].join("\n\n");
+  }
+
+  if (lower.includes("brief") || lower.includes("today") || lower.includes("priority")) {
+    return [
+      "Today's best order:",
+      "1. Reply to the highest-priority lead with two call windows and a clear next step.",
+      "2. Review the ChicagoShots proposal packet and mark the status: draft, sent manually, follow-up needed, won, or lost.",
+      "3. Prepare one Core Sprint follow-up around the $1,500 offer, with $750 Starter as the fallback.",
+      "4. Keep Media Lab/PhantomCut proof private unless the prospect asks for examples.",
+      safetyNote,
+    ].join("\n");
+  }
+
+  if (lower.includes("price") || lower.includes("quote") || lower.includes("offer") || lower.includes("package")) {
+    return [
+      "Use this offer ladder:",
+      "- $750 Starter: quick cleanup, first follow-up, simple action board.",
+      "- $1,500 Core Sprint: default offer for ops + content setup.",
+      "- $2,500 Pro: messy workflows, dashboards, media, or heavier delivery.",
+      "For retainers, start at $300/mo unless the client only needs light follow-up support.",
+      safetyNote,
+    ].join("\n");
+  }
+
+  if (lower.includes("chicagoshots") || lower.includes("media") || lower.includes("video") || lower.includes("content")) {
+    return [
+      "ChicagoShots should be framed as the media execution arm:",
+      "1. Confirm the shoot/content goal.",
+      "2. Pick the package and delivery timeline.",
+      "3. Draft the follow-up manually.",
+      "4. Track status in proposal history before any external send.",
+      "Media Lab and PhantomCut are proof-backed support tools, not autonomous posting tools.",
+      safetyNote,
+    ].join("\n");
+  }
+
+  return [
+    `For ${business}, the next useful move is to turn this into an owner-approved action.`,
+    "I can help draft the reply, outline the quote, prepare a booking step, organize the proposal status, or summarize the next three revenue actions.",
+    "Ask: \"prepare the follow-up\", \"brief today\", \"draft the quote\", or \"what should I send?\"",
+    safetyNote,
+  ].join("\n\n");
 }
 
 function getSendReadinessStatus() {
@@ -2108,14 +2163,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
 
   const result = await runModelRouterFoundation(normalized);
   const interactionMemory = await recordHermesInteractionMemoryFromRun(result);
-  const protectedResponse = [
-    `Phantom AI handled this through the protected ${result.decision.provider_route} lane for ${normalized.business_name}.`,
-    `${result.action_preview.label}: ${result.action_preview.next_action}`,
-    result.decision.risks.length
-      ? `Safety notes: ${result.decision.risks.map((risk) => redactSensitiveText(risk)).join(" ")}`
-      : "Safety notes: no live provider, send, upload, queue execution, or approval execution ran.",
-    "I recorded the interaction to Hermes so the dashboard can keep building memory without exposing raw tools or secrets.",
-  ].join("\n\n");
+  const protectedResponse = buildPhantomAiWorkspaceReply(normalized.user_request, normalized.business_name);
 
   return {
     ok: true,

@@ -602,6 +602,19 @@ img {
   border-radius: 8px;
 }
 
+.command-form .lane-readout {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.command-form .lane-readout svg {
+  color: var(--cyan);
+}
+
 .command-form input {
   min-height: 48px;
   padding: 0 12px;

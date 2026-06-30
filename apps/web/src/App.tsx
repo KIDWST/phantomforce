@@ -2688,8 +2688,23 @@ function App() {
     event.preventDefault();
     const text = commandText.trim();
     if (!text) return;
+    const lower = text.toLowerCase();
     setCommandText("");
     setMessages((current) => [...current, { id: makeId("msg-user"), role: "user", content: text }]);
+
+    if (
+      lower.includes("schedule") ||
+      lower.includes("follow") ||
+      lower.includes("handle") ||
+      lower.includes("email") ||
+      lower.includes("reply") ||
+      lower.includes("book") ||
+      lower.includes("quote") ||
+      lower.includes("proposal")
+    ) {
+      createFollowUpPlan();
+      return;
+    }
 
     if (aiProvider === "openrouter_glm" || aiProvider === "phantom") {
       setPhantomAiBusy(true);
@@ -2699,7 +2714,7 @@ function App() {
           method: "POST",
           headers: sessionHeaders(true),
           body: JSON.stringify({
-            provider: aiProvider,
+            provider: "phantom",
             message: text,
             tenant_id: activeSession.clientId ?? "phantomforce-owner",
             business_name: selectedOrg,
@@ -2734,17 +2749,8 @@ function App() {
             content,
           },
         ]);
-        addActivity(
-          aiProvider === "openrouter_glm"
-            ? data?.live_provider_called
-              ? "Advanced reasoning lane responded"
-              : "Advanced reasoning lane blocked"
-            : "Phantom AI protected lane recorded",
-          data?.openrouter?.blocked_reason ??
-            data?.openrouter?.error_message ??
-            "Phantom AI backend returned safely through the protected lane.",
-          data?.live_provider_called || aiProvider === "phantom" ? "ok" : "warn",
-        );
+        addActivity("Phantom AI replied", "Business guidance returned without sending, posting, billing, or exposing tools.", "ok");
+        return;
       } catch {
         setMessages((current) => [
           ...current,
@@ -2752,27 +2758,13 @@ function App() {
             id: makeId("msg-assistant"),
             role: "assistant",
             content:
-              aiProvider === "openrouter_glm"
-                ? "Phantom AI could not reach the protected GLM worker lane. Check the server and env setup."
-                : "Phantom AI could not reach the protected backend lane. I can still prepare local approval-only actions.",
+              "Phantom AI could not reach the backend. I can still prepare local approval-only actions from the dashboard.",
           },
         ]);
-        addActivity(
-          aiProvider === "openrouter_glm" ? "GLM worker lane offline" : "Phantom AI backend offline",
-          "The Phantom AI backend did not answer.",
-          "warn",
-        );
+        addActivity("Phantom AI backend offline", "The Phantom AI backend did not answer.", "warn");
       } finally {
         setPhantomAiBusy(false);
       }
-
-      if (aiProvider === "openrouter_glm") return;
-    }
-
-    const lower = text.toLowerCase();
-    if (lower.includes("schedule") || lower.includes("follow") || lower.includes("handle") || lower.includes("email")) {
-      createFollowUpPlan();
-      return;
     }
 
     if (lower.includes("brief") || lower.includes("today")) {
@@ -2792,10 +2784,10 @@ function App() {
     setMessages((current) => [
       ...current,
       {
-        id: makeId("msg-assistant"),
-        role: "assistant",
-        content:
-          "I can help with that. For this first build, I can brief the day, find follow-ups, create approval cards, organize tasks, and prepare email/calendar actions for review.",
+          id: makeId("msg-assistant"),
+          role: "assistant",
+          content:
+            "I can help with that. I can brief the day, prioritize leads, create approval cards, organize tasks, prepare quotes, and draft email/calendar actions for review.",
       },
     ]);
   }
@@ -3476,16 +3468,10 @@ function CommandCenter({
             ))}
           </div>
           <form className="command-form" onSubmit={submitCommand}>
-            <select
-              aria-label="Phantom AI lane"
-              className="llm-select"
-              value={aiProvider}
-              onChange={(event) => setAiProvider(event.target.value as AiProviderChoice)}
-              disabled={phantomAiBusy}
-            >
-              <option value="phantom">Phantom AI</option>
-              {canManageAccess ? <option value="openrouter_glm">Advanced reasoning lane</option> : null}
-            </select>
+            <div aria-label="Phantom AI lane" className="llm-select lane-readout">
+              <Bot size={15} />
+              <span>Phantom AI</span>
+            </div>
             <input
               value={commandText}
               onChange={(event) => setCommandText(event.target.value)}
