@@ -156,8 +156,12 @@ function initConversation() {
     }, reduceMotion ? 80 : 320);
   });
 
-  // first set of thoughts
-  setOrbits(["Service business", "Sports org", "Media / creator", "E-commerce", "Something else"]);
+  // boot: the entity wakes and speaks first
+  say.replaceChildren();
+  window.setTimeout(() => {
+    speak("I'm a private cyber-AI that runs your business. Point me at what's eating your time.");
+    window.setTimeout(() => setOrbits(["Service business", "Sports org", "Media / creator", "E-commerce", "Something else"]), 1600);
+  }, 650);
 }
 
 /* ---------------- the entity (WebGL) ---------------- */
@@ -260,6 +264,17 @@ function initPhantomMoods() {
     if (!eraf) eraf = requestAnimationFrame(animateEyes);
     window.setTimeout(() => phantom.classList.remove("dead"), 1500);
   });
+
+  // touch devices have no cursor — give the entity its own idle life
+  if (window.matchMedia("(hover: none)").matches && !reduceMotion) {
+    window.setInterval(() => {
+      if (phantom.classList.contains("dead")) return;
+      tex = (Math.random() - 0.5) * 5; tey = (Math.random() - 0.5) * 3.4;
+      if (!eraf) eraf = requestAnimationFrame(animateEyes);
+      phantom.classList.add("happy");
+      window.setTimeout(() => phantom.classList.remove("happy"), 1500);
+    }, 3600);
+  }
 }
 
 /* ---------------- threat radar: risks a business faces ---------------- */

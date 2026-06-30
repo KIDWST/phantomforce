@@ -134,8 +134,9 @@ button, input { font: inherit; color: inherit; }
   display: inline-flex; align-items: center; gap: 9px; margin-top: 2px; padding: 13px 24px; border-radius: 999px;
   background: linear-gradient(120deg, var(--neon), #15d97f); color: #02140b;
   font: 600 12px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none;
-  box-shadow: 0 0 36px rgba(65, 255, 161, 0.45); animation: emerge 0.8s ease both;
+  box-shadow: 0 0 36px rgba(65, 255, 161, 0.45); animation: emerge 0.8s ease both, summonPulse 2.6s ease-in-out 0.8s infinite;
 }
+@keyframes summonPulse { 50% { box-shadow: 0 0 56px rgba(65, 255, 161, 0.72); } }
 .summon span { transition: transform 0.2s; }
 .summon:hover span { transform: translateX(4px); }
 
