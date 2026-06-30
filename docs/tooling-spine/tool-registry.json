@@ -1,0 +1,134 @@
+{
+  "schema_version": "0.1.0",
+  "status": "sprint_0_plan_only",
+  "base_head": "715712cf1e12643e20369ace8d7dd2946fc30972",
+  "branch": "feature/tooling-spine-n8n-agentlab-sprint0-20260629",
+  "rules": {
+    "phantom_ai_role": "user_facing_brain",
+    "hermes_role": "memory_context_approval_budget_redaction_cache_audit_layer",
+    "default_mode": "dry_run_plan_only",
+    "public_webhooks_allowed": false,
+    "real_credentials_allowed": false,
+    "live_provider_calls_allowed": false,
+    "approval_execution_allowed": false,
+    "production_ledger_writes_allowed": false,
+    "queue_writes_allowed": false,
+    "external_write_actions_allowed": false
+  },
+  "tools": [
+    {
+      "id": "n8n",
+      "display_name": "n8n",
+      "path_or_repo": "future local-only install; not present in Sprint 0",
+      "intended_role": "approval-gated local automation worker for boring tasks",
+      "allowed_mode": "planned_only",
+      "blocked_actions": [
+        "public_webhooks",
+        "credential_storage",
+        "active_workflows",
+        "email_send",
+        "social_post",
+        "file_upload",
+        "client_call",
+        "crm_mutation",
+        "billing_or_charge",
+        "live_provider_call",
+        "production_ledger_write",
+        "approval_execution",
+        "destructive_source_media_change"
+      ],
+      "next_phase": "Write OpenSpec proposal and local-only inactive worker scaffold plan before any runtime setup."
+    },
+    {
+      "id": "openspec",
+      "display_name": "OpenSpec",
+      "path_or_repo": "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\openspec",
+      "intended_role": "controlled proposal/spec/task workflow before implementation",
+      "allowed_mode": "agentlab_reference_only",
+      "blocked_actions": [
+        "openspec_init_against_phantomforce",
+        "openspec_update_against_phantomforce",
+        "openspec_validate_runtime",
+        "package_install",
+        "unreviewed_repo_writes"
+      ],
+      "next_phase": "Draft a proposal for tooling spine implementation gates."
+    },
+    {
+      "id": "agent-os",
+      "display_name": "Agent OS",
+      "path_or_repo": "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\agent-os",
+      "intended_role": "standards and workflow layer aligned with AGENTS.md and CLAUDE.md",
+      "allowed_mode": "agentlab_reference_only",
+      "blocked_actions": [
+        "project_install",
+        "sync_to_profile",
+        "global_agent_config_write",
+        "claude_command_install",
+        "codex_config_write",
+        "unreviewed_repo_writes"
+      ],
+      "next_phase": "Draft standards alignment notes without running install or sync scripts."
+    },
+    {
+      "id": "serena",
+      "display_name": "Serena",
+      "path_or_repo": "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\serena",
+      "intended_role": "read-only semantic code navigation for Claude and Codex",
+      "allowed_mode": "agentlab_reference_only_future_read_only",
+      "blocked_actions": [
+        "mcp_server_start",
+        "global_mcp_registration",
+        "shell_execution",
+        "write_tools",
+        "repo_mutation",
+        "health_check_against_phantomforce_without_approval"
+      ],
+      "next_phase": "Design a read-only navigation profile with shell/write tools disabled."
+    },
+    {
+      "id": "ruflo",
+      "display_name": "Ruflo",
+      "path_or_repo": "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\ruflo",
+      "intended_role": "sandbox-only candidate for future agent squad planning vocabulary",
+      "allowed_mode": "quarantine_planning_only",
+      "blocked_actions": [
+        "cli_execution",
+        "claude_flow_execution",
+        "mcp_server",
+        "daemon",
+        "hooks",
+        "swarms",
+        "agentdb_or_memory_import",
+        "federation",
+        "ipfs_or_pinata",
+        "cloud_calls",
+        "production_use"
+      ],
+      "next_phase": "Keep quarantined until Jordan approves a separate runtime review."
+    },
+    {
+      "id": "phantom-ai-online-fetch",
+      "display_name": "Phantom AI Online Fetch Lane",
+      "path_or_repo": "future PhantomForce implementation; not present in Sprint 0",
+      "intended_role": "allowlisted read-only fetch through Hermes approval, budget, redaction, cache, and citation controls",
+      "allowed_mode": "planned_only",
+      "blocked_actions": [
+        "send",
+        "upload",
+        "post",
+        "publish",
+        "client_call",
+        "crm_mutation",
+        "billing_or_charge",
+        "delete",
+        "destructive_mutation",
+        "live_provider_call_without_approval",
+        "queue_write_without_approved_path",
+        "production_ledger_write",
+        "approval_execution"
+      ],
+      "next_phase": "Specify request/response schema, allowlist, cache contract, and Hermes budget/redaction/citation reporting."
+    }
+  ]
+}
