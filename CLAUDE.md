@@ -87,7 +87,7 @@ Jordan approval.
   - Request-time guard endpoints exist:
     - `GET /client-workspaces/:id`
     - `GET /client-workspaces/:id/modules/:moduleKey`
-  - Sports Ops Demo guard behavior is verified:
+  - Test Client guard behavior is verified:
     - `active` returns `full`.
     - `past_due` returns `read_only`.
     - `revoked` returns HTTP `403` and `blocked`.
@@ -290,7 +290,7 @@ Latest verification on 2026-06-25:
   - `client-past-due` route shows `DISABLED`.
   - Pangolin dry-run cards show gateway enforcement separately from app-layer
     enforcement.
-  - Access renders the guarded Calendar module payload for Sports Ops Demo.
+  - Access renders the guarded Calendar module payload for the Test Client workspace.
   - Access renders the Calendar connector boundary: `connector: calendar`,
     `local-demo-calendar`, `credentialMode=local_demo`, `status=available`,
     `credentialSource=workspace_reference`,
@@ -300,7 +300,7 @@ Latest verification on 2026-06-25:
     to `Read only`.
   - Restore flips the request-time guard back to `full` and the module panel
     to `Write enabled`.
-  - Sports Ops Demo client session sees one scoped access card, no module
+  - Test Client session sees one scoped access card, no module
     controls, and no Pangolin dry-run panel.
   - Money demo browser flow passed:
     signed lead -> blocked until payment -> paid active workspace -> Calendar

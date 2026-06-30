@@ -14,6 +14,7 @@ export type AccessSession = {
   role: SessionRole;
   clientId?: string;
   canManageAccess: boolean;
+  visibleOnLogin?: boolean;
 };
 
 const DEFAULT_SESSION_SECRET = "phantomforce-local-dev-session-secret-change-before-production";
@@ -33,9 +34,10 @@ const enableLocalSessionLogin = enableDemoAuth || enablePrismaDevAuth || enableO
 const demoSessions: AccessSession[] = [
   {
     id: "admin-jordan",
-    label: "Jordan / PhantomForce Admin",
+    label: "Jordan Admin",
     role: "admin",
     canManageAccess: true,
+    visibleOnLogin: true,
   },
   {
     id: "client-chicagoshots",
@@ -43,20 +45,23 @@ const demoSessions: AccessSession[] = [
     role: "client",
     clientId: "client-chicagoshots",
     canManageAccess: false,
+    visibleOnLogin: false,
   },
   {
     id: "client-sports-demo",
-    label: "Sports Ops Demo client",
+    label: "Test Client",
     role: "client",
     clientId: "client-sports-demo",
     canManageAccess: false,
+    visibleOnLogin: true,
   },
   {
     id: "client-past-due",
-    label: "Past Due Pilot client",
+    label: "The Force",
     role: "client",
     clientId: "client-past-due",
     canManageAccess: false,
+    visibleOnLogin: false,
   },
 ];
 
@@ -194,8 +199,10 @@ export function assertAccessAuthConfiguration() {
   );
 }
 
-export function listAccessSessions() {
-  return accessSessions;
+export function listAccessSessions(options?: { includeHidden?: boolean }) {
+  if (options?.includeHidden) return accessSessions;
+
+  return accessSessions.filter((session) => session.visibleOnLogin !== false);
 }
 
 export function setAccessSessions(sessions: AccessSession[]) {

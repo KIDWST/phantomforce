@@ -563,8 +563,8 @@ app.get("/phantom-ai/provider-policy/status", async (request, reply) => {
     provider_enabled: true,
   });
   const hardBudgetGate = evaluateProviderBudgetHardGateFromPolicy({
-    tenant_id: "demo-trainer",
-    business_name: "West Loop Strength Lab",
+    tenant_id: "phantomforce-admin",
+    business_name: "PhantomForce",
     provider_id: "openrouter_glm",
     model_id: "z-ai/glm-5.2",
     estimated_tokens: 0,
@@ -647,9 +647,9 @@ app.post("/phantom-ai/provider-funding/approval-contract/preview", async (reques
     estimated_tokens?: unknown;
     estimated_cost_usd?: unknown;
   };
-  const tenantId = typeof body.tenant_id === "string" ? body.tenant_id.slice(0, 80) : "demo-trainer";
+  const tenantId = typeof body.tenant_id === "string" ? body.tenant_id.slice(0, 80) : "phantomforce-admin";
   const businessName =
-    typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "West Loop Strength Lab";
+    typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "PhantomForce";
   const providerId = "openrouter_glm";
   const modelId = "z-ai/glm-5.2";
   const policy = getProviderBudgetPolicyStatus();

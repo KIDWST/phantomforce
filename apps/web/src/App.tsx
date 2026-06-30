@@ -1226,33 +1226,22 @@ type AppSession = {
 };
 
 const AUTHORIZATION_HEADER = "Authorization";
+const OWNER_ORG_NAME = "PhantomForce";
+const DEFAULT_CLIENT_WORKSPACE_ID = "client-chicagoshots";
+const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-sports-demo", "client-past-due"]);
 
 const initialSessions: AppSession[] = [
   {
     id: "admin-jordan",
-    label: "Jordan / PhantomForce Owner",
+    label: "Jordan Admin",
     role: "admin",
     canManageAccess: true,
   },
   {
-    id: "client-chicagoshots",
-    label: "ChicagoShots workspace",
-    role: "client",
-    clientId: "client-chicagoshots",
-    canManageAccess: false,
-  },
-  {
     id: "client-sports-demo",
-    label: "Sports Ops Demo client",
+    label: "Test Client",
     role: "client",
     clientId: "client-sports-demo",
-    canManageAccess: false,
-  },
-  {
-    id: "client-past-due",
-    label: "Past Due Pilot client",
-    role: "client",
-    clientId: "client-past-due",
     canManageAccess: false,
   },
 ];
@@ -1429,29 +1418,90 @@ const initialClientAccess: ClientAccess[] = [
   },
   {
     id: "client-sports-demo",
-    business: "Sports Ops Demo",
-    owner: "Client Owner",
-    plan: "$2,000 Team Media Day",
+    business: "Test Client",
+    owner: "Demo Client",
+    plan: "Test client workspace",
     paymentStatus: "paid",
     accessStatus: "active",
     gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/sports-ops-demo",
+    privateRoute: "app.phantomforce.online/test-client",
     modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts"],
     lastAudit: "Deposit paid; workspace active",
   },
   {
     id: "client-past-due",
-    business: "Past Due Pilot",
+    business: "The Force",
     owner: "Client Owner",
     plan: "$1,250/mo Ops Support",
     paymentStatus: "failed",
     accessStatus: "revoked",
     gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/past-due-pilot",
+    privateRoute: "app.phantomforce.online/the-force",
     modules: ["Command", "Tasks", "Reports"],
     lastAudit: "Payment failed; private route revoked",
   },
 ];
+
+function normalizeClientAccessRecord(record: ClientAccess): ClientAccess {
+  if (record.id === "client-sports-demo") {
+    return {
+      ...record,
+      business: "Test Client",
+      owner: record.owner === "Client Owner" || record.owner === "Sports Ops Demo Owner" ? "Demo Client" : record.owner,
+      plan: record.plan === "$2,000 Team Media Day" ? "Test client workspace" : record.plan,
+      privateRoute:
+        record.privateRoute === "app.phantomforce.online/sports-ops-demo"
+          ? "app.phantomforce.online/test-client"
+          : record.privateRoute,
+    };
+  }
+
+  if (record.id === "client-past-due") {
+    return {
+      ...record,
+      business: "The Force",
+      privateRoute:
+        record.privateRoute === "app.phantomforce.online/past-due-pilot"
+          ? "app.phantomforce.online/the-force"
+          : record.privateRoute,
+      lastAudit: record.lastAudit.replace(/Past Due Pilot/g, "The Force"),
+    };
+  }
+
+  return record;
+}
+
+function normalizePangolinRoutePlan(plan: PangolinRoutePlan): PangolinRoutePlan {
+  if (plan.clientId === "client-sports-demo") {
+    return {
+      ...plan,
+      business: "Test Client",
+      privateRoute:
+        plan.privateRoute === "app.phantomforce.online/sports-ops-demo"
+          ? "app.phantomforce.online/test-client"
+          : plan.privateRoute,
+    };
+  }
+
+  if (plan.clientId === "client-past-due") {
+    return {
+      ...plan,
+      business: "The Force",
+      privateRoute:
+        plan.privateRoute === "app.phantomforce.online/past-due-pilot"
+          ? "app.phantomforce.online/the-force"
+          : plan.privateRoute,
+    };
+  }
+
+  return plan;
+}
+
+function accessStatusFromGuardMode(mode: GuardedWorkspace["mode"]): ClientAccessStatus {
+  if (mode === "blocked") return "revoked";
+  if (mode === "read_only") return "past_due";
+  return "active";
+}
 
 const modules = [
   "AI Command",
@@ -2368,7 +2418,7 @@ function App() {
   const [tasks, setTasks] = useState(initialTasks);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [activity, setActivity] = useState(initialActivity);
-  const [clientAccess, setClientAccess] = useState(initialClientAccess);
+  const [clientAccess, setClientAccess] = useState(initialClientAccess.map(normalizeClientAccessRecord));
   const [guardedWorkspace, setGuardedWorkspace] = useState<GuardedWorkspace | null>(null);
   const [workspaceModuleView, setWorkspaceModuleView] = useState<WorkspaceModuleView | null>(null);
   const [pangolinPlan, setPangolinPlan] = useState<PangolinRoutePlan[]>([]);
@@ -2380,7 +2430,7 @@ function App() {
   const [aiProvider, setAiProvider] = useState<AiProviderChoice>("codex");
   const [phantomAiBusy, setPhantomAiBusy] = useState(false);
   const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
-  const [selectedOrg, setSelectedOrg] = useState("PhantomForce Pilot");
+  const [selectedOrg, setSelectedOrg] = useState(OWNER_ORG_NAME);
   const activeSession = useMemo(
     () => initialSessions.find((session) => session.id === activeSessionId) ?? initialSessions[0],
     [activeSessionId],
@@ -2394,6 +2444,22 @@ function App() {
     if (canManageAccess) return clientAccess;
     return clientAccess.filter((client) => client.id === activeSession.clientId);
   }, [activeSession.clientId, canManageAccess, clientAccess]);
+  const organizationOptions = useMemo(() => {
+    if (!canManageAccess) return [selectedOrg];
+
+    return Array.from(
+      new Set([
+        OWNER_ORG_NAME,
+        ...clientAccess
+          .filter((client) => CORE_ORGANIZATION_CLIENT_IDS.has(client.id))
+          .map((client) => client.business),
+      ]),
+    );
+  }, [canManageAccess, clientAccess, selectedOrg]);
+  const selectedWorkspaceClient = useMemo(
+    () => clientAccess.find((client) => client.business === selectedOrg),
+    [clientAccess, selectedOrg],
+  );
 
   useEffect(() => {
     if (!canManageAccess && (route === "access" || route === "connections")) {
@@ -2417,7 +2483,11 @@ function App() {
       ? preferredRoute
       : "command";
     setActiveSessionId(session.id);
-    setSelectedOrg(session.clientId ? session.label.replace(" client", "") : "PhantomForce Pilot");
+    setSelectedOrg(
+      session.clientId
+        ? (clientAccess.find((client) => client.id === session.clientId)?.business ?? session.label)
+        : OWNER_ORG_NAME,
+    );
     setSessionToken("");
 
     try {
@@ -2481,7 +2551,9 @@ function App() {
     setWorkspaceModuleView(null);
   }
 
-  async function refreshGuardedWorkspace(clientId = activeSession.clientId ?? "client-chicagoshots") {
+  async function refreshGuardedWorkspace(
+    clientId = activeSession.clientId ?? selectedWorkspaceClient?.id ?? DEFAULT_CLIENT_WORKSPACE_ID,
+  ) {
     try {
       const response = await fetch(`${API_BASE_URL}/client-workspaces/${clientId}`, {
         headers: sessionHeaders(),
@@ -2506,9 +2578,21 @@ function App() {
 
       if (response.ok && data.workspace) {
         const modules = data.workspace.modules;
-        setGuardedWorkspace({
+        const workspaceRecord = normalizeClientAccessRecord({
           id: data.workspace.id,
           business: data.workspace.business,
+          owner: "Client Owner",
+          plan: "Workspace",
+          paymentStatus: "paid",
+          accessStatus: accessStatusFromGuardMode(data.workspace.mode),
+          gateway: "Pangolin",
+          privateRoute: "",
+          modules,
+          lastAudit: "",
+        });
+        setGuardedWorkspace({
+          id: data.workspace.id,
+          business: workspaceRecord.business,
           mode: data.workspace.mode,
           modules,
           reason: data.decision?.reason ?? "Workspace request allowed.",
@@ -2520,9 +2604,21 @@ function App() {
 
       if (data.record && data.decision) {
         const modules = data.decision.modules ?? [];
-        setGuardedWorkspace({
+        const workspaceRecord = normalizeClientAccessRecord({
           id: data.record.id,
           business: data.record.business,
+          owner: "Client Owner",
+          plan: "Workspace",
+          paymentStatus: "paid",
+          accessStatus: accessStatusFromGuardMode(data.decision.mode),
+          gateway: "Pangolin",
+          privateRoute: "",
+          modules,
+          lastAudit: "",
+        });
+        setGuardedWorkspace({
+          id: data.record.id,
+          business: workspaceRecord.business,
           mode: data.decision.mode,
           modules,
           reason: data.decision.reason,
@@ -2562,7 +2658,7 @@ function App() {
 
       const data = (await response.json()) as { plans?: PangolinRoutePlan[] };
       if (Array.isArray(data.plans)) {
-        setPangolinPlan(data.plans);
+        setPangolinPlan(data.plans.map(normalizePangolinRoutePlan));
       }
     } catch {
       addActivity("Pangolin dry-run offline", "Gateway route planning is waiting on the backend.", "warn");
@@ -2669,7 +2765,7 @@ function App() {
         if (!response.ok) return;
         const data = (await response.json()) as { records?: ClientAccess[] };
         if (!cancelled && Array.isArray(data.records)) {
-          setClientAccess(data.records);
+          setClientAccess(data.records.map(normalizeClientAccessRecord));
         }
       } catch {
         addActivity("Access API offline", "Using local workspace access state until the backend is available.", "warn");
@@ -2695,6 +2791,12 @@ function App() {
     };
   }, [activeSessionId, sessionToken, signedIn]);
 
+  useEffect(() => {
+    if (!signedIn || !canManageAccess || !selectedWorkspaceClient) return;
+
+    void refreshGuardedWorkspace(selectedWorkspaceClient.id);
+  }, [canManageAccess, selectedOrg, signedIn, selectedWorkspaceClient?.id]);
+
   const stats = useMemo(() => {
     return {
       urgent: emails.filter((email) => email.status === "needs-reply").length,
@@ -2719,9 +2821,12 @@ function App() {
   }
 
   function upsertClientAccessRecord(record: ClientAccess) {
+    const normalizedRecord = normalizeClientAccessRecord(record);
     setClientAccess((current) => {
-      const exists = current.some((item) => item.id === record.id);
-      return exists ? current.map((item) => (item.id === record.id ? record : item)) : [record, ...current];
+      const exists = current.some((item) => item.id === normalizedRecord.id);
+      return exists
+        ? current.map((item) => (item.id === normalizedRecord.id ? normalizedRecord : item))
+        : [normalizedRecord, ...current];
     });
   }
 
@@ -3249,9 +3354,9 @@ function App() {
             onChange={(event) => setSelectedOrg(event.target.value)}
             disabled={!canManageAccess}
           >
-            <option>PhantomForce Pilot</option>
-            <option>ChicagoShots</option>
-            {!canManageAccess ? <option>{selectedOrg}</option> : null}
+            {organizationOptions.map((organization) => (
+              <option key={organization}>{organization}</option>
+            ))}
           </select>
         </div>
 
