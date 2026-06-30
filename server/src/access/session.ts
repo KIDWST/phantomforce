@@ -25,6 +25,7 @@ const enableDemoAuth =
   authProvider === "demo" && process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH !== "false" && !productionMode;
 const enablePrismaDevAuth = authProvider === "prisma-dev" && !productionMode;
 const enableOwnerProductionAuth = authProvider === "owner-production";
+const enableGatewayForwardedAuth = authProvider === "gateway-forwarded";
 const ownerEmail = (process.env.PHANTOMFORCE_OWNER_EMAIL ?? "").trim().toLowerCase();
 const ownerLoginKey = process.env.PHANTOMFORCE_OWNER_LOGIN_KEY ?? "";
 const MIN_OWNER_LOGIN_KEY_LENGTH = 16;
@@ -95,6 +96,42 @@ const ownerProductionConfigured =
   !enableDemoAuth &&
   !allowUnsignedSessionHeader;
 
+// --- gateway-forwarded auth (Pangolin forward-auth / unified single login) ---
+// Pangolin authenticates the user at its gate (built-in accounts) and reverse-
+// proxies the request with the user's identity in a header. PhantomForce trusts
+// that identity ONLY when the request also carries the shared secret, so the
+// header cannot be forged by anything that bypasses the gateway. Fail-closed:
+// no secret, wrong secret, no user, or an unmapped user => no session.
+const MIN_GATEWAY_SECRET_LENGTH = 16;
+const gatewaySharedSecret = process.env.PHANTOMFORCE_GATEWAY_SHARED_SECRET ?? "";
+const gatewaySecretHeader = (
+  process.env.PHANTOMFORCE_GATEWAY_SECRET_HEADER ?? "x-phantomforce-gateway"
+)
+  .trim()
+  .toLowerCase();
+const gatewayUserHeader = (process.env.PHANTOMFORCE_GATEWAY_USER_HEADER ?? "remote-user")
+  .trim()
+  .toLowerCase();
+const gatewayAdminUsers = new Set(
+  (process.env.PHANTOMFORCE_GATEWAY_ADMIN_USERS ?? "")
+    .split(",")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean),
+);
+const gatewayClientMap = new Map<string, string>(
+  (process.env.PHANTOMFORCE_GATEWAY_CLIENT_MAP ?? "")
+    .split(",")
+    .map((pair) => pair.split("="))
+    .filter((kv) => kv.length === 2 && kv[0]?.trim() && kv[1]?.trim())
+    .map(([user, clientId]) => [user.trim().toLowerCase(), clientId.trim()]),
+);
+const gatewayConfigured =
+  enableGatewayForwardedAuth &&
+  gatewaySharedSecret.length >= MIN_GATEWAY_SECRET_LENGTH &&
+  (gatewayAdminUsers.size > 0 || gatewayClientMap.size > 0) &&
+  !enableDemoAuth &&
+  !allowUnsignedSessionHeader;
+
 const AccessSessionTokenPayloadSchema = z.object({
   v: z.literal(1),
   sid: z.string().min(1),
@@ -114,15 +151,19 @@ export function getAccessAuthConfiguration() {
     demoAuthEnabled: enableDemoAuth,
     prismaDevAuthEnabled: enablePrismaDevAuth,
     ownerProductionAuthEnabled: enableOwnerProductionAuth,
+    gatewayForwardedAuthEnabled: enableGatewayForwardedAuth,
+    gatewayConfigured,
     sessionLoginEnabled: enableLocalSessionLogin,
-    sessionSource: enableOwnerProductionAuth
-      ? "owner-production"
-      : enablePrismaDevAuth
-        ? "prisma-membership"
-        : enableDemoAuth
-          ? "demo-seed"
-          : "disabled",
-    productionReady: ownerProductionConfigured,
+    sessionSource: enableGatewayForwardedAuth
+      ? "gateway-forwarded"
+      : enableOwnerProductionAuth
+        ? "owner-production"
+        : enablePrismaDevAuth
+          ? "prisma-membership"
+          : enableDemoAuth
+            ? "demo-seed"
+            : "disabled",
+    productionReady: ownerProductionConfigured || gatewayConfigured,
     tokenType: "Bearer" as const,
     authorizationHeader: AUTHORIZATION_HEADER,
     legacyHeader: SESSION_HEADER,
@@ -145,9 +186,38 @@ export function assertAccessAuthConfiguration() {
   if (
     authProvider !== "demo" &&
     authProvider !== "prisma-dev" &&
-    authProvider !== "owner-production"
+    authProvider !== "owner-production" &&
+    authProvider !== "gateway-forwarded"
   ) {
     throw new Error(`Unsupported PHANTOMFORCE_AUTH_PROVIDER "${authProvider}".`);
+  }
+
+  // Gateway-forwarded (Pangolin single login). Valid in production too. Must be
+  // strongly configured and never coexist with demo auth or unsigned headers.
+  if (enableGatewayForwardedAuth) {
+    if (enableDemoAuth) {
+      throw new Error("Demo auth must be disabled for gateway-forwarded auth.");
+    }
+
+    if (allowUnsignedSessionHeader) {
+      throw new Error(
+        "PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER cannot be enabled with gateway-forwarded auth.",
+      );
+    }
+
+    if (gatewaySharedSecret.length < MIN_GATEWAY_SECRET_LENGTH) {
+      throw new Error(
+        "PHANTOMFORCE_GATEWAY_SHARED_SECRET must be set to a strong value (at least 16 characters) for gateway-forwarded auth.",
+      );
+    }
+
+    if (gatewayAdminUsers.size === 0 && gatewayClientMap.size === 0) {
+      throw new Error(
+        "gateway-forwarded auth requires PHANTOMFORCE_GATEWAY_ADMIN_USERS and/or PHANTOMFORCE_GATEWAY_CLIENT_MAP to map forwarded identities.",
+      );
+    }
+
+    return authConfiguration;
   }
 
   // Owner-controlled production auth. Must be strongly configured whether or not
@@ -332,7 +402,58 @@ function getSessionHeader(request: FastifyRequest) {
   return value;
 }
 
+function readForwardedHeader(request: FastifyRequest, name: string) {
+  const value = request.headers[name];
+  const header = Array.isArray(value) ? value[0] : value;
+  return typeof header === "string" ? header : undefined;
+}
+
+// Resolve a session from Pangolin's forwarded identity. Trust nothing unless the
+// shared secret matches (timing-safe). An unmapped but gateway-authenticated
+// user is denied rather than granted a default workspace — fail closed.
+function resolveGatewayForwardedSession(request: FastifyRequest): AccessSession | undefined {
+  if (gatewaySharedSecret.length < MIN_GATEWAY_SECRET_LENGTH) {
+    return undefined;
+  }
+
+  const presentedSecret = readForwardedHeader(request, gatewaySecretHeader);
+  if (!presentedSecret || !safeEqual(presentedSecret, gatewaySharedSecret)) {
+    return undefined;
+  }
+
+  const user = (readForwardedHeader(request, gatewayUserHeader) ?? "").trim().toLowerCase();
+  if (!user) {
+    return undefined;
+  }
+
+  if (gatewayAdminUsers.has(user)) {
+    return {
+      id: `gateway:${user}`,
+      label: "Operator",
+      role: "admin",
+      canManageAccess: true,
+    };
+  }
+
+  const clientId = gatewayClientMap.get(user);
+  if (!clientId) {
+    return undefined;
+  }
+
+  return {
+    id: `gateway:${user}`,
+    label: "Client workspace",
+    role: "client",
+    clientId,
+    canManageAccess: false,
+  };
+}
+
 export function resolveAccessSession(request: FastifyRequest) {
+  if (enableGatewayForwardedAuth) {
+    return resolveGatewayForwardedSession(request);
+  }
+
   const bearerSession = verifyAccessSessionToken(readBearerToken(request));
 
   if (bearerSession) {
