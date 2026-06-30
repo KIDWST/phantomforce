@@ -6,18 +6,21 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const pulse = { v: 0 };
 const flare = () => { pulse.v = 1; };
 
-/* Live brain: set this to your deployed Cloudflare Worker URL to switch the
-   input from the local responder to live GLM 5.2 (server-side key, 5-prompt
-   daily cap + token limit enforced in the Worker). Empty = local responder. */
+/* Live brain: set this to your deployed proxy URL to switch the input from
+   the local responder to live Claude (server-side key, 5-prompt daily cap +
+   token limit enforced in the proxy). Empty = local responder. */
 const AI_ENDPOINT = "";
 async function askPhantom(message) {
   if (!AI_ENDPOINT) return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 7000);
   try {
-    const r = await fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }) });
+    const r = await fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }), signal: ctrl.signal });
     const d = await r.json();
     if (d && (d.error === "limit" || d.error === "busy")) return { limited: true, message: d.message };
     if (d && d.reply) return { reply: String(d.reply).slice(0, 320) };
-  } catch { /* unreachable -> fall back */ }
+  } catch { /* unreachable / timeout -> fall back to local responder */ }
+  finally { clearTimeout(timer); }
   return null;
 }
 function localReply(text) {
@@ -293,25 +296,29 @@ function initPhantomMoods() {
 function initRiskRadar() {
   const field = document.querySelector("[data-riskfield]");
   if (!field || reduceMotion) return;
-  const risks = ["emails", "malware", "data leaks", "scams", "law updates", "chargebacks", "missed follow-ups", "late invoices", "no-shows", "phishing", "spam", "bad reviews", "downtime", "compliance", "deadlines", "double-bookings"];
+  // red = threats they face; cyan = the everyday flood PhantomForce absorbs
+  const threats = ["malware", "scam", "data leak", "phishing", "chargeback", "law update", "spam", "fraud", "compliance", "deadline", "downtime", "bad review"];
+  const stream = ["new email", "instagram dm", "missed call", "new booking", "5★ review", "invoice due", "follow-up", "facebook msg", "new lead", "tiktok comment", "voicemail", "appointment", "renewal", "support ticket", "late payment", "quote request"];
   const spawn = () => {
     if (document.hidden) return;
+    const threat = Math.random() < 0.38;
+    const pool = threat ? threats : stream;
     const ping = document.createElement("div");
-    ping.className = "risk-ping";
+    ping.className = "risk-ping " + (threat ? "threat" : "stream");
     const right = Math.random() < 0.5;
     ping.style.left = (right ? 72 + Math.random() * 22 : 6 + Math.random() * 22) + "%";
     ping.style.top = 12 + Math.random() * 76 + "%";
     const dot = document.createElement("span"); dot.className = "risk-dot";
     const label = document.createElement("span"); label.className = "risk-label";
-    label.textContent = risks[Math.floor(Math.random() * risks.length)];
+    label.textContent = pool[Math.floor(Math.random() * pool.length)];
     ping.append(dot, label);
     field.appendChild(ping);
     requestAnimationFrame(() => ping.classList.add("on"));
     window.setTimeout(() => ping.classList.remove("on"), 3200);
     window.setTimeout(() => ping.remove(), 4200);
   };
-  for (let i = 0; i < 3; i++) window.setTimeout(spawn, i * 850);
-  window.setInterval(spawn, 1700);
+  for (let i = 0; i < 4; i++) window.setTimeout(spawn, i * 650);
+  window.setInterval(spawn, 1300);
 }
 
 function boot() { initConversation(); initEntity(); initPhantomMoods(); initRiskRadar(); }
