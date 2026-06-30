@@ -1,11 +1,9 @@
-import { execFile } from "node:child_process";
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
-import { promisify } from "node:util";
 
 import { redactSensitiveText } from "../hermes-ledger.js";
 import type { SensitivityLevel } from "../types.js";
-
-const execFileAsync = promisify(execFile);
 
 export type ClaudeCliChatInput = {
   requestId: string;
@@ -44,6 +42,69 @@ export type ClaudeCliChatResult = {
 const MAX_CONTEXT_CHARS = 6000;
 const MAX_MESSAGE_CHARS = 1800;
 const MAX_RESPONSE_CHARS = 7000;
+const DEFAULT_WINDOWS_CLAUDE_PS1 = "C:\\Users\\jorda\\AppData\\Local\\hermes\\node\\claude.ps1";
+
+function resolveClaudeCliCommand(env: NodeJS.ProcessEnv | Record<string, string | undefined>) {
+  const configured = env.PHANTOM_CLAUDE_CLI_COMMAND?.trim();
+  if (configured) return { command: configured, argsPrefix: [] as string[], display: configured };
+
+  if (process.platform === "win32" && existsSync(DEFAULT_WINDOWS_CLAUDE_PS1)) {
+    return {
+      command: "powershell.exe",
+      argsPrefix: [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        DEFAULT_WINDOWS_CLAUDE_PS1,
+        "--dangerously-skip-permissions",
+      ],
+      display: DEFAULT_WINDOWS_CLAUDE_PS1,
+    };
+  }
+
+  return { command: "claude", argsPrefix: [] as string[], display: "claude" };
+}
+
+function runClaudeCliProcess(command: string, args: string[], cwd: string, timeout: number) {
+  return new Promise<{ stdout: string; stderr: string; code: number | string | null; signal: NodeJS.Signals | null }>(
+    (resolvePromise, reject) => {
+      const child = spawn(command, args, {
+        cwd,
+        windowsHide: true,
+        env: process.env,
+        stdio: ["ignore", "pipe", "pipe"],
+      });
+      let stdout = "";
+      let stderr = "";
+      let finished = false;
+      const timer = setTimeout(() => {
+        if (finished) return;
+        child.kill();
+        reject(new Error(`Claude CLI timed out after ${timeout}ms.`));
+      }, timeout);
+
+      child.stdout.on("data", (chunk) => {
+        stdout += String(chunk);
+      });
+      child.stderr.on("data", (chunk) => {
+        stderr += String(chunk);
+      });
+      child.on("error", (error) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        reject(error);
+      });
+      child.on("close", (code, signal) => {
+        if (finished) return;
+        finished = true;
+        clearTimeout(timer);
+        resolvePromise({ stdout, stderr, code, signal });
+      });
+    },
+  );
+}
 
 function truncate(value: string, max = MAX_RESPONSE_CHARS) {
   return redactSensitiveText(value).slice(0, max);
@@ -60,7 +121,7 @@ function blockedResult(input: ClaudeCliChatInput, reason: string): ClaudeCliChat
     provider_called: false,
     network_call_performed: false,
     request_body_prepared: false,
-    command: process.env.PHANTOM_CLAUDE_CLI_COMMAND?.trim() || "claude",
+    command: resolveClaudeCliCommand(process.env).display,
     cwd: resolve(input.cwd ?? process.cwd()),
     exit_code: null,
     stdout_chars: 0,
@@ -80,7 +141,7 @@ export async function callClaudeCliChat(
   } = {},
 ): Promise<ClaudeCliChatResult> {
   const env = { ...process.env, ...(options.env ?? {}) };
-  const command = env.PHANTOM_CLAUDE_CLI_COMMAND?.trim() || "claude";
+  const claudeCommand = resolveClaudeCliCommand(env);
   const cwd = resolve(input.cwd ?? process.cwd());
   const timeout = Math.min(Math.max(input.timeoutMs ?? 90000, 5000), 180000);
 
@@ -104,28 +165,23 @@ export async function callClaudeCliChat(
   ].join("\n");
 
   try {
-    const result = await execFileAsync(command, ["-p", prompt], {
-      cwd,
-      timeout,
-      windowsHide: true,
-      maxBuffer: 4 * 1024 * 1024,
-      env: process.env,
-    });
+    const result = await runClaudeCliProcess(claudeCommand.command, [...claudeCommand.argsPrefix, "-p", prompt], cwd, timeout);
     const output = truncate(result.stdout || result.stderr || "Claude CLI returned an empty response.");
+    const exitCode = result.code ?? 0;
 
     return {
       provider_id: "claude_cli",
       model_id: "claude-cli",
-      status: "called",
+      status: exitCode === 0 ? "called" : "error",
       blocked_reason: null,
-      error_message: null,
+      error_message: exitCode === 0 ? null : truncate(result.stderr || `Claude CLI exited with ${exitCode}.`, 1000),
       output_text: output,
       provider_called: true,
       network_call_performed: true,
       request_body_prepared: true,
-      command,
+      command: claudeCommand.display,
       cwd,
-      exit_code: 0,
+      exit_code: exitCode,
       stdout_chars: result.stdout.length,
       stderr_chars: result.stderr.length,
       ledger_written: false,
@@ -146,7 +202,7 @@ export async function callClaudeCliChat(
       /not found/i.test(stderr);
 
     if (notFound) {
-      return blockedResult(input, `Claude CLI command "${command}" is not available to the backend process.`);
+      return blockedResult(input, `Claude CLI command "${claudeCommand.display}" is not available to the backend process.`);
     }
 
     return {
@@ -159,7 +215,7 @@ export async function callClaudeCliChat(
       provider_called: true,
       network_call_performed: true,
       request_body_prepared: true,
-      command,
+      command: claudeCommand.display,
       cwd,
       exit_code: commandError.code ?? 1,
       stdout_chars: stdout.length,
