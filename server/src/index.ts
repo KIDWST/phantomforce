@@ -92,6 +92,7 @@ import {
   readHermesInteractionMemoryStoreRecords,
 } from "./phantom-ai/hermes-interaction-memory-store.js";
 import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
+import { runCodexOperatorChat } from "./phantom-ai/codex-operator.js";
 import { buildToolLanePreview } from "./phantom-ai/tool-lane.js";
 import { buildChicagoShotsLeadIntakePreview } from "./phantom-ai/ops-workflow.js";
 import {
@@ -110,6 +111,7 @@ import {
   previewModelRouterFoundation,
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
+import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
 import { evaluateProviderLiveReceiptLedgerContract } from "./phantom-ai/provider-live-receipt-ledger-contract.js";
 import {
@@ -406,6 +408,26 @@ function buildModelRouterRequestFromBody(
 
 function parsePhantomAiChatProvider(value: unknown) {
   return value === "openrouter_glm" ? "openrouter_glm" : "phantom";
+}
+
+type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli";
+
+function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
+  if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
+  if (value === "claude_cli" || value === "claude") return "claude_cli";
+  return "codex";
+}
+
+function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
+  if (lane === "glm_5_2") return "GLM 5.2";
+  if (lane === "claude_cli") return "Claude CLI";
+  return "Codex operator";
+}
+
+function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
+  if (lane === "glm_5_2") return "openrouter_glm" as const;
+  if (lane === "claude_cli") return "claude" as const;
+  return "local" as const;
 }
 
 function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string) {
@@ -2029,6 +2051,8 @@ app.post("/phantom-ai/chat", async (request, reply) => {
 
   const body = (request.body ?? {}) as {
     provider?: unknown;
+    admin_model?: unknown;
+    model_lane?: unknown;
     message?: unknown;
     tenant_id?: unknown;
     business_name?: unknown;
@@ -2068,6 +2092,176 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     session,
     "chat",
   );
+
+  if (session.canManageAccess) {
+    const adminModelLane = parseAdminPhantomAiModelLane(body.admin_model ?? body.model_lane ?? body.provider);
+    const adminProviderRoute = adminPhantomAiProviderRoute(adminModelLane);
+    const adminModelLabel = adminPhantomAiModelLabel(adminModelLane);
+    const preview = previewModelRouterFoundation(normalized, {
+      env: {
+        ...process.env,
+        PHANTOM_MODEL_ROUTER_MODE:
+          adminProviderRoute === "openrouter_glm" ? "openrouter" : adminProviderRoute === "claude" ? "claude" : "local",
+      },
+    });
+    const memoryContext = await buildHermesMemoryContextPreview({
+      tenant_id: normalized.tenant_id,
+      business_name: normalized.business_name,
+      actor_user_id: normalized.actor_user_id,
+      request_id: normalized.request_id,
+      task_type: normalized.task_type,
+      sensitivity_level: preview.decision.sensitivity_level,
+      provider_route: adminProviderRoute,
+      user_request: normalized.user_request,
+      business_summary: normalized.business_summary,
+      module_data: normalized.module_data,
+    });
+    const approvalRequired = preview.decision.approval_required || preview.action_preview.approval_required;
+    const adminResult =
+      adminModelLane === "glm_5_2"
+        ? {
+            lane: adminModelLane,
+            model_id: (await callOpenRouterGlm52(
+              {
+                requestId: normalized.request_id,
+                businessName: normalized.business_name,
+                taskType: normalized.task_type,
+                userMessage: normalized.user_request,
+                compactContext: memoryContext.augmented_context_preview,
+                sensitivityLevel: preview.decision.sensitivity_level,
+                approvalRequired,
+                adminOperatorLane: true,
+              },
+              {
+                env: {
+                  ...process.env,
+                  PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
+                  PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
+                },
+              },
+            )),
+          }
+        : adminModelLane === "claude_cli"
+          ? {
+              lane: adminModelLane,
+              model_id: await callClaudeCliChat({
+                requestId: normalized.request_id,
+                businessName: normalized.business_name,
+                taskType: normalized.task_type,
+                userMessage: normalized.user_request,
+                compactContext: memoryContext.augmented_context_preview,
+                sensitivityLevel: preview.decision.sensitivity_level,
+                approvalRequired,
+              }),
+            }
+          : {
+              lane: adminModelLane,
+              model_id: await runCodexOperatorChat({
+                requestId: normalized.request_id,
+                businessName: normalized.business_name,
+                userMessage: normalized.user_request,
+                compactContext: memoryContext.augmented_context_preview,
+                approvalRequired,
+                cwd: process.cwd(),
+              }),
+            };
+    const modelResult = adminResult.model_id;
+    const resultStatus = "status" in modelResult ? modelResult.status : "called";
+    const resultError =
+      "error_message" in modelResult && typeof modelResult.error_message === "string"
+        ? modelResult.error_message
+        : null;
+    const resultBlocked =
+      "blocked_reason" in modelResult && typeof modelResult.blocked_reason === "string"
+        ? modelResult.blocked_reason
+        : null;
+    const resultOutput = "output_text" in modelResult ? modelResult.output_text : "";
+    const toolExecuted = "tool_executed" in modelResult ? modelResult.tool_executed : false;
+    const toolName = "tool_name" in modelResult ? modelResult.tool_name : null;
+    const providerCalled = "provider_called" in modelResult ? modelResult.provider_called : false;
+    const networkCallPerformed =
+      "network_call_performed" in modelResult ? modelResult.network_call_performed : providerCalled;
+    const requestBodyPrepared = "request_body_prepared" in modelResult ? modelResult.request_body_prepared : false;
+    const ledgerRecord: HermesLedgerRecord = {
+      timestamp: new Date().toISOString(),
+      tenant_id: normalized.tenant_id,
+      business_name: normalized.business_name,
+      actor_user_id: normalized.actor_user_id,
+      actor_role: normalized.actor_role,
+      request_id: normalized.request_id,
+      task_type: normalized.task_type,
+      sensitivity_level: preview.decision.sensitivity_level,
+      provider_route: adminProviderRoute,
+      model_id: modelResult.model_id,
+      context_chars: memoryContext.augmented_context_chars,
+      estimated_tokens: Math.ceil(memoryContext.augmented_context_chars / 4),
+      estimated_cost_usd: null,
+      user_request_summary: redactSensitiveText(normalized.user_request).replace(/\s+/g, " ").slice(0, 240),
+      result_summary: redactSensitiveText(
+        toolExecuted
+          ? `${adminModelLabel} executed ${toolName ?? "tool"} and returned a receipt.`
+          : providerCalled
+            ? `${adminModelLabel} returned a Hermes-backed admin response.`
+            : `${adminModelLabel} did not complete: ${resultBlocked ?? resultError ?? resultStatus}`,
+      ).slice(0, 360),
+      approval_required: approvalRequired,
+      approval_status: approvalRequired ? "pending" : "not_required",
+      risks: preview.decision.risks.map((risk) => redactSensitiveText(risk)).slice(0, 8),
+      next_action: toolExecuted
+        ? "Review the operator receipt in Phantom AI."
+        : `Continue in Phantom AI with ${adminModelLabel} or switch admin model lanes.`,
+      agent_run_id: `phantom-ai-admin-${adminModelLane}-${normalized.request_id}`,
+      parent_task_id: normalized.request_id,
+    };
+
+    await appendHermesLedgerRecord(ledgerRecord);
+
+    return {
+      ok: true,
+      session,
+      provider_choice: "phantom",
+      admin_model_lane: adminModelLane,
+      admin_model_label: adminModelLabel,
+      model_id: modelResult.model_id,
+      message: {
+        role: "assistant",
+        content: resultError ? `${resultOutput}\n\n${adminModelLabel} error: ${resultError}` : resultOutput,
+      },
+      operator:
+        adminModelLane === "codex" && "tool_requested" in modelResult
+          ? {
+              status: modelResult.status,
+              admin_only: modelResult.admin_only,
+              localhost_only: modelResult.localhost_only,
+              tool_requested: modelResult.tool_requested,
+              tool_executed: modelResult.tool_executed,
+              tool_name: modelResult.tool_name,
+              tool_result: modelResult.tool_result,
+            }
+          : null,
+      openrouter: adminModelLane === "glm_5_2" ? modelResult : null,
+      claude_cli: adminModelLane === "claude_cli" ? modelResult : null,
+      hermes: {
+        context_used: true,
+        ledger_written: true,
+        provider_route: adminProviderRoute,
+        recalled_memory_count: memoryContext.memory.recalled_count,
+      },
+      memory_context: {
+        scope: memoryContext.scope,
+        recalled_memory_count: memoryContext.memory.recalled_count,
+        compact_context_chars: memoryContext.augmented_context_chars,
+        redaction: memoryContext.redaction,
+      },
+      ledger_record: redactHermesLedgerRecord(ledgerRecord),
+      provider_request_body_created: requestBodyPrepared,
+      live_provider_called: providerCalled,
+      network_call_performed: networkCallPerformed,
+      approval_executed: false,
+      queue_written: false,
+      external_action_executed: false,
+    };
+  }
 
   const providerStatus = getProviderSetupStatus(process.env);
   const shouldTryGlmChat = providerChoice === "openrouter_glm" || providerStatus.openrouter_glm.configured;

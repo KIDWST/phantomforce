@@ -611,8 +611,28 @@ img {
   white-space: nowrap;
 }
 
+.admin-operator-pill {
+  color: #e8ddff;
+  background: rgba(142, 83, 255, 0.14);
+  border-color: rgba(179, 126, 255, 0.32);
+}
+
 .command-form .lane-readout svg {
   color: var(--cyan);
+}
+
+.command-form .model-select {
+  justify-content: flex-start;
+}
+
+.command-form .model-select select {
+  min-width: 0;
+  height: 38px;
+  padding: 0 6px;
+  color: var(--text);
+  background: transparent;
+  border: 0;
+  font-weight: 800;
 }
 
 .command-form input {

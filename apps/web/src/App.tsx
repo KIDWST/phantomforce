@@ -105,7 +105,7 @@ type Message = {
   content: string;
 };
 
-type AiProviderChoice = "phantom" | "openrouter_glm";
+type AiProviderChoice = "phantom" | "openrouter_glm" | "codex" | "glm_5_2" | "claude_cli";
 
 type Connection = {
   id: string;
@@ -571,11 +571,28 @@ type ChicagoShotsProposalStatusUpdateResponse = {
 type PhantomAiChatResponse = {
   ok: boolean;
   provider_choice: AiProviderChoice;
+  admin_model_lane?: AiProviderChoice;
+  admin_model_label?: string;
   model_id: string;
   message?: {
     role: "assistant";
     content: string;
   };
+  hermes?: {
+    context_used: boolean;
+    ledger_written: boolean;
+    provider_route: string;
+    recalled_memory_count: number;
+  };
+  operator?: {
+    status: string;
+    admin_only: boolean;
+    localhost_only: boolean;
+    tool_requested: boolean;
+    tool_executed: boolean;
+    tool_name: string | null;
+    tool_result: unknown;
+  } | null;
   openrouter?: {
     status: "blocked" | "called" | "error";
     blocked_reason: string | null;
@@ -583,6 +600,13 @@ type PhantomAiChatResponse = {
     provider_called: boolean;
     network_call_performed: boolean;
   };
+  claude_cli?: {
+    status: "blocked" | "called" | "error";
+    blocked_reason: string | null;
+    error_message: string | null;
+    provider_called: boolean;
+    network_call_performed: boolean;
+  } | null;
   live_provider_called: boolean;
   network_call_performed: boolean;
   provider_request_body_created: boolean;
@@ -2353,7 +2377,7 @@ function App() {
   const [providerSetupStatus, setProviderSetupStatus] = useState<ProviderSetupStatus>(defaultProviderSetupStatus);
   const [phantomAiOpsStatus, setPhantomAiOpsStatus] =
     useState<PhantomAiOpsStatus>(defaultPhantomAiOpsStatus);
-  const [aiProvider, setAiProvider] = useState<AiProviderChoice>("phantom");
+  const [aiProvider, setAiProvider] = useState<AiProviderChoice>("codex");
   const [phantomAiBusy, setPhantomAiBusy] = useState(false);
   const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
   const [selectedOrg, setSelectedOrg] = useState("PhantomForce Pilot");
@@ -2769,7 +2793,7 @@ function App() {
       return;
     }
 
-    if (aiProvider === "openrouter_glm" || aiProvider === "phantom") {
+    if (aiProvider === "codex" || aiProvider === "glm_5_2" || aiProvider === "claude_cli" || aiProvider === "phantom") {
       setPhantomAiBusy(true);
 
       try {
@@ -2777,7 +2801,8 @@ function App() {
           method: "POST",
           headers: sessionHeaders(true),
           body: JSON.stringify({
-            provider: "phantom",
+            provider: canManageAccess && aiProvider === "glm_5_2" ? "openrouter_glm" : "phantom",
+            admin_model: canManageAccess ? aiProvider : undefined,
             message: text,
             tenant_id: activeSession.clientId ?? "phantomforce-owner",
             business_name: selectedOrg,
@@ -2803,6 +2828,7 @@ function App() {
         const data = (await response.json().catch(() => null)) as PhantomAiChatResponse | null;
         const content =
           data?.message?.content ?? data?.error ?? "Phantom AI could not reach the selected backend lane.";
+        const laneLabel = data?.admin_model_label ?? (canManageAccess ? "Phantom AI" : "Client Phantom AI");
 
         setMessages((current) => [
           ...current,
@@ -2812,7 +2838,13 @@ function App() {
             content,
           },
         ]);
-        addActivity("Phantom AI replied", "Business guidance returned without sending, posting, billing, or exposing tools.", "ok");
+        addActivity(
+          "Phantom AI replied",
+          canManageAccess
+            ? `${laneLabel} answered with Hermes context${data?.hermes?.ledger_written ? " and a ledger receipt" : ""}.`
+            : "Client-safe guidance returned without exposing admin tools.",
+          "ok",
+        );
         return;
       } catch {
         setMessages((current) => [
@@ -3485,6 +3517,8 @@ function CommandCenter({
   events: CalendarEvent[];
 }) {
   const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
+  const aiProviderLabel =
+    aiProvider === "glm_5_2" ? "GLM 5.2" : aiProvider === "claude_cli" ? "Claude CLI" : "Codex operator";
   return (
     <div className="command-layout">
       <section className="command-main">
@@ -3517,10 +3551,17 @@ function CommandCenter({
               <span className="eyebrow">Phantom AI</span>
               <h3>Command thread</h3>
             </div>
-            <span className="safe-pill">
-              <ShieldCheck size={15} />
-              Approval gated
-            </span>
+            {canManageAccess ? (
+              <span className="safe-pill admin-operator-pill">
+                <Command size={15} />
+                Admin: {aiProviderLabel}
+              </span>
+            ) : (
+              <span className="safe-pill">
+                <ShieldCheck size={15} />
+                Client protected
+              </span>
+            )}
           </div>
           <div className="messages" aria-live="polite">
             {messages.map((message) => (
@@ -3531,10 +3572,25 @@ function CommandCenter({
             ))}
           </div>
           <form className="command-form" onSubmit={submitCommand}>
-            <div aria-label="Phantom AI lane" className="llm-select lane-readout">
-              <Bot size={15} />
-              <span>Phantom AI</span>
-            </div>
+            {canManageAccess ? (
+              <label aria-label="Admin Phantom AI model lane" className="llm-select lane-readout model-select">
+                <Bot size={15} />
+                <select
+                  value={aiProvider}
+                  onChange={(event) => setAiProvider(event.target.value as AiProviderChoice)}
+                  disabled={phantomAiBusy}
+                >
+                  <option value="codex">Codex operator</option>
+                  <option value="glm_5_2">GLM 5.2</option>
+                  <option value="claude_cli">Claude CLI</option>
+                </select>
+              </label>
+            ) : (
+              <div aria-label="Phantom AI lane" className="llm-select lane-readout">
+                <Bot size={15} />
+                <span>Phantom AI</span>
+              </div>
+            )}
             <input
               value={commandText}
               onChange={(event) => setCommandText(event.target.value)}
@@ -3559,7 +3615,7 @@ function CommandCenter({
         </section>
 
         <PhantomAiStatusPanel
-          canManageAccess={false}
+          canManageAccess={canManageAccess}
           opsStatus={phantomAiOpsStatus}
           sessionHeaders={sessionHeaders}
         />

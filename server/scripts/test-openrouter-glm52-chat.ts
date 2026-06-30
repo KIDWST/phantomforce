@@ -127,6 +127,23 @@ const approvalRequired = await callOpenRouterGlm52(
 assert(approvalRequired.status === "blocked", "Approval-required work should block GLM worker lane.");
 assert(calls.length === 0, "Approval-required block must not invoke fetch.");
 
+const adminApprovalDraft = await callOpenRouterGlm52(
+  { ...input, approvalRequired: true, sensitivityLevel: "high", adminOperatorLane: true },
+  {
+    env: {
+      OPENROUTER_API_KEY: fakeKey,
+      PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
+      PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
+      OPENROUTER_MODEL: OPENROUTER_GLM_52_MODEL_ID,
+    },
+    fetchImpl: fakeFetch,
+  },
+);
+assert(adminApprovalDraft.status === "called", "Admin GLM lane should draft for approval-sensitive work.");
+assert(adminApprovalDraft.approval_executed === false, "Admin GLM lane must not execute approvals.");
+assert(adminApprovalDraft.external_action_executed === false, "Admin GLM lane must not execute external actions.");
+assert(calls.length === 1, "Admin GLM lane should call fake fetch once.");
+
 const called = await callOpenRouterGlm52(input, {
   env: {
     OPENROUTER_API_KEY: fakeKey,
@@ -144,7 +161,7 @@ assert(called.ledger_written === false, "Transport must not write ledgers direct
 assert(called.queue_written === false, "Transport must not write queues.");
 assert(called.approval_executed === false, "Transport must not execute approvals.");
 assert(called.external_action_executed === false, "Transport must not execute external actions.");
-assert(calls.length === 1, "Configured live transport should call fake fetch once.");
+assert(calls.length === 2, "Configured live transport should call fake fetch twice total.");
 assert(calls[0]?.url === OPENROUTER_CHAT_COMPLETIONS_ENDPOINT, "Transport should target OpenRouter chat completions.");
 assert(calls[0]?.body.model === OPENROUTER_GLM_52_MODEL_ID, "Transport body should use GLM 5.2.");
 assert(Array.isArray(calls[0]?.body.messages), "Transport body should include chat messages.");
@@ -173,6 +190,7 @@ console.log(
       missingKey: missingKey.status,
       highSensitivityBlocked: highSensitivity.status,
       approvalRequiredBlocked: approvalRequired.status,
+      adminApprovalDraft: adminApprovalDraft.status,
       calledStatus: called.status,
       providerCalled: called.provider_called,
       networkCallPerformed: called.network_call_performed,

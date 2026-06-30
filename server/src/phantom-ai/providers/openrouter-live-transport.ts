@@ -31,6 +31,7 @@ export type OpenRouterGlm52ChatInput = {
   sensitivityLevel: SensitivityLevel;
   approvalRequired: boolean;
   maxTokens?: number;
+  adminOperatorLane?: boolean;
 };
 
 export type OpenRouterGlm52ChatResult = {
@@ -168,11 +169,11 @@ export async function callOpenRouterGlm52(
     return blockedResult(input, "OPENROUTER_API_KEY is not configured on the server.");
   }
 
-  if (input.sensitivityLevel === "high") {
+  if (input.sensitivityLevel === "high" && !input.adminOperatorLane) {
     return blockedResult(input, "High-sensitivity requests are blocked from the OpenRouter GLM worker lane.");
   }
 
-  if (input.approvalRequired) {
+  if (input.approvalRequired && !input.adminOperatorLane) {
     return blockedResult(input, "Approval-required requests cannot run through the OpenRouter GLM worker lane.");
   }
 
