@@ -42,10 +42,24 @@ button, input { font: inherit; color: inherit; }
   animation: ripple 2.2s ease-out infinite;
 }
 .risk-label { font: 500 10px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #ff97a4; white-space: nowrap; }
-/* everyday stream (emails, DMs, calls, bookings...) in cyan */
-.risk-ping.stream .risk-dot { background: var(--neon-2); box-shadow: 0 0 10px var(--neon-2), 0 0 22px rgba(30, 240, 255, 0.55); animation: rippleCyan 2.2s ease-out infinite; }
-.risk-ping.stream .risk-label { color: #8fe9ff; }
-@keyframes rippleCyan { 0% { box-shadow: 0 0 10px var(--neon-2), 0 0 0 0 rgba(30, 240, 255, 0.5); } 100% { box-shadow: 0 0 10px var(--neon-2), 0 0 0 16px rgba(30, 240, 255, 0); } }
+/* the everyday flood: realistic notification cards (face, app, a real question) */
+.risk-ping.notif {
+  display: flex; align-items: center; gap: 9px; max-width: 240px;
+  padding: 7px 13px 7px 7px; border-radius: 14px;
+  background: rgba(7, 18, 26, 0.78); border: 1px solid rgba(30, 240, 255, 0.22);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45), 0 0 18px rgba(30, 240, 255, 0.12);
+  -webkit-backdrop-filter: blur(9px); backdrop-filter: blur(9px);
+}
+.risk-ping.notif.on { opacity: 0.92; }
+.notif-av {
+  flex: 0 0 auto; width: 30px; height: 30px; display: grid; place-items: center;
+  border-radius: 50%; font-size: 16px; background: rgba(30, 240, 255, 0.12);
+  box-shadow: 0 0 9px rgba(30, 240, 255, 0.4); border: 1px solid rgba(30, 240, 255, 0.25);
+}
+.notif-body { display: flex; flex-direction: column; min-width: 0; line-height: 1.18; }
+.notif-app { font: 600 9.5px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: #7fe6ff; }
+.notif-msg { font: 400 12.5px "Space Grotesk", sans-serif; color: #e3f8ff; max-width: 175px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 640px) { .risk-ping.notif { display: none; } }
 @keyframes ripple { 0% { box-shadow: 0 0 10px var(--risk), 0 0 0 0 rgba(255, 77, 99, 0.5); } 100% { box-shadow: 0 0 10px var(--risk), 0 0 0 16px rgba(255, 77, 99, 0); } }
 
 .presence {

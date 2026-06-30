@@ -296,26 +296,52 @@ function initPhantomMoods() {
 function initRiskRadar() {
   const field = document.querySelector("[data-riskfield]");
   if (!field || reduceMotion) return;
-  // red = threats they face; cyan = the everyday flood PhantomForce absorbs
+  // red = threats they face. blue = the everyday flood of real notifications
+  // (a face, the app, a real question) — the burdens PhantomForce absorbs.
   const threats = ["malware", "scam", "data leak", "phishing", "chargeback", "law update", "spam", "fraud", "compliance", "deadline", "downtime", "bad review"];
-  const stream = ["new email", "instagram dm", "missed call", "new booking", "5★ review", "invoice due", "follow-up", "facebook msg", "new lead", "tiktok comment", "voicemail", "appointment", "renewal", "support ticket", "late payment", "quote request"];
+  const stream = [
+    { face: "👩", app: "Instagram", msg: "how much for a shoot?" },
+    { face: "🧔", app: "Messenger", msg: "you free Saturday?" },
+    { face: "👨", app: "Email", msg: "Re: your quote" },
+    { face: "👱‍♀️", app: "WhatsApp", msg: "can you call me back?" },
+    { face: "🧑", app: "Text", msg: "still on for 3pm?" },
+    { face: "👩‍🦰", app: "Facebook", msg: "do you do weddings?" },
+    { face: "👨‍🦱", app: "Missed call", msg: "called twice" },
+    { face: "🧑‍💼", app: "New lead", msg: "wants a callback today" },
+    { face: "👩‍🦱", app: "TikTok", msg: "commented on your post" },
+    { face: "👨‍🦳", app: "Voicemail", msg: "left you a message" },
+    { face: "⭐", app: "New review", msg: "left you 5 stars" },
+    { face: "🧾", app: "Invoice", msg: "payment is overdue" },
+    { face: "👩", app: "Booking", msg: "needs to reschedule" },
+    { face: "🧓", app: "Email", msg: "where's my order?" },
+  ];
   const spawn = () => {
     if (document.hidden) return;
-    const threat = Math.random() < 0.38;
-    const pool = threat ? threats : stream;
+    const threat = Math.random() < 0.34;
     const ping = document.createElement("div");
-    ping.className = "risk-ping " + (threat ? "threat" : "stream");
     const right = Math.random() < 0.5;
     ping.style.left = (right ? 72 + Math.random() * 22 : 6 + Math.random() * 22) + "%";
     ping.style.top = 12 + Math.random() * 76 + "%";
-    const dot = document.createElement("span"); dot.className = "risk-dot";
-    const label = document.createElement("span"); label.className = "risk-label";
-    label.textContent = pool[Math.floor(Math.random() * pool.length)];
-    ping.append(dot, label);
+    if (threat) {
+      ping.className = "risk-ping threat";
+      const dot = document.createElement("span"); dot.className = "risk-dot";
+      const label = document.createElement("span"); label.className = "risk-label";
+      label.textContent = threats[Math.floor(Math.random() * threats.length)];
+      ping.append(dot, label);
+    } else {
+      const n = stream[Math.floor(Math.random() * stream.length)];
+      ping.className = "risk-ping stream notif";
+      const av = document.createElement("span"); av.className = "notif-av"; av.textContent = n.face;
+      const body = document.createElement("span"); body.className = "notif-body";
+      const app = document.createElement("b"); app.className = "notif-app"; app.textContent = n.app;
+      const msg = document.createElement("span"); msg.className = "notif-msg"; msg.textContent = n.msg;
+      body.append(app, msg);
+      ping.append(av, body);
+    }
     field.appendChild(ping);
     requestAnimationFrame(() => ping.classList.add("on"));
-    window.setTimeout(() => ping.classList.remove("on"), 3200);
-    window.setTimeout(() => ping.remove(), 4200);
+    window.setTimeout(() => ping.classList.remove("on"), 3400);
+    window.setTimeout(() => ping.remove(), 4400);
   };
   for (let i = 0; i < 4; i++) window.setTimeout(spawn, i * 650);
   window.setInterval(spawn, 1300);
