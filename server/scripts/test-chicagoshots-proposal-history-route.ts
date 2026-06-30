@@ -39,6 +39,10 @@ type SaveResponse = {
     id: string;
     client_name: string;
     status: string;
+    proposal_priority_score: number;
+    proposal_priority_label: string;
+    proposal_next_action: string;
+    proposal_follow_up_timing: string;
     package: string;
     recommended_package: string;
     recommended_price_range: string;
@@ -183,6 +187,9 @@ try {
   assert(saveBody.ok === true, "Save response should be ok.");
   assert(saveBody.record.client_name === "Coach Ramirez", "Saved record should keep client name.");
   assert(saveBody.record.status === "draft", "Saved record should start as draft.");
+  assert(saveBody.record.proposal_priority_label === "send_now", "Saved draft should expose send_now priority.");
+  assert(saveBody.record.proposal_priority_score > 0, "Saved draft should expose a positive priority score.");
+  assert(saveBody.record.proposal_next_action.includes("Review"), "Saved draft should expose a next action.");
   assert(saveBody.record.package === "Sports / Action", "Saved record should keep package.");
   assert(saveBody.record.recommended_package === "Sports / Action", "Saved record should expose recommended_package.");
   assert(saveBody.record.client_ready_proposal.includes("Quote range"), "Saved record should include client_ready_proposal.");
@@ -276,6 +283,8 @@ try {
   assert(wonUpdate.statusCode === 200, "Admin won status update should return 200.");
   const wonBody = parseJson<StatusUpdateResponse>(wonUpdate.payload);
   assert(wonBody.status === "won", "Status update response should show won.");
+  assert(wonBody.record.proposal_priority_label === "delivery_ready", "Won status should expose delivery-ready priority.");
+  assert(wonBody.record.proposal_next_action.includes("Schedule"), "Won status should expose delivery kickoff action.");
 
   const updatedHistory = await app.inject({
     method: "GET",
@@ -323,6 +332,8 @@ try {
         client: saveBody.record.client_name,
         package: saveBody.record.package,
         currentStatus: wonBody.status,
+        currentPriority: wonBody.record.proposal_priority_label,
+        nextAction: wonBody.record.proposal_next_action,
         totalSaved: updatedHistoryBody.summary_counts.total,
         wonCount: updatedHistoryBody.summary_counts.won,
         recommendedPackage: saveBody.record.recommended_package,

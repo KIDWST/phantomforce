@@ -34,6 +34,12 @@ export type ChicagoShotsProposalHistorySafetyFlags = {
 };
 
 export type ChicagoShotsProposalStatus = (typeof PROPOSAL_STATUSES)[number];
+export type ChicagoShotsProposalPriorityLabel =
+  | "send_now"
+  | "follow_up_now"
+  | "watch_reply"
+  | "delivery_ready"
+  | "closed_lost";
 
 export type ChicagoShotsProposalStatusCounts = Record<ChicagoShotsProposalStatus, number> & {
   total: number;
@@ -44,6 +50,11 @@ export type ChicagoShotsProposalHistoryRecord = {
   created_at: string;
   status: ChicagoShotsProposalStatus;
   status_updated_at: string;
+  proposal_priority_score: number;
+  proposal_priority_label: ChicagoShotsProposalPriorityLabel;
+  proposal_next_action: string;
+  proposal_next_action_detail: string;
+  proposal_follow_up_timing: string;
   store_kind: "local_admin_only_chicagoshots_proposal_history";
   store_version: 1;
   source_preview_id: string;
@@ -159,6 +170,97 @@ function countStatuses(records: ChicagoShotsProposalHistoryRecord[]): ChicagoSho
   return counts;
 }
 
+function parseHighestDollarValue(value: string) {
+  return Math.max(
+    0,
+    ...Array.from(value.matchAll(/\$?\s*([0-9][0-9,]*)/g)).map((match) =>
+      Number.parseInt(match[1].replace(/,/g, ""), 10),
+    ),
+  );
+}
+
+function buildProposalSalesIntelligence(input: {
+  status: ChicagoShotsProposalStatus;
+  clientName: string;
+  packageName: string;
+  recommendedPriceRange: string;
+  followUpChannel: string;
+}) {
+  const priceCeiling = parseHighestDollarValue(input.recommendedPriceRange);
+  const priceBoost = priceCeiling >= 2500 ? 10 : priceCeiling >= 1500 ? 6 : priceCeiling >= 750 ? 3 : 0;
+  const channel = input.followUpChannel || "manual channel";
+
+  if (input.status === "follow_up_needed") {
+    return {
+      proposal_priority_score: 90 + priceBoost,
+      proposal_priority_label: "follow_up_now" as const,
+      proposal_next_action: "Manual follow-up now",
+      proposal_next_action_detail: `Use the saved proposal packet to follow up with ${input.clientName} on ${channel}.`,
+      proposal_follow_up_timing: "today",
+    };
+  }
+
+  if (input.status === "sent_manually") {
+    return {
+      proposal_priority_score: 78 + priceBoost,
+      proposal_priority_label: "watch_reply" as const,
+      proposal_next_action: "Watch reply window",
+      proposal_next_action_detail: `If ${input.clientName} has not answered, mark follow-up needed and prepare the manual follow-up.`,
+      proposal_follow_up_timing: "next business day",
+    };
+  }
+
+  if (input.status === "draft") {
+    return {
+      proposal_priority_score: 66 + priceBoost,
+      proposal_priority_label: "send_now" as const,
+      proposal_next_action: "Review and send manually",
+      proposal_next_action_detail: `Review the ${input.packageName} proposal, then mark sent manually after Jordan sends it outside the app.`,
+      proposal_follow_up_timing: "after manual send",
+    };
+  }
+
+  if (input.status === "won") {
+    return {
+      proposal_priority_score: 35 + priceBoost,
+      proposal_priority_label: "delivery_ready" as const,
+      proposal_next_action: "Schedule delivery kickoff",
+      proposal_next_action_detail: `Confirm shoot date, deliverables, and handoff plan for ${input.clientName}.`,
+      proposal_follow_up_timing: "delivery planning",
+    };
+  }
+
+  return {
+    proposal_priority_score: 5,
+    proposal_priority_label: "closed_lost" as const,
+    proposal_next_action: "Archive lesson",
+    proposal_next_action_detail: `Capture why ${input.clientName} did not move forward and keep the packet for future reference.`,
+    proposal_follow_up_timing: "closed",
+  };
+}
+
+function withProposalSalesIntelligence(
+  record: Omit<
+    ChicagoShotsProposalHistoryRecord,
+    | "proposal_priority_score"
+    | "proposal_priority_label"
+    | "proposal_next_action"
+    | "proposal_next_action_detail"
+    | "proposal_follow_up_timing"
+  >,
+): ChicagoShotsProposalHistoryRecord {
+  return {
+    ...record,
+    ...buildProposalSalesIntelligence({
+      status: record.status,
+      clientName: record.client_name,
+      packageName: record.package,
+      recommendedPriceRange: record.recommended_price_range,
+      followUpChannel: record.follow_up_channel,
+    }),
+  };
+}
+
 function assertPacketStillSafe(packet: ChicagoShotsLeadIntakePreview) {
   const flags = packet.safety_flags;
   return (
@@ -236,7 +338,7 @@ export function createChicagoShotsProposalHistoryRecord(input: {
 
   const recommendedPackage = clean(input.packet.recommended_service_package.name) || "General Inquiry";
 
-  return {
+  return withProposalSalesIntelligence({
     id: createHistoryId(input.packet),
     created_at: createdAt,
     status: "draft",
@@ -258,7 +360,7 @@ export function createChicagoShotsProposalHistoryRecord(input: {
     safety_flags: safetyFlags(),
     local_dev_only: true,
     production_write_allowed: false,
-  };
+  });
 }
 
 function normalizeStoredProposalHistoryRecord(value: unknown): ChicagoShotsProposalHistoryRecord | null {
@@ -301,7 +403,7 @@ function normalizeStoredProposalHistoryRecord(value: unknown): ChicagoShotsPropo
     flags.payment_request_created === false &&
     flags.invoice_created === false
   ) {
-    return {
+    return withProposalSalesIntelligence({
       ...record,
       status,
       status_updated_at: statusUpdatedAt,
@@ -310,7 +412,14 @@ function normalizeStoredProposalHistoryRecord(value: unknown): ChicagoShotsPropo
       safety_flags: safetyFlags(),
       local_dev_only: true,
       production_write_allowed: false,
-    } as ChicagoShotsProposalHistoryRecord;
+    } as Omit<
+      ChicagoShotsProposalHistoryRecord,
+      | "proposal_priority_score"
+      | "proposal_priority_label"
+      | "proposal_next_action"
+      | "proposal_next_action_detail"
+      | "proposal_follow_up_timing"
+    >);
   }
 
   return null;
@@ -375,13 +484,14 @@ export async function readChicagoShotsProposalHistoryRecords(
       }
     }
 
-    const allRecords = Array.from(byId.values()).sort((left, right) =>
-      left.created_at.localeCompare(right.created_at),
+    const allRecords = Array.from(byId.values()).sort(
+      (left, right) =>
+        right.proposal_priority_score - left.proposal_priority_score ||
+        right.status_updated_at.localeCompare(left.status_updated_at) ||
+        right.created_at.localeCompare(left.created_at),
     );
     const statusCounts = countStatuses(allRecords);
-    const records = allRecords
-      .slice(-limit)
-      .reverse();
+    const records = allRecords.slice(0, limit);
 
     return {
       store_path: storePath,
@@ -427,14 +537,14 @@ export async function updateChicagoShotsProposalHistoryRecordStatus(
   }
 
   const updatedAt = options.updatedAt ?? new Date().toISOString();
-  const updated: ChicagoShotsProposalHistoryRecord = {
+  const updated = withProposalSalesIntelligence({
     ...current,
     status,
     status_updated_at: updatedAt,
     safety_flags: safetyFlags(),
     local_dev_only: true,
     production_write_allowed: false,
-  };
+  });
   const persistence = await persistChicagoShotsProposalHistoryRecord(updated, {
     storePath: options.storePath,
     env: options.env,

@@ -1397,6 +1397,57 @@ img {
   gap: 10px;
 }
 
+.phantom-ai-workflow-brain {
+  display: grid;
+  gap: 10px;
+  padding: 11px;
+  background: rgba(40, 196, 216, 0.055);
+  border: 1px solid rgba(40, 196, 216, 0.14);
+  border-radius: 8px;
+}
+
+.phantom-ai-workflow-brain .section-head h4 {
+  margin: 0;
+  font-size: 14px;
+}
+
+.phantom-ai-context-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.phantom-ai-action-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.phantom-ai-artifact-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.phantom-ai-artifact {
+  align-content: start;
+}
+
+.phantom-ai-artifact.follow_up,
+.phantom-ai-artifact.approval {
+  border-color: rgba(255, 197, 92, 0.2);
+}
+
+.phantom-ai-artifact.proposal,
+.phantom-ai-artifact.saved_packet {
+  border-color: rgba(85, 214, 153, 0.2);
+}
+
+.phantom-ai-artifact.next_action,
+.phantom-ai-artifact.package {
+  border-color: rgba(40, 196, 216, 0.22);
+}
+
 .proposal-history-panel {
   display: grid;
   gap: 10px;
@@ -1428,6 +1479,32 @@ img {
   display: flex;
   flex-wrap: wrap;
   gap: 7px;
+}
+
+.proposal-history-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 8px;
+}
+
+.proposal-search-field {
+  display: grid;
+  gap: 6px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.proposal-search-field input {
+  width: 100%;
+  min-height: 38px;
+  padding: 8px 10px;
+  color: var(--text);
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
 }
 
 .proposal-status-select {
@@ -3068,6 +3145,7 @@ img {
   .approval-transition-controls,
   .destination-grid,
   .simulation-grid,
+  .phantom-ai-context-grid,
   .proposal-summary-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -3175,6 +3253,8 @@ img {
   .destination-grid,
   .simulation-grid,
   .simulation-hero,
+  .phantom-ai-context-grid,
+  .phantom-ai-artifact-grid,
   .proposal-history-list,
   .ai-rule-columns,
   .access-hero,

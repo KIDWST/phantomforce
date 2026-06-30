@@ -80,6 +80,10 @@ try {
   assert(record.delivery_timeline.length > 0, "Record should keep the delivery timeline.");
   assert(record.follow_up_channel === "email", "Record should keep the follow-up channel.");
   assert(record.client_ready_proposal.includes("Quote range: $750-$1,500"), "Record should keep client-ready proposal copy.");
+  assert(record.proposal_priority_score > 0, "Record should include a positive proposal priority score.");
+  assert(record.proposal_priority_label === "send_now", "Draft proposal should be labeled send_now.");
+  assert(record.proposal_next_action.includes("Review"), "Draft proposal should include a review/send next action.");
+  assert(record.proposal_follow_up_timing === "after manual send", "Draft proposal should set follow-up timing.");
   assert(record.exported_markdown.includes("[redacted"), "Record should redact sensitive markdown.");
   assert(!recordJson.includes(fakeApiKeyValue), "Record must not store raw API keys.");
   assert(record.safety_flags.external_send === false, "History must not send externally.");
@@ -118,6 +122,8 @@ try {
   assert(wonUpdate.found === true, "Status update should find the saved proposal.");
   assert(wonUpdate.record?.status === "won", "Status update should mark the proposal won.");
   assert(wonUpdate.record?.status_updated_at === "2026-06-30T16:00:00.000Z", "Status update timestamp should persist.");
+  assert(wonUpdate.record?.proposal_priority_label === "delivery_ready", "Won proposal should become delivery_ready.");
+  assert(wonUpdate.record?.proposal_next_action.includes("Schedule"), "Won proposal should expose delivery kickoff action.");
   assert(wonUpdate.record?.safety_flags.external_send === false, "Status update must not send externally.");
   assert(wonUpdate.record?.safety_flags.queue_written === false, "Status update must not write queues.");
   assert(wonUpdate.record?.safety_flags.production_ledger_write === false, "Status update must not write production ledgers.");
@@ -138,7 +144,10 @@ try {
         priceRange: record.recommended_price_range,
         clientReadyProposal: record.client_ready_proposal.includes("Quote range"),
         initialStatus: record.status,
+        initialPriority: record.proposal_priority_label,
         updatedStatus: wonUpdate.record?.status,
+        updatedPriority: wonUpdate.record?.proposal_priority_label,
+        nextAction: wonUpdate.record?.proposal_next_action,
         followUpChannel: record.follow_up_channel,
         recordsReturned: history.records.length,
         totalSaved: updatedHistory.status_counts.total,

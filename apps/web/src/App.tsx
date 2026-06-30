@@ -468,12 +468,47 @@ type ChicagoShotsProposalHistoryFilter = "all" | ChicagoShotsProposalStatus;
 type ChicagoShotsProposalStatusCounts = Record<ChicagoShotsProposalStatus, number> & {
   total: number;
 };
+type ChicagoShotsProposalPriorityLabel =
+  | "send_now"
+  | "follow_up_now"
+  | "watch_reply"
+  | "delivery_ready"
+  | "closed_lost";
+type ChicagoShotsPhantomAiAction =
+  | "draft_follow_up"
+  | "generate_proposal"
+  | "explain_package"
+  | "summarize_saved_packet"
+  | "suggest_next_action";
+type ChicagoShotsPhantomAiArtifactKind =
+  | "follow_up"
+  | "proposal"
+  | "package"
+  | "approval"
+  | "saved_packet"
+  | "next_action";
+
+type ChicagoShotsPhantomAiArtifact = {
+  id: string;
+  kind: ChicagoShotsPhantomAiArtifactKind;
+  title: string;
+  summary: string;
+  body?: string;
+  details: string[];
+  copy_label?: string;
+  copy_text?: string;
+};
 
 type ChicagoShotsProposalHistoryRecord = {
   id: string;
   created_at: string;
   status: ChicagoShotsProposalStatus;
   status_updated_at: string;
+  proposal_priority_score: number;
+  proposal_priority_label: ChicagoShotsProposalPriorityLabel;
+  proposal_next_action: string;
+  proposal_next_action_detail: string;
+  proposal_follow_up_timing: string;
   source_preview_id: string;
   client_name: string;
   event_type: string;
@@ -2019,10 +2054,19 @@ const chicagoShotsProposalStatusOptions: ChicagoShotsProposalStatus[] = [
 const chicagoShotsProposalHistoryFilters: ChicagoShotsProposalHistoryFilter[] = [
   "all",
   "draft",
+  "sent_manually",
   "follow_up_needed",
   "won",
   "lost",
 ];
+
+const chicagoShotsProposalPriorityLabels: Record<ChicagoShotsProposalPriorityLabel, string> = {
+  send_now: "Send now",
+  follow_up_now: "Follow up now",
+  watch_reply: "Watch reply",
+  delivery_ready: "Delivery ready",
+  closed_lost: "Closed lost",
+};
 
 const defaultChicagoShotsProposalStatusCounts: ChicagoShotsProposalStatusCounts = {
   total: 0,
@@ -2048,6 +2092,127 @@ function chicagoShotsProposalBody(record: ChicagoShotsProposalHistoryRecord) {
   return record.client_ready_proposal || record.exported_markdown;
 }
 
+function hasChicagoShotsLeadInput(form: ChicagoShotsLeadForm) {
+  return Object.values(form).some((value) => value.trim().length > 0);
+}
+
+function createChicagoShotsArtifact(
+  kind: ChicagoShotsPhantomAiArtifactKind,
+  title: string,
+  summary: string,
+  details: string[],
+  options: { body?: string; copyLabel?: string; copyText?: string } = {},
+): ChicagoShotsPhantomAiArtifact {
+  return {
+    id: makeId(`phantom-ai-${kind}`),
+    kind,
+    title,
+    summary,
+    body: options.body,
+    details,
+    copy_label: options.copyLabel,
+    copy_text: options.copyText,
+  };
+}
+
+function createChicagoShotsNextActionArtifact(summary: string, details: string[]) {
+  const copyText = [summary, ...details.map((detail) => `- ${detail}`)].join("\n");
+
+  return createChicagoShotsArtifact("next_action", "Suggested next action", summary, details, {
+    copyLabel: "next action",
+    copyText,
+  });
+}
+
+function buildFollowUpArtifact(packet: ChicagoShotsLeadIntakePacket) {
+  const draft = formatChicagoShotsFollowUpDraft(packet);
+
+  return createChicagoShotsArtifact(
+    "follow_up",
+    packet.follow_up_draft.subject,
+    `Prepared for ${packet.normalized_lead.client_name || "the lead"} on ${packet.follow_up_draft.channel_hint}.`,
+    [
+      "Preview-only draft",
+      "Jordan approval required before any manual send",
+      `Package: ${packet.recommended_service_package.name}`,
+    ],
+    {
+      body: packet.follow_up_draft.body,
+      copyLabel: "follow-up draft",
+      copyText: draft,
+    },
+  );
+}
+
+function buildProposalArtifact(packet: ChicagoShotsLeadIntakePacket) {
+  const proposal = formatChicagoShotsClientReadyProposal(packet);
+
+  return createChicagoShotsArtifact(
+    "proposal",
+    packet.quote_draft.title,
+    packet.quote_draft.summary,
+    [
+      `Range: ${packet.recommended_price_range}`,
+      `Timeline: ${packet.delivery_timeline}`,
+      "No payment request or invoice created",
+    ],
+    {
+      body: proposal,
+      copyLabel: "client-ready proposal",
+      copyText: proposal,
+    },
+  );
+}
+
+function buildPackageArtifact(packet: ChicagoShotsLeadIntakePacket) {
+  return createChicagoShotsArtifact(
+    "package",
+    `${packet.recommended_service_package.name} recommendation`,
+    packet.recommended_service_package.rationale,
+    [
+      `Category: ${packet.normalized_lead.event_category}`,
+      `Add-ons: ${packet.recommended_service_package.suggested_addons.join(", ") || "None"}`,
+      `Quote range: ${packet.recommended_price_range}`,
+    ],
+  );
+}
+
+function buildApprovalArtifact(packet: ChicagoShotsLeadIntakePacket) {
+  return createChicagoShotsArtifact(
+    "approval",
+    "Approval preview",
+    packet.approval_preview.summary,
+    [
+      `Status: ${packet.approval_preview.status}`,
+      `Risk: ${packet.approval_preview.risk_level}`,
+      `Execution disabled: ${packet.approval_preview.execution_disabled ? "true" : "false"}`,
+      "No approval execution route is used",
+    ],
+  );
+}
+
+function buildSavedPacketArtifact(record: ChicagoShotsProposalHistoryRecord) {
+  const proposal = chicagoShotsProposalBody(record);
+
+  return createChicagoShotsArtifact(
+    "saved_packet",
+    `${record.client_name} - ${record.package}`,
+    record.proposal_summary,
+    [
+      `Status: ${chicagoShotsProposalStatusLabels[record.status]}`,
+      `Priority: ${record.proposal_priority_score} / ${chicagoShotsProposalPriorityLabels[record.proposal_priority_label]}`,
+      `Next action: ${record.proposal_next_action}`,
+      `Range: ${record.recommended_price_range}`,
+      `Updated: ${record.status_updated_at}`,
+    ],
+    {
+      body: proposal,
+      copyLabel: "saved proposal packet",
+      copyText: proposal,
+    },
+  );
+}
+
 function chicagoShotsProposalStatusLabel(status: ChicagoShotsProposalHistoryFilter) {
   if (status === "all") return "All";
   if (status === "draft") return "Drafts";
@@ -2056,6 +2221,42 @@ function chicagoShotsProposalStatusLabel(status: ChicagoShotsProposalHistoryFilt
 
 function chicagoShotsProposalStatusClass(status: ChicagoShotsProposalStatus) {
   return `status-${status.replace(/_/g, "-")}`;
+}
+
+function chicagoShotsProposalPriorityClass(label: ChicagoShotsProposalPriorityLabel) {
+  return `priority-${label.replace(/_/g, "-")}`;
+}
+
+function sortChicagoShotsProposalHistory(records: ChicagoShotsProposalHistoryRecord[]) {
+  return [...records].sort(
+    (left, right) =>
+      right.proposal_priority_score - left.proposal_priority_score ||
+      right.status_updated_at.localeCompare(left.status_updated_at) ||
+      right.created_at.localeCompare(left.created_at),
+  );
+}
+
+function chicagoShotsProposalSearchText(record: ChicagoShotsProposalHistoryRecord) {
+  return [
+    record.client_name,
+    record.event_type,
+    record.package,
+    record.recommended_package,
+    record.recommended_price_range,
+    record.delivery_timeline,
+    record.follow_up_channel,
+    record.proposal_summary,
+    record.proposal_next_action,
+    record.proposal_next_action_detail,
+    chicagoShotsProposalPriorityLabels[record.proposal_priority_label],
+    record.status,
+  ]
+    .join(" ")
+    .toLowerCase();
+}
+
+function getChicagoShotsPriorityProposal(records: ChicagoShotsProposalHistoryRecord[]) {
+  return sortChicagoShotsProposalHistory(records)[0] ?? null;
 }
 
 function makeId(prefix: string) {
@@ -5984,6 +6185,8 @@ function ChicagoShotsLeadIntakePanel({
   const [proposalHistoryFilter, setProposalHistoryFilter] = useState<ChicagoShotsProposalHistoryFilter>("all");
   const [proposalHistoryCounts, setProposalHistoryCounts] =
     useState<ChicagoShotsProposalStatusCounts>(defaultChicagoShotsProposalStatusCounts);
+  const [proposalHistorySearch, setProposalHistorySearch] = useState("");
+  const [phantomAiArtifacts, setPhantomAiArtifacts] = useState<ChicagoShotsPhantomAiArtifact[]>([]);
   const hasSessionHeaders = Boolean(sessionHeaders);
 
   function updateLeadField(field: keyof ChicagoShotsLeadForm, value: string) {
@@ -5995,6 +6198,13 @@ function ChicagoShotsLeadIntakePanel({
     setLeadPreview(null);
     setLeadError("");
     setCopiedLeadText("");
+    setPhantomAiArtifacts([
+      createChicagoShotsNextActionArtifact("Preset loaded. Generate the intake preview to create quote and proposal artifacts.", [
+        preset.label,
+        "Preview route stays local and deterministic",
+        "No send or invoice is created",
+      ]),
+    ]);
   }
 
   useEffect(() => {
@@ -6035,6 +6245,59 @@ function ChicagoShotsLeadIntakePanel({
     URL.revokeObjectURL(url);
   }
 
+  function showPhantomAiArtifacts(cards: ChicagoShotsPhantomAiArtifact[]) {
+    setPhantomAiArtifacts(cards.slice(0, 5));
+  }
+
+  function addPhantomAiArtifacts(cards: ChicagoShotsPhantomAiArtifact[]) {
+    setPhantomAiArtifacts((current) => [...cards, ...current].slice(0, 5));
+  }
+
+  async function requestChicagoShotsPreview(options: { saveToHistory?: boolean } = {}) {
+    setLeadError("");
+    setCopiedLeadText("");
+
+    if (!sessionHeaders) {
+      setLeadError("Admin session is not available. Sign in as Jordan / PhantomForce Admin.");
+      return null;
+    }
+
+    setLeadBusy(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/ops/chicagoshots/lead-intake/preview`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          tenant_id: "chicagoshots",
+          ...leadForm,
+        }),
+      });
+      const data = (await response.json().catch(() => null)) as {
+        ok?: boolean;
+        lead?: ChicagoShotsLeadIntakePacket;
+        error?: string;
+      } | null;
+
+      if (!response.ok || !data?.lead) {
+        setLeadPreview(null);
+        setLeadError(data?.error ?? "ChicagoShots intake preview is unavailable.");
+        return null;
+      }
+
+      setLeadPreview(data.lead);
+      if (options.saveToHistory ?? true) {
+        void saveProposalPacket(data.lead, { silent: true });
+      }
+      return data.lead;
+    } catch {
+      setLeadPreview(null);
+      setLeadError("ChicagoShots intake preview could not reach the local backend.");
+      return null;
+    } finally {
+      setLeadBusy(false);
+    }
+  }
+
   async function loadProposalHistory() {
     if (!sessionHeaders) return;
 
@@ -6065,10 +6328,13 @@ function ChicagoShotsLeadIntakePanel({
     }
   }
 
-  async function saveProposalPacket(packet: ChicagoShotsLeadIntakePacket, options: { silent?: boolean } = {}) {
+  async function saveProposalPacket(
+    packet: ChicagoShotsLeadIntakePacket,
+    options: { silent?: boolean } = {},
+  ): Promise<ChicagoShotsProposalHistoryRecord | null> {
     if (!sessionHeaders) {
       setLeadError("Admin session is not available. Sign in as Jordan / PhantomForce Admin.");
-      return;
+      return null;
     }
 
     const exportedMarkdown = formatChicagoShotsIntakePacket(packet);
@@ -6090,7 +6356,7 @@ function ChicagoShotsLeadIntakePanel({
 
       if (!response.ok || !data?.record) {
         setProposalHistoryStatus(data?.error ?? "Proposal packet could not be saved locally.");
-        return;
+        return null;
       }
 
       setProposalHistory((current) => {
@@ -6100,8 +6366,10 @@ function ChicagoShotsLeadIntakePanel({
       });
       setSelectedProposalRecord(data.record);
       setProposalHistoryStatus(options.silent ? "Saved generated packet to local history." : "Saved proposal packet locally.");
+      return data.record;
     } catch {
       setProposalHistoryStatus("Proposal packet could not be saved to the local backend.");
+      return null;
     }
   }
 
@@ -6135,11 +6403,120 @@ function ChicagoShotsLeadIntakePanel({
       });
       setSelectedProposalRecord(data.record);
       setProposalHistoryStatus(`Status updated: ${chicagoShotsProposalStatusLabels[data.record.status]}. No message was sent.`);
+      showPhantomAiArtifacts([
+        buildSavedPacketArtifact(data.record),
+        createChicagoShotsNextActionArtifact(data.record.proposal_next_action, [
+          data.record.proposal_next_action_detail,
+          `Follow-up timing: ${data.record.proposal_follow_up_timing}`,
+          "No automated send, payment request, invoice, queue write, or ledger write occurred",
+        ]),
+      ]);
     } catch {
       setProposalHistoryStatus("Proposal status update could not reach the local backend.");
     } finally {
       setProposalHistoryBusy(false);
     }
+  }
+
+  function getActiveProposalRecord() {
+    return selectedProposalRecord ?? getChicagoShotsPriorityProposal(proposalHistory);
+  }
+
+  function createMissingLeadArtifact(action: string) {
+    return createChicagoShotsNextActionArtifact(`${action} needs a lead context first.`, [
+      "Load a ChicagoShots preset or enter lead details",
+      "Generate the local intake preview",
+      "Then Phantom AI can produce dashboard artifacts from the packet",
+    ]);
+  }
+
+  async function ensureLeadPreviewForAction(action: string) {
+    if (leadPreview) return leadPreview;
+
+    if (!hasChicagoShotsLeadInput(leadForm)) {
+      showPhantomAiArtifacts([createMissingLeadArtifact(action)]);
+      return null;
+    }
+
+    return requestChicagoShotsPreview({ saveToHistory: false });
+  }
+
+  function buildContextNextActionArtifact() {
+    const activeRecord = getActiveProposalRecord();
+
+    if (activeRecord) {
+      return createChicagoShotsNextActionArtifact(activeRecord.proposal_next_action, [
+        `${activeRecord.client_name} - ${activeRecord.package}`,
+        `Status: ${chicagoShotsProposalStatusLabels[activeRecord.status]}`,
+        `Priority: ${activeRecord.proposal_priority_score} / ${chicagoShotsProposalPriorityLabels[activeRecord.proposal_priority_label]}`,
+        activeRecord.proposal_next_action_detail,
+        "No automated message, payment request, invoice, queue write, or ledger write will be created",
+      ]);
+    }
+
+    if (leadPreview) {
+      return createChicagoShotsNextActionArtifact("Save the generated proposal packet, then choose the next local pipeline status.", [
+        `${leadPreview.normalized_lead.client_name || "New lead"} - ${leadPreview.recommended_service_package.name}`,
+        `Range: ${leadPreview.recommended_price_range}`,
+        "Saved packet history stays local/admin-only",
+      ]);
+    }
+
+    return createChicagoShotsNextActionArtifact("Start with a ChicagoShots lead preset or enter a real lead request.", [
+      "Phantom AI will use the local preview route",
+      "Artifacts render as dashboard cards",
+      "Provider calls and external actions stay blocked",
+    ]);
+  }
+
+  async function runPhantomAiAction(action: ChicagoShotsPhantomAiAction) {
+    if (action === "summarize_saved_packet") {
+      const activeRecord = getActiveProposalRecord();
+      showPhantomAiArtifacts(
+        activeRecord
+          ? [buildSavedPacketArtifact(activeRecord), buildContextNextActionArtifact()]
+          : [
+              createChicagoShotsNextActionArtifact("No saved packet is selected yet.", [
+                "Generate a proposal packet from the lead intake form",
+                "Or select an existing saved packet from recent proposal packets",
+                "History stays local/admin-only",
+              ]),
+            ],
+      );
+      return;
+    }
+
+    if (action === "suggest_next_action") {
+      showPhantomAiArtifacts([buildContextNextActionArtifact()]);
+      return;
+    }
+
+    const packet = await ensureLeadPreviewForAction(
+      action === "draft_follow_up"
+        ? "Draft follow-up"
+        : action === "generate_proposal"
+          ? "Generate proposal"
+          : "Explain package recommendation",
+    );
+
+    if (!packet) return;
+
+    if (action === "draft_follow_up") {
+      showPhantomAiArtifacts([buildFollowUpArtifact(packet), buildApprovalArtifact(packet)]);
+      return;
+    }
+
+    if (action === "explain_package") {
+      showPhantomAiArtifacts([buildPackageArtifact(packet), buildContextNextActionArtifact()]);
+      return;
+    }
+
+    const savedRecord = await saveProposalPacket(packet);
+    showPhantomAiArtifacts([
+      buildProposalArtifact(packet),
+      buildApprovalArtifact(packet),
+      ...(savedRecord ? [buildSavedPacketArtifact(savedRecord)] : []),
+    ]);
   }
 
   function downloadSavedPacket(record: ChicagoShotsProposalHistoryRecord) {
@@ -6150,43 +6527,10 @@ function ChicagoShotsLeadIntakePanel({
 
   async function generateIntakePreview(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setLeadError("");
-    setCopiedLeadText("");
+    const packet = await requestChicagoShotsPreview({ saveToHistory: true });
 
-    if (!sessionHeaders) {
-      setLeadError("Admin session is not available. Sign in as Jordan / PhantomForce Admin.");
-      return;
-    }
-
-    setLeadBusy(true);
-    try {
-      const response = await fetch(`${API_BASE_URL}/phantom-ai/ops/chicagoshots/lead-intake/preview`, {
-        method: "POST",
-        headers: sessionHeaders(true),
-        body: JSON.stringify({
-          tenant_id: "chicagoshots",
-          ...leadForm,
-        }),
-      });
-      const data = (await response.json().catch(() => null)) as {
-        ok?: boolean;
-        lead?: ChicagoShotsLeadIntakePacket;
-        error?: string;
-      } | null;
-
-      if (!response.ok || !data?.lead) {
-        setLeadPreview(null);
-        setLeadError(data?.error ?? "ChicagoShots intake preview is unavailable.");
-        return;
-      }
-
-      setLeadPreview(data.lead);
-      void saveProposalPacket(data.lead, { silent: true });
-    } catch {
-      setLeadPreview(null);
-      setLeadError("ChicagoShots intake preview could not reach the local backend.");
-    } finally {
-      setLeadBusy(false);
+    if (packet) {
+      showPhantomAiArtifacts([buildProposalArtifact(packet), buildApprovalArtifact(packet), buildFollowUpArtifact(packet)]);
     }
   }
 
@@ -6202,9 +6546,29 @@ function ChicagoShotsLeadIntakePanel({
         ["Raw secret exposed", leadPreview.safety_flags.raw_secret_exposed],
       ]
     : [];
-  const visibleProposalHistory = proposalHistory.filter((record) =>
-    proposalHistoryFilter === "all" ? true : record.status === proposalHistoryFilter,
+  const prioritizedProposalHistory = sortChicagoShotsProposalHistory(proposalHistory);
+  const priorityProposalRecord = getChicagoShotsPriorityProposal(proposalHistory);
+  const proposalSearchTerm = proposalHistorySearch.trim().toLowerCase();
+  const visibleProposalHistory = prioritizedProposalHistory.filter((record) =>
+    (proposalHistoryFilter === "all" ? true : record.status === proposalHistoryFilter) &&
+    (!proposalSearchTerm || chicagoShotsProposalSearchText(record).includes(proposalSearchTerm)),
   );
+  const activeProposalRecord = getActiveProposalRecord();
+  const nextActionContext = buildContextNextActionArtifact().summary;
+  const workflowContext = leadPreview
+    ? `${leadPreview.normalized_lead.client_name || "New lead"} - ${leadPreview.recommended_service_package.name}`
+    : activeProposalRecord
+      ? `${activeProposalRecord.client_name} - ${activeProposalRecord.package}`
+      : "ChicagoShots lead intake ready";
+  const activePacketContext = activeProposalRecord
+    ? `${activeProposalRecord.client_name} (${chicagoShotsProposalStatusLabels[activeProposalRecord.status]})`
+    : leadPreview
+      ? `${leadPreview.normalized_lead.client_name || "Unsaved lead"} preview`
+      : "No proposal packet selected";
+  const priorityPacketContext = priorityProposalRecord
+    ? `${priorityProposalRecord.client_name} - ${chicagoShotsProposalStatusLabels[priorityProposalRecord.status]}`
+    : "No saved packet yet";
+  const phantomAiActionDisabled = !sessionHeaders || leadBusy || proposalHistoryBusy;
 
   return (
     <section className="lead-intake-panel">
@@ -6222,6 +6586,117 @@ function ChicagoShotsLeadIntakePanel({
         <span>No queue write</span>
         <span>No ledger write</span>
       </div>
+      <section className="phantom-ai-workflow-brain" aria-label="Embedded Phantom AI dashboard workflow">
+        <div className="section-head compact">
+          <div>
+            <span className="eyebrow">Phantom AI embedded</span>
+            <h4>Dashboard brain for this workflow</h4>
+          </div>
+          <TruthBadge state="real" label="Action-first" />
+        </div>
+        <div className="phantom-ai-context-grid">
+          <StatusLine label="Current module" value="Phantom AI / ChicagoShots operator" />
+          <StatusLine label="Workflow context" value={workflowContext} />
+          <StatusLine label="Active packet" value={activePacketContext} />
+          <StatusLine label="Priority packet" value={priorityPacketContext} />
+          <StatusLine label="Best local move" value={nextActionContext} />
+        </div>
+        <div className="phantom-ai-action-row" aria-label="Embedded Phantom AI actions">
+          <button
+            className="ghost-small"
+            type="button"
+            onClick={() => void runPhantomAiAction("draft_follow_up")}
+            disabled={phantomAiActionDisabled}
+          >
+            <MessageSquare size={15} />
+            Draft follow-up
+          </button>
+          <button
+            className="ghost-small"
+            type="button"
+            onClick={() => void runPhantomAiAction("generate_proposal")}
+            disabled={phantomAiActionDisabled}
+          >
+            <FileText size={15} />
+            Generate proposal
+          </button>
+          <button
+            className="ghost-small"
+            type="button"
+            onClick={() => void runPhantomAiAction("explain_package")}
+            disabled={phantomAiActionDisabled}
+          >
+            <Search size={15} />
+            Explain package recommendation
+          </button>
+          <button
+            className="ghost-small"
+            type="button"
+            onClick={() => void runPhantomAiAction("summarize_saved_packet")}
+            disabled={phantomAiActionDisabled || !activeProposalRecord}
+          >
+            <FileText size={15} />
+            Summarize saved packet
+          </button>
+          <button
+            className="ghost-small"
+            type="button"
+            onClick={() => void runPhantomAiAction("suggest_next_action")}
+            disabled={phantomAiActionDisabled}
+          >
+            <ArrowRight size={15} />
+            Suggest next action
+          </button>
+          <button
+            className="ghost-small"
+            type="button"
+            onClick={() => {
+              if (!priorityProposalRecord) return;
+              setSelectedProposalRecord(priorityProposalRecord);
+              showPhantomAiArtifacts([
+                buildSavedPacketArtifact(priorityProposalRecord),
+                buildContextNextActionArtifact(),
+              ]);
+            }}
+            disabled={phantomAiActionDisabled || !priorityProposalRecord}
+          >
+            <Zap size={15} />
+            Open priority packet
+          </button>
+        </div>
+        {phantomAiArtifacts.length ? (
+          <div className="phantom-ai-artifact-grid" aria-label="Phantom AI dashboard artifacts">
+            {phantomAiArtifacts.map((artifact) => (
+              <article className={`operator-result-card phantom-ai-artifact ${artifact.kind}`} key={artifact.id}>
+                <span className="eyebrow">{artifact.kind.replace(/_/g, " ")}</span>
+                <h4>{artifact.title}</h4>
+                <p>{artifact.summary}</p>
+                {artifact.body ? <p className="draft-copy">{artifact.body}</p> : null}
+                <ul>
+                  {artifact.details.map((detail) => (
+                    <li key={detail}>{detail}</li>
+                  ))}
+                </ul>
+                {artifact.copy_text && artifact.copy_label ? (
+                  <button
+                    className="ghost-small"
+                    type="button"
+                    onClick={() => void copyLeadText(artifact.copy_label!, artifact.copy_text!)}
+                  >
+                    <Copy size={15} />
+                    Copy {artifact.copy_label}
+                  </button>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="ops-status-note">
+            Use the embedded actions to turn this module context into follow-up, proposal, approval, saved-packet, or
+            next-action cards.
+          </p>
+        )}
+      </section>
       <div className="lead-preset-row" aria-label="ChicagoShots lead presets">
         {chicagoShotsLeadPresets.map((preset) => (
           <button className="lead-preset-button" type="button" key={preset.id} onClick={() => applyPreset(preset)}>
@@ -6357,8 +6832,52 @@ function ChicagoShotsLeadIntakePanel({
         <div className="proposal-summary-grid" aria-label="ChicagoShots proposal pipeline counts">
           <StatusLine label="Total saved" value={String(proposalHistoryCounts.total)} />
           <StatusLine label="Drafts" value={String(proposalHistoryCounts.draft)} />
+          <StatusLine label="Sent manually" value={String(proposalHistoryCounts.sent_manually)} />
           <StatusLine label="Follow-up needed" value={String(proposalHistoryCounts.follow_up_needed)} />
           <StatusLine label="Won" value={String(proposalHistoryCounts.won)} />
+        </div>
+        {priorityProposalRecord ? (
+          <article className="proposal-priority-card" aria-label="Fastest money move">
+            <span className={`proposal-priority-badge ${chicagoShotsProposalPriorityClass(priorityProposalRecord.proposal_priority_label)}`}>
+              {chicagoShotsProposalPriorityLabels[priorityProposalRecord.proposal_priority_label]} ·{" "}
+              {priorityProposalRecord.proposal_priority_score}
+            </span>
+            <div>
+              <strong>{priorityProposalRecord.proposal_next_action}</strong>
+              <p>{priorityProposalRecord.proposal_next_action_detail}</p>
+            </div>
+            <button
+              className="ghost-small"
+              type="button"
+              onClick={() => {
+                setSelectedProposalRecord(priorityProposalRecord);
+                showPhantomAiArtifacts([buildSavedPacketArtifact(priorityProposalRecord), buildContextNextActionArtifact()]);
+              }}
+            >
+              <Zap size={15} />
+              Work this first
+            </button>
+          </article>
+        ) : null}
+        <div className="proposal-history-tools">
+          <label className="proposal-search-field">
+            Search saved packets
+            <input
+              value={proposalHistorySearch}
+              onChange={(event) => setProposalHistorySearch(event.target.value)}
+              placeholder="Client, package, status, price..."
+            />
+          </label>
+          {priorityProposalRecord ? (
+            <button
+              className="ghost-small"
+              type="button"
+              onClick={() => setSelectedProposalRecord(priorityProposalRecord)}
+            >
+              <Zap size={15} />
+              Jump to priority
+            </button>
+          ) : null}
         </div>
         <div className="proposal-filter-row" aria-label="ChicagoShots proposal filters">
           {chicagoShotsProposalHistoryFilters.map((value) => (
@@ -6386,6 +6905,10 @@ function ChicagoShotsLeadIntakePanel({
                 </span>
                 <strong>{record.client_name}</strong>
                 <span>{record.package}</span>
+                <span className={`proposal-priority-mini ${chicagoShotsProposalPriorityClass(record.proposal_priority_label)}`}>
+                  {chicagoShotsProposalPriorityLabels[record.proposal_priority_label]} · {record.proposal_priority_score}
+                </span>
+                <span>{record.proposal_next_action}</span>
                 <span>{record.created_at.slice(0, 10)} - {record.recommended_price_range}</span>
               </button>
             ))}
@@ -6407,6 +6930,15 @@ function ChicagoShotsLeadIntakePanel({
             <StatusLine label="Range" value={selectedProposalRecord.recommended_price_range} />
             <StatusLine label="Timeline" value={selectedProposalRecord.delivery_timeline} />
             <StatusLine label="Channel" value={selectedProposalRecord.follow_up_channel} />
+            <StatusLine
+              label="Priority"
+              value={`${chicagoShotsProposalPriorityLabels[selectedProposalRecord.proposal_priority_label]} / ${selectedProposalRecord.proposal_priority_score}`}
+            />
+            <StatusLine label="Follow-up timing" value={selectedProposalRecord.proposal_follow_up_timing} />
+            <div className="proposal-next-action-box">
+              <strong>{selectedProposalRecord.proposal_next_action}</strong>
+              <p>{selectedProposalRecord.proposal_next_action_detail}</p>
+            </div>
             <p>{selectedProposalRecord.proposal_summary}</p>
             <label className="proposal-status-select">
               Status
