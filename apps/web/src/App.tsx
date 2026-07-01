@@ -4981,6 +4981,12 @@ function LoginScreen({
   setActiveSessionId: (sessionId: string) => void;
   onSignIn: (sessionId: string) => void | Promise<void>;
 }) {
+  // Sessions (the list + switcher) are an admin-only feature. A client never
+  // sees a session list — they enter their single workspace. Operators reveal
+  // the picker explicitly.
+  const [operatorMode, setOperatorMode] = useState(false);
+  const clientDefault = sessions.find((session) => !session.canManageAccess) ?? sessions[0];
+  const targetSessionId = operatorMode ? activeSessionId : (clientDefault?.id ?? activeSessionId);
   return (
     <main className="login-screen">
       <section className="login-copy">
@@ -5012,19 +5018,24 @@ function LoginScreen({
           Password
           <input type="password" defaultValue="phantomforce" />
         </label>
-        <label>
-          Session
-          <select value={activeSessionId} onChange={(event) => setActiveSessionId(event.target.value)}>
-            {sessions.map((session) => (
-              <option key={session.id} value={session.id}>
-                {session.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        <button className="primary-action" type="button" onClick={() => void onSignIn(activeSessionId)}>
+        {operatorMode ? (
+          <label>
+            Session
+            <select value={activeSessionId} onChange={(event) => setActiveSessionId(event.target.value)}>
+              {sessions.map((session) => (
+                <option key={session.id} value={session.id}>
+                  {session.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+        <button className="primary-action" type="button" onClick={() => void onSignIn(targetSessionId)}>
           <KeyRound size={18} />
           Enter PhantomForce
+        </button>
+        <button className="ghost-small operator-toggle" type="button" onClick={() => setOperatorMode((value) => !value)}>
+          {operatorMode ? "Back to client sign-in" : "Operator sign-in"}
         </button>
         <p className="account-disclaimer">
           By creating an account, you agree that PhantomForce provides software, automation tools, and AI-generated
