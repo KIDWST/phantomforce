@@ -10,6 +10,9 @@ const flare = () => { pulse.v = 1; };
    the local responder to live Claude (server-side key, 5-prompt daily cap +
    token limit enforced in the proxy). Empty = local responder. */
 const AI_ENDPOINT = "";
+// Download/open the PhantomForce dashboard. Behind Pangolin: sign up / log in
+// there, then land in the (currently free) paywalled app.
+const APP_URL = "https://app.phantomforce.online";
 async function askPhantom(message) {
   if (!AI_ENDPOINT) return null;
   const ctrl = new AbortController();
@@ -104,7 +107,7 @@ function initConversation() {
   const finish = () => {
     setOrbits([]);
     if (!summon) return;
-    summon.href = `mailto:demo@phantomforce.online?subject=${encodeURIComponent("Build my PhantomForce operator")}&body=${encodeURIComponent(captured.map((c, i) => `(${i + 1}) ${c}`).join("\n"))}`;
+    summon.href = APP_URL;
     summon.hidden = false;
   };
 
@@ -178,7 +181,7 @@ function initConversation() {
       askPhantom(v).then((ai) => {
         // live brain enforces its own per-day cap
         if (ai && ai.limited) {
-          speak(ai.message || "That's your free questions for now — summon an operator to go deeper.");
+          speak(ai.message || "That's your free questions for now — download PhantomForce to go deeper.");
           if (summon) summon.hidden = false;
           return;
         }
@@ -186,7 +189,7 @@ function initConversation() {
         // free local responder: reactive, then capped to pull them in
         window.setTimeout(() => {
           if (typed > FREE_LIMIT) {
-            speak("That's a taste of what I do. The full version runs 24/7, privately, for your whole business — summon your operator.");
+            speak("That's a taste of what I do. The full version runs 24/7, privately, for your whole business — download PhantomForce and create your account.");
             if (summon) summon.hidden = false;
           } else {
             speak(localReply(v));
