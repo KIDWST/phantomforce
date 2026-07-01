@@ -285,11 +285,12 @@ async function initEntity() {
     // --- gestures: look at cursor + smile on move + play dead on click ---
     let px = 0, py = 0, cpx = 0, cpy = 0;
     let happy = 0, dead = 0, blink = 3;
+    const DEAD_T = 0.9;   // how long it plays dead (seconds)
     window.addEventListener("pointermove", (e) => {
       px = e.clientX / innerWidth - 0.5; py = e.clientY / innerHeight - 0.5;
       if (dead <= 0) happy = 1.1;
     }, { passive: true });
-    canvas.addEventListener("pointerdown", () => { if (dead <= 0) { dead = 1.6; flare(); } });
+    canvas.addEventListener("pointerdown", () => { if (dead <= 0) { dead = DEAD_T; flare(); } });
 
     const t0 = performance.now();
     let running = true;
@@ -324,12 +325,12 @@ async function initEntity() {
       glowMat.opacity = 0.16 + pulse.v * 0.16;
 
       // float; slump when dead
-      ghost.position.y = Math.sin(t * 1.1) * 0.1 - (isDead ? (1 - dead / 1.6) * 0.45 : 0);
+      ghost.position.y = Math.sin(t * 1.1) * 0.1 - (isDead ? (1 - dead / DEAD_T) * 0.45 : 0);
 
       // look toward cursor + gentle drift; shake like pac-man when dead
       cpx = lerp(cpx, px, 0.06); cpy = lerp(cpy, py, 0.06);
       let rx = cpy * 0.36, ry = cpx * 0.66 + Math.sin(t * 0.15) * 0.05, rz = 0;
-      if (isDead) { const sh = dead / 1.6; rz = Math.sin(t * 42) * 0.2 * sh; rx += Math.sin(t * 35) * 0.12 * sh; }
+      if (isDead) { const sh = dead / DEAD_T; rz = Math.sin(t * 42) * 0.2 * sh; rx += Math.sin(t * 35) * 0.12 * sh; }
       ghost.rotation.set(rx, ry, rz);
 
       // eyes: the glow drifts toward the cursor and intensifies when you move
@@ -384,7 +385,7 @@ function initRiskRadar() {
   ];
   const spawn = () => {
     if (document.hidden) return;
-    const threat = Math.random() < 0.34;
+    const threat = Math.random() < 0.6;   // red threat dots outnumber the message bubbles
     const ping = document.createElement("div");
     const right = Math.random() < 0.5;
     ping.style.left = (right ? 72 + Math.random() * 22 : 6 + Math.random() * 22) + "%";
