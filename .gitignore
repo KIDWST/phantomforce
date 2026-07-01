@@ -11,6 +11,7 @@ packages/contracts/src/*.js
 Thumbs.db
 # Local runtime state, backups, and recovery snapshots (not source)
 server/data/
+server/.local/
 .phantom/
 **/*.bak
 **/snapshots/

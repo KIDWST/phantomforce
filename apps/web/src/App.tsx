@@ -24,15 +24,17 @@ import {
   Send,
   Settings,
   ShieldCheck,
+  ShoppingCart,
   Sparkles,
   SquareCheckBig,
+  Star,
   ToggleLeft,
   UserRound,
   Users,
   X,
   Zap,
 } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
 type Route =
   | "command"
@@ -42,13 +44,14 @@ type Route =
   | "tasks"
   | "content"
   | "media"
+  | "security"
   | "site"
   | "offers"
   | "approvals"
   | "access"
   | "activity"
   | "connections";
-type ApprovalKind = "email" | "calendar" | "task";
+type ApprovalKind = "email" | "calendar" | "task" | "review_request" | "website_review" | "video_generation";
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type ActivityLevel = "ok" | "info" | "warn";
 type ClientAccessStatus = "active" | "past_due" | "revoked";
@@ -92,6 +95,36 @@ type Approval = {
   payload: Record<string, string>;
   reversible: boolean;
   status: ApprovalStatus;
+};
+
+type ReviewClientStatus = "ready" | "request_queued" | "request_approved" | "review_received" | "website_ready";
+
+type ReviewClient = {
+  id: string;
+  business: string;
+  contact: string;
+  service: string;
+  lastWorked: string;
+  result: string;
+  channel: "email" | "text" | "manual";
+  status: ReviewClientStatus;
+  reviewLink: string;
+  draftMessage: string;
+  submittedReview?: {
+    rating: string;
+    quote: string;
+    author: string;
+  };
+};
+
+type WebsiteReview = {
+  id: string;
+  business: string;
+  author: string;
+  quote: string;
+  rating: string;
+  service: string;
+  approvedAt: string;
 };
 
 type ActivityItem = {
@@ -397,6 +430,367 @@ type PhantomAiOpsStatus = {
     localhost_status_check_performed: boolean;
   };
 };
+
+type AgentWorkerMetric = {
+  id: string;
+  name: string;
+  role: string;
+  tool_binding: string;
+  state: string;
+  focus: string;
+  tasks_last_1h: number;
+  tasks_last_24h: number;
+  tasks_last_7d: number;
+  tokens_last_24h: number;
+  estimated_cost_usd_last_24h: number;
+  last_run_at: string | null;
+  data_source: string;
+};
+
+type AgentSubagentMetric = {
+  id: string;
+  name: string;
+  parent: string;
+  specialty: string;
+  state: string;
+  tasks_last_24h: number;
+  tokens_last_24h: number;
+};
+
+type AgentToolStackItem = {
+  id: string;
+  display_name: string;
+  intended_role: string;
+  allowed_mode: string;
+  state: string;
+  blocked_actions_count: number;
+  next_phase: string;
+};
+
+type AgentAssignment = {
+  id: string;
+  owner: string;
+  title: string;
+  detail: string;
+  status: "ready" | "watching" | "blocked" | "drafting";
+  action_label: string;
+  destination_route: Route;
+  guardrail: string;
+};
+
+type AgentProgramUse = AgentToolStackItem & {
+  manager_agent: string;
+  current_use: string;
+  action_id: string;
+  action_label: string;
+  destination_route: Route;
+  commercial_visible: boolean;
+};
+
+type AgentActionResult = {
+  ok: boolean;
+  action_id?: string;
+  label?: string;
+  worker?: string;
+  program?: string;
+  status?: string;
+  result_type?: string;
+  output?: unknown;
+  stderr?: string;
+  safety_flags?: Record<string, boolean>;
+  error?: unknown;
+};
+
+type AgentTickerItem = {
+  id: string;
+  label: string;
+  text: string;
+  timestamp: string;
+};
+
+type AgentClientSummary = {
+  visible_to_client?: boolean;
+  active_agent_count: number;
+  total_agent_count: number;
+  status: string;
+  label: string;
+};
+
+type AdminAgentWorkforceStatus = {
+  ok: true;
+  role: "admin";
+  summary: {
+    window_hours: number;
+    generated_at: string;
+    ledger_exists: boolean;
+    ledger_bytes: number;
+    tasks_in_window: number;
+    tokens_in_window: number;
+    estimated_cost_usd_in_window: number;
+    active_workers: number;
+    total_workers: number;
+    subagents_mapped: number;
+    n8n_scaffolded: boolean;
+    n8n_running: boolean;
+    tool_registry_loaded: boolean;
+    tool_count: number;
+  };
+  client_summary: AgentClientSummary;
+  workers: AgentWorkerMetric[];
+  subagents: AgentSubagentMetric[];
+  tool_stack: AgentToolStackItem[];
+  assignments: AgentAssignment[];
+  programs: AgentProgramUse[];
+  ticker: AgentTickerItem[];
+  n8n: {
+    status: string;
+    execution_disabled: boolean;
+    would_run: boolean;
+    local_url: string;
+    scaffolded: boolean;
+    running: boolean;
+    workflow_drafts: Array<{
+      id: string;
+      exists: boolean;
+      active: boolean;
+    }>;
+  };
+  safety_flags: {
+    read_only: true;
+    provider_called: false;
+    external_call_performed: false;
+    n8n_started: false;
+    workflow_executed: false;
+    approval_executed: false;
+    queue_written: false;
+    production_ledger_written: false;
+  };
+};
+
+type ClientAgentWorkforceStatus = {
+  ok: true;
+  role: "client";
+  summary: AgentClientSummary;
+  details_redacted: true;
+  token_usage_visible: false;
+  tool_stack_visible: false;
+};
+
+type AgentWorkforceStatus = AdminAgentWorkforceStatus | ClientAgentWorkforceStatus;
+
+type MissionBundle = {
+  id: string;
+  command: string;
+  aliases: string[];
+  title: string;
+  short: string;
+  prompt: string;
+  sample: string;
+  route: Route;
+  cta: string;
+  crew: string[];
+};
+
+type StorefrontDraft = {
+  name: string;
+  headline: string;
+  product: string;
+  price: string;
+  description: string;
+  fulfillment: string;
+  checkoutNote: string;
+  cta: string;
+};
+
+const adminMissionBundles: MissionBundle[] = [
+  {
+    id: "help",
+    command: "/help",
+    aliases: ["/commands"],
+    title: "Show mission menu",
+    short: "List the admin command bundles.",
+    prompt: "Show Jordan the available PhantomAI mission bundles and explain when to use each one.",
+    sample: "/help",
+    route: "command",
+    cta: "Show menu",
+    crew: ["router", "memory"],
+  },
+  {
+    id: "sprint",
+    command: "/sprint",
+    aliases: ["/launch", "/client"],
+    title: "Launch a client sprint",
+    short: "Scope, price, plan, proof, and next action.",
+    prompt:
+      "Build a client sprint package. Return the target buyer, pain, package recommendation, deliverables, proof to show, first message, follow-up step, and risk notes.",
+    sample: "/sprint for a sports trainer who needs booking, content, and follow-ups",
+    route: "offers",
+    cta: "Build sprint",
+    crew: ["planner", "standards guard", "proposal drafter", "memory"],
+  },
+  {
+    id: "followup",
+    command: "/followup",
+    aliases: ["/reply", "/lead"],
+    title: "Handle a lead",
+    short: "Draft reply, booking path, and review card.",
+    prompt:
+      "Handle the next lead. Identify the best reply, the booking path, the service angle, and the approval card needed before any external action.",
+    sample: "/followup the warmest lead and prepare the next message",
+    route: "inbox",
+    cta: "Handle lead",
+    crew: ["lead finder", "reply drafter", "booking planner", "approval guard"],
+  },
+  {
+    id: "quote",
+    command: "/quote",
+    aliases: ["/price", "/proposal"],
+    title: "Build a quote",
+    short: "Pick Starter, Core, or Pro and write the pitch.",
+    prompt:
+      "Create a quote recommendation. Choose $750 Starter, $1,500 Core, or $2,500 Pro, explain why, write a short pitch, and include a fallback option.",
+    sample: "/quote for a small business owner who needs website cleanup and follow-up system",
+    route: "offers",
+    cta: "Price it",
+    crew: ["offer strategist", "proposal drafter", "risk checker", "memory"],
+  },
+  {
+    id: "book",
+    command: "/book",
+    aliases: ["/schedule", "/call"],
+    title: "Book the call",
+    short: "Agenda, time windows, prep, and approval gate.",
+    prompt:
+      "Create a booking workflow. Return two safe time-window suggestions, a 15-minute agenda, what to ask, what to send afterward, and what needs approval.",
+    sample: "/book a 15-minute setup call for the next interested prospect",
+    route: "calendar",
+    cta: "Plan call",
+    crew: ["scheduler", "agenda builder", "approval guard", "memory"],
+  },
+  {
+    id: "site",
+    command: "/site",
+    aliases: ["/website", "/page"],
+    title: "Upgrade the site",
+    short: "Copy, sections, preview plan, and scanner pass.",
+    prompt:
+      "Plan a private website improvement. Return the page goal, copy changes, section order, proof needed, safe preview route, and scanner checklist before anything goes live.",
+    sample: "/site make the homepage more direct and sales-ready",
+    route: "site",
+    cta: "Plan site",
+    crew: ["site editor", "code mapper", "scanner", "approval guard"],
+  },
+  {
+    id: "store",
+    command: "/store",
+    aliases: ["/shop", "/checkout"],
+    title: "Build a store page",
+    short: "Offer, price, product copy, scanner check, and review card.",
+    prompt:
+      "Build a storefront package. Return the offer, price, product copy, proof points, checkout risk notes, scanner checklist, and approval step before any payment link goes live.",
+    sample: "/store build a checkout-ready page for the Core Sprint",
+    route: "site",
+    cta: "Build store",
+    crew: ["offer strategist", "site editor", "scanner", "approval guard"],
+  },
+  {
+    id: "media",
+    command: "/media",
+    aliases: ["/video", "/content"],
+    title: "Create a media asset",
+    short: "Content angle, video brief, caption, and proof.",
+    prompt:
+      "Build a media package. Return the creative angle, video concept, caption, shot list, proof source, client-safe language, and next approval step.",
+    sample: "/video make a private sports business promo concept",
+    route: "media",
+    cta: "Build media",
+    crew: ["creative director", "proof checker", "media lab", "approval guard"],
+  },
+  {
+    id: "scan",
+    command: "/scan",
+    aliases: ["/audit", "/security"],
+    title: "Inspect risk",
+    short: "Scan copy, files, secrets, scripts, and launch risk.",
+    prompt:
+      "Run a risk review plan. Summarize what to inspect, what is safe, what is blocked, what proof is missing, and the next safest action. Do not expose secrets.",
+    sample: "/scan the dashboard before I show it to someone",
+    route: "security",
+    cta: "Inspect",
+    crew: ["scanner", "standards guard", "route checker", "memory"],
+  },
+  {
+    id: "agents",
+    command: "/agents",
+    aliases: ["/workforce", "/crew"],
+    title: "Manage workforce",
+    short: "Show who is working and what bundles are ready.",
+    prompt:
+      "Summarize the current PhantomForce workforce as business outcomes: who is working, what they are handling, what is blocked, and what Jordan should assign next.",
+    sample: "/agents show what my workforce should do next",
+    route: "agents",
+    cta: "Manage",
+    crew: ["operator", "memory", "automation watcher", "scanner"],
+  },
+];
+
+function resolveMissionBundle(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith("/")) return null;
+  const [token = ""] = trimmed.split(/\s+/, 1);
+  const bundle = adminMissionBundles.find((item) => item.command === token || item.aliases.includes(token));
+  if (!bundle) return null;
+  return {
+    bundle,
+    subject: trimmed.slice(token.length).trim(),
+  };
+}
+
+function buildMissionPrompt(bundle: MissionBundle, subject: string) {
+  const focus = subject || bundle.sample.replace(bundle.command, "").trim() || "the current workspace priority";
+  return [
+    `Run the "${bundle.title}" PhantomForce mission for: ${focus}`,
+    bundle.prompt,
+    `Coordinate the internal workforce together: ${bundle.crew.join(", ")}.`,
+    "Do not expose raw tool names as the product. Speak in business outcomes, artifacts, and next actions.",
+    "If the work would send, post, upload, book, bill, deploy, delete, change credentials, or mutate production, prepare an approval-ready draft instead of executing it.",
+  ].join("\n");
+}
+
+function requestsExternalAction(text: string) {
+  const lower = text.toLowerCase();
+
+  return (
+    /\b(send|email|dm|text|post|upload)\b.*\b(to|them|client|lead|prospect|gmail|instagram|facebook|youtube)\b/.test(
+      lower,
+    ) ||
+    lower.includes("send it") ||
+    lower.includes("send this") ||
+    lower.includes("create calendar") ||
+    lower.includes("put it on my calendar") ||
+    lower.includes("handle the follow-up") ||
+    /\b(schedule|book)\b.*\b(call|meeting|appointment|calendar)\b/.test(lower)
+  );
+}
+
+function missionHelpText() {
+  return adminMissionBundles
+    .filter((bundle) => bundle.id !== "help")
+    .map((bundle) => `${bundle.command} - ${bundle.title}: ${bundle.short}`)
+    .join("\n");
+}
+
+function missionBundleIcon(id: string) {
+  if (id === "sprint" || id === "quote") return <Zap size={18} />;
+  if (id === "followup") return <Mail size={18} />;
+  if (id === "book") return <CalendarDays size={18} />;
+  if (id === "store") return <ShoppingCart size={18} />;
+  if (id === "site") return <FileText size={18} />;
+  if (id === "media") return <Play size={18} />;
+  if (id === "scan") return <Search size={18} />;
+  if (id === "agents") return <Users size={18} />;
+  return <Sparkles size={18} />;
+}
 
 type ChicagoShotsLeadForm = {
   client_name: string;
@@ -1231,7 +1625,7 @@ type AppSession = {
 const AUTHORIZATION_HEADER = "Authorization";
 const OWNER_ORG_NAME = "PhantomForce";
 const DEFAULT_CLIENT_WORKSPACE_ID = "client-chicagoshots";
-const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-sports-demo", "client-past-due"]);
+const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-sports-demo"]);
 const ADMIN_ONLY_ROUTES = new Set<Route>(["agents", "site", "access", "connections"]);
 
 const initialSessions: AppSession[] = [
@@ -1258,6 +1652,7 @@ const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "offers", label: "Money", icon: <Zap size={18} /> },
   { id: "content", label: "Create", icon: <FileText size={18} /> },
   { id: "media", label: "Video", icon: <Play size={18} /> },
+  { id: "security", label: "Scanner", icon: <ShieldCheck size={18} /> },
   { id: "calendar", label: "Bookings", icon: <CalendarDays size={18} /> },
   { id: "tasks", label: "Work", icon: <SquareCheckBig size={18} /> },
   { id: "approvals", label: "Review", icon: <ShieldCheck size={18} /> },
@@ -1385,6 +1780,60 @@ const initialMessages: Message[] = [
   },
 ];
 
+const initialReviewClients: ReviewClient[] = [
+  {
+    id: "review-chicagoshots-media-day",
+    business: "ChicagoShots media client",
+    contact: "Past sports media client",
+    service: "Media day / highlight delivery",
+    lastWorked: "Recently completed",
+    result: "Delivered short-form media assets and a clean delivery workflow.",
+    channel: "manual",
+    status: "ready",
+    reviewLink: "app.phantomforce.online/review/chicagoshots-media-client",
+    draftMessage:
+      "Appreciate you working with us. Could you leave a quick review about the media day / highlight workflow? It helps other teams understand what the process feels like. Link: app.phantomforce.online/review/chicagoshots-media-client",
+    submittedReview: {
+      rating: "5",
+      author: "Sports media client",
+      quote:
+        "The workflow made it simple to get organized media, clear next steps, and usable short-form content without chasing files.",
+    },
+  },
+  {
+    id: "review-ops-sprint",
+    business: "Local service business",
+    contact: "Past ops sprint contact",
+    service: "Ops + Content Setup Sprint",
+    lastWorked: "Past setup sprint",
+    result: "Organized follow-ups, offer copy, and next-step workflow.",
+    channel: "email",
+    status: "ready",
+    reviewLink: "app.phantomforce.online/review/local-service-ops-sprint",
+    draftMessage:
+      "Quick ask: would you leave a short review about the setup sprint and how it helped organize follow-ups, offers, and next steps? Link: app.phantomforce.online/review/local-service-ops-sprint",
+    submittedReview: {
+      rating: "5",
+      author: "Local service owner",
+      quote:
+        "PhantomForce helped turn scattered follow-ups and offer ideas into a simple system we could actually act on.",
+    },
+  },
+  {
+    id: "review-coach-team",
+    business: "Coach / team owner",
+    contact: "Past team contact",
+    service: "Sports content and parent-facing delivery plan",
+    lastWorked: "Previous season",
+    result: "Prepared a media package and delivery structure for team content.",
+    channel: "text",
+    status: "ready",
+    reviewLink: "app.phantomforce.online/review/team-media-workflow",
+    draftMessage:
+      "Would you mind leaving a quick review about the team media workflow? A few lines about the communication, content, and delivery process would help. Link: app.phantomforce.online/review/team-media-workflow",
+  },
+];
+
 const connections: Connection[] = [
   {
     id: "gmail",
@@ -1431,7 +1880,7 @@ const initialClientAccess: ClientAccess[] = [
     accessStatus: "active",
     gateway: "Pangolin",
     privateRoute: "app.phantomforce.online/test-client",
-    modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts"],
+    modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts", "Video"],
     lastAudit: "Deposit paid; workspace active",
   },
   {
@@ -1533,6 +1982,7 @@ const clientModuleCatalog = [
   "Work",
   "Review",
   "Contacts",
+  "Video",
   "Content",
   "Activity",
   "Documents",
@@ -1914,6 +2364,22 @@ const defaultPhantomAiOpsStatus: PhantomAiOpsStatus = {
     production_ledger_written: false,
     localhost_status_check_performed: false,
   },
+};
+
+const defaultAgentClientSummary: AgentClientSummary = {
+  active_agent_count: 0,
+  total_agent_count: 0,
+  status: "standing_by",
+  label: "Agent floor waiting on backend",
+};
+
+const defaultAgentWorkforceStatus: ClientAgentWorkforceStatus = {
+  ok: true,
+  role: "client",
+  summary: defaultAgentClientSummary,
+  details_redacted: true,
+  token_usage_visible: false,
+  tool_stack_visible: false,
 };
 
 const defaultChicagoShotsLeadForm: ChicagoShotsLeadForm = {
@@ -2417,6 +2883,34 @@ function moduleTestId(clientId: string, moduleKey: string) {
   return `access-module-${clientId}-${slug}`;
 }
 
+function classSlug(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
+}
+
+function formatNumber(value: number) {
+  return new Intl.NumberFormat("en-US").format(Math.max(0, Math.round(value)));
+}
+
+function formatUsd(value: number) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumFractionDigits: value > 0 && value < 1 ? 4 : 2,
+  }).format(Math.max(0, value));
+}
+
+function formatLastRun(value: string | null) {
+  if (!value) return "No recorded run";
+  const parsed = Date.parse(value);
+  if (!Number.isFinite(parsed)) return value;
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(new Date(parsed));
+}
+
 function App() {
   const [route, setRoute] = useState<Route>("command");
   const [signedIn, setSignedIn] = useState(false);
@@ -2429,6 +2923,8 @@ function App() {
   const [events, setEvents] = useState(initialEvents);
   const [tasks, setTasks] = useState(initialTasks);
   const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [reviewClients, setReviewClients] = useState<ReviewClient[]>(initialReviewClients);
+  const [websiteReviews, setWebsiteReviews] = useState<WebsiteReview[]>([]);
   const [activity, setActivity] = useState(initialActivity);
   const [clientAccess, setClientAccess] = useState(initialClientAccess.map(normalizeClientAccessRecord));
   const [guardedWorkspace, setGuardedWorkspace] = useState<GuardedWorkspace | null>(null);
@@ -2439,6 +2935,8 @@ function App() {
   const [providerSetupStatus, setProviderSetupStatus] = useState<ProviderSetupStatus>(defaultProviderSetupStatus);
   const [phantomAiOpsStatus, setPhantomAiOpsStatus] =
     useState<PhantomAiOpsStatus>(defaultPhantomAiOpsStatus);
+  const [agentWorkforceStatus, setAgentWorkforceStatus] =
+    useState<AgentWorkforceStatus>(defaultAgentWorkforceStatus);
   const [aiProvider, setAiProvider] = useState<AiProviderChoice>("codex");
   const [phantomAiBusy, setPhantomAiBusy] = useState(false);
   const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
@@ -2764,6 +3262,25 @@ function App() {
     }
   }
 
+  async function refreshAgentWorkforceStatus() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/agents/status?window_hours=24`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setAgentWorkforceStatus(defaultAgentWorkforceStatus);
+        return;
+      }
+
+      const data = (await response.json()) as { workforce?: AgentWorkforceStatus };
+      setAgentWorkforceStatus(data.workforce ?? defaultAgentWorkforceStatus);
+    } catch {
+      addActivity("Agent floor offline", "Agent workforce telemetry is waiting on the backend.", "warn");
+      setAgentWorkforceStatus(defaultAgentWorkforceStatus);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -2786,6 +3303,7 @@ function App() {
 
     void loadClientAccess();
     void refreshGuardedWorkspace();
+    void refreshAgentWorkforceStatus();
     if (canManageAccess) {
       void refreshPangolinPlan();
       void refreshReadinessReport();
@@ -2886,6 +3404,184 @@ function App() {
     setRoute("command");
   }
 
+  function createStoreReviewApproval(draft: StorefrontDraft) {
+    const storeApproval: Approval = {
+      id: makeId("approval-store"),
+      kind: "task",
+      title: `Review store page: ${draft.product}`,
+      summary:
+        "Confirm storefront copy, price, fulfillment promise, scanner result, checkout gate, and publish/payment path before anything goes live.",
+      payload: {
+        title: `Storefront review - ${draft.product}`,
+        due: "Before publish/payment link",
+        store: draft.name,
+        product: draft.product,
+        price: draft.price,
+        cta: draft.cta,
+      },
+      reversible: true,
+      status: "pending",
+    };
+
+    setApprovals((current) => [storeApproval, ...current]);
+    setMessages((current) => [
+      ...current,
+      {
+        id: makeId("msg-assistant"),
+        role: "assistant",
+        content:
+          "I staged the store page review card. It is now in Review queue with price, product, CTA, and checkout-gate notes. No payment link, publish, send, or external action was created.",
+      },
+    ]);
+    addActivity("Store review staged", `${draft.product} is waiting in Review queue before checkout or publish.`, "ok");
+    setRoute("approvals");
+  }
+
+  function createReviewRequestApproval(clientId: string) {
+    const client = reviewClients.find((item) => item.id === clientId);
+    if (!client) return;
+
+    if (client.status === "request_queued") {
+      addActivity("Review request already queued", `${client.business} is already waiting in Review queue.`, "info");
+      setRoute("approvals");
+      return;
+    }
+
+    const reviewApproval: Approval = {
+      id: makeId("approval-review-request"),
+      kind: "review_request",
+      title: `Request review: ${client.business}`,
+      summary: `Draft a ${client.channel} review ask for ${client.service}. No message sends until approved.`,
+      payload: {
+        client_id: client.id,
+        business: client.business,
+        contact: client.contact,
+        service: client.service,
+        channel: client.channel,
+        review_link: client.reviewLink,
+        draft_message: client.draftMessage,
+        send_status: "not sent - approval required",
+      },
+      reversible: true,
+      status: "pending",
+    };
+
+    setReviewClients((clients) =>
+      clients.map((item) => (item.id === client.id ? { ...item, status: "request_queued" } : item)),
+    );
+    setApprovals((current) => [reviewApproval, ...current]);
+    addActivity("Review request staged", `${client.business} review ask is waiting for approval.`, "ok");
+    setRoute("approvals");
+  }
+
+  function prepareAutonomousReviewFollowups() {
+    const readyClients = reviewClients.filter((client) => client.status === "ready");
+
+    if (!readyClients.length) {
+      addActivity("Review engine current", "No unqueued previous-client review requests are waiting.", "info");
+      setRoute("inbox");
+      return;
+    }
+
+    const reviewApprovals: Approval[] = readyClients.map((client) => ({
+      id: makeId(`approval-review-request-${client.id}`),
+      kind: "review_request",
+      title: `Request review: ${client.business}`,
+      summary: `Autonomous review follow-up prepared for ${client.service}. No external message sent.`,
+      payload: {
+        client_id: client.id,
+        business: client.business,
+        contact: client.contact,
+        service: client.service,
+        channel: client.channel,
+        review_link: client.reviewLink,
+        draft_message: client.draftMessage,
+        send_status: "not sent - approval required",
+      },
+      reversible: true,
+      status: "pending",
+    }));
+
+    setReviewClients((clients) =>
+      clients.map((client) =>
+        readyClients.some((readyClient) => readyClient.id === client.id)
+          ? { ...client, status: "request_queued" }
+          : client,
+      ),
+    );
+    setApprovals((current) => [...reviewApprovals, ...current]);
+    addActivity("Autonomous reviews staged", `${reviewApprovals.length} review request(s) moved to Review queue.`, "ok");
+    setRoute("approvals");
+  }
+
+  function stageReviewForWebsiteApproval(clientId: string) {
+    const client = reviewClients.find((item) => item.id === clientId);
+    if (!client?.submittedReview) {
+      addActivity("Review not ready", "No submitted review is available for that client yet.", "warn");
+      return;
+    }
+
+    const websiteReviewApproval: Approval = {
+      id: makeId("approval-website-review"),
+      kind: "website_review",
+      title: `Approve website review: ${client.business}`,
+      summary: "Review received. Approve before it appears on the website testimonial surface.",
+      payload: {
+        client_id: client.id,
+        business: client.business,
+        author: client.submittedReview.author,
+        rating: client.submittedReview.rating,
+        quote: client.submittedReview.quote,
+        service: client.service,
+        website_status: "not published - approval required",
+      },
+      reversible: true,
+      status: "pending",
+    };
+
+    setReviewClients((clients) =>
+      clients.map((item) => (item.id === client.id ? { ...item, status: "review_received" } : item)),
+    );
+    setApprovals((current) => [websiteReviewApproval, ...current]);
+    addActivity("Website review staged", `${client.business} testimonial is waiting in Review queue.`, "ok");
+    setRoute("approvals");
+  }
+
+  function stageHiggsfieldGenerationApproval(payload: {
+    prompt: string;
+    mediaPath: string;
+    commandPreview: string;
+    model: string;
+    aspectRatio: string;
+    resolution: string;
+    duration: string;
+  }) {
+    const approval: Approval = {
+      id: makeId("approval-higgsfield-video"),
+      kind: "video_generation",
+      title: "Run Higgsfield video generation",
+      summary: "Approve before any paid/upload Higgsfield generation can be run from PhantomCut.",
+      payload: {
+        provider: "Higgsfield",
+        model: payload.model,
+        aspect_ratio: payload.aspectRatio,
+        resolution: payload.resolution,
+        duration: payload.duration,
+        source_media: payload.mediaPath || "prompt-only",
+        prompt: payload.prompt,
+        command_preview: payload.commandPreview,
+        required_confirmation: "RUN_HIGGSFIELD_PAID_JOB",
+        execution_status: "not run - approval only",
+      },
+      reversible: true,
+      status: "pending",
+    };
+
+    setApprovals((current) => [approval, ...current]);
+    addActivity("Higgsfield generation staged", "Paid/upload generation request is waiting in Review queue.", "ok");
+    setRoute("approvals");
+  }
+
   async function runPhantomCommand(rawText: string) {
     const text = rawText.trim();
     if (!text) return;
@@ -2906,23 +3602,32 @@ function App() {
       return;
     }
 
-    const lower = text.toLowerCase();
+    const mission = resolveMissionBundle(text);
 
-    const requestsExternalAction =
-      /\b(send|email|dm|text|post|upload)\b.*\b(to|them|client|lead|prospect|gmail|instagram|facebook|youtube)\b/.test(
-        lower,
-      ) ||
-      lower.includes("send it") ||
-      lower.includes("send this") ||
-      lower.includes("create calendar") ||
-      lower.includes("put it on my calendar") ||
-      lower.includes("handle the follow-up") ||
-      /\b(schedule|book)\b.*\b(call|meeting|appointment|calendar|with|client|lead|prospect)\b/.test(lower);
+    if (mission?.bundle.id === "help") {
+      setMessages((current) => [
+        ...current,
+        {
+          id: makeId("msg-assistant"),
+          role: "assistant",
+          content: `Use normal language by default. Use slash commands only when you want to force a mission bundle:\n${missionHelpText()}`,
+        },
+      ]);
+      addActivity("Mission menu shown", "Admin command bundles were listed without starting external work.", "info");
+      return;
+    }
 
-    if (requestsExternalAction) {
+    if (mission?.bundle.id === "followup") {
       createFollowUpPlan();
       return;
     }
+
+    if (requestsExternalAction(text)) {
+      createFollowUpPlan();
+      return;
+    }
+
+    const messageForBackend = mission ? buildMissionPrompt(mission.bundle, mission.subject) : text;
 
     if (aiProvider === "codex" || aiProvider === "glm_5_2" || aiProvider === "claude_cli" || aiProvider === "phantom") {
       setPhantomAiBusy(true);
@@ -2934,15 +3639,16 @@ function App() {
           body: JSON.stringify({
             provider: canManageAccess && aiProvider === "glm_5_2" ? "openrouter_glm" : "phantom",
             admin_model: canManageAccess ? aiProvider : undefined,
-            message: text,
+            message: messageForBackend,
             tenant_id: activeSession.clientId ?? "phantomforce-owner",
             business_name: selectedOrg,
             actor_user_id: activeSession.id,
             request_id: `chat-${Date.now()}`,
-            task_type: "content_idea_summary",
+            task_type: mission ? `mission_bundle_${mission.bundle.id}` : "content_idea_summary",
             sensitivity_level: "low",
-            business_summary:
-              "Owner command center request. External actions, sends, uploads, billing, deletes, deploys, and credential changes require explicit confirmation.",
+            business_summary: mission
+              ? `Owner command center mission bundle: ${mission.bundle.title}. Internal workers are bundled behind PhantomAI. External actions, sends, uploads, billing, deletes, deploys, and credential changes require explicit confirmation.`
+              : "Owner command center request. External actions, sends, uploads, billing, deletes, deploys, and credential changes require explicit confirmation.",
             module_data: [
               {
                 module: "Command Center",
@@ -2953,6 +3659,19 @@ function App() {
                   { title: "Today tasks", status: String(stats.today), detail: "Summarize operational priorities." },
                 ],
               },
+              ...(mission
+                ? [
+                    {
+                      module: "Mission Bundle",
+                      summary: mission.bundle.title,
+                      items: mission.bundle.crew.map((crew) => ({
+                        title: crew,
+                        status: "bundled",
+                        detail: "Hidden internal worker lane, surfaced as one PhantomAI outcome.",
+                      })),
+                    },
+                  ]
+                : []),
             ],
           }),
         });
@@ -2969,12 +3688,15 @@ function App() {
           },
         ]);
         addActivity(
-          "Phantom AI replied",
+          mission ? "Mission bundle routed" : "Phantom AI replied",
           canManageAccess
-            ? `PhantomAI answered in ${phantomAiModeLabel(aiProvider).toLowerCase()} mode${data?.hermes?.ledger_written ? " and saved a local receipt" : ""}.`
+            ? `${mission ? mission.bundle.title : "PhantomAI"} answered in ${phantomAiModeLabel(aiProvider).toLowerCase()} mode${data?.hermes?.ledger_written ? " and saved a local receipt" : ""}.`
             : "Client-safe guidance returned without exposing admin tools.",
           "ok",
         );
+        if (mission?.bundle.route && mission.bundle.route !== "command") {
+          setRoute(mission.bundle.route);
+        }
         return;
       } catch {
         setMessages((current) => [
@@ -2992,7 +3714,7 @@ function App() {
       }
     }
 
-    if (lower.includes("brief") || lower.includes("today")) {
+    if (text.toLowerCase().includes("brief") || text.toLowerCase().includes("today")) {
       setMessages((current) => [
         ...current,
         {
@@ -3064,6 +3786,56 @@ function App() {
       ]);
     }
 
+    if (approval.kind === "review_request") {
+      setReviewClients((clients) =>
+        clients.map((client) =>
+          client.id === approval.payload.client_id ? { ...client, status: "request_approved" } : client,
+        ),
+      );
+      setTasks((current) => [
+        {
+          id: makeId("task-review-send"),
+          title: `Manually send review link to ${approval.payload.business}`,
+          owner: "PhantomForce",
+          due: "Next follow-up block",
+          status: "queued",
+        },
+        ...current,
+      ]);
+    }
+
+    if (approval.kind === "website_review") {
+      const websiteReview: WebsiteReview = {
+        id: makeId("website-review"),
+        business: approval.payload.business,
+        author: approval.payload.author,
+        quote: approval.payload.quote,
+        rating: approval.payload.rating,
+        service: approval.payload.service,
+        approvedAt: new Date().toISOString(),
+      };
+
+      setWebsiteReviews((reviews) => [websiteReview, ...reviews]);
+      setReviewClients((clients) =>
+        clients.map((client) =>
+          client.id === approval.payload.client_id ? { ...client, status: "website_ready" } : client,
+        ),
+      );
+    }
+
+    if (approval.kind === "video_generation") {
+      setTasks((current) => [
+        {
+          id: makeId("task-higgsfield-run"),
+          title: "Run approved Higgsfield generation inside PhantomCut",
+          owner: "Media Lab",
+          due: "When Jordan is ready to spend credits",
+          status: "queued",
+        },
+        ...current,
+      ]);
+    }
+
     addActivity("Confirmed action completed", approval.title, "ok");
   }
 
@@ -3072,6 +3844,20 @@ function App() {
     setApprovals((current) =>
       current.map((item) => (item.id === id ? { ...item, status: "rejected" } : item)),
     );
+    if (approval?.kind === "review_request") {
+      setReviewClients((clients) =>
+        clients.map((client) =>
+          client.id === approval.payload.client_id ? { ...client, status: "ready" } : client,
+        ),
+      );
+    }
+    if (approval?.kind === "website_review") {
+      setReviewClients((clients) =>
+        clients.map((client) =>
+          client.id === approval.payload.client_id ? { ...client, status: "request_approved" } : client,
+        ),
+      );
+    }
     if (approval) addActivity("Action rejected", approval.title, "warn");
   }
 
@@ -3451,26 +4237,53 @@ function App() {
         ) : null}
         {route === "agents" && canManageAccess ? (
           <AgentControlCenter
-            aiProvider={aiProvider}
-            setAiProvider={setAiProvider}
-            phantomAiBusy={phantomAiBusy}
-            runPhantomCommand={runPhantomCommand}
             setRoute={setRoute}
             pangolinPlan={pangolinPlan}
             pangolinStatus={pangolinStatus}
+            phantomAiOpsStatus={phantomAiOpsStatus}
+            agentWorkforceStatus={agentWorkforceStatus}
+            sessionHeaders={sessionHeaders}
           />
         ) : null}
-        {route === "inbox" ? <InboxView emails={emails} createFollowUpPlan={createFollowUpPlan} /> : null}
+        {route === "inbox" ? (
+          <InboxView
+            emails={emails}
+            reviewClients={reviewClients}
+            websiteReviews={websiteReviews}
+            createFollowUpPlan={createFollowUpPlan}
+            createReviewRequestApproval={createReviewRequestApproval}
+            prepareAutonomousReviewFollowups={prepareAutonomousReviewFollowups}
+            stageReviewForWebsiteApproval={stageReviewForWebsiteApproval}
+          />
+        ) : null}
         {route === "calendar" ? <CalendarView events={events} /> : null}
         {route === "tasks" ? <TasksView tasks={tasks} completeTask={completeTask} /> : null}
         {route === "content" ? <ContentView /> : null}
-        {route === "media" ? <MediaLabView /> : null}
+        {route === "media" ? (
+          <MediaLabView
+            sessionHeaders={sessionHeaders}
+            stageHiggsfieldGenerationApproval={stageHiggsfieldGenerationApproval}
+          />
+        ) : null}
+        {route === "security" ? (
+          <SecurityScannerView canManageAccess={canManageAccess} sessionHeaders={sessionHeaders} />
+        ) : null}
         {route === "site" && canManageAccess ? (
-          <SiteStudioView pangolinPlan={pangolinPlan} pangolinStatus={pangolinStatus} />
+          <SiteStudioView
+            pangolinPlan={pangolinPlan}
+            pangolinStatus={pangolinStatus}
+            sessionHeaders={sessionHeaders}
+            createStoreReviewApproval={createStoreReviewApproval}
+          />
         ) : null}
         {route === "offers" ? <OffersView /> : null}
         {route === "approvals" ? (
-          <ApprovalsView approvals={approvals} approveAction={approveAction} rejectAction={rejectAction} />
+          <ApprovalsView
+            approvals={approvals}
+            websiteReviews={websiteReviews}
+            approveAction={approveAction}
+            rejectAction={rejectAction}
+          />
         ) : null}
         {route === "access" && canManageAccess ? (
           <AccessView
@@ -3675,6 +4488,13 @@ function CommandCenter({
 }) {
   const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
   const aiProviderLabel = phantomAiModeLabel(aiProvider);
+  const missionBundles = adminMissionBundles.filter((bundle) => bundle.id !== "help");
+  const typedSlash = commandText.trim().startsWith("/") ? commandText.trim().toLowerCase() : "";
+  const missionMatches = typedSlash
+    ? missionBundles.filter((bundle) =>
+        [bundle.command, ...bundle.aliases].some((alias) => alias.startsWith(typedSlash) || typedSlash.startsWith(alias)),
+      )
+    : missionBundles.slice(0, 6);
 
   if (!canManageAccess) {
     return <ClientOperatorDemoDashboard />;
@@ -3687,7 +4507,7 @@ function CommandCenter({
       meta: `${stats.urgent} waiting`,
       icon: <Mail size={20} />,
       tone: "danger",
-      action: createFollowUpPlan,
+      action: () => void runPhantomCommand("/followup priority lead"),
       cta: "Ask now",
     },
     {
@@ -3696,10 +4516,7 @@ function CommandCenter({
       meta: `${stats.events} calendar items`,
       icon: <CalendarDays size={20} />,
       tone: "blue",
-      action: () =>
-        void runPhantomCommand(
-          "Draft a 15-minute setup call plan for the next interested lead. Include two time windows, what to ask, and what to send after.",
-        ),
+      action: () => void runPhantomCommand("/book next interested lead"),
       cta: "Ask now",
     },
     {
@@ -3708,10 +4525,7 @@ function CommandCenter({
       meta: "$750 / $1,500 / $2,500",
       icon: <Zap size={20} />,
       tone: "gold",
-      action: () =>
-        void runPhantomCommand(
-          "Turn the current lead into a quote recommendation. Choose $750 Starter, $1,500 Core, or $2,500 Pro and explain the next step.",
-        ),
+      action: () => void runPhantomCommand("/quote current lead"),
       cta: "Ask now",
     },
     {
@@ -3720,10 +4534,16 @@ function CommandCenter({
       meta: "Content + video",
       icon: <FileText size={20} />,
       tone: "green",
-      action: () =>
-        void runPhantomCommand(
-          "Create the best client-ready artifact for the current opportunity: choose a doc, one-page proposal, content plan, or video concept and build the first draft.",
-        ),
+      action: () => void runPhantomCommand("/media current opportunity"),
+      cta: "Ask now",
+    },
+    {
+      title: "Build a store",
+      detail: "Turn the offer into a storefront draft.",
+      meta: "Offer + checkout gate",
+      icon: <ShoppingCart size={20} />,
+      tone: "blue",
+      action: () => void runPhantomCommand("/store Core Sprint"),
       cta: "Ask now",
     },
     {
@@ -3734,7 +4554,7 @@ function CommandCenter({
       tone: "violet",
       action: () =>
         void runPhantomCommand(
-          "Propose updates to my PhantomForce website: suggest copy, sections, or design changes as a preview I can review and approve before anything goes live. Keep everything private to my business.",
+          "/site improve the PhantomForce homepage and make it more sales-ready",
         ),
       cta: "Ask now",
     },
@@ -3793,6 +4613,43 @@ function CommandCenter({
             <strong>Video</strong>
             <span>creative prompt + proof</span>
           </article>
+          <article>
+            <ShoppingCart size={18} />
+            <strong>Store</strong>
+            <span>offer + checkout draft</span>
+          </article>
+        </section>
+
+        <section className="mission-bundle-panel" aria-label="Admin mission bundles">
+          <div className="section-head compact">
+            <div>
+              <span className="eyebrow">Mission bundles</span>
+              <h3>Tell PhantomAI the outcome. It bundles the workers.</h3>
+            </div>
+            <button className="ghost-small" type="button" onClick={() => setCommandText("/help")}>
+              <Command size={15} />
+              Commands
+            </button>
+          </div>
+          <div className="mission-bundle-grid">
+            {missionMatches.map((bundle) => (
+              <button
+                className="mission-bundle-card"
+                type="button"
+                key={bundle.id}
+                onClick={() => setCommandText(`${bundle.command} `)}
+              >
+                <span>{missionBundleIcon(bundle.id)}</span>
+                <strong>{bundle.title}</strong>
+                <small>{bundle.short}</small>
+                <em>{bundle.command}</em>
+              </button>
+            ))}
+          </div>
+          <p>
+            Natural language still works. Slash commands are optional admin shortcuts for forcing a bundled mission:
+            sprint, quote, booking, site, media, scan, or workforce.
+          </p>
         </section>
 
         <section className="action-board" aria-label="Next actions">
@@ -3897,7 +4754,7 @@ function CommandCenter({
             <input
               value={commandText}
               onChange={(event) => setCommandText(event.target.value)}
-              placeholder="Ask for the finished thing: reply, quote, booking plan, doc, deck, content, or video..."
+              placeholder="Ask normally, or use /sprint /quote /site /video /scan to force a mission bundle..."
               disabled={phantomAiBusy}
             />
             <button type="submit" title="Send command" disabled={phantomAiBusy}>
@@ -4130,7 +4987,31 @@ function ClientOperatorDemoDashboard() {
   );
 }
 
-function InboxView({ emails, createFollowUpPlan }: { emails: EmailItem[]; createFollowUpPlan: () => void }) {
+function reviewClientStatusLabel(status: ReviewClientStatus) {
+  if (status === "ready") return "ready to ask";
+  if (status === "request_queued") return "in review queue";
+  if (status === "request_approved") return "ready to send";
+  if (status === "review_received") return "review received";
+  return "website ready";
+}
+
+function InboxView({
+  emails,
+  reviewClients,
+  websiteReviews,
+  createFollowUpPlan,
+  createReviewRequestApproval,
+  prepareAutonomousReviewFollowups,
+  stageReviewForWebsiteApproval,
+}: {
+  emails: EmailItem[];
+  reviewClients: ReviewClient[];
+  websiteReviews: WebsiteReview[];
+  createFollowUpPlan: () => void;
+  createReviewRequestApproval: (clientId: string) => void;
+  prepareAutonomousReviewFollowups: () => void;
+  stageReviewForWebsiteApproval: (clientId: string) => void;
+}) {
   const [mode, setMode] = useState<ResultMode>("recommended");
   const followUpItems: SimulationItem[] = emails.map((email) => ({
     title: email.subject,
@@ -4142,9 +5023,26 @@ function InboxView({ emails, createFollowUpPlan }: { emails: EmailItem[]; create
     ["hot", "approval", "needs-reply", "new"].includes(item.status ?? ""),
   );
   const visibleItems = mode === "recommended" ? recommendedItems : allItems;
+  const pendingReviewRequests = reviewClients.filter((client) => client.status === "ready").length;
+  const websiteReadyReviews = websiteReviews.length + reviewClients.filter((client) => client.status === "website_ready").length;
 
   return (
-    <Page title="Leads and clients" kicker="Lead intake" action={<button className="primary-small" onClick={createFollowUpPlan}><Sparkles size={16} /> Prepare follow-up</button>}>
+    <Page
+      title="Leads and clients"
+      kicker="CRM and data"
+      action={
+        <div className="page-action-stack">
+          <button className="ghost-small" type="button" onClick={prepareAutonomousReviewFollowups}>
+            <Star size={16} />
+            Prep review asks
+          </button>
+          <button className="primary-small" type="button" onClick={createFollowUpPlan}>
+            <Sparkles size={16} />
+            Prepare follow-up
+          </button>
+        </div>
+      }
+    >
       <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
@@ -4154,6 +5052,100 @@ function InboxView({ emails, createFollowUpPlan }: { emails: EmailItem[]; create
           <ResultModeToggle mode={mode} setMode={setMode} />
         </div>
         <SimulationList items={visibleItems} />
+      </section>
+
+      <section className="module-panel review-engine-panel">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Autonomous reviews</span>
+            <h3>Turn past clients into approved website proof.</h3>
+          </div>
+          <TruthBadge state="real" label="approval gated" />
+        </div>
+        <p>
+          PhantomAI prepares the review ask, the client uses a review link, and the submitted review waits in Review
+          before it can appear on the website.
+        </p>
+        <div className="review-metric-grid">
+          <StatusLine label="Ready to ask" value={String(pendingReviewRequests)} />
+          <StatusLine label="Website-ready proof" value={String(websiteReadyReviews)} />
+          <StatusLine label="Auto-send" value="Off" />
+          <StatusLine label="Website publish" value="Approval only" />
+        </div>
+        <div className="review-client-grid">
+          {reviewClients.map((client) => (
+            <article className={`review-client-card ${classSlug(client.status)}`} key={client.id}>
+              <div className="review-client-head">
+                <div>
+                  <strong>{client.business}</strong>
+                  <span>{client.service}</span>
+                </div>
+                <b>{reviewClientStatusLabel(client.status)}</b>
+              </div>
+              <p>{client.result}</p>
+              <dl className="review-client-meta">
+                <div>
+                  <dt>Contact</dt>
+                  <dd>{client.contact}</dd>
+                </div>
+                <div>
+                  <dt>Review link</dt>
+                  <dd>{client.reviewLink}</dd>
+                </div>
+              </dl>
+              <div className="review-card-actions">
+                <button
+                  className="ghost-small"
+                  type="button"
+                  onClick={() => createReviewRequestApproval(client.id)}
+                  disabled={client.status === "request_queued" || client.status === "website_ready"}
+                >
+                  <Mail size={15} />
+                  Ask for review
+                </button>
+                <button
+                  className="ghost-small"
+                  type="button"
+                  onClick={() => stageReviewForWebsiteApproval(client.id)}
+                  disabled={!client.submittedReview || client.status === "website_ready"}
+                >
+                  <ShieldCheck size={15} />
+                  Stage website review
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="module-panel website-review-panel">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Website proof</span>
+            <h3>Approved reviews ready for the site.</h3>
+          </div>
+          <TruthBadge state={websiteReviews.length ? "real" : "demo"} label={`${websiteReviews.length} approved`} />
+        </div>
+        {websiteReviews.length ? (
+          <div className="website-review-grid">
+            {websiteReviews.map((review) => (
+              <article className="website-review-card" key={review.id}>
+                <div>
+                  <span>{review.rating} stars</span>
+                  <strong>{review.business}</strong>
+                </div>
+                <p>“{review.quote}”</p>
+                <small>
+                  {review.author} · {review.service} · approved {formatLastRun(review.approvedAt)}
+                </small>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="autonomous-security-note">
+            No testimonials have been approved for the website yet. Stage a submitted review, then approve it in Review.
+          </p>
+        )}
       </section>
     </Page>
   );
@@ -4223,10 +5215,12 @@ function TasksView({ tasks, completeTask }: { tasks: TaskItem[]; completeTask: (
 
 function ApprovalsView({
   approvals,
+  websiteReviews,
   approveAction,
   rejectAction,
 }: {
   approvals: Approval[];
+  websiteReviews: WebsiteReview[];
   approveAction: (id: string) => void;
   rejectAction: (id: string) => void;
 }) {
@@ -4249,6 +5243,27 @@ function ApprovalsView({
           <ResultModeToggle mode={mode} setMode={setMode} />
         </div>
         <p>Bookings, sends, uploads, billing, credentials, and production changes sit here until you confirm them.</p>
+      </section>
+      <section className="module-panel review-approval-summary">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Review engine</span>
+            <h3>Client reviews become website proof only after approval.</h3>
+          </div>
+          <TruthBadge state="real" label="no auto-publish" />
+        </div>
+        <div className="review-metric-grid">
+          <StatusLine
+            label="Review requests"
+            value={String(approvals.filter((approval) => approval.kind === "review_request" && approval.status === "pending").length)}
+          />
+          <StatusLine
+            label="Website reviews"
+            value={String(approvals.filter((approval) => approval.kind === "website_review" && approval.status === "pending").length)}
+          />
+          <StatusLine label="Approved on-site" value={String(websiteReviews.length)} />
+          <StatusLine label="External sending" value="manual only" />
+        </div>
       </section>
       {visibleApprovals.length ? (
         <div className="approval-grid">
@@ -4313,22 +5328,270 @@ function ContentView() {
   );
 }
 
-function MediaLabView() {
+type HiggsfieldBridgeStatus = {
+  ok: boolean;
+  subscribed_access: boolean;
+  admin_access: boolean;
+  client_visible_name: string;
+  phantomcut: {
+    base_url: string;
+    reachable: boolean;
+    status?: {
+      configured?: boolean;
+      can_generate?: boolean;
+      commercial_provider?: boolean;
+      required_confirmation?: string;
+      warning?: string;
+      cli_health?: {
+        ready?: boolean;
+        message?: string;
+      };
+    } | null;
+    status_error?: string | null;
+  };
+  safety: {
+    draft_only: true;
+    paid_job_called: false;
+    upload_performed: false;
+    run_endpoint_exposed: false;
+    explicit_confirmation_required: string;
+  };
+};
+
+type HiggsfieldDraftRouteResponse = {
+  ok: boolean;
+  error?: unknown;
+  draft?: {
+    action?: string;
+    provider?: string;
+    model?: string;
+    mode?: string;
+    command_preview?: string;
+    warnings?: string[];
+    status?: HiggsfieldBridgeStatus["phantomcut"]["status"];
+  };
+  safety?: {
+    paid_job_called: false;
+    upload_performed: false;
+    run_endpoint_exposed: false;
+    explicit_confirmation_required: string;
+  };
+};
+
+function MediaLabView({
+  sessionHeaders,
+  stageHiggsfieldGenerationApproval,
+}: {
+  sessionHeaders: (json?: boolean) => Record<string, string>;
+  stageHiggsfieldGenerationApproval: (payload: {
+    prompt: string;
+    mediaPath: string;
+    commandPreview: string;
+    model: string;
+    aspectRatio: string;
+    resolution: string;
+    duration: string;
+  }) => void;
+}) {
+  const [status, setStatus] = useState<HiggsfieldBridgeStatus | null>(null);
+  const [draftResponse, setDraftResponse] = useState<HiggsfieldDraftRouteResponse | null>(null);
+  const [videoPrompt, setVideoPrompt] = useState(
+    "Make this feel cinematic, punchy, alive, and social-ready. Keep it human-approved and proof-backed.",
+  );
+  const [mediaPath, setMediaPath] = useState("");
+  const [aspectRatio, setAspectRatio] = useState<"9:16" | "16:9" | "1:1" | "4:5">("9:16");
+  const [resolution, setResolution] = useState<"480p" | "720p" | "1080p" | "2k" | "4k">("720p");
+  const [duration, setDuration] = useState("12");
+  const [busy, setBusy] = useState(false);
+  const [draftStatus, setDraftStatus] = useState("Ready to draft. No paid generation will run.");
+
+  async function refreshHiggsfieldStatus() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/media-lab/higgsfield/status`, {
+        headers: sessionHeaders(),
+      });
+      const data = (await response.json()) as HiggsfieldBridgeStatus;
+      if (response.ok) {
+        setStatus(data);
+      }
+    } catch {
+      setStatus(null);
+    }
+  }
+
+  useEffect(() => {
+    void refreshHiggsfieldStatus();
+  }, []);
+
+  async function createHiggsfieldDraft(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setDraftStatus("Creating Higgsfield draft only...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/media-lab/higgsfield/draft`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          prompt: videoPrompt,
+          media_path: mediaPath,
+          media_role: mediaPath ? "video" : "start-image",
+          model: "seedance_2_0",
+          mode: "video",
+          duration,
+          aspect_ratio: aspectRatio,
+          resolution,
+        }),
+      });
+      const data = (await response.json()) as HiggsfieldDraftRouteResponse;
+      setDraftResponse(data);
+      setDraftStatus(
+        response.ok && data.ok
+          ? "Draft created. Stage it for approval before any paid/upload generation."
+          : typeof data.error === "string"
+            ? data.error
+            : "Draft failed. Check PhantomCut status.",
+      );
+    } catch {
+      setDraftStatus("Media Lab bridge is offline.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const canDraft = status?.subscribed_access !== false;
+  const canGenerate = Boolean(status?.phantomcut.status?.can_generate);
+  const commandPreview = draftResponse?.draft?.command_preview ?? "";
+
   return (
     <Page title="Video Studio" kicker="Creative output" action={<TruthBadge state="real" label="Proof-backed" />}>
       <section className="simulation-hero">
         <div>
-          <span className="eyebrow">Creative engine</span>
-          <h3>Ask for the video plan. PhantomAI prepares the cut path.</h3>
+          <span className="eyebrow">Higgsfield video</span>
+          <h3>Create with the commercial video engine already wired through PhantomCut.</h3>
           <p>
-            Track requests, drafts, consent, proof clips, and delivery status without exposing generation tools or raw
-            upload controls.
+            Subscribers get a clean Generate Video surface. PhantomForce keeps the provider, upload, paid credits,
+            and approval proof behind the product layer.
           </p>
         </div>
         <div className="simulation-hero-status">
-          <StatusLine label="Uploads" value="Final click" />
-          <StatusLine label="Delivery" value="Confirm first" />
-          <StatusLine label="Core app" value="Leads, bookings, money, work, review" />
+          <StatusLine label="Provider" value="Higgsfield" />
+          <StatusLine label="PhantomCut" value={status?.phantomcut.reachable ? "Connected" : "Open 127.0.0.1:8787"} />
+          <StatusLine label="Paid run" value="Approval gated" />
+        </div>
+      </section>
+
+      <section className="module-panel higgsfield-cockpit-panel">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Generate Video</span>
+            <h3>Draft the video job here. Run it only after approval.</h3>
+          </div>
+          <div className="page-action-stack">
+            <button className="ghost-small" type="button" onClick={refreshHiggsfieldStatus}>
+              <RefreshCcw size={16} />
+              Check status
+            </button>
+            <button
+              className="ghost-small"
+              type="button"
+              onClick={() => window.open("http://127.0.0.1:8787/?source=phantomforce-dashboard", "_blank")}
+            >
+              <Play size={16} />
+              Open PhantomCut
+            </button>
+          </div>
+        </div>
+
+        <div className="higgsfield-status-grid">
+          <StatusLine label="Subscribed access" value={canDraft ? "Enabled" : "Not in package"} />
+          <StatusLine label="CLI ready" value={canGenerate ? "Ready" : "Needs PhantomCut/auth"} />
+          <StatusLine label="Confirmation" value={status?.safety.explicit_confirmation_required ?? "Required"} />
+          <StatusLine label="Uploads/credits" value="Not used by drafts" />
+        </div>
+
+        <form className="higgsfield-draft-form" onSubmit={createHiggsfieldDraft}>
+          <label>
+            Video prompt
+            <textarea value={videoPrompt} onChange={(event) => setVideoPrompt(event.target.value)} />
+          </label>
+          <label>
+            Optional local source video path
+            <input
+              value={mediaPath}
+              onChange={(event) => setMediaPath(event.target.value)}
+              placeholder="Example: G:\\Footage\\C2204.MP4"
+            />
+          </label>
+          <div className="higgsfield-form-row">
+            <label>
+              Shape
+              <select value={aspectRatio} onChange={(event) => setAspectRatio(event.target.value as typeof aspectRatio)}>
+                <option value="9:16">9:16 vertical</option>
+                <option value="16:9">16:9 wide</option>
+                <option value="1:1">1:1 square</option>
+                <option value="4:5">4:5 feed</option>
+              </select>
+            </label>
+            <label>
+              Quality
+              <select value={resolution} onChange={(event) => setResolution(event.target.value as typeof resolution)}>
+                <option value="720p">720p draft</option>
+                <option value="1080p">1080p</option>
+                <option value="2k">2K</option>
+                <option value="4k">4K</option>
+              </select>
+            </label>
+            <label>
+              Duration
+              <select value={duration} onChange={(event) => setDuration(event.target.value)}>
+                <option value="5">5s</option>
+                <option value="8">8s</option>
+                <option value="12">12s</option>
+                <option value="15">15s</option>
+              </select>
+            </label>
+          </div>
+          <button className="primary-action" type="submit" disabled={busy || !canDraft}>
+            <Sparkles size={18} />
+            {busy ? "Drafting..." : "Create Higgsfield draft"}
+          </button>
+        </form>
+
+        <div className="higgsfield-proof-panel">
+          <div>
+            <span className="eyebrow">Job proof</span>
+            <h4>{draftStatus}</h4>
+          </div>
+          {commandPreview ? (
+            <>
+              <pre>{commandPreview}</pre>
+              <button
+                className="primary-small"
+                type="button"
+                onClick={() =>
+                  stageHiggsfieldGenerationApproval({
+                    prompt: videoPrompt,
+                    mediaPath,
+                    commandPreview,
+                    model: draftResponse?.draft?.model ?? "seedance_2_0",
+                    aspectRatio,
+                    resolution,
+                    duration,
+                  })
+                }
+              >
+                <ShieldCheck size={16} />
+                Stage paid run approval
+              </button>
+            </>
+          ) : (
+            <p>No paid job has run. Create a draft to see the exact command and stage it for Review.</p>
+          )}
+          <button className="ghost-small" type="button" disabled>
+            <Lock size={16} />
+            Run paid generation disabled here
+          </button>
         </div>
       </section>
 
@@ -4338,6 +5601,504 @@ function MediaLabView() {
         <SimulationSection icon={<AlertTriangle size={18} />} title="Uploads and delivery status" items={businessOpsSimulation.mediaPlaceholders} />
         <VideoEngineAddonCard />
       </div>
+    </Page>
+  );
+}
+
+type SecurityScanFinding = {
+  id: string;
+  kind: "malware_indicator" | "sensitive_data" | "risky_file" | "injection_risk";
+  severity: "critical" | "high" | "medium" | "low";
+  title: string;
+  detail: string;
+  evidence: string;
+  recommendation: string;
+};
+
+type SecurityScanResult = {
+  target_label: string;
+  mode: "auto" | "website" | "upload" | "message" | "code";
+  summary: {
+    verdict: "clean" | "review" | "blocked";
+    highest_severity: string;
+    total_findings: number;
+    malware_indicators: number;
+    sensitive_data_findings: number;
+    risky_file_findings: number;
+    injection_risk_findings: number;
+  };
+  findings: SecurityScanFinding[];
+  safety_flags: {
+    local_only: true;
+    destructive_action: false;
+    quarantine_performed: false;
+    file_deleted: false;
+    external_scan_provider_called: false;
+    upload_performed: false;
+    raw_content_returned: false;
+  };
+};
+
+type AutonomousSecurityScanDetails = {
+  status: "active" | "disabled" | "waiting" | "ran_this_month";
+  cadence: "monthly";
+  current_month_key: string;
+  proof_id: string;
+  last_run_at: string | null;
+  next_run_after: string;
+  run_count: number;
+  target_count: number;
+  targets?: Array<{
+    target_id: string;
+    target_label: string;
+    scanned_at: string;
+    summary: SecurityScanResult["summary"];
+    finding_titles: Array<{
+      severity: string;
+      kind: string;
+      title: string;
+    }>;
+  }>;
+  safety_flags?: {
+    local_only: true;
+    synthetic_targets_only?: true;
+    destructive_action: false;
+    external_scan_provider_called: false;
+    upload_performed: false;
+    raw_content_stored?: false;
+  };
+  password_health?: {
+    proof_id: string;
+    checked_at: string;
+    policy: {
+      unique_password_required: true;
+      rotation_interval_days: 180;
+      breach_check_timing: "password_change_or_reset_only";
+      plaintext_password_storage: false;
+    };
+    summary: {
+      total_admin_accounts: number;
+      baseline_needed: number;
+      rotation_due_or_unknown: number;
+      breach_check_ready: true;
+      breached_passwords_found: null;
+    };
+    accounts: Array<{
+      account_id: string;
+      workspace: string;
+      account_label: string;
+      role: string;
+      password_age_known: false;
+      last_password_change_at: null;
+      rotation_interval_days: 180;
+      rotation_status: "baseline_needed";
+      breach_check_status: "check_on_next_password_change";
+      recommendation: string;
+    }>;
+    safety_flags: {
+      plaintext_password_stored: false;
+      raw_password_logged: false;
+      external_breach_provider_called: false;
+      credential_printed: false;
+    };
+  };
+};
+
+type AutonomousSecurityScanResponse = {
+  autonomous: true;
+  cadence?: "monthly";
+  status?: AutonomousSecurityScanDetails | AutonomousSecurityScanDetails["status"];
+  protection_active?: boolean;
+  target_count?: number;
+  last_run_at?: string | null;
+  next_run_after?: string;
+  details_redacted?: boolean;
+};
+
+function arrayBufferToBase64(buffer: ArrayBuffer) {
+  const bytes = new Uint8Array(buffer);
+  let binary = "";
+  const chunkSize = 0x8000;
+
+  for (let index = 0; index < bytes.length; index += chunkSize) {
+    const chunk = bytes.subarray(index, index + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+
+  return window.btoa(binary);
+}
+
+function SecurityScannerView({
+  canManageAccess,
+  sessionHeaders,
+}: {
+  canManageAccess: boolean;
+  sessionHeaders: (json?: boolean) => Record<string, string>;
+}) {
+  const [label, setLabel] = useState(canManageAccess ? "Admin site scan" : "Client site scan");
+  const [filename, setFilename] = useState("");
+  const [mode, setMode] = useState<SecurityScanResult["mode"]>("website");
+  const [content, setContent] = useState("");
+  const [contentBase64, setContentBase64] = useState("");
+  const [status, setStatus] = useState("Ready. Local scan only.");
+  const [result, setResult] = useState<SecurityScanResult | null>(null);
+  const [autonomousStatus, setAutonomousStatus] = useState<AutonomousSecurityScanResponse | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function refreshAutonomousStatus() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/phantom-ai/security/autonomous/status`, {
+          headers: sessionHeaders(),
+        });
+        const data = (await response.json()) as AutonomousSecurityScanResponse;
+
+        if (active && response.ok) {
+          setAutonomousStatus(data);
+        }
+      } catch {
+        if (active) setAutonomousStatus(null);
+      }
+    }
+
+    void refreshAutonomousStatus();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  async function loadFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    if (file.size > 450_000) {
+      setStatus("File is too large for the local preview lane. Paste text or use a smaller sample under 450 KB.");
+      setContentBase64("");
+      setFilename(file.name);
+      setLabel(file.name);
+      setMode("upload");
+      return;
+    }
+
+    const buffer = await file.arrayBuffer();
+    setContentBase64(arrayBufferToBase64(buffer));
+    setFilename(file.name);
+    setLabel(file.name);
+    setMode("upload");
+    setStatus(`Loaded ${file.name} locally. Click Scan before it is sent to the local backend.`);
+  }
+
+  async function runScan(event: FormEvent) {
+    event.preventDefault();
+    setBusy(true);
+    setStatus("Scanning locally...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/security/scan/preview`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          label,
+          filename,
+          mode,
+          content,
+          content_base64: contentBase64 || undefined,
+        }),
+      });
+      const data = (await response.json()) as { result?: SecurityScanResult; error?: unknown };
+
+      if (!response.ok || !data.result) {
+        setStatus(typeof data.error === "string" ? data.error : "Security scan failed closed.");
+        return;
+      }
+
+      setResult(data.result);
+      setStatus(
+        data.result.summary.verdict === "clean"
+          ? "Clean preview. No malware or sensitive-data indicators found."
+          : data.result.summary.verdict === "blocked"
+            ? "Blocked. Review findings before this touches a client/admin page."
+            : "Review needed. Findings are not automatically destructive.",
+      );
+    } catch {
+      setStatus("Scanner backend is offline.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function loadUnsafeProofSample() {
+    const fakeSecret = ["sk", "or-v1-fakeScannerProofKey1234567890"].join("-");
+    setLabel("Scanner proof sample");
+    setFilename("client-intake.pdf.exe");
+    setMode("upload");
+    setContent(
+      [
+        "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*",
+        `OPENROUTER_API_KEY=${fakeSecret}`,
+        "coach@example.com",
+        "<script>alert('test')</script>",
+      ].join("\n"),
+    );
+    setContentBase64("");
+    setStatus("Loaded a fake unsafe sample. It proves scanner detection without using real secrets.");
+  }
+
+  const summary = result?.summary;
+  const verdictClass = summary?.verdict ?? "clean";
+  const resultBadgeState: TruthState = summary ? (summary.verdict === "clean" ? "real" : "blocked") : "demo";
+  const autonomousDetails =
+    typeof autonomousStatus?.status === "object" ? autonomousStatus.status : null;
+  const autonomousLabel =
+    autonomousDetails?.status ?? (typeof autonomousStatus?.status === "string" ? autonomousStatus.status : "waiting");
+  const autonomousTargetCount = autonomousDetails?.target_count ?? autonomousStatus?.target_count ?? 0;
+  const autonomousLastRun = autonomousDetails?.last_run_at ?? autonomousStatus?.last_run_at ?? null;
+  const autonomousNextRun = autonomousDetails?.next_run_after ?? autonomousStatus?.next_run_after ?? null;
+  const passwordHealth = autonomousDetails?.password_health;
+
+  return (
+    <Page
+      title="Security Scanner"
+      kicker={canManageAccess ? "Admin and client protection" : "Client upload protection"}
+      action={
+        <span className="safe-pill">
+          <ShieldCheck size={15} />
+          Local only
+        </span>
+      }
+    >
+      <section className="security-hero">
+        <div>
+          <span className="eyebrow">Autonomous protection</span>
+          <h3>Monthly safety checks run in the background.</h3>
+          <p>
+            PhantomForce checks core dashboard, store, upload-policy, and approval-gate copy every month while the
+            backend is running. Manual scanning stays available for one-off diagnostics.
+          </p>
+        </div>
+        <div className="security-proof-grid">
+          <StatusLine label="Cadence" value="Monthly" />
+          <StatusLine label="Status" value={autonomousLabel.replace(/_/g, " ")} />
+          <StatusLine label="Protected templates" value={String(autonomousTargetCount)} />
+        </div>
+      </section>
+
+      <section className="module-panel autonomous-security-panel">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Always-on scanner</span>
+            <h3>Autonomous monthly self-check</h3>
+          </div>
+          <TruthBadge state={autonomousLabel === "ran_this_month" ? "real" : "demo"} label={autonomousLabel.replace(/_/g, " ")} />
+        </div>
+
+        <div className="autonomous-security-grid">
+          <StatusLine label="Last run" value={autonomousLastRun ? formatLastRun(autonomousLastRun) : "Waiting for first run"} />
+          <StatusLine label="Next run" value={autonomousNextRun ? formatLastRun(autonomousNextRun) : "Next server monthly check"} />
+          <StatusLine label="Scope" value={autonomousStatus?.details_redacted ? "Client-safe summary" : "Admin template summaries"} />
+          <StatusLine label="External provider" value="Never" />
+        </div>
+
+        {autonomousDetails ? (
+          <div className="scan-proof-receipt" aria-label="Monthly scan proof receipt">
+            <div>
+              <span className="eyebrow">Proof receipt</span>
+              <strong>{autonomousDetails.proof_id}</strong>
+              <small>
+                Month {autonomousDetails.current_month_key} · run #{autonomousDetails.run_count}
+              </small>
+            </div>
+            <div>
+              <span>Completed</span>
+              <strong>{autonomousLastRun ? formatLastRun(autonomousLastRun) : "Not yet"}</strong>
+            </div>
+            <div>
+              <span>Coverage</span>
+              <strong>{autonomousTargetCount} scan target(s)</strong>
+            </div>
+            <div>
+              <span>Safety</span>
+              <strong>No upload · no delete · no external scan</strong>
+            </div>
+          </div>
+        ) : null}
+
+        {passwordHealth ? (
+          <div className="password-health-proof" aria-label="Password health and breach readiness proof">
+            <div className="password-health-head">
+              <div>
+                <span className="eyebrow">Password breach readiness</span>
+                <h4>Unique passwords and 6-month rotation are tracked.</h4>
+              </div>
+              <TruthBadge state="demo" label="baseline needed" />
+            </div>
+            <div className="autonomous-security-grid">
+              <StatusLine label="Password proof" value={passwordHealth.proof_id} />
+              <StatusLine label="Rotation policy" value={`${passwordHealth.policy.rotation_interval_days} days`} />
+              <StatusLine label="Admin accounts" value={String(passwordHealth.summary.total_admin_accounts)} />
+              <StatusLine label="Breach check" value="On password change/reset" />
+            </div>
+            <div className="password-account-grid">
+              {passwordHealth.accounts.map((account) => (
+                <article className="password-account-card" key={account.account_id}>
+                  <div>
+                    <strong>{account.workspace}</strong>
+                    <span>{account.rotation_status.replace(/_/g, " ")}</span>
+                  </div>
+                  <p>{account.account_label}</p>
+                  <small>
+                    Remind every {account.rotation_interval_days} days · breach check runs when the password is
+                    changed.
+                  </small>
+                </article>
+              ))}
+            </div>
+            <p className="autonomous-security-note">
+              PhantomForce does not store plaintext passwords. Breach checks should run during password change/reset
+              using a safe hash-based check, then this monthly proof reminds every admin when rotation is due.
+            </p>
+          </div>
+        ) : (
+          <p className="autonomous-security-note">
+            Password rotation policy is active. Detailed admin-account proof is redacted from client view.
+          </p>
+        )}
+
+        {autonomousDetails?.targets?.length ? (
+          <div className="autonomous-target-grid" aria-label="Autonomous scan targets">
+            {autonomousDetails.targets.map((target) => (
+              <article className={`autonomous-target-card ${target.summary.verdict}`} key={target.target_id}>
+                <div>
+                  <strong>{target.target_label}</strong>
+                  <span>{target.summary.verdict}</span>
+                </div>
+                <p>{target.summary.total_findings} finding(s) · highest {target.summary.highest_severity}</p>
+                <small>Last checked {formatLastRun(target.scanned_at)}</small>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="autonomous-security-note">
+            {autonomousStatus?.details_redacted
+              ? "Client view only shows that autonomous protection is active."
+              : "The server will run the monthly catch-up automatically the next time the backend starts or the monthly check is due."}
+          </p>
+        )}
+      </section>
+
+      <form className="security-scan-grid" onSubmit={runScan}>
+        <section className="module-panel security-input-panel">
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">Scan target</span>
+              <h3>Paste website copy, code, message text, or a small upload sample.</h3>
+            </div>
+            <button className="ghost-small" type="button" onClick={loadUnsafeProofSample}>
+              <AlertTriangle size={16} />
+              Load proof sample
+            </button>
+          </div>
+
+          <div className="security-field-row">
+            <label>
+              Label
+              <input value={label} onChange={(event) => setLabel(event.target.value)} />
+            </label>
+            <label>
+              Mode
+              <select value={mode} onChange={(event) => setMode(event.target.value as SecurityScanResult["mode"])}>
+                <option value="website">Website/page</option>
+                <option value="upload">Upload/file</option>
+                <option value="message">Message/client text</option>
+                <option value="code">Code/snippet</option>
+                <option value="auto">Auto</option>
+              </select>
+            </label>
+          </div>
+
+          <label>
+            File name or upload name
+            <input
+              value={filename}
+              onChange={(event) => setFilename(event.target.value)}
+              placeholder="example: proposal.pdf, homepage.html, player-roster.csv"
+            />
+          </label>
+
+          <label>
+            Local file sample
+            <input type="file" onChange={loadFile} />
+          </label>
+
+          <label>
+            Content to scan
+            <textarea
+              value={content}
+              onChange={(event) => setContent(event.target.value)}
+              placeholder="Paste site copy, suspicious script, client upload text, proposal copy, or page HTML..."
+            />
+          </label>
+
+          <button className="primary-action security-submit" type="submit" disabled={busy}>
+            <Search size={18} />
+            {busy ? "Scanning..." : "Run security scan"}
+          </button>
+          <p className="security-status">{status}</p>
+        </section>
+
+        <section className={`module-panel security-result-panel ${verdictClass}`}>
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">Result</span>
+              <h3>{summary ? `${summary.verdict.toUpperCase()} - ${summary.total_findings} finding(s)` : "No scan yet"}</h3>
+            </div>
+            <TruthBadge state={resultBadgeState} label={summary?.highest_severity ?? "ready"} />
+          </div>
+
+          {summary ? (
+            <>
+              <div className="security-metric-grid">
+                <StatusLine label="Malware indicators" value={String(summary.malware_indicators)} />
+                <StatusLine label="Sensitive data" value={String(summary.sensitive_data_findings)} />
+                <StatusLine label="Risky files" value={String(summary.risky_file_findings)} />
+                <StatusLine label="Injection risk" value={String(summary.injection_risk_findings)} />
+              </div>
+
+              <div className="security-findings">
+                {result?.findings.length ? (
+                  result.findings.map((finding) => (
+                    <article className={`security-finding ${finding.severity}`} key={finding.id}>
+                      <div>
+                        <span>{finding.severity}</span>
+                        <strong>{finding.title}</strong>
+                      </div>
+                      <p>{finding.detail}</p>
+                      <code>{finding.evidence}</code>
+                      <small>{finding.recommendation}</small>
+                    </article>
+                  ))
+                ) : (
+                  <EmptyState
+                    icon={<ShieldCheck size={20} />}
+                    title="No indicators found"
+                    detail="This does not replace endpoint antivirus, but the dashboard preview found nothing obvious."
+                  />
+                )}
+              </div>
+            </>
+          ) : (
+            <EmptyState
+              icon={<ShieldCheck size={20} />}
+              title="Ready to scan"
+              detail="Use this before adding content to admin pages, client pages, proposal packets, or uploads."
+            />
+          )}
+        </section>
+      </form>
     </Page>
   );
 }
@@ -4381,222 +6142,603 @@ function OffersView() {
 }
 
 function AgentControlCenter({
-  aiProvider,
-  setAiProvider,
-  phantomAiBusy,
-  runPhantomCommand,
   setRoute,
   pangolinPlan,
   pangolinStatus,
+  phantomAiOpsStatus,
+  agentWorkforceStatus,
+  sessionHeaders,
 }: {
-  aiProvider: AiProviderChoice;
-  setAiProvider: (value: AiProviderChoice) => void;
-  phantomAiBusy: boolean;
-  runPhantomCommand: (text: string) => Promise<void>;
   setRoute: (route: Route) => void;
   pangolinPlan: PangolinRoutePlan[];
   pangolinStatus: PangolinReadOnlyStatus | null;
+  phantomAiOpsStatus: PhantomAiOpsStatus;
+  agentWorkforceStatus: AgentWorkforceStatus;
+  sessionHeaders: (json?: boolean) => Record<string, string>;
 }) {
-  const [agentCommand, setAgentCommand] = useState(
-    "Audit the dashboard like my admin operating system. Tell me what is broken, what to fix first, and what you can directly prepare.",
-  );
-  const activeLane = phantomAiModeLabel(aiProvider);
+  const [agentActionBusy, setAgentActionBusy] = useState<string | null>(null);
+  const [agentActionResult, setAgentActionResult] = useState<AgentActionResult | null>(null);
   const enabledRoutes = pangolinPlan.filter((plan) => plan.desiredState === "enabled").length;
   const disabledRoutes = pangolinPlan.filter((plan) => plan.desiredState === "disabled").length;
-  const controlActions = [
+  const adminWorkforce = agentWorkforceStatus.role === "admin" ? agentWorkforceStatus : null;
+  const fallbackWorkers: AgentWorkerMetric[] = [
     {
-      title: "Audit this app",
-      detail: "Find broken UX, stale labels, blocked workflows, and launch blockers.",
-      icon: <Search size={18} />,
-      prompt:
-        "Audit the current PhantomForce dashboard as an admin operating system. Identify broken UX, stale labels, blocked workflows, and the next fixes. Do not send, deploy, or mutate external systems.",
+      id: "phantom-ai",
+      name: "PhantomAI",
+      role: "Chief operator",
+      state: phantomAiOpsStatus.product_status.includes("Online") ? "active" : "checking",
+      tool_binding: "dashboard_chat_and_router",
+      focus: "Turns Jordan's ask into work cards, drafts, and next steps.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "Fallback UI status",
     },
     {
-      title: "Change the website",
-      detail: "Draft website copy or layout changes and send them to Site Studio preview.",
+      id: "hermes",
+      name: "Hermes",
+      role: "Memory keeper",
+      state: phantomAiOpsStatus.hermes.ready ? "active" : "warming",
+      tool_binding: "hermes_ledger_context_memory",
+      focus: "Stores receipts and context so the system remembers what happened.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "Fallback UI status",
+    },
+    {
+      id: "builder",
+      name: "Builder",
+      role: "App and file worker",
+      state: "standby",
+      tool_binding: "codex_local_operator_lane",
+      focus: "Handles local repo, website, dashboard, and file changes for admin work.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "Fallback UI status",
+    },
+    {
+      id: "reviewer",
+      name: "Reviewer",
+      role: "Second opinion lane",
+      state: "standby",
+      tool_binding: "claude_cli_lane",
+      focus: "Pressure-tests product decisions, copy, UI, and claims when asked.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "Fallback UI status",
+    },
+    {
+      id: "gatekeeper",
+      name: "Gatekeeper",
+      role: "Private access guard",
+      state: pangolinStatus?.status ?? "unconfigured",
+      tool_binding: "pangolin_access_state",
+      focus: "Tracks Pangolin/private routes and client access state.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "Pangolin read-only status",
+    },
+    {
+      id: "scout",
+      name: "Scout",
+      role: "Lead and proposal worker",
+      state: phantomAiOpsStatus.chicagoshots_ops.available ? "active" : "checking",
+      tool_binding: "chicagoshots_pipeline",
+      focus: "Organizes ChicagoShots leads, proposal packets, and follow-up status.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "Fallback UI status",
+    },
+    {
+      id: "cutlab",
+      name: "CutLab",
+      role: "Media workflow worker",
+      state: "standby",
+      tool_binding: "phantomcut_media_lab",
+      focus: "Keeps video, Media Lab, and ChicagoShots delivery work organized.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "Fallback UI status",
+    },
+    {
+      id: "sentinel",
+      name: "Sentinel",
+      role: "Security scanner",
+      state: "active",
+      tool_binding: "local_security_scanner",
+      focus: "Checks page copy, uploads, scripts, and secrets before client exposure.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "Fallback UI status",
+    },
+  ];
+  const workers = adminWorkforce?.workers ?? fallbackWorkers;
+  const subagents = adminWorkforce?.subagents ?? [];
+  const assignments = adminWorkforce?.assignments ?? [];
+  const programs = adminWorkforce?.programs ?? [];
+  const ticker = adminWorkforce?.ticker ?? [
+    {
+      id: "fallback-ticker",
+      label: "Agent Floor",
+      text: "Agent telemetry is waiting on the backend.",
+      timestamp: new Date().toISOString(),
+    },
+  ];
+  const summary = adminWorkforce?.summary;
+  const clientSummary: AgentClientSummary =
+    adminWorkforce?.client_summary ??
+    (agentWorkforceStatus.role === "client"
+      ? agentWorkforceStatus.summary
+      : defaultAgentClientSummary);
+  const activeWorkerCount = summary?.active_workers ?? workers.filter((worker) => worker.state === "active").length;
+  const windowHours = summary?.window_hours ?? 24;
+  const taskCount = summary?.tasks_in_window ?? workers.reduce((total, worker) => total + worker.tasks_last_24h, 0);
+  const tokenCount = summary?.tokens_in_window ?? workers.reduce((total, worker) => total + worker.tokens_last_24h, 0);
+  const spend = summary?.estimated_cost_usd_in_window ?? workers.reduce(
+    (total, worker) => total + worker.estimated_cost_usd_last_24h,
+    0,
+  );
+  const n8nState = adminWorkforce?.n8n.running
+    ? "running"
+    : adminWorkforce?.n8n.scaffolded
+      ? "scaffolded idle"
+      : "not ready";
+  const workerIcon = (worker: AgentWorkerMetric) => {
+    const icons: Record<string, ReactNode> = {
+      "phantom-ai": <Bot size={20} />,
+      hermes: <Clock3 size={20} />,
+      builder: <Command size={20} />,
+      strategist: <Sparkles size={20} />,
+      reviewer: <MessageSquare size={20} />,
+      gatekeeper: <KeyRound size={20} />,
+      scout: <Users size={20} />,
+      sentinel: <ShieldCheck size={20} />,
+      cutlab: <Play size={20} />,
+    };
+    return icons[worker.id] ?? <Zap size={20} />;
+  };
+  async function runSafeAgentActionRequest(actionId: string, title: string) {
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/agents/actions/run`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          action_id: actionId,
+          title,
+          write: actionId === "openspec-proposal",
+        }),
+      });
+      const data = (await response.json()) as { result?: AgentActionResult; error?: unknown };
+      return (
+        data.result ?? {
+          ok: false,
+          action_id: actionId,
+          label: title,
+          error: data.error ?? `Action failed with HTTP ${response.status}`,
+        }
+      );
+    } catch {
+      return {
+        ok: false,
+        action_id: actionId,
+        label: title,
+        error: "Agent action backend is offline.",
+      };
+    }
+  }
+
+  const capabilityBundles = [
+    {
+      id: "client-sprint",
+      title: "Build a Client Sprint",
+      detail: "Turns a lead into scope, offer, proof, checklist, and a next-message plan.",
+      outcome: "Proposal-ready sprint package",
+      route: "offers" as Route,
+      actionIds: ["openspec-proposal", "agent-os-sandbox", "serena-readonly-profile", "tool-registry-audit"],
+    },
+    {
+      id: "site-upgrade",
+      title: "Upgrade the Website",
+      detail: "Maps the site, checks standards, scans launch risk, and prepares a private edit plan.",
+      outcome: "Site improvement plan",
+      route: "site" as Route,
+      actionIds: ["serena-readonly-profile", "agent-os-sandbox", "tool-registry-audit", "agentlab-preflight"],
+    },
+    {
+      id: "automation-readiness",
+      title: "Prepare Automation",
+      detail: "Checks local workflow readiness and explains what can be automated without sending anything.",
+      outcome: "Safe automation readiness report",
+      route: "agents" as Route,
+      actionIds: ["n8n-readiness", "ruflo-planning", "agentlab-preflight"],
+    },
+    {
+      id: "risk-review",
+      title: "Inspect Before Launch",
+      detail: "Reviews current work through preflight, route safety, code-map, and standards checks.",
+      outcome: "Launch risk summary",
+      route: "security" as Route,
+      actionIds: ["agentlab-preflight", "serena-readonly-profile", "agent-os-sandbox", "tool-registry-audit"],
+    },
+  ];
+  async function runSafeAgentBundle(bundle: (typeof capabilityBundles)[number]) {
+    setAgentActionBusy(`bundle:${bundle.id}`);
+    setAgentActionResult(null);
+
+    try {
+      const availableActions = new Set(programs.map((program) => program.action_id));
+      const results: AgentActionResult[] = [];
+
+      for (const actionId of bundle.actionIds) {
+        if (!availableActions.has(actionId)) {
+          results.push({
+            ok: false,
+            action_id: actionId,
+            label: actionId,
+            error: "Safe wrapper is not available in this workspace.",
+          });
+          continue;
+        }
+        results.push(
+          await runSafeAgentActionRequest(
+            actionId,
+            `${bundle.title} bundled check ${actionId} ${new Date().toISOString()}`,
+          ),
+        );
+      }
+
+      setAgentActionResult({
+        ok: results.every((result) => result.ok),
+        action_id: bundle.id,
+        label: bundle.title,
+        result_type: "bundled_safe_workforce_check",
+        output: {
+          outcome: bundle.outcome,
+          route: bundle.route,
+          checks_run: results.length,
+          checks: results.map((result, index) => ({
+            check: index + 1,
+            ok: result.ok,
+            status: result.status ?? (result.ok ? "completed" : "blocked"),
+            result_type: result.result_type ?? "safe_check",
+            safety_flags: result.safety_flags,
+            error: result.ok ? undefined : "A safe workforce check did not complete.",
+          })),
+        },
+        safety_flags: {
+          provider_called: false,
+          external_send: false,
+          n8n_execution: false,
+          production_write: false,
+        },
+      });
+    } finally {
+      setAgentActionBusy(null);
+    }
+  }
+  const workflowStages = [
+    { label: "Ask", detail: "Jordan gives the mission", icon: <Command size={18} /> },
+    { label: "Route", detail: "PhantomAI picks the worker lane", icon: <Bot size={18} /> },
+    { label: "Work", detail: `${formatNumber(taskCount)} logged tasks in ${windowHours}h`, icon: <Zap size={18} /> },
+    { label: "Watch", detail: `${formatNumber(tokenCount)} tokens tracked`, icon: <BarChart3 size={18} /> },
+    { label: "Output", detail: "Artifacts move when the target is safe", icon: <ArrowRight size={18} /> },
+  ];
+  const nextPanels = [
+    {
+      title: "Ask PhantomAI",
+      detail: "Create the work. This is where commands belong.",
+      route: "command" as Route,
+      icon: <Sparkles size={18} />,
+    },
+    {
+      title: "Open Site Studio",
+      detail: "Edit public-site copy and private previews.",
+      route: "site" as Route,
       icon: <FileText size={18} />,
-      prompt:
-        "Prepare a Site Studio update for PhantomForce: rewrite the public site hero, offer section, and CTA. Keep it as a private draft/preview only.",
     },
     {
-      title: "Check Pangolin",
-      detail: "Explain which private routes are enabled, disabled, and unverified.",
-      icon: <KeyRound size={18} />,
-      prompt:
-        "Explain the current Pangolin route plan in plain English. List enabled, disabled, and unverified routes, then tell me what must be configured before live route control.",
+      title: "Run Security Scan",
+      detail: "Check copy, uploads, secrets, and scripts.",
+      route: "security" as Route,
+      icon: <Search size={18} />,
     },
     {
-      title: "Prepare a quote",
-      detail: "Pick Starter/Core/Pro and generate the client-ready pitch.",
-      icon: <Zap size={18} />,
-      prompt:
-        "Use the current PhantomForce offer ladder to prepare a client-ready quote. Choose $750 Starter, $1,500 Core, or $2,500 Pro and write the next-step message.",
-    },
-    {
-      title: "Make a media plan",
-      detail: "Turn a client into a ChicagoShots + Media Lab content path.",
-      icon: <Play size={18} />,
-      prompt:
-        "Create a ChicagoShots and PhantomForce Media Lab content plan for a sports/team/client lead. Include deliverables, timeline, price path, and what proof to show.",
-    },
-    {
-      title: "Brief Claude",
-      detail: "Write a strict report-only Claude review prompt.",
-      icon: <MessageSquare size={18} />,
-      prompt:
-        "Draft a report-only Claude review prompt for this dashboard. Ask Claude to judge UI, usability, functionality, truthfulness, and whether it is ready to proceed. Claude must not edit files.",
+      title: "View System",
+      detail: "Inspect provider, memory, and route status.",
+      route: "connections" as Route,
+      icon: <Link2 size={18} />,
     },
   ];
 
-  function submitAgentCommand(event: FormEvent) {
-    event.preventDefault();
-    void runPhantomCommand(agentCommand);
-  }
-
   return (
-    <Page
-      title="Agent Control Center"
-      kicker="Admin operating system"
-      action={<TruthBadge state="real" label="Admin only" />}
-    >
-      <section className="simulation-hero">
+    <Page title="Agent Floor" kicker="Private workforce map" action={<TruthBadge state="real" label="Admin only" />}>
+      <section className="agent-floor-hero">
         <div>
-          <span className="eyebrow">Operator app</span>
-          <h3>Control the agents from here.</h3>
+          <span className="eyebrow">Not a chat room</span>
+          <h3>See who is working for you and what they are handling.</h3>
           <p>
-            This is the private console for directing PhantomAI, Codex-style local work, GLM reasoning, Claude review,
-            Hermes memory, Site Studio, and Pangolin route planning from one place.
+            Agents are shown like a private operations crew. Clients may eventually see employees or departments here;
+            Jordan sees the machine behind PhantomForce.
           </p>
+          <div className="agent-floor-actions">
+            {nextPanels.map((panel) => (
+              <button key={panel.title} type="button" onClick={() => setRoute(panel.route)}>
+                {panel.icon}
+                <span>{panel.title}</span>
+              </button>
+            ))}
+          </div>
         </div>
-        <div className="simulation-hero-status">
-          <StatusLine label="Active lane" value={activeLane} />
-          <StatusLine label="Client access" value="Hidden" />
-          <StatusLine label="External mutation" value="Off" />
+        <div className="agent-command-node">
+          <span>Mission Control</span>
+          <strong>Jordan</strong>
+          <small>{workers.length} workers / {subagents.length} subagents mapped</small>
         </div>
       </section>
 
-      <section className="module-panel simulation-section">
-        <div className="section-head">
-          <div>
-            <span className="eyebrow">Agent lane</span>
-            <h3>Choose how PhantomAI thinks</h3>
-          </div>
-          <TruthBadge state="real" label={activeLane} />
-        </div>
-        <div className="action-card-grid">
-          {[
-            { value: "codex" as AiProviderChoice, label: "Auto / operator", detail: "Best default for local app work." },
-            { value: "glm_5_2" as AiProviderChoice, label: "Deep thinking", detail: "Use for strategy, copy, and reasoning." },
-            { value: "claude_cli" as AiProviderChoice, label: "Second opinion", detail: "Use for review when Claude CLI is available." },
-          ].map((lane) => (
-            <button
-              className={`action-tile ${aiProvider === lane.value ? "green" : "blue"}`}
-              key={lane.value}
-              type="button"
-              onClick={() => setAiProvider(lane.value)}
-              disabled={phantomAiBusy}
-            >
-              <span className="action-icon">
-                <Bot size={18} />
+      <section className="agent-ticker" aria-label="Agent activity ticker">
+        <input
+          type="checkbox"
+          id="forcewire-min"
+          className="agent-ticker-toggle"
+          aria-label="Minimize live worker updates"
+        />
+        <label htmlFor="forcewire-min" className="agent-ticker-label">
+          <span>FORCEWIRE</span>
+          <strong>Live worker updates</strong>
+        </label>
+        <div className="agent-ticker-track">
+          <div className="agent-ticker-marquee">
+            {[...ticker, ...ticker].map((item, index) => (
+              <span key={`${item.id}-${index}`}>
+                <b>{item.label}</b>
+                {item.text}
               </span>
-              <strong>{lane.label}</strong>
-              <small>{lane.detail}</small>
-              <em>{aiProvider === lane.value ? "Selected" : "Click to switch"}</em>
-            </button>
-          ))}
+            ))}
+          </div>
         </div>
       </section>
 
-      <section className="module-panel simulation-section">
+      <section className="agent-metric-strip" aria-label="Agent telemetry">
+        <article>
+          <span>Workers active</span>
+          <strong>{activeWorkerCount}/{workers.length}</strong>
+          <small>Admin operations floor</small>
+        </article>
+        <article>
+          <span>Work in {windowHours}h</span>
+          <strong>{formatNumber(taskCount)}</strong>
+          <small>Hermes ledger receipts</small>
+        </article>
+        <article>
+          <span>Tokens tracked</span>
+          <strong>{formatNumber(tokenCount)}</strong>
+          <small>{formatUsd(spend)} estimated</small>
+        </article>
+        <article>
+          <span>Client view</span>
+          <strong>{clientSummary.label}</strong>
+          <small>No tokens or tools exposed</small>
+        </article>
+        <article>
+          <span>Automation</span>
+          <strong>{n8nState}</strong>
+          <small>{adminWorkforce?.n8n.execution_disabled === false ? "execution possible" : "execution blocked"}</small>
+        </article>
+      </section>
+
+      <section className="agent-flow-panel" aria-label="Agent workflow diagram">
+        {workflowStages.map((stage, index) => (
+          <article key={stage.label}>
+            <span>{stage.icon}</span>
+            <small>0{index + 1}</small>
+            <strong>{stage.label}</strong>
+            <p>{stage.detail}</p>
+          </article>
+        ))}
+      </section>
+
+      <section className="agent-section agent-manager-section">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Command pad</span>
-            <h3>Tell the agents what to do</h3>
+            <span className="eyebrow">Manage the workforce</span>
+            <h3>Assign work by sending each agent to the correct cockpit surface.</h3>
           </div>
-          <TruthBadge state="real" label="Runs through PhantomAI" />
+          <TruthBadge state="real" label="Functional routes" />
         </div>
-        <form className="lead-intake-form" onSubmit={submitAgentCommand}>
-          <label className="lead-notes-field">
-            Admin command
-            <textarea value={agentCommand} onChange={(event) => setAgentCommand(event.target.value)} />
-          </label>
-          <div className="lead-intake-actions">
-            <button className="primary-action" type="submit" disabled={phantomAiBusy || !agentCommand.trim()}>
-              {phantomAiBusy ? <RefreshCcw size={16} /> : <Command size={16} />}
-              Run through PhantomAI
-            </button>
-            <button className="ghost-small" type="button" onClick={() => setRoute("site")}>
-              <FileText size={15} />
-              Open Site Studio
-            </button>
-            <button className="ghost-small" type="button" onClick={() => setRoute("connections")}>
-              <Link2 size={15} />
-              System
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section className="action-board" aria-label="Agent actions">
-        <div className="section-head compact">
-          <div>
-            <span className="eyebrow">Direct controls</span>
-            <h3>Click an outcome, not a tool.</h3>
-          </div>
-          <span>{controlActions.length} actions</span>
-        </div>
-        <div className="action-card-grid">
-          {controlActions.map((action) => (
-            <button
-              className="action-tile violet"
-              type="button"
-              key={action.title}
-              onClick={() => void runPhantomCommand(action.prompt)}
-              disabled={phantomAiBusy}
-            >
-              <span className="action-icon">{action.icon}</span>
-              <strong>{action.title}</strong>
-              <small>{action.detail}</small>
-              <b>
-                Run
-                <ArrowRight size={15} />
-              </b>
-            </button>
+        <div className="agent-assignment-grid">
+          {assignments.map((assignment) => (
+            <article className={`agent-assignment-card ${classSlug(assignment.status)}`} key={assignment.id}>
+              <div>
+                <span>{assignment.owner}</span>
+                <b>{assignment.status}</b>
+              </div>
+              <h4>{assignment.title}</h4>
+              <p>{assignment.detail}</p>
+              <small>{assignment.guardrail}</small>
+              <button type="button" onClick={() => setRoute(assignment.destination_route)}>
+                {assignment.action_label}
+                <ArrowRight size={16} />
+              </button>
+            </article>
           ))}
         </div>
       </section>
 
-      <div className="destination-grid">
+      <section className="agent-worker-grid" aria-label="Active agent workforce">
+        {workers.map((worker) => (
+          <article className={`agent-worker-card ${classSlug(worker.state)}`} key={worker.id}>
+            <div className="agent-worker-top">
+              <span>{workerIcon(worker)}</span>
+              <b>{worker.state.replace(/_/g, " ")}</b>
+            </div>
+            <h3>{worker.name}</h3>
+            <strong>{worker.role}</strong>
+            <p>{worker.focus}</p>
+            <div className="agent-worker-metrics">
+              <span><b>{worker.tasks_last_1h}</b> 1h</span>
+              <span><b>{worker.tasks_last_24h}</b> 24h</span>
+              <span><b>{formatNumber(worker.tokens_last_24h)}</b> tokens</span>
+            </div>
+            <div className="agent-output-chip">
+              {worker.id === "gatekeeper"
+                ? `Pangolin: ${pangolinStatus?.status ?? "unconfigured"}`
+                : worker.tool_binding.replace(/_/g, " ")}
+            </div>
+            <div className="agent-worker-footer">
+              <span>{worker.data_source}</span>
+              <span>{formatLastRun(worker.last_run_at)}</span>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      <section className="agent-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Subagents</span>
+            <h3>Named specialists under the main workers.</h3>
+          </div>
+          <TruthBadge state="demo" label="Internal map" />
+        </div>
+        <div className="agent-subagent-grid">
+          {subagents.length ? (
+            subagents.map((subagent) => (
+              <article className={`agent-subagent-card ${classSlug(subagent.state)}`} key={subagent.id}>
+                <div>
+                  <strong>{subagent.name}</strong>
+                  <span>{subagent.parent}</span>
+                </div>
+                <p>{subagent.specialty}</p>
+                <small>{subagent.state} · {subagent.tasks_last_24h} tasks · {formatNumber(subagent.tokens_last_24h)} tokens</small>
+              </article>
+            ))
+          ) : (
+            <article className="agent-subagent-card waiting">
+              <div>
+                <strong>Telemetry waiting</strong>
+                <span>Backend offline</span>
+              </div>
+              <p>The named specialist map appears after the admin agent-status route loads.</p>
+              <small>Client workspaces never see token/tool detail.</small>
+            </article>
+          )}
+        </div>
+      </section>
+
+      <section className="agent-section">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Workforce bundles</span>
+            <h3>Run business missions, not isolated tools.</h3>
+          </div>
+          <TruthBadge state="real" label="Bundled safe actions" />
+        </div>
+        <div className="agent-tool-grid">
+          {capabilityBundles.map((bundle) => {
+            const missingActions = bundle.actionIds.filter(
+              (actionId) => !programs.some((program) => program.action_id === actionId),
+            );
+            const ready = missingActions.length === 0;
+            return (
+              <article className={`agent-tool-card ${ready ? "ready" : "waiting"}`} key={bundle.id}>
+                <div>
+                  <strong>{bundle.title}</strong>
+                  <span>{ready ? "ready" : "partial"}</span>
+                </div>
+                <p>{bundle.detail}</p>
+                <StatusLine label="Outcome" value={bundle.outcome} />
+                <StatusLine label="Workers bundled" value={String(bundle.actionIds.length - missingActions.length)} />
+                <StatusLine label="Missing safe wrappers" value={String(missingActions.length)} />
+                <button
+                  type="button"
+                  onClick={() => void runSafeAgentBundle(bundle)}
+                  disabled={agentActionBusy === `bundle:${bundle.id}`}
+                >
+                  {agentActionBusy === `bundle:${bundle.id}` ? "Running bundle..." : "Run safe bundle"}
+                  <ArrowRight size={15} />
+                </button>
+                <button type="button" className="agent-secondary-action" onClick={() => setRoute(bundle.route)}>
+                  Open result area
+                  <ArrowRight size={15} />
+                </button>
+                <small>Hidden crew works together behind PhantomAI. No provider call, send, or production execution.</small>
+              </article>
+            );
+          })}
+        </div>
+        <p className="agent-program-note">
+          The installed programs are now treated like internal employees under a mission. Admins can run bundled safe
+          checks here; clients only see simple business outcomes.
+        </p>
+        {agentActionResult ? (
+          <article className={`agent-action-result ${agentActionResult.ok ? "ok" : "blocked"}`}>
+            <div>
+              <span className="eyebrow">Last agent action</span>
+              <strong>{agentActionResult.label ?? agentActionResult.action_id ?? "Agent action"}</strong>
+            </div>
+            <p>{agentActionResult.ok ? "Completed through the safe admin wrapper." : "Action did not complete."}</p>
+            <pre>{JSON.stringify(agentActionResult.output ?? agentActionResult.error ?? agentActionResult, null, 2)}</pre>
+          </article>
+        ) : null}
+      </section>
+
+      <div className="agent-ops-grid">
         <article className="operator-result-card">
-          <span className="eyebrow">Hermes memory</span>
-          <h4>Receipts and context stay in the backend.</h4>
+          <span className="eyebrow">Operator rule</span>
+          <h4>Visibility here. Commands on Home.</h4>
           <p>
-            PhantomAI can use workspace context and interaction receipts without exposing raw keys, logs, or provider
-            plumbing to clients.
+            This page is the dashboard map of active workers and their cost/activity. To create work, use Home. To inspect risk, use Scanner.
+            To edit the site, use Site Studio.
           </p>
-          <StatusLine label="Memory lane" value="Backend" />
-          <StatusLine label="Client visibility" value="None" />
         </article>
         <article className="operator-result-card">
-          <span className="eyebrow">Local control</span>
-          <h4>Admin can direct local work. Clients cannot.</h4>
+          <span className="eyebrow">Client version later</span>
+          <h4>{clientSummary.label} is all clients need.</h4>
           <p>
-            File, repo, dashboard, and operator tasks belong here. Customer workspaces receive finished artifacts,
-            drafts, and approvals only.
+            Operators see workers, tools, tokens, and spend. Client workspaces can simplify this into Sales, Media,
+            Support, Bookings, and Delivery.
           </p>
-          <StatusLine label="Admin tools" value="Available" />
-          <StatusLine label="Client tools" value="Blocked" />
         </article>
         <article className="operator-result-card">
           <span className="eyebrow">Pangolin route map</span>
           <h4>
             {enabledRoutes} enabled, {disabledRoutes} disabled.
           </h4>
-          <p>
-            Pangolin is the private doorway layer. PhantomForce decides what each workspace can do after a user enters.
-          </p>
+          <p>Pangolin remains the private doorway layer. Live changes stay outside this visual map.</p>
           <StatusLine label="Live instance" value={pangolinStatus?.status ?? "unconfigured"} />
-          <StatusLine label="Live changes" value="Off" />
+          <StatusLine label="Automation bay" value={n8nState} />
         </article>
       </div>
     </Page>
@@ -4606,9 +6748,13 @@ function AgentControlCenter({
 function SiteStudioView({
   pangolinPlan,
   pangolinStatus,
+  sessionHeaders,
+  createStoreReviewApproval,
 }: {
   pangolinPlan: PangolinRoutePlan[];
   pangolinStatus: PangolinReadOnlyStatus | null;
+  sessionHeaders: (json?: boolean) => Record<string, string>;
+  createStoreReviewApproval: (draft: StorefrontDraft) => void;
 }) {
   const [siteDraft, setSiteDraft] = useState({
     hero: "PhantomForce builds the system behind your business.",
@@ -4617,10 +6763,102 @@ function SiteStudioView({
     offer: "Start with an Ops + Content Setup Sprint: $750 Starter, $1,500 Core, or $2,500 Pro.",
     cta: "Book a 15-minute setup call",
   });
+  const [storeDraft, setStoreDraft] = useState<StorefrontDraft>({
+    name: "PhantomForce Store",
+    headline: "Buy the system, not another random service.",
+    product: "Ops + Content Setup Sprint",
+    price: "$1,500",
+    description: "We map the mess, build the working command system, and prepare your next sales/content workflow.",
+    fulfillment: "Delivered as a private setup sprint with owner approval before sends, posts, bookings, or billing actions.",
+    checkoutNote: "Checkout is draft-only here. Live payment links require a separate approval and billing gate.",
+    cta: "Request setup sprint",
+  });
+  const [storePreviewOpen, setStorePreviewOpen] = useState(true);
+  const [storeScanBusy, setStoreScanBusy] = useState(false);
+  const [storeScanStatus, setStoreScanStatus] = useState("Not scanned yet.");
+  const [storeScanSummary, setStoreScanSummary] = useState<SecurityScanResult["summary"] | null>(null);
   const [previewOpen, setPreviewOpen] = useState(true);
 
   function updateDraft(key: keyof typeof siteDraft, value: string) {
     setSiteDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateStoreDraft(key: keyof typeof storeDraft, value: string) {
+    setStoreDraft((current) => ({ ...current, [key]: value }));
+  }
+
+  function loadStorePackage(packageName: "starter" | "core" | "pro") {
+    const packages = {
+      starter: {
+        product: "Starter Setup Sprint",
+        price: "$750",
+        description: "A focused cleanup sprint for one offer, one page, and one follow-up path.",
+      },
+      core: {
+        product: "Core Ops + Content Sprint",
+        price: "$1,500",
+        description: "The main PhantomForce package: lead flow, booking path, proposal copy, and content workflow.",
+      },
+      pro: {
+        product: "Pro Business System Sprint",
+        price: "$2,500",
+        description: "A heavier build for messy operations: site sections, dashboards, follow-ups, media, and approval lanes.",
+      },
+    };
+    setStoreDraft((current) => ({ ...current, ...packages[packageName] }));
+    setStorePreviewOpen(true);
+  }
+
+  function storeDraftContent() {
+    return [
+      `Store: ${storeDraft.name}`,
+      `Headline: ${storeDraft.headline}`,
+      `Product: ${storeDraft.product}`,
+      `Price: ${storeDraft.price}`,
+      `Description: ${storeDraft.description}`,
+      `Fulfillment: ${storeDraft.fulfillment}`,
+      `CTA: ${storeDraft.cta}`,
+      `Checkout note: ${storeDraft.checkoutNote}`,
+    ].join("\n");
+  }
+
+  async function scanStoreDraft() {
+    setStoreScanBusy(true);
+    setStoreScanStatus("Scanning store draft locally...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/security/scan/preview`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({
+          label: `Store Builder - ${storeDraft.product}`,
+          filename: "storefront-draft.txt",
+          mode: "website",
+          content: storeDraftContent(),
+        }),
+      });
+      const data = (await response.json()) as { result?: SecurityScanResult; error?: unknown };
+
+      if (!response.ok || !data.result) {
+        setStoreScanSummary(null);
+        setStoreScanStatus(typeof data.error === "string" ? data.error : "Store scan failed closed.");
+        return;
+      }
+
+      setStoreScanSummary(data.result.summary);
+      setStoreScanStatus(
+        data.result.summary.verdict === "clean"
+          ? "Clean store draft. No local indicators found."
+          : data.result.summary.verdict === "blocked"
+            ? "Blocked. Review scanner findings before using this store copy."
+            : "Review needed before checkout or publish.",
+      );
+    } catch {
+      setStoreScanSummary(null);
+      setStoreScanStatus("Scanner backend is offline.");
+    } finally {
+      setStoreScanBusy(false);
+    }
   }
 
   return (
@@ -4679,6 +6917,138 @@ function SiteStudioView({
               Publish gated
             </button>
           </div>
+        </div>
+      </section>
+
+      <section className="module-panel store-builder-panel">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Store Builder</span>
+            <h3>Turn an offer into a buyer-ready store page.</h3>
+          </div>
+          <TruthBadge state="stub" label="Checkout gated" />
+        </div>
+
+        <div className="store-integration-strip" aria-label="Store Builder integrations">
+          <article>
+            <Zap size={17} />
+            <strong>Offers</strong>
+            <span>Starter/Core/Pro presets feed this page.</span>
+          </article>
+          <article>
+            <Search size={17} />
+            <strong>Scanner</strong>
+            <span>{storeScanSummary ? `${storeScanSummary.verdict} · ${storeScanSummary.total_findings} finding(s)` : "Local scan ready."}</span>
+          </article>
+          <article>
+            <SquareCheckBig size={17} />
+            <strong>Review queue</strong>
+            <span>Store publish/payment requires approval card.</span>
+          </article>
+          <article>
+            <KeyRound size={17} />
+            <strong>Access</strong>
+            <span>Pangolin remains {pangolinStatus?.status ?? "unconfigured"}.</span>
+          </article>
+        </div>
+
+        <div className="store-builder-layout">
+          <div className="store-builder-form lead-intake-form">
+            <div className="store-package-quickbar" aria-label="Store package presets">
+              <button type="button" onClick={() => loadStorePackage("starter")}>Starter</button>
+              <button type="button" onClick={() => loadStorePackage("core")}>Core</button>
+              <button type="button" onClick={() => loadStorePackage("pro")}>Pro</button>
+            </div>
+            <label>
+              Store name
+              <input value={storeDraft.name} onChange={(event) => updateStoreDraft("name", event.target.value)} />
+            </label>
+            <label>
+              Store headline
+              <input value={storeDraft.headline} onChange={(event) => updateStoreDraft("headline", event.target.value)} />
+            </label>
+            <div className="store-two-column">
+              <label>
+                Product / offer
+                <input value={storeDraft.product} onChange={(event) => updateStoreDraft("product", event.target.value)} />
+              </label>
+              <label>
+                Price
+                <input value={storeDraft.price} onChange={(event) => updateStoreDraft("price", event.target.value)} />
+              </label>
+            </div>
+            <label className="lead-notes-field">
+              Product description
+              <textarea value={storeDraft.description} onChange={(event) => updateStoreDraft("description", event.target.value)} />
+            </label>
+            <label className="lead-notes-field">
+              Fulfillment promise
+              <textarea value={storeDraft.fulfillment} onChange={(event) => updateStoreDraft("fulfillment", event.target.value)} />
+            </label>
+            <label>
+              CTA
+              <input value={storeDraft.cta} onChange={(event) => updateStoreDraft("cta", event.target.value)} />
+            </label>
+            <div className="lead-intake-actions">
+              <button className="primary-action" type="button" onClick={() => setStorePreviewOpen(true)}>
+                <ShoppingCart size={16} />
+                Preview store
+              </button>
+              <button className="ghost-small" type="button" onClick={() => void scanStoreDraft()} disabled={storeScanBusy}>
+                <Search size={15} />
+                {storeScanBusy ? "Scanning..." : "Scan store"}
+              </button>
+              <button className="ghost-small" type="button" onClick={() => createStoreReviewApproval(storeDraft)}>
+                <SquareCheckBig size={15} />
+                Stage review card
+              </button>
+              <button className="ghost-small" type="button" onClick={() => setStorePreviewOpen(false)}>
+                Hide store
+              </button>
+              <button className="ghost-small" type="button" disabled title="Payment and checkout require a separate approved billing integration.">
+                <Lock size={15} />
+                Checkout gated
+              </button>
+            </div>
+            <p className={`store-scan-status ${storeScanSummary?.verdict ?? "idle"}`}>{storeScanStatus}</p>
+          </div>
+
+          {storePreviewOpen ? (
+            <article className="store-preview-card">
+              <div className="store-preview-head">
+                <span>
+                  <ShoppingCart size={18} />
+                  Store preview
+                </span>
+                <b>Draft only</b>
+              </div>
+              <h4>{storeDraft.name}</h4>
+              <p>{storeDraft.headline}</p>
+              <div className="store-product-card">
+                <span className="eyebrow">Featured offer</span>
+                <strong>{storeDraft.product}</strong>
+                <em>{storeDraft.price}</em>
+                <p>{storeDraft.description}</p>
+                <small>{storeDraft.fulfillment}</small>
+                <button className="primary-small" type="button" disabled>
+                  {storeDraft.cta}
+                </button>
+              </div>
+              <div className="store-safety-strip">
+                <span>No payment link</span>
+                <span>No invoice</span>
+                <span>No send</span>
+                <span>Approval required</span>
+              </div>
+              <p className="route-note">{storeDraft.checkoutNote}</p>
+            </article>
+          ) : (
+            <article className="store-preview-card muted">
+              <ShoppingCart size={20} />
+              <h4>Store preview hidden</h4>
+              <p>Draft fields remain local in this admin screen. Nothing publishes or charges a customer.</p>
+            </article>
+          )}
         </div>
       </section>
 
@@ -8246,7 +10616,16 @@ function ApprovalCard({
   rejectAction: (id: string) => void;
   compact?: boolean;
 }) {
-  const Icon = approval.kind === "email" ? Mail : approval.kind === "calendar" ? CalendarDays : SquareCheckBig;
+  const Icon =
+    approval.kind === "email"
+      ? Mail
+      : approval.kind === "calendar"
+        ? CalendarDays
+        : approval.kind === "review_request" || approval.kind === "website_review"
+          ? Star
+          : approval.kind === "video_generation"
+            ? Play
+          : SquareCheckBig;
   return (
     <article className={`approval-card ${compact ? "compact" : ""} ${approval.status}`}>
       <div className="approval-title">
