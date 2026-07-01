@@ -2079,9 +2079,9 @@ const phantomDeckWorkspaces: Array<{
   },
   {
     id: "n8n",
-    label: "n8n",
-    command: "n8n",
-    detail: "Local workflow scaffold",
+    label: "Automation",
+    command: "automation",
+    detail: "Workflow bundles",
     icon: <Settings size={18} />,
     route: "connections",
   },
@@ -5233,8 +5233,8 @@ function PhantomDeck({
     },
     {
       key: "n8n",
-      label: "n8n",
-      value: n8nRunning ? "Running" : n8nScaffolded ? "Scaffold" : "Planned",
+      label: "Automation",
+      value: n8nRunning ? "Running" : n8nScaffolded ? "Ready" : "Planned",
       tone: n8nRunning ? "good" : n8nScaffolded ? "warn" : "muted",
     },
     {
@@ -5245,7 +5245,7 @@ function PhantomDeck({
     },
     {
       key: "provider",
-      label: "Provider",
+      label: "AI lane",
       value: providerReady ? "Ready" : "Gated/off",
       tone: providerReady ? "warn" : "good",
     },
@@ -5257,10 +5257,10 @@ function PhantomDeck({
       return `${proposalCounts.follow_up_needed} ${noun} follow-up.`;
     }
     if (priorityProposal) return `Fastest money move: ${priorityProposal.client_name}.`;
-    if (n8nRunning) return "n8n is running locally.";
-    if (n8nScaffolded) return "n8n is offline, but the scaffold is ready.";
+    if (n8nRunning) return "Automation worker is running locally.";
+    if (n8nScaffolded) return "Automation worker is staged and ready to configure.";
     if (!effectiveSendReadiness.send_enabled) return "Send readiness is draft-only.";
-    if (!providerReady) return "Provider lane is gated/off.";
+    if (!providerReady) return "AI execution lane is gated/off.";
     return "All visible lanes are calm.";
   })();
 
@@ -5538,7 +5538,7 @@ function ActiveWorkspace({
             tone={phantomAiOpsStatus.hermes.ready ? "good" : "muted"}
           />
           <DeckMetric
-            label="Provider"
+            label="AI execution"
             value={providerReady ? "Ready" : "Gated/off"}
             detail={phantomAiOpsStatus.glm_worker.detail}
             tone={providerReady ? "warn" : "good"}
@@ -5664,7 +5664,7 @@ function ActiveWorkspace({
           <DeckMetric label="Execution" value={phantomAiOpsStatus.safety_flags.execution_disabled ? "Disabled" : "Review"} detail="Workflow and approval execution stay blocked." tone={phantomAiOpsStatus.safety_flags.execution_disabled ? "good" : "alert"} />
           <DeckMetric label="Sends" value={sendReadiness.send_enabled ? "Enabled" : "Draft-only"} detail={sendReadiness.next_required_before_send[0] ?? "Send adapter not implemented."} tone={sendReadiness.send_enabled ? "warn" : "good"} />
           <DeckMetric label="Protect scanners" value="Planned/local" detail="Medusa/Robin-style scanning is represented as planned or preview-only until configured." tone="muted" />
-          <DeckMetric label="Provider" value={providerReady ? "Ready" : "Gated/off"} detail="No provider call is triggered by this workspace." tone="good" />
+          <DeckMetric label="AI execution" value={providerReady ? "Ready" : "Gated/off"} detail="No external model call is triggered by this workspace." tone="good" />
           <section className="deck-wide-card">
             <div className="section-head compact">
               <h3>Safety locks</h3>
@@ -5730,9 +5730,9 @@ function ActiveWorkspace({
 
       {workspace === "n8n" ? (
         <div className="deck-grid">
-          <DeckMetric label="n8n" value={n8nLocalUrl} detail={phantomAiOpsStatus.n8n.n8n_running ? "Local worker detected." : "Local scaffold or planned worker only."} tone={phantomAiOpsStatus.n8n.n8n_running ? "good" : "warn"} />
-          <DeckMetric label="Tool lane" value={toolLanePreview?.preview?.status ?? phantomAiOpsStatus.tool_lane_status.status} detail={toolLanePreview?.preview?.reason ?? phantomAiOpsStatus.tool_lane_status.reason} tone="good" />
-          <DeckMetric label="Execution" value={toolLanePreview?.execution_disabled ?? true ? "Disabled" : "Review"} detail="Preview cannot start n8n, run workflows, or open webhooks." tone="good" />
+          <DeckMetric label="Automation worker" value={n8nLocalUrl} detail={phantomAiOpsStatus.n8n.n8n_running ? "Local worker detected." : "Local scaffold or planned worker only."} tone={phantomAiOpsStatus.n8n.n8n_running ? "good" : "warn"} />
+          <DeckMetric label="Workflow lane" value={toolLanePreview?.preview?.status ?? phantomAiOpsStatus.tool_lane_status.status} detail={toolLanePreview?.preview?.reason ?? phantomAiOpsStatus.tool_lane_status.reason} tone="good" />
+          <DeckMetric label="Execution" value={toolLanePreview?.execution_disabled ?? true ? "Disabled" : "Review"} detail="Preview cannot start workers, run workflows, or open webhooks." tone="good" />
           <section className="deck-wide-card">
             <div className="section-head compact">
               <h3>Workflow drafts</h3>

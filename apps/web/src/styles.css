@@ -22,12 +22,14 @@
 }
 
 html {
+  width: 100%;
   min-width: 320px;
   background: var(--bg);
 }
 
 body {
   margin: 0;
+  width: 100%;
   min-width: 320px;
   min-height: 100vh;
   color: var(--text);
@@ -1252,6 +1254,11 @@ img {
   background: transparent;
   border: 0;
   font-weight: 800;
+}
+
+#root {
+  width: 100%;
+  min-height: 100vh;
 }
 
 select option {
@@ -6342,6 +6349,8 @@ select option:disabled {
 /* ------------------------------------------------------------------ */
 .phantom-deck-app-shell {
   display: block;
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
   background:
     linear-gradient(180deg, rgba(5, 10, 14, 0.98), rgba(4, 6, 9, 1)),
@@ -6349,6 +6358,8 @@ select option:disabled {
 }
 
 .phantom-deck-workspace {
+  width: 100%;
+  min-width: 0;
   min-height: 100vh;
 }
 
@@ -6358,6 +6369,8 @@ select option:disabled {
   --deck-amber: #f7c95c;
   --deck-red: #ff5a6a;
   position: relative;
+  width: 100%;
+  min-width: 100%;
   min-height: 100vh;
   padding: 22px 24px 24px 92px;
   overflow: hidden;
@@ -6459,8 +6472,9 @@ select option:disabled {
 .phantom-deck-main {
   position: relative;
   z-index: 1;
-  width: min(1540px, 100%);
-  margin: 0 auto;
+  width: 100%;
+  max-width: none;
+  margin: 0;
   display: grid;
   gap: 16px;
 }
