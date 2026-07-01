@@ -625,6 +625,7 @@ type PhantomDeckWorkspaceId =
   | "protect"
   | "review"
   | "site"
+  | "agentlab"
   | "n8n"
   | "help";
 type PhantomDeckMood = "calm" | "alert" | "thinking" | "blocked";
@@ -2094,6 +2095,14 @@ const phantomDeckWorkspaces: Array<{
     route: "site",
   },
   {
+    id: "agentlab",
+    label: "AgentLab",
+    command: "agentlab",
+    detail: "Internal workforce",
+    icon: <Bot size={18} />,
+    route: "agents",
+  },
+  {
     id: "n8n",
     label: "n8n",
     command: "n8n",
@@ -2109,6 +2118,32 @@ const phantomDeckWorkspaces: Array<{
     icon: <Command size={18} />,
   },
 ];
+
+const phantomToolGroups: Array<{
+  id: "business" | "create" | "safety" | "systems";
+  label: string;
+  items: PhantomDeckWorkspaceId[];
+}> = [
+  { id: "business", label: "Business", items: ["leads", "proposal", "followup", "work", "money"] },
+  { id: "create", label: "Create", items: ["video", "site"] },
+  { id: "safety", label: "Safety", items: ["protect", "review"] },
+  { id: "systems", label: "Systems", items: ["n8n", "agentlab", "status"] },
+];
+
+const phantomOrbitPositions: Partial<Record<PhantomDeckWorkspaceId, { x: string; y: string }>> = {
+  leads: { x: "-330px", y: "-104px" },
+  proposal: { x: "-246px", y: "-170px" },
+  followup: { x: "-126px", y: "-214px" },
+  work: { x: "-306px", y: "10px" },
+  money: { x: "-198px", y: "92px" },
+  video: { x: "128px", y: "-214px" },
+  site: { x: "250px", y: "-156px" },
+  protect: { x: "318px", y: "-48px" },
+  review: { x: "296px", y: "72px" },
+  n8n: { x: "114px", y: "136px" },
+  agentlab: { x: "0px", y: "174px" },
+  status: { x: "-116px", y: "142px" },
+};
 
 function resolvePhantomDeckWorkspace(value: string): PhantomDeckWorkspaceId | null {
   const text = value.trim().toLowerCase();
@@ -2127,6 +2162,7 @@ function resolvePhantomDeckWorkspace(value: string): PhantomDeckWorkspaceId | nu
   if (/\b(protect|security|scanner|scan|medusa|robin|phishing|passwords?)\b/.test(text)) return "protect";
   if (/\b(review|approvals?|approve|drafts?|human)\b/.test(text)) return "review";
   if (/\b(site|website|web app|dashboard|codex|build lane)\b/.test(text)) return "site";
+  if (/\b(agentlab|agent lab|agents?|workforce|crew|internal workers?)\b/.test(text)) return "agentlab";
   if (/\b(n8n|automation|workflow|tool lane|worker|systems?|orchestration)\b/.test(text)) return "n8n";
   if (/\b(status|health|systems?|ops|pulse)\b/.test(text)) return "status";
 
@@ -5230,56 +5266,50 @@ function PhantomDeck({
     {
       key: "leads",
       label: "Leads",
-      value: proposalCounts.total ? `${proposalCounts.total} saved` : `${stats.urgent} hot`,
+      value: proposalCounts.total ? String(proposalCounts.total) : String(stats.urgent),
       tone: proposalCounts.follow_up_needed || stats.urgent ? "warn" : "good",
     },
     {
       key: "work",
       label: "Work",
-      value: stats.today ? `${stats.today} today` : "Clear",
+      value: String(stats.today),
       tone: stats.today ? "warn" : "good",
     },
     {
       key: "money",
       label: "Money",
-      value: proposalCounts.won ? `${proposalCounts.won} won` : proposalCounts.total ? `${proposalCounts.total} open` : "No packets",
+      value: String(proposalCounts.draft + proposalCounts.sent_manually + proposalCounts.follow_up_needed),
       tone: proposalCounts.won ? "good" : proposalCounts.total ? "warn" : "muted",
     },
     {
       key: "video",
       label: "Video",
-      value: "Draft-ready",
+      value: "ready",
       tone: "good",
     },
     {
       key: "protect",
       label: "Protect",
-      value: phantomAiOpsStatus.safety_flags.execution_disabled ? "Blocked lanes" : "Review",
+      value: phantomAiOpsStatus.safety_flags.execution_disabled ? "locked" : "review",
       tone: phantomAiOpsStatus.safety_flags.execution_disabled ? "good" : "alert",
     },
     {
       key: "review",
       label: "Review",
-      value: pendingApprovals.length ? `${pendingApprovals.length} pending` : "Clear",
+      value: pendingApprovals.length ? String(pendingApprovals.length) : "clear",
       tone: pendingApprovals.length ? "alert" : "good",
     },
     {
       key: "n8n",
       label: "n8n",
-      value: n8nRunning ? "Running" : n8nScaffolded ? "Off" : "Planned",
+      value: n8nRunning ? "on" : n8nScaffolded ? "off" : "planned",
       tone: n8nRunning ? "good" : n8nScaffolded ? "warn" : "muted",
     },
     {
       key: "send",
-      label: "Sends manual",
-      value: effectiveSendReadiness.send_enabled ? "Enabled" : "Draft-only",
+      label: "Sends",
+      value: effectiveSendReadiness.send_enabled ? "review" : "manual",
       tone: effectiveSendReadiness.send_enabled ? "warn" : "good",
-    },
-    {
-      key: "provider",
-      label: "Provider",
-      value: providerReady ? "Ready" : "Gated/off",
-      tone: providerReady ? "warn" : "good",
     },
   ];
 
@@ -5328,13 +5358,28 @@ function PhantomDeck({
     setDeckNotice(`${phantomDeckWorkspaceLabel(workspace)} workspace summoned.`);
   }
 
+  function openToolOrbit() {
+    setActiveWorkspace(null);
+    setToolsOpen(true);
+    setDeckNotice("Capability orbit opened.");
+  }
+
+  function toggleToolOrbit() {
+    if (toolsOpen) {
+      setToolsOpen(false);
+      setDeckNotice("Capability orbit closed.");
+      return;
+    }
+
+    openToolOrbit();
+  }
+
   function submitDeckCommand(event: FormEvent) {
     event.preventDefault();
     const nextWorkspace = resolvePhantomDeckWorkspace(commandText);
     if (nextWorkspace) {
       if (nextWorkspace === "help") {
-        setToolsOpen(true);
-        setDeckNotice("Tool orbit opened.");
+        openToolOrbit();
       } else {
         openWorkspace(nextWorkspace);
       }
@@ -5342,7 +5387,7 @@ function PhantomDeck({
       return;
     }
 
-    setToolsOpen(true);
+    openToolOrbit();
     setDeckNotice("Try leads, proposal, follow up, money, video, protect, review, work, n8n, or status.");
   }
 
@@ -5351,16 +5396,16 @@ function PhantomDeck({
     setDeckNotice("Workspace minimized.");
   }
 
-  const suggestionPills: Array<{ label: string; workspace: PhantomDeckWorkspaceId }> = [
-    { label: "Handle a lead", workspace: "leads" },
-    { label: "Build proposal", workspace: "proposal" },
-    { label: "Show follow-ups", workspace: "followup" },
-    { label: "Create video", workspace: "video" },
-    { label: "Protect business", workspace: "protect" },
-  ];
+  const orbitTools = phantomToolGroups.flatMap((group) =>
+    group.items.map((id) => ({
+      group,
+      workspace: phantomDeckWorkspaces.find((item) => item.id === id)!,
+      position: phantomOrbitPositions[id] ?? { x: "0px", y: "0px" },
+    })),
+  );
 
   return (
-    <section className={`phantom-deck v2${activeWorkspace ? " has-workspace" : ""}`} style={deckStyle} onMouseMove={handlePointerMove}>
+    <section className={`phantom-deck v2 v3${activeWorkspace ? " has-workspace" : ""}${toolsOpen ? " tools-open" : ""}`} style={deckStyle} onMouseMove={handlePointerMove}>
       <div className="phantom-deck-main">
         <header className="phantom-deck-header">
           <div className="phantom-brand-lockup">
@@ -5371,10 +5416,10 @@ function PhantomDeck({
             </div>
           </div>
           <div className="phantom-top-chips" aria-label="Live deck readouts">
-            <span>{phantomAiOpsStatus.product_status}</span>
-            <span>{phantomAiOpsStatus.safety_flags.execution_disabled ? "Protected" : "Review locks"}</span>
-            <span>{effectiveSendReadiness.send_enabled ? "Send review" : "Manual send"}</span>
-            <span>{n8nRunning ? "Local Worker" : "Worker Off"}</span>
+            <span>Live Internal</span>
+            <span>{phantomAiOpsStatus.safety_flags.execution_disabled ? "Protected" : "Review Locks"}</span>
+            <span>{effectiveSendReadiness.send_enabled ? "Send Review" : "Manual Send"}</span>
+            <span>{n8nRunning ? "Worker On" : "Worker Off"}</span>
           </div>
           <div className="phantom-top-actions">
             <button type="button" title="Search">
@@ -5388,63 +5433,68 @@ function PhantomDeck({
 
         <section className="phantom-command-stage" aria-label="Phantom command center">
           <div className="phantom-command-orb" aria-hidden="true" />
-          <PhantomCompanion
-            mood={companionMood}
-            speech={companionSignal.text}
-            thinking={commandFocused || deckLoading}
-            onSpeechClick={() => openWorkspace(companionSignal.workspace)}
-          />
-          <form className={`phantom-command ${commandFocused ? "focused" : ""}`} onSubmit={submitDeckCommand}>
-            <Command size={24} />
-            <input
-              value={commandText}
-              onChange={(event) => setCommandText(event.target.value)}
-              onFocus={() => setCommandFocused(true)}
-              onBlur={() => setCommandFocused(false)}
-              placeholder="What should PhantomForce do?"
-            />
-            <button type="submit" title="Summon workspace">
-              <ArrowRight size={20} />
-            </button>
-          </form>
-          <div className="phantom-suggestions" aria-label="Suggested commands">
-            {suggestionPills.map((pill) => (
-              <button key={pill.label} type="button" onClick={() => openWorkspace(pill.workspace)}>
-                {pill.label}
+          <div className="phantom-command-core">
+            <div className="phantom-command-dock">
+              <form className={`phantom-command ${commandFocused ? "focused" : ""}`} onSubmit={submitDeckCommand}>
+                <Command size={25} />
+                <input
+                  value={commandText}
+                  onChange={(event) => setCommandText(event.target.value)}
+                  onFocus={() => setCommandFocused(true)}
+                  onBlur={() => setCommandFocused(false)}
+                  placeholder="Ask PhantomForce to handle a lead, build a quote, open video, check protect..."
+                />
+                <button type="submit" title="Summon workspace">
+                  <ArrowRight size={21} />
+                </button>
+              </form>
+              <button
+                className={`tool-orbit-button${toolsOpen ? " active" : ""}`}
+                type="button"
+                onClick={toggleToolOrbit}
+                aria-expanded={toolsOpen}
+                title="Open capability orbit"
+              >
+                <Sparkles size={18} />
+                <span>Orbit</span>
               </button>
-            ))}
+            </div>
+            <PhantomCompanion
+              mood={companionMood}
+              speech={companionSignal.text}
+              thinking={commandFocused || deckLoading}
+              onSpeechClick={() => openWorkspace(companionSignal.workspace)}
+            />
+            {toolsOpen ? (
+              <div className="tool-orbit-menu" aria-label="PhantomForce capability orbit">
+                {phantomToolGroups.map((group) => (
+                  <span key={group.id} className={`tool-orbit-group-label ${group.id}`}>
+                    {group.label}
+                  </span>
+                ))}
+                {orbitTools.map(({ group, workspace, position }) => (
+                  <button
+                    key={workspace.id}
+                    className={`tool-orbit-node ${group.id}`}
+                    type="button"
+                    onClick={() => openWorkspace(workspace.id)}
+                    style={{ "--orbit-x": position.x, "--orbit-y": position.y } as CSSProperties}
+                  >
+                    {workspace.icon}
+                    <span>{workspace.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
           </div>
         </section>
 
         <PulseStrip items={pulseItems} activeWorkspace={activeWorkspace} setActiveWorkspace={openWorkspace} />
 
-        <div className="phantom-tool-launcher">
-          <button
-            className={`tool-orbit-button${toolsOpen ? " active" : ""}`}
-            type="button"
-            onClick={() => setToolsOpen((open) => !open)}
-            aria-expanded={toolsOpen}
-          >
-            <Sparkles size={18} />
-            <span>All tools</span>
-          </button>
-          {toolsOpen ? (
-            <div className="tool-orbit-menu" aria-label="All PhantomForce tools">
-              {phantomDeckWorkspaces.filter((workspace) => workspace.id !== "help").map((workspace) => (
-                <button key={workspace.id} type="button" onClick={() => openWorkspace(workspace.id)}>
-                  {workspace.icon}
-                  <strong>{workspace.label}</strong>
-                  <small>{workspace.detail}</small>
-                </button>
-              ))}
-            </div>
-          ) : null}
-        </div>
-
         <div className="phantom-deck-body" aria-live="polite">
           {!activeWorkspace ? (
             <div className="phantom-idle-state" aria-label="Idle Phantom Deck">
-              <span>{deckNotice}</span>
+              {deckLoading ? <span>Syncing</span> : null}
             </div>
           ) : activeWorkspaceMeta ? (
             <ActiveWorkspace
@@ -5899,6 +5949,24 @@ function ActiveWorkspace({
         </div>
       ) : null}
 
+      {workspace === "agentlab" ? (
+        <div className="deck-grid">
+          <DeckMetric label="Workforce" value={agentSummary} detail="Internal worker status stays owner/admin-only." tone="good" />
+          <DeckMetric label="Command lane" value={opsContext?.assistant?.mode_label ?? "Internal"} detail={opsContext?.assistant?.external_sends ?? "External actions remain gated."} tone="good" />
+          <DeckMetric label="Review" value={pendingApprovals.length ? `${pendingApprovals.length} pending` : "Clear"} detail="Human review stays ahead of risky actions." tone={pendingApprovals.length ? "alert" : "good"} />
+          <section className="deck-wide-card">
+            <div className="section-head compact">
+              <h3>AgentLab</h3>
+              <button className="deck-icon-button" type="button" onClick={() => setRoute("agents")}>
+                <Bot size={17} />
+                <span>Open AgentLab</span>
+              </button>
+            </div>
+            <p>AgentLab is the internal workforce surface. This deck only summarizes status and opens the full admin lane.</p>
+          </section>
+        </div>
+      ) : null}
+
       {workspace === "n8n" ? (
         <div className="deck-grid">
           <DeckMetric label="n8n worker" value={n8nLocalUrl} detail={phantomAiOpsStatus.n8n.n8n_running ? "Local worker detected." : "Local scaffold or planned worker only."} tone={phantomAiOpsStatus.n8n.n8n_running ? "good" : "warn"} />
@@ -5940,10 +6008,6 @@ function ActiveWorkspace({
         </section>
       ) : null}
 
-      <div className="deck-bottom-glance">
-        <DeckListItem title="Hot lead signal" detail={emails[0]?.subject ?? "No inbox signal"} status={emails[0]?.status ?? "idle"} />
-        <DeckListItem title="Recent activity" detail={activity[0]?.detail ?? "No recent activity"} status={activity[0]?.level ?? "info"} />
-      </div>
     </section>
   );
 }
