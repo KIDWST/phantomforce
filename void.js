@@ -20,14 +20,18 @@ const REGISTER_ENDPOINT =
     : "https://ai.phantomforce.online/register";
 async function registerForDemo(name, email) {
   if (!REGISTER_ENDPOINT) return true; // no endpoint -> optimistic local preview
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 22000);
   try {
     const r = await fetch(REGISTER_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ name, email }),
+      signal: ctrl.signal,
     });
     return r.ok;
   } catch { return false; }
+  finally { clearTimeout(timer); }
 }
 async function askPhantom(message) {
   if (!AI_ENDPOINT) return null;
@@ -177,6 +181,11 @@ function initConversation() {
     }
     const btn = downloadForm.querySelector("button[type='submit']");
     if (btn) btn.disabled = true;
+    if (downloadStatus) {
+      downloadStatus.hidden = false;
+      downloadStatus.className = "download-status";
+      downloadStatus.textContent = "Sending your PhantomForce download link...";
+    }
     registerForDemo(name, email).then((ok) => {
       if (!downloadStatus) return;
       downloadStatus.hidden = false;
