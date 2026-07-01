@@ -140,6 +140,9 @@ type Message = {
   id: string;
   role: "user" | "assistant";
   content: string;
+  missionId?: string;
+  missionTitle?: string;
+  producedAt?: string;
 };
 
 type AiProviderChoice = "phantom" | "openrouter_glm" | "codex" | "glm_5_2" | "claude_cli";
@@ -585,6 +588,9 @@ type MissionBundle = {
   aliases: string[];
   title: string;
   short: string;
+  deliverable: string;
+  proof: string;
+  nextAction: string;
   prompt: string;
   sample: string;
   route: Route;
@@ -610,6 +616,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/commands"],
     title: "Show mission menu",
     short: "List the admin command bundles.",
+    deliverable: "Mission menu",
+    proof: "Active workspace command catalog",
+    nextAction: "Choose the mission that matches the business outcome.",
     prompt: "Show Jordan the available PhantomAI mission bundles and explain when to use each one.",
     sample: "/help",
     route: "command",
@@ -622,6 +631,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/launch", "/client"],
     title: "Launch a client sprint",
     short: "Scope, price, plan, proof, and next action.",
+    deliverable: "Client sprint package",
+    proof: "Lead context, offer ladder, proof assets, and risk notes",
+    nextAction: "Review the package and decide whether it becomes Starter, Core, or Pro.",
     prompt:
       "Build a client sprint package. Return the target buyer, pain, package recommendation, deliverables, proof to show, first message, follow-up step, and risk notes.",
     sample: "/sprint for a sports trainer who needs booking, content, and follow-ups",
@@ -635,6 +647,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/reply", "/lead"],
     title: "Handle a lead",
     short: "Draft reply, booking path, and review card.",
+    deliverable: "Lead follow-up packet",
+    proof: "Inbox context, lead status, booking path, and approval queue",
+    nextAction: "Review the reply and approve, edit, or hold it.",
     prompt:
       "Handle the next lead. Identify the best reply, the booking path, the service angle, and the approval card needed before any external action.",
     sample: "/followup the warmest lead and prepare the next message",
@@ -648,6 +663,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/price", "/proposal"],
     title: "Build a quote",
     short: "Pick Starter, Core, or Pro and write the pitch.",
+    deliverable: "Quote recommendation",
+    proof: "Offer ladder, buyer need, pricing fit, and fallback option",
+    nextAction: "Pick the package and mark it ready for manual send.",
     prompt:
       "Create a quote recommendation. Choose $750 Starter, $1,500 Core, or $2,500 Pro, explain why, write a short pitch, and include a fallback option.",
     sample: "/quote for a small business owner who needs website cleanup and follow-up system",
@@ -661,6 +679,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/schedule", "/call"],
     title: "Book the call",
     short: "Agenda, time windows, prep, and approval gate.",
+    deliverable: "Booking plan",
+    proof: "Calendar context, suggested windows, agenda, and approval rules",
+    nextAction: "Choose a time window before any calendar action.",
     prompt:
       "Create a booking workflow. Return two safe time-window suggestions, a 15-minute agenda, what to ask, what to send afterward, and what needs approval.",
     sample: "/book a 15-minute setup call for the next interested prospect",
@@ -674,6 +695,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/website", "/page"],
     title: "Upgrade the site",
     short: "Copy, sections, preview plan, and scanner pass.",
+    deliverable: "Website improvement plan",
+    proof: "Current page context, copy goals, scanner checklist, and safe preview path",
+    nextAction: "Open Site Studio and approve the first page change.",
     prompt:
       "Plan a private website improvement. Return the page goal, copy changes, section order, proof needed, safe preview route, and scanner checklist before anything goes live.",
     sample: "/site make the homepage more direct and sales-ready",
@@ -687,6 +711,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/shop", "/checkout"],
     title: "Build a store page",
     short: "Offer, price, product copy, scanner check, and review card.",
+    deliverable: "Storefront plan",
+    proof: "Offer, price, product copy, checkout risk notes, and scanner checklist",
+    nextAction: "Review the store page before any payment link goes live.",
     prompt:
       "Build a storefront package. Return the offer, price, product copy, proof points, checkout risk notes, scanner checklist, and approval step before any payment link goes live.",
     sample: "/store build a checkout-ready page for the Core Sprint",
@@ -700,6 +727,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/video", "/content"],
     title: "Create a media asset",
     short: "Content angle, video brief, caption, and proof.",
+    deliverable: "Media asset brief",
+    proof: "Creative angle, shot list, proof source, and client-safe language",
+    nextAction: "Review the creative direction before generation or publishing.",
     prompt:
       "Build a media package. Return the creative angle, video concept, caption, shot list, proof source, client-safe language, and next approval step.",
     sample: "/video make a private sports business promo concept",
@@ -713,6 +743,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/audit", "/security"],
     title: "Inspect risk",
     short: "Scan copy, files, secrets, scripts, and launch risk.",
+    deliverable: "Risk summary",
+    proof: "Security scan targets, launch assumptions, blocked actions, and missing proof",
+    nextAction: "Fix the highest-risk item or mark it accepted.",
     prompt:
       "Run a risk review plan. Summarize what to inspect, what is safe, what is blocked, what proof is missing, and the next safest action. Do not expose secrets.",
     sample: "/scan the dashboard before I show it to someone",
@@ -726,6 +759,9 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/workforce", "/crew"],
     title: "Manage workforce",
     short: "Show who is working and what bundles are ready.",
+    deliverable: "Workforce command map",
+    proof: "Agent status, token/task telemetry, safe bundles, and blocked lanes",
+    nextAction: "Assign the next mission to the correct crew.",
     prompt:
       "Summarize the current PhantomForce workforce as business outcomes: who is working, what they are handling, what is blocked, and what Jordan should assign next.",
     sample: "/agents show what my workforce should do next",
@@ -779,6 +815,55 @@ function missionHelpText() {
     .filter((bundle) => bundle.id !== "help")
     .map((bundle) => `${bundle.command} - ${bundle.title}: ${bundle.short}`)
     .join("\n");
+}
+
+function titleCaseWords(value: string) {
+  return value
+    .split(/\s+/)
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function buildArtifactPreview(message: Message | undefined, bundle: MissionBundle | undefined, pendingApprovals: number) {
+  const body = message?.content.trim() || "";
+
+  return {
+    deliverable: bundle?.deliverable ?? "PhantomForce artifact",
+    proof: bundle?.proof ?? "Workspace context",
+    nextAction: bundle?.nextAction ?? "Choose a mission and describe the outcome.",
+    approval: pendingApprovals > 0 ? `${pendingApprovals} item(s) waiting in Review` : "No approval needed yet",
+    body,
+  };
+}
+
+function capabilityOutcomeLabel(binding: string) {
+  const labels: Record<string, string> = {
+    dashboard_chat_and_router: "Operator brain",
+    hermes_ledger_context_memory: "Memory and receipts",
+    codex_local_operator_lane: "Build and fix desk",
+    claude_cli_lane: "Second-opinion desk",
+    pangolin_access_state: "Access and security guard",
+    chicagoshots_pipeline: "Lead and proposal desk",
+    phantomcut_media_lab: "Media studio",
+    local_security_scanner: "Risk and safety check",
+    n8n_local_workflow_layer: "Automation runner",
+  };
+  return labels[binding] ?? titleCaseWords(binding.replace(/_/g, " "));
+}
+
+function workerActivityLabel(worker: AgentWorkerMetric) {
+  const hasActivity =
+    worker.tasks_last_1h > 0 ||
+    worker.tasks_last_24h > 0 ||
+    worker.tokens_last_24h > 0 ||
+    worker.estimated_cost_usd_last_24h > 0;
+
+  if (!hasActivity) return "Idle - ready";
+
+  return `${worker.tasks_last_1h} in 1h - ${worker.tasks_last_24h} in 24h - ${formatNumber(
+    worker.tokens_last_24h,
+  )} tokens`;
 }
 
 function missionBundleIcon(id: string) {
@@ -1652,7 +1737,7 @@ const initialSessions: AppSession[] = [
 // Bookings/Work screens; those views still render when an assistant opens its
 // full surface, they are just no longer separate nav destinations.
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
-  { id: "command", label: "Console", icon: <Command size={18} /> },
+  { id: "command", label: "Command", icon: <Command size={18} /> },
   { id: "approvals", label: "Review", icon: <ShieldCheck size={18} /> },
   { id: "access", label: "Access", icon: <KeyRound size={18} /> },
 ];
@@ -3398,7 +3483,7 @@ function App() {
     });
   }
 
-  function createFollowUpPlan() {
+  function createFollowUpPlan(sourceMission?: MissionBundle) {
     const targetEmail = emails.find((email) => email.status === "needs-reply") || emails[0];
     const emailApproval: Approval = {
       id: makeId("approval-email"),
@@ -3434,6 +3519,9 @@ function App() {
       {
         id: makeId("msg-assistant"),
         role: "assistant",
+        missionId: sourceMission?.id,
+        missionTitle: sourceMission?.title,
+        producedAt: new Date().toISOString(),
         content:
           "I found the best next action: reply to the priority lead and reserve a call window. I prepared an email draft and a booking card for your final click. No external action has been taken.",
       },
@@ -3623,8 +3711,18 @@ function App() {
   async function runPhantomCommand(rawText: string) {
     const text = rawText.trim();
     if (!text) return;
+    const mission = resolveMissionBundle(text);
     setCommandText("");
-    setMessages((current) => [...current, { id: makeId("msg-user"), role: "user", content: text }]);
+    setMessages((current) => [
+      ...current,
+      {
+        id: makeId("msg-user"),
+        role: "user",
+        content: text,
+        missionId: mission?.bundle.id,
+        missionTitle: mission?.bundle.title,
+      },
+    ]);
 
     if (!canManageAccess) {
       setMessages((current) => [
@@ -3640,8 +3738,6 @@ function App() {
       return;
     }
 
-    const mission = resolveMissionBundle(text);
-
     if (mission?.bundle.id === "help") {
       setMessages((current) => [
         ...current,
@@ -3656,12 +3752,12 @@ function App() {
     }
 
     if (mission?.bundle.id === "followup") {
-      createFollowUpPlan();
+      createFollowUpPlan(mission.bundle);
       return;
     }
 
     if (requestsExternalAction(text)) {
-      createFollowUpPlan();
+      createFollowUpPlan(mission?.bundle);
       return;
     }
 
@@ -3722,6 +3818,9 @@ function App() {
           {
             id: makeId("msg-assistant"),
             role: "assistant",
+            missionId: mission?.bundle.id,
+            missionTitle: mission?.bundle.title,
+            producedAt: new Date().toISOString(),
             content,
           },
         ]);
@@ -3742,6 +3841,9 @@ function App() {
           {
             id: makeId("msg-assistant"),
             role: "assistant",
+            missionId: mission?.bundle.id,
+            missionTitle: mission?.bundle.title,
+            producedAt: new Date().toISOString(),
             content:
               "Phantom AI could not reach the backend. I can still prepare local drafts, booking cards, quotes, and tasks from the dashboard.",
           },
@@ -4669,6 +4771,70 @@ function RadarScanner({
   );
 }
 
+// Anti-bloat: a small Bookings glance for the Console instead of jumping to a
+// full calendar. Shows the next appointment and a count; expands to the next
+// few and links to the full Bookings screen on tap.
+function BookingsGlance({
+  events,
+  setRoute,
+}: {
+  events: CalendarEvent[];
+  setRoute: (route: Route) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const next = events[0];
+  const confirmed = events.filter((event) => event.status === "confirmed").length;
+  const pending = events.length - confirmed;
+
+  return (
+    <section className="panel glance-panel">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">Bookings</span>
+          <h3>{next ? "Next up" : "Nothing booked yet"}</h3>
+        </div>
+        <span className="glance-count">{events.length}</span>
+      </div>
+      {next ? (
+        <button
+          type="button"
+          className="glance-lead"
+          onClick={() => setOpen((value) => !value)}
+          aria-expanded={open}
+          aria-label="Show upcoming bookings"
+        >
+          <CalendarDays size={16} />
+          <span className="glance-lead-text">
+            <strong>{next.title}</strong>
+            <small>{next.time}</small>
+          </span>
+          <span className={`glance-pill ${next.status}`}>{next.status}</span>
+        </button>
+      ) : (
+        <p className="radar-hint">When a call is booked, it shows up here.</p>
+      )}
+      {open && events.length > 1 ? (
+        <div className="glance-list">
+          {events.slice(1, 4).map((event) => (
+            <div className="glance-row" key={event.id}>
+              <span>{event.title}</span>
+              <b>{event.time}</b>
+            </div>
+          ))}
+        </div>
+      ) : null}
+      <div className="glance-foot">
+        <span>
+          {confirmed} confirmed · {pending} pending
+        </span>
+        <button className="ghost-small" type="button" onClick={() => setRoute("calendar")}>
+          Open bookings
+        </button>
+      </div>
+    </section>
+  );
+}
+
 function CommandCenter({
   messages,
   commandText,
@@ -4715,19 +4881,76 @@ function CommandCenter({
   const missionBundles = adminMissionBundles.filter((bundle) => bundle.id !== "help");
   const [activeAssistantId, setActiveAssistantId] = useState<string>(missionBundles[0]?.id ?? "site");
   const activeAssistant = missionBundles.find((bundle) => bundle.id === activeAssistantId) ?? missionBundles[0];
-  const lastAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant");
+  const lastMissionOutput = [...messages].reverse().find((message) => message.role === "assistant" && message.missionId);
+  const outputMissionBundle = missionBundles.find((bundle) => bundle.id === lastMissionOutput?.missionId);
+  const lastUserMessage = [...messages].reverse().find((message) => message.role === "user");
+  const artifactPreview = buildArtifactPreview(lastMissionOutput, outputMissionBundle, pendingApprovals.length);
+  const hotLead = emails.find((email) => email.status === "needs-reply") ?? emails[0];
+  const nextEvent = events[0];
+  const nowTiles = [
+    {
+      label: "Approvals",
+      value: String(stats.pending),
+      detail: stats.pending ? "Waiting for your call" : "Nothing blocked",
+      route: "approvals" as Route,
+      tone: stats.pending ? "warn" : "ok",
+    },
+    {
+      label: "Hot leads",
+      value: String(stats.urgent),
+      detail: hotLead ? hotLead.subject : "No lead selected",
+      route: "inbox" as Route,
+      tone: stats.urgent ? "danger" : "ok",
+    },
+    {
+      label: "Next booking",
+      value: nextEvent ? nextEvent.time : "None",
+      detail: nextEvent ? nextEvent.title : "Ask PhantomAI to plan one",
+      route: "calendar" as Route,
+      tone: nextEvent ? "info" : "muted",
+    },
+    {
+      label: "Due today",
+      value: String(stats.today),
+      detail: stats.today ? "Work waiting" : "Board is clear",
+      route: "tasks" as Route,
+      tone: stats.today ? "warn" : "ok",
+    },
+  ];
+  const missionState = phantomAiBusy
+    ? "Drafting"
+    : lastMissionOutput
+      ? pendingApprovals.length
+        ? "Ready for review"
+        : "Artifact ready"
+      : "No run yet";
+  const currentMissionLabel = phantomAiBusy
+    ? lastUserMessage?.content.trim() || activeAssistant?.sample || "Mission running"
+    : lastMissionOutput?.missionTitle ?? "No mission run yet";
+  const currentMissionBundle = phantomAiBusy ? activeAssistant : outputMissionBundle;
 
   if (!canManageAccess) {
-    return <ClientOperatorDemoDashboard />;
+    return <ClientOperatorDemoDashboard createFollowUpPlan={createFollowUpPlan} setRoute={setRoute} />;
   }
 
   return (
-    <div className="studio-layout">
+    <div className="studio-shell">
+      <section className="now-strip" aria-label="What needs attention now">
+        {nowTiles.map((tile) => (
+          <button className={`now-tile ${tile.tone}`} key={tile.label} type="button" onClick={() => setRoute(tile.route)}>
+            <span>{tile.label}</span>
+            <strong>{tile.value}</strong>
+            <small>{tile.detail}</small>
+          </button>
+        ))}
+      </section>
+
+      <div className="studio-layout">
       <aside className="studio-assistants" aria-label="Assistants">
         <div className="studio-rail-head">
-          <span className="eyebrow">Assistants</span>
-          <h3>Pick a task.</h3>
-          <p className="studio-rail-note">Choose one, then tell it what you need in plain words.</p>
+          <span className="eyebrow">Missions</span>
+          <h3>Point your workforce at an outcome.</h3>
+          <p className="studio-rail-note">Pick a mission, then say what you want. PhantomAI handles the how.</p>
         </div>
         <div className="studio-assistant-list">
           {missionBundles.map((bundle) => (
@@ -4753,14 +4976,35 @@ function CommandCenter({
       <section className="chat-card studio-chat">
         <div className="section-head">
           <div>
-            <span className="eyebrow">PhantomAI · {activeAssistant ? activeAssistant.title : "Console"}</span>
-            <h3>Just say what you want.</h3>
+            <span className="eyebrow">Mission control</span>
+            <h3>What outcome do you want?</h3>
           </div>
           <span className="safe-pill admin-operator-pill">
             <Command size={15} />
             Mode: {aiProviderLabel}
           </span>
         </div>
+          <section className={`mission-flight-panel ${phantomAiBusy ? "working" : ""}`} aria-label="Current mission state">
+            <div className="section-head compact">
+              <div>
+                <span className="eyebrow">Current mission</span>
+                <h4>{currentMissionLabel}</h4>
+              </div>
+              <span className="mission-flight-status">{missionState}</span>
+            </div>
+            <article className="mission-flight-card">
+              <span className="mission-flight-icon">
+                {currentMissionBundle ? missionBundleIcon(currentMissionBundle.id) : <Sparkles size={18} />}
+              </span>
+              <div>
+                <strong>{currentMissionBundle?.deliverable ?? "No artifact yet"}</strong>
+                <small>{currentMissionBundle?.short ?? "Pick a mission and run it to create the first artifact."}</small>
+              </div>
+              <p>{phantomAiBusy ? "PhantomAI is drafting the artifact now." : lastMissionOutput ? artifactPreview.nextAction : "Choose a mission on the left, then tell PhantomAI the outcome."}</p>
+            </article>
+          </section>
+          <details className="conversation-log">
+            <summary>Conversation log</summary>
           <div className="messages" aria-live="polite">
             {messages.map((message) => (
               <article className={`message ${message.role}`} key={message.id}>
@@ -4769,6 +5013,7 @@ function CommandCenter({
               </article>
             ))}
           </div>
+          </details>
           <form className="command-form" onSubmit={submitCommand}>
             {canManageAccess ? (
               <label aria-label="PhantomAI mode" className="llm-select lane-readout model-select">
@@ -4792,7 +5037,7 @@ function CommandCenter({
             <input
               value={commandText}
               onChange={(event) => setCommandText(event.target.value)}
-              placeholder={activeAssistant ? `Tell PhantomAI what you need for “${activeAssistant.title.toLowerCase()}”…` : "Tell PhantomAI what you need…"}
+              placeholder={activeAssistant ? `Tell PhantomAI the outcome for "${activeAssistant.title.toLowerCase()}"...` : "Tell PhantomAI the outcome..."}
               disabled={phantomAiBusy}
             />
             <button type="submit" title="Send command" disabled={phantomAiBusy}>
@@ -4815,20 +5060,23 @@ function CommandCenter({
           {activeAssistant ? (
             <>
               <p className="studio-preview-what">{activeAssistant.short}</p>
+              <span className="studio-team-label">Team on this:</span>
               <div className="studio-worker-chips">
                 {activeAssistant.crew.map((worker) => (
                   <span className="studio-worker-chip" key={worker}>
-                    {worker}
+                    {titleCaseWords(worker)}
                   </span>
                 ))}
               </div>
               <div className="studio-result">
-                <span className="eyebrow">Latest result</span>
-                {lastAssistantMessage ? (
-                  <p>{lastAssistantMessage.content}</p>
-                ) : (
-                  <p className="muted">Ask on the left and the artifact shows up here.</p>
-                )}
+                <span className="eyebrow">Artifact preview</span>
+                <div className={`artifact-proof-grid ${phantomAiBusy ? "loading" : ""}`}>
+                  <StatusLine label="Deliverable" value={artifactPreview.deliverable} />
+                  <StatusLine label="Proof used" value={artifactPreview.proof} />
+                  <StatusLine label="Next action" value={artifactPreview.nextAction} />
+                  <StatusLine label="Approval" value={artifactPreview.approval} />
+                </div>
+                {artifactPreview.body ? <p>{artifactPreview.body}</p> : <p className="muted">Ask on the left and the artifact shows up here.</p>}
               </div>
               {activeAssistant.route && activeAssistant.route !== "command" ? (
                 <button
@@ -4845,6 +5093,8 @@ function CommandCenter({
         </section>
 
         <RadarScanner setRoute={setRoute} sessionHeaders={sessionHeaders} />
+
+        <BookingsGlance events={events} setRoute={setRoute} />
 
         <section className="panel">
           <div className="section-head compact">
@@ -4872,6 +5122,7 @@ function CommandCenter({
           )}
         </section>
       </aside>
+      </div>
     </div>
   );
 }
@@ -4917,31 +5168,74 @@ const privateInfrastructureList = [
   "Admin debug/status panels",
 ];
 
-function ClientOperatorDemoDashboard() {
+function ClientOperatorDemoDashboard({
+  createFollowUpPlan,
+  setRoute,
+}: {
+  createFollowUpPlan: () => void;
+  setRoute: (route: Route) => void;
+}) {
+  const clientActions = [
+    {
+      title: "Draft follow-up",
+      detail: "Create a review-ready reply for the next client touch.",
+      action: createFollowUpPlan,
+      icon: <Mail size={18} />,
+    },
+    {
+      title: "Request quote",
+      detail: "Open the package builder and turn the need into scope.",
+      action: () => setRoute("offers"),
+      icon: <FileText size={18} />,
+    },
+    {
+      title: "Plan booking",
+      detail: "Stage a call plan without touching a real calendar.",
+      action: () => setRoute("calendar"),
+      icon: <CalendarDays size={18} />,
+    },
+    {
+      title: "Review proof",
+      detail: "See what is waiting before anything goes live.",
+      action: () => setRoute("approvals"),
+      icon: <ShieldCheck size={18} />,
+    },
+  ];
+
   return (
     <div className="client-operator-demo" data-testid="client-operator-demo">
       <section className="client-demo-hero">
         <div>
-          <span className="eyebrow">Operator demo</span>
-          <h2>See the system. Do not touch the engine.</h2>
+          <span className="eyebrow">Client command center</span>
+          <h2>Your AI operations team, ready.</h2>
           <p>
-            This is the customer-safe PhantomForce preview: the business outcome is visible, but Jordan's private
-            infrastructure, local tools, agent stack, and security controls stay behind the wall.
+            Clients see outcomes they can use: follow-ups, quotes, bookings, proof, and next steps. Private operator
+            controls stay hidden unless Jordan grants admin access.
           </p>
         </div>
         <div className="client-demo-lock">
-          <Lock size={20} />
-          <strong>Demo mode</strong>
-          <span>No commands, no sends, no infrastructure access</span>
+          <ShieldCheck size={20} />
+          <strong>Approval-protected</strong>
+          <span>Nothing sends, books, bills, or posts without an owner review.</span>
         </div>
       </section>
 
       <section className="client-demo-status-strip" aria-label="Client demo safety status">
-        <span>Preview only</span>
-        <span>No operator endpoint</span>
-        <span>No backend model call</span>
-        <span>No background execution</span>
-        <span>No private logs</span>
+        <span>Action-ready workspace</span>
+        <span>Owner approval required</span>
+        <span>Private tools hidden</span>
+        <span>Client-safe proof</span>
+      </section>
+
+      <section className="client-action-grid" aria-label="Client actions">
+        {clientActions.map((action) => (
+          <button className="client-action-card" key={action.title} type="button" onClick={action.action}>
+            <span>{action.icon}</span>
+            <strong>{action.title}</strong>
+            <small>{action.detail}</small>
+            <ArrowRight size={16} />
+          </button>
+        ))}
       </section>
 
       <section className="client-demo-flow" aria-label="Demo operator flow">
@@ -4988,27 +5282,27 @@ function ClientOperatorDemoDashboard() {
           <article>
             <Mail size={17} />
             <strong>Follow-up draft</strong>
-            <p>Prepared for review. Owner approves before anything leaves.</p>
+            <p>Ready to review, edit, and approve.</p>
           </article>
           <article>
             <CalendarDays size={17} />
             <strong>Booking plan</strong>
-            <p>Agenda and windows staged. No calendar mutation from demo.</p>
+            <p>Call windows and agenda staged before calendar action.</p>
           </article>
           <article>
             <BarChart3 size={17} />
             <strong>Quote lane</strong>
-            <p>Package guidance appears here without payment or invoice actions.</p>
+            <p>Starter, Core, or Pro guidance with human sign-off.</p>
           </article>
           <article>
             <Play size={17} />
             <strong>Media workflow</strong>
-            <p>Creative direction can be previewed; generation tools stay private.</p>
+            <p>Creative plan and proof stay visible without exposing engines.</p>
           </article>
         </div>
-        <button className="primary-action locked-demo-button" type="button" disabled>
-          <Lock size={17} />
-          Operator actions locked in demo
+        <button className="primary-action locked-demo-button" type="button" onClick={createFollowUpPlan}>
+          <Sparkles size={17} />
+          Prepare first client artifact
         </button>
       </section>
     </div>
@@ -6635,15 +6929,25 @@ function AgentControlCenter({
             <strong>{worker.role}</strong>
             <p>{worker.focus}</p>
             <div className="agent-worker-metrics">
-              <span><b>{worker.tasks_last_1h}</b> 1h</span>
-              <span><b>{worker.tasks_last_24h}</b> 24h</span>
-              <span><b>{formatNumber(worker.tokens_last_24h)}</b> tokens</span>
+              {worker.tasks_last_1h === 0 && worker.tasks_last_24h === 0 ? (
+                <span className="agent-idle-readout">{workerActivityLabel(worker)}</span>
+              ) : (
+                <>
+                  <span><b>{worker.tasks_last_1h}</b> 1h</span>
+                  <span><b>{worker.tasks_last_24h}</b> 24h</span>
+                  <span><b>{formatNumber(worker.tokens_last_24h)}</b> tokens</span>
+                </>
+              )}
             </div>
             <div className="agent-output-chip">
               {worker.id === "gatekeeper"
-                ? `Pangolin: ${pangolinStatus?.status ?? "unconfigured"}`
-                : worker.tool_binding.replace(/_/g, " ")}
+                ? `Access and security guard: ${pangolinStatus?.status ?? "checking"}`
+                : capabilityOutcomeLabel(worker.tool_binding)}
             </div>
+            <details className="agent-under-hood">
+              <summary>Admin details</summary>
+              <code>{worker.tool_binding}</code>
+            </details>
             <div className="agent-worker-footer">
               <span>{worker.data_source}</span>
               <span>{formatLastRun(worker.last_run_at)}</span>
