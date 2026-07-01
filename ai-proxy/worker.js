@@ -1,7 +1,7 @@
 /* PhantomForce — public AI proxy (Cloudflare Worker).
  *
- * Lets the public site use GLM 5.2 (via OpenRouter) WITHOUT ever exposing the
- * API key in the browser. The key lives only as a Worker secret.
+ * Lets the public site use Claude WITHOUT ever exposing the API key in the
+ * browser. The key lives only as a Worker secret.
  *
  * Strict limits (abuse + cost protection):
  *   - 5 prompts per visitor (by IP) per day
@@ -9,14 +9,15 @@
  *   - max_tokens 160 per reply  (tiny per-call cost)
  *   - business-only system prompt, <=2 sentences, no personal data
  *
- * Deploy: see README.md. The key is set with `wrangler secret put OPENROUTER_API_KEY`
- * and is NEVER committed or returned to the client.
+ * Deploy: see README.md. For OpenRouter, set `OPENROUTER_API_KEY`. For native
+ * Anthropic, set `ANTHROPIC_API_KEY` and optionally `PF_PROVIDER=anthropic`.
+ * Keys are NEVER committed or returned to the client.
  */
 
-const MODEL = "z-ai/glm-5.2";
 const PER_USER_DAILY = 5;
 const GLOBAL_DAILY_CAP = 800;
 const MAX_TOKENS = 160;
+const ANTHROPIC_VERSION = "2023-06-01";
 const ALLOWED_ORIGINS = [
   "https://phantomforce.online",
   "https://www.phantomforce.online",
@@ -49,14 +50,76 @@ function ttlToEndOfDay() {
   const end = new Date(now); end.setUTCHours(23, 59, 59, 999);
   return Math.max(60, Math.floor((end.getTime() - now) / 1000));
 }
+function pickProvider(env) {
+  const requested = String(env.PF_PROVIDER || (env.ANTHROPIC_API_KEY ? "anthropic" : "openrouter")).toLowerCase();
+  return ["anthropic", "openrouter"].includes(requested) ? requested : "openrouter";
+}
+function pickModel(env, provider) {
+  if (env.PF_MODEL) return env.PF_MODEL;
+  return provider === "anthropic" ? "claude-sonnet-5" : "~anthropic/claude-sonnet-latest";
+}
+async function askClaude(message, env, model) {
+  const upstream = await fetch("https://api.anthropic.com/v1/messages", {
+    method: "POST",
+    headers: {
+      "x-api-key": env.ANTHROPIC_API_KEY || env.CLAUDE_API_KEY,
+      "anthropic-version": env.ANTHROPIC_VERSION || ANTHROPIC_VERSION,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: MAX_TOKENS,
+      system: SYSTEM_PROMPT,
+      messages: [{ role: "user", content: message }],
+    }),
+  });
+  if (!upstream.ok) return "";
+  const data = await upstream.json();
+  return ((data && data.content) || [])
+    .filter((block) => block && block.type === "text" && block.text)
+    .map((block) => block.text)
+    .join("\n")
+    .trim();
+}
+async function askOpenRouter(message, env, model) {
+  const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
+      "Content-Type": "application/json",
+      "HTTP-Referer": "https://phantomforce.online",
+      "X-Title": "PhantomForce",
+    },
+    body: JSON.stringify({
+      model,
+      max_tokens: MAX_TOKENS,
+      temperature: 0.6,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: message },
+      ],
+    }),
+  });
+  if (!upstream.ok) return "";
+  const data = await upstream.json();
+  return (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || "").trim();
+}
 
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin") || "";
     const headers = cors(origin);
+    const provider = pickProvider(env);
+    const model = pickModel(env, provider);
+    const configured = provider === "anthropic"
+      ? !!(env.ANTHROPIC_API_KEY || env.CLAUDE_API_KEY)
+      : !!env.OPENROUTER_API_KEY;
     if (request.method === "OPTIONS") return new Response(null, { headers });
+    if (request.method === "GET" && new URL(request.url).pathname === "/health") {
+      return json({ ok: true, configured, provider, model }, 200, headers);
+    }
     if (request.method !== "POST") return json({ error: "method" }, 405, headers);
-    if (!env.OPENROUTER_API_KEY) return json({ error: "unconfigured" }, 200, headers);
+    if (!configured) return json({ error: "unconfigured" }, 200, headers);
 
     const ip = request.headers.get("CF-Connecting-IP") || "anon";
     const day = new Date().toISOString().slice(0, 10);
@@ -79,27 +142,9 @@ export default {
 
     let reply = "";
     try {
-      const upstream = await fetch("https://openrouter.ai/api/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${env.OPENROUTER_API_KEY}`,
-          "Content-Type": "application/json",
-          "HTTP-Referer": "https://phantomforce.online",
-          "X-Title": "PhantomForce",
-        },
-        body: JSON.stringify({
-          model: MODEL,
-          max_tokens: MAX_TOKENS,
-          temperature: 0.6,
-          messages: [
-            { role: "system", content: SYSTEM_PROMPT },
-            { role: "user", content: message },
-          ],
-        }),
-      });
-      if (!upstream.ok) return json({ error: "upstream" }, 200, headers);
-      const data = await upstream.json();
-      reply = (data && data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content || "").trim();
+      reply = provider === "anthropic"
+        ? await askClaude(message, env, model)
+        : await askOpenRouter(message, env, model);
     } catch {
       return json({ error: "upstream" }, 200, headers);
     }

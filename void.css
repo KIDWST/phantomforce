@@ -153,3 +153,28 @@ button, input { font: inherit; color: inherit; }
   .void-fallback, .wordmark, .orbits button, .speak-caret, .say-line, .risk-dot, .riskfield::before { animation: none !important; }
   .void-canvas { display: none; }
 }
+
+/* Email-gated demo: the enlist form reuses the .speak pill; add the submit
+   button + the confirmation line. Matches the neon-green summon aesthetic. */
+.enlist { width: min(560px, 92vw); }
+.enlist input[type="email"] { flex: 1; background: none; border: 0; outline: none; font-size: 16px; color: inherit; }
+.enlist input[type="email"]::placeholder { color: var(--dim); }
+.enlist-go {
+  display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  padding: 9px 16px; border: 0; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(120deg, var(--neon), #15d97f); color: #02140b;
+  font: 600 11px "DM Mono", monospace; letter-spacing: 0.07em; text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(65, 255, 161, 0.4);
+  transition: transform 0.2s, box-shadow 0.3s, opacity 0.2s;
+}
+.enlist-go:hover { box-shadow: 0 0 40px rgba(65, 255, 161, 0.72); }
+.enlist-go span { transition: transform 0.2s; }
+.enlist-go:hover span { transform: translateX(3px); }
+.enlist-go:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
+.enlist-done {
+  margin: 12px 0 0; max-width: min(560px, 92vw); text-align: center;
+  font: 400 12px "DM Mono", monospace; letter-spacing: 0.04em; line-height: 1.5;
+  animation: emerge 0.6s ease both;
+}
+.enlist-done.ok { color: var(--neon); text-shadow: 0 0 14px rgba(65, 255, 161, 0.4); }
+.enlist-done.err { color: #ff9a9a; }

@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="void.css?v=21" />
+    <link rel="stylesheet" href="void.css?v=22" />
   </head>
   <body>
     <canvas class="void-canvas" data-void aria-hidden="true"></canvas>
@@ -43,9 +43,14 @@
         <span class="speak-caret" aria-hidden="true">›</span>
         <input type="text" data-speak-input autocomplete="off" spellcheck="false" placeholder="ask phantomforce…" aria-label="Speak to PhantomForce" />
       </form>
-      <a class="summon" hidden data-summon href="https://app.phantomforce.online">download phantomforce <span>→</span></a>
+      <form class="speak enlist" hidden data-enlist>
+        <span class="speak-caret" aria-hidden="true">✉</span>
+        <input type="email" data-enlist-email required autocomplete="email" spellcheck="false" placeholder="your email for the demo…" aria-label="Your email to get the PhantomForce demo" />
+        <button type="submit" class="enlist-go">get the demo <span>→</span></button>
+      </form>
+      <p class="enlist-done" hidden data-enlist-done aria-live="polite"></p>
     </main>
     <p class="hint" data-hint hidden></p>
-    <script type="module" src="void.js?v=21"></script>
+    <script type="module" src="void.js?v=22"></script>
   </body>
 </html>

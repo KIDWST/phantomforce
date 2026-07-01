@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PhantomForce Demo</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #020607;
+        --panel: rgba(6, 22, 16, 0.9);
+        --line: rgba(78, 255, 163, 0.26);
+        --text: #dff7eb;
+        --dim: #83a894;
+        --neon: #39ff8b;
+        --warn: #ffd166;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background:
+          radial-gradient(circle at 20% 20%, rgba(57, 255, 139, 0.16), transparent 30%),
+          radial-gradient(circle at 80% 0%, rgba(40, 178, 255, 0.12), transparent 34%),
+          var(--bg);
+        color: var(--text);
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+      main {
+        width: min(960px, calc(100% - 32px));
+        margin: 0 auto;
+        padding: 48px 0;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        gap: 24px;
+        align-items: flex-start;
+        border-bottom: 1px solid var(--line);
+        padding-bottom: 28px;
+      }
+      h1, h2, p { margin: 0; }
+      h1 {
+        font-size: clamp(34px, 7vw, 78px);
+        line-height: 0.9;
+        letter-spacing: 0;
+      }
+      .tag {
+        color: var(--neon);
+        font: 700 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        letter-spacing: 0.22em;
+        text-transform: uppercase;
+        margin-bottom: 12px;
+      }
+      .status {
+        min-width: 180px;
+        border: 1px solid var(--line);
+        background: rgba(4, 14, 10, 0.72);
+        padding: 14px;
+      }
+      .status strong {
+        display: block;
+        color: var(--neon);
+        font-size: 20px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 18px;
+        margin-top: 26px;
+      }
+      section {
+        border: 1px solid var(--line);
+        background: var(--panel);
+        padding: 20px;
+      }
+      h2 {
+        font-size: 16px;
+        color: var(--neon);
+        margin-bottom: 14px;
+      }
+      textarea {
+        width: 100%;
+        min-height: 150px;
+        resize: vertical;
+        border: 1px solid var(--line);
+        background: rgba(0, 0, 0, 0.34);
+        color: var(--text);
+        padding: 14px;
+        font: 14px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      }
+      button {
+        margin-top: 12px;
+        border: 0;
+        background: var(--neon);
+        color: #02140b;
+        padding: 12px 18px;
+        font-weight: 800;
+        cursor: pointer;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .output {
+        display: grid;
+        gap: 12px;
+      }
+      .card {
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        background: rgba(0, 0, 0, 0.2);
+        padding: 14px;
+      }
+      .card b {
+        display: block;
+        color: var(--dim);
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        margin-bottom: 8px;
+      }
+      .priority { color: var(--warn); }
+      .cta {
+        margin-top: 18px;
+        color: var(--dim);
+        line-height: 1.6;
+      }
+      .cta a { color: var(--neon); }
+      @media (max-width: 760px) {
+        header, .grid { grid-template-columns: 1fr; display: grid; }
+        .status { min-width: 0; }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <header>
+        <div>
+          <p class="tag">PhantomForce local demo</p>
+          <h1>Business signals, cleaned up fast.</h1>
+        </div>
+        <div class="status">
+          <span>Demo mode</span>
+          <strong>Owner approval first</strong>
+        </div>
+      </header>
+
+      <div class="grid">
+        <section>
+          <h2>Paste a lead, customer email, or messy note</h2>
+          <textarea id="input">A customer says they need pricing today, but also mentioned their old vendor missed three deadlines and they are worried about getting burned again.</textarea>
+          <button id="run">Run PhantomForce</button>
+          <p class="cta">
+            Full app: <a href="https://app.phantomforce.online">https://app.phantomforce.online</a>
+          </p>
+        </section>
+
+        <section class="output" aria-live="polite">
+          <div class="card">
+            <b>Priority</b>
+            <span id="priority" class="priority">High intent, trust-sensitive</span>
+          </div>
+          <div class="card">
+            <b>Risk</b>
+            <span id="risk">They are comparing reliability, not just price. Do not overpromise.</span>
+          </div>
+          <div class="card">
+            <b>Draft response</b>
+            <span id="response">I can send pricing today. I will also include the timeline, owner checkpoints, and what happens if anything slips so you know exactly how we protect the project.</span>
+          </div>
+          <div class="card">
+            <b>Next action</b>
+            <span id="next">Send proposal, then follow up in 24 hours with one proof point and one clear next step.</span>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script>
+      const input = document.getElementById("input");
+      const priority = document.getElementById("priority");
+      const risk = document.getElementById("risk");
+      const response = document.getElementById("response");
+      const next = document.getElementById("next");
+
+      document.getElementById("run").addEventListener("click", () => {
+        const text = input.value.toLowerCase();
+        const urgent = /today|urgent|asap|deadline|now/.test(text);
+        const trust = /worried|burned|missed|scam|risk|trust|safe/.test(text);
+        const price = /price|pricing|quote|cost|budget/.test(text);
+
+        priority.textContent = urgent || price ? "High intent, respond today" : "Medium intent, needs nurture";
+        risk.textContent = trust
+          ? "Trust is the buying trigger. Lead with proof, checkpoints, and owner visibility."
+          : "Keep the reply concise and move them toward a concrete next step.";
+        response.textContent = price
+          ? "I can send pricing today. I will include scope, timing, approval checkpoints, and the next step so you can compare clearly."
+          : "Thanks for the details. I can help with this and will keep the plan simple: confirm the goal, show the path, and give you a clear next step.";
+        next.textContent = urgent
+          ? "Reply now, create a follow-up reminder for tomorrow, and attach one proof point."
+          : "Send the reply, tag the lead, and follow up with a short proof point within 48 hours.";
+      });
+    </script>
+  </body>
+</html>

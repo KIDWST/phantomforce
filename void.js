@@ -10,9 +10,25 @@ const flare = () => { pulse.v = 1; };
    the local responder to live Claude (server-side key, 5-prompt daily cap +
    token limit enforced in the proxy). Empty = local responder. */
 const AI_ENDPOINT = "";
-// Download/open the PhantomForce dashboard. Behind Pangolin: sign up / log in
-// there, then land in the (currently free) paywalled app.
-const APP_URL = "https://app.phantomforce.online";
+// Email-gated demo: the visitor leaves their email and gets an automated email
+// with the PhantomForce demo download. Submits to the backend /register route.
+// On localhost it targets the local proxy so you can test end-to-end; in
+// production it targets the Pangolin-exposed proxy.
+const REGISTER_ENDPOINT =
+  (location.hostname === "127.0.0.1" || location.hostname === "localhost")
+    ? "http://127.0.0.1:8788/register"
+    : "https://ai.phantomforce.online/register";
+async function registerForDemo(email) {
+  if (!REGISTER_ENDPOINT) return true; // no endpoint -> optimistic local preview
+  try {
+    const r = await fetch(REGISTER_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
 async function askPhantom(message) {
   if (!AI_ENDPOINT) return null;
   const ctrl = new AbortController();
@@ -68,7 +84,8 @@ function initConversation() {
   const orbits = document.querySelector("[data-orbits]");
   const form = document.querySelector("[data-speak]");
   const input = document.querySelector("[data-speak-input]");
-  const summon = document.querySelector("[data-summon]");
+  const enlist = document.querySelector("[data-enlist]");
+  const enlistDone = document.querySelector("[data-enlist-done]");
   const hint = document.querySelector("[data-hint]");
   if (!say || !orbits) return;
 
@@ -104,12 +121,38 @@ function initConversation() {
   };
   const think = (then) => { speak("· · ·", "thinking"); flare(); window.setTimeout(then, reduceMotion ? 220 : 760); };
 
+  const showEnlist = () => { if (enlist) enlist.hidden = false; };
   const finish = () => {
     setOrbits([]);
-    if (!summon) return;
-    summon.href = APP_URL;
-    summon.hidden = false;
+    showEnlist();
   };
+
+  // Email → automated demo. Submits to REGISTER_ENDPOINT (or previews success
+  // locally when that's empty). No Pangolin, no download-then-figure-it-out.
+  enlist?.addEventListener("submit", (e) => {
+    e.preventDefault();
+    const emailEl = enlist.querySelector("[data-enlist-email]");
+    const email = (emailEl?.value || "").trim();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      if (enlistDone) {
+        enlistDone.hidden = false;
+        enlistDone.className = "enlist-done err";
+        enlistDone.textContent = "Enter a valid email so I can send your demo.";
+      }
+      return;
+    }
+    const btn = enlist.querySelector("button");
+    if (btn) btn.disabled = true;
+    registerForDemo(email).then((ok) => {
+      enlist.hidden = true;
+      if (!enlistDone) return;
+      enlistDone.hidden = false;
+      enlistDone.className = `enlist-done ${ok ? "ok" : "err"}`;
+      enlistDone.textContent = ok
+        ? "Check your email — your PhantomForce demo is on its way."
+        : "Couldn't reach me just now. Try again in a moment.";
+    });
+  });
 
   // beat content
   const businessReply = (t) => {
@@ -181,16 +224,16 @@ function initConversation() {
       askPhantom(v).then((ai) => {
         // live brain enforces its own per-day cap
         if (ai && ai.limited) {
-          speak(ai.message || "That's your free questions for now — download PhantomForce to go deeper.");
-          if (summon) summon.hidden = false;
+          speak(ai.message || "That's your free questions for now — drop your email and I'll send your private demo.");
+          showEnlist();
           return;
         }
         if (ai && ai.reply) { window.setTimeout(() => speak(ai.reply), reduceMotion ? 120 : 540); return; }
         // free local responder: reactive, then capped to pull them in
         window.setTimeout(() => {
           if (typed > FREE_LIMIT) {
-            speak("That's a taste of what I do. The full version runs 24/7, privately, for your whole business — download PhantomForce and create your account.");
-            if (summon) summon.hidden = false;
+            speak("That's a taste of what I do. The full version runs 24/7, privately, for your whole business — leave your email and I'll send your demo.");
+            showEnlist();
           } else {
             speak(localReply(v));
           }
@@ -390,7 +433,7 @@ function initRiskRadar() {
   const active = [];
   const overlaps = (a, b, pad) =>
     a.left - pad < b.right && a.right + pad > b.left && a.top - pad < b.bottom && a.bottom + pad > b.top;
-  const uiSel = "[data-wordmark], [data-say], [data-orbits], [data-speak], [data-summon]";
+  const uiSel = "[data-wordmark], [data-say], [data-orbits], [data-speak], [data-enlist], [data-enlist-done]";
   const place = (ping) => {
     const W = innerWidth, H = innerHeight;
     const obstacles = active.map((e) => e.getBoundingClientRect())

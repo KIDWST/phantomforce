@@ -1,7 +1,12 @@
 # PhantomForce public AI proxy
 
-Lets `phantomforce.online` use **GLM 5.2 via OpenRouter** without ever putting
-the API key in the browser. The key lives only in the proxy's environment.
+Lets `phantomforce.online` use **Claude** without ever putting the API key in
+the browser. The key lives only in the proxy's environment.
+
+Default live path: **Claude via OpenRouter** using
+`~anthropic/claude-sonnet-latest`. If you add `ANTHROPIC_API_KEY` and set
+`PF_PROVIDER=anthropic`, the same proxy can call Anthropic's native Messages API
+with `claude-sonnet-5`.
 
 Two builds — use the one that matches your setup:
 - **`server.mjs`** — self-hosted Node server, for **Pangolin** (recommended for you).
@@ -18,13 +23,21 @@ Two builds — use the one that matches your setup:
 On your always-on box (the one running PhantomForce / behind Pangolin):
 
 ```bash
-# 1. set your key in the environment (never in code)
-export OPENROUTER_API_KEY="your-openrouter-key"        # or put it in your service's env
+# 1. set your key in the environment (never in code). Existing setup uses OpenRouter.
+export OPENROUTER_API_KEY="your-openrouter-key"
+export PF_PROVIDER="openrouter"
+export PF_MODEL="~anthropic/claude-sonnet-latest"
+
+# Native Anthropic alternative:
+# export ANTHROPIC_API_KEY="your-anthropic-key"
+# export PF_PROVIDER="anthropic"
+# export PF_MODEL="claude-sonnet-5"
 
 # 2. run the proxy (Node 18+). Keep it alive with pm2/systemd for 24/7.
 node ai-proxy/server.mjs
 #   -> listening on http://127.0.0.1:8788
-#   test: curl http://127.0.0.1:8788/health   -> {"ok":true,"configured":true}
+#   test: curl http://127.0.0.1:8788/health
+#   -> {"ok":true,"configured":true,"provider":"openrouter","model":"~anthropic/claude-sonnet-latest"}
 
 # 3. in Pangolin: add a resource/route exposing a public hostname
 #    e.g.  https://ai.phantomforce.online   ->   127.0.0.1:8788
@@ -32,18 +45,19 @@ node ai-proxy/server.mjs
 
 That's it on your side. **Send me the public URL** (e.g. `https://ai.phantomforce.online`)
 and say **"wire it"** — I set `AI_ENDPOINT` in `void.js`, redeploy the site, and the
-homepage phantom goes live on GLM 5.2.
+homepage phantom goes live on Claude.
 
 Keep it alive 24/7 (recommended `pm2`):
 ```bash
 npm i -g pm2
-OPENROUTER_API_KEY="your-openrouter-key" pm2 start ai-proxy/server.mjs --name phantomforce-ai
+OPENROUTER_API_KEY="your-openrouter-key" PF_PROVIDER="openrouter" PF_MODEL="~anthropic/claude-sonnet-latest" pm2 start ai-proxy/server.mjs --name phantomforce-ai
 pm2 save
 ```
 
 ## Notes
-- The key is read from `OPENROUTER_API_KEY` in the environment — never committed,
-  never sent to the browser, never seen by anyone but your server + OpenRouter.
+- The active key is read from `OPENROUTER_API_KEY`, `ANTHROPIC_API_KEY`, or
+  `CLAUDE_API_KEY` in the environment — never committed, never sent to the
+  browser, never seen by anyone but your server + the selected provider.
 - CORS is locked to the PhantomForce origins (`PF_ALLOWED_ORIGINS` to change).
 - Real client IP for the per-user limit comes from `X-Forwarded-For` (Pangolin sets it).
 - Until `AI_ENDPOINT` is set in `void.js`, the site uses the built-in local

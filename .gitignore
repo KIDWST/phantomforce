@@ -1,0 +1,14 @@
+# Secrets & local data — NEVER commit these
+ai-proxy/.env
+.env
+.env.local
+.env.*.local
+
+# Signup data (contains visitor emails — PII)
+ai-proxy/signups.json
+
+# Local handoff / operator notes
+CODEX_HANDOFF.md
+
+# Node
+node_modules/
