@@ -1,9 +1,10 @@
 /*
- * test-paywall.ts — proves the dashboard subscription gate.
+ * test-paywall.ts — proves the server-side dashboard entitlement gate.
  *
- * Free launch (default): every signed-in account is entitled, the paywall is
- * "open", anonymous callers are refused. Paid mode: members are blocked until a
- * subscription exists, operator/owner always gets in. Pure unit test, no server.
+ * Free plan = VIEW ONLY: signed-in members can view but every write is refused.
+ * Owner and active subscribers may write. Anonymous callers fail closed. An
+ * optional PHANTOM_FREE_WRITE promo can open writes to everyone. No server, no
+ * network — pure unit test of the gate logic.
  *
  * Run: npx tsx scripts/test-paywall.ts
  */
@@ -12,44 +13,50 @@ function assert(condition: unknown, message: string): asserts condition {
   if (!condition) throw new Error(`ASSERTION FAILED: ${message}`);
 }
 
-const { getPaywallState, isEntitled } = await import("../src/access/paywall.js");
+const { getPaywallDecision, canWrite, isEntitled } = await import("../src/access/paywall.js");
 
 const member = { id: "gateway:member@acme.com" };
 const owner = { id: "owner-admin", canManageAccess: true };
+const subscriber = { id: "gateway:pro@acme.com", subscriptionActive: true };
 
-// ---- default: FREE launch ----
-delete process.env.PHANTOM_PAYWALL_MODE;
-const free = getPaywallState(member);
-assert(free.mode === "free", "defaults to free mode");
-assert(free.open === true, "paywall is open during free launch");
-assert(free.entitled === true, "signed-in member is entitled while free");
-assert(free.tier === "free", "member tier is free");
+delete process.env.PHANTOM_FREE_WRITE;
 
-assert(getPaywallState(null).entitled === false, "anonymous caller is not entitled (fail closed)");
-assert(getPaywallState(null).open === true, "paywall still reports open in free mode even for anon");
-assert(getPaywallState(owner).entitled === true, "owner is entitled in free mode");
+// ---- anonymous: fail closed ----
+assert(getPaywallDecision(null).entitled === false, "anon not entitled");
+assert(getPaywallDecision(null).canView === false, "anon cannot view");
+assert(getPaywallDecision(null).canWrite === false, "anon cannot write");
+assert(getPaywallDecision({ id: "" }).entitled === false, "empty id fails closed");
 
-// ---- flip to PAID enforcement ----
-process.env.PHANTOM_PAYWALL_MODE = "paid";
-const paidMember = getPaywallState(member);
-assert(paidMember.mode === "paid", "paid mode reported");
-assert(paidMember.open === false, "paywall is closed in paid mode");
-assert(paidMember.entitled === false, "member without a subscription is blocked in paid mode");
+// ---- free member: view only ----
+const free = getPaywallDecision(member);
+assert(free.entitled === true, "signed-in member is entitled (can enter)");
+assert(free.canView === true, "free member can view");
+assert(free.canWrite === false, "free member CANNOT write (view only)");
+assert(free.tier === "free", "free member is free tier");
+assert(canWrite(member) === false, "canWrite() false for free member");
 
-assert(getPaywallState(owner).entitled === true, "owner still gets in under paid mode");
-assert(getPaywallState({ id: "sub", subscriptionActive: true }).entitled === true, "active subscriber is entitled");
-assert(isEntitled(null) === false, "anonymous caller blocked in paid mode");
+// ---- owner + subscriber: full access ----
+assert(canWrite(owner) === true, "owner can write");
+assert(getPaywallDecision(owner).tier === "pro", "owner is pro tier");
+assert(canWrite(subscriber) === true, "active subscriber can write");
+assert(getPaywallDecision(subscriber).tier === "pro", "subscriber is pro tier");
 
-// restore default so nothing leaks
-delete process.env.PHANTOM_PAYWALL_MODE;
+// ---- optional free-write promo opens writes to all signed-in ----
+process.env.PHANTOM_FREE_WRITE = "true";
+assert(canWrite(member) === true, "promo grants write to a free member");
+assert(isEntitled(null) === false, "promo still fails closed for anon");
+delete process.env.PHANTOM_FREE_WRITE;
+assert(canWrite(member) === false, "write closes again once promo is off");
 
 console.log(
   JSON.stringify(
     {
       ok: true,
-      freeLaunch: { mode: free.mode, open: free.open, memberEntitled: free.entitled },
-      paidMode: { open: paidMember.open, memberBlocked: !paidMember.entitled, ownerEntitled: true, subscriberEntitled: true },
-      anonymousFailClosed: true,
+      freeMember: { entitled: free.entitled, canView: free.canView, canWrite: free.canWrite, tier: free.tier },
+      ownerCanWrite: true,
+      subscriberCanWrite: true,
+      anonFailClosed: true,
+      promoTogglesWrite: true,
     },
     null,
     2,

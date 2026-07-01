@@ -1,93 +1,93 @@
 /*
- * paywall.ts — the subscription gate for the PhantomForce dashboard.
+ * paywall.ts — the subscription/entitlement gate for the PhantomForce dashboard.
  *
- * Funnel: public site "Download PhantomForce" -> Pangolin gateway (sign up /
- * log in with a built-in account) -> the dashboard -> THIS paywall.
+ * Funnel (user-facing wording never mentions the gateway/Pangolin — that is our
+ * plumbing): public site "Download PhantomForce" -> dashboard "log in / create
+ * account" -> the app -> THIS gate.
  *
- * Launch posture: FREE. `PHANTOM_PAYWALL_MODE` defaults to "free", so every
- * signed-in account gets full access while we build the audience. The gate is
- * real and in place — flip `PHANTOM_PAYWALL_MODE=paid` (once billing/subscription
- * records exist) to start enforcing it. No account data or payment is touched
- * here; this only answers "is this session entitled to the app right now?".
+ * Security model — the gate is SERVER-SIDE and un-bypassable:
+ *   - The server alone decides free-vs-paid. The browser can never assert it.
+ *   - Free plan = VIEW ONLY. Every mutating/write action is refused server-side,
+ *     so hiding buttons in the UI is only cosmetics on top of a real gate.
+ *   - Write access requires the owner, or a subscription that was granted by a
+ *     TRUSTED server process (payment webhook / owner grant) — never the client.
+ *
+ * Launch posture: free accounts get in and can view everything; they cannot
+ * change anything. Flip nothing to "launch free": that is already the default.
  */
 
-export type PaywallMode = "free" | "paid";
 export type PaywallTier = "free" | "pro";
 
-/** A minimal view of the gateway/dashboard session the gate needs. */
+/** The minimal, server-trusted view of a session the gate needs. */
 export type PaywallSession = {
   id: string;
   canManageAccess?: boolean;
-  /** Reserved for paid mode once real subscriptions are wired. */
+  /**
+   * Whether this account has paid access. This MUST only ever be set by a
+   * trusted server process (a payment-provider webhook or an owner grant) after
+   * verifying payment — never from a client-supplied value.
+   */
   subscriptionActive?: boolean;
 };
 
-export type PaywallState = {
-  mode: PaywallMode;
-  /** true while the paywall lets every signed-in account through (free launch). */
-  open: boolean;
-  /** may this session use the paid app right now? */
+export type PaywallDecision = {
+  /** allowed into the app at all (view). */
   entitled: boolean;
+  canView: boolean;
+  /** allowed to perform mutating/write actions. */
+  canWrite: boolean;
   tier: PaywallTier;
   reason: string;
 };
 
-// Read at call time (not cached) so config/tests can flip it without a reload.
-function currentMode(): PaywallMode {
-  return process.env.PHANTOM_PAYWALL_MODE === "paid" ? "paid" : "free";
-}
-
-export function getPaywallMode(): PaywallMode {
-  return currentMode();
+// Optional launch promo: grant write to every signed-in account. Server-side env
+// only, defaults OFF, so the secure default is "free = view only".
+function freeWriteForAll(): boolean {
+  return process.env.PHANTOM_FREE_WRITE === "true";
 }
 
 /**
- * Decide entitlement for a dashboard session. Fail closed for anonymous callers:
- * you must be signed in through the gateway before the paywall is even asked.
+ * The single source of truth for dashboard entitlement. Fail closed: an
+ * unauthenticated caller gets nothing. Everyone signed in may view; only the
+ * owner, an active subscriber, or an explicit free-write promo may write.
  */
-export function getPaywallState(session?: PaywallSession | null): PaywallState {
-  const mode = currentMode();
-
-  if (!session) {
+export function getPaywallDecision(session?: PaywallSession | null): PaywallDecision {
+  if (!session || !session.id) {
     return {
-      mode,
-      open: mode === "free",
       entitled: false,
+      canView: false,
+      canWrite: false,
       tier: "free",
-      reason: "No authenticated session — sign in through the dashboard gateway first.",
+      reason: "Not signed in — no dashboard access.",
     };
   }
 
-  // The operator/owner always has access regardless of billing.
-  if (session.canManageAccess) {
-    return { mode, open: mode === "free", entitled: true, tier: "pro", reason: "Operator/owner access." };
-  }
-
-  if (mode === "free") {
-    return {
-      mode,
-      open: true,
-      entitled: true,
-      tier: "free",
-      reason: "Free launch — the paywall is open; every signed-in account has full access for now.",
-    };
-  }
-
-  // Paid mode: real subscription records are not wired yet, so members are not
-  // entitled until billing lands. Reserved `subscriptionActive` flips this on.
-  if (session.subscriptionActive) {
-    return { mode, open: false, entitled: true, tier: "pro", reason: "Active subscription." };
-  }
+  const owner = session.canManageAccess === true;
+  const subscribed = session.subscriptionActive === true;
+  const promo = freeWriteForAll();
+  const write = owner || subscribed || promo;
 
   return {
-    mode,
-    open: false,
-    entitled: false,
-    tier: "free",
-    reason: "Paid mode — an active subscription is required (billing integration pending).",
+    entitled: true,
+    canView: true,
+    canWrite: write,
+    tier: write ? "pro" : "free",
+    reason: owner
+      ? "Operator/owner — full access."
+      : subscribed
+        ? "Active subscription — full access."
+        : promo
+          ? "Free-write launch promo — full access."
+          : "Free plan — view only. Upgrade to make changes.",
   };
 }
 
+/** True only if this session may perform a mutating/write action. */
+export function canWrite(session?: PaywallSession | null): boolean {
+  return getPaywallDecision(session).canWrite;
+}
+
+/** True if this session may access (view) the dashboard at all. */
 export function isEntitled(session?: PaywallSession | null): boolean {
-  return getPaywallState(session).entitled;
+  return getPaywallDecision(session).entitled;
 }
