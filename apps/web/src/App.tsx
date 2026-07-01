@@ -598,6 +598,22 @@ type MissionBundle = {
   crew: string[];
 };
 
+type OwnerQuickTool = {
+  id: string;
+  title: string;
+  lane: string;
+  description: string;
+  status: string;
+  cta: string;
+  command: string;
+  route: Route;
+  proof: string;
+  taskTitle: string;
+  taskDue: string;
+  bullets: string[];
+  openUrl?: string;
+};
+
 type StorefrontDraft = {
   name: string;
   headline: string;
@@ -771,6 +787,148 @@ const adminMissionBundles: MissionBundle[] = [
   },
 ];
 
+const obsidianQuickCaptureContent = encodeURIComponent(
+  [
+    "# PhantomForce Quick Capture",
+    "",
+    "## Outcome",
+    "What are we trying to move?",
+    "",
+    "## Source",
+    "- Dashboard route: app.phantomforce.online",
+    "- Local route: http://127.0.0.1:5177",
+    "",
+    "## Decision",
+    "- Owner: Jordan",
+    "- Next approval:",
+  ].join("\n"),
+);
+
+const ownerQuickTools: OwnerQuickTool[] = [
+  {
+    id: "agent-loop",
+    title: "Agent Loop Launcher",
+    lane: "Claude + Codex",
+    description: "Start a bounded worker loop, then bring the result back through Codex review.",
+    status: "armed",
+    cta: "Launch",
+    route: "agents",
+    proof: "Loop prompt, Codex verification, Obsidian receipt",
+    taskTitle: "Run the next bounded PhantomForce agent loop",
+    taskDue: "Today",
+    bullets: ["Claude loop", "Codex verify", "Receipt"],
+    command:
+      "/agents run a bounded Claude Code plus Codex loop for the highest-leverage PhantomForce task. Inspect, implement, verify, write an Obsidian receipt, and stop on real blockers.",
+  },
+  {
+    id: "obsidian-capture",
+    title: "Obsidian Capture",
+    lane: "Command Center",
+    description: "Open the central vault and log the mission, decisions, proof, and next action.",
+    status: "vault linked",
+    cta: "Capture",
+    route: "agents",
+    proof: "PhantomForce Command Center vault note",
+    taskTitle: "Capture today's operating state in Obsidian",
+    taskDue: "Today",
+    bullets: ["Vault", "Registry", "Receipts"],
+    openUrl: `obsidian://new?vault=PhantomForce-Command-Center&file=00%20Inbox/PhantomForce%20Quick%20Capture&content=${obsidianQuickCaptureContent}`,
+    command:
+      "/agents capture the current PhantomForce mission into Obsidian with objective, files, decisions, proof, risks, and next action.",
+  },
+  {
+    id: "higgsfield-factory",
+    title: "Higgsfield Factory",
+    lane: "Media",
+    description: "Build fresh ad/video briefs with credit tracking and no recycled-looking assets.",
+    status: "credit aware",
+    cta: "Brief",
+    route: "media",
+    proof: "Credits before/after, prompt, references, output path",
+    taskTitle: "Prepare the next Higgsfield production brief",
+    taskDue: "Before generation",
+    bullets: ["Credit count", "Fresh shots", "No fake text"],
+    command:
+      "/media build a Higgsfield production brief that reports credits before and after, uses fresh scenes only, avoids generated on-screen text, and returns asset IDs and file paths.",
+  },
+  {
+    id: "security-intake",
+    title: "Security Intake",
+    lane: "Risk",
+    description: "Scope malware, phishing, leaked-password, and account-abuse checks defensively.",
+    status: "scoped",
+    cta: "Inspect",
+    route: "security",
+    proof: "Authorized scope, evidence, risk level, fix, verification",
+    taskTitle: "Run authorized security intake for business-owned systems",
+    taskDue: "Before scan",
+    bullets: ["Owned assets", "No secrets", "Evidence"],
+    command:
+      "/scan create an authorized defensive security intake for business-owned systems covering malware, phishing, password exposure, account abuse, evidence, risk level, fix, and verification. Do not expose secrets.",
+  },
+  {
+    id: "revenue-sprint",
+    title: "Revenue Sprint",
+    lane: "Sales",
+    description: "Turn leads, reviews, offers, and calendar openings into a 7-day sales sprint.",
+    status: "operator ready",
+    cta: "Sprint",
+    route: "offers",
+    proof: "Priority leads, offer angle, copy, call blocks, approvals",
+    taskTitle: "Build this week's PhantomForce revenue sprint",
+    taskDue: "Today",
+    bullets: ["7 days", "Offer angle", "Follow-ups"],
+    command:
+      "/sprint build a 7-day PhantomForce revenue sprint using current leads, review proof, calendar openings, offers, follow-up copy, and approval gates.",
+  },
+  {
+    id: "ai-route-health",
+    title: "AI Route Health",
+    lane: "Infrastructure",
+    description: "Check the public AI health route before wiring it into customer-facing flows.",
+    status: "public check",
+    cta: "Check",
+    route: "agents",
+    proof: "DNS, Pangolin route, proxy, provider key, fallback",
+    taskTitle: "Verify ai.phantomforce.online public health",
+    taskDue: "Now",
+    bullets: ["DNS", "Pangolin", "Proxy"],
+    openUrl: "https://ai.phantomforce.online/health",
+    command:
+      '/agents verify the AI route health for https://ai.phantomforce.online/health. Healthy is {"ok":true,"configured":true}. If unhealthy, check DNS, Pangolin route, proxy, provider key, and homepage fallback.',
+  },
+  {
+    id: "repo-scan",
+    title: "Repo Intelligence",
+    lane: "Code",
+    description: "Scan local code drift, risky strings, TODOs, and build readiness before deploy.",
+    status: "safe scan",
+    cta: "Scan",
+    route: "security",
+    proof: "Git status, risky-string search, typecheck result",
+    taskTitle: "Run PhantomForce repo intelligence scan",
+    taskDue: "Before deploy",
+    bullets: ["No destructive ops", "Secrets check", "Build signal"],
+    command:
+      "/scan plan a safe PhantomForce repo intelligence scan: git status, TODO/FIXME/risky-string search excluding node_modules/dist/.git, typecheck, and highest-risk findings. Do not print secrets.",
+  },
+  {
+    id: "automation-runbook",
+    title: "Runbook Forge",
+    lane: "Automation",
+    description: "Convert a business process into triggers, approvals, logs, failures, and rollback.",
+    status: "template",
+    cta: "Forge",
+    route: "agents",
+    proof: "Trigger map, approval gates, audit log, rollback plan",
+    taskTitle: "Write an automation runbook for the next workflow",
+    taskDue: "This week",
+    bullets: ["Triggers", "Approvals", "Rollback"],
+    command:
+      "/agents forge an automation runbook for the next PhantomForce workflow with trigger, inputs, actions, approval gates, failure states, audit log, rollback, owner, and review date.",
+  },
+];
+
 function resolveMissionBundle(text: string) {
   const trimmed = text.trim();
   if (!trimmed.startsWith("/")) return null;
@@ -792,6 +950,40 @@ function buildMissionPrompt(bundle: MissionBundle, subject: string) {
     "Do not expose raw tool names as the product. Speak in business outcomes, artifacts, and next actions.",
     "If the work would send, post, upload, book, bill, deploy, delete, change credentials, or mutate production, prepare an approval-ready draft instead of executing it.",
   ].join("\n");
+}
+
+function buildQuickToolHandoff(tool: OwnerQuickTool) {
+  return [
+    `# ${tool.title}`,
+    "",
+    `Lane: ${tool.lane}`,
+    `Status: ${tool.status}`,
+    `Proof: ${tool.proof}`,
+    "",
+    "Checks:",
+    ...tool.bullets.map((bullet) => `- ${bullet}`),
+    "",
+    "Mission command:",
+    tool.command,
+  ].join("\n");
+}
+
+async function copyPlainText(text: string) {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    const textArea = document.createElement("textarea");
+    textArea.value = text;
+    textArea.style.position = "fixed";
+    textArea.style.opacity = "0";
+    document.body.appendChild(textArea);
+    textArea.focus();
+    textArea.select();
+    const copied = document.execCommand("copy");
+    document.body.removeChild(textArea);
+    return copied;
+  }
 }
 
 function requestsExternalAction(text: string) {
@@ -3563,6 +3755,28 @@ function App() {
     setRoute("approvals");
   }
 
+  function stageQuickToolApproval(tool: OwnerQuickTool, copied: boolean) {
+    const approval: Approval = {
+      id: makeId(`approval-quick-tool-${tool.id}`),
+      kind: "task",
+      title: `Run quick tool: ${tool.title}`,
+      summary: `${tool.description} Proof required: ${tool.proof}.`,
+      payload: {
+        title: tool.taskTitle,
+        due: tool.taskDue,
+        lane: tool.lane,
+        proof: tool.proof,
+        command: tool.command,
+        handoff: copied ? "copied to clipboard" : "copy blocked by browser",
+      },
+      reversible: true,
+      status: "pending",
+    };
+
+    setApprovals((current) => [approval, ...current]);
+    addActivity("Quick tool staged", `${tool.title} is waiting in Review with its proof requirements.`, "ok");
+  }
+
   function createReviewRequestApproval(clientId: string) {
     const client = reviewClients.find((item) => item.id === clientId);
     if (!client) return;
@@ -4380,6 +4594,7 @@ function App() {
             sessionHeaders={sessionHeaders}
             createFollowUpPlan={createFollowUpPlan}
             runPhantomCommand={runPhantomCommand}
+            stageQuickToolApproval={stageQuickToolApproval}
             stats={stats}
             approvals={approvals}
             approveAction={approveAction}
@@ -4848,6 +5063,7 @@ function CommandCenter({
   sessionHeaders,
   createFollowUpPlan,
   runPhantomCommand,
+  stageQuickToolApproval,
   stats,
   approvals,
   approveAction,
@@ -4868,6 +5084,7 @@ function CommandCenter({
   sessionHeaders: (json?: boolean) => Record<string, string>;
   createFollowUpPlan: () => void;
   runPhantomCommand: (text: string) => Promise<void>;
+  stageQuickToolApproval: (tool: OwnerQuickTool, copied: boolean) => void;
   stats: { urgent: number; pending: number; today: number; events: number };
   approvals: Approval[];
   approveAction: (id: string) => void;
@@ -4944,6 +5161,13 @@ function CommandCenter({
           </button>
         ))}
       </section>
+
+      <OwnerQuickTools
+        tools={ownerQuickTools}
+        runPhantomCommand={runPhantomCommand}
+        stageQuickToolApproval={stageQuickToolApproval}
+        setRoute={setRoute}
+      />
 
       <div className="studio-layout">
       <aside className="studio-assistants" aria-label="Assistants">
@@ -5124,6 +5348,98 @@ function CommandCenter({
       </aside>
       </div>
     </div>
+  );
+}
+
+function quickToolIcon(tool: OwnerQuickTool) {
+  if (tool.id === "agent-loop" || tool.id === "automation-runbook") return <Users size={18} />;
+  if (tool.id === "obsidian-capture") return <FileText size={18} />;
+  if (tool.id === "higgsfield-factory") return <Play size={18} />;
+  if (tool.id === "security-intake" || tool.id === "repo-scan") return <Search size={18} />;
+  if (tool.id === "revenue-sprint") return <Zap size={18} />;
+  if (tool.id === "ai-route-health") return <Link2 size={18} />;
+  return <Command size={18} />;
+}
+
+function OwnerQuickTools({
+  tools,
+  runPhantomCommand,
+  stageQuickToolApproval,
+  setRoute,
+}: {
+  tools: OwnerQuickTool[];
+  runPhantomCommand: (text: string) => Promise<void>;
+  stageQuickToolApproval: (tool: OwnerQuickTool, copied: boolean) => void;
+  setRoute: (route: Route) => void;
+}) {
+  const [launchingId, setLaunchingId] = useState<string | null>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+
+  async function launchTool(tool: OwnerQuickTool) {
+    if (launchingId) return;
+    setLaunchingId(tool.id);
+
+    try {
+      const copied = await copyPlainText(buildQuickToolHandoff(tool));
+      if (copied) {
+        setCopiedId(tool.id);
+        window.setTimeout(() => setCopiedId((current) => (current === tool.id ? null : current)), 1800);
+      }
+
+      if (tool.openUrl) {
+        window.open(tool.openUrl, "_blank", "noopener,noreferrer");
+      }
+
+      stageQuickToolApproval(tool, copied);
+      await runPhantomCommand(tool.command);
+
+      if (tool.route !== "command") {
+        setRoute(tool.route);
+      }
+    } finally {
+      setLaunchingId(null);
+    }
+  }
+
+  return (
+    <section className="owner-quick-tools" aria-label="Owner quick tools">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">Quick tools</span>
+          <h3>Owner launch deck</h3>
+        </div>
+        <span className="owner-quick-count">{tools.length} armed</span>
+      </div>
+      <div className="owner-quick-grid">
+        {tools.map((tool) => {
+          const isLaunching = launchingId === tool.id;
+          const isCopied = copiedId === tool.id;
+
+          return (
+            <article className="owner-quick-card" key={tool.id}>
+              <div className="owner-quick-top">
+                <span className="owner-quick-icon">{quickToolIcon(tool)}</span>
+                <div>
+                  <span>{tool.lane}</span>
+                  <strong>{tool.title}</strong>
+                </div>
+                <em>{tool.status}</em>
+              </div>
+              <p>{tool.description}</p>
+              <div className="owner-quick-chips">
+                {tool.bullets.map((bullet) => (
+                  <span key={bullet}>{bullet}</span>
+                ))}
+              </div>
+              <button type="button" onClick={() => void launchTool(tool)} disabled={Boolean(launchingId)}>
+                {isLaunching ? <RefreshCcw size={16} /> : isCopied ? <Check size={16} /> : <Copy size={16} />}
+                {isLaunching ? "Running" : isCopied ? "Copied" : tool.cta}
+              </button>
+            </article>
+          );
+        })}
+      </div>
+    </section>
   );
 }
 
