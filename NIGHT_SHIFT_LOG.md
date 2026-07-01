@@ -8,6 +8,29 @@ Mandate from Jordan: "work the night shift until I wake up and say another
 command — foolproof it, make it amazing. PC, apps, and PhantomForce should be
 impeccable, outstanding."
 
+## ☀️ MORNING STATUS (08:53) — read me first
+
+Good morning. Net result: **the app is in a healthy, fully-green combined state.**
+
+- **Coast cleared at 08:51.** Codex committed its overnight work
+  (`c15e764 Improve PhantomForce mission command center`, then
+  `acde592 docs: update night shift handoff log`). Working tree is now CLEAN.
+- **Both my night-shift widgets survived and are wired in:** the honest
+  `RadarScanner` and `BookingsGlance` render in the Console; my Console redesign
+  base (`4d48661`) is intact.
+- **Full verification on the merged tree just passed:** `npm run typecheck` (exit 0),
+  web build green, `test:access` `ok:true` (auditEvents=167, all boundary flags true).
+- **No corruption occurred** — standing down from the shared file overnight paid off;
+  Codex's work and mine coexist.
+- View it at **http://127.0.0.1:5189/** (or Codex's 5177 — same files).
+
+Two decisions still waiting for you (details in "Needs approval" below):
+1. **Coordination:** give each agent its own worktree/branch (or run one at a time)
+   so two agents never share one uncommitted file again.
+2. **Cleanup:** approve stopping the ~26 orphaned dev-server processes (~2.76 GB RAM).
+
+I'm holding at a light monitor, ready to resume full-speed the moment you give a command.
+
 ## Operating rules (self-imposed guardrails)
 
 DO (safe, reversible, autonomous):
@@ -29,7 +52,7 @@ DO NOT (queue for Jordan's approval instead — see "Needs approval" section):
 
 1. [x] Establish green baseline (typecheck, build, access tests).
 2. [x] Wire the radar widget to the real scanner backend (honest status + offline).
-3. [ ] Convert a heavy screen into a glanceable Console widget (Bookings first).
+3. [x] Convert a heavy screen into a glanceable Console widget (radar + Bookings; both wired in HEAD).
 4. [ ] Repeat widget conversion: Leads, Money, Site.
 5. [ ] First-time-user onboarding / empty states / jargon cleanup pass.
 6. [ ] Console-error + accessibility + mobile responsive sweep.
