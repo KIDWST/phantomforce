@@ -35,7 +35,7 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { ChangeEvent, CSSProperties, FormEvent, MouseEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { ChangeEvent, CSSProperties, FormEvent, MouseEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
 
 type Route =
   | "command"
@@ -674,11 +674,24 @@ type PhantomDeckWorkspaceId =
   | "protect"
   | "review"
   | "site"
+  | "brain"
+  | "access"
   | "agentlab"
   | "n8n"
   | "help";
 type PhantomDeckMood = "calm" | "alert" | "thinking" | "blocked";
 type PhantomDeckPulseTone = "good" | "warn" | "alert" | "muted";
+type PhantomSystemNodeStatus = "active" | "ready" | "watch" | "blocked" | "planned";
+
+type PhantomSystemNode = {
+  id: string;
+  label: string;
+  detail: string;
+  value: string;
+  status: PhantomSystemNodeStatus;
+  workspace: PhantomDeckWorkspaceId;
+  icon: ReactNode;
+};
 
 type PhantomDeckSalesConnectorStatus = {
   display_name?: string;
@@ -2150,11 +2163,27 @@ const phantomDeckWorkspaces: Array<{
   },
   {
     id: "site",
-    label: "Site",
+    label: "Site Studio",
     command: "site",
-    detail: "Website and build lane",
+    detail: "Website, app, and store builder",
     icon: <Link2 size={18} />,
     route: "site",
+  },
+  {
+    id: "brain",
+    label: "Brain",
+    command: "brain",
+    detail: "Hermes memory and model posture",
+    icon: <Sparkles size={18} />,
+    route: "connections",
+  },
+  {
+    id: "access",
+    label: "Access",
+    command: "clients",
+    detail: "Admin and client separation",
+    icon: <Users size={18} />,
+    route: "access",
   },
   {
     id: "agentlab",
@@ -2166,9 +2195,9 @@ const phantomDeckWorkspaces: Array<{
   },
   {
     id: "n8n",
-    label: "n8n",
-    command: "n8n",
-    detail: "Local workflow worker",
+    label: "Automation",
+    command: "automation",
+    detail: "Workflow drafts and worker posture",
     icon: <Settings size={18} />,
     route: "connections",
   },
@@ -2188,8 +2217,8 @@ const phantomToolGroups: Array<{
 }> = [
   { id: "business", label: "Business", items: ["leads", "proposal", "followup", "work", "money"] },
   { id: "create", label: "Create", items: ["video", "site"] },
-  { id: "safety", label: "Safety", items: ["protect", "review"] },
-  { id: "systems", label: "Systems", items: ["n8n", "agentlab", "status"] },
+  { id: "safety", label: "Safety", items: ["protect", "review", "access"] },
+  { id: "systems", label: "Systems", items: ["brain", "n8n", "agentlab", "status"] },
 ];
 
 function resolvePhantomDeckWorkspace(value: string): PhantomDeckWorkspaceId | null {
@@ -2205,15 +2234,39 @@ function resolvePhantomDeckWorkspace(value: string): PhantomDeckWorkspaceId | nu
   }
   if (/\b(work|tasks?|schedule|bookings?|calendar|today)\b/.test(text)) return "work";
   if (/\b(money|revenue|cash|won|lost|quote values?|sales)\b/.test(text)) return "money";
-  if (/\b(video|phantomcut|media|higgsfield|reaper|clips?)\b/.test(text)) return "video";
+  if (/\b(video|phantomcut|media|higgsfield|reaper|resolve|clips?|creative generation)\b/.test(text)) return "video";
   if (/\b(protect|security|scanner|scan|medusa|robin|phishing|passwords?)\b/.test(text)) return "protect";
   if (/\b(review|approvals?|approve|drafts?|human)\b/.test(text)) return "review";
-  if (/\b(site|website|web app|dashboard|codex|build lane)\b/.test(text)) return "site";
+  if (/\b(site|website|web app|dashboard|codex|build lane|store|shop|checkout|storefront)\b/.test(text)) return "site";
+  if (/\b(hermes|brain|memory|model|models?|companion|phantom ai|phantomai)\b/.test(text)) return "brain";
+  if (/\b(access|clients?|users?|admin|login|permissions?|organization|organizations?)\b/.test(text)) return "access";
   if (/\b(agentlab|agent lab|agents?|workforce|crew|internal workers?)\b/.test(text)) return "agentlab";
   if (/\b(n8n|automation|workflow|tool lane|worker|systems?|orchestration)\b/.test(text)) return "n8n";
   if (/\b(status|health|systems?|ops|pulse)\b/.test(text)) return "status";
 
   return null;
+}
+
+function suggestPhantomDeckWorkspaces(value: string): PhantomDeckWorkspaceId[] {
+  const text = value.trim().toLowerCase();
+  if (!text) return ["status", "work", "leads", "video"];
+
+  const scored = phantomDeckWorkspaces
+    .filter((workspace) => workspace.id !== "help")
+    .map((workspace) => {
+      const haystack = `${workspace.id} ${workspace.label} ${workspace.command} ${workspace.detail}`.toLowerCase();
+      const score = text
+        .split(/\s+/)
+        .filter((term) => term.length > 2)
+        .reduce((total, term) => total + (haystack.includes(term) ? 1 : 0), 0);
+      return { workspace: workspace.id, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .map((item) => item.workspace);
+
+  const fallback: PhantomDeckWorkspaceId[] = ["work", "site", "video", "brain"];
+  return (scored.length ? scored : fallback).slice(0, 4);
 }
 
 function phantomDeckWorkspaceLabel(id: PhantomDeckWorkspaceId) {
@@ -5304,7 +5357,9 @@ function PhantomDeck({
   const [deckNotice, setDeckNotice] = useState("Ask PhantomForce what to do.");
   const [deckLoading, setDeckLoading] = useState(true);
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [commandSuggestions, setCommandSuggestions] = useState<PhantomDeckWorkspaceId[]>([]);
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const commandInputRef = useRef<HTMLInputElement | null>(null);
   const [proposalHistory, setProposalHistory] = useState<ChicagoShotsProposalHistoryRecord[]>([]);
   const [proposalCounts, setProposalCounts] =
     useState<ChicagoShotsProposalStatusCounts>(defaultChicagoShotsProposalStatusCounts);
@@ -5393,6 +5448,29 @@ function PhantomDeck({
     };
   }, [activeWorkspace, canManageAccess]);
 
+  useEffect(() => {
+    function handleKeyboardShortcut(event: KeyboardEvent) {
+      const target = event.target as HTMLElement | null;
+      const tagName = target?.tagName.toLowerCase();
+      const typing = tagName === "input" || tagName === "textarea" || target?.isContentEditable;
+
+      if ((event.key === "/" && !typing) || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k")) {
+        event.preventDefault();
+        commandInputRef.current?.focus();
+      }
+
+      if (event.key === "Escape") {
+        setActiveWorkspace(null);
+        setToolsOpen(false);
+        setCommandSuggestions([]);
+        commandInputRef.current?.blur();
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyboardShortcut);
+    return () => window.removeEventListener("keydown", handleKeyboardShortcut);
+  }, []);
+
   const pulseItems: Array<{ key: string; label: string; value: string; tone: PhantomDeckPulseTone }> = [
     {
       key: "leads",
@@ -5432,7 +5510,7 @@ function PhantomDeck({
     },
     {
       key: "n8n",
-      label: "n8n",
+      label: "Auto",
       value: n8nRunning ? "on" : n8nScaffolded ? "off" : "planned",
       tone: n8nRunning ? "good" : n8nScaffolded ? "warn" : "muted",
     },
@@ -5455,8 +5533,8 @@ function PhantomDeck({
     if (priorityProposal) {
       return { text: `Fastest money move: ${priorityProposal.client_name}.`, workspace: "money" as PhantomDeckWorkspaceId };
     }
-    if (n8nRunning) return { text: "n8n is running locally.", workspace: "n8n" as PhantomDeckWorkspaceId };
-    if (n8nScaffolded) return { text: "n8n is offline, but the scaffold is ready.", workspace: "n8n" as PhantomDeckWorkspaceId };
+    if (n8nRunning) return { text: "Automation worker is running locally.", workspace: "n8n" as PhantomDeckWorkspaceId };
+    if (n8nScaffolded) return { text: "Automation is scaffolded and controlled.", workspace: "n8n" as PhantomDeckWorkspaceId };
     if (!effectiveSendReadiness.send_enabled) {
       return { text: "Everything is manual-send safe.", workspace: "protect" as PhantomDeckWorkspaceId };
     }
@@ -5472,6 +5550,107 @@ function PhantomDeck({
         ? "blocked"
         : "calm";
 
+  const systemNodes: PhantomSystemNode[] = [
+    {
+      id: "phantom-ai",
+      label: "Phantom AI",
+      detail: "Routes commands into the right owner workspace.",
+      value: phantomAiOpsStatus.product_status,
+      status: "active",
+      workspace: "brain",
+      icon: <Bot size={18} />,
+    },
+    {
+      id: "leads",
+      label: "Leads",
+      detail: "Saved packets, follow-ups, and proposal priority.",
+      value: `${proposalCounts.total || stats.urgent} live`,
+      status: proposalCounts.follow_up_needed || stats.urgent ? "watch" : "ready",
+      workspace: "leads",
+      icon: <Inbox size={18} />,
+    },
+    {
+      id: "work",
+      label: "Work",
+      detail: "Tasks, bookings, schedule, and delivery moves.",
+      value: `${stats.today} today`,
+      status: stats.today ? "watch" : "ready",
+      workspace: "work",
+      icon: <SquareCheckBig size={18} />,
+    },
+    {
+      id: "money",
+      label: "Money",
+      detail: "Open proposal value and won/lost tracking.",
+      value: estimatedPipelineValue ? formatUsd(estimatedPipelineValue) : "waiting",
+      status: estimatedPipelineValue ? "active" : "planned",
+      workspace: "money",
+      icon: <BarChart3 size={18} />,
+    },
+    {
+      id: "video",
+      label: "Media Lab",
+      detail: "Creative generation planning, PhantomCut, Resolve, Reaper.",
+      value: "draft-ready",
+      status: "ready",
+      workspace: "video",
+      icon: <Play size={18} />,
+    },
+    {
+      id: "site",
+      label: "Site + Store",
+      detail: "Website, app, dashboard, and storefront build lane.",
+      value: "builder",
+      status: "ready",
+      workspace: "site",
+      icon: <ShoppingCart size={18} />,
+    },
+    {
+      id: "protect",
+      label: "Protect",
+      detail: "Autonomous scan posture, password reminders, send locks.",
+      value: phantomAiOpsStatus.safety_flags.execution_disabled ? "locked" : "review",
+      status: phantomAiOpsStatus.safety_flags.execution_disabled ? "ready" : "blocked",
+      workspace: "protect",
+      icon: <ShieldCheck size={18} />,
+    },
+    {
+      id: "review",
+      label: "Review",
+      detail: "Human approvals before risky or external action.",
+      value: pendingApprovals.length ? `${pendingApprovals.length} pending` : "clear",
+      status: pendingApprovals.length ? "watch" : "ready",
+      workspace: "review",
+      icon: <Bell size={18} />,
+    },
+    {
+      id: "agentlab",
+      label: "AgentLab",
+      detail: "Internal workforce map and worker receipts.",
+      value: agentSummary,
+      status: "active",
+      workspace: "agentlab",
+      icon: <Sparkles size={18} />,
+    },
+    {
+      id: "access",
+      label: "Access",
+      detail: "Admin/client separation and business workspaces.",
+      value: `${clientAccess.length} users`,
+      status: stats.revoked ? "watch" : "ready",
+      workspace: "access",
+      icon: <Users size={18} />,
+    },
+  ];
+
+  const tickerItems = [
+    ...(agentWorkforceStatus.role === "admin" ? agentWorkforceStatus.ticker.slice(0, 5).map((item) => item.text) : []),
+    proposalCounts.follow_up_needed ? `${proposalCounts.follow_up_needed} proposal follow-up${proposalCounts.follow_up_needed === 1 ? "" : "s"} waiting.` : "Proposal follow-up lane is clear.",
+    stats.today ? `${stats.today} work items active today.` : "No urgent work items blocking the cockpit.",
+    providerReady ? "Model lane is configured; external calls still stay gated by controls." : "Model lane gated/off until admin enables provider posture.",
+    n8nRunning ? "Automation worker detected locally." : "Automation lane remains scaffolded and controlled.",
+  ].filter(Boolean);
+
   const deckStyle = {
     "--ghost-look-x": `${pointer.x}px`,
     "--ghost-look-y": `${pointer.y}px`,
@@ -5486,12 +5665,14 @@ function PhantomDeck({
   function openWorkspace(workspace: PhantomDeckWorkspaceId) {
     setActiveWorkspace(workspace);
     setToolsOpen(false);
+    setCommandSuggestions([]);
     setDeckNotice(`${phantomDeckWorkspaceLabel(workspace)} workspace summoned.`);
   }
 
   function openToolOrbit() {
     setActiveWorkspace(null);
     setToolsOpen(true);
+    setCommandSuggestions([]);
     setDeckNotice("Capability orbit opened.");
   }
 
@@ -5518,8 +5699,9 @@ function PhantomDeck({
       return;
     }
 
-    openToolOrbit();
-    setDeckNotice("Try leads, proposal, follow up, money, video, protect, review, work, n8n, or status.");
+    setToolsOpen(false);
+    setCommandSuggestions(suggestPhantomDeckWorkspaces(commandText));
+    setDeckNotice("No exact command yet. Closest workspaces are ready below.");
   }
 
   function closeWorkspace() {
@@ -5562,6 +5744,7 @@ function PhantomDeck({
                 <span className="phantom-command-label">Phantom Command</span>
                 <Command size={25} />
                 <input
+                  ref={commandInputRef}
                   value={commandText}
                   onChange={(event) => setCommandText(event.target.value)}
                   onFocus={() => setCommandFocused(true)}
@@ -5619,14 +5802,20 @@ function PhantomDeck({
           </div>
         </section>
 
+        <PhantomActivityTicker items={tickerItems} />
+
         <PulseStrip items={pulseItems} activeWorkspace={activeWorkspace} setActiveWorkspace={openWorkspace} />
 
-        <div className="phantom-deck-body" aria-live="polite">
-          {!activeWorkspace ? (
-            <div className="phantom-idle-state" aria-label="Idle Phantom Deck">
-              {deckLoading ? <span>Syncing</span> : null}
-            </div>
-          ) : activeWorkspaceMeta ? (
+        <div className={`phantom-deck-body ${activeWorkspace ? "has-active-workspace" : "brain-default"}`} aria-live="polite">
+          <PhantomNervousSystem
+            nodes={systemNodes}
+            activeWorkspace={activeWorkspace}
+            suggestions={commandSuggestions}
+            deckNotice={deckNotice}
+            deckLoading={deckLoading}
+            openWorkspace={openWorkspace}
+          />
+          {activeWorkspace && activeWorkspaceMeta ? (
             <ActiveWorkspace
               workspace={activeWorkspace}
               workspaceMeta={activeWorkspaceMeta}
@@ -5662,6 +5851,103 @@ function PhantomDeck({
           ) : null}
         </div>
       </div>
+    </section>
+  );
+}
+
+function PhantomActivityTicker({ items }: { items: string[] }) {
+  const ticker = items.length ? items : ["PhantomForce is standing by for the next command."];
+
+  return (
+    <section className="phantom-live-ticker" aria-label="Live PhantomForce activity">
+      <span>FORCEWIRE</span>
+      <div>
+        <p>
+          {[...ticker, ...ticker].map((item, index) => (
+            <b key={`${item}-${index}`}>{item}</b>
+          ))}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+function PhantomNervousSystem({
+  nodes,
+  activeWorkspace,
+  suggestions,
+  deckNotice,
+  deckLoading,
+  openWorkspace,
+}: {
+  nodes: PhantomSystemNode[];
+  activeWorkspace: PhantomDeckWorkspaceId | null;
+  suggestions: PhantomDeckWorkspaceId[];
+  deckNotice: string;
+  deckLoading: boolean;
+  openWorkspace: (workspace: PhantomDeckWorkspaceId) => void;
+}) {
+  const suggestedWorkspaces = suggestions
+    .map((id) => phantomDeckWorkspaces.find((workspace) => workspace.id === id))
+    .filter(Boolean) as Array<(typeof phantomDeckWorkspaces)[number]>;
+
+  return (
+    <section className={`phantom-nervous-system${activeWorkspace ? " compact" : ""}`} aria-label="PhantomForce living system map">
+      <div className="nervous-head">
+        <div>
+          <span className="eyebrow">{deckLoading ? "Syncing system" : "Living command map"}</span>
+          <h2>One command routes the business.</h2>
+          <p>{deckNotice}</p>
+        </div>
+        <div className="nervous-core">
+          <span>PhantomAI</span>
+          <strong>Operator brain</strong>
+          <small>Local-first, approval-aware</small>
+        </div>
+      </div>
+
+      <div className="nervous-flow-grid">
+        {nodes.map((node) => (
+          <button
+            key={node.id}
+            className={`nervous-node ${node.status}${activeWorkspace === node.workspace ? " active" : ""}`}
+            type="button"
+            onClick={() => openWorkspace(node.workspace)}
+          >
+            <span className="nervous-node-icon">{node.icon}</span>
+            <span className="nervous-node-copy">
+              <strong>{node.label}</strong>
+              <small>{node.detail}</small>
+            </span>
+            <em>{node.value}</em>
+          </button>
+        ))}
+      </div>
+
+      <div className="nervous-rails" aria-label="Command flow">
+        <span>Ask</span>
+        <i />
+        <span>Route</span>
+        <i />
+        <span>Create artifact</span>
+        <i />
+        <span>Review</span>
+        <i />
+        <span>Manual send</span>
+      </div>
+
+      {suggestedWorkspaces.length ? (
+        <div className="phantom-command-suggestions" aria-label="Closest command matches">
+          <span>Closest moves</span>
+          {suggestedWorkspaces.map((workspace) => (
+            <button key={workspace.id} type="button" onClick={() => openWorkspace(workspace.id)}>
+              {workspace.icon}
+              <strong>{workspace.label}</strong>
+              <small>{workspace.detail}</small>
+            </button>
+          ))}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -5994,18 +6280,18 @@ function ActiveWorkspace({
 
       {workspace === "video" ? (
         <div className="deck-grid">
-          <DeckMetric label="Media Lab" value="Draft surface" detail="Video creation stays draft/approval-gated before paid generation." tone="good" />
-          <DeckMetric label="Creative generation" value="Approval required" detail="No paid job, upload, or public post runs from this deck." tone="good" />
-          <DeckMetric label="Sound design" value="Planning lane" detail="Audio suite links stay local/planned unless the full module opens." tone="muted" />
+          <DeckMetric label="Media Lab" value="Draft-ready" detail="Commercial video stays routed through gated creative generation." tone="good" />
+          <DeckMetric label="PhantomCut" value="Cockpit linked" detail="Local video proof and provider readiness stay inside Media Lab." tone="good" />
+          <DeckMetric label="Resolve + Reaper" value="Bridge-ready" detail="Editing apps are launcher/plan surfaces until a human applies work." tone="muted" />
           <section className="deck-wide-card">
             <div className="section-head compact">
-              <h3>Video command</h3>
+              <h3>Creative command</h3>
               <button className="deck-icon-button" type="button" onClick={() => setRoute("media")}>
                 <Play size={17} />
                 <span>Open Media Lab</span>
               </button>
             </div>
-            <p>Use this lane for video plans, creative briefs, credit tracking, and manual review before any generation spend.</p>
+            <p>Use this lane for video briefs, edit plans, proof review, and controlled generation requests. No spend or upload starts from the deck.</p>
           </section>
         </div>
       ) : null}
@@ -6064,17 +6350,63 @@ function ActiveWorkspace({
       {workspace === "site" ? (
         <div className="deck-grid">
           <DeckMetric label="Site Studio" value="Available" detail="Website/app build lane opens as a full surface." tone="good" />
+          <DeckMetric label="Store Builder" value="Concept-ready" detail="Products, offers, checkout notes, and catalog drafts belong here." tone="good" />
           <DeckMetric label="Dashboard route" value="app.phantomforce.online" detail="Public exposure is not changed by this deck." tone="good" />
           <DeckMetric label="Client workspaces" value={String(clientAccess.length)} detail="Access remains permission-gated." tone="muted" />
           <section className="deck-wide-card">
             <div className="section-head compact">
-              <h3>Build lane</h3>
+              <h3>Website, app, and store lane</h3>
               <button className="deck-icon-button" type="button" onClick={() => setRoute("site")}>
                 <Link2 size={17} />
                 <span>Open Site Studio</span>
               </button>
             </div>
-            <p>Site Studio stays behind owner/admin access. Use it for website/app work, build receipts, and approval-gated publish planning.</p>
+            <p>Site Studio stays behind owner/admin access. Use it for website/app work, storefront planning, build receipts, and approval-gated publish planning.</p>
+            <div className="deck-safety-grid">
+              <TruthBadge state="real" label="Website/page" />
+              <TruthBadge state="real" label="Storefront draft" />
+              <TruthBadge state="stub" label="Checkout requires approved provider" />
+              <TruthBadge state="blocked" label="No deploy from deck" />
+            </div>
+          </section>
+        </div>
+      ) : null}
+
+      {workspace === "brain" ? (
+        <div className="deck-grid">
+          <DeckMetric
+            label="Hermes"
+            value={phantomAiOpsStatus.hermes.ready ? "Ready" : phantomAiOpsStatus.hermes.status}
+            detail={`${opsContext?.memory?.recalled_count ?? 0} recalled memories available to the owner cockpit.`}
+            tone={phantomAiOpsStatus.hermes.ready ? "good" : "muted"}
+          />
+          <DeckMetric
+            label="Companion"
+            value="Command-first"
+            detail="The visible bot routes workspaces instead of exposing raw tools to users."
+            tone="good"
+          />
+          <DeckMetric
+            label="Model lane"
+            value={providerReady ? "Configured" : "Gated/off"}
+            detail="No live model call happens from this command map."
+            tone={providerReady ? "warn" : "good"}
+          />
+          <DeckMetric
+            label="Memory writes"
+            value="Blocked here"
+            detail="This surface reads posture and opens workspaces; it does not write ledger data."
+            tone="good"
+          />
+          <section className="deck-wide-card">
+            <div className="section-head compact">
+              <h3>Brain posture</h3>
+              <TruthBadge state="real" label="Admin-only internals" />
+            </div>
+            <p>
+              PhantomAI should feel like one brain to users. The internal stack remains hidden behind owner/admin surfaces:
+              memory, model readiness, command routing, and proof status.
+            </p>
           </section>
         </div>
       ) : null}
@@ -6093,6 +6425,34 @@ function ActiveWorkspace({
               </button>
             </div>
             <p>AgentLab is the internal workforce surface. This deck only summarizes status and opens the full admin lane.</p>
+          </section>
+        </div>
+      ) : null}
+
+      {workspace === "access" ? (
+        <div className="deck-stack">
+          <div className="deck-grid compact-metrics">
+            <DeckMetric label="Users" value={String(clientAccess.length)} detail="Admin and test-client access records." tone="good" />
+            <DeckMetric label="Revoked" value={String(stats.revoked)} detail="Blocked users stay out of client surfaces." tone={stats.revoked ? "warn" : "good"} />
+            <DeckMetric label="Boundary" value="Separated" detail="Admin sees internals; clients see outcomes only." tone="good" />
+            <DeckMetric label="Organizations" value="3 visible" detail="PhantomForce, ChicagoShots, and Test Client remain the clean set." tone="good" />
+          </div>
+          <section className="deck-list-card">
+            <div className="section-head compact">
+              <h3>Client/admin access</h3>
+              <button className="deck-icon-button" type="button" onClick={() => setRoute("access")}>
+                <Users size={17} />
+                <span>Open Access</span>
+              </button>
+            </div>
+            {clientAccess.slice(0, 6).map((client) => (
+              <DeckListItem
+                key={client.id}
+                title={client.business}
+                detail={`${client.owner} · ${client.plan}`}
+                status={client.accessStatus}
+              />
+            ))}
           </section>
         </div>
       ) : null}
