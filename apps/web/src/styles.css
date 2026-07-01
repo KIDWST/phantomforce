@@ -5462,6 +5462,47 @@ img {
     text-overflow: ellipsis;
     white-space: nowrap;
   }
+
+  .mobile-more-sheet {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: 76px;
+    z-index: 21;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    padding: 10px;
+    background: rgba(9, 12, 16, 0.97);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 10px;
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(18px);
+  }
+
+  .mobile-more-sheet button {
+    display: grid;
+    place-items: center;
+    gap: 4px;
+    min-height: 58px;
+    padding: 8px 4px;
+    border-radius: 8px;
+    color: var(--muted);
+    background: transparent;
+    font-size: 11px;
+  }
+
+  .mobile-more-sheet button.active {
+    color: white;
+    background: var(--panel-2);
+  }
+
+  .mobile-more-sheet button span {
+    max-width: 84px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 }
 
 @media (max-width: 760px) {

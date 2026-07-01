@@ -17,6 +17,7 @@ import {
   Lock,
   Mail,
   MessageSquare,
+  MoreHorizontal,
   Play,
   Plus,
   RefreshCcw,
@@ -1627,6 +1628,8 @@ const OWNER_ORG_NAME = "PhantomForce";
 const DEFAULT_CLIENT_WORKSPACE_ID = "client-chicagoshots";
 const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-sports-demo"]);
 const ADMIN_ONLY_ROUTES = new Set<Route>(["agents", "site", "access", "connections"]);
+// The essentials pinned in the mobile bottom bar; everything else goes under "More".
+const CORE_MOBILE_ROUTES = new Set<Route>(["command", "inbox", "offers", "agents", "approvals"]);
 
 const initialSessions: AppSession[] = [
   {
@@ -2932,6 +2935,7 @@ function App() {
   const [subscription, setSubscription] = useState<
     { plan: string; canView: boolean; canWrite: boolean; reason: string } | null
   >(null);
+  const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [pangolinPlan, setPangolinPlan] = useState<PangolinRoutePlan[]>([]);
   const [pangolinStatus, setPangolinStatus] = useState<PangolinReadOnlyStatus | null>(null);
   const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
@@ -2953,6 +2957,14 @@ function App() {
     if (canManageAccess) return navItems;
     return navItems.filter((item) => !ADMIN_ONLY_ROUTES.has(item.id));
   }, [canManageAccess]);
+  const coreMobileNavItems = useMemo(
+    () => visibleNavItems.filter((item) => CORE_MOBILE_ROUTES.has(item.id)),
+    [visibleNavItems],
+  );
+  const moreMobileNavItems = useMemo(
+    () => visibleNavItems.filter((item) => !CORE_MOBILE_ROUTES.has(item.id)),
+    [visibleNavItems],
+  );
   const visibleClientAccess = useMemo(() => {
     if (canManageAccess) return clientAccess;
     return clientAccess.filter((client) => client.id === activeSession.clientId);
@@ -4361,19 +4373,53 @@ function App() {
         ) : null}
       </main>
 
+      {mobileMoreOpen && moreMobileNavItems.length ? (
+        <div className="mobile-more-sheet" role="menu" aria-label="More sections">
+          {moreMobileNavItems.map((item) => (
+            <button
+              key={item.id}
+              className={route === item.id ? "active" : ""}
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setRoute(item.id);
+                setMobileMoreOpen(false);
+              }}
+            >
+              {item.icon}
+              <span>{item.label}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
       <nav className="mobile-nav" aria-label="Mobile navigation">
-        {visibleNavItems.map((item) => (
+        {coreMobileNavItems.map((item) => (
           <button
             key={item.id}
             className={route === item.id ? "active" : ""}
             type="button"
-            onClick={() => setRoute(item.id)}
+            onClick={() => {
+              setRoute(item.id);
+              setMobileMoreOpen(false);
+            }}
             title={item.label}
           >
             {item.icon}
             <span>{item.label}</span>
           </button>
         ))}
+        {moreMobileNavItems.length ? (
+          <button
+            className={mobileMoreOpen ? "active" : ""}
+            type="button"
+            onClick={() => setMobileMoreOpen((open) => !open)}
+            title="More"
+            aria-expanded={mobileMoreOpen}
+          >
+            <MoreHorizontal size={18} />
+            <span>More</span>
+          </button>
+        ) : null}
       </nav>
     </div>
   );
