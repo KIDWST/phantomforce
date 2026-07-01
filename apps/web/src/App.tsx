@@ -2130,21 +2130,6 @@ const phantomToolGroups: Array<{
   { id: "systems", label: "Systems", items: ["n8n", "agentlab", "status"] },
 ];
 
-const phantomOrbitPositions: Partial<Record<PhantomDeckWorkspaceId, { x: string; y: string }>> = {
-  leads: { x: "-330px", y: "-104px" },
-  proposal: { x: "-246px", y: "-170px" },
-  followup: { x: "-126px", y: "-214px" },
-  work: { x: "-306px", y: "10px" },
-  money: { x: "-198px", y: "92px" },
-  video: { x: "128px", y: "-214px" },
-  site: { x: "250px", y: "-156px" },
-  protect: { x: "318px", y: "-48px" },
-  review: { x: "296px", y: "72px" },
-  n8n: { x: "114px", y: "136px" },
-  agentlab: { x: "0px", y: "174px" },
-  status: { x: "-116px", y: "142px" },
-};
-
 function resolvePhantomDeckWorkspace(value: string): PhantomDeckWorkspaceId | null {
   const text = value.trim().toLowerCase();
 
@@ -5396,14 +5381,6 @@ function PhantomDeck({
     setDeckNotice("Workspace minimized.");
   }
 
-  const orbitTools = phantomToolGroups.flatMap((group) =>
-    group.items.map((id) => ({
-      group,
-      workspace: phantomDeckWorkspaces.find((item) => item.id === id)!,
-      position: phantomOrbitPositions[id] ?? { x: "0px", y: "0px" },
-    })),
-  );
-
   return (
     <section className={`phantom-deck v2 v3${activeWorkspace ? " has-workspace" : ""}${toolsOpen ? " tools-open" : ""}`} style={deckStyle} onMouseMove={handlePointerMove}>
       <div className="phantom-deck-main">
@@ -5436,6 +5413,7 @@ function PhantomDeck({
           <div className="phantom-command-core">
             <div className="phantom-command-dock">
               <form className={`phantom-command ${commandFocused ? "focused" : ""}`} onSubmit={submitDeckCommand}>
+                <span className="phantom-command-label">Phantom Command</span>
                 <Command size={25} />
                 <input
                   value={commandText}
@@ -5468,21 +5446,27 @@ function PhantomDeck({
             {toolsOpen ? (
               <div className="tool-orbit-menu" aria-label="PhantomForce capability orbit">
                 {phantomToolGroups.map((group) => (
-                  <span key={group.id} className={`tool-orbit-group-label ${group.id}`}>
-                    {group.label}
-                  </span>
-                ))}
-                {orbitTools.map(({ group, workspace, position }) => (
-                  <button
-                    key={workspace.id}
-                    className={`tool-orbit-node ${group.id}`}
-                    type="button"
-                    onClick={() => openWorkspace(workspace.id)}
-                    style={{ "--orbit-x": position.x, "--orbit-y": position.y } as CSSProperties}
-                  >
-                    {workspace.icon}
-                    <span>{workspace.label}</span>
-                  </button>
+                  <div key={group.id} className={`tool-orbit-cluster ${group.id}`}>
+                    <span className="tool-orbit-group-label">{group.label}</span>
+                    <div className="tool-orbit-cluster-items">
+                      {group.items.map((id) => {
+                        const workspace = phantomDeckWorkspaces.find((item) => item.id === id)!;
+                        return (
+                          <button
+                            key={workspace.id}
+                            className={`tool-orbit-node ${group.id}`}
+                            type="button"
+                            onClick={() => openWorkspace(workspace.id)}
+                            title={workspace.label}
+                            aria-label={workspace.label}
+                          >
+                            {workspace.icon}
+                            <span>{workspace.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
                 ))}
               </div>
             ) : null}

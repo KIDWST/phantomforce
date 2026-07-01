@@ -8686,3 +8686,440 @@ button.phantom-speech {
   .mission-flight-status { animation: deck-live 3.2s ease-in-out infinite; }
   @keyframes deck-live { 50% { opacity: 0.72; } }
 }
+
+/* ------------------------------------------------------------------ */
+/* Phantom Deck v3 QA polish: command surface, not dashboard.          */
+/* ------------------------------------------------------------------ */
+.phantom-deck.v3 {
+  --deck-green: #28f2a8;
+  --deck-cyan: #69dfff;
+  --deck-violet: #a5a9ff;
+  --deck-amber: #ffd77b;
+  padding: 16px 22px 18px;
+  background:
+    radial-gradient(circle at 52% 56%, rgba(40, 242, 168, 0.07), transparent 29%),
+    radial-gradient(circle at 76% 30%, rgba(105, 223, 255, 0.045), transparent 24%),
+    radial-gradient(circle at 26% 78%, rgba(165, 169, 255, 0.035), transparent 26%),
+    linear-gradient(180deg, #06080a 0%, #020304 100%);
+}
+
+.phantom-deck.v3::before {
+  opacity: 0.14;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.014) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.01) 1px, transparent 1px);
+  background-size: 124px 124px;
+}
+
+.phantom-deck.v3::after {
+  content: "";
+  position: absolute;
+  inset: auto 6% 2%;
+  height: 34vh;
+  pointer-events: none;
+  background:
+    radial-gradient(ellipse at 50% 46%, rgba(105, 223, 255, 0.11), transparent 18%),
+    radial-gradient(ellipse at 50% 62%, rgba(40, 242, 168, 0.13), rgba(40, 242, 168, 0.04) 34%, transparent 72%);
+  clip-path: none;
+  border-radius: 50%;
+  opacity: 0.26;
+  filter: blur(10px);
+  mix-blend-mode: screen;
+  animation: none;
+}
+
+.phantom-deck.v3 .phantom-deck-main {
+  min-height: calc(100vh - 34px);
+  grid-template-rows: auto minmax(430px, 1fr) auto auto;
+}
+
+.phantom-deck.v3.has-workspace .phantom-deck-main {
+  grid-template-rows: auto 205px auto auto;
+}
+
+.phantom-deck.v3 .phantom-command-stage {
+  min-height: clamp(430px, 58vh, 620px);
+}
+
+.phantom-deck.v3.has-workspace .phantom-command-stage {
+  min-height: 205px;
+}
+
+.phantom-deck.v3 .phantom-command-orb {
+  width: min(900px, 76vw);
+  height: 270px;
+  background:
+    radial-gradient(ellipse at center, rgba(105, 223, 255, 0.085), transparent 24%),
+    radial-gradient(ellipse at center, rgba(40, 242, 168, 0.08), rgba(40, 242, 168, 0.018) 48%, transparent 72%);
+  opacity: 0.66;
+}
+
+.phantom-deck.v3 .phantom-command-orb::before {
+  top: 52%;
+  opacity: 0.58;
+}
+
+.phantom-deck.v3 .phantom-command-orb::after {
+  bottom: 64px;
+  opacity: 0.72;
+}
+
+.phantom-deck.v3 .phantom-command-core {
+  width: min(1020px, calc(100% - 150px));
+  min-height: 190px;
+}
+
+.phantom-deck.v3.has-workspace .phantom-command-core {
+  min-height: 122px;
+}
+
+.phantom-deck.v3 .phantom-command-dock {
+  width: min(980px, 100%);
+  grid-template-columns: minmax(0, 1fr) 56px;
+  gap: 12px;
+}
+
+.phantom-deck.v3 .phantom-command {
+  position: relative;
+  min-height: 92px;
+  grid-template-columns: 36px minmax(0, 1fr) 54px;
+  padding: 24px 12px 12px 22px;
+  border-color: rgba(237, 255, 249, 0.1);
+  border-radius: 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.075), rgba(255, 255, 255, 0.028)),
+    linear-gradient(90deg, rgba(40, 242, 168, 0.055), rgba(105, 223, 255, 0.035)),
+    rgba(2, 7, 8, 0.9);
+  box-shadow:
+    0 38px 130px rgba(0, 0, 0, 0.64),
+    0 0 0 1px rgba(255, 255, 255, 0.018),
+    0 0 72px rgba(40, 242, 168, 0.09),
+    inset 0 1px 0 rgba(255, 255, 255, 0.07);
+}
+
+.phantom-deck.v3 .phantom-command::before {
+  content: "";
+  position: absolute;
+  inset: -14px 8% auto;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(105, 223, 255, 0.58), rgba(40, 242, 168, 0.44), transparent);
+  opacity: 0.62;
+}
+
+.phantom-deck.v3 .phantom-command-label {
+  position: absolute;
+  top: 11px;
+  left: 75px;
+  color: rgba(105, 223, 255, 0.66);
+  font-size: 9px;
+  font-weight: 900;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.phantom-deck.v3 .phantom-command input {
+  font-size: 20px;
+}
+
+.phantom-deck.v3 .phantom-command input::placeholder {
+  color: rgba(238, 250, 249, 0.52);
+}
+
+.phantom-deck.v3 .phantom-command button,
+.phantom-deck.v3 .tool-orbit-button {
+  border-radius: 12px;
+}
+
+.phantom-deck.v3 .tool-orbit-button {
+  width: 56px;
+  min-width: 56px;
+  min-height: 56px;
+  border-radius: 50%;
+}
+
+.phantom-deck.v3 .phantom-companion {
+  top: 50%;
+  right: -112px;
+  grid-template-columns: minmax(124px, 198px) 52px;
+  align-items: center;
+  transform: translateY(-50%);
+}
+
+.phantom-deck.v3.has-workspace .phantom-companion {
+  top: 50%;
+}
+
+.phantom-deck.v3 .phantom-speech {
+  max-width: 198px;
+  padding: 8px 10px;
+  border-color: rgba(237, 255, 249, 0.1);
+  border-radius: 14px 14px 4px 14px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.02)),
+    rgba(3, 8, 10, 0.9);
+  font-size: 11px;
+}
+
+.phantom-deck.v3 .phantom-ghost {
+  width: 50px;
+  height: 62px;
+  border-radius: 25px 25px 8px 8px;
+  background:
+    radial-gradient(circle at 50% 42%, rgba(40, 242, 168, 0.2), transparent 42%),
+    rgba(12, 29, 26, 0.42);
+  box-shadow:
+    inset 0 0 24px rgba(40, 242, 168, 0.12),
+    0 0 30px rgba(40, 242, 168, 0.18);
+}
+
+.phantom-deck.v3 .ghost-eye {
+  top: 22px;
+  width: 6px;
+  height: 6px;
+}
+
+.phantom-deck.v3 .ghost-eye.left {
+  left: 14px;
+}
+
+.phantom-deck.v3 .ghost-eye.right {
+  right: 14px;
+}
+
+.phantom-deck.v3 .ghost-tail {
+  width: 16px;
+  height: 14px;
+}
+
+.phantom-deck.v3 .ghost-tail.one {
+  left: 6px;
+}
+
+.phantom-deck.v3 .ghost-tail.two {
+  left: 18px;
+}
+
+.phantom-deck.v3 .ghost-tail.three {
+  right: 6px;
+}
+
+.phantom-deck.v3 .tool-orbit-menu {
+  width: min(660px, 88vw);
+  height: 300px;
+  z-index: 2;
+}
+
+.phantom-deck.v3 .tool-orbit-menu::before {
+  inset: 58px 92px;
+  border-color: rgba(237, 255, 249, 0.07);
+  background: radial-gradient(ellipse at center, rgba(40, 242, 168, 0.045), transparent 62%);
+}
+
+.phantom-deck.v3 .tool-orbit-cluster {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  display: grid;
+  gap: 7px;
+  justify-items: center;
+  pointer-events: auto;
+}
+
+.phantom-deck.v3 .tool-orbit-cluster.business {
+  transform: translate(-395px, -132px);
+}
+
+.phantom-deck.v3 .tool-orbit-cluster.create {
+  transform: translate(205px, -132px);
+}
+
+.phantom-deck.v3 .tool-orbit-cluster.safety {
+  transform: translate(250px, 54px);
+}
+
+.phantom-deck.v3 .tool-orbit-cluster.systems {
+  transform: translate(-66px, 112px);
+}
+
+.phantom-deck.v3 .tool-orbit-group-label {
+  position: static;
+  padding: 0;
+  color: rgba(237, 255, 249, 0.48);
+  background: transparent;
+  font-size: 9px;
+  transform: none;
+}
+
+.phantom-deck.v3 .tool-orbit-cluster-items {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 7px;
+  align-items: center;
+  justify-content: center;
+}
+
+.phantom-deck.v3 .tool-orbit-menu button.tool-orbit-node {
+  position: relative;
+  left: auto;
+  top: auto;
+  width: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 38% 26%, rgba(255, 255, 255, 0.12), transparent 35%),
+    rgba(3, 9, 11, 0.84);
+  border-color: rgba(237, 255, 249, 0.1);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.36);
+  transform: none;
+}
+
+.phantom-deck.v3 .tool-orbit-menu button.tool-orbit-node:hover,
+.phantom-deck.v3 .tool-orbit-menu button.tool-orbit-node:focus-visible {
+  border-color: rgba(40, 242, 168, 0.42);
+  background: rgba(40, 242, 168, 0.12);
+  transform: translateY(-2px);
+}
+
+.phantom-deck.v3 .tool-orbit-node span {
+  position: absolute;
+  left: 50%;
+  top: calc(100% + 7px);
+  width: max-content;
+  max-width: 120px;
+  padding: 4px 7px;
+  overflow: hidden;
+  color: rgba(242, 255, 251, 0.88);
+  background: rgba(4, 9, 11, 0.92);
+  border: 1px solid rgba(237, 255, 249, 0.08);
+  border-radius: 999px;
+  font-size: 10px;
+  line-height: 1;
+  opacity: 0;
+  pointer-events: none;
+  text-overflow: ellipsis;
+  transform: translate(-50%, -3px);
+  transition: opacity 150ms ease, transform 150ms ease;
+  white-space: nowrap;
+}
+
+.phantom-deck.v3 .tool-orbit-node:hover span,
+.phantom-deck.v3 .tool-orbit-node:focus-visible span {
+  opacity: 1;
+  transform: translate(-50%, 0);
+}
+
+.phantom-deck.v3 .pulse-strip {
+  width: min(820px, 100%);
+  margin-top: -52px;
+  opacity: 0.82;
+}
+
+.phantom-deck.v3.tools-open .pulse-strip {
+  opacity: 0.25;
+  pointer-events: none;
+  transform: translateY(8px);
+}
+
+.phantom-deck.v3 .pulse-chip {
+  min-height: 24px;
+  gap: 4px;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.018);
+  border-color: rgba(255, 255, 255, 0.045);
+}
+
+.phantom-deck.v3 .pulse-chip span,
+.phantom-deck.v3 .pulse-chip strong {
+  font-size: 9px;
+}
+
+.phantom-deck.v3 .active-workspace {
+  margin-top: 6px;
+  border-radius: 14px;
+  border-color: rgba(237, 255, 249, 0.09);
+  background:
+    radial-gradient(circle at 84% 0%, rgba(105, 223, 255, 0.075), transparent 28%),
+    linear-gradient(180deg, rgba(13, 18, 22, 0.88), rgba(4, 7, 9, 0.92));
+}
+
+.phantom-deck.v3 .deck-metric,
+.phantom-deck.v3 .deck-list-card,
+.phantom-deck.v3 .deck-wide-card,
+.phantom-deck.v3 .deck-embedded-module {
+  border-color: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.026);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .phantom-deck.v3::after {
+    animation: command-floor-breathe 9s ease-in-out infinite;
+  }
+
+  @keyframes command-floor-breathe {
+    50% {
+      opacity: 0.34;
+      transform: scaleX(1.04);
+    }
+  }
+}
+
+@media (max-width: 1320px) {
+  .phantom-deck.v3 .phantom-command-core {
+    width: min(940px, calc(100% - 96px));
+  }
+
+  .phantom-deck.v3 .phantom-companion {
+    right: -74px;
+    grid-template-columns: minmax(118px, 180px) 50px;
+  }
+
+  .phantom-deck.v3 .tool-orbit-cluster.business {
+    transform: translate(-335px, -128px);
+  }
+
+  .phantom-deck.v3 .tool-orbit-cluster.create {
+    transform: translate(174px, -128px);
+  }
+
+  .phantom-deck.v3 .tool-orbit-cluster.safety {
+    transform: translate(212px, 50px);
+  }
+}
+
+@media (max-width: 920px) {
+  .phantom-deck.v3 .phantom-command-core {
+    width: 100%;
+  }
+
+  .phantom-deck.v3 .phantom-companion {
+    transform: none;
+  }
+
+  .phantom-deck.v3 .tool-orbit-menu {
+    position: static;
+    height: auto;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+    margin-top: 14px;
+    transform: none;
+  }
+
+  .phantom-deck.v3 .tool-orbit-menu::before {
+    display: none;
+  }
+
+  .phantom-deck.v3 .tool-orbit-cluster,
+  .phantom-deck.v3 .tool-orbit-cluster.business,
+  .phantom-deck.v3 .tool-orbit-cluster.create,
+  .phantom-deck.v3 .tool-orbit-cluster.safety,
+  .phantom-deck.v3 .tool-orbit-cluster.systems {
+    position: static;
+    transform: none;
+  }
+}
