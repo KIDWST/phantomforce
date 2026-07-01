@@ -78,7 +78,7 @@ assert(r.statusCode === 0, "owner is NOT blocked from writing");
 // anonymous caller hitting a write is refused
 r = fakeReply();
 await asAnon({ method: "POST", url: "/client-access/abc/status/propose", headers: {} } as never, r as never);
-assert(r.statusCode === 403, "anonymous caller is 403'd on a write endpoint");
+assert(r.statusCode === 401, "anonymous caller is 401'd on a write endpoint");
 
 console.log(
   JSON.stringify(
@@ -89,6 +89,7 @@ console.log(
       freeMemberCanViewAndPreview: true,
       ownerCanWrite: true,
       anonWriteBlocked: true,
+      anonWriteStatus: 401,
       directApiBypassBlocked: true,
     },
     null,

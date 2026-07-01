@@ -46,6 +46,14 @@ export function makePaywallPreHandler(resolve: (request: FastifyRequest) => unkn
     if (!requiresWrite(request.method, request.url)) return;
 
     const session = resolve(request) as Parameters<typeof canWrite>[0];
+    if (!session) {
+      reply.code(401).send({
+        ok: false,
+        error: "Missing or invalid Authorization bearer token.",
+      });
+      return reply;
+    }
+
     if (canWrite(session)) return;
 
     const decision = getPaywallDecision(session);
