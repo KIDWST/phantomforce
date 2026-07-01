@@ -287,16 +287,18 @@ function handleRequest(req, res) {
     "Access-Control-Allow-Methods": "POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, x-admin-key",
     "Vary": "Origin",
+    "Connection": "close",
   };
   const send = (obj, status = 200) => {
-    res.writeHead(status, { ...base, "Content-Type": "application/json" });
-    res.end(JSON.stringify(obj));
+    const body = JSON.stringify(obj);
+    res.writeHead(status, { ...base, "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) });
+    res.end(body);
   };
 
-  if (req.method === "OPTIONS") { res.writeHead(204, base); return res.end(); }
+  if (req.method === "OPTIONS") { res.writeHead(204, { ...base, "Content-Length": 0 }); return res.end(); }
   const path = (req.url || "").split("?")[0];
   if (req.method === "GET" && path === "/health") return send({ ok: true, configured: !!KEY, provider: PROVIDER, model: MODEL, demoEmail: !!RESEND_API_KEY });
-  if (req.method !== "POST") { res.writeHead(405, base); return res.end(); }
+  if (req.method !== "POST") { res.writeHead(405, { ...base, "Content-Length": 0 }); return res.end(); }
   // Demo signup lives outside the AI proxy: it works even without an AI key.
   if (path === "/register") return handleRegister(req, res, send);
   if (path === "/upgrade") return handleUpgrade(req, res, send);
