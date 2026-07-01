@@ -7,6 +7,7 @@ import {
 } from "@phantomforce/contracts";
 import "dotenv/config";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
+import { z } from "zod";
 
 import {
   AccessApprovalDecisionSchema,
@@ -27,6 +28,7 @@ import { accessRepository } from "./access/access-repository.js";
 import {
   assertModuleAccess,
   assertWorkspaceAccess,
+  getWorkspaceAccess,
 } from "./access/access-guard.js";
 import { initializeAccessIdentityState } from "./access/access-identity-state.js";
 import { getWorkspaceModuleView } from "./access/module-handlers.js";
@@ -42,6 +44,7 @@ import {
   requireAccessSession,
   requireClientWorkspaceView,
 } from "./access/session.js";
+import type { AccessSession } from "./access/session.js";
 import {
   ClientAccessStatusSchema,
   getAccessDecision,
@@ -53,6 +56,7 @@ import { listPangolinDryRunPlan } from "./access/pangolin-reconciler.js";
 import { checkPangolinReadOnlyStatus } from "./access/pangolin-status.js";
 import { buildProductionReadinessReport } from "./access/production-readiness.js";
 import { getBillingProviderStatus } from "./access/billing-provider.js";
+import { paywallPreHandler } from "./access/paywall-guard.js";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
@@ -83,6 +87,12 @@ import { buildHermesLiveCallReceiptContract } from "./phantom-ai/hermes-live-rec
 import { buildHermesInteractionMemoryPreview } from "./phantom-ai/hermes-interaction-memory.js";
 import { recallHermesInteractionMemory } from "./phantom-ai/hermes-interaction-recall.js";
 import { buildOpsDashboardContext } from "./phantom-ai/ops-context.js";
+import { buildAgentWorkforceStatus } from "./phantom-ai/agent-workforce.js";
+import {
+  AgentActionRequestSchema,
+  getAgentActionDefinitions,
+  runAgentAction,
+} from "./phantom-ai/agent-actions.js";
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import {
   getHermesInteractionMemoryStoreStatus,
@@ -106,6 +116,15 @@ import {
   updateChicagoShotsProposalHistoryRecordStatus,
 } from "./phantom-ai/chicagoshots-proposal-history.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
+import {
+  getSecurityScannerStatus,
+  runSecurityScanPreview,
+  SecurityScanRequestSchema,
+} from "./phantom-ai/security-scanner.js";
+import {
+  getAutonomousSecurityScanStatus,
+  startAutonomousSecurityScanScheduler,
+} from "./phantom-ai/security-scan-scheduler.js";
 import {
   getProviderSetupStatus,
   previewModelRouterFoundation,
@@ -151,9 +170,97 @@ await app.register(cors, {
   allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER],
 });
 
+// Un-bypassable paywall: free/anonymous sessions may view but not mutate.
+app.addHook("preHandler", paywallPreHandler);
+
 const falconBroker = createFalconBroker({
   baseUrl: process.env.FALCON_BASE_URL ?? "http://127.0.0.1:8765",
 });
+
+const HiggsfieldDraftSchema = z.object({
+  prompt: z.string().trim().min(1).max(1600),
+  media_path: z.string().trim().max(600).optional().default(""),
+  mode: z.enum(["video", "image", "marketing", "analyze"]).optional().default("video"),
+  model: z.string().trim().max(80).optional().default("seedance_2_0"),
+  duration: z.string().trim().max(12).optional().default("12"),
+  aspect_ratio: z.enum(["9:16", "16:9", "1:1", "4:5"]).optional().default("9:16"),
+  resolution: z.enum(["480p", "720p", "1080p", "2k", "4k"]).optional().default("720p"),
+  media_role: z.enum(["image", "start-image", "end-image", "video", "audio"]).optional().default("video"),
+  product_url: z.string().trim().max(600).optional().default(""),
+  generate_audio: z.enum(["", "true", "false", "yes", "no"]).optional().default(""),
+});
+
+type PhantomCutBridgeResult =
+  | {
+      ok: true;
+      status: number;
+      data: unknown;
+      latencyMs: number;
+    }
+  | {
+      ok: false;
+      status: number;
+      error: string;
+      latencyMs: number;
+    };
+
+function phantomCutBaseUrl() {
+  return (process.env.PHANTOMCUT_BASE_URL ?? "http://127.0.0.1:8787").replace(/\/+$/, "");
+}
+
+function hasMediaLabAccess(session: AccessSession | undefined) {
+  if (!session) return false;
+  if (session.canManageAccess) return true;
+  if (!session.clientId) return false;
+
+  const workspace = getWorkspaceAccess(session.clientId);
+  if (!workspace?.decision.allowed) return false;
+
+  return workspace.decision.modules.some((moduleKey) =>
+    ["video", "media", "media lab", "content"].includes(moduleKey.trim().toLowerCase()),
+  );
+}
+
+async function callPhantomCut(pathname: string, init?: RequestInit): Promise<PhantomCutBridgeResult> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 4500);
+  const startedAt = Date.now();
+
+  try {
+    const response = await fetch(`${phantomCutBaseUrl()}${pathname}`, {
+      ...init,
+      signal: controller.signal,
+      headers: {
+        ...(init?.headers ?? {}),
+      },
+    });
+    const contentType = response.headers.get("content-type") ?? "";
+    const data = contentType.includes("application/json") ? await response.json() : await response.text();
+
+    return response.ok
+      ? {
+          ok: true,
+          status: response.status,
+          data,
+          latencyMs: Date.now() - startedAt,
+        }
+      : {
+          ok: false,
+          status: response.status,
+          error: typeof data === "string" ? data : JSON.stringify(data),
+          latencyMs: Date.now() - startedAt,
+        };
+  } catch (error) {
+    return {
+      ok: false,
+      status: 503,
+      error: error instanceof Error ? error.message : "PhantomCut bridge did not respond.",
+      latencyMs: Date.now() - startedAt,
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 try {
   assertAccessAuthConfiguration();
@@ -1672,6 +1779,109 @@ app.get("/phantom-ai/ops/context", async (request, reply) => {
   return { ok: true, session, read_only: true, context };
 });
 
+app.get("/phantom-ai/agents/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = (request.query ?? {}) as { window_hours?: unknown };
+  const requestedWindow =
+    typeof query.window_hours === "string" ? Number.parseInt(query.window_hours, 10) : undefined;
+  const windowHours =
+    Number.isInteger(requestedWindow) && requestedWindow && requestedWindow >= 1 && requestedWindow <= 24 * 7
+      ? requestedWindow
+      : 24;
+  const workforce = await buildAgentWorkforceStatus({
+    admin: session.canManageAccess,
+    windowHours,
+  });
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    workforce,
+  };
+});
+
+app.get("/phantom-ai/agents/actions", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    actions: getAgentActionDefinitions(),
+    safety_flags: {
+      product_repo_edits: false,
+      external_actions: false,
+      provider_calls: false,
+      n8n_started: false,
+      workflow_executed: false,
+      credentials_used: false,
+    },
+  };
+});
+
+app.post("/phantom-ai/agents/actions/run", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = AgentActionRequestSchema.safeParse(request.body ?? {});
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+      safety_flags: {
+        product_repo_edits: false,
+        external_actions: false,
+        provider_calls: false,
+        n8n_started: false,
+        workflow_executed: false,
+        credentials_used: false,
+      },
+    });
+  }
+
+  try {
+    const result = await runAgentAction(parsed.data);
+
+    if (!result.ok) {
+      return reply.code(404).send({ ok: false, session, result });
+    }
+
+    return {
+      ok: true,
+      session,
+      result,
+    };
+  } catch (error) {
+    return reply.code(500).send({
+      ok: false,
+      session,
+      error: error instanceof Error ? error.message : "Agent action failed.",
+      safety_flags: {
+        product_repo_edits: false,
+        external_actions: false,
+        provider_calls: false,
+        n8n_started: false,
+        workflow_executed: false,
+        credentials_used: false,
+      },
+    });
+  }
+});
+
 app.get("/phantom-ai/ops/sales-connector/status", async (request, reply) => {
   // Admin-only. Sales connector is intentionally planned/disabled pre-live:
   // no credentials, no external send, no live action.
@@ -1699,6 +1909,225 @@ app.get("/phantom-ai/ops/send-readiness/status", async (request, reply) => {
     session,
     read_only: true,
     send_readiness: getSendReadinessStatus(),
+  };
+});
+
+app.get("/phantom-ai/security/scan/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    scanner: getSecurityScannerStatus(),
+    access: {
+      role: session.role,
+      admin: session.canManageAccess,
+      scope: session.canManageAccess
+        ? "admin_and_client_website_content_preview"
+        : "own_client_workspace_content_preview",
+      filesystem_scan_enabled: false,
+      admin_filesystem_scan_required: false,
+    },
+  };
+});
+
+app.get("/phantom-ai/security/autonomous/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const status = await getAutonomousSecurityScanStatus();
+
+  if (!session.canManageAccess) {
+    return {
+      ok: true,
+      session,
+      autonomous: true,
+      cadence: status.cadence,
+      status: status.status,
+      protection_active: status.enabled,
+      target_count: status.target_count,
+      last_run_at: status.last_run_at,
+      next_run_after: status.next_run_after,
+      password_health: {
+        enabled: true,
+        rotation_interval_days: status.password_health.policy.rotation_interval_days,
+        last_checked_at: status.password_health.checked_at,
+        breach_check_timing: status.password_health.policy.breach_check_timing,
+        details_redacted: true,
+      },
+      details_redacted: true,
+      safety_flags: {
+        local_only: true,
+        destructive_action: false,
+        external_scan_provider_called: false,
+        upload_performed: false,
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    session,
+    autonomous: true,
+    status,
+    safety_flags: status.safety_flags,
+  };
+});
+
+app.get("/phantom-ai/media-lab/higgsfield/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const entitled = hasMediaLabAccess(session);
+  const [health, providerStatus] = await Promise.all([
+    callPhantomCut("/api/health"),
+    callPhantomCut("/api/providers/higgsfield/status"),
+  ]);
+
+  return {
+    ok: true,
+    session,
+    service: "PhantomForce Media Lab",
+    provider: "higgsfield",
+    commercial_provider: true,
+    subscribed_access: entitled,
+    admin_access: session.canManageAccess,
+    client_visible_name: "Generate Video",
+    phantomcut: {
+      base_url: phantomCutBaseUrl(),
+      reachable: health.ok,
+      health_status: health.status,
+      status: providerStatus.ok ? providerStatus.data : null,
+      status_error: providerStatus.ok ? null : providerStatus.error,
+      latency_ms: Math.max(health.latencyMs, providerStatus.latencyMs),
+    },
+    safety: {
+      draft_only: true,
+      paid_job_called: false,
+      upload_performed: false,
+      run_endpoint_exposed: false,
+      explicit_confirmation_required: "RUN_HIGGSFIELD_PAID_JOB",
+      no_public_posting: true,
+    },
+  };
+});
+
+app.post("/phantom-ai/media-lab/higgsfield/draft", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  if (!hasMediaLabAccess(session)) {
+    return reply.code(403).send({
+      ok: false,
+      error: "Media Lab video generation is not enabled for this workspace.",
+      provider_called: false,
+      paid_job_called: false,
+      upload_performed: false,
+    });
+  }
+
+  const parsed = HiggsfieldDraftSchema.safeParse(request.body ?? {});
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+      provider_called: false,
+      paid_job_called: false,
+      upload_performed: false,
+    });
+  }
+
+  const draft = await callPhantomCut("/api/jobs/higgsfield/draft", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      ...parsed.data,
+      explicit_confirmation: "",
+    }),
+  });
+
+  if (!draft.ok) {
+    return reply.code(draft.status).send({
+      ok: false,
+      error: draft.error,
+      provider: "higgsfield",
+      phantomcut_reachable: draft.status !== 503,
+      provider_called: false,
+      paid_job_called: false,
+      upload_performed: false,
+    });
+  }
+
+  return {
+    ok: true,
+    provider: "higgsfield",
+    commercial_provider: true,
+    action: "draft_only",
+    draft: draft.data,
+    safety: {
+      paid_job_called: false,
+      upload_performed: false,
+      run_endpoint_exposed: false,
+      explicit_confirmation_required: "RUN_HIGGSFIELD_PAID_JOB",
+      note: "This dashboard creates the Higgsfield draft only. Running a paid/upload generation remains separately gated inside PhantomCut.",
+    },
+  };
+});
+
+app.post("/phantom-ai/security/scan/preview", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = SecurityScanRequestSchema.safeParse(request.body ?? {});
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+      scanner: getSecurityScannerStatus(),
+      safety_flags: {
+        local_only: true,
+        destructive_action: false,
+        quarantine_performed: false,
+        external_scan_provider_called: false,
+        upload_performed: false,
+        raw_content_returned: false,
+      },
+    });
+  }
+
+  const result = runSecurityScanPreview(parsed.data);
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    scanner: getSecurityScannerStatus(),
+    result,
+    provider_called: false,
+    external_api_call_performed: false,
+    upload_performed: false,
+    destructive_action: false,
   };
 });
 
@@ -2849,9 +3278,17 @@ app.post("/falcon/jobs/validate", async (request, reply) => {
 
 export { app };
 
+let stopAutonomousSecurityScanner: (() => void) | null = null;
+
+app.addHook("onClose", async () => {
+  stopAutonomousSecurityScanner?.();
+  stopAutonomousSecurityScanner = null;
+});
+
 if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
   try {
     await app.listen({ host, port });
+    stopAutonomousSecurityScanner = startAutonomousSecurityScanScheduler(app.log);
     app.log.info(`PhantomForce server listening on http://${host}:${port}`);
   } catch (error) {
     app.log.error(error);

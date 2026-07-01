@@ -148,6 +148,22 @@ const moduleDefinitions: Record<string, ModuleDefinition> = {
       { id: "create-content", label: "Create content", requiresFullAccess: true },
     ],
   },
+  video: {
+    title: "Video Studio",
+    summary: "Subscriber video generation cockpit backed by PhantomForce Media Lab and Higgsfield drafts.",
+    widgets: [
+      { id: "provider", label: "Provider", value: "Higgsfield" },
+      { id: "mode", label: "Mode", value: "Draft first" },
+    ],
+    records: [
+      { id: "higgsfield-draft", title: "Generate Video draft lane", status: "available" },
+      { id: "approval", title: "Paid/upload run confirmation", status: "required" },
+    ],
+    actions: [
+      { id: "view-video-studio", label: "Open Video Studio", requiresFullAccess: false },
+      { id: "draft-generation-job", label: "Draft generation job", requiresFullAccess: true },
+    ],
+  },
   activity: {
     title: "Activity",
     summary: "Audit-friendly record of workspace changes.",
