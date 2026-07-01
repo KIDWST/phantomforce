@@ -931,7 +931,7 @@ const obsidianQuickCaptureContent = encodeURIComponent(
     "What are we trying to move?",
     "",
     "## Source",
-    "- Dashboard route: app.phantomforce.online",
+    "- Admin route: admin.phantomforce.online",
     "- Local route: http://127.0.0.1:5177",
     "",
     "## Decision",
@@ -2401,9 +2401,9 @@ const initialReviewClients: ReviewClient[] = [
     result: "Delivered short-form media assets and a clean delivery workflow.",
     channel: "manual",
     status: "ready",
-    reviewLink: "app.phantomforce.online/review/chicagoshots-media-client",
+    reviewLink: "app.chicagoshots.online/review/chicagoshots-media-client",
     draftMessage:
-      "Appreciate you working with us. Could you leave a quick review about the media day / highlight workflow? It helps other teams understand what the process feels like. Link: app.phantomforce.online/review/chicagoshots-media-client",
+      "Appreciate you working with us. Could you leave a quick review about the media day / highlight workflow? It helps other teams understand what the process feels like. Link: app.chicagoshots.online/review/chicagoshots-media-client",
     submittedReview: {
       rating: "5",
       author: "Sports media client",
@@ -2420,9 +2420,9 @@ const initialReviewClients: ReviewClient[] = [
     result: "Organized follow-ups, offer copy, and next-step workflow.",
     channel: "email",
     status: "ready",
-    reviewLink: "app.phantomforce.online/review/local-service-ops-sprint",
+    reviewLink: "app.chicagoshots.online/review/local-service-ops-sprint",
     draftMessage:
-      "Quick ask: would you leave a short review about the setup sprint and how it helped organize follow-ups, offers, and next steps? Link: app.phantomforce.online/review/local-service-ops-sprint",
+      "Quick ask: would you leave a short review about the setup sprint and how it helped organize follow-ups, offers, and next steps? Link: app.chicagoshots.online/review/local-service-ops-sprint",
     submittedReview: {
       rating: "5",
       author: "Local service owner",
@@ -2439,9 +2439,9 @@ const initialReviewClients: ReviewClient[] = [
     result: "Prepared a media package and delivery structure for team content.",
     channel: "text",
     status: "ready",
-    reviewLink: "app.phantomforce.online/review/team-media-workflow",
+    reviewLink: "app.chicagoshots.online/review/team-media-workflow",
     draftMessage:
-      "Would you mind leaving a quick review about the team media workflow? A few lines about the communication, content, and delivery process would help. Link: app.phantomforce.online/review/team-media-workflow",
+      "Would you mind leaving a quick review about the team media workflow? A few lines about the communication, content, and delivery process would help. Link: app.chicagoshots.online/review/team-media-workflow",
   },
 ];
 
@@ -2478,7 +2478,7 @@ const initialClientAccess: ClientAccess[] = [
     paymentStatus: "paid",
     accessStatus: "active",
     gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/chicagoshots",
+    privateRoute: "app.chicagoshots.online/chicagoshots",
     modules: ["Command", "Content", "Tasks", "Approvals", "Activity"],
     lastAudit: "Access confirmed for partner workspace",
   },
@@ -2490,7 +2490,7 @@ const initialClientAccess: ClientAccess[] = [
     paymentStatus: "paid",
     accessStatus: "active",
     gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/test-client",
+    privateRoute: "app.chicagoshots.online/test-client",
     modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts", "Video"],
     lastAudit: "Deposit paid; workspace active",
   },
@@ -2502,7 +2502,7 @@ const initialClientAccess: ClientAccess[] = [
     paymentStatus: "failed",
     accessStatus: "revoked",
     gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/the-force",
+    privateRoute: "app.chicagoshots.online/the-force",
     modules: ["Command", "Tasks", "Reports"],
     lastAudit: "Payment failed; private route revoked",
   },
@@ -2517,7 +2517,7 @@ function normalizeClientAccessRecord(record: ClientAccess): ClientAccess {
       plan: record.plan === "$2,000 Team Media Day" ? "Test client workspace" : record.plan,
       privateRoute:
         record.privateRoute === "app.phantomforce.online/sports-ops-demo"
-          ? "app.phantomforce.online/test-client"
+          ? "app.chicagoshots.online/test-client"
           : record.privateRoute,
     };
   }
@@ -2528,7 +2528,7 @@ function normalizeClientAccessRecord(record: ClientAccess): ClientAccess {
       business: "The Force",
       privateRoute:
         record.privateRoute === "app.phantomforce.online/past-due-pilot"
-          ? "app.phantomforce.online/the-force"
+          ? "app.chicagoshots.online/the-force"
           : record.privateRoute,
       lastAudit: record.lastAudit.replace(/Past Due Pilot/g, "The Force"),
     };
@@ -2550,7 +2550,7 @@ function normalizePangolinRoutePlan(plan: PangolinRoutePlan): PangolinRoutePlan 
       business: "Test Client",
       privateRoute:
         plan.privateRoute === "app.phantomforce.online/sports-ops-demo"
-          ? "app.phantomforce.online/test-client"
+          ? "app.chicagoshots.online/test-client"
           : plan.privateRoute,
     };
   }
@@ -2561,7 +2561,7 @@ function normalizePangolinRoutePlan(plan: PangolinRoutePlan): PangolinRoutePlan 
       business: "The Force",
       privateRoute:
         plan.privateRoute === "app.phantomforce.online/past-due-pilot"
-          ? "app.phantomforce.online/the-force"
+          ? "app.chicagoshots.online/the-force"
           : plan.privateRoute,
     };
   }
@@ -2814,7 +2814,20 @@ const businessOpsSimulation = {
 const API_BASE_URL =
   (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL?.replace(/\/$/, "") ??
   "http://127.0.0.1:5190";
+const ADMIN_PUBLIC_HOST = "admin.phantomforce.online";
+const CLIENT_PUBLIC_HOST = "app.chicagoshots.online";
+const ADMIN_PUBLIC_URL = `https://${ADMIN_PUBLIC_HOST}`;
+const CLIENT_PUBLIC_URL = `https://${CLIENT_PUBLIC_HOST}`;
 const MONEY_DEMO_CLIENT_ID = "client-money-demo";
+
+function currentPublicHost() {
+  if (typeof window === "undefined") return "";
+  return window.location.hostname.trim().toLowerCase();
+}
+
+function isAdminPublicHost() {
+  return currentPublicHost() === ADMIN_PUBLIC_HOST;
+}
 
 const defaultProviderSetupStatus: ProviderSetupStatus = {
   router_mode: "mock",
@@ -2871,7 +2884,7 @@ const defaultDeploymentModelStatus: DeploymentModelStatus = {
   model: "cloud_app_with_optional_local_connector",
   user_facing_product: "PhantomForce",
   user_facing_ai: "PhantomAI",
-  public_app_url: "https://app.phantomforce.online",
+  public_app_url: CLIENT_PUBLIC_URL,
   normal_user_surface: "hosted_web_app",
   desktop_companion_role: "optional_local_connector",
   source_code_exposed_to_users: false,
@@ -3619,9 +3632,14 @@ function App() {
   const [phantomAiBusy, setPhantomAiBusy] = useState(false);
   const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
   const [selectedOrg, setSelectedOrg] = useState(OWNER_ORG_NAME);
+  const adminHostOnly = useMemo(() => isAdminPublicHost(), []);
+  const availableSessions = useMemo(
+    () => (adminHostOnly ? initialSessions.filter((session) => session.canManageAccess) : initialSessions),
+    [adminHostOnly],
+  );
   const activeSession = useMemo(
-    () => initialSessions.find((session) => session.id === activeSessionId) ?? initialSessions[0],
-    [activeSessionId],
+    () => availableSessions.find((session) => session.id === activeSessionId) ?? availableSessions[0] ?? initialSessions[0],
+    [activeSessionId, availableSessions],
   );
   const canManageAccess = activeSession.canManageAccess;
   const visibleNavItems = useMemo(() => {
@@ -3674,7 +3692,13 @@ function App() {
   }
 
   async function signIn(sessionId: string, preferredRoute: Route = "command") {
-    const session = initialSessions.find((item) => item.id === sessionId) ?? initialSessions[0];
+    const session = availableSessions.find((item) => item.id === sessionId) ?? availableSessions[0] ?? initialSessions[0];
+
+    if (adminHostOnly && !session.canManageAccess) {
+      addActivity("Admin host blocked client login", "admin.phantomforce.online only allows owner/admin access.", "warn");
+      return;
+    }
+
     const allowedRoute = session.canManageAccess || !ADMIN_ONLY_ROUTES.has(preferredRoute)
       ? preferredRoute
       : "command";
@@ -3697,7 +3721,11 @@ function App() {
         const data = (await response.json()) as { token?: string };
         setSessionToken(data.token ?? "");
       } else {
-        addActivity("Signed in locally", "Backend auth token was not issued; API requests will fail closed.", "warn");
+        const gatewayResponse = await fetch(`${API_BASE_URL}/session`);
+
+        if (!gatewayResponse.ok) {
+          addActivity("Signed in locally", "Backend auth token was not issued; API requests will fail closed.", "warn");
+        }
       }
     } catch {
       addActivity("Signed in locally", "Backend auth service is offline; API requests will fail closed.", "warn");
@@ -3712,13 +3740,13 @@ function App() {
 
     const params = new URLSearchParams(window.location.search);
     const sessionId = params.get("session");
-    const previewSession = initialSessions.find((session) => session.id === sessionId);
+    const previewSession = availableSessions.find((session) => session.id === sessionId);
 
     if (!previewSession) return;
 
     setPreviewLinkApplied(true);
     void signIn(previewSession.id, parsePreviewRoute(params.get("view")));
-  }, [previewLinkApplied, signedIn]);
+  }, [availableSessions, previewLinkApplied, signedIn]);
 
   async function refreshWorkspaceModule(clientId: string, moduleKey?: string) {
     if (!moduleKey) {
@@ -4917,9 +4945,10 @@ function App() {
     return (
       <LoginScreen
         activeSessionId={activeSessionId}
-        sessions={initialSessions}
+        sessions={availableSessions}
         setActiveSessionId={setActiveSessionId}
         onSignIn={signIn}
+        adminHostOnly={adminHostOnly}
       />
     );
   }
@@ -5195,18 +5224,25 @@ function LoginScreen({
   sessions,
   setActiveSessionId,
   onSignIn,
+  adminHostOnly,
 }: {
   activeSessionId: string;
   sessions: AppSession[];
   setActiveSessionId: (sessionId: string) => void;
   onSignIn: (sessionId: string) => void | Promise<void>;
+  adminHostOnly: boolean;
 }) {
   // Sessions (the list + switcher) are an admin-only feature. A client never
   // sees a session list — they enter their single workspace. Operators reveal
   // the picker explicitly.
   const [operatorMode, setOperatorMode] = useState(false);
+  const adminDefault = sessions.find((session) => session.canManageAccess) ?? sessions[0];
   const clientDefault = sessions.find((session) => !session.canManageAccess) ?? sessions[0];
-  const targetSessionId = operatorMode ? activeSessionId : (clientDefault?.id ?? activeSessionId);
+  const targetSessionId = adminHostOnly
+    ? (adminDefault?.id ?? activeSessionId)
+    : operatorMode
+      ? activeSessionId
+      : (clientDefault?.id ?? activeSessionId);
   return (
     <main className="login-screen">
       <section className="login-copy">
@@ -5228,8 +5264,8 @@ function LoginScreen({
         </div>
       </section>
       <section className="login-panel">
-        <span className="panel-label">Pilot access</span>
-        <h2>One login. One business brain.</h2>
+        <span className="panel-label">{adminHostOnly ? "Admin access" : "Pilot access"}</span>
+        <h2>{adminHostOnly ? "Owner command access." : "One login. One business brain."}</h2>
         <label>
           Email
           <input defaultValue="jordan@phantomforce.online" />
@@ -5238,7 +5274,7 @@ function LoginScreen({
           Password
           <input type="password" defaultValue="phantomforce" />
         </label>
-        {operatorMode ? (
+        {operatorMode && !adminHostOnly ? (
           <label>
             Session
             <select value={activeSessionId} onChange={(event) => setActiveSessionId(event.target.value)}>
@@ -5252,11 +5288,13 @@ function LoginScreen({
         ) : null}
         <button className="primary-action" type="button" onClick={() => void onSignIn(targetSessionId)}>
           <KeyRound size={18} />
-          Enter PhantomForce
+          {adminHostOnly ? "Enter Admin Cockpit" : "Enter PhantomForce"}
         </button>
-        <button className="ghost-small operator-toggle" type="button" onClick={() => setOperatorMode((value) => !value)}>
-          {operatorMode ? "Back to client sign-in" : "Operator sign-in"}
-        </button>
+        {!adminHostOnly ? (
+          <button className="ghost-small operator-toggle" type="button" onClick={() => setOperatorMode((value) => !value)}>
+            {operatorMode ? "Back to client sign-in" : "Operator sign-in"}
+          </button>
+        ) : null}
         <p className="account-disclaimer">
           By creating an account, you agree that PhantomForce provides software, automation tools, and AI-generated
           assistance. You are responsible for reviewing and approving any outputs, decisions, messages, content, or
@@ -6462,7 +6500,7 @@ function ActiveWorkspace({
         <div className="deck-grid">
           <DeckMetric label="Site Studio" value="Available" detail="Website/app build lane opens as a full surface." tone="good" />
           <DeckMetric label="Store Builder" value="Concept-ready" detail="Products, offers, checkout notes, and catalog drafts belong here." tone="good" />
-          <DeckMetric label="Dashboard route" value="app.phantomforce.online" detail="Public exposure is not changed by this deck." tone="good" />
+          <DeckMetric label="Admin route" value="admin.phantomforce.online" detail="Client workspaces stay on app.chicagoshots.online." tone="good" />
           <DeckMetric label="Client workspaces" value={String(clientAccess.length)} detail="Access remains permission-gated." tone="muted" />
           <section className="deck-wide-card">
             <div className="section-head compact">
@@ -9709,7 +9747,7 @@ function AccessView({
             ))}
           </div>
           <div className="money-demo-proof">
-            <span>{moneyDemoClient?.privateRoute ?? "app.phantomforce.online/money-demo-athletics"}</span>
+            <span>{moneyDemoClient?.privateRoute ?? "app.chicagoshots.online/money-demo-athletics"}</span>
             <span>Calendar credential ref: local-demo:{MONEY_DEMO_CLIENT_ID}:calendar</span>
             <span>Confirmation and audit required</span>
           </div>

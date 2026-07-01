@@ -5,6 +5,7 @@ import {
   getLocalDemoCredentialReference,
   type ConnectorCredentialReference,
 } from "../connectors/credential-boundary.js";
+import { CLIENT_PUBLIC_HOST } from "./public-hosts.js";
 
 export const ClientAccessStatusSchema = z.enum(["active", "past_due", "revoked"]);
 export const PaymentStatusSchema = z.enum(["paid", "due", "failed"]);
@@ -69,33 +70,41 @@ function normalizeConnectorCredentials(record: ClientAccessRecord): ClientAccess
 }
 
 function normalizeClientAccessRecord(record: ClientAccessRecord): ClientAccessRecord {
-  if (record.id === "client-sports-demo") {
+  const recordWithClientHost = {
+    ...record,
+    privateRoute: record.privateRoute.replace(/^app\.phantomforce\.online\//, `${CLIENT_PUBLIC_HOST}/`),
+  };
+
+  if (recordWithClientHost.id === "client-sports-demo") {
     return normalizeConnectorCredentials({
-      ...record,
+      ...recordWithClientHost,
       business: "Test Client",
-      owner: record.owner === "Client Owner" || record.owner === "Sports Ops Demo Owner" ? "Demo Client" : record.owner,
-      plan: record.plan === "$2,000 Team Media Day" ? "Test client workspace" : record.plan,
+      owner:
+        recordWithClientHost.owner === "Client Owner" || recordWithClientHost.owner === "Sports Ops Demo Owner"
+          ? "Demo Client"
+          : recordWithClientHost.owner,
+      plan: recordWithClientHost.plan === "$2,000 Team Media Day" ? "Test client workspace" : recordWithClientHost.plan,
       privateRoute:
-        record.privateRoute === "app.phantomforce.online/sports-ops-demo"
-          ? "app.phantomforce.online/test-client"
-          : record.privateRoute,
-      lastAudit: record.lastAudit.replace(/Sports Ops Demo/g, "Test Client"),
+        recordWithClientHost.privateRoute === `${CLIENT_PUBLIC_HOST}/sports-ops-demo`
+          ? `${CLIENT_PUBLIC_HOST}/test-client`
+          : recordWithClientHost.privateRoute,
+      lastAudit: recordWithClientHost.lastAudit.replace(/Sports Ops Demo/g, "Test Client"),
     });
   }
 
-  if (record.id === "client-past-due") {
+  if (recordWithClientHost.id === "client-past-due") {
     return normalizeConnectorCredentials({
-      ...record,
+      ...recordWithClientHost,
       business: "The Force",
       privateRoute:
-        record.privateRoute === "app.phantomforce.online/past-due-pilot"
-          ? "app.phantomforce.online/the-force"
-          : record.privateRoute,
-      lastAudit: record.lastAudit.replace(/Past Due Pilot/g, "The Force"),
+        recordWithClientHost.privateRoute === `${CLIENT_PUBLIC_HOST}/past-due-pilot`
+          ? `${CLIENT_PUBLIC_HOST}/the-force`
+          : recordWithClientHost.privateRoute,
+      lastAudit: recordWithClientHost.lastAudit.replace(/Past Due Pilot/g, "The Force"),
     });
   }
 
-  return normalizeConnectorCredentials(record);
+  return normalizeConnectorCredentials(recordWithClientHost);
 }
 
 export const seedClientAccessRecords: ClientAccessRecord[] = [
@@ -107,7 +116,7 @@ export const seedClientAccessRecords: ClientAccessRecord[] = [
     paymentStatus: "paid",
     accessStatus: "active",
     gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/chicagoshots",
+    privateRoute: `${CLIENT_PUBLIC_HOST}/chicagoshots`,
     modules: ["Command", "Content", "Tasks", "Approvals", "Activity"],
     connectorCredentials: {},
     lastAudit: "Access confirmed for partner workspace",
@@ -120,7 +129,7 @@ export const seedClientAccessRecords: ClientAccessRecord[] = [
     paymentStatus: "paid",
     accessStatus: "active",
     gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/test-client",
+    privateRoute: `${CLIENT_PUBLIC_HOST}/test-client`,
     modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts", "Video"],
     connectorCredentials: buildDefaultConnectorCredentials("client-sports-demo", [
       "Command",
@@ -140,7 +149,7 @@ export const seedClientAccessRecords: ClientAccessRecord[] = [
     paymentStatus: "failed",
     accessStatus: "revoked",
     gateway: "Pangolin",
-    privateRoute: "app.phantomforce.online/the-force",
+    privateRoute: `${CLIENT_PUBLIC_HOST}/the-force`,
     modules: ["Command", "Tasks", "Reports"],
     connectorCredentials: {},
     lastAudit: "Payment failed; private route revoked",
@@ -191,7 +200,7 @@ export function deriveAccessStatusFromPayment(paymentStatus: PaymentStatus): Cli
 }
 
 export function defaultPrivateRouteForBusiness(business: string) {
-  return `app.phantomforce.online/${slugifyRouteSegment(business) || "client"}`;
+  return `${CLIENT_PUBLIC_HOST}/${slugifyRouteSegment(business) || "client"}`;
 }
 
 export function buildProvisionedClientAccess(

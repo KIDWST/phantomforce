@@ -4,6 +4,7 @@ import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { isSubscriptionActive } from "./subscription-store.js";
+import { filterSessionsForPublicHost, publicHostFromHeaders } from "./public-hosts.js";
 
 export const SESSION_HEADER = "x-phantomforce-session";
 export const AUTHORIZATION_HEADER = "Authorization";
@@ -476,6 +477,8 @@ export function requireAccessSession(request: FastifyRequest, reply: FastifyRepl
   const session = resolveAccessSession(request);
 
   if (!session) {
+    const publicHost = publicHostFromHeaders(request.headers as Record<string, unknown>);
+
     reply.code(401).send({
       ok: false,
       error: `Missing or invalid ${AUTHORIZATION_HEADER} bearer token.`,
@@ -484,7 +487,7 @@ export function requireAccessSession(request: FastifyRequest, reply: FastifyRepl
         : enableDemoAuth
           ? "/auth/demo-login"
           : "/auth/session-login",
-      sessions: listAccessSessions(),
+      sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
     });
     return undefined;
   }

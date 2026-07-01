@@ -5,8 +5,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     host: "127.0.0.1",
-    port: 5188,
-    allowedHosts: ["app.phantomforce.online"],
+    port: 5177,
+    strictPort: true,
+    allowedHosts: ["admin.phantomforce.online", "app.chicagoshots.online", "app.phantomforce.online"],
     proxy: {
       "/auth": "http://127.0.0.1:5190",
       "/billing": "http://127.0.0.1:5190",

@@ -1,3 +1,5 @@
+import { CLIENT_PUBLIC_URL } from "./public-hosts.js";
+
 export type DeploymentModelAudience = "admin" | "client";
 
 function boolFromEnv(name: string) {
@@ -10,7 +12,7 @@ function optionalEnv(name: string) {
 }
 
 export function buildDeploymentModelStatus(options: { audience: DeploymentModelAudience }) {
-  const publicAppUrl = optionalEnv("PHANTOMFORCE_PUBLIC_APP_URL") ?? "https://app.phantomforce.online";
+  const publicAppUrl = optionalEnv("PHANTOMFORCE_PUBLIC_APP_URL") ?? CLIENT_PUBLIC_URL;
   const localConnectorEnabled = boolFromEnv("PHANTOMFORCE_LOCAL_CONNECTOR_ENABLED");
   const signedDesktopCompanion = boolFromEnv("PHANTOMFORCE_SIGNED_DESKTOP_COMPANION_READY");
   const productionCloudReady = boolFromEnv("PHANTOMFORCE_PRODUCTION_CLOUD_READY");

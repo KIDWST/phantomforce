@@ -12,6 +12,7 @@ Thumbs.db
 # Local runtime state, backups, and recovery snapshots (not source)
 server/data/
 server/.local/
+.local/
 .phantom/
 **/*.bak
 **/snapshots/

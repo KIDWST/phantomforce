@@ -38,6 +38,7 @@ import {
   SESSION_HEADER,
   assertAccessAuthConfiguration,
   getAccessAuthConfiguration,
+  getAccessSession,
   issueAccessSessionToken,
   listAccessSessions,
   requireAdminAccessSession,
@@ -45,6 +46,12 @@ import {
   requireClientWorkspaceView,
 } from "./access/session.js";
 import type { AccessSession } from "./access/session.js";
+import {
+  canUseSessionOnPublicHost,
+  filterSessionsForPublicHost,
+  publicHostFromHeaders,
+  PUBLIC_WEB_ORIGINS,
+} from "./access/public-hosts.js";
 import {
   ClientAccessStatusSchema,
   getAccessDecision,
@@ -172,7 +179,7 @@ await app.register(cors, {
   origin: [
     /^http:\/\/127\.0\.0\.1:\d+$/,
     /^http:\/\/localhost:\d+$/,
-    "https://app.phantomforce.online",
+    ...PUBLIC_WEB_ORIGINS,
   ],
   credentials: true,
   allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER],
@@ -299,15 +306,20 @@ app.get("/contracts/actions", async () => {
   };
 });
 
-app.get("/sessions", async () => {
+function requestPublicHost(request: FastifyRequest) {
+  return publicHostFromHeaders(request.headers as Record<string, unknown>);
+}
+
+app.get("/sessions", async (request) => {
   const authConfiguration = getAccessAuthConfiguration();
+  const publicHost = requestPublicHost(request);
 
   return {
     ok: true,
     auth: {
       ...authConfiguration,
     },
-    sessions: listAccessSessions(),
+    sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
   };
 });
 
@@ -328,6 +340,18 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
     return reply.code(400).send({
       ok: false,
       error: parsed.error.flatten(),
+    });
+  }
+
+  const requestedSession = getAccessSession(parsed.data.sessionId);
+  const publicHost = requestPublicHost(request);
+
+  if (requestedSession && !canUseSessionOnPublicHost(publicHost, requestedSession)) {
+    return reply.code(403).send({
+      ok: false,
+      error: "This login is not available on this public host.",
+      host: publicHost || "local",
+      sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
     });
   }
 
