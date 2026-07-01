@@ -168,7 +168,11 @@ const app = Fastify({
 });
 
 await app.register(cors, {
-  origin: [/^http:\/\/127\.0\.0\.1:\d+$/, /^http:\/\/localhost:\d+$/],
+  origin: [
+    /^http:\/\/127\.0\.0\.1:\d+$/,
+    /^http:\/\/localhost:\d+$/,
+    "https://app.phantomforce.online",
+  ],
   credentials: true,
   allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER],
 });
