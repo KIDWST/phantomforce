@@ -318,9 +318,9 @@ async function initEntity() {
         pa[j] = bx * s; pa[j + 1] = ny * breath; pa[j + 2] = bz * s;
       }
       posAttr.needsUpdate = true;
-      bodyMat.color.setHex(isDead ? 0xff6b8a : 0x33ffa0);
+      bodyMat.color.setHex(isDead ? 0xff2020 : 0x33ffa0);   // red when it plays dead
       bodyMat.opacity = 0.86 + pulse.v * 0.14;
-      glowMat.color.setHex(isDead ? 0xc23a52 : 0x0d7d50);
+      glowMat.color.setHex(isDead ? 0xb00d0d : 0x0d7d50);
       glowMat.opacity = 0.16 + pulse.v * 0.16;
 
       // float; slump when dead
