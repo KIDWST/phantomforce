@@ -2221,37 +2221,49 @@ const phantomToolGroups: Array<{
   { id: "systems", label: "Systems", items: ["brain", "n8n", "agentlab", "status"] },
 ];
 
-function resolvePhantomDeckWorkspace(value: string): PhantomDeckWorkspaceId | null {
+const ADMIN_ONLY_DECK_WORKSPACES = new Set<PhantomDeckWorkspaceId>(["brain", "access", "agentlab", "n8n"]);
+
+function canOpenPhantomDeckWorkspace(workspace: PhantomDeckWorkspaceId, canManageAccess: boolean) {
+  return canManageAccess || !ADMIN_ONLY_DECK_WORKSPACES.has(workspace);
+}
+
+function getVisiblePhantomDeckWorkspaces(canManageAccess: boolean) {
+  return phantomDeckWorkspaces.filter((workspace) => canOpenPhantomDeckWorkspace(workspace.id, canManageAccess));
+}
+
+function resolvePhantomDeckWorkspace(value: string, canManageAccess = true): PhantomDeckWorkspaceId | null {
   const text = value.trim().toLowerCase();
+  const allow = (workspace: PhantomDeckWorkspaceId) =>
+    canOpenPhantomDeckWorkspace(workspace, canManageAccess) ? workspace : "status";
 
   if (!text) return null;
   if (/\b(help|commands?|what can|menu)\b/.test(text)) return "help";
   if (/\b(all tools|tools?|orbit|launcher|modules?)\b/.test(text)) return "help";
-  if (/\b(proposals?|quote|quote builder|build proposal|lead intake)\b/.test(text)) return "proposal";
-  if (/\b(follow[-\s]?ups?|follow up|manual send|manual-send)\b/.test(text)) return "followup";
+  if (/\b(proposals?|quote|quote builder|build proposal|lead intake)\b/.test(text)) return allow("proposal");
+  if (/\b(follow[-\s]?ups?|follow up|manual send|manual-send)\b/.test(text)) return allow("followup");
   if (/\b(leads?|pipeline|proposal packets?)\b/.test(text)) {
-    return "leads";
+    return allow("leads");
   }
-  if (/\b(work|tasks?|schedule|bookings?|calendar|today)\b/.test(text)) return "work";
-  if (/\b(money|revenue|cash|won|lost|quote values?|sales)\b/.test(text)) return "money";
-  if (/\b(video|phantomcut|media|higgsfield|reaper|resolve|clips?|creative generation)\b/.test(text)) return "video";
-  if (/\b(protect|security|scanner|scan|medusa|robin|phishing|passwords?)\b/.test(text)) return "protect";
-  if (/\b(review|approvals?|approve|drafts?|human)\b/.test(text)) return "review";
-  if (/\b(site|website|web app|dashboard|codex|build lane|store|shop|checkout|storefront)\b/.test(text)) return "site";
-  if (/\b(hermes|brain|memory|model|models?|companion|phantom ai|phantomai)\b/.test(text)) return "brain";
-  if (/\b(access|clients?|users?|admin|login|permissions?|organization|organizations?)\b/.test(text)) return "access";
-  if (/\b(agentlab|agent lab|agents?|workforce|crew|internal workers?)\b/.test(text)) return "agentlab";
-  if (/\b(n8n|automation|workflow|tool lane|worker|systems?|orchestration)\b/.test(text)) return "n8n";
-  if (/\b(status|health|systems?|ops|pulse)\b/.test(text)) return "status";
+  if (/\b(work|tasks?|schedule|bookings?|calendar|today)\b/.test(text)) return allow("work");
+  if (/\b(money|revenue|cash|won|lost|quote values?|sales)\b/.test(text)) return allow("money");
+  if (/\b(video|phantomcut|media|higgsfield|reaper|resolve|clips?|creative generation)\b/.test(text)) return allow("video");
+  if (/\b(protect|security|scanner|scan|medusa|robin|phishing|passwords?)\b/.test(text)) return allow("protect");
+  if (/\b(review|approvals?|approve|drafts?|human)\b/.test(text)) return allow("review");
+  if (/\b(site|website|web app|dashboard|codex|build lane|store|shop|checkout|storefront)\b/.test(text)) return allow("site");
+  if (/\b(hermes|brain|memory|model|models?|companion|phantom ai|phantomai)\b/.test(text)) return allow("brain");
+  if (/\b(access|clients?|users?|admin|login|permissions?|organization|organizations?)\b/.test(text)) return allow("access");
+  if (/\b(agentlab|agent lab|agents?|workforce|crew|internal workers?)\b/.test(text)) return allow("agentlab");
+  if (/\b(n8n|automation|workflow|tool lane|worker|systems?|orchestration)\b/.test(text)) return allow("n8n");
+  if (/\b(status|health|systems?|ops|pulse)\b/.test(text)) return allow("status");
 
   return null;
 }
 
-function suggestPhantomDeckWorkspaces(value: string): PhantomDeckWorkspaceId[] {
+function suggestPhantomDeckWorkspaces(value: string, canManageAccess = true): PhantomDeckWorkspaceId[] {
   const text = value.trim().toLowerCase();
   if (!text) return ["status", "work", "leads", "video"];
 
-  const scored = phantomDeckWorkspaces
+  const scored = getVisiblePhantomDeckWorkspaces(canManageAccess)
     .filter((workspace) => workspace.id !== "help")
     .map((workspace) => {
       const haystack = `${workspace.id} ${workspace.label} ${workspace.command} ${workspace.detail}`.toLowerCase();
@@ -2265,7 +2277,7 @@ function suggestPhantomDeckWorkspaces(value: string): PhantomDeckWorkspaceId[] {
     .sort((a, b) => b.score - a.score)
     .map((item) => item.workspace);
 
-  const fallback: PhantomDeckWorkspaceId[] = ["work", "site", "video", "brain"];
+  const fallback: PhantomDeckWorkspaceId[] = canManageAccess ? ["work", "site", "video", "brain"] : ["work", "site", "video", "review"];
   return (scored.length ? scored : fallback).slice(0, 4);
 }
 
@@ -3674,6 +3686,10 @@ function App() {
     () => clientAccess.find((client) => client.business === selectedOrg),
     [clientAccess, selectedOrg],
   );
+  const scopedClientAccess = useMemo(() => {
+    if (canManageAccess && selectedWorkspaceClient) return [selectedWorkspaceClient];
+    return visibleClientAccess;
+  }, [canManageAccess, selectedWorkspaceClient, visibleClientAccess]);
 
   useEffect(() => {
     if (!canManageAccess && ADMIN_ONLY_ROUTES.has(route)) {
@@ -4953,11 +4969,8 @@ function App() {
     );
   }
 
-  const adminDeckActive = canManageAccess && route === "command";
-
   return (
-    <div className={`app-shell${adminDeckActive ? " phantom-deck-app-shell" : ""}`}>
-      {!adminDeckActive ? (
+    <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-row">
           <div className="brand-mark">
@@ -5015,10 +5028,8 @@ function App() {
           <small>Phantom AI, ChicagoShots proposals, and next-step planning are active locally.</small>
         </div>
       </aside>
-      ) : null}
 
-      <main className={adminDeckActive ? "phantom-deck-workspace" : "workspace"}>
-        {!adminDeckActive ? (
+      <main className="workspace">
           <>
         <Topbar activeSession={activeSession} selectedOrg={selectedOrg} pending={stats.pending} />
         {subscription && subscription.canView && !subscription.canWrite ? (
@@ -5036,14 +5047,14 @@ function App() {
           </div>
         ) : null}
           </>
-        ) : null}
         {route === "command" ? (
-          canManageAccess ? (
           <PhantomDeck
             messages={messages}
             commandText={commandText}
             setCommandText={setCommandText}
             canManageAccess={canManageAccess}
+            selectedOrg={selectedOrg}
+            selectedWorkspaceClient={selectedWorkspaceClient}
             phantomAiOpsStatus={phantomAiOpsStatus}
             providerSetupStatus={providerSetupStatus}
             agentWorkforceStatus={agentWorkforceStatus}
@@ -5056,33 +5067,9 @@ function App() {
             events={events}
             tasks={tasks}
             activity={activity}
-            clientAccess={visibleClientAccess}
+            clientAccess={scopedClientAccess}
             setRoute={setRoute}
           />
-          ) : (
-          <CommandCenter
-            messages={messages}
-            commandText={commandText}
-            setCommandText={setCommandText}
-            submitCommand={submitCommand}
-            aiProvider={aiProvider}
-            setAiProvider={setAiProvider}
-            phantomAiBusy={phantomAiBusy}
-            canManageAccess={canManageAccess}
-            phantomAiOpsStatus={phantomAiOpsStatus}
-            sessionHeaders={sessionHeaders}
-            createFollowUpPlan={createFollowUpPlan}
-            runPhantomCommand={runPhantomCommand}
-            stageQuickToolApproval={stageQuickToolApproval}
-            stats={stats}
-            approvals={approvals}
-            approveAction={approveAction}
-            rejectAction={rejectAction}
-            emails={emails}
-            events={events}
-            setRoute={setRoute}
-          />
-          )
         ) : null}
         {route === "agents" && canManageAccess ? (
           <AgentControlCenter
@@ -5137,7 +5124,7 @@ function App() {
         {route === "access" && canManageAccess ? (
           <AccessView
             canManageAccess={canManageAccess}
-            clientAccess={visibleClientAccess}
+            clientAccess={scopedClientAccess}
             guardedWorkspace={guardedWorkspace}
             workspaceModuleView={workspaceModuleView}
             pangolinPlan={pangolinPlan}
@@ -5165,7 +5152,7 @@ function App() {
         ) : null}
       </main>
 
-      {!adminDeckActive && mobileMoreOpen && moreMobileNavItems.length ? (
+      {mobileMoreOpen && moreMobileNavItems.length ? (
         <div className="mobile-more-sheet" role="menu" aria-label="More sections">
           {moreMobileNavItems.map((item) => (
             <button
@@ -5184,7 +5171,6 @@ function App() {
           ))}
         </div>
       ) : null}
-      {!adminDeckActive ? (
       <nav className="mobile-nav" aria-label="Mobile navigation">
         {coreMobileNavItems.map((item) => (
           <button
@@ -5214,7 +5200,6 @@ function App() {
           </button>
         ) : null}
       </nav>
-      ) : null}
     </div>
   );
 }
@@ -5356,6 +5341,8 @@ function PhantomDeck({
   commandText,
   setCommandText,
   canManageAccess,
+  selectedOrg,
+  selectedWorkspaceClient,
   phantomAiOpsStatus,
   providerSetupStatus,
   agentWorkforceStatus,
@@ -5375,6 +5362,8 @@ function PhantomDeck({
   commandText: string;
   setCommandText: (value: string) => void;
   canManageAccess: boolean;
+  selectedOrg: string;
+  selectedWorkspaceClient?: ClientAccess;
   phantomAiOpsStatus: PhantomAiOpsStatus;
   providerSetupStatus: ProviderSetupStatus;
   agentWorkforceStatus: AgentWorkforceStatus;
@@ -5406,10 +5395,13 @@ function PhantomDeck({
   const [sendReadiness, setSendReadiness] = useState<PhantomAiOpsStatus["send_readiness"] | null>(null);
   const [toolLanePreview, setToolLanePreview] = useState<PhantomDeckToolLanePreview | null>(null);
   const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
+  const viewingClientWorkspace = Boolean(canManageAccess && selectedWorkspaceClient);
   const latestAssistant = [...messages].reverse().find((message) => message.role === "assistant");
   const priorityProposal = getChicagoShotsPriorityProposal(proposalHistory);
   const activeWorkspaceMeta = activeWorkspace
-    ? (phantomDeckWorkspaces.find((workspace) => workspace.id === activeWorkspace) ?? phantomDeckWorkspaces[0])
+    ? (getVisiblePhantomDeckWorkspaces(canManageAccess).find((workspace) => workspace.id === activeWorkspace) ??
+      getVisiblePhantomDeckWorkspaces(canManageAccess)[0] ??
+      phantomDeckWorkspaces[0])
     : null;
   const effectiveSendReadiness = sendReadiness ?? phantomAiOpsStatus.send_readiness;
   const n8nRunning = toolLanePreview?.n8n_running ?? phantomAiOpsStatus.n8n.n8n_running;
@@ -5680,6 +5672,9 @@ function PhantomDeck({
       icon: <Users size={18} />,
     },
   ];
+  const visibleSystemNodes = systemNodes.filter((node) =>
+    canOpenPhantomDeckWorkspace(node.workspace, canManageAccess),
+  );
 
   const tickerItems = [
     ...(agentWorkforceStatus.role === "admin" ? agentWorkforceStatus.ticker.slice(0, 5).map((item) => item.text) : []),
@@ -5703,6 +5698,9 @@ function PhantomDeck({
     { label: "Automation", detail: "Runbook drafts", workspace: "n8n", icon: <Settings size={20} /> },
     { label: "View All", detail: "Capability orbit", workspace: "help", icon: <Plus size={20} /> },
   ];
+  const visibleMissionTiles = missionTiles.filter((tile) =>
+    canOpenPhantomDeckWorkspace(tile.workspace, canManageAccess),
+  );
 
   const atAGlanceItems = [
     { label: "Due today", value: String(stats.today), tone: "cyan" },
@@ -5742,6 +5740,12 @@ function PhantomDeck({
     "--ghost-look-x": `${pointer.x}px`,
     "--ghost-look-y": `${pointer.y}px`,
   } as CSSProperties;
+  const visibleToolGroups = phantomToolGroups
+    .map((group) => ({
+      ...group,
+      items: group.items.filter((item) => canOpenPhantomDeckWorkspace(item, canManageAccess)),
+    }))
+    .filter((group) => group.items.length);
 
   function handlePointerMove(event: MouseEvent<HTMLDivElement>) {
     const x = Math.max(-4, Math.min(4, (event.clientX - window.innerWidth / 2) / 120));
@@ -5750,6 +5754,14 @@ function PhantomDeck({
   }
 
   function openWorkspace(workspace: PhantomDeckWorkspaceId) {
+    if (!canOpenPhantomDeckWorkspace(workspace, canManageAccess)) {
+      setActiveWorkspace("status");
+      setToolsOpen(false);
+      setCommandSuggestions([]);
+      setDeckNotice("That workspace is owner/admin-only.");
+      return;
+    }
+
     setActiveWorkspace(workspace);
     setToolsOpen(false);
     setCommandSuggestions([]);
@@ -5775,7 +5787,7 @@ function PhantomDeck({
 
   function submitDeckCommand(event: FormEvent) {
     event.preventDefault();
-    const nextWorkspace = resolvePhantomDeckWorkspace(commandText);
+    const nextWorkspace = resolvePhantomDeckWorkspace(commandText, canManageAccess);
     if (nextWorkspace) {
       if (nextWorkspace === "help") {
         openToolOrbit();
@@ -5787,7 +5799,7 @@ function PhantomDeck({
     }
 
     setToolsOpen(false);
-    setCommandSuggestions(suggestPhantomDeckWorkspaces(commandText));
+    setCommandSuggestions(suggestPhantomDeckWorkspaces(commandText, canManageAccess));
     setDeckNotice("No exact command yet. Closest workspaces are ready below.");
   }
 
@@ -5808,10 +5820,12 @@ function PhantomDeck({
             </div>
           </div>
           <div className="phantom-top-chips" aria-label="Live deck readouts">
+            <span>{selectedOrg}</span>
             <span>Live Internal</span>
             <span>{phantomAiOpsStatus.safety_flags.execution_disabled ? "Protected" : "Review Locks"}</span>
             <span>{effectiveSendReadiness.send_enabled ? "Send Review" : "Manual Send"}</span>
-            <span>{n8nRunning ? "Worker On" : "Worker Off"}</span>
+            {canManageAccess ? <span>{n8nRunning ? "Worker On" : "Worker Off"}</span> : null}
+            {viewingClientWorkspace ? <span>Client mirror</span> : null}
           </div>
           <div className="phantom-top-actions">
             <button type="button" title="Search">
@@ -5859,7 +5873,7 @@ function PhantomDeck({
                 </button>
               </div>
               <div className="mission-tile-grid" aria-label="Fast PhantomForce actions">
-                {missionTiles.map((tile) => (
+                {visibleMissionTiles.map((tile) => (
                   <button key={tile.label} type="button" onClick={() => openWorkspace(tile.workspace)}>
                     {tile.icon}
                     <strong>{tile.label}</strong>
@@ -5880,6 +5894,20 @@ function PhantomDeck({
             </div>
 
             <div className="phantom-intel-stack" aria-label="Command intelligence">
+              {canManageAccess ? (
+                <section className="intel-card workspace-context-card">
+                  <div className="section-head compact">
+                    <h3>Viewing</h3>
+                    <span>{viewingClientWorkspace ? "Client" : "Owner"}</span>
+                  </div>
+                  <strong>{selectedOrg}</strong>
+                  <p>
+                    {viewingClientWorkspace
+                      ? `Admin mirror of ${selectedWorkspaceClient?.business ?? selectedOrg}: ${selectedWorkspaceClient?.plan ?? "workspace"}`
+                      : "Owner cockpit with all business workspaces available."}
+                  </p>
+                </section>
+              ) : null}
               <section className="intel-card at-glance-card">
                 <div className="section-head compact">
                   <h3>At a glance</h3>
@@ -5915,15 +5943,15 @@ function PhantomDeck({
                 <div>
                   <button type="button" onClick={() => openWorkspace("site")}>Docs</button>
                   <button type="button" onClick={() => openWorkspace("video")}>Assets</button>
-                  <button type="button" onClick={() => openWorkspace("access")}>Access</button>
-                  <button type="button" onClick={() => openWorkspace("brain")}>Brain</button>
+                    {canManageAccess ? <button type="button" onClick={() => openWorkspace("access")}>Access</button> : null}
+                    {canManageAccess ? <button type="button" onClick={() => openWorkspace("brain")}>Brain</button> : null}
                 </div>
               </section>
             </div>
 
             {toolsOpen ? (
               <div className="tool-orbit-menu" aria-label="PhantomForce capability orbit">
-                {phantomToolGroups.map((group) => (
+                {visibleToolGroups.map((group) => (
                   <div key={group.id} className={`tool-orbit-cluster ${group.id}`}>
                     <span className="tool-orbit-group-label">{group.label}</span>
                     <div className="tool-orbit-cluster-items">
@@ -5957,7 +5985,7 @@ function PhantomDeck({
 
         <div className={`phantom-deck-body ${activeWorkspace ? "has-active-workspace" : "brain-default"}`} aria-live="polite">
           <PhantomNervousSystem
-            nodes={systemNodes}
+            nodes={visibleSystemNodes}
             activeWorkspace={activeWorkspace}
             suggestions={commandSuggestions}
             deckNotice={deckNotice}
@@ -5994,6 +6022,9 @@ function PhantomDeck({
               activity={activity}
               clientAccess={clientAccess}
               sessionHeaders={sessionHeaders}
+              canManageAccess={canManageAccess}
+              selectedOrg={selectedOrg}
+              selectedWorkspaceClient={selectedWorkspaceClient}
               setRoute={setRoute}
               closeWorkspace={closeWorkspace}
             />
@@ -6192,6 +6223,9 @@ function ActiveWorkspace({
   activity,
   clientAccess,
   sessionHeaders,
+  canManageAccess,
+  selectedOrg,
+  selectedWorkspaceClient,
   setRoute,
   closeWorkspace,
 }: {
@@ -6223,6 +6257,9 @@ function ActiveWorkspace({
   activity: ActivityItem[];
   clientAccess: ClientAccess[];
   sessionHeaders: (json?: boolean) => Record<string, string>;
+  canManageAccess: boolean;
+  selectedOrg: string;
+  selectedWorkspaceClient?: ClientAccess;
   setRoute: (route: Route) => void;
   closeWorkspace: () => void;
 }) {
@@ -6243,7 +6280,7 @@ function ActiveWorkspace({
           <p>{workspaceMeta.detail}</p>
         </div>
         <div className="active-workspace-actions">
-          {workspaceMeta.route ? (
+          {workspaceMeta.route && (canManageAccess || !ADMIN_ONLY_ROUTES.has(workspaceMeta.route)) ? (
             <button className="deck-icon-button" type="button" onClick={() => setRoute(workspaceMeta.route!)}>
               <ArrowRight size={17} />
               <span>Full surface</span>
@@ -6272,9 +6309,19 @@ function ActiveWorkspace({
           />
           <DeckMetric
             label="Workforce"
-            value={agentSummary}
-            detail="Internal workforce status stays admin-only."
+            value={canManageAccess ? agentSummary : "Hidden"}
+            detail={canManageAccess ? "Internal workforce status stays admin-only." : "Client view shows outcomes, not worker internals."}
             tone="good"
+          />
+          <DeckMetric
+            label="Viewing"
+            value={selectedOrg}
+            detail={
+              selectedWorkspaceClient
+                ? `${selectedWorkspaceClient.owner} · ${selectedWorkspaceClient.plan}`
+                : "Owner-level workspace"
+            }
+            tone={selectedWorkspaceClient ? "warn" : "good"}
           />
           <DeckMetric
             label="Sales connector"
@@ -6505,10 +6552,12 @@ function ActiveWorkspace({
           <section className="deck-wide-card">
             <div className="section-head compact">
               <h3>Website, app, and store lane</h3>
-              <button className="deck-icon-button" type="button" onClick={() => setRoute("site")}>
-                <Link2 size={17} />
-                <span>Open Site Studio</span>
-              </button>
+              {canManageAccess ? (
+                <button className="deck-icon-button" type="button" onClick={() => setRoute("site")}>
+                  <Link2 size={17} />
+                  <span>Open Site Studio</span>
+                </button>
+              ) : null}
             </div>
             <p>Site Studio stays behind owner/admin access. Use it for website/app work, storefront planning, build receipts, and approval-gated publish planning.</p>
             <div className="deck-safety-grid">
@@ -6636,8 +6685,14 @@ function ActiveWorkspace({
             <span>Local deterministic</span>
           </div>
           <div className="deck-command-list">
-            {phantomDeckWorkspaces.map((item) => (
-              <button key={item.id} type="button" onClick={() => setRoute(item.route ?? "command")}>
+            {getVisiblePhantomDeckWorkspaces(canManageAccess).map((item) => (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() =>
+                  setRoute(item.route && (canManageAccess || !ADMIN_ONLY_ROUTES.has(item.route)) ? item.route : "command")
+                }
+              >
                 <span>{item.command}</span>
                 <strong>{item.label}</strong>
                 <small>{item.detail}</small>

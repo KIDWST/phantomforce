@@ -284,6 +284,19 @@ img {
   padding: 20px 22px 32px;
 }
 
+.workspace > .phantom-deck {
+  min-height: calc(100vh - 124px);
+  padding: 18px;
+  border: 1px solid rgba(38, 247, 168, 0.16);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.workspace > .phantom-deck .phantom-deck-main {
+  max-width: none;
+  min-height: auto;
+}
+
 /* free-plan (view-only) banner */
 .plan-banner {
   display: flex;
