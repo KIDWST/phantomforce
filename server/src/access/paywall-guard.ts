@@ -28,8 +28,9 @@ export function requiresWrite(method: string, url: string): boolean {
   const path = (url || "").split("?")[0];
   const seg = path.split("/").filter(Boolean).pop() || "";
 
-  // --- explicit read-only endpoints that use a mutating method ---
+  // --- endpoints exempt from the session paywall ---
   if (/^(session|owner|demo)-login$/.test(seg)) return false; // signing in
+  if (path === "/billing/webhook") return false; // authenticated by its own signing secret, not a session
   if (/(^|-)(preview|dry-run|preflight|contract|validate)$/.test(seg)) return false; // read-only computes
   if (path === "/phantom-ai/chat") return false; // conversational; its side effects are separately gated
 

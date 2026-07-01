@@ -3,6 +3,8 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 import type { FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { isSubscriptionActive } from "./subscription-store.js";
+
 export const SESSION_HEADER = "x-phantomforce-session";
 export const AUTHORIZATION_HEADER = "Authorization";
 
@@ -15,6 +17,8 @@ export type AccessSession = {
   clientId?: string;
   canManageAccess: boolean;
   visibleOnLogin?: boolean;
+  /** Paid access, resolved server-side from the subscription store. Never client-set. */
+  subscriptionActive?: boolean;
 };
 
 const DEFAULT_SESSION_SECRET = "phantomforce-local-dev-session-secret-change-before-production";
@@ -446,6 +450,7 @@ function resolveGatewayForwardedSession(request: FastifyRequest): AccessSession 
     role: "client",
     clientId,
     canManageAccess: false,
+    subscriptionActive: isSubscriptionActive(user),
   };
 }
 

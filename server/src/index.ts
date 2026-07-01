@@ -57,6 +57,9 @@ import { checkPangolinReadOnlyStatus } from "./access/pangolin-status.js";
 import { buildProductionReadinessReport } from "./access/production-readiness.js";
 import { getBillingProviderStatus } from "./access/billing-provider.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
+import { getPaywallDecision } from "./access/paywall.js";
+import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
+import { timingSafeEqual } from "node:crypto";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
@@ -402,6 +405,104 @@ app.get("/billing/status/read-only", async (request, reply) => {
     session,
     status: getBillingProviderStatus(),
   };
+});
+
+// The signed-in account's own plan — the dashboard reads this to show the plan
+// badge and an "upgrade to make changes" prompt. Any authenticated session.
+app.get("/billing/subscription/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const decision = getPaywallDecision(session);
+  return {
+    ok: true,
+    session,
+    plan: decision.tier,
+    canView: decision.canView,
+    canWrite: decision.canWrite,
+    reason: decision.reason,
+  };
+});
+
+// Owner-only trusted write path: grant or revoke paid access for an account.
+const SubscriptionGrantSchema = z.object({
+  email: z.string().trim().min(3).max(200),
+  active: z.boolean(),
+  note: z.string().trim().max(300).optional(),
+});
+app.post("/billing/subscription/grant", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = SubscriptionGrantSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+
+  const subscription = setSubscription({
+    email: parsed.data.email,
+    active: parsed.data.active,
+    source: "owner-grant",
+    note: parsed.data.note,
+  });
+  return { ok: true, session, subscription };
+});
+
+app.get("/billing/subscriptions", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return { ok: true, session, subscriptions: listSubscriptions() };
+});
+
+// Payment webhook (stub, ready for a real provider). Authenticated ONLY by a
+// signing secret (PHANTOM_BILLING_WEBHOOK_SECRET), never a session. Disabled
+// with 503 until the secret is set, so it can never be used to self-grant.
+const BillingWebhookSchema = z.object({
+  email: z.string().trim().min(3).max(200),
+  event: z.enum(["subscription_active", "subscription_canceled"]),
+  provider: z.string().trim().max(40).optional().default("manual"),
+});
+app.post("/billing/webhook", async (request, reply) => {
+  const secret = process.env.PHANTOM_BILLING_WEBHOOK_SECRET ?? "";
+  if (secret.length < 16) {
+    return reply.code(503).send({
+      ok: false,
+      error: "billing_webhook_disabled",
+      reason: "PHANTOM_BILLING_WEBHOOK_SECRET is not configured (>=16 chars).",
+    });
+  }
+
+  const presented = request.headers["x-phantom-billing-secret"];
+  const provided = Array.isArray(presented) ? presented[0] : presented;
+  const authorized =
+    typeof provided === "string" &&
+    provided.length === secret.length &&
+    timingSafeEqual(Buffer.from(provided), Buffer.from(secret));
+  if (!authorized) {
+    return reply.code(401).send({ ok: false, error: "invalid_webhook_signature" });
+  }
+
+  const parsed = BillingWebhookSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+
+  const subscription = setSubscription({
+    email: parsed.data.email,
+    active: parsed.data.event === "subscription_active",
+    source: `webhook:${parsed.data.provider}`,
+  });
+  return { ok: true, subscription, liveProvider: false };
 });
 
 function parseHermesRecordLimit(value: string | undefined) {
