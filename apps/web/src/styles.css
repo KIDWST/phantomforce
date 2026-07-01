@@ -7390,3 +7390,585 @@ select option:disabled {
   color: var(--muted);
   font-size: 12px;
 }
+
+/* ------------------------------------------------------------------ */
+/* Phantom Deck v2: cinematic command OS.                              */
+/* ------------------------------------------------------------------ */
+.phantom-deck.v2 {
+  --deck-green: #31f6a7;
+  --deck-cyan: #59dff7;
+  --deck-ink: #05070a;
+  --deck-panel: rgba(9, 15, 18, 0.78);
+  --deck-line: rgba(151, 255, 222, 0.13);
+  min-height: 100vh;
+  padding: 22px;
+  overflow-y: auto;
+  background:
+    linear-gradient(180deg, rgba(6, 11, 15, 0.98) 0%, rgba(3, 5, 8, 1) 100%),
+    #05070a;
+}
+
+.phantom-deck.v2::before {
+  opacity: 0.4;
+  background:
+    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.016) 1px, transparent 1px);
+  background-size: 86px 86px;
+}
+
+.phantom-deck.v2::after {
+  content: "";
+  position: fixed;
+  inset: auto 0 0;
+  height: 34vh;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, transparent 0%, rgba(49, 246, 167, 0.16) 50%, transparent 100%),
+    linear-gradient(180deg, transparent, rgba(49, 246, 167, 0.06));
+  clip-path: polygon(0 86%, 50% 0, 100% 86%, 100% 100%, 0 100%);
+  opacity: 0.28;
+}
+
+.phantom-deck.v2 .phantom-deck-main {
+  min-height: calc(100vh - 44px);
+  max-width: 1420px;
+  margin: 0 auto;
+  gap: 16px;
+  grid-template-rows: auto minmax(330px, 1fr) auto auto auto;
+}
+
+.phantom-deck.v2.has-workspace .phantom-deck-main {
+  grid-template-rows: auto minmax(230px, auto) auto auto auto;
+}
+
+.phantom-deck.v2 .phantom-deck-header {
+  min-height: 54px;
+  padding: 0 4px;
+}
+
+.phantom-brand-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 210px;
+}
+
+.phantom-brand-lockup strong,
+.phantom-brand-lockup span {
+  display: block;
+  letter-spacing: 0;
+}
+
+.phantom-brand-lockup strong {
+  color: #f3fff9;
+  font-size: 18px;
+  font-weight: 820;
+}
+
+.phantom-brand-lockup span {
+  margin-top: 3px;
+  color: var(--deck-green);
+  font-size: 11px;
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.phantom-deck.v2 .mini-ghost {
+  width: 24px;
+  height: 28px;
+}
+
+.phantom-top-chips {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.phantom-top-chips span,
+.phantom-suggestions button,
+.tool-orbit-button,
+.phantom-deck.v2 .deck-icon-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 12px;
+  color: rgba(237, 255, 249, 0.82);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.phantom-top-actions {
+  display: inline-flex;
+  gap: 8px;
+}
+
+.phantom-top-actions button,
+.phantom-deck.v2 .deck-icon-button.icon-only {
+  width: 38px;
+  min-width: 38px;
+  min-height: 38px;
+  padding: 0;
+  display: inline-grid;
+  place-items: center;
+  color: rgba(237, 255, 249, 0.78);
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.phantom-top-actions button:hover,
+.phantom-suggestions button:hover,
+.tool-orbit-button:hover,
+.tool-orbit-button.active,
+.tool-orbit-menu button:hover,
+.phantom-deck.v2 .deck-icon-button:hover {
+  color: #f5fffb;
+  border-color: rgba(49, 246, 167, 0.34);
+  background: rgba(49, 246, 167, 0.11);
+}
+
+.phantom-command-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 18px;
+  min-height: 440px;
+  isolation: isolate;
+}
+
+.phantom-deck.v2.has-workspace .phantom-command-stage {
+  min-height: 250px;
+}
+
+.phantom-command-orb {
+  position: absolute;
+  z-index: -1;
+  width: min(820px, 74vw);
+  height: 250px;
+  border-top: 1px solid rgba(49, 246, 167, 0.24);
+  border-bottom: 1px solid rgba(89, 223, 247, 0.14);
+  border-radius: 50%;
+  opacity: 0.72;
+  transform: translateY(18px);
+  box-shadow:
+    inset 0 24px 54px rgba(49, 246, 167, 0.045),
+    0 26px 70px rgba(49, 246, 167, 0.08);
+}
+
+.phantom-command-orb::before,
+.phantom-command-orb::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.phantom-command-orb::before {
+  top: 50%;
+  width: 64%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(49, 246, 167, 0.42), transparent);
+}
+
+.phantom-command-orb::after {
+  bottom: 48px;
+  width: 160px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(89, 223, 247, 0.5), transparent);
+}
+
+.phantom-deck.v2 .phantom-command {
+  width: min(760px, 100%);
+  min-height: 70px;
+  margin: 0;
+  border-color: rgba(141, 255, 218, 0.18);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02)),
+    rgba(5, 10, 13, 0.88);
+  box-shadow:
+    0 0 0 1px rgba(49, 246, 167, 0.045),
+    0 28px 90px rgba(0, 0, 0, 0.55),
+    0 0 42px rgba(49, 246, 167, 0.08);
+  backdrop-filter: blur(22px);
+}
+
+.phantom-deck.v2 .phantom-command.focused {
+  border-color: rgba(49, 246, 167, 0.58);
+  box-shadow:
+    0 0 0 1px rgba(49, 246, 167, 0.18),
+    0 34px 100px rgba(0, 0, 0, 0.58),
+    0 0 52px rgba(49, 246, 167, 0.18);
+}
+
+.phantom-deck.v2 .phantom-command input {
+  font-size: 18px;
+}
+
+.phantom-deck.v2 .phantom-command button {
+  width: 46px;
+  min-height: 46px;
+  padding: 0;
+  background: rgba(49, 246, 167, 0.11);
+  border-color: rgba(49, 246, 167, 0.22);
+}
+
+.phantom-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  max-width: 820px;
+}
+
+.phantom-suggestions button {
+  cursor: pointer;
+}
+
+.phantom-deck.v2 .phantom-companion {
+  position: absolute;
+  z-index: 2;
+  top: calc(50% - 92px);
+  right: 0;
+  display: grid;
+  grid-template-columns: minmax(150px, 230px) 64px;
+  align-items: end;
+  justify-items: end;
+  gap: 10px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+.phantom-deck.v2 .phantom-speech {
+  width: auto;
+  min-height: 0;
+  padding: 10px 12px;
+  text-align: left;
+  color: rgba(236, 255, 249, 0.84);
+  background: rgba(6, 13, 16, 0.88);
+  border: 1px solid rgba(151, 255, 222, 0.15);
+  border-radius: 8px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.36);
+  font-size: 12px;
+  font-weight: 720;
+  cursor: pointer;
+}
+
+button.phantom-speech {
+  font-family: inherit;
+}
+
+.phantom-deck.v2 .phantom-speech:hover {
+  color: #f6fffb;
+  border-color: rgba(49, 246, 167, 0.34);
+}
+
+.phantom-deck.v2 .phantom-ghost {
+  width: 62px;
+  height: 76px;
+  border-width: 2px;
+  border-radius: 30px 30px 8px 8px;
+  background:
+    linear-gradient(180deg, rgba(49, 246, 167, 0.18), rgba(89, 223, 247, 0.04)),
+    rgba(5, 11, 13, 0.9);
+}
+
+.phantom-deck.v2 .ghost-eye {
+  top: 27px;
+  width: 8px;
+  height: 8px;
+}
+
+.phantom-deck.v2 .ghost-eye.left {
+  left: 18px;
+}
+
+.phantom-deck.v2 .ghost-eye.right {
+  right: 18px;
+}
+
+.phantom-deck.v2 .ghost-tail {
+  width: 19px;
+  height: 17px;
+}
+
+.phantom-deck.v2 .ghost-tail.one {
+  left: 8px;
+}
+
+.phantom-deck.v2 .ghost-tail.two {
+  left: 22px;
+}
+
+.phantom-deck.v2 .ghost-tail.three {
+  right: 8px;
+}
+
+.phantom-deck.v2 .ghost-alert-dot {
+  top: 5px;
+  right: 7px;
+  width: 8px;
+  height: 8px;
+}
+
+.phantom-deck.v2 .pulse-strip {
+  width: min(1120px, 100%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0 auto;
+}
+
+.phantom-deck.v2 .pulse-chip {
+  flex: 0 1 114px;
+  min-height: 46px;
+  padding: 8px 10px;
+  background: rgba(255, 255, 255, 0.032);
+  border-color: rgba(255, 255, 255, 0.075);
+}
+
+.phantom-deck.v2 .pulse-chip span {
+  font-size: 10px;
+}
+
+.phantom-deck.v2 .pulse-chip strong {
+  margin-top: 3px;
+  font-size: 12px;
+}
+
+.phantom-tool-launcher {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  min-height: 44px;
+}
+
+.tool-orbit-button {
+  cursor: pointer;
+}
+
+.tool-orbit-menu {
+  position: absolute;
+  z-index: 10;
+  top: 48px;
+  width: min(980px, calc(100vw - 44px));
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  background: rgba(5, 10, 13, 0.92);
+  border: 1px solid rgba(151, 255, 222, 0.16);
+  border-radius: 8px;
+  box-shadow: 0 28px 90px rgba(0, 0, 0, 0.56);
+  backdrop-filter: blur(24px);
+  animation: workspace-enter 160ms ease-out;
+}
+
+.tool-orbit-menu button {
+  min-height: 86px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 4px 8px;
+  align-content: start;
+  padding: 10px;
+  color: #f2fff9;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.tool-orbit-menu button svg {
+  grid-row: span 2;
+  color: var(--deck-green);
+}
+
+.tool-orbit-menu button strong,
+.tool-orbit-menu button small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.tool-orbit-menu button strong {
+  font-size: 13px;
+}
+
+.tool-orbit-menu button small {
+  color: rgba(226, 242, 240, 0.62);
+  line-height: 1.32;
+}
+
+.phantom-deck.v2 .phantom-deck-body {
+  display: block;
+  min-height: 88px;
+}
+
+.phantom-idle-state {
+  min-height: 82px;
+  display: grid;
+  place-items: center;
+  color: rgba(226, 242, 240, 0.56);
+  font-size: 13px;
+  text-align: center;
+}
+
+.phantom-idle-state span {
+  padding-top: 14px;
+  border-top: 1px solid rgba(151, 255, 222, 0.14);
+}
+
+.phantom-deck.v2 .active-workspace {
+  width: min(1180px, 100%);
+  min-height: 0;
+  margin: 0 auto 24px;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(16, 26, 30, 0.86), rgba(7, 11, 14, 0.88)),
+    rgba(7, 11, 14, 0.9);
+  border-color: rgba(151, 255, 222, 0.15);
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.05);
+}
+
+.phantom-deck.v2 .active-workspace-head h2 {
+  font-size: 30px;
+}
+
+.active-workspace-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.phantom-deck.v2 .deck-metric strong {
+  font-size: 23px;
+}
+
+.phantom-deck.v2 .deck-embedded-module {
+  max-height: none;
+}
+
+.proposal-builder-module {
+  padding: 8px;
+}
+
+@media (max-width: 1060px) {
+  .phantom-deck.v2 .phantom-deck-main {
+    min-height: auto;
+    grid-template-rows: auto auto auto auto auto;
+  }
+
+  .phantom-deck.v2 .phantom-deck-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .phantom-top-chips {
+    justify-content: flex-start;
+  }
+
+  .phantom-command-stage {
+    min-height: 390px;
+  }
+
+  .phantom-deck.v2 .phantom-companion {
+    top: 20px;
+    right: 10px;
+    grid-template-columns: minmax(130px, 210px) 58px;
+  }
+
+  .tool-orbit-menu {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1400px) {
+  .phantom-deck.v2 .phantom-companion {
+    position: relative;
+    top: auto;
+    right: auto;
+    grid-template-columns: minmax(150px, 230px) 64px;
+    justify-self: center;
+    order: -1;
+  }
+}
+
+@media (max-width: 760px) {
+  .phantom-deck.v2 {
+    padding: 14px 12px 18px;
+  }
+
+  .phantom-brand-lockup {
+    min-width: 0;
+  }
+
+  .phantom-top-chips span {
+    min-height: 30px;
+    padding: 0 9px;
+  }
+
+  .phantom-command-stage,
+  .phantom-deck.v2.has-workspace .phantom-command-stage {
+    min-height: 370px;
+    justify-items: stretch;
+  }
+
+  .phantom-command-orb {
+    width: 94vw;
+    height: 210px;
+  }
+
+  .phantom-deck.v2 .phantom-companion {
+    position: relative;
+    top: auto;
+    right: auto;
+    grid-template-columns: minmax(0, 1fr) 56px;
+    justify-self: stretch;
+    order: -1;
+  }
+
+  .phantom-deck.v2 .phantom-command {
+    min-height: 62px;
+    grid-template-columns: 26px minmax(0, 1fr) 42px;
+  }
+
+  .phantom-deck.v2 .phantom-command input {
+    font-size: 16px;
+  }
+
+  .phantom-deck.v2 .pulse-chip {
+    flex-basis: calc(33.333% - 8px);
+  }
+
+  .tool-orbit-menu {
+    position: static;
+    width: 100%;
+    grid-template-columns: 1fr;
+    margin-top: 8px;
+  }
+
+  .phantom-deck.v2 .active-workspace {
+    padding: 14px;
+  }
+
+  .phantom-deck.v2 .active-workspace-head h2 {
+    font-size: 25px;
+  }
+}
