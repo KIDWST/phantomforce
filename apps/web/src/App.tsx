@@ -5651,6 +5651,55 @@ function PhantomDeck({
     n8nRunning ? "Automation worker detected locally." : "Automation lane remains scaffolded and controlled.",
   ].filter(Boolean);
 
+  const missionTiles: Array<{ label: string; detail: string; workspace: PhantomDeckWorkspaceId; icon: ReactNode }> = [
+    { label: "Launch Sprint", detail: "Build the next move", workspace: "work", icon: <Zap size={20} /> },
+    { label: "Handle Lead", detail: "Prioritize follow-up", workspace: "leads", icon: <UserRound size={20} /> },
+    { label: "Build Quote", detail: "Create proposal packet", workspace: "proposal", icon: <FileText size={20} /> },
+    { label: "Security Scan", detail: "Check posture", workspace: "protect", icon: <ShieldCheck size={20} /> },
+    { label: "Media Factory", detail: "Video command lane", workspace: "video", icon: <Play size={20} /> },
+    { label: "Store Builder", detail: "Site + shop drafts", workspace: "site", icon: <ShoppingCart size={20} /> },
+    { label: "Agent Floor", detail: "Worker map", workspace: "agentlab", icon: <Bot size={20} /> },
+    { label: "Vault Access", detail: "Users + boundaries", workspace: "access", icon: <KeyRound size={20} /> },
+    { label: "Command Center", detail: "System status", workspace: "status", icon: <Command size={20} /> },
+    { label: "Analytics", detail: "Money and pipeline", workspace: "money", icon: <BarChart3 size={20} /> },
+    { label: "Automation", detail: "Runbook drafts", workspace: "n8n", icon: <Settings size={20} /> },
+    { label: "View All", detail: "Capability orbit", workspace: "help", icon: <Plus size={20} /> },
+  ];
+
+  const atAGlanceItems = [
+    { label: "Due today", value: String(stats.today), tone: "cyan" },
+    { label: "Follow-ups", value: String(proposalCounts.follow_up_needed || stats.urgent), tone: "gold" },
+    { label: "Pipeline", value: estimatedPipelineValue ? formatUsd(estimatedPipelineValue) : "$0", tone: "green" },
+    { label: "Review", value: String(pendingApprovals.length), tone: "red" },
+  ];
+
+  const missionQueueItems = [
+    {
+      title: priorityProposal ? `${priorityProposal.client_name} follow-up` : "ChicagoShots proposal lane",
+      detail: priorityProposal?.proposal_next_action ?? "No priority packet blocking revenue.",
+      status: priorityProposal ? "QUEUED" : "CLEAR",
+      workspace: priorityProposal ? ("followup" as PhantomDeckWorkspaceId) : ("proposal" as PhantomDeckWorkspaceId),
+    },
+    {
+      title: "Media Factory",
+      detail: "Video and creative generation requests stay gated.",
+      status: "READY",
+      workspace: "video" as PhantomDeckWorkspaceId,
+    },
+    {
+      title: "Security Intake",
+      detail: "Autonomous scan proof and password cadence.",
+      status: "WATCH",
+      workspace: "protect" as PhantomDeckWorkspaceId,
+    },
+    {
+      title: "Site + Store Studio",
+      detail: "Website, app, dashboard, and storefront drafts.",
+      status: "READY",
+      workspace: "site" as PhantomDeckWorkspaceId,
+    },
+  ];
+
   const deckStyle = {
     "--ghost-look-x": `${pointer.x}px`,
     "--ghost-look-y": `${pointer.y}px`,
@@ -5739,39 +5788,101 @@ function PhantomDeck({
         <section className="phantom-command-stage" aria-label="Phantom command center">
           <div className="phantom-command-orb" aria-hidden="true" />
           <div className="phantom-command-core">
-            <div className="phantom-command-dock">
-              <form className={`phantom-command ${commandFocused ? "focused" : ""}`} onSubmit={submitDeckCommand}>
-                <span className="phantom-command-label">Phantom Command</span>
-                <Command size={25} />
-                <input
-                  ref={commandInputRef}
-                  value={commandText}
-                  onChange={(event) => setCommandText(event.target.value)}
-                  onFocus={() => setCommandFocused(true)}
-                  onBlur={() => setCommandFocused(false)}
-                  placeholder="Ask PhantomForce to handle a lead, build a quote, open video, check protect..."
-                />
-                <button type="submit" title="Summon workspace">
-                  <ArrowRight size={21} />
+            <div className="mission-control-panel">
+              <div className="mission-control-head">
+                <span className="eyebrow">Mission Control</span>
+                <strong>What do you want PhantomForce to do?</strong>
+              </div>
+              <div className="phantom-command-dock">
+                <form className={`phantom-command ${commandFocused ? "focused" : ""}`} onSubmit={submitDeckCommand}>
+                  <span className="phantom-command-label">Phantom Command</span>
+                  <Command size={25} />
+                  <input
+                    ref={commandInputRef}
+                    value={commandText}
+                    onChange={(event) => setCommandText(event.target.value)}
+                    onFocus={() => setCommandFocused(true)}
+                    onBlur={() => setCommandFocused(false)}
+                    placeholder="Ask PhantomForce anything..."
+                  />
+                  <button type="submit" title="Summon workspace">
+                    <ArrowRight size={21} />
+                  </button>
+                </form>
+                <button
+                  className={`tool-orbit-button${toolsOpen ? " active" : ""}`}
+                  type="button"
+                  onClick={toggleToolOrbit}
+                  aria-expanded={toolsOpen}
+                  title="Open capability orbit"
+                >
+                  <Sparkles size={18} />
+                  <span>Orbit</span>
                 </button>
-              </form>
-              <button
-                className={`tool-orbit-button${toolsOpen ? " active" : ""}`}
-                type="button"
-                onClick={toggleToolOrbit}
-                aria-expanded={toolsOpen}
-                title="Open capability orbit"
-              >
-                <Sparkles size={18} />
-                <span>Orbit</span>
-              </button>
+              </div>
+              <div className="mission-tile-grid" aria-label="Fast PhantomForce actions">
+                {missionTiles.map((tile) => (
+                  <button key={tile.label} type="button" onClick={() => openWorkspace(tile.workspace)}>
+                    {tile.icon}
+                    <strong>{tile.label}</strong>
+                    <small>{tile.detail}</small>
+                  </button>
+                ))}
+              </div>
             </div>
-            <PhantomCompanion
-              mood={companionMood}
-              speech={companionSignal.text}
-              thinking={commandFocused || deckLoading}
-              onSpeechClick={() => openWorkspace(companionSignal.workspace)}
-            />
+
+            <div className="phantom-holo-stage" aria-label="PhantomForce AI hologram">
+              <PhantomCompanion
+                mood={companionMood}
+                speech={companionSignal.text}
+                thinking={commandFocused || deckLoading}
+                onSpeechClick={() => openWorkspace(companionSignal.workspace)}
+              />
+              <span className="holo-label">PHANTOMFORCE AI</span>
+            </div>
+
+            <div className="phantom-intel-stack" aria-label="Command intelligence">
+              <section className="intel-card at-glance-card">
+                <div className="section-head compact">
+                  <h3>At a glance</h3>
+                  <span>Live</span>
+                </div>
+                {atAGlanceItems.map((item) => (
+                  <article key={item.label} className={`glance-row ${item.tone}`}>
+                    <strong>{item.value}</strong>
+                    <span>{item.label}</span>
+                  </article>
+                ))}
+              </section>
+              <section className="intel-card mission-queue-card">
+                <div className="section-head compact">
+                  <h3>Mission queue</h3>
+                  <span>{missionQueueItems.length}</span>
+                </div>
+                {missionQueueItems.map((item) => (
+                  <button key={item.title} type="button" onClick={() => openWorkspace(item.workspace)}>
+                    <span>
+                      <strong>{item.title}</strong>
+                      <small>{item.detail}</small>
+                    </span>
+                    <em>{item.status}</em>
+                  </button>
+                ))}
+              </section>
+              <section className="intel-card resource-vault-card">
+                <div className="section-head compact">
+                  <h3>Resource vault</h3>
+                  <span>Ready</span>
+                </div>
+                <div>
+                  <button type="button" onClick={() => openWorkspace("site")}>Docs</button>
+                  <button type="button" onClick={() => openWorkspace("video")}>Assets</button>
+                  <button type="button" onClick={() => openWorkspace("access")}>Access</button>
+                  <button type="button" onClick={() => openWorkspace("brain")}>Brain</button>
+                </div>
+              </section>
+            </div>
+
             {toolsOpen ? (
               <div className="tool-orbit-menu" aria-label="PhantomForce capability orbit">
                 {phantomToolGroups.map((group) => (
