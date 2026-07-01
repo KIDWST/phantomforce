@@ -4605,13 +4605,6 @@ function CommandCenter({
       cta: "Ask now",
     },
   ];
-  const workflowSteps = [
-    { label: "Ask", value: "1", icon: <Sparkles size={18} /> },
-    { label: "Build", value: "artifact", icon: <FileText size={18} /> },
-    { label: "Preview", value: "card", icon: <SquareCheckBig size={18} /> },
-    { label: "Confirm", value: stats.pending, icon: <ShieldCheck size={18} /> },
-    { label: "Send", value: "manual", icon: <Send size={18} /> },
-  ];
   return (
     <div className="command-layout">
       <section className="command-main">
@@ -4632,39 +4625,6 @@ function CommandCenter({
             Agent Control
           </button>
         </div>
-
-        <section className="outcome-rail" aria-label="PhantomAI output types">
-          <article>
-            <Mail size={18} />
-            <strong>Reply</strong>
-            <span>ready-to-send draft</span>
-          </article>
-          <article>
-            <FileText size={18} />
-            <strong>Doc</strong>
-            <span>proposal or brief</span>
-          </article>
-          <article>
-            <CalendarDays size={18} />
-            <strong>Booking</strong>
-            <span>call plan + times</span>
-          </article>
-          <article>
-            <BarChart3 size={18} />
-            <strong>Sheet</strong>
-            <span>pipeline or quote table</span>
-          </article>
-          <article>
-            <Play size={18} />
-            <strong>Video</strong>
-            <span>creative prompt + proof</span>
-          </article>
-          <article>
-            <ShoppingCart size={18} />
-            <strong>Store</strong>
-            <span>offer + checkout draft</span>
-          </article>
-        </section>
 
         <section className="mission-bundle-panel" aria-label="Admin mission bundles">
           <div className="section-head compact">
@@ -4692,10 +4652,6 @@ function CommandCenter({
               </button>
             ))}
           </div>
-          <p>
-            Natural language still works. Slash commands are optional admin shortcuts for forcing a bundled mission:
-            sprint, quote, booking, site, media, scan, or workforce.
-          </p>
         </section>
 
         <section className="action-board" aria-label="Next actions">
@@ -4720,35 +4676,6 @@ function CommandCenter({
               </button>
             ))}
           </div>
-        </section>
-
-        <section className="workflow-board" aria-label="Workflow">
-          {workflowSteps.map((step, index) => (
-            <article className="workflow-step" key={step.label}>
-              <span>{step.icon}</span>
-              <strong>{step.label}</strong>
-              <em>{step.value}</em>
-              {index < workflowSteps.length - 1 ? <ArrowRight size={16} /> : null}
-            </article>
-          ))}
-        </section>
-
-        <section className="proof-strip" aria-label="Action proof">
-          <article>
-            <Sparkles size={18} />
-            <strong>Phantom AI</strong>
-            <span>Builds the outcome</span>
-          </article>
-          <article>
-            <ShieldCheck size={18} />
-            <strong>Send control</strong>
-            <span>You choose what leaves</span>
-          </article>
-          <article>
-            <Play size={18} />
-            <strong>Creative engine</strong>
-            <span>Video lives here</span>
-          </article>
         </section>
 
         <section className="chat-card">
@@ -4811,15 +4738,6 @@ function CommandCenter({
       </section>
 
       <aside className="command-side">
-        <section className="panel asset-panel">
-          <img src="/assets/falcon-stream.png" alt="Protected workflow stream" />
-          <div>
-            <span className="eyebrow">Backend power</span>
-            <h3>Automation stays behind the glass.</h3>
-            <p>Clients get safe typed outcomes, not raw execution controls.</p>
-          </div>
-        </section>
-
         <section className="panel next-move-panel">
           <div className="section-head compact">
             <div>
