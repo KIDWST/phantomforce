@@ -2929,6 +2929,9 @@ function App() {
   const [clientAccess, setClientAccess] = useState(initialClientAccess.map(normalizeClientAccessRecord));
   const [guardedWorkspace, setGuardedWorkspace] = useState<GuardedWorkspace | null>(null);
   const [workspaceModuleView, setWorkspaceModuleView] = useState<WorkspaceModuleView | null>(null);
+  const [subscription, setSubscription] = useState<
+    { plan: string; canView: boolean; canWrite: boolean; reason: string } | null
+  >(null);
   const [pangolinPlan, setPangolinPlan] = useState<PangolinRoutePlan[]>([]);
   const [pangolinStatus, setPangolinStatus] = useState<PangolinReadOnlyStatus | null>(null);
   const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
@@ -3262,6 +3265,34 @@ function App() {
     }
   }
 
+  async function refreshSubscriptionStatus() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/billing/subscription/status`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setSubscription(null);
+        return;
+      }
+
+      const data = (await response.json()) as {
+        plan?: string;
+        canView?: boolean;
+        canWrite?: boolean;
+        reason?: string;
+      };
+      setSubscription({
+        plan: data.plan ?? "free",
+        canView: data.canView ?? true,
+        canWrite: data.canWrite ?? false,
+        reason: data.reason ?? "",
+      });
+    } catch {
+      setSubscription(null);
+    }
+  }
+
   async function refreshAgentWorkforceStatus() {
     try {
       const response = await fetch(`${API_BASE_URL}/phantom-ai/agents/status?window_hours=24`, {
@@ -3304,6 +3335,7 @@ function App() {
     void loadClientAccess();
     void refreshGuardedWorkspace();
     void refreshAgentWorkforceStatus();
+    void refreshSubscriptionStatus();
     if (canManageAccess) {
       void refreshPangolinPlan();
       void refreshReadinessReport();
@@ -4212,6 +4244,20 @@ function App() {
 
       <main className="workspace">
         <Topbar activeSession={activeSession} selectedOrg={selectedOrg} pending={stats.pending} />
+        {subscription && subscription.canView && !subscription.canWrite ? (
+          <div className="plan-banner" role="status">
+            <span className="plan-banner-tag">Free plan</span>
+            <span className="plan-banner-msg">
+              You have full view access. Upgrade to make changes, run actions, and approve.
+            </span>
+            <a
+              className="plan-banner-cta"
+              href="mailto:hello@phantomforce.online?subject=Upgrade%20my%20PhantomForce%20plan"
+            >
+              Upgrade
+            </a>
+          </div>
+        ) : null}
         {route === "command" ? (
           <CommandCenter
             messages={messages}
