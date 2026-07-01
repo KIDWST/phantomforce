@@ -383,18 +383,40 @@ function initRiskRadar() {
     { name: "Zara Ahmed", photo: rmu("women", 41), app: "Comment", msg: "is this available?" },
     { name: "Andre Thompson", photo: rmu("men", 51), app: "New DM", msg: "sent you the details" },
   ];
+  // keep pings from overlapping each other OR the text UI in the middle
+  const active = [];
+  const overlaps = (a, b, pad) =>
+    a.left - pad < b.right && a.right + pad > b.left && a.top - pad < b.bottom && a.bottom + pad > b.top;
+  const uiSel = "[data-wordmark], [data-say], [data-orbits], [data-speak], [data-summon]";
+  const place = (ping) => {
+    const W = innerWidth, H = innerHeight;
+    const obstacles = active.map((e) => e.getBoundingClientRect())
+      .concat(Array.from(document.querySelectorAll(uiSel)).map((el) => el.getBoundingClientRect()));
+    for (let tries = 0; tries < 26; tries++) {
+      const right = Math.random() < 0.5;                    // left or right band, fully random within
+      const lp = right ? 76 + Math.random() * 21 : 3 + Math.random() * 21;
+      const tp = 8 + Math.random() * 84;
+      ping.style.left = lp + "%"; ping.style.top = tp + "%";
+      const r = ping.getBoundingClientRect();
+      if (r.width < 2 || r.left < 8 || r.right > W - 8 || r.top < 8 || r.bottom > H - 8) continue;   // keep on-screen
+      let clash = false;
+      for (const o of obstacles) { if (overlaps(r, o, 16)) { clash = true; break; } }
+      if (!clash) return true;
+    }
+    return false;                                           // no clear spot -> skip this one
+  };
+  let lastThreat = -1;
   const spawn = () => {
     if (document.hidden) return;
-    const threat = Math.random() < 0.6;   // red threat dots outnumber the message bubbles
+    const threat = smallScreen ? true : Math.random() < 0.6;   // red threat dots outnumber the bubbles
     const ping = document.createElement("div");
-    const right = Math.random() < 0.5;
-    ping.style.left = (right ? 72 + Math.random() * 22 : 6 + Math.random() * 22) + "%";
-    ping.style.top = 12 + Math.random() * 76 + "%";
+    ping.style.visibility = "hidden";
     if (threat) {
       ping.className = "risk-ping threat";
+      let ti; do { ti = Math.floor(Math.random() * threats.length); } while (threats.length > 1 && ti === lastThreat);
+      lastThreat = ti;
       const dot = document.createElement("span"); dot.className = "risk-dot";
-      const label = document.createElement("span"); label.className = "risk-label";
-      label.textContent = threats[Math.floor(Math.random() * threats.length)];
+      const label = document.createElement("span"); label.className = "risk-label"; label.textContent = threats[ti];
       ping.append(dot, label);
     } else {
       const n = stream[Math.floor(Math.random() * stream.length)];
@@ -410,12 +432,15 @@ function initRiskRadar() {
       ping.append(av, body);
     }
     field.appendChild(ping);
+    if (!place(ping)) { ping.remove(); return; }            // couldn't fit without overlap -> skip
+    ping.style.visibility = "";
+    active.push(ping);
     requestAnimationFrame(() => ping.classList.add("on"));
     window.setTimeout(() => ping.classList.remove("on"), 3400);
-    window.setTimeout(() => ping.remove(), 4400);
+    window.setTimeout(() => { ping.remove(); const i = active.indexOf(ping); if (i >= 0) active.splice(i, 1); }, 4400);
   };
-  for (let i = 0; i < 4; i++) window.setTimeout(spawn, i * 650);
-  window.setInterval(spawn, 1300);
+  const tick = () => { spawn(); window.setTimeout(tick, 800 + Math.random() * 1300); };   // random 0.8-2.1s gap
+  tick();
 }
 
 function boot() { initConversation(); initEntity(); initRiskRadar(); }
