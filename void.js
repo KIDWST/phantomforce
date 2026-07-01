@@ -222,100 +222,56 @@ async function initEntity() {
 
     const ghost = new THREE.Group(); scene.add(ghost);   // the whole phantom: tilts, floats, shakes
 
-    // ===== sculpted phantom body: a lathed specter silhouette with a
-    //       fresnel rim-glow (bright ethereal edge, translucent core) =====
-    const prof = [
-      [0.001, 1.56], [0.30, 1.46], [0.55, 1.27], [0.76, 1.00], [0.90, 0.63],
-      [0.99, 0.21], [1.03, -0.24], [1.02, -0.64], [0.95, -0.98], [0.80, -1.22],
-      [0.52, -1.36], [0.001, -1.44],
-    ].map(([x, y]) => new THREE.Vector2(x, y));
-    const bodyGeo = new THREE.LatheGeometry(prof, 84);
-    bodyGeo.computeVertexNormals();
-    const bpos = bodyGeo.attributes.position;
-    const bbase = new Float32Array(bpos.array);         // rest positions for the flowing hem
-    const bodyUniforms = {
-      uColor: { value: new THREE.Color(0x1fd992) },     // translucent body
-      uRim: { value: new THREE.Color(0xcafff0) },       // bright ethereal edge
-      uOpacity: { value: 0.4 },
-      uPulse: { value: 0 },
-      uDead: { value: 0 },
-    };
-    const bodyMat = new THREE.ShaderMaterial({
-      uniforms: bodyUniforms, transparent: true, depthWrite: false,
-      side: THREE.DoubleSide, blending: THREE.AdditiveBlending,
-      vertexShader: `
-        varying vec3 vN; varying vec3 vV;
-        void main() {
-          vec4 wp = modelMatrix * vec4(position, 1.0);
-          vN = normalize(mat3(modelMatrix) * normal);
-          vV = normalize(cameraPosition - wp.xyz);
-          gl_Position = projectionMatrix * viewMatrix * wp;
-        }`,
-      fragmentShader: `
-        uniform vec3 uColor; uniform vec3 uRim; uniform float uOpacity; uniform float uPulse; uniform float uDead;
-        varying vec3 vN; varying vec3 vV;
-        void main() {
-          float f = pow(1.0 - clamp(dot(normalize(vN), normalize(vV)), 0.0, 1.0), 2.3);
-          vec3 base = mix(uColor, vec3(1.0, 0.34, 0.46), uDead);
-          vec3 rim = mix(uRim, vec3(1.0, 0.68, 0.76), uDead);
-          vec3 col = mix(base, rim, f) + uPulse * 0.35;
-          float a = uOpacity * (0.22 + 0.9 * f) + uPulse * 0.2;
-          gl_FragColor = vec4(col, a);
-        }`,
-    });
-    const bodyMesh = new THREE.Mesh(bodyGeo, bodyMat); bodyMesh.renderOrder = 1; ghost.add(bodyMesh);
-
-    // ===== energy aura: a shell of light points just outside the body =====
-    const N = smallScreen ? 1500 : 3000;
-    const abase = new Float32Array(N * 3), apos = new Float32Array(N * 3);
+    // ===== phantom body: a ghost of light — dome head, flowing body, and a
+    //       RAGGED tendrilled hem (not a closed egg), flattened to face you =====
+    const N = smallScreen ? 3200 : 6000;
     const GA = 2.399963229728653;
+    const NTEND = 7;                                   // hanging tendrils around the hem
+    const base = new Float32Array(N * 3), pos = new Float32Array(N * 3);
     for (let k = 0; k < N; k++) {
-      const v = k / (N - 1);
+      const v = k / (N - 1);                           // 0 = crown, 1 = hem
       const ang = k * GA;
-      const R = v < 0.42 ? Math.sin((v / 0.42) * (Math.PI / 2)) : 1;
-      const y = 1.52 - v * 2.98;
-      const rr = R * (1.05 + 0.1 * (((k * 9301) % 233) / 233));   // just outside the shell
-      abase[k * 3] = Math.cos(ang) * rr; abase[k * 3 + 1] = y; abase[k * 3 + 2] = Math.sin(ang) * rr;
-      apos[k * 3] = abase[k * 3]; apos[k * 3 + 1] = y; apos[k * 3 + 2] = abase[k * 3 + 2];
+      const tend = Math.pow(0.5 + 0.5 * Math.cos(ang * NTEND), 1.7);   // 0 between tendrils .. 1 at a tip
+      const hemY = -0.6 - tend * 1.05;                 // ragged bottom edge dips at each tendril
+      let R, y;
+      if (v < 0.3) { const u = v / 0.3; R = Math.sin(u * Math.PI / 2); y = 1.55 - u * 0.95; }         // head dome
+      else if (v < 0.6) { const u = (v - 0.3) / 0.3; R = 1 - 0.05 * Math.sin(u * Math.PI); y = 0.6 - u; }  // shoulders/body
+      else { const u = (v - 0.6) / 0.4; R = 1 - 0.16 * u; y = -0.4 + u * (hemY + 0.4); }               // body -> tendrils
+      const rr = R * (0.9 + 0.1 * (((k * 9301) % 233) / 233));
+      const x = Math.cos(ang) * rr, z = Math.sin(ang) * rr * 0.58;    // flattened front-to-back
+      base[k * 3] = x; base[k * 3 + 1] = y; base[k * 3 + 2] = z;
+      pos[k * 3] = x; pos[k * 3 + 1] = y; pos[k * 3 + 2] = z;
     }
-    const auraGeo = new THREE.BufferGeometry(); auraGeo.setAttribute("position", new THREE.BufferAttribute(apos, 3));
-    const auraMat = new THREE.PointsMaterial({ color: new THREE.Color(0x6bffc0), size: 0.026, sizeAttenuation: true, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false });
-    const aura = new THREE.Points(auraGeo, auraMat); aura.renderOrder = 2; ghost.add(aura);
-    const aattr = auraGeo.attributes.position;
+    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    const posAttr = geo.attributes.position;
+    const bodyMat = new THREE.PointsMaterial({ color: new THREE.Color(0x33ffa0), size: 0.03, sizeAttenuation: true, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false });
+    ghost.add(new THREE.Points(geo, bodyMat));
+    const glowMat = new THREE.PointsMaterial({ color: new THREE.Color(0x0d7d50), size: 0.12, sizeAttenuation: true, transparent: true, opacity: 0.16, blending: THREE.AdditiveBlending, depthWrite: false });
+    ghost.add(new THREE.Points(geo, glowMat));         // soft volume glow (shares the geometry)
 
-    // soul-core spark inside the body
-    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.34, 1), new THREE.MeshBasicMaterial({ color: 0xdfffee, transparent: true, opacity: 0.35, blending: THREE.AdditiveBlending, depthWrite: false }));
-    ghost.add(core);
-
-    // ===== face (always drawn on top of the translucent body) =====
+    // ===== ominous glowing eyes (drawn on top of the body) — no cheery smile =====
     const onTop = (m) => { m.transparent = true; m.depthTest = false; return m; };
-    const eyeCore = onTop(new THREE.MeshBasicMaterial({ color: 0x02160e }));
-    const eyeRimMat = onTop(new THREE.MeshBasicMaterial({ color: 0x86ffd0, opacity: 0.95, blending: THREE.AdditiveBlending }));
-    const pupilMat = onTop(new THREE.MeshBasicMaterial({ color: 0xeafff6, blending: THREE.AdditiveBlending }));
+    const socketMat = onTop(new THREE.MeshBasicMaterial({ color: 0x00140c }));
     const barMat = onTop(new THREE.MeshBasicMaterial({ color: 0xeafff6, blending: THREE.AdditiveBlending }));
-    const EYE_Y = 0.8, EYE_Z = 0.86;
+    const EYE_Y = 0.74, EYE_Z = 0.62;
     const makeEye = (sx, tilt) => {
-      const g = new THREE.Group(); g.position.set(sx, EYE_Y, EYE_Z); g.rotation.z = tilt; g.scale.set(1.32, 0.8, 1); g.renderOrder = 10;
-      const socket = new THREE.Mesh(new THREE.CircleGeometry(0.17, 30), eyeCore);
-      const rim = new THREE.Mesh(new THREE.RingGeometry(0.155, 0.205, 30), eyeRimMat);
-      const pupil = new THREE.Mesh(new THREE.CircleGeometry(0.08, 20), pupilMat); pupil.position.z = 0.01;
-      g.add(socket, rim, pupil); g.userData.pupil = pupil; return g;
+      const g = new THREE.Group(); g.position.set(sx, EYE_Y, EYE_Z); g.rotation.z = tilt; g.renderOrder = 10;
+      const socket = new THREE.Mesh(new THREE.CircleGeometry(0.19, 32), socketMat); socket.scale.set(0.84, 1.5, 1);
+      const glowEyeMat = onTop(new THREE.MeshBasicMaterial({ color: 0xaeffda, opacity: 0.95, blending: THREE.AdditiveBlending }));
+      const gcore = new THREE.Mesh(new THREE.CircleGeometry(0.12, 26), glowEyeMat); gcore.scale.set(0.8, 1.42, 1); gcore.position.z = 0.01;
+      g.add(socket, gcore); g.userData.glow = gcore; g.userData.mat = glowEyeMat; return g;
     };
-    const eyeL = makeEye(-0.33, -0.16), eyeR = makeEye(0.33, 0.16); ghost.add(eyeL, eyeR);   // inner corners down = fierce
+    const eyeL = makeEye(-0.3, -0.16), eyeR = makeEye(0.3, 0.16); ghost.add(eyeL, eyeR);   // inner corners down = fierce
 
     const makeX = (sx) => {
       const g = new THREE.Group(); g.position.set(sx, EYE_Y, EYE_Z + 0.02); g.visible = false; g.renderOrder = 11;
-      const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.06, 0.02), barMat); b1.rotation.z = Math.PI / 4;
-      const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.06, 0.02), barMat); b2.rotation.z = -Math.PI / 4;
+      const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.02), barMat); b1.rotation.z = Math.PI / 4;
+      const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.06, 0.02), barMat); b2.rotation.z = -Math.PI / 4;
       g.add(b1, b2); return g;
     };
-    const xL = makeX(-0.33), xR = makeX(0.33); ghost.add(xL, xR);
-
-    const mouthMat = onTop(new THREE.MeshBasicMaterial({ color: 0x5bffb0, opacity: 0.92, blending: THREE.AdditiveBlending }));
-    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.032, 10, 30, Math.PI), mouthMat);
-    mouth.position.set(0, 0.42, 0.9); mouth.rotation.z = Math.PI; mouth.renderOrder = 10; ghost.add(mouth);
-    const tongue = new THREE.Mesh(new THREE.CircleGeometry(0.085, 16), onTop(new THREE.MeshBasicMaterial({ color: 0xff86a6 })));
-    tongue.position.set(0, 0.3, 0.92); tongue.visible = false; tongue.renderOrder = 11; ghost.add(tongue);
+    const xL = makeX(-0.3), xR = makeX(0.3); ghost.add(xL, xR);
+    const tongue = new THREE.Mesh(new THREE.CircleGeometry(0.09, 16), onTop(new THREE.MeshBasicMaterial({ color: 0xff86a6 })));
+    tongue.position.set(0, 0.2, EYE_Z + 0.05); tongue.visible = false; tongue.renderOrder = 11; ghost.add(tongue);
 
     // starfield backdrop
     const SF = 700, sf = new Float32Array(SF * 3);
@@ -347,65 +303,50 @@ async function initEntity() {
       const isDead = dead > 0;
       const breath = 1 + Math.sin(t * 0.9) * 0.025 + pulse.v * 0.12;
 
-      // flowing tattered hem on the solid body
-      const ba = bpos.array;
-      for (let i = 0; i < bbase.length; i += 3) {
-        const bx = bbase[i], by = bbase[i + 1], bz = bbase[i + 2];
-        let nx = bx, ny = by, nz = bz;
-        if (by < -0.2) {
-          const m = Math.min(1, (-0.2 - by) / 1.15);
-          const ang = Math.atan2(bz, bx);
-          ny = by + (Math.sin(ang * 5 + t * 2.2) * 0.11 + Math.sin(ang * 3 - t * 1.6) * 0.06) * m;
-          const rp = 1 + 0.07 * m * Math.sin(ang * 5 + t * 2.2);
-          nx = bx * rp; nz = bz * rp;
-        }
-        ba[i] = nx * breath; ba[i + 1] = ny * breath; ba[i + 2] = nz * breath;
-      }
-      bpos.needsUpdate = true;
-
-      // aura shimmer
+      // ragged flowing hem + gentle breathing across the whole body
+      const pa = posAttr.array;
       for (let k = 0; k < N; k++) {
         const j = k * 3;
-        const n = Math.sin(abase[j] * 3 + t * 1.2) * Math.cos(abase[j + 1] * 3 - t) * 0.06;
+        const bx = base[j], by = base[j + 1], bz = base[j + 2];
+        let ny = by;
+        if (by < -0.2) {                              // tendrils drift and flow
+          const m = Math.min(1, (-0.2 - by) / 1.2);
+          ny = by + (Math.sin(bx * 4 + t * 2.4) * 0.09 + Math.sin(bz * 5 - t * 1.7) * 0.05) * m;
+        }
+        const n = Math.sin(bx * 3 + t * 1.3) * Math.cos(by * 3 - t) * 0.05;
         const s = (1 + n) * breath;
-        aattr.array[j] = abase[j] * s; aattr.array[j + 1] = abase[j + 1] * s; aattr.array[j + 2] = abase[j + 2] * s;
+        pa[j] = bx * s; pa[j + 1] = ny * breath; pa[j + 2] = bz * s;
       }
-      aattr.needsUpdate = true;
-
-      bodyUniforms.uPulse.value = pulse.v;
-      bodyUniforms.uDead.value = isDead ? Math.min(1, dead / 0.8) : 0;
-      auraMat.color.setHex(isDead ? 0xff8fa6 : 0x6bffc0);
-      auraMat.opacity = 0.5 + pulse.v * 0.25;
+      posAttr.needsUpdate = true;
+      bodyMat.color.setHex(isDead ? 0xff6b8a : 0x33ffa0);
+      bodyMat.opacity = 0.86 + pulse.v * 0.14;
+      glowMat.color.setHex(isDead ? 0xc23a52 : 0x0d7d50);
+      glowMat.opacity = 0.16 + pulse.v * 0.16;
 
       // float; slump when dead
       ghost.position.y = Math.sin(t * 1.1) * 0.1 - (isDead ? (1 - dead / 1.6) * 0.45 : 0);
 
       // look toward cursor + gentle drift; shake like pac-man when dead
       cpx = lerp(cpx, px, 0.06); cpy = lerp(cpy, py, 0.06);
-      let rx = cpy * 0.38, ry = cpx * 0.68 + Math.sin(t * 0.15) * 0.05, rz = 0;
+      let rx = cpy * 0.36, ry = cpx * 0.66 + Math.sin(t * 0.15) * 0.05, rz = 0;
       if (isDead) { const sh = dead / 1.6; rz = Math.sin(t * 42) * 0.2 * sh; rx += Math.sin(t * 35) * 0.12 * sh; }
       ghost.rotation.set(rx, ry, rz);
 
-      // pupils track the cursor
-      const lookX = cpx * 0.05, lookY = -cpy * 0.05;
-      eyeL.userData.pupil.position.x = lookX; eyeL.userData.pupil.position.y = lookY;
-      eyeR.userData.pupil.position.x = lookX; eyeR.userData.pupil.position.y = lookY;
+      // eyes: the glow drifts toward the cursor and intensifies when you move
+      const foc = happy > 0 ? 1 : 0;
+      const gx = cpx * 0.05, gy = -cpy * 0.05;
+      [eyeL, eyeR].forEach((e) => {
+        e.userData.glow.position.x = gx; e.userData.glow.position.y = gy;
+        e.userData.mat.opacity = 0.78 + foc * 0.22 + pulse.v * 0.3;
+      });
 
       // blink
       blink -= dt; if (blink < -0.13) blink = 2.4 + Math.random() * 3.4;
-      const eyeSy = (blink < 0 && !isDead) ? 0.14 : 0.8;
-
-      // expressions
+      const eyeSy = (blink < 0 && !isDead) ? 0.12 : 1;
       eyeL.visible = eyeR.visible = !isDead;
       xL.visible = xR.visible = isDead;
       tongue.visible = isDead;
       eyeL.scale.y = eyeR.scale.y = eyeSy;
-      mouth.visible = !isDead;
-      const smiling = happy > 0;
-      mouth.scale.set(smiling ? 1.3 : 1, smiling ? 1.4 : 0.68, 1);
-
-      core.rotation.x += 0.004; core.rotation.y += 0.005;
-      core.scale.setScalar((1 + pulse.v * 0.5) * breath); core.material.opacity = 0.3 + pulse.v * 0.4;
 
       renderer.render(scene, camera); requestAnimationFrame(frame);
     };
