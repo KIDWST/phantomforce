@@ -8579,3 +8579,110 @@ button.phantom-speech {
     margin-top: -16px;
   }
 }
+
+/* ================================================================== */
+/* COMMAND CENTER — BROUGHT TO LIFE                                     */
+/* Ambient motion, entrance, and live telemetry for the admin phantom  */
+/* deck. All motion honors prefers-reduced-motion.                     */
+/* ================================================================== */
+
+/* deck content sits above the ambient scan layer */
+.phantom-deck .studio-shell { position: relative; z-index: 1; }
+
+/* live telemetry dot on each attention tile, colored by status */
+.phantom-deck .now-tile { position: relative; }
+.phantom-deck .now-tile::after {
+  content: "";
+  position: absolute;
+  top: 11px; right: 11px;
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: var(--deck-green, #26f7a8);
+  box-shadow: 0 0 9px var(--deck-green, #26f7a8);
+  opacity: 0.6;
+}
+.phantom-deck .now-tile.warn::after { background: var(--deck-amber, #f7c95c); box-shadow: 0 0 9px var(--deck-amber, #f7c95c); }
+.phantom-deck .now-tile.danger::after { background: var(--deck-red, #ff5a6a); box-shadow: 0 0 9px var(--deck-red, #ff5a6a); }
+
+/* deck-themed hover glow (augments existing hover) */
+.phantom-deck .now-tile:hover { box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(38, 247, 168, 0.28); }
+.phantom-deck .studio-assistant { transition: transform 160ms ease, border-color 160ms ease, background 160ms ease, box-shadow 160ms ease; }
+.phantom-deck .studio-assistant:hover { box-shadow: 0 0 0 1px rgba(38, 247, 168, 0.3), 0 8px 24px rgba(0, 0, 0, 0.4); }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* ambient grid drift */
+  .phantom-deck::before { animation: deck-grid-drift 26s linear infinite; }
+  @keyframes deck-grid-drift { to { background-position: 72px 72px, 72px 72px; } }
+
+  /* radar-style scan sweep down the deck (behind content, screen-blended) */
+  .phantom-deck::after {
+    content: "";
+    position: absolute;
+    left: 0; right: 0; top: 0;
+    height: 38%;
+    z-index: 0;
+    pointer-events: none;
+    background: linear-gradient(180deg, transparent, rgba(38, 247, 168, 0.05) 62%, rgba(69, 223, 255, 0.07) 90%, transparent);
+    mix-blend-mode: screen;
+    animation: deck-scan 8s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  }
+  @keyframes deck-scan {
+    0% { transform: translateY(-40%); opacity: 0; }
+    14% { opacity: 1; }
+    86% { opacity: 1; }
+    100% { transform: translateY(240%); opacity: 0; }
+  }
+
+  /* telemetry dot pulse */
+  .phantom-deck .now-tile::after { animation: deck-blip 2.8s ease-in-out infinite; }
+  @keyframes deck-blip {
+    0%, 100% { opacity: 0.25; transform: scale(0.8); }
+    50% { opacity: 0.95; transform: scale(1.15); }
+  }
+
+  /* entrance: panels rise + fade in, staggered, on deck open */
+  .phantom-deck .now-tile,
+  .phantom-deck .owner-quick-tools,
+  .phantom-deck .studio-assistants,
+  .phantom-deck .studio-chat,
+  .phantom-deck .studio-preview > * {
+    animation: deck-rise 0.55s cubic-bezier(0.22, 0.68, 0.32, 1) both;
+  }
+  @keyframes deck-rise {
+    from { opacity: 0; transform: translateY(14px) scale(0.99); }
+    to { opacity: 1; transform: none; }
+  }
+  .phantom-deck .now-tile:nth-child(1) { animation-delay: 0.03s; }
+  .phantom-deck .now-tile:nth-child(2) { animation-delay: 0.09s; }
+  .phantom-deck .now-tile:nth-child(3) { animation-delay: 0.15s; }
+  .phantom-deck .now-tile:nth-child(4) { animation-delay: 0.21s; }
+  .phantom-deck .studio-chat { animation-delay: 0.10s; }
+  .phantom-deck .owner-quick-tools { animation-delay: 0.14s; }
+  .phantom-deck .studio-assistants { animation-delay: 0.18s; }
+  .phantom-deck .studio-preview > *:nth-child(1) { animation-delay: 0.20s; }
+  .phantom-deck .studio-preview > *:nth-child(2) { animation-delay: 0.28s; }
+  .phantom-deck .studio-preview > *:nth-child(3) { animation-delay: 0.36s; }
+
+  /* assistant rows cascade in */
+  .phantom-deck .studio-assistant { animation: deck-rise 0.5s ease both; }
+  .phantom-deck .studio-assistant:nth-child(1) { animation-delay: 0.22s; }
+  .phantom-deck .studio-assistant:nth-child(2) { animation-delay: 0.27s; }
+  .phantom-deck .studio-assistant:nth-child(3) { animation-delay: 0.32s; }
+  .phantom-deck .studio-assistant:nth-child(4) { animation-delay: 0.37s; }
+  .phantom-deck .studio-assistant:nth-child(5) { animation-delay: 0.42s; }
+  .phantom-deck .studio-assistant:nth-child(6) { animation-delay: 0.47s; }
+  .phantom-deck .studio-assistant:nth-child(7) { animation-delay: 0.52s; }
+  .phantom-deck .studio-assistant:nth-child(8) { animation-delay: 0.57s; }
+  .phantom-deck .studio-assistant:nth-child(9) { animation-delay: 0.62s; }
+
+  /* active mission: processing pulse */
+  .mission-flight-panel.working { animation: deck-work-pulse 1.8s ease-in-out infinite; }
+  @keyframes deck-work-pulse {
+    0%, 100% { box-shadow: 0 0 0 1px rgba(69, 223, 255, 0.18); }
+    50% { box-shadow: 0 0 0 1px rgba(69, 223, 255, 0.5), 0 0 26px rgba(69, 223, 255, 0.16); }
+  }
+
+  /* mission status softly breathes */
+  .mission-flight-status { animation: deck-live 3.2s ease-in-out infinite; }
+  @keyframes deck-live { 50% { opacity: 0.72; } }
+}
