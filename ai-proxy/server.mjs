@@ -135,11 +135,23 @@ function readSignups() {
 function writeSignups(list) {
   fs.writeFileSync(SIGNUPS_FILE, JSON.stringify(list, null, 2));
 }
-function recordSignup(email, token) {
+function cleanName(value) {
+  return String(value || "")
+    .replace(/[\r\n\t]+/g, " ")
+    .replace(/\s{2,}/g, " ")
+    .trim()
+    .slice(0, 90);
+}
+
+function recordSignup(email, token, name = "") {
   const list = readSignups();
   const existing = list.find((r) => r.email === email);
-  if (existing) { existing.token = existing.token || token; existing.at = existing.at || new Date().toISOString(); }
-  else list.push({ email, token, at: new Date().toISOString(), paid: false, accessKey: null });
+  if (existing) {
+    existing.token = existing.token || token;
+    existing.at = existing.at || new Date().toISOString();
+    if (name) existing.name = name;
+  }
+  else list.push({ name, email, token, at: new Date().toISOString(), paid: false, accessKey: null });
   writeSignups(list);
 }
 
@@ -178,10 +190,14 @@ async function sendDemoEmail(to, downloadUrl) {
 
 function handleRegister(req, res, send) {
   let body = "";
-  req.on("data", (c) => { body += c; if (body.length > 2000) req.destroy(); });
+  req.on("data", (c) => { body += c; if (body.length > 3000) req.destroy(); });
   req.on("end", async () => {
-    let email;
-    try { email = String((JSON.parse(body) || {}).email || "").trim().toLowerCase(); }
+    let email, name;
+    try {
+      const payload = JSON.parse(body) || {};
+      email = String(payload.email || "").trim().toLowerCase();
+      name = cleanName(payload.name);
+    }
     catch { return send({ error: "bad_request" }, 400); }
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return send({ error: "invalid_email" }, 400);
     // Unique token: the demo download key today, and the seed for a paid access
@@ -190,7 +206,7 @@ function handleRegister(req, res, send) {
     const downloadUrl = DEMO_DOWNLOAD_URL
       ? `${DEMO_DOWNLOAD_URL}${DEMO_DOWNLOAD_URL.includes("?") ? "&" : "?"}key=${token}`
       : "";
-    try { recordSignup(email, token); } catch (e) { console.warn(`[register] could not store signup: ${e && e.message}`); }
+    try { recordSignup(email, token, name); } catch (e) { console.warn(`[register] could not store signup: ${e && e.message}`); }
     const result = await sendDemoEmail(email, downloadUrl).catch(() => ({ ok: false }));
     send({ ok: true, emailed: !!result.ok, live: !!RESEND_API_KEY });
   });

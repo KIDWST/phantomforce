@@ -8,6 +8,7 @@ html, body {
 }
 body { position: fixed; inset: 0; }
 button, input { font: inherit; color: inherit; }
+body.modal-open { touch-action: none; }
 
 .void-canvas { position: fixed; inset: 0; z-index: 0; width: 100%; height: 100%; opacity: 0; transition: opacity 2.4s ease; }
 .void-canvas.lit { opacity: 1; }
@@ -132,15 +133,16 @@ button, input { font: inherit; color: inherit; }
 .speak input { flex: 1; background: none; border: 0; outline: none; font-size: 16px; }
 .speak input::placeholder { color: var(--dim); }
 
-.summon {
+.summon, .download-cta {
   display: inline-flex; align-items: center; gap: 9px; margin-top: 2px; padding: 13px 24px; border-radius: 999px;
   background: linear-gradient(120deg, var(--neon), #15d97f); color: #02140b;
+  border: 0; cursor: pointer;
   font: 600 12px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; text-decoration: none;
   box-shadow: 0 0 36px rgba(65, 255, 161, 0.45); animation: emerge 0.8s ease both, summonPulse 2.6s ease-in-out 0.8s infinite;
 }
 @keyframes summonPulse { 50% { box-shadow: 0 0 56px rgba(65, 255, 161, 0.72); } }
-.summon span { transition: transform 0.2s; }
-.summon:hover span { transform: translateX(4px); }
+.summon span, .download-cta span { transition: transform 0.2s; }
+.summon:hover span, .download-cta:hover span { transform: translateX(4px); }
 
 .hint {
   position: fixed; left: 0; right: 0; bottom: 22px; z-index: 3; margin: 0; text-align: center;
@@ -154,27 +156,141 @@ button, input { font: inherit; color: inherit; }
   .void-canvas { display: none; }
 }
 
-/* Email-gated demo: the enlist form reuses the .speak pill; add the submit
-   button + the confirmation line. Matches the neon-green summon aesthetic. */
-.enlist { width: min(560px, 92vw); }
-.enlist input[type="email"] { flex: 1; background: none; border: 0; outline: none; font-size: 16px; color: inherit; }
-.enlist input[type="email"]::placeholder { color: var(--dim); }
-.enlist-go {
-  display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
-  padding: 9px 16px; border: 0; border-radius: 999px; cursor: pointer;
-  background: linear-gradient(120deg, var(--neon), #15d97f); color: #02140b;
-  font: 600 11px "DM Mono", monospace; letter-spacing: 0.07em; text-transform: uppercase;
-  box-shadow: 0 0 24px rgba(65, 255, 161, 0.4);
-  transition: transform 0.2s, box-shadow 0.3s, opacity 0.2s;
+/* Download gate: one clean CTA on the page, name/email form only when summoned. */
+.download-modal {
+  position: fixed; inset: 0; z-index: 10; display: grid; place-items: center;
+  padding: 20px; color: var(--ink);
 }
-.enlist-go:hover { box-shadow: 0 0 40px rgba(65, 255, 161, 0.72); }
-.enlist-go span { transition: transform 0.2s; }
-.enlist-go:hover span { transform: translateX(3px); }
-.enlist-go:disabled { opacity: 0.55; cursor: default; box-shadow: none; }
-.enlist-done {
-  margin: 12px 0 0; max-width: min(560px, 92vw); text-align: center;
-  font: 400 12px "DM Mono", monospace; letter-spacing: 0.04em; line-height: 1.5;
-  animation: emerge 0.6s ease both;
+.download-modal[hidden], .download-cta[hidden] { display: none; }
+.download-backdrop {
+  position: absolute; inset: 0; border: 0; cursor: pointer;
+  background: radial-gradient(70% 70% at 50% 42%, rgba(65, 255, 161, 0.12), rgba(2, 6, 10, 0.84) 70%);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
 }
-.enlist-done.ok { color: var(--neon); text-shadow: 0 0 14px rgba(65, 255, 161, 0.4); }
-.enlist-done.err { color: #ff9a9a; }
+.download-card {
+  position: relative; width: min(460px, calc(100vw - 32px)); padding: 28px;
+  display: grid; gap: 16px; overflow: hidden;
+  border: 1px solid rgba(65, 255, 161, 0.26); border-radius: 28px;
+  background: linear-gradient(180deg, rgba(7, 20, 14, 0.94), rgba(2, 8, 10, 0.94));
+  box-shadow: 0 22px 90px rgba(0, 0, 0, 0.6), 0 0 70px rgba(65, 255, 161, 0.18);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+  animation: emerge 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.download-card::before {
+  content: ""; position: absolute; inset: -1px; border-radius: inherit; pointer-events: none;
+  background: linear-gradient(135deg, rgba(65, 255, 161, 0.35), transparent 34%, rgba(30, 240, 255, 0.18));
+  opacity: 0.45;
+}
+.download-card > * { position: relative; z-index: 1; }
+.download-x {
+  position: absolute; top: 14px; right: 14px; z-index: 2;
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border: 1px solid rgba(65, 255, 161, 0.2); border-radius: 50%;
+  background: rgba(3, 12, 9, 0.58); color: #caffdf; cursor: pointer;
+  font-size: 20px; line-height: 1;
+}
+.download-kicker {
+  margin: 0; font: 500 11px "DM Mono", monospace; letter-spacing: 0.22em;
+  text-transform: uppercase; color: var(--neon);
+}
+.download-card h2 {
+  margin: -4px 38px 0 0; font-size: clamp(28px, 5vw, 42px); line-height: 1.02; letter-spacing: 0;
+}
+.download-fields { display: grid; gap: 12px; }
+.download-fields label { display: grid; gap: 7px; text-align: left; }
+.download-fields span {
+  font: 500 10px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim);
+}
+.download-fields input {
+  width: 100%; min-width: 0; border: 1px solid rgba(65, 255, 161, 0.22); border-radius: 16px;
+  background: rgba(0, 0, 0, 0.28); outline: none; padding: 14px 15px;
+  color: var(--ink); font-size: 16px;
+}
+.download-fields input::placeholder { color: rgba(95, 143, 119, 0.78); }
+.download-fields input:focus { border-color: var(--neon); box-shadow: 0 0 0 3px rgba(65, 255, 161, 0.12); }
+.download-submit {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 48px; padding: 13px 18px; border: 0; border-radius: 999px; cursor: pointer;
+  background: linear-gradient(120deg, var(--neon), #12d982); color: #02140b;
+  font: 600 12px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase;
+  box-shadow: 0 0 34px rgba(65, 255, 161, 0.38);
+}
+.download-submit:disabled { opacity: 0.58; cursor: default; box-shadow: none; }
+.download-status {
+  margin: 0; text-align: center; font: 400 12px "DM Mono", monospace;
+  letter-spacing: 0.04em; line-height: 1.5;
+}
+.download-status.ok { color: var(--neon); text-shadow: 0 0 14px rgba(65, 255, 161, 0.4); }
+.download-status.err { color: #ff9a9a; }
+.download-card.sent .download-fields, .download-card.sent .download-submit { display: none; }
+
+@media (max-width: 520px) {
+  .presence {
+    justify-content: flex-start;
+    gap: clamp(8px, 1.25vh, 13px);
+    padding: max(26px, env(safe-area-inset-top)) 14px max(18px, env(safe-area-inset-bottom));
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .wordmark {
+    margin-top: 2px;
+    font-size: clamp(10px, 2.85vw, 12px);
+    letter-spacing: 0.44em;
+    text-indent: 0.44em;
+  }
+  .say {
+    width: 100%;
+    max-width: 360px;
+    min-height: 0;
+  }
+  .say-line {
+    font-size: clamp(26px, 8.5vw, 38px);
+    line-height: 1.13;
+    letter-spacing: 0;
+    text-wrap: balance;
+  }
+  .orbits {
+    width: 100%;
+    max-width: 330px;
+    gap: 8px;
+    min-height: 0;
+  }
+  .orbits button {
+    width: min(270px, 76vw);
+    padding: 11px 14px;
+    font-size: clamp(14px, 4.5vw, 18px);
+    line-height: 1.1;
+    overflow-wrap: anywhere;
+  }
+  .speak {
+    width: min(352px, calc(100vw - 28px));
+    min-height: 58px;
+    padding: 12px 16px;
+    gap: 10px;
+  }
+  .speak input {
+    min-width: 0;
+    font-size: clamp(16px, 5.3vw, 22px);
+    text-overflow: ellipsis;
+  }
+  .download-cta {
+    width: min(352px, calc(100vw - 28px));
+    justify-content: center;
+    padding: 15px 18px;
+    font-size: clamp(12px, 3.7vw, 15px);
+    white-space: nowrap;
+  }
+  .download-card {
+    padding: 24px 18px 20px;
+    border-radius: 24px;
+  }
+  .download-card h2 { font-size: 30px; }
+}
+
+@media (max-height: 760px) and (max-width: 520px) {
+  .presence { gap: 7px; padding-top: 18px; }
+  .say-line { font-size: clamp(23px, 7.6vw, 32px); line-height: 1.1; }
+  .orbits button { padding: 9px 13px; font-size: clamp(13px, 4vw, 16px); }
+  .speak { min-height: 54px; }
+  .void-canvas { transform: scale(0.9) translateY(2.5vh); transform-origin: 50% 54%; }
+}

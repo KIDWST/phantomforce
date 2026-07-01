@@ -18,13 +18,13 @@ const REGISTER_ENDPOINT =
   (location.hostname === "127.0.0.1" || location.hostname === "localhost")
     ? "http://127.0.0.1:8788/register"
     : "https://ai.phantomforce.online/register";
-async function registerForDemo(email) {
+async function registerForDemo(name, email) {
   if (!REGISTER_ENDPOINT) return true; // no endpoint -> optimistic local preview
   try {
     const r = await fetch(REGISTER_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email }),
+      body: JSON.stringify({ name, email }),
     });
     return r.ok;
   } catch { return false; }
@@ -84,8 +84,12 @@ function initConversation() {
   const orbits = document.querySelector("[data-orbits]");
   const form = document.querySelector("[data-speak]");
   const input = document.querySelector("[data-speak-input]");
-  const enlist = document.querySelector("[data-enlist]");
-  const enlistDone = document.querySelector("[data-enlist-done]");
+  const downloadCta = document.querySelector("[data-download-cta]");
+  const downloadModal = document.querySelector("[data-download-modal]");
+  const downloadForm = document.querySelector("[data-download-form]");
+  const downloadName = document.querySelector("[data-download-name]");
+  const downloadEmail = document.querySelector("[data-download-email]");
+  const downloadStatus = document.querySelector("[data-download-status]");
   const hint = document.querySelector("[data-hint]");
   if (!say || !orbits) return;
 
@@ -121,36 +125,68 @@ function initConversation() {
   };
   const think = (then) => { speak("· · ·", "thinking"); flare(); window.setTimeout(then, reduceMotion ? 220 : 760); };
 
-  const showEnlist = () => { if (enlist) enlist.hidden = false; };
+  const showDownload = () => { if (downloadCta) downloadCta.hidden = false; };
   const finish = () => {
     setOrbits([]);
-    showEnlist();
+    showDownload();
   };
 
-  // Email → automated demo. Submits to REGISTER_ENDPOINT (or previews success
-  // locally when that's empty). No Pangolin, no download-then-figure-it-out.
-  enlist?.addEventListener("submit", (e) => {
+  const openDownload = () => {
+    if (!downloadModal) return;
+    downloadModal.hidden = false;
+    document.body.classList.add("modal-open");
+    if (downloadStatus) downloadStatus.hidden = true;
+    window.setTimeout(() => downloadName?.focus(), 40);
+  };
+  const closeDownload = () => {
+    if (!downloadModal) return;
+    downloadModal.hidden = true;
+    document.body.classList.remove("modal-open");
+    downloadCta?.focus();
+  };
+
+  downloadCta?.addEventListener("click", openDownload);
+  document.querySelectorAll("[data-download-close]").forEach((btn) => btn.addEventListener("click", closeDownload));
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && downloadModal && !downloadModal.hidden) closeDownload();
+  });
+
+  // Name + email -> automated demo email. Paid access is still guarded by the
+  // proxy's owner-only /upgrade route after subscription activation.
+  downloadForm?.addEventListener("submit", (e) => {
     e.preventDefault();
-    const emailEl = enlist.querySelector("[data-enlist-email]");
-    const email = (emailEl?.value || "").trim();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
-      if (enlistDone) {
-        enlistDone.hidden = false;
-        enlistDone.className = "enlist-done err";
-        enlistDone.textContent = "Enter a valid email so I can send your demo.";
+    const name = (downloadName?.value || "").trim();
+    const email = (downloadEmail?.value || "").trim();
+    if (name.length < 2) {
+      if (downloadStatus) {
+        downloadStatus.hidden = false;
+        downloadStatus.className = "download-status err";
+        downloadStatus.textContent = "Enter your name to unlock the download.";
       }
+      downloadName?.focus();
       return;
     }
-    const btn = enlist.querySelector("button");
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) {
+      if (downloadStatus) {
+        downloadStatus.hidden = false;
+        downloadStatus.className = "download-status err";
+        downloadStatus.textContent = "Enter a valid email so I can send your download.";
+      }
+      downloadEmail?.focus();
+      return;
+    }
+    const btn = downloadForm.querySelector("button[type='submit']");
     if (btn) btn.disabled = true;
-    registerForDemo(email).then((ok) => {
-      enlist.hidden = true;
-      if (!enlistDone) return;
-      enlistDone.hidden = false;
-      enlistDone.className = `enlist-done ${ok ? "ok" : "err"}`;
-      enlistDone.textContent = ok
-        ? "Check your email — your PhantomForce demo is on its way."
+    registerForDemo(name, email).then((ok) => {
+      if (!downloadStatus) return;
+      downloadStatus.hidden = false;
+      downloadStatus.className = `download-status ${ok ? "ok" : "err"}`;
+      downloadStatus.textContent = ok
+        ? "Check your email — your PhantomForce download is on its way."
         : "Couldn't reach me just now. Try again in a moment.";
+      if (ok) downloadForm.classList.add("sent");
+    }).finally(() => {
+      if (btn) btn.disabled = false;
     });
   });
 
@@ -224,16 +260,16 @@ function initConversation() {
       askPhantom(v).then((ai) => {
         // live brain enforces its own per-day cap
         if (ai && ai.limited) {
-          speak(ai.message || "That's your free questions for now — drop your email and I'll send your private demo.");
-          showEnlist();
+          speak(ai.message || "That's your free questions for now — download PhantomForce to go deeper.");
+          showDownload();
           return;
         }
         if (ai && ai.reply) { window.setTimeout(() => speak(ai.reply), reduceMotion ? 120 : 540); return; }
         // free local responder: reactive, then capped to pull them in
         window.setTimeout(() => {
           if (typed > FREE_LIMIT) {
-            speak("That's a taste of what I do. The full version runs 24/7, privately, for your whole business — leave your email and I'll send your demo.");
-            showEnlist();
+            speak("That's a taste. The full version runs 24/7, privately, for your whole business — download PhantomForce to go deeper.");
+            showDownload();
           } else {
             speak(localReply(v));
           }
@@ -433,7 +469,7 @@ function initRiskRadar() {
   const active = [];
   const overlaps = (a, b, pad) =>
     a.left - pad < b.right && a.right + pad > b.left && a.top - pad < b.bottom && a.bottom + pad > b.top;
-  const uiSel = "[data-wordmark], [data-say], [data-orbits], [data-speak], [data-enlist], [data-enlist-done]";
+  const uiSel = "[data-wordmark], [data-say], [data-orbits], [data-speak], [data-download-cta], [data-download-modal]";
   const place = (ping) => {
     const W = innerWidth, H = innerHeight;
     const obstacles = active.map((e) => e.getBoundingClientRect())

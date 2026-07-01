@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="void.css?v=22" />
+    <link rel="stylesheet" href="void.css?v=23" />
   </head>
   <body>
     <canvas class="void-canvas" data-void aria-hidden="true"></canvas>
@@ -43,14 +43,31 @@
         <span class="speak-caret" aria-hidden="true">›</span>
         <input type="text" data-speak-input autocomplete="off" spellcheck="false" placeholder="ask phantomforce…" aria-label="Speak to PhantomForce" />
       </form>
-      <form class="speak enlist" hidden data-enlist>
-        <span class="speak-caret" aria-hidden="true">✉</span>
-        <input type="email" data-enlist-email required autocomplete="email" spellcheck="false" placeholder="your email for the demo…" aria-label="Your email to get the PhantomForce demo" />
-        <button type="submit" class="enlist-go">get the demo <span>→</span></button>
-      </form>
-      <p class="enlist-done" hidden data-enlist-done aria-live="polite"></p>
+      <button class="download-cta" type="button" hidden data-download-cta>
+        Download PhantomForce <span aria-hidden="true">→</span>
+      </button>
     </main>
+    <div class="download-modal" hidden data-download-modal role="dialog" aria-modal="true" aria-labelledby="download-title">
+      <button class="download-backdrop" type="button" data-download-close aria-label="Close download form"></button>
+      <form class="download-card" data-download-form>
+        <button class="download-x" type="button" data-download-close aria-label="Close">×</button>
+        <p class="download-kicker">Private access</p>
+        <h2 id="download-title">Download PhantomForce</h2>
+        <div class="download-fields">
+          <label>
+            <span>Name</span>
+            <input type="text" data-download-name required autocomplete="name" placeholder="Jordan West" />
+          </label>
+          <label>
+            <span>Email</span>
+            <input type="email" data-download-email required autocomplete="email" placeholder="you@company.com" />
+          </label>
+        </div>
+        <button class="download-submit" type="submit">Send download link <span aria-hidden="true">→</span></button>
+        <p class="download-status" hidden data-download-status aria-live="polite"></p>
+      </form>
+    </div>
     <p class="hint" data-hint hidden></p>
-    <script type="module" src="void.js?v=22"></script>
+    <script type="module" src="void.js?v=23"></script>
   </body>
 </html>
