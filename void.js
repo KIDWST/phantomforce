@@ -67,7 +67,6 @@ function initConversation() {
   const input = document.querySelector("[data-speak-input]");
   const summon = document.querySelector("[data-summon]");
   const hint = document.querySelector("[data-hint]");
-  const phantom = document.querySelector("[data-phantom]");
   if (!say || !orbits) return;
 
   const captured = [];
@@ -205,7 +204,7 @@ function initConversation() {
   }, 650);
 }
 
-/* ---------------- the entity (WebGL) ---------------- */
+/* ---------------- the phantom (WebGL 3D entity) ---------------- */
 async function initEntity() {
   if (reduceMotion) return;
   const canvas = document.querySelector("[data-void]");
@@ -218,116 +217,145 @@ async function initEntity() {
     renderer.setClearColor(0x000000, 0);
     renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, smallScreen ? 1.2 : 1.6));
     const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(58, 1, 0.1, 100);
-    camera.position.set(0, 0, 7.6);
-    const root = new THREE.Group(); scene.add(root);
+    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
+    camera.position.set(0, 0, 7);
 
-    // a ghost made of light: dome head, body, scalloped bottom fringe (a 3D
-    // surface of revolution so it reads as a ghost from any angle).
-    const N = smallScreen ? 1800 : 3000;
+    const ghost = new THREE.Group(); scene.add(ghost);   // the whole phantom: tilts, floats, shakes
+
+    // --- body: a cloud of light in a classic ghost silhouette (dome head,
+    //     straight body, wavy skirt) — reads as a phantom from any angle ---
+    const N = smallScreen ? 2400 : 4600;
     const base = new Float32Array(N * 3), pos = new Float32Array(N * 3);
     const GA = 2.399963229728653;
     for (let k = 0; k < N; k++) {
-      const v = k / (N - 1);                 // 0 = top, 1 = bottom
+      const v = k / (N - 1);                       // 0 = top of head, 1 = bottom
       const ang = k * GA;
-      const R = v < 0.34 ? Math.sin((v / 0.34) * (Math.PI / 2)) * 0.95 : 0.95;
-      let y = 1.12 - v * 2.24;               // top ~+1.12 -> bottom ~-1.12
-      if (v > 0.72) {                        // wavy fringe at the bottom
-        const f = (v - 0.72) / 0.28;
-        y += f * 0.44 * (0.5 + 0.5 * Math.sin(ang * 5));
+      const R = v < 0.42 ? Math.sin((v / 0.42) * (Math.PI / 2)) : 1;   // rounded head dome
+      let y = 1.4 - v * 2.8;                        // +1.4 (top) -> -1.4 (bottom)
+      if (v > 0.76) {                               // wavy ghost skirt
+        const f = (v - 0.76) / 0.24;
+        y += f * 0.5 * (0.5 + 0.5 * Math.sin(ang * 6));
       }
-      const rr = R * (0.8 + 0.2 * (((k * 9301) % 233) / 233));   // a little volume
+      const rr = R * (0.82 + 0.18 * (((k * 9301) % 233) / 233));
       const x = Math.cos(ang) * rr;
-      const z = Math.sin(ang) * rr * 0.72;   // slightly flatter front-to-back
+      const z = Math.sin(ang) * rr * 0.6;           // flatter front-to-back so the face reads
       base[k * 3] = x; base[k * 3 + 1] = y; base[k * 3 + 2] = z;
       pos[k * 3] = x; pos[k * 3 + 1] = y; pos[k * 3 + 2] = z;
     }
     const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const ent = new THREE.Points(geo, new THREE.PointsMaterial({ color: new THREE.Color(0x41ffa1), size: 0.035, sizeAttenuation: true, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending, depthWrite: false }));
-    root.add(ent);
-    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.55, 1), new THREE.MeshBasicMaterial({ color: 0xb9ffe0, transparent: true, opacity: 0.5, wireframe: true }));
-    root.add(core);
-    const SF = 800, sf = new Float32Array(SF * 3);
-    for (let k = 0; k < SF; k++) { sf[k * 3] = (Math.random() - 0.5) * 30; sf[k * 3 + 1] = (Math.random() - 0.5) * 20; sf[k * 3 + 2] = (Math.random() - 0.5) * 20 - 6; }
+    const bodyMat = new THREE.PointsMaterial({ color: new THREE.Color(0x41ffa1), size: 0.032, sizeAttenuation: true, transparent: true, opacity: 0.95, blending: THREE.AdditiveBlending, depthWrite: false });
+    const body = new THREE.Points(geo, bodyMat); ghost.add(body);
+
+    // --- face: eyes + mouth, children of the ghost so they move as one ---
+    const FZ = 0.64;                                 // front of the face
+    const eyeMat = new THREE.MeshBasicMaterial({ color: 0x03130c });
+    const rimMat = new THREE.MeshBasicMaterial({ color: 0xb9ffe0, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending });
+    const pupilMat = new THREE.MeshBasicMaterial({ color: 0xd6ffec });
+    const makeEye = (sx) => {
+      const g = new THREE.Group(); g.position.set(sx, 0.6, FZ);
+      const eye = new THREE.Mesh(new THREE.CircleGeometry(0.16, 28), eyeMat);
+      const rim = new THREE.Mesh(new THREE.RingGeometry(0.15, 0.2, 28), rimMat);
+      const pupil = new THREE.Mesh(new THREE.CircleGeometry(0.07, 18), pupilMat); pupil.position.z = 0.01;
+      g.add(eye, rim, pupil); g.userData.pupil = pupil; return g;
+    };
+    const eyeL = makeEye(-0.34), eyeR = makeEye(0.34); ghost.add(eyeL, eyeR);
+
+    // X eyes for "play dead"
+    const barMat = new THREE.MeshBasicMaterial({ color: 0xd6ffec });
+    const makeX = (sx) => {
+      const g = new THREE.Group(); g.position.set(sx, 0.6, FZ + 0.02); g.visible = false;
+      const b1 = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.055, 0.02), barMat); b1.rotation.z = Math.PI / 4;
+      const b2 = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.055, 0.02), barMat); b2.rotation.z = -Math.PI / 4;
+      g.add(b1, b2); return g;
+    };
+    const xL = makeX(-0.34), xR = makeX(0.34); ghost.add(xL, xR);
+
+    // mouth (smile) + tongue
+    const mouthMat = new THREE.MeshBasicMaterial({ color: 0x41ffa1, transparent: true, opacity: 0.92, blending: THREE.AdditiveBlending });
+    const mouth = new THREE.Mesh(new THREE.TorusGeometry(0.2, 0.03, 10, 28, Math.PI), mouthMat);
+    mouth.position.set(0, 0.24, FZ); mouth.rotation.z = Math.PI;   // opening up = smile
+    ghost.add(mouth);
+    const tongue = new THREE.Mesh(new THREE.CircleGeometry(0.08, 14), new THREE.MeshBasicMaterial({ color: 0xff86a6 }));
+    tongue.position.set(0, 0.12, FZ + 0.01); tongue.visible = false; ghost.add(tongue);
+
+    // core spark + starfield (keep the digital vibe)
+    const core = new THREE.Mesh(new THREE.IcosahedronGeometry(0.42, 1), new THREE.MeshBasicMaterial({ color: 0xb9ffe0, transparent: true, opacity: 0.22, wireframe: true }));
+    ghost.add(core);
+    const SF = 700, sf = new Float32Array(SF * 3);
+    for (let k = 0; k < SF; k++) { sf[k * 3] = (Math.random() - 0.5) * 34; sf[k * 3 + 1] = (Math.random() - 0.5) * 22; sf[k * 3 + 2] = (Math.random() - 0.5) * 20 - 6; }
     const sgeo = new THREE.BufferGeometry(); sgeo.setAttribute("position", new THREE.BufferAttribute(sf, 3));
     scene.add(new THREE.Points(sgeo, new THREE.PointsMaterial({ color: 0x1ef0ff, size: 0.03, transparent: true, opacity: 0.4 })));
 
     const resize = () => { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
     resize(); window.addEventListener("resize", resize, { passive: true });
+
+    // --- gestures: look at cursor + smile on move + play dead on click ---
     let px = 0, py = 0, cpx = 0, cpy = 0;
-    window.addEventListener("pointermove", (e) => { px = e.clientX / innerWidth - 0.5; py = e.clientY / innerHeight - 0.5; }, { passive: true });
-    let running = true;
-    document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
+    let happy = 0, dead = 0, blink = 3;
+    window.addEventListener("pointermove", (e) => {
+      px = e.clientX / innerWidth - 0.5; py = e.clientY / innerHeight - 0.5;
+      if (dead <= 0) happy = 1.1;
+    }, { passive: true });
+    canvas.addEventListener("pointerdown", () => { if (dead <= 0) { dead = 1.6; flare(); } });
 
     const attr = geo.attributes.position, t0 = performance.now();
+    let running = true;
+    document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
     const frame = (now) => {
       if (!running) return;
-      const t = ((now || performance.now()) - t0) * 0.001;
+      const t = ((now || performance.now()) - t0) * 0.001, dt = 0.016;
       pulse.v = Math.max(0, pulse.v - 0.02);
-      const breath = 1 + Math.sin(t * 0.9) * 0.04 + pulse.v * 0.22;
+      happy = Math.max(0, happy - dt * 1.1);
+      dead = Math.max(0, dead - dt);
+      const isDead = dead > 0;
+
+      // breathing body
+      const breath = 1 + Math.sin(t * 0.9) * 0.03 + pulse.v * 0.16;
       for (let k = 0; k < N; k++) {
         const j = k * 3;
-        const n = Math.sin(base[j] * 3 + t * 1.4) * Math.cos(base[j + 1] * 3 - t) * 0.12;
-        const s = (1.9 + n) * breath;
+        const n = Math.sin(base[j] * 3 + t * 1.3) * Math.cos(base[j + 1] * 3 - t) * 0.07;
+        const s = (1 + n) * breath;
         attr.array[j] = base[j] * s; attr.array[j + 1] = base[j + 1] * s; attr.array[j + 2] = base[j + 2] * s;
       }
       attr.needsUpdate = true;
-      ent.material.opacity = 0.82 + pulse.v * 0.18; ent.material.size = 0.035 + pulse.v * 0.02;
-      core.rotation.x += 0.003; core.rotation.y += 0.004;
-      core.scale.setScalar(1 + pulse.v * 0.5); core.material.opacity = 0.4 + pulse.v * 0.5;
-      cpx = lerp(cpx, px, 0.04); cpy = lerp(cpy, py, 0.04);
-      root.rotation.y = t * 0.05 + cpx * 0.6; root.rotation.x = cpy * 0.4;
+      bodyMat.opacity = 0.85 + pulse.v * 0.15;
+      bodyMat.color.setHex(isDead ? 0xff6b8a : 0x41ffa1);
+
+      // float; slump when dead
+      ghost.position.y = Math.sin(t * 1.1) * 0.1 - (isDead ? (1 - dead / 1.6) * 0.5 : 0);
+
+      // look toward cursor + gentle drift; shake like pac-man when dead
+      cpx = lerp(cpx, px, 0.06); cpy = lerp(cpy, py, 0.06);
+      let rx = cpy * 0.4, ry = cpx * 0.7 + Math.sin(t * 0.15) * 0.05, rz = 0;
+      if (isDead) { const sh = dead / 1.6; rz = Math.sin(t * 42) * 0.2 * sh; rx += Math.sin(t * 35) * 0.12 * sh; }
+      ghost.rotation.set(rx, ry, rz);
+
+      // pupils track the cursor
+      const lookX = cpx * 0.05, lookY = -cpy * 0.05;
+      eyeL.userData.pupil.position.x = lookX; eyeL.userData.pupil.position.y = lookY;
+      eyeR.userData.pupil.position.x = lookX; eyeR.userData.pupil.position.y = lookY;
+
+      // blink
+      blink -= dt; if (blink < -0.13) blink = 2.4 + Math.random() * 3.4;
+      const eyeSy = (blink < 0 && !isDead) ? 0.12 : 1;
+
+      // expressions
+      eyeL.visible = eyeR.visible = !isDead;
+      xL.visible = xR.visible = isDead;
+      tongue.visible = isDead;
+      eyeL.scale.y = eyeR.scale.y = eyeSy;
+      mouth.visible = !isDead;
+      const smiling = happy > 0;
+      mouth.scale.set(smiling ? 1.25 : 1, smiling ? 1.35 : 0.7, 1);
+
+      core.rotation.x += 0.004; core.rotation.y += 0.005;
+      core.scale.setScalar(1 + pulse.v * 0.4); core.material.opacity = 0.18 + pulse.v * 0.4;
+
       renderer.render(scene, camera); requestAnimationFrame(frame);
     };
     requestAnimationFrame(frame);
     canvas.classList.add("lit");
   } catch {}
-}
-
-/* ---------------- phantom moods + play dead ---------------- */
-function initPhantomMoods() {
-  const phantom = document.querySelector("[data-phantom]");
-  if (!phantom) return;
-  const eyes = phantom.querySelector(".eyes-live");
-  let idle = 0;
-  // eyes that track the cursor (smoothed)
-  let ex = 0, ey = 0, tex = 0, tey = 0, eraf = 0;
-  const animateEyes = () => {
-    ex = lerp(ex, tex, 0.2); ey = lerp(ey, tey, 0.2);
-    if (eyes) eyes.setAttribute("transform", `translate(${ex.toFixed(2)} ${ey.toFixed(2)})`);
-    eraf = (Math.abs(ex - tex) > 0.01 || Math.abs(ey - tey) > 0.01) ? requestAnimationFrame(animateEyes) : 0;
-  };
-  window.addEventListener("pointermove", (e) => {
-    if (phantom.classList.contains("dead")) return;
-    phantom.classList.add("happy");
-    window.clearTimeout(idle);
-    idle = window.setTimeout(() => phantom.classList.remove("happy"), 1100);
-    const r = phantom.getBoundingClientRect();
-    const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
-    tex = Math.max(-3.6, Math.min(3.6, ((e.clientX - cx) / (r.width / 2 || 1)) * 3.6));
-    tey = Math.max(-2.6, Math.min(2.6, ((e.clientY - cy) / (r.height / 2 || 1)) * 3.0));
-    if (!eraf) eraf = requestAnimationFrame(animateEyes);
-  }, { passive: true });
-  phantom.addEventListener("click", () => {
-    if (phantom.classList.contains("dead")) return;
-    phantom.classList.remove("happy");
-    phantom.classList.add("dead");
-    flare();
-    tex = 0; tey = 0;
-    if (!eraf) eraf = requestAnimationFrame(animateEyes);
-    window.setTimeout(() => phantom.classList.remove("dead"), 1500);
-  });
-
-  // touch devices have no cursor — give the entity its own idle life
-  if (window.matchMedia("(hover: none)").matches && !reduceMotion) {
-    window.setInterval(() => {
-      if (phantom.classList.contains("dead")) return;
-      tex = (Math.random() - 0.5) * 5; tey = (Math.random() - 0.5) * 3.4;
-      if (!eraf) eraf = requestAnimationFrame(animateEyes);
-      phantom.classList.add("happy");
-      window.setTimeout(() => phantom.classList.remove("happy"), 1500);
-    }, 3600);
-  }
 }
 
 /* ---------------- threat radar: risks a business faces ---------------- */
@@ -337,21 +365,25 @@ function initRiskRadar() {
   // red = threats they face. blue = the everyday flood of real notifications
   // (a face, the app, a real question) — the burdens PhantomForce absorbs.
   const threats = ["malware", "scam", "data leak", "phishing", "chargeback", "law update", "spam", "fraud", "compliance", "deadline", "downtime", "bad review"];
+  // real portraits + diverse names so the flood feels like actual people
+  const rmu = (g, i) => `https://randomuser.me/api/portraits/${g}/${i}.jpg`;
   const stream = [
-    { face: "👩", app: "Instagram", msg: "how much for a shoot?" },
-    { face: "🧔", app: "Messenger", msg: "you free Saturday?" },
-    { face: "👨", app: "Email", msg: "Re: your quote" },
-    { face: "👱‍♀️", app: "WhatsApp", msg: "can you call me back?" },
-    { face: "🧑", app: "Text", msg: "still on for 3pm?" },
-    { face: "👩‍🦰", app: "Facebook", msg: "do you do weddings?" },
-    { face: "👨‍🦱", app: "Missed call", msg: "called twice" },
-    { face: "🧑‍💼", app: "New lead", msg: "wants a callback today" },
-    { face: "👩‍🦱", app: "TikTok", msg: "commented on your post" },
-    { face: "👨‍🦳", app: "Voicemail", msg: "left you a message" },
-    { face: "⭐", app: "New review", msg: "left you 5 stars" },
-    { face: "🧾", app: "Invoice", msg: "payment is overdue" },
-    { face: "👩", app: "Booking", msg: "needs to reschedule" },
-    { face: "🧓", app: "Email", msg: "where's my order?" },
+    { name: "Aaliyah Johnson", photo: rmu("women", 68), app: "Instagram", msg: "how much for a shoot?" },
+    { name: "Diego Martínez", photo: rmu("men", 32), app: "Messenger", msg: "you free Saturday?" },
+    { name: "Mei Chen", photo: rmu("women", 79), app: "Email", msg: "Re: your quote" },
+    { name: "Liam O'Brien", photo: rmu("men", 45), app: "WhatsApp", msg: "can you call me back?" },
+    { name: "Priya Patel", photo: rmu("women", 12), app: "Text", msg: "still on for 3pm?" },
+    { name: "Marcus Williams", photo: rmu("men", 11), app: "Facebook", msg: "do you do weddings?" },
+    { name: "Sofia Rossi", photo: rmu("women", 90), app: "Missed call", msg: "called twice" },
+    { name: "Omar Hassan", photo: rmu("men", 64), app: "New lead", msg: "wants a callback today" },
+    { name: "Nia Okafor", photo: rmu("women", 87), app: "TikTok", msg: "commented on your post" },
+    { name: "Kenji Tanaka", photo: rmu("men", 76), app: "Voicemail", msg: "left you a message" },
+    { name: "Chloe Dubois", photo: rmu("women", 54), app: "New review", msg: "left you 5 stars" },
+    { name: "Rajesh Kumar", photo: rmu("men", 83), app: "Invoice", msg: "payment is overdue" },
+    { name: "Fatima Al-Sayed", photo: rmu("women", 33), app: "Booking", msg: "needs to reschedule" },
+    { name: "Lucas Silva", photo: rmu("men", 9), app: "Email", msg: "where's my order?" },
+    { name: "Zara Ahmed", photo: rmu("women", 41), app: "Comment", msg: "is this available?" },
+    { name: "Andre Thompson", photo: rmu("men", 51), app: "New DM", msg: "sent you the details" },
   ];
   const spawn = () => {
     if (document.hidden) return;
@@ -369,11 +401,14 @@ function initRiskRadar() {
     } else {
       const n = stream[Math.floor(Math.random() * stream.length)];
       ping.className = "risk-ping stream notif";
-      const av = document.createElement("span"); av.className = "notif-av"; av.textContent = n.face;
+      const av = document.createElement("img");
+      av.className = "notif-av"; av.src = n.photo; av.alt = ""; av.loading = "lazy"; av.referrerPolicy = "no-referrer";
+      av.addEventListener("error", () => { av.classList.add("notif-av-blank"); av.removeAttribute("src"); });
       const body = document.createElement("span"); body.className = "notif-body";
-      const app = document.createElement("b"); app.className = "notif-app"; app.textContent = n.app;
+      const name = document.createElement("b"); name.className = "notif-name"; name.textContent = n.name;
+      const app = document.createElement("span"); app.className = "notif-app"; app.textContent = n.app;
       const msg = document.createElement("span"); msg.className = "notif-msg"; msg.textContent = n.msg;
-      body.append(app, msg);
+      body.append(name, app, msg);
       ping.append(av, body);
     }
     field.appendChild(ping);
@@ -385,6 +420,6 @@ function initRiskRadar() {
   window.setInterval(spawn, 1300);
 }
 
-function boot() { initConversation(); initEntity(); initPhantomMoods(); initRiskRadar(); }
+function boot() { initConversation(); initEntity(); initRiskRadar(); }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
 else boot();
