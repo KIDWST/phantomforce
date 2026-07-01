@@ -6,6 +6,7 @@ export default defineConfig({
   server: {
     host: "127.0.0.1",
     port: 5188,
+    allowedHosts: ["app.phantomforce.online"],
   },
   preview: {
     host: "127.0.0.1",

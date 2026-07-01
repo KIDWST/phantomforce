@@ -1629,7 +1629,7 @@ const DEFAULT_CLIENT_WORKSPACE_ID = "client-chicagoshots";
 const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-sports-demo"]);
 const ADMIN_ONLY_ROUTES = new Set<Route>(["agents", "site", "access", "connections"]);
 // The essentials pinned in the mobile bottom bar; everything else goes under "More".
-const CORE_MOBILE_ROUTES = new Set<Route>(["command", "inbox", "offers", "agents", "approvals"]);
+const CORE_MOBILE_ROUTES = new Set<Route>(["command", "approvals", "access"]);
 
 const initialSessions: AppSession[] = [
   {
@@ -1647,20 +1647,14 @@ const initialSessions: AppSession[] = [
   },
 ];
 
+// Three simple tabs. The Studio (command route) is the chat+assistants+preview
+// home that absorbs the old Home/Agents/Site/Leads/Money/Create/Video/Scanner/
+// Bookings/Work screens; those views still render when an assistant opens its
+// full surface, they are just no longer separate nav destinations.
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
-  { id: "command", label: "Home", icon: <Command size={18} /> },
-  { id: "agents", label: "Agents", icon: <Bot size={18} /> },
-  { id: "site", label: "Site Studio", icon: <FileText size={18} /> },
-  { id: "inbox", label: "Leads", icon: <Users size={18} /> },
-  { id: "offers", label: "Money", icon: <Zap size={18} /> },
-  { id: "content", label: "Create", icon: <FileText size={18} /> },
-  { id: "media", label: "Video", icon: <Play size={18} /> },
-  { id: "security", label: "Scanner", icon: <ShieldCheck size={18} /> },
-  { id: "calendar", label: "Bookings", icon: <CalendarDays size={18} /> },
-  { id: "tasks", label: "Work", icon: <SquareCheckBig size={18} /> },
+  { id: "command", label: "Console", icon: <Command size={18} /> },
   { id: "approvals", label: "Review", icon: <ShieldCheck size={18} /> },
   { id: "access", label: "Access", icon: <KeyRound size={18} /> },
-  { id: "connections", label: "System", icon: <Link2 size={18} /> },
 ];
 
 const validRouteIds = new Set<Route>(navItems.map((item) => item.id));
@@ -4537,6 +4531,144 @@ function Topbar({
   );
 }
 
+// Anti-bloat: instead of a whole Scanner page, the Console shows a small live
+// radar wired to the real autonomous-scan status (read-only GET). It reads the
+// state at a glance and expands to the details (or the full scan) on tap.
+// Degrades gracefully to "offline" if the backend is not reachable.
+function RadarScanner({
+  setRoute,
+  sessionHeaders,
+}: {
+  setRoute: (route: Route) => void;
+  sessionHeaders: (json?: boolean) => Record<string, string>;
+}) {
+  const [open, setOpen] = useState(false);
+  const [data, setData] = useState<AutonomousSecurityScanResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [failed, setFailed] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+
+    async function loadStatus() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/phantom-ai/security/autonomous/status`, {
+          headers: sessionHeaders(),
+        });
+        const payload = (await response.json()) as AutonomousSecurityScanResponse;
+        if (!active) return;
+        if (response.ok) {
+          setData(payload);
+          setFailed(false);
+        } else {
+          setFailed(true);
+        }
+      } catch {
+        if (active) setFailed(true);
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    void loadStatus();
+    return () => {
+      active = false;
+    };
+  }, [sessionHeaders]);
+
+  const details = data && typeof data.status === "object" ? data.status : undefined;
+  const statusWord = typeof data?.status === "string" ? data.status : details?.status;
+  const active = data?.protection_active ?? statusWord === "active";
+  const targetCount = data?.target_count ?? details?.target_count ?? 0;
+  const findings = (details?.targets ?? []).reduce(
+    (sum, target) => sum + (target.summary?.total_findings ?? 0),
+    0,
+  );
+  const lastRun = data?.last_run_at ?? details?.last_run_at ?? null;
+  const lastRunLabel = lastRun ? new Date(lastRun).toLocaleDateString() : "Not yet";
+
+  const state = loading ? "loading" : failed ? "offline" : active ? "protected" : "off";
+  const statusChip =
+    state === "loading"
+      ? { label: "Checking", cls: "muted" }
+      : state === "offline"
+        ? { label: "Offline", cls: "muted" }
+        : state === "protected"
+          ? { label: findings > 0 ? "Review" : "Clear", cls: findings > 0 ? "warn" : "ok" }
+          : { label: "Off", cls: "warn" };
+  const headline =
+    state === "loading"
+      ? "Checking your setup…"
+      : state === "offline"
+        ? "Scanner is offline."
+        : state === "protected"
+          ? findings > 0
+            ? "A few things to review."
+            : "Nothing needs you."
+          : "Protection is off.";
+
+  return (
+    <section className="panel radar-panel">
+      <div className="section-head compact">
+        <div>
+          <span className="eyebrow">Security radar</span>
+          <h3>{headline}</h3>
+        </div>
+        <span className={`radar-status ${statusChip.cls}`}>{statusChip.label}</span>
+      </div>
+      <button
+        type="button"
+        className={`radar-dish ${open ? "open" : ""} ${state}`}
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        aria-label="Show what the security radar checked"
+      >
+        <span className="radar-ring" />
+        <span className="radar-ring radar-ring-2" />
+        <span className="radar-sweep" />
+        <span className="radar-blip radar-blip-1" />
+        <span className="radar-blip radar-blip-2" />
+        <span className="radar-core">{open ? "Hide" : "Scan"}</span>
+      </button>
+      {open ? (
+        <div className="radar-details">
+          {state === "offline" ? (
+            <div className="radar-signal">
+              <span>Scanner backend</span>
+              <b className="warn">Not reachable</b>
+            </div>
+          ) : (
+            <>
+              <div className="radar-signal">
+                <span>Protection</span>
+                <b className={active ? "ok" : "warn"}>{active ? "Active" : "Off"}</b>
+              </div>
+              <div className="radar-signal">
+                <span>Things watched</span>
+                <b className="ok">{targetCount}</b>
+              </div>
+              <div className="radar-signal">
+                <span>Needs a look</span>
+                <b className={findings > 0 ? "warn" : "ok"}>{findings === 0 ? "Nothing" : `${findings} item(s)`}</b>
+              </div>
+              <div className="radar-signal">
+                <span>Last checked</span>
+                <b className="ok">{lastRunLabel}</b>
+              </div>
+            </>
+          )}
+          <button className="ghost-small radar-full" type="button" onClick={() => setRoute("security")}>
+            <Search size={15} />
+            Open full scan
+          </button>
+        </div>
+      ) : (
+        <p className="radar-hint">Tap the radar to see what PhantomAI checked.</p>
+      )}
+    </section>
+  );
+}
+
 function CommandCenter({
   messages,
   commandText,
@@ -4581,167 +4713,54 @@ function CommandCenter({
   const pendingApprovals = approvals.filter((approval) => approval.status === "pending");
   const aiProviderLabel = phantomAiModeLabel(aiProvider);
   const missionBundles = adminMissionBundles.filter((bundle) => bundle.id !== "help");
-  const typedSlash = commandText.trim().startsWith("/") ? commandText.trim().toLowerCase() : "";
-  const missionMatches = typedSlash
-    ? missionBundles.filter((bundle) =>
-        [bundle.command, ...bundle.aliases].some((alias) => alias.startsWith(typedSlash) || typedSlash.startsWith(alias)),
-      )
-    : missionBundles.slice(0, 6);
+  const [activeAssistantId, setActiveAssistantId] = useState<string>(missionBundles[0]?.id ?? "site");
+  const activeAssistant = missionBundles.find((bundle) => bundle.id === activeAssistantId) ?? missionBundles[0];
+  const lastAssistantMessage = [...messages].reverse().find((message) => message.role === "assistant");
 
   if (!canManageAccess) {
     return <ClientOperatorDemoDashboard />;
   }
 
-  const nextActions = [
-    {
-      title: "Write the reply",
-      detail: "PhantomAI drafts the message and next click.",
-      meta: `${stats.urgent} waiting`,
-      icon: <Mail size={20} />,
-      tone: "danger",
-      action: () => void runPhantomCommand("/followup priority lead"),
-      cta: "Ask now",
-    },
-    {
-      title: "Book the call",
-      detail: "Get times, agenda, and follow-up copy.",
-      meta: `${stats.events} calendar items`,
-      icon: <CalendarDays size={20} />,
-      tone: "blue",
-      action: () => void runPhantomCommand("/book next interested lead"),
-      cta: "Ask now",
-    },
-    {
-      title: "Price the sprint",
-      detail: "Choose the package and write the pitch.",
-      meta: "$750 / $1,500 / $2,500",
-      icon: <Zap size={20} />,
-      tone: "gold",
-      action: () => void runPhantomCommand("/quote current lead"),
-      cta: "Ask now",
-    },
-    {
-      title: "Make an asset",
-      detail: "Turn the idea into a post, deck, doc, or video plan.",
-      meta: "Content + video",
-      icon: <FileText size={20} />,
-      tone: "green",
-      action: () => void runPhantomCommand("/media current opportunity"),
-      cta: "Ask now",
-    },
-    {
-      title: "Build a store",
-      detail: "Turn the offer into a storefront draft.",
-      meta: "Offer + checkout gate",
-      icon: <ShoppingCart size={20} />,
-      tone: "blue",
-      action: () => void runPhantomCommand("/store Core Sprint"),
-      cta: "Ask now",
-    },
-    {
-      title: "Customize my site",
-      detail: "Propose copy, sections, or design for your private site.",
-      meta: "Preview + approve",
-      icon: <Sparkles size={20} />,
-      tone: "violet",
-      action: () =>
-        void runPhantomCommand(
-          "/site improve the PhantomForce homepage and make it more sales-ready",
-        ),
-      cta: "Ask now",
-    },
-  ];
   return (
-    <div className="command-layout">
-      <section className="command-main">
-        <div className="hero-command">
-          <div>
-            <span className="eyebrow">PhantomAI · your superuser</span>
-            <h2>Command anything. It's done.</h2>
-            <p>
-              One private AI that runs your business — drafts, deals, docs, video, even your website. Smarter than a generic chatbot because it's wired into your operation, and nothing leaves without you.
-            </p>
-          </div>
-          <button className="demo-button" type="button" onClick={createFollowUpPlan}>
-            <Sparkles size={18} />
-            Command PhantomAI
-          </button>
-          <button className="ghost-small" type="button" onClick={() => setRoute("agents")}>
-            <Bot size={16} />
-            Agent Control
-          </button>
+    <div className="studio-layout">
+      <aside className="studio-assistants" aria-label="Assistants">
+        <div className="studio-rail-head">
+          <span className="eyebrow">Assistants</span>
+          <h3>Pick a task.</h3>
+          <p className="studio-rail-note">Choose one, then tell it what you need in plain words.</p>
         </div>
-
-        <section className="mission-bundle-panel" aria-label="Admin mission bundles">
-          <div className="section-head compact">
-            <div>
-              <span className="eyebrow">Mission bundles</span>
-              <h3>Tell PhantomAI the outcome. It bundles the workers.</h3>
-            </div>
-            <button className="ghost-small" type="button" onClick={() => setCommandText("/help")}>
-              <Command size={15} />
-              Commands
-            </button>
-          </div>
-          <div className="mission-bundle-grid">
-            {missionMatches.map((bundle) => (
-              <button
-                className="mission-bundle-card"
-                type="button"
-                key={bundle.id}
-                onClick={() => setCommandText(`${bundle.command} `)}
-              >
-                <span>{missionBundleIcon(bundle.id)}</span>
+        <div className="studio-assistant-list">
+          {missionBundles.map((bundle) => (
+            <button
+              key={bundle.id}
+              type="button"
+              className={`studio-assistant ${activeAssistant && bundle.id === activeAssistant.id ? "active" : ""}`}
+              onClick={() => {
+                setActiveAssistantId(bundle.id);
+                setCommandText(`${bundle.command} `);
+              }}
+            >
+              <span className="studio-assistant-icon">{missionBundleIcon(bundle.id)}</span>
+              <span className="studio-assistant-text">
                 <strong>{bundle.title}</strong>
                 <small>{bundle.short}</small>
-                <em>{bundle.command}</em>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="action-board" aria-label="Next actions">
-          <div className="section-head compact">
-            <div>
-              <span className="eyebrow">Do this next</span>
-              <h3>Ask once. Get the artifact.</h3>
-            </div>
-            <span>{stats.today} work items</span>
-          </div>
-          <div className="action-card-grid">
-            {nextActions.map((action) => (
-              <button className={`action-tile ${action.tone}`} type="button" onClick={action.action} key={action.title}>
-                <span className="action-icon">{action.icon}</span>
-                <strong>{action.title}</strong>
-                <small>{action.detail}</small>
-                <em>{action.meta}</em>
-                <b>
-                  {action.cta}
-                  <ArrowRight size={15} />
-                </b>
-              </button>
-            ))}
-          </div>
-        </section>
-
-        <section className="chat-card">
-          <div className="section-head">
-            <div>
-              <span className="eyebrow">Phantom AI</span>
-              <h3>Command thread</h3>
-            </div>
-            {canManageAccess ? (
-              <span className="safe-pill admin-operator-pill">
-                <Command size={15} />
-                Mode: {aiProviderLabel}
               </span>
-            ) : (
-              <span className="safe-pill">
-                <ShieldCheck size={15} />
-                Client protected
-              </span>
-            )}
+            </button>
+          ))}
+        </div>
+      </aside>
+
+      <section className="chat-card studio-chat">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">PhantomAI · {activeAssistant ? activeAssistant.title : "Console"}</span>
+            <h3>Just say what you want.</h3>
           </div>
+          <span className="safe-pill admin-operator-pill">
+            <Command size={15} />
+            Mode: {aiProviderLabel}
+          </span>
+        </div>
           <div className="messages" aria-live="polite">
             {messages.map((message) => (
               <article className={`message ${message.role}`} key={message.id}>
@@ -4773,7 +4792,7 @@ function CommandCenter({
             <input
               value={commandText}
               onChange={(event) => setCommandText(event.target.value)}
-              placeholder="Ask normally, or use /sprint /quote /site /video /scan to force a mission bundle..."
+              placeholder={activeAssistant ? `Tell PhantomAI what you need for “${activeAssistant.title.toLowerCase()}”…` : "Tell PhantomAI what you need…"}
               disabled={phantomAiBusy}
             />
             <button type="submit" title="Send command" disabled={phantomAiBusy}>
@@ -4781,49 +4800,55 @@ function CommandCenter({
             </button>
           </form>
         </section>
-      </section>
 
-      <aside className="command-side">
-        <section className="panel next-move-panel">
+      <aside className="studio-preview" aria-label="Live preview">
+        <section className="panel studio-preview-card">
           <div className="section-head compact">
             <div>
-              <span className="eyebrow">Launch controls</span>
-              <h3>Jump to the result area.</h3>
+              <span className="eyebrow">Live preview</span>
+              <h3>{activeAssistant ? activeAssistant.title : "Result"}</h3>
             </div>
+            <span className="studio-preview-icon">
+              {activeAssistant ? missionBundleIcon(activeAssistant.id) : <Sparkles size={16} />}
+            </span>
           </div>
-          <div className="launch-control-grid">
-            <button type="button" onClick={() => setRoute("inbox")}>
-              <Inbox size={17} />
-              Leads
-            </button>
-            <button type="button" onClick={() => setRoute("offers")}>
-              <Zap size={17} />
-              Money
-            </button>
-            <button type="button" onClick={() => setRoute("media")}>
-              <Play size={17} />
-              Video
-            </button>
-            <button type="button" onClick={() => setRoute("agents")}>
-              <Bot size={17} />
-              Agents
-            </button>
-            <button type="button" onClick={() => setRoute("calendar")}>
-              <CalendarDays size={17} />
-              Bookings
-            </button>
-            {canManageAccess ? (
-              <button type="button" onClick={() => setRoute("access")}>
-                <KeyRound size={17} />
-                Access
-              </button>
-            ) : null}
-          </div>
+          {activeAssistant ? (
+            <>
+              <p className="studio-preview-what">{activeAssistant.short}</p>
+              <div className="studio-worker-chips">
+                {activeAssistant.crew.map((worker) => (
+                  <span className="studio-worker-chip" key={worker}>
+                    {worker}
+                  </span>
+                ))}
+              </div>
+              <div className="studio-result">
+                <span className="eyebrow">Latest result</span>
+                {lastAssistantMessage ? (
+                  <p>{lastAssistantMessage.content}</p>
+                ) : (
+                  <p className="muted">Ask on the left and the artifact shows up here.</p>
+                )}
+              </div>
+              {activeAssistant.route && activeAssistant.route !== "command" ? (
+                <button
+                  className="primary-action studio-open-full"
+                  type="button"
+                  onClick={() => setRoute(activeAssistant.route)}
+                >
+                  <ArrowRight size={16} />
+                  Open full {activeAssistant.title.toLowerCase()}
+                </button>
+              ) : null}
+            </>
+          ) : null}
         </section>
+
+        <RadarScanner setRoute={setRoute} sessionHeaders={sessionHeaders} />
 
         <section className="panel">
           <div className="section-head compact">
-            <h3>Action stack</h3>
+            <h3>Review queue</h3>
             <span>{pendingApprovals.length} pending</span>
           </div>
           {pendingApprovals.length ? (
@@ -4839,19 +4864,12 @@ function CommandCenter({
               ))}
             </div>
           ) : (
-            <EmptyState icon={<ShieldCheck size={20} />} title="No pending commands" detail="Ask Phantom AI for a follow-up, quote, booking step, or content action." />
+            <EmptyState
+              icon={<ShieldCheck size={20} />}
+              title="Nothing waiting"
+              detail="Approvals from any assistant land here before anything goes live."
+            />
           )}
-        </section>
-
-        <section className="panel">
-          <div className="section-head compact">
-            <h3>Live context</h3>
-            <span>Action source</span>
-          </div>
-          <div className="context-list">
-            <ContextRow icon={<Inbox size={17} />} title={emails[0].subject} detail={`${emails[0].from} - ${emails[0].age}`} />
-            <ContextRow icon={<CalendarDays size={17} />} title={events[0].title} detail={`${events[0].time} - ${events[0].status}`} />
-          </div>
         </section>
       </aside>
     </div>
