@@ -277,6 +277,54 @@ type ProductionReadinessReport = {
   gates: ReadinessGate[];
 };
 
+type DeploymentModelStatus = {
+  audience: "admin" | "client";
+  model: "cloud_app_with_optional_local_connector";
+  user_facing_product: "PhantomForce";
+  user_facing_ai: "PhantomAI";
+  public_app_url: string;
+  normal_user_surface: "hosted_web_app";
+  desktop_companion_role: "optional_local_connector";
+  source_code_exposed_to_users: boolean;
+  repo_access_required_for_users: boolean;
+  users_can_modify_product_files: boolean;
+  customer_traffic_should_route_through_jordan_pc: boolean;
+  current_jordan_windows_host_role: "admin_pilot_and_private_connector_only";
+  internal_tool_names_hidden_from_clients: boolean;
+  privacy_posture: string;
+  recommended_architecture?: string;
+  commercial_posture?: "cloud_ready" | "pilot_needs_cloud_hardening";
+  production_cloud_ready?: boolean;
+  tenant_isolation_ready?: boolean;
+  license_gate_ready?: boolean;
+  signed_desktop_companion_ready?: boolean;
+  local_connector_enabled?: boolean;
+  client_copy_resistance?: string[];
+  admin_operating_rules?: string[];
+  local_connector: {
+    enabled?: boolean;
+    available?: boolean;
+    status?: string;
+    recommended_transport?: string;
+    customer_owned: boolean;
+    outbound_only?: boolean;
+    stores_customer_files_locally?: boolean;
+    raw_files_uploaded_by_default: boolean;
+    source_code_shipped?: boolean;
+    role?: string;
+    purpose?: string;
+    production_requirements?: string[];
+  };
+  safety_flags?: {
+    read_only_status: boolean;
+    provider_called: boolean;
+    external_network_call_performed: boolean;
+    deployment_changed: boolean;
+    credential_read: boolean;
+    customer_data_mutated: boolean;
+  };
+};
+
 type ProviderSetupStatus = {
   router_mode: "mock" | "openrouter" | "claude" | "local" | "router";
   phantomforce_managed: {
@@ -413,6 +461,7 @@ type PhantomAiOpsStatus = {
     architecture: string[];
     next_required_before_send: string[];
   };
+  deployment_model?: DeploymentModelStatus;
   safety_flags: {
     approvals_execute_absent: boolean;
     execution_disabled: boolean;
@@ -2008,7 +2057,20 @@ const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "access", label: "Access", icon: <KeyRound size={18} /> },
 ];
 
-const validRouteIds = new Set<Route>(navItems.map((item) => item.id));
+const validRouteIds = new Set<Route>([
+  ...navItems.map((item) => item.id),
+  "agents",
+  "inbox",
+  "calendar",
+  "tasks",
+  "content",
+  "media",
+  "security",
+  "site",
+  "offers",
+  "activity",
+  "connections",
+]);
 
 const phantomDeckWorkspaces: Array<{
   id: PhantomDeckWorkspaceId;
@@ -2751,6 +2813,66 @@ const defaultProviderSetupStatus: ProviderSetupStatus = {
   },
 };
 
+const defaultDeploymentModelStatus: DeploymentModelStatus = {
+  audience: "admin",
+  model: "cloud_app_with_optional_local_connector",
+  user_facing_product: "PhantomForce",
+  user_facing_ai: "PhantomAI",
+  public_app_url: "https://app.phantomforce.online",
+  normal_user_surface: "hosted_web_app",
+  desktop_companion_role: "optional_local_connector",
+  source_code_exposed_to_users: false,
+  repo_access_required_for_users: false,
+  users_can_modify_product_files: false,
+  customer_traffic_should_route_through_jordan_pc: false,
+  current_jordan_windows_host_role: "admin_pilot_and_private_connector_only",
+  internal_tool_names_hidden_from_clients: true,
+  privacy_posture:
+    "Customers use the hosted app. Local files and machine actions stay on their own connector when installed.",
+  recommended_architecture: "Cloud-first SaaS control plane plus optional customer-owned desktop connector.",
+  commercial_posture: "pilot_needs_cloud_hardening",
+  production_cloud_ready: false,
+  tenant_isolation_ready: false,
+  license_gate_ready: false,
+  signed_desktop_companion_ready: false,
+  local_connector_enabled: false,
+  client_copy_resistance: [
+    "Keep orchestration, billing, access control, and provider routing server-side.",
+    "Ship no provider keys or source repositories to customers.",
+    "Gate valuable capabilities by account, tenant, subscription, and license.",
+  ],
+  admin_operating_rules: [
+    "Jordan's PC is the admin pilot/private connector, not the long-term customer hub.",
+    "Every customer gets a tenant/workspace, not a source clone.",
+    "Every local action is connector-scoped, outbound-only, and audited.",
+  ],
+  local_connector: {
+    enabled: false,
+    recommended_transport: "outbound_only",
+    customer_owned: true,
+    stores_customer_files_locally: true,
+    raw_files_uploaded_by_default: false,
+    source_code_shipped: false,
+    role: "Desktop bridge for local files, scans, creative tools, and private machine actions.",
+    production_requirements: [
+      "signed installer",
+      "per-tenant device registration",
+      "license check",
+      "revocation path",
+      "audit receipts",
+      "least-privilege action allowlist",
+    ],
+  },
+  safety_flags: {
+    read_only_status: true,
+    provider_called: false,
+    external_network_call_performed: false,
+    deployment_changed: false,
+    credential_read: false,
+    customer_data_mutated: false,
+  },
+};
+
 const defaultPhantomAiOpsStatus: PhantomAiOpsStatus = {
   product_status: "Online - protected",
   hermes: {
@@ -2840,6 +2962,7 @@ const defaultPhantomAiOpsStatus: PhantomAiOpsStatus = {
       "Add redacted receipt storage for every send attempt.",
     ],
   },
+  deployment_model: defaultDeploymentModelStatus,
   safety_flags: {
     approvals_execute_absent: true,
     execution_disabled: true,
@@ -3433,6 +3556,8 @@ function App() {
   const [pangolinStatus, setPangolinStatus] = useState<PangolinReadOnlyStatus | null>(null);
   const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
   const [providerSetupStatus, setProviderSetupStatus] = useState<ProviderSetupStatus>(defaultProviderSetupStatus);
+  const [deploymentModelStatus, setDeploymentModelStatus] =
+    useState<DeploymentModelStatus>(defaultDeploymentModelStatus);
   const [phantomAiOpsStatus, setPhantomAiOpsStatus] =
     useState<PhantomAiOpsStatus>(defaultPhantomAiOpsStatus);
   const [agentWorkforceStatus, setAgentWorkforceStatus] =
@@ -3770,6 +3895,25 @@ function App() {
     }
   }
 
+  async function refreshDeploymentModelStatus() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantom-ai/deployment/model/status`, {
+        headers: sessionHeaders(),
+      });
+
+      if (!response.ok) {
+        setDeploymentModelStatus(defaultDeploymentModelStatus);
+        return;
+      }
+
+      const data = (await response.json()) as { deployment_model?: DeploymentModelStatus };
+      setDeploymentModelStatus(data.deployment_model ?? defaultDeploymentModelStatus);
+    } catch {
+      addActivity("Deployment model offline", "Cloud/connector product posture is waiting on the backend.", "warn");
+      setDeploymentModelStatus(defaultDeploymentModelStatus);
+    }
+  }
+
   async function refreshSubscriptionStatus() {
     try {
       const response = await fetch(`${API_BASE_URL}/billing/subscription/status`, {
@@ -3841,6 +3985,7 @@ function App() {
     void refreshGuardedWorkspace();
     void refreshAgentWorkforceStatus();
     void refreshSubscriptionStatus();
+    void refreshDeploymentModelStatus();
     if (canManageAccess) {
       void refreshPangolinPlan();
       void refreshReadinessReport();
@@ -4930,6 +5075,7 @@ function App() {
           <StatusView
             canManageAccess={canManageAccess}
             providerSetupStatus={providerSetupStatus}
+            deploymentModelStatus={deploymentModelStatus}
             sessionHeaders={sessionHeaders}
             pangolinPlan={pangolinPlan}
             pangolinStatus={pangolinStatus}
@@ -9381,12 +9527,14 @@ function AccessView({
 function StatusView({
   canManageAccess,
   providerSetupStatus,
+  deploymentModelStatus,
   sessionHeaders,
   pangolinPlan,
   pangolinStatus,
 }: {
   canManageAccess: boolean;
   providerSetupStatus: ProviderSetupStatus;
+  deploymentModelStatus: DeploymentModelStatus;
   sessionHeaders: (json?: boolean) => Record<string, string>;
   pangolinPlan: PangolinRoutePlan[];
   pangolinStatus: PangolinReadOnlyStatus | null;
@@ -9400,6 +9548,7 @@ function StatusView({
       action={<TruthBadge state="blocked" label="Needs setup" />}
     >
       <CustomerReadinessPanel />
+      <DeploymentModelPanel status={deploymentModelStatus} />
       {canManageAccess ? <ProviderSetupPanel status={providerSetupStatus} /> : null}
       {canManageAccess ? <PangolinSummaryPanel pangolinPlan={pangolinPlan} pangolinStatus={pangolinStatus} /> : null}
       {canManageAccess ? <HermesRouterDebugPanel sessionHeaders={sessionHeaders} /> : null}
@@ -9460,6 +9609,73 @@ function StatusView({
         </section>
       ) : null}
     </Page>
+  );
+}
+
+function DeploymentModelPanel({ status }: { status: DeploymentModelStatus }) {
+  const connectorStatus = status.local_connector.enabled || status.local_connector.available ? "Available path" : "Planned / gated";
+  const cloudReady = status.production_cloud_ready ? "Cloud-ready" : "Pilot hardening";
+  const tenantReady = status.tenant_isolation_ready ? "Tenant gates ready" : "Tenant gates next";
+  const licenseReady = status.license_gate_ready ? "License gates ready" : "License gates next";
+
+  return (
+    <section className="panel provider-setup-panel">
+      <div className="section-head">
+        <div>
+          <span className="eyebrow">Product model</span>
+          <h3>Cloud app first. Customer-owned connector when local control is needed.</h3>
+        </div>
+        <TruthBadge state="real" label="SaaS + connector" />
+      </div>
+      <p>
+        PhantomForce should feel like one clean product: customers use the hosted app, while local files and desktop tools stay on
+        their own machine through an optional connector. Internal models, scripts, and source repositories stay behind PhantomAI.
+      </p>
+      <div className="provider-grid">
+        <ProviderStatusCard
+          label="Customer app"
+          value="Online cockpit"
+          detail={`Primary surface: ${status.public_app_url}. Users log into PhantomForce instead of touching repos or source files.`}
+          state="real"
+        />
+        <ProviderStatusCard
+          label="Desktop companion"
+          value={connectorStatus}
+          detail={status.local_connector.role ?? status.local_connector.purpose ?? "Optional outbound-only connector for local files and tools."}
+          state={status.local_connector.enabled || status.local_connector.available ? "real" : "stub"}
+        />
+        <ProviderStatusCard
+          label="Source exposure"
+          value={status.source_code_exposed_to_users ? "Risk" : "Hidden"}
+          detail="Customers should never receive source repos, provider keys, or raw developer tooling."
+          state={status.source_code_exposed_to_users ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Jordan PC role"
+          value={status.customer_traffic_should_route_through_jordan_pc ? "Too much" : "Admin pilot only"}
+          detail="Jordan's Windows host can run the admin pilot/private connector, but customer production traffic should move to cloud infrastructure."
+          state={status.customer_traffic_should_route_through_jordan_pc ? "blocked" : "real"}
+        />
+        <ProviderStatusCard
+          label="Tenant isolation"
+          value={tenantReady}
+          detail="Every business should get a scoped tenant/workspace, not a cloned app folder."
+          state={status.tenant_isolation_ready ? "real" : "stub"}
+        />
+        <ProviderStatusCard
+          label="Copy resistance"
+          value={licenseReady}
+          detail="Server-side orchestration, account gates, subscription gates, and signed companion builds make copying the product impractical."
+          state={status.license_gate_ready ? "real" : "stub"}
+        />
+      </div>
+      <div className="scope-list">
+        <span>{cloudReady}</span>
+        <span>PhantomAI is the only user-facing brain</span>
+        <span>{status.internal_tool_names_hidden_from_clients ? "Tool names hidden" : "Tool names visible risk"}</span>
+        <span>{status.local_connector.raw_files_uploaded_by_default ? "Raw uploads risk" : "No raw upload by default"}</span>
+      </div>
+    </section>
   );
 }
 

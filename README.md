@@ -19,6 +19,30 @@ audit trail, AI orchestration, and connector layer now belong.
 - AI may propose actions, but human approval executes side effects.
 - External sends, calendar writes, Falcon write jobs, and Falcon command jobs
   must execute only through persisted approvals and audit events.
+- Customers use the hosted PhantomForce app. Source repos, provider keys,
+  internal tools, and raw admin machinery are never shipped to customers.
+- Local machine access belongs in an optional customer-owned connector, not in
+  Jordan's PC as the long-term customer traffic hub.
+
+## Product Deployment Model
+
+PhantomForce is moving toward a cloud-first SaaS operating cockpit with an
+optional desktop connector for local files, scans, and creative tools.
+
+- Hosted app: primary customer/admin surface.
+- PhantomAI: only user-facing brain.
+- Desktop connector: optional, outbound-only, customer-owned bridge.
+- Jordan Windows host: internal admin pilot/private connector only.
+- Copy resistance: server-side orchestration, tenant gates, subscription gates,
+  license gates, and no source-code distribution.
+
+Status contract:
+
+```text
+GET /phantom-ai/deployment/model/status
+```
+
+See `docs/PHANTOMFORCE_CLOUD_CONNECTOR_MODEL.md`.
 
 ## Local Commands
 

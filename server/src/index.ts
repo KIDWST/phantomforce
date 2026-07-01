@@ -56,6 +56,7 @@ import { listPangolinDryRunPlan } from "./access/pangolin-reconciler.js";
 import { checkPangolinReadOnlyStatus } from "./access/pangolin-status.js";
 import { buildProductionReadinessReport } from "./access/production-readiness.js";
 import { getBillingProviderStatus } from "./access/billing-provider.js";
+import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
@@ -1934,6 +1935,23 @@ app.get("/phantom-ai/agents/actions", async (request, reply) => {
   };
 });
 
+app.get("/phantom-ai/deployment/model/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    deployment_model: buildDeploymentModelStatus({
+      audience: session.canManageAccess ? "admin" : "client",
+    }),
+  };
+});
+
 app.post("/phantom-ai/agents/actions/run", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -2328,6 +2346,7 @@ app.get("/phantom-ai/ops/status", async (request, reply) => {
         approval_executed: false,
       },
       send_readiness: getSendReadinessStatus(),
+      deployment_model: buildDeploymentModelStatus({ audience: "admin" }),
       safety_flags: {
         approvals_execute_absent: true,
         execution_disabled: true,
