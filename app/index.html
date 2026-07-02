@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <script>
+      if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
+        location.replace("https://" + location.host + location.pathname + location.search + location.hash);
+      }
+    </script>
+    <title>PhantomForce — Cockpit</title>
+    <meta name="description" content="The PhantomForce cockpit — your AI business operating system." />
+    <meta name="robots" content="noindex" />
+    <meta name="theme-color" content="#02060a" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="cockpit.css?v=1" />
+  </head>
+  <body>
+    <div class="bg-grid" aria-hidden="true"></div>
+    <div class="bg-glow" aria-hidden="true"></div>
+
+    <!-- ===================== access gate (preview identity picker; real
+         authentication is enforced by the private gateway in front) ====== -->
+    <div class="gate" data-gate hidden>
+      <div class="gate-card">
+        <p class="gate-kicker">PHANTOMFORCE · PRIVATE ACCESS</p>
+        <h1>Who's stepping into the cockpit?</h1>
+        <div class="gate-options">
+          <button class="gate-opt" data-enter="admin">
+            <span class="gate-opt-icon">⌘</span>
+            <b>Admin Console</b>
+            <i>Jordan — full command. All workspaces, workforce, approvals, Admin OS.</i>
+            <em>admin.phantomforce.online</em>
+          </button>
+          <button class="gate-opt" data-enter="client">
+            <span class="gate-opt-icon">◈</span>
+            <b>Client Portal</b>
+            <i>Test Client — the simplified portal your clients live in.</i>
+            <em>app.phantomforce.online</em>
+          </button>
+        </div>
+        <p class="gate-note">This is the local preview gate. In production, sign-in happens at the private gateway before this screen ever loads.</p>
+      </div>
+    </div>
+
+    <!-- =========================== cockpit =========================== -->
+    <div class="cockpit" data-cockpit hidden>
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-ghost" aria-hidden="true"></span>
+          <span class="brand-word">PHANTOMFORCE</span>
+          <span class="brand-sub" data-role-sub>COCKPIT</span>
+        </div>
+        <div class="topbar-mid">
+          <label class="org-switch" data-org-wrap hidden>
+            <span>Workspace</span>
+            <select data-org-select aria-label="Switch workspace"></select>
+          </label>
+        </div>
+        <div class="topbar-right">
+          <span class="identity" data-identity></span>
+          <button class="btn btn-quiet btn-exit" data-signout>Switch</button>
+        </div>
+      </header>
+
+      <div class="ticker" data-ticker aria-live="off">
+        <span class="ticker-tag">LIVE</span>
+        <span class="ticker-line" data-ticker-line></span>
+      </div>
+
+      <main class="deck">
+        <section class="command-hero">
+          <canvas class="ghost-canvas" data-ghost width="10" height="10" aria-hidden="true"></canvas>
+          <div class="hero-say" data-say aria-live="polite"><p class="say-line">What do you want PhantomForce to do?</p></div>
+          <form class="speakline speakline-hero" data-command-form>
+            <span class="speak-caret" aria-hidden="true">›</span>
+            <input type="text" data-command-input autocomplete="off" spellcheck="false"
+                   placeholder="ask for an outcome — a quote, a video, a page, a security check…"
+                   aria-label="What do you want PhantomForce to do?" />
+          </form>
+          <div class="suggests" data-suggests></div>
+          <div class="response-cards" data-response></div>
+        </section>
+
+        <div class="deck-body">
+          <section class="mission" aria-label="Workspaces">
+            <h2 class="deck-label">Mission grid</h2>
+            <div class="mission-grid" data-mission></div>
+          </section>
+
+          <aside class="rail" aria-label="Intelligence rail">
+            <div class="rail-block" data-rail-plan>
+              <h3>Today's plan</h3><div class="rail-body"></div>
+            </div>
+            <div class="rail-block" data-rail-money>
+              <h3>Money</h3><div class="rail-body"></div>
+            </div>
+            <div class="rail-block" data-rail-approvals>
+              <h3>Waiting on you</h3><div class="rail-body"></div>
+            </div>
+            <div class="rail-block" data-rail-work>
+              <h3>Active work</h3><div class="rail-body"></div>
+            </div>
+          </aside>
+        </div>
+      </main>
+    </div>
+
+    <!-- workspace overlays mount here, above the blurred cockpit -->
+    <div class="overlay-root" data-overlay-root></div>
+
+    <script type="module" src="js/main.js?v=1"></script>
+  </body>
+</html>

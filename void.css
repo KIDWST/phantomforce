@@ -223,6 +223,9 @@ body.modal-open { touch-action: none; }
 .download-status.ok { color: var(--neon); text-shadow: 0 0 14px rgba(65, 255, 161, 0.4); }
 .download-status.err { color: #ff9a9a; }
 .download-card.sent .download-fields, .download-card.sent .download-submit { display: none; }
+.download-alt { margin: 0; text-align: center; font: 400 11.5px "DM Mono", monospace; letter-spacing: 0.04em; color: var(--dim); }
+.download-alt a { color: var(--neon); text-decoration: none; }
+.download-alt a:hover { text-shadow: 0 0 12px rgba(65, 255, 161, 0.6); }
 
 @media (max-width: 520px) {
   .presence {
