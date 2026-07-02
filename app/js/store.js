@@ -3,8 +3,8 @@
    no payments, no provider calls happen from here — records move through
    draft → approval → *-ready states and stop there until a connector exists. */
 
-const DB_KEY = "pf.cockpit.v4";
-const SESSION_KEY = "pf.session.v4";
+const DB_KEY = "pf.cockpit.v3";
+const SESSION_KEY = "pf.session.v3";
 const DAY = 86400000;
 
 export const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 8)}${(Date.now() % 100000).toString(36)}`;
@@ -91,9 +91,9 @@ function seed() {
   ];
 
   const security = [
-    { id: "sec-pf", ws: "phantomforce", lastScan: days(-11), nextScan: days(19), proofId: "PF-SCAN-2026-06", posture: "clean", cadence: "monthly autonomous proof run", proofDate: days(-11), breachScanner: "password + exposed credential watch", findings: [{ level: "ok", text: "No malware or exposed data found across monitored surfaces." }, { level: "warn", text: "2 admin passwords pass 180-day rotation window in 24 days." }, { level: "ok", text: "Domain + DNS posture unchanged since last scan." }], accounts: 6, rotationDue: days(24), phishing: "low", breachCheck: "Runs on password change, reset, and monthly scan cadence" },
-    { id: "sec-cs", ws: "chicagoshots", lastScan: days(-11), nextScan: days(19), proofId: "CS-SCAN-2026-06", posture: "clean", cadence: "monthly autonomous proof run", proofDate: days(-11), breachScanner: "brand account exposure watch", findings: [{ level: "ok", text: "Brand accounts clean. No credential reuse detected in tracked set." }], accounts: 3, rotationDue: days(51), phishing: "low", breachCheck: "Runs on password change, reset, and monthly scan cadence" },
-    { id: "sec-test", ws: "test-client", lastScan: days(-6), nextScan: days(24), proofId: "TC-SCAN-2026-06", posture: "attention", cadence: "monthly autonomous proof run", proofDate: days(-6), breachScanner: "client login + contact form exposure watch", findings: [{ level: "warn", text: "Website contact form has no spam protection — recommend adding the shield before launch." }, { level: "ok", text: "No breaches found for tracked business email." }], accounts: 2, rotationDue: days(120), phishing: "medium", breachCheck: "Runs on password change, reset, and monthly scan cadence" },
+    { id: "sec-pf", ws: "phantomforce", lastScan: days(-11), nextScan: days(19), proofId: "PF-SCAN-2026-06", posture: "clean", findings: [{ level: "ok", text: "No malware or exposed data found across monitored surfaces." }, { level: "warn", text: "2 admin passwords pass 180-day rotation window in 24 days." }, { level: "ok", text: "Domain + DNS posture unchanged since last scan." }], accounts: 6, rotationDue: days(24), phishing: "low", breachCheck: "Runs on password change or reset" },
+    { id: "sec-cs", ws: "chicagoshots", lastScan: days(-11), nextScan: days(19), proofId: "CS-SCAN-2026-06", posture: "clean", findings: [{ level: "ok", text: "Brand accounts clean. No credential reuse detected in tracked set." }], accounts: 3, rotationDue: days(51), phishing: "low", breachCheck: "Runs on password change or reset" },
+    { id: "sec-test", ws: "test-client", lastScan: days(-6), nextScan: days(24), proofId: "TC-SCAN-2026-06", posture: "attention", findings: [{ level: "warn", text: "Website contact form has no spam protection — recommend adding the shield before launch." }, { level: "ok", text: "No breaches found for tracked business email." }], accounts: 2, rotationDue: days(120), phishing: "medium", breachCheck: "Runs on password change or reset" },
   ];
 
   const approvals = [
@@ -120,7 +120,6 @@ function seed() {
   ];
 
   const activity = [
-    { id: uid("act"), ws: "phantomforce", who: "Page Sync", text: "mirrored the admin cockpit feature model into phantomforce.online/app.", at: days(-0.01) },
     { id: uid("act"), ws: "phantomforce", who: "Lead Hunter", text: "found 2 follow-up opportunities in the missed-lead pile.", at: days(-0.05) },
     { id: uid("act"), ws: "chicagoshots", who: "Proposal Forge", text: "prepared the Chen & Park quote — send-ready, waiting on approval.", at: days(-0.1) },
     { id: uid("act"), ws: "phantomforce", who: "Security Watch", text: "completed monthly scan proof PF-SCAN-2026-06 — posture clean.", at: days(-0.3) },
@@ -131,7 +130,7 @@ function seed() {
     { id: uid("act"), ws: "chicagoshots", who: "Booking Coordinator", text: "confirmed the Halsted shoot for Monday 9am.", at: days(-0.6) },
   ];
 
-  return { version: 4, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, agents, activity };
+  return { version: 3, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, agents, activity };
 }
 
 /* ---------------- store ---------------- */
@@ -140,7 +139,7 @@ function load() {
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      if (d && d.version === 4) return d;
+      if (d && d.version === 3) return d;
     }
   } catch {}
   return seed();

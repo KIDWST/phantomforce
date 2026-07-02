@@ -257,22 +257,11 @@ function renderBookings(el, rerender) {
 /* ============================= MEDIA LAB ============================= */
 function renderMedia(el, rerender) {
   const media = visible(store.state.media);
-  const readyBriefs = media.filter((m) => ["brief-ready", "generation-approved"].includes(m.status));
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Commercial creative lane: brief → approval → generation → proof → delivery. Clients see the outcome; admin sees provider posture and spend gates.</p>
+      <p class="ws-note">Controlled creative generation: brief → approval → generation → proof → delivery. Paid generation never runs without sign-off.</p>
       <button class="btn btn-primary" data-act="add">+ Video brief</button>
     </div>
-    <div class="stat-row">
-      <div class="stat"><span>Commercial provider</span><b>Higgsfield</b><i>current paid video lane</i></div>
-      <div class="stat"><span>Generation posture</span><b>Gated</b><i>approval required per run</i></div>
-      <div class="stat"><span>Ready briefs</span><b>${readyBriefs.length}</b><i>can become generation requests</i></div>
-      <div class="stat"><span>Studio bridges</span><b>Ready</b><i>PhantomCut · Resolve · Reaper</i></div>
-    </div>
-    <article class="record record-wide media-proof-banner">
-      <div class="record-top"><h4>Media Lab proof stack</h4>${chip("approved")}</div>
-      <p class="record-notes">PhantomCut is the editing cockpit, Higgsfield is the commercial generation lane, and Resolve/Reaper launchers connect the desktop production tools. The app never starts a paid render or upload from this preview.</p>
-    </article>
     <div class="card-grid">
       ${media.map((m) => `
         <article class="record">
@@ -408,27 +397,16 @@ function renderSites(el, rerender) {
 /* ============================== PROTECT ============================== */
 function renderProtect(el, rerender) {
   const secs = visible(store.state.security);
-  const warnings = secs.reduce((n, s) => n + s.findings.filter((f) => f.level === "warn").length, 0);
-  const nextScan = secs.slice().sort((a, b) => new Date(a.nextScan) - new Date(b.nextScan))[0];
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Autonomous monthly watch: malware/data scan proofs, password rotation reminders, and breach checks. Admins see proof dates; clients see the simple health signal.</p></div>
-    <div class="stat-row">
-      <div class="stat"><span>Scan cadence</span><b>Monthly</b><i>autonomous proof record</i></div>
-      <div class="stat"><span>Next scan</span><b>${nextScan ? fmtDate(nextScan.nextScan) : "—"}</b><i>${nextScan ? `${daysUntil(nextScan.nextScan)} days` : "not scheduled"}</i></div>
-      <div class="stat"><span>Warnings</span><b>${warnings}</b><i>needs owner awareness</i></div>
-      <div class="stat"><span>Password rule</span><b>180d</b><i>unique password reminder</i></div>
-    </div>
+    <div class="ws-toolbar"><p class="ws-note">Defensive posture only: monthly scan proofs, rotation reminders, breach checks on password change or reset. No secrets are stored or shown here.</p></div>
     <div class="card-grid">
       ${secs.map((s) => `
         <article class="record">
           <div class="record-top">${wsTag(s.ws)}<h4>${esc(wsName(s.ws))} posture ${chip(s.posture === "clean" ? "approved" : "pending")}</h4></div>
           ${kv("Last scan", `${fmtDate(s.lastScan)} · proof <code>${esc(s.proofId)}</code>`)}
-          ${kv("Proof date", fmtDate(s.proofDate || s.lastScan))}
-          ${kv("Cadence", esc(s.cadence || "monthly autonomous proof run"))}
-          ${kv("Next scan", `${fmtDate(s.nextScan)} (in ${daysUntil(s.nextScan)} days)`)}
+          ${kv("Next scan", `${fmtDate(s.nextScan)} (in ${daysUntil(s.nextScan)} days — autonomous monthly cadence)`)}
           ${kv("Accounts tracked", `${s.accounts}`)}
           ${kv("Password rotation", `${daysUntil(s.rotationDue) <= 30 ? "⚠ " : ""}window closes ${fmtDate(s.rotationDue)} — rotate every 180 days, unique per account`)}
-          ${kv("Breach scanner", esc(s.breachScanner || "password exposure watch"))}
           ${kv("Phishing risk", esc(s.phishing))}
           ${kv("Breach check", esc(s.breachCheck))}
           <ul class="record-list">
@@ -552,23 +530,13 @@ function renderAdmin(el, rerender) {
   const lanes = [
     ["Workforce intelligence", "ready", "planning / spec / build lanes loaded"],
     ["Memory & context", "ready", "backend context store reachable"],
-    ["Command routing", "ready", "plain language becomes leads, quotes, bookings, pages, scans, or media briefs"],
-    ["Automation lane", "standby", "workflow runner scaffolded, not armed"],
-    ["Media generation lane", "gated", "Higgsfield commercial lane; paid runs require explicit approval"],
-    ["Private access gateway", "active", "admin host protected; client preview stays scoped"],
-  ];
-  const routeRows = [
-    ["Admin OS", "<code>admin.phantomforce.online</code>", "private Pangolin route to the same cockpit source, with owner-only controls"],
-    ["Pages cockpit", "<code>phantomforce.online/app/</code>", "polished static cockpit mirror for preview and client-safe experience"],
-    ["Client preview", "<code>phantomforce.online/app/?session=client</code>", "same look, scoped to Test Client and no admin-only workspaces"],
-    ["Backend", "<code>127.0.0.1:5190</code>", "private to the admin host; not exposed by the Pages cockpit"],
+    ["Model lanes A/B/C", "ready", "operator lanes standing by"],
+    ["Automation lane", "standby", "workflow runner configured, not armed"],
+    ["Media generation lane", "gated", "paid — every run needs approval"],
+    ["Private access gateway", "active", "admin + client hosts enforced upstream"],
   ];
   el.innerHTML = `
     <div class="ws-toolbar"><p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients.</p></div>
-    <h3 class="ws-subhead">Live surfaces</h3>
-    <div class="stack">
-      ${routeRows.map(([name, path, note]) => `<article class="record record-row"><h4>${esc(name)}</h4><p class="record-sub">${path}</p><span class="admin-ws-stats">${esc(note)}</span></article>`).join("")}
-    </div>
     <h3 class="ws-subhead">Workspace states</h3>
     <div class="stack">
       ${store.state.workspaces.map((w) => {
@@ -585,13 +553,12 @@ function renderAdmin(el, rerender) {
         <article class="record"><div class="record-top"><h4>${esc(name)}</h4>${chip(state === "ready" || state === "active" ? "approved" : "pending")}</div>
         <p class="record-sub">${esc(note)}</p></article>`).join("")}
     </div>
-    <h3 class="ws-subhead">Access model</h3>
+    <h3 class="ws-subhead">Access</h3>
     <div class="stack">
       <article class="record record-wide">
-        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full operator controls")}
-        ${kv("Client path", "<code>phantomforce.online/app/?session=client</code> — client-safe preview")}
-        ${kv("Gateway", "Pangolin stays behind the branded login/route; clients should never see raw gateway plumbing")}
-        ${kv("Rule", "one cockpit source, two permission levels: Jordan/admin can switch organizations; clients only see their workspace")}
+        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full cockpit, this view")}
+        ${kv("Client host", "<code>app.phantomforce.online</code> — portal view, workspace-scoped")}
+        ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
       </article>
     </div>
     <h3 class="ws-subhead">Diagnostics</h3>
