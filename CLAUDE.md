@@ -1,5 +1,42 @@
 # PhantomForce App Instructions
 
+## Current Active Admin Worktree - Read This First
+
+For the current admin/client cockpit work, edit this worktree:
+
+```text
+C:\Users\jorda\Documents\Codex\worktrees\phantomforce-client-sim-truth-20260629
+```
+
+Do not switch to `C:\Users\jorda\Documents\PhantomForce-App` for this track
+unless Jordan explicitly asks for that repo. That older path may still contain
+related app history, but it is not the active admin/live cockpit source for this
+worktree.
+
+The Fable/Claude cockpit that Jordan wants preserved is mounted here:
+
+```text
+apps\web\public\app
+```
+
+`admin.phantomforce.online` is expected to load:
+
+```text
+/app/index.html?session=owner-admin
+```
+
+The public Pages/demo cockpit source is separate:
+
+```text
+C:\Users\jorda\Documents\Codex\2026-06-18\when-should-i-use-my-rate\outputs\phantomforce-site\app
+```
+
+If Jordan says the admin dashboard should look like the `/app` cockpit, update
+`apps\web\public\app` in this repo, or intentionally sync the public Pages
+`app` folder into `apps\web\public\app`. Do not patch the public Pages repo and
+assume the admin host changed. Do not overwrite the Fable cockpit with the old
+React dashboard unless Jordan explicitly asks for that rollback.
+
 This is the active source root for the all-in-one PhantomForce AI operating app.
 
 ## Read This First
