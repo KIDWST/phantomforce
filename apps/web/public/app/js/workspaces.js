@@ -89,7 +89,7 @@ function renderLeads(el, rerender) {
     revive: (id) => { const l = find(id); l.status = "follow-up"; l.next = "Warm re-engage with a proof point"; store.save(); rerender(); },
     review: (id) => {
       const l = find(id);
-      store.state.reviews.unshift({ id: uid("rev"), ws: l.ws, client: `${l.name} — ${l.company}`, status: "draft", channel: "Google", draft: `${l.name.split(" ")[0]} — glad this one landed. A short review helps the next owner find us; two sentences is plenty. Link below.`, link: "g.page/r/phantom-demo/review", received: null, quote: null });
+      store.state.reviews.unshift({ id: uid("rev"), ws: l.ws, client: `${l.name} — ${l.company}`, status: "draft", channel: "Google", draft: `${l.name.split(" ")[0]} — glad this one landed. A short review helps the next owner find us; two sentences is plenty. Link below.`, link: "review-link-ready", received: null, quote: null });
       pushActivity("Review Desk", `drafted a review request for ${l.company}.`, l.ws);
       store.save(); rerender();
     },
@@ -188,7 +188,7 @@ function renderReviews(el, rerender) {
     add: () => {
       const client = prompt("Who are we asking for a review?");
       if (!client) return;
-      store.state.reviews.unshift({ id: uid("rev"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), client: client.trim(), status: "draft", channel: "Google", draft: `${client.trim().split(" ")[0]} — if the work moved the needle, a short review helps the next owner find us. Two sentences is plenty — link below.`, link: "g.page/r/phantom-demo/review", received: null, quote: null });
+      store.state.reviews.unshift({ id: uid("rev"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), client: client.trim(), status: "draft", channel: "Google", draft: `${client.trim().split(" ")[0]} — if the work moved the needle, a short review helps the next owner find us. Two sentences is plenty — link below.`, link: "review-link-ready", received: null, quote: null });
       pushActivity("Review Desk", `drafted a review request for ${client.trim()}.`);
       store.save(); rerender();
     },
@@ -563,11 +563,11 @@ function renderAdmin(el, rerender) {
     </div>
     <h3 class="ws-subhead">Diagnostics</h3>
     <div class="record-actions">
-      <button class="btn btn-quiet" data-act="reset">Reset demo data</button>
+      <button class="btn btn-quiet" data-act="reset">Reset local cockpit data</button>
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
-    reset: () => { if (confirm("Reset all cockpit demo data to the seeded state?")) { store.reset(); rerender(); } },
+    reset: () => { if (confirm("Reset local cockpit data to the seeded state?")) { store.reset(); rerender(); } },
   });
 }
 

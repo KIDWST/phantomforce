@@ -33,8 +33,12 @@ apps\web\index.html
 Expected admin entry:
 
 ```text
-https://admin.phantomforce.online/app/index.html?session=owner-admin
+https://admin.phantomforce.online/app/index.html
 ```
+
+The live admin host uses PhantomForce owner-key login. Do not hardcode
+`?session=owner-admin` on the public admin host. Query-string sessions are only
+acceptable for local/static preview contexts.
 
 ## Public Pages repo
 

@@ -22,8 +22,12 @@ apps\web\public\app
 `admin.phantomforce.online` is expected to load:
 
 ```text
-/app/index.html?session=owner-admin
+/app/index.html
 ```
+
+The live admin host must show PhantomForce owner login first. Do not use
+`?session=owner-admin` on the public admin host; query-string sessions are for
+local/static preview only.
 
 The public Pages/demo cockpit source is separate:
 

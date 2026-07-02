@@ -2,7 +2,7 @@
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
-  visible, todaysPlan, moneyView, fmtMoney, ago,
+  visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, ownerLogin, verifyLiveSession,
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
@@ -18,6 +18,51 @@ const overlayRoot = $("[data-overlay-root]");
 function showGate() {
   gate.hidden = false;
   cockpit.hidden = true;
+  const card = gate.querySelector(".gate-card");
+  if (isLiveAdminHost()) {
+    card.innerHTML = `
+      <p class="gate-kicker">PHANTOMFORCE · LIVE OWNER ACCESS</p>
+      <h1>Sign in to the command cockpit.</h1>
+      <form class="owner-login" data-owner-login>
+        <label>
+          <span>Owner key</span>
+          <input type="password" data-owner-key autocomplete="current-password" placeholder="Enter owner key" autofocus />
+        </label>
+        <button class="gate-opt gate-submit" type="submit">
+          <span class="gate-opt-icon">⌘</span>
+          <b>Launch Admin Cockpit</b>
+          <i>Backend session required. Owner login is enforced on this host.</i>
+        </button>
+        <p class="gate-error" data-owner-error hidden></p>
+      </form>
+      <p class="gate-note">Pangolin provides the private route. PhantomForce owns the visible login and session.</p>`;
+    const form = card.querySelector("[data-owner-login]");
+    const input = card.querySelector("[data-owner-key]");
+    const error = card.querySelector("[data-owner-error]");
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      error.hidden = true;
+      const ownerKey = input.value.trim();
+      if (!ownerKey) {
+        error.textContent = "Enter the owner key.";
+        error.hidden = false;
+        return;
+      }
+      form.classList.add("is-loading");
+      try {
+        ctx.session = await ownerLogin(ownerKey);
+        enterCockpit();
+      } catch (err) {
+        session.clear();
+        error.textContent = err?.message || "Owner login failed.";
+        error.hidden = false;
+      } finally {
+        form.classList.remove("is-loading");
+      }
+    };
+    return;
+  }
+
   gate.querySelectorAll("[data-enter]").forEach((btn) => {
     btn.onclick = () => {
       const kind = btn.dataset.enter;
@@ -365,8 +410,8 @@ function enterCockpit() {
     : `Welcome back. Your workspace is moving — ask me anything or check today's plan.`);
 }
 
-function boot() {
-  ctx.session = resolveSession();
+async function boot() {
+  ctx.session = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
   wireCommandDeck();
   store.onChange(() => { /* keep rail + grid live after any store write */
     if (!cockpit.hidden) { renderMission(); renderRail(); }

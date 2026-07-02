@@ -10,10 +10,10 @@
         const clientHost = "app.phantomforce.online";
         if (location.pathname !== "/") return;
         if (location.hostname === adminHost) {
-          location.replace("/app/index.html?session=owner-admin");
+          location.replace("/app/index.html");
         }
         if (location.hostname === clientHost) {
-          location.replace("/app/index.html?session=client");
+          location.replace("/app/index.html");
         }
       })();
     </script>

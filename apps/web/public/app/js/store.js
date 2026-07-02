@@ -5,6 +5,7 @@
 
 const DB_KEY = "pf.cockpit.v3";
 const SESSION_KEY = "pf.session.v3";
+const LIVE_TOKEN_KEY = "pf.live.sessionToken.v1";
 const DAY = 86400000;
 
 export const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 8)}${(Date.now() % 100000).toString(36)}`;
@@ -40,7 +41,7 @@ function seed() {
   const workspaces = [
     { id: "phantomforce", name: "PhantomForce", kind: "HQ", tagline: "The agency itself — command level." },
     { id: "chicagoshots", name: "ChicagoShots", kind: "Brand", tagline: "Media brand workspace inside PhantomForce." },
-    { id: "test-client", name: "Test Client", kind: "Client", tagline: "What every client sees. Use it to preview the portal." },
+    { id: "test-client", name: "Test Client", kind: "Client", tagline: "Client workspace surface with scoped work, approvals, and delivery status." },
   ];
 
   const leads = [
@@ -60,8 +61,8 @@ function seed() {
   ];
 
   const reviews = [
-    { id: "rev-dobrev", ws: "chicagoshots", client: "Nina Dobrev — Halsted Coffee", status: "draft", channel: "Google", draft: "Nina — it was a blast shooting the shop. If the photos brought the space to life for you, a quick Google review helps other owners find us. Link below, two sentences is plenty.", link: "g.page/r/phantom-demo/review", received: null, quote: null },
-    { id: "rev-marcus", ws: "phantomforce", client: "Marcus Reed — Reed Landscaping", status: "received", channel: "Google", draft: "Marcus — glad the new booking flow is saving your evenings. Would you drop a quick review?", link: "g.page/r/phantom-demo/review", received: days(-3), quote: "PhantomForce built our site and now runs our follow-ups. I stopped losing jobs to missed calls. Worth every dollar." },
+    { id: "rev-dobrev", ws: "chicagoshots", client: "Nina Dobrev — Halsted Coffee", status: "draft", channel: "Google", draft: "Nina — it was a blast shooting the shop. If the photos brought the space to life for you, a quick Google review helps other owners find us. Link below, two sentences is plenty.", link: "review-link-ready", received: null, quote: null },
+    { id: "rev-marcus", ws: "phantomforce", client: "Marcus Reed — Reed Landscaping", status: "received", channel: "Google", draft: "Marcus — glad the new booking flow is saving your evenings. Would you drop a quick review?", link: "review-link-ready", received: days(-3), quote: "PhantomForce built our site and now runs our follow-ups. I stopped losing jobs to missed calls. Worth every dollar." },
     { id: "rev-tania", ws: "phantomforce", client: "Tania Flores — Flores Catering", status: "publish-ready", channel: "Website", draft: null, link: null, received: days(-9), quote: "They turned my DMs into an actual pipeline. Booked out six weekends straight after the site went live." },
   ];
 
@@ -156,17 +157,39 @@ export const store = {
   reset() { try { localStorage.removeItem(DB_KEY); } catch {} this.state = seed(); this.save(); },
 };
 
-/* ---------------- session (preview access; production access is enforced
-   at the private gateway in front of the app — this never weakens it) ---- */
+/* ---------------- session ---------------- */
 export const session = {
   get() {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
   },
-  set(s) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch {} },
-  clear() { try { localStorage.removeItem(SESSION_KEY); } catch {} },
+  set(s) {
+    try {
+      const { token, ...safeSession } = s || {};
+      localStorage.setItem(SESSION_KEY, JSON.stringify(safeSession));
+      if (token) sessionStorage.setItem(LIVE_TOKEN_KEY, token);
+    } catch {}
+  },
+  token() {
+    try { return sessionStorage.getItem(LIVE_TOKEN_KEY) || ""; } catch { return ""; }
+  },
+  clear() {
+    try {
+      localStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(LIVE_TOKEN_KEY);
+    } catch {}
+  },
 };
 
+export const isLiveAdminHost = () => location.hostname === "admin.phantomforce.online";
+
 export function resolveSession() {
+  if (isLiveAdminHost()) {
+    const saved = session.get();
+    const token = session.token();
+    if (saved?.role === "admin" && token) return { ...saved, token };
+    return null;
+  }
+
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
   if (key === "owner-admin" || key === "admin" || key === "jordan") {
@@ -178,6 +201,47 @@ export function resolveSession() {
     session.set(s); return s;
   }
   return session.get();
+}
+
+export async function ownerLogin(ownerKey) {
+  const response = await fetch("/auth/owner-login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: "owner-admin", ownerKey }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.token || !payload?.session) {
+    throw new Error(payload?.error || "Owner login failed.");
+  }
+  const s = {
+    role: "admin",
+    name: payload.session.label || "Jordan",
+    ws: "phantomforce",
+    token: payload.token,
+  };
+  session.set(s);
+  return s;
+}
+
+export async function verifyLiveSession() {
+  if (!isLiveAdminHost()) return resolveSession();
+  const token = session.token();
+  if (!token) return null;
+  const response = await fetch("/session", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    session.clear();
+    return null;
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!payload?.session?.canManageAccess) {
+    session.clear();
+    return null;
+  }
+  const s = { role: "admin", name: payload.session.label || "Jordan", ws: "phantomforce", token };
+  session.set(s);
+  return s;
 }
 
 /* ---------------- selectors ---------------- */
