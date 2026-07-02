@@ -4,13 +4,26 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#080a0d" />
+    <script>
+      (() => {
+        const adminHost = "admin.phantomforce.online";
+        const clientHost = "app.phantomforce.online";
+        if (location.pathname !== "/") return;
+        if (location.hostname === adminHost) {
+          location.replace("/app/index.html?session=owner-admin");
+        }
+        if (location.hostname === clientHost) {
+          location.replace("/app/index.html?session=client");
+        }
+      })();
+    </script>
     <meta
       name="description"
-      content="PhantomForce AI is an all-in-one business command app for email, scheduling, tasks, approvals, and AI-assisted operations."
+      content="The PhantomForce cockpit is a private AI business operating system for command, work, media, reviews, and approvals."
     />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/assets/operator-core.png" />
-    <title>PhantomForce AI</title>
+    <title>PhantomForce — Cockpit</title>
   </head>
   <body>
     <div id="root"></div>
