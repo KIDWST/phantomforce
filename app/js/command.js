@@ -121,6 +121,25 @@ export function handleCommand(raw) {
   const subject = subjectOf(text);
   const admin = isAdmin();
 
+  /* --- connected surfaces / admin OS --- */
+  if (/(connected|connection|route|routes|domain|pangolin|admin host|admin os|gateway|live site|online|phone access)/.test(s)) {
+    if (!admin) {
+      return {
+        say: "Your portal is connected through the PhantomForce cockpit. Admin-only routing details stay hidden, but your workspace stays scoped to your business.",
+        cards: [card("Client view", "Private workspace", "You see deliverables, approvals, work status, reviews, bookings, and security posture without the admin plumbing.", [openAction("Open today's plan", "workforce")])],
+        open: null,
+      };
+    }
+    return {
+      say: "Admin OS is the route map: private admin host, Pages cockpit mirror, workspace-scoped client preview, and backend kept private.",
+      cards: [
+        card("Live surfaces", "Admin + Pages cockpit", "admin.phantomforce.online runs the private operator surface; phantomforce.online/app carries the polished cockpit model for preview and client-safe use.", [openAction("Open Admin OS", "adminos")]),
+        card("Permission model", "One cockpit, two levels", "Jordan/admin can switch organizations. Clients only see their workspace and cannot reach admin-only workspaces.", [openAction("Open Workforce", "workforce")]),
+      ],
+      open: "adminos",
+    };
+  }
+
   /* --- money / pipeline --- */
   if (/pipeline|revenue|money|how much.*(made|worth|owed)|unpaid|invoice|cash/.test(s)) {
     const m = moneyView();
@@ -306,6 +325,6 @@ export function handleCommand(raw) {
 /* Suggestion chips under the command input. */
 export function commandSuggestions() {
   return isAdmin()
-    ? ["Catch me up", "What's my pipeline?", "Draft a proposal for Brooks Plumbing", "Create a video brief for Halsted Coffee", "Run a security check", "What's waiting on me?"]
+    ? ["Catch me up", "What's connected?", "What's my pipeline?", "Build a store for Okafor Fitness", "Create a video brief for Halsted Coffee", "Run a security check"]
     : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Run a security check"];
 }
