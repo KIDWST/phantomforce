@@ -2,7 +2,7 @@
   "name": "PhantomForce AI",
   "short_name": "PhantomForce",
   "description": "AI command center for business operations.",
-  "start_url": "/",
+  "start_url": "/app/index.html",
   "display": "standalone",
   "background_color": "#080a0d",
   "theme_color": "#080a0d",
