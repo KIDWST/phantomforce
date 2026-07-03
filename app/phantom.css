@@ -131,11 +131,12 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   padding: clamp(18px, 3.2vh, 40px) 0 10px; gap: clamp(10px, 1.6vh, 18px);
 }
 .ghost-canvas {
-  position: absolute; top: -6px; left: 50%; transform: translateX(-50%);
-  width: min(430px, 80vw); height: clamp(170px, 26vh, 250px);
-  pointer-events: none; opacity: 0.9; z-index: 0;
+  position: absolute; top: -18px; left: 50%; transform: translateX(-50%);
+  width: min(430px, 80vw); height: clamp(165px, 24vh, 235px);
+  pointer-events: none; opacity: 0.86; z-index: 0;
+  filter: drop-shadow(0 0 24px rgba(65, 255, 161, 0.26));
 }
-.hero-say { position: relative; z-index: 1; max-width: 860px; min-height: 2.4em; display: grid; place-items: center; margin-top: clamp(120px, 18vh, 175px); }
+.hero-say { position: relative; z-index: 1; max-width: 860px; min-height: 2.4em; display: grid; place-items: center; margin-top: clamp(132px, 19vh, 184px); }
 .say-line {
   margin: 0; font-size: clamp(19px, 3vw, 32px); line-height: 1.2; letter-spacing: -0.015em;
   background: linear-gradient(180deg, #ffffff, #b8ffd8 60%, #41ffa1);
@@ -454,8 +455,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .org-switch select { flex: 1; }
   .identity { display: none; }
   .deck { padding: 0 12px 30px; }
-  .ghost-canvas { height: 140px; }
-  .hero-say { margin-top: 112px; }
+  .ghost-canvas { top: -12px; height: 150px; opacity: 0.78; }
+  .hero-say { margin-top: 136px; }
   .say-line { font-size: clamp(17px, 5.4vw, 22px); }
   .speakline {
     min-height: 58px;
