@@ -92,7 +92,7 @@ function createReviewRequest(subject) {
     id: uid("rev"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(),
     client, status: "draft", channel: "Google",
     draft: `${client.split(" ")[0]} — loved working on this with you. If it moved the needle, a short review helps the next owner find us. Two sentences is plenty — link below.`,
-    link: "g.page/r/phantom-demo/review", received: null, quote: null,
+    link: "review-link-ready", received: null, quote: null,
   };
   store.state.reviews.unshift(r);
   pushActivity("Review Desk", `drafted a review request for ${client}.`, r.ws);
