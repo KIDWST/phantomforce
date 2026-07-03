@@ -6,10 +6,15 @@ const lerp = (a, b, t) => a + (b - a) * t;
 const pulse = { v: 0 };
 const flare = () => { pulse.v = 1; };
 
-/* Live brain: set this to your deployed proxy URL to switch the input from
-   the local responder to live Claude (server-side key, 5-prompt daily cap +
-   token limit enforced in the proxy). Empty = local responder. */
-const AI_ENDPOINT = "";
+/* Live brain: the public ai-proxy (server-side key only; per-visitor daily cap
+   + burst throttle enforced there; read-only — it can only talk). Localhost
+   targets the local proxy for end-to-end testing. If the proxy is down or
+   unconfigured, askPhantom returns null and the built-in local responder
+   answers instead — the page is never broken. */
+const AI_ENDPOINT =
+  (location.hostname === "127.0.0.1" || location.hostname === "localhost")
+    ? "http://127.0.0.1:8788/chat"
+    : "https://ai.phantomforce.online/chat";
 // Email-gated demo: the visitor leaves their email and gets an automated email
 // with the PhantomForce demo download. Submits to the backend /register route.
 // On localhost it targets the local proxy so you can test end-to-end; in
@@ -36,12 +41,12 @@ async function registerForDemo(name, email) {
 async function askPhantom(message) {
   if (!AI_ENDPOINT) return null;
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 7000);
+  const timer = setTimeout(() => ctrl.abort(), 16000);   // reasoning models take a beat
   try {
     const r = await fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }), signal: ctrl.signal });
     const d = await r.json();
     if (d && (d.error === "limit" || d.error === "busy")) return { limited: true, message: d.message };
-    if (d && d.reply) return { reply: String(d.reply).slice(0, 320) };
+    if (d && d.reply) return { reply: String(d.reply).slice(0, 600), remaining: typeof d.remaining === "number" ? d.remaining : null };
   } catch { /* unreachable / timeout -> fall back to local responder */ }
   finally { clearTimeout(timer); }
   return null;
@@ -252,7 +257,15 @@ function initConversation() {
           showDownload();
           return;
         }
-        if (ai && ai.reply) { window.setTimeout(() => speak(ai.reply), reduceMotion ? 120 : 540); return; }
+        if (ai && ai.reply) {
+          window.setTimeout(() => {
+            speak(ai.reply);
+            if (ai.remaining != null && input) {
+              input.placeholder = ai.remaining > 0 ? `ask phantomforce… ${ai.remaining} left today` : "ask phantomforce…";
+            }
+          }, reduceMotion ? 120 : 540);
+          return;
+        }
         // free local responder: reactive, then capped to pull them in
         window.setTimeout(() => {
           if (typed > FREE_LIMIT) {
