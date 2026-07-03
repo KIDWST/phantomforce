@@ -412,7 +412,7 @@ async function askCodexPhantomBrain(text, localResult) {
         request_id: `app-codex-${uid("req")}`,
         task_type: inferTaskType(text),
         sensitivity_level: inferSensitivity(text),
-        business_summary: "PhantomForce admin mobile command deck. Use Codex as both the operator brain and a normal general-purpose chatbot. For unrelated/general questions, answer directly without forcing dashboard context. Draft and advise only unless owner approves a separate action.",
+        business_summary: "PhantomForce admin mobile command deck. Use Codex as the operator brain and a normal general-purpose chatbot. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and approval-ready action cards. For unrelated/general questions, answer directly without forcing dashboard context. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution lane and owner approval.",
         module_data: brainModuleData(),
       }),
     });

@@ -171,6 +171,33 @@ export function handleCommand(raw) {
     };
   }
 
+  if (admin && /\b(read.?only|unleash(?:ed)?|can you change|can phantom change|what can you actually do|ability|powerful|make.*business|zero to amazing)\b/.test(s)) {
+    return {
+      say: "Phantom is not read-only. It is command-first: I can create the plan, proposal, site/store draft, content brief, follow-up workflow, scan proof, and approval-ready action card from one request.",
+      cards: [
+        card(
+          "Admin action model",
+          "Phantom builds, then routes execution",
+          "Safe internal work happens in the workspace. External moves like sends, publishing, billing, deploys, credential changes, or deletes go through the right execution lane with owner approval and receipts.",
+          [
+            openAction("Open Harbor", "adminos"),
+            openAction("Open Review", "approvals"),
+          ],
+          "PhantomOps · Hermes memory · connector-ready",
+        ),
+        card(
+          "Try it",
+          "Tell Phantom an outcome",
+          "Example: build a launch plan for a new plumbing company, draft the offer, create the site outline, set the follow-up workflow, and stage the approval cards.",
+          [],
+          "One command → artifacts → action lanes",
+        ),
+      ],
+      open: null,
+      skipBrain: true,
+    };
+  }
+
   /* --- admin files / Google Drive --- */
   const driveFile = extractDriveFileIntent(text);
   if (driveFile) {
