@@ -165,9 +165,38 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .speakline:focus-within::before { animation-duration: 2.2s; }
 @keyframes gleam { to { --gleam: 360deg; } }
 .speakline:focus-within { border-color: var(--neon); box-shadow: 0 0 60px rgba(65, 255, 161, 0.28); }
-.speak-caret { color: var(--neon); font-size: 20px; text-shadow: 0 0 12px var(--neon); animation: blink 1.2s steps(1) infinite; }
+.speak-caret {
+  flex: 0 0 18px;
+  display: inline-grid;
+  place-items: center;
+  width: 18px;
+  height: 26px;
+  line-height: 26px;
+  color: var(--neon);
+  font-size: 20px;
+  text-shadow: 0 0 12px var(--neon);
+  animation: blink 1.2s steps(1) infinite;
+}
 @keyframes blink { 50% { opacity: 0.2; } }
-.speakline input { flex: 1; min-width: 0; background: none; border: 0; outline: none; font-size: 16px; }
+.speakline input {
+  flex: 1;
+  min-width: 0;
+  height: 26px;
+  min-height: 26px;
+  margin: 0;
+  padding: 0;
+  display: block;
+  background: none;
+  border: 0;
+  outline: none;
+  color: var(--text);
+  caret-color: var(--neon);
+  -webkit-text-fill-color: var(--text);
+  -webkit-appearance: none;
+  appearance: none;
+  font-size: 16px;
+  line-height: 26px;
+}
 .speakline input::placeholder { color: var(--dim); }
 
 .suggests { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 8px 10px; justify-content: center; max-width: 860px; }
@@ -428,8 +457,15 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .ghost-canvas { height: 140px; }
   .hero-say { margin-top: 112px; }
   .say-line { font-size: clamp(17px, 5.4vw, 22px); }
-  .speakline { padding: 12px 16px; }
-  .speakline input { font-size: 16px; }
+  .speakline {
+    min-height: 58px;
+    padding: 15px 18px;
+    align-items: center;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .speakline input { height: 28px; min-height: 28px; font-size: 16px; line-height: 28px; }
+  .speak-caret { height: 28px; line-height: 28px; }
   .suggests { gap: 7px; }
   .suggest { font-size: 11px; padding: 7px 12px; }
   .mission-grid { grid-template-columns: repeat(2, 1fr); gap: 9px; }
