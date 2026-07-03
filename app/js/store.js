@@ -341,7 +341,21 @@ export const session = {
   },
 };
 
-export const isLiveAdminHost = () => location.hostname === "admin.phantomforce.online";
+export const ADMIN_PUBLIC_HOST = "admin.phantomforce.online";
+export const PUBLIC_PAGES_HOSTS = new Set(["phantomforce.online", "www.phantomforce.online"]);
+
+export const isLiveAdminHost = () => location.hostname === ADMIN_PUBLIC_HOST;
+export const isStaticPublicHost = () => PUBLIC_PAGES_HOSTS.has(location.hostname);
+
+export function liveAdminUrl() {
+  const url = new URL(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
+  url.searchParams.set("from", "phantomforce-online");
+  return url.toString();
+}
+
+export function redirectToLiveAdmin() {
+  location.replace(liveAdminUrl());
+}
 
 export function resolveSession() {
   if (isLiveAdminHost()) {
@@ -354,6 +368,10 @@ export function resolveSession() {
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
   if (key === "owner-admin" || key === "admin" || key === "jordan") {
+    if (isStaticPublicHost()) {
+      redirectToLiveAdmin();
+      return null;
+    }
     const s = { role: "admin", name: "Jordan", ws: "phantomforce" };
     session.set(s); return s;
   }
@@ -361,7 +379,12 @@ export function resolveSession() {
     const s = { role: "client", name: "Test Client", ws: "test-client" };
     session.set(s); return s;
   }
-  return session.get();
+  const saved = session.get();
+  if (saved?.role === "admin" && isStaticPublicHost()) {
+    redirectToLiveAdmin();
+    return null;
+  }
+  return saved;
 }
 
 export async function ownerLogin(ownerKey) {

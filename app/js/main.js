@@ -2,7 +2,8 @@
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
-  visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, ownerLogin, verifyLiveSession,
+  visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, isStaticPublicHost,
+  ownerLogin, redirectToLiveAdmin, verifyLiveSession,
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
@@ -67,6 +68,10 @@ function showGate() {
   gate.querySelectorAll("[data-enter]").forEach((btn) => {
     btn.onclick = () => {
       const kind = btn.dataset.enter;
+      if (kind === "admin" && isStaticPublicHost()) {
+        redirectToLiveAdmin();
+        return;
+      }
       ctx.session = kind === "admin"
         ? { role: "admin", name: "Jordan", ws: "phantomforce" }
         : { role: "client", name: "Test Client", ws: "test-client" };
