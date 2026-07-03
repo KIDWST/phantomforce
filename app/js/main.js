@@ -328,6 +328,23 @@ function initGhost() {
   let px = 0, cpx = 0;
   window.addEventListener("pointermove", (e) => { px = e.clientX / innerWidth - 0.5; }, { passive: true });
   let lastMood = "idle", spinAt = -1, nextSpin = 0, idleQuirk = 5;   // Midna-style flourish timers
+  let lastT = 0, sway = 0, prevTilt = 0;                             // hem follow-through
+  /* pixie dust: twinkling 4-point sparkles shed from the body — more while
+     she talks, a storm through every pirouette */
+  const sparkles = [];
+  const SPARK_MAX = small ? 60 : 110;
+  const spawnSpark = (x, y) => {
+    if (sparkles.length >= SPARK_MAX) return;
+    sparkles.push({
+      x, y,
+      vx: (Math.random() - 0.5) * 26,
+      vy: 6 + Math.random() * 20,
+      life: 0, max: 0.9 + Math.random() * 1.2,
+      r: 1.2 + Math.random() * 2.4,
+      tw: 4 + Math.random() * 8,
+      gold: Math.random() < 0.3,   // warm glints scattered through the green magic
+    });
+  };
   const t0 = performance.now();
   const accents = {
     calm: [65, 255, 161],
@@ -338,6 +355,7 @@ function initGhost() {
   const frame = (now) => {
     if (document.hidden) { requestAnimationFrame(frame); return; }
     const t = (now - t0) * 0.001;
+    const dt = Math.min(0.05, Math.max(0.001, t - lastT)); lastT = t;
     if (ghostMoodUntil && now > ghostMoodUntil) {
       ghostMood = "idle";
       ghostMoodUntil = 0;
@@ -346,8 +364,9 @@ function initGhost() {
     cpx += (px - cpx) * 0.05;
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx2.clearRect(0, 0, w, h);
-    const cx = w / 2, cy = h * 0.56;
     const scale = Math.min(w, h) * 0.30;
+    /* she drifts on a gentle figure-8 arc rather than bobbing in place */
+    const cx = w / 2 + Math.sin(t * 0.6) * scale * 0.05, cy = h * 0.56;
     const spinRate = ghostMood === "thinking" ? 0.72 : ghostMood === "talking" ? 0.44 : 0.24;
     /* spin flourishes: a full pirouette when she starts talking, more mid-speech,
        and the occasional playful roll while idle so she never sits still */
@@ -357,15 +376,27 @@ function initGhost() {
     }
     if (ghostMood === "talking" && t > nextSpin) { spinAt = t; nextSpin = t + 2.2 + Math.random() * 2.8; }
     if (ghostMood === "idle" && t > idleQuirk) { spinAt = t; idleQuirk = t + 8 + Math.random() * 9; }
-    let spinOff = 0, spinHop = 0;
+    /* three-phase pirouette, classic-animation style: anticipation (crouch +
+       wind back), the leap-and-twirl, then an elastic overshoot settle */
+    const WIND = 0.22, SPIN = 0.85, SETTLE = 0.55;
+    let spinOff = 0, spinHop = 0, airStretch = 0, settleWob = 0;
     if (spinAt >= 0) {
-      const sp = (t - spinAt) / 0.85;
-      if (sp >= 1) spinAt = -1;
-      else {
-        const e = sp < 0.5 ? 4 * sp * sp * sp : 1 - Math.pow(-2 * sp + 2, 3) / 2;   // ease-in-out
-        spinOff = e * Math.PI * 2;
-        spinHop = Math.sin(sp * Math.PI);   // lifts as she twirls
-      }
+      const el = t - spinAt;
+      if (el < WIND) {
+        const p = el / WIND;
+        spinOff = -0.35 * p * p;                    // winds back the other way
+        spinHop = -0.45 * Math.sin(p * Math.PI / 2); // dips down
+        airStretch = -0.45 * p;                      // crouch squash (wide + short)
+      } else if (el < WIND + SPIN) {
+        const p = (el - WIND) / SPIN;
+        const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;   // ease-in-out
+        spinOff = -0.35 * (1 - e) + e * Math.PI * 2;
+        spinHop = Math.sin(p * Math.PI);             // leaps as she twirls
+        airStretch = 0.4 * Math.sin(p * Math.PI);    // stretches tall in the air
+      } else if (el < WIND + SPIN + SETTLE) {
+        const p = (el - WIND - SPIN) / SETTLE;
+        settleWob = Math.sin(p * Math.PI * 3) * (1 - p) * 0.12;   // wobbles to rest
+      } else spinAt = -1;
     }
     const rot = t * spinRate + cpx * 0.9 + Math.sin(t * 0.55) * 0.12 + spinOff;
     const cosR = Math.cos(rot), sinR = Math.sin(rot);
@@ -380,12 +411,17 @@ function initGhost() {
 
     /* whole-body language: head-waggle tilt while talking, pensive cock while
        thinking, lean-in while listening; squash & stretch on the talk beat */
-    const tilt =
+    const tilt = (
       ghostMood === "talking" ? Math.sin(t * 3.3) * 0.11 + Math.sin(t * 1.4) * 0.04 :
       ghostMood === "thinking" ? 0.12 + Math.sin(t * 1.2) * 0.05 :
       ghostMood === "listening" ? -0.07 :
-      Math.sin(t * 0.7) * 0.035;
-    const squash = talkBeat * 0.05 + spinHop * 0.05 + ghostPulse * 0.03;
+      Math.sin(t * 0.7) * 0.035
+    ) + settleWob;
+    const squash = talkBeat * 0.05 + ghostPulse * 0.03 + airStretch * 0.35 + settleWob * 0.5;
+    /* follow-through: the hem lags behind the head's tilt, whipping after her */
+    const tiltV = (tilt - prevTilt) / dt; prevTilt = tilt;
+    sway += (tiltV * -0.06 - sway) * Math.min(1, dt * 5);
+    sway = Math.max(-0.4, Math.min(0.4, sway));
     ctx2.save();
     ctx2.translate(cx, cy);
     ctx2.rotate(tilt);
@@ -407,6 +443,10 @@ function initGhost() {
     ctx2.restore();
 
     ctx2.globalCompositeOperation = "lighter";
+    /* dust-per-second scales with how animated she is; sparkles sample the
+       visible body so they shed from her silhouette */
+    const emitRate = (ghostMood === "talking" ? 24 : 6) + (spinAt >= 0 ? 60 : 0) + ghostPulse * 80;
+    const sparkProb = (emitRate * dt) / N;
     for (const p of pts) {
       let ny = p.y;
       if (p.y < -0.2) {
@@ -416,8 +456,9 @@ function initGhost() {
       const moodWarp = ghostMood === "thinking" ? Math.sin(t * 6 + p.x * 4 + p.z * 3) * 0.018 : 0;
       const rx = p.x * cosR + p.z * sinR;
       const rz = -p.x * sinR + p.z * cosR;
-      const X = cx + (rx + moodWarp) * scale * breath;
+      const X = cx + (rx + moodWarp) * scale * breath + sway * Math.max(0, -ny) * scale;
       const Y = cy - ny * scale * breath + floatY;
+      if (Math.random() < sparkProb) spawnSpark(X, Y);
       const depth = (rz + 1) / 2;
       const a = 0.16 + depth * 0.5 + ghostPulse * 0.3;
       const greenMix = ghostEmotion === "alert" ? 0.55 : 1;
@@ -429,7 +470,8 @@ function initGhost() {
       ctx2.fillRect(X, Y, sz, sz);
     }
     /* expressive cyber face */
-    const blink = (Math.sin(t * 0.9) > 0.995) ? 0.12 : 1;
+    const bp = t % 3.7;   // eased lid sweep every few seconds, not an instant snap
+    const blink = bp < 0.26 ? Math.max(0.1, Math.abs(bp / 0.13 - 1)) : 1;
     const eyeSquint =
       ghostMood === "thinking" ? 0.62 :
       ghostEmotion === "alert" ? 0.7 :
@@ -449,6 +491,8 @@ function initGhost() {
       ctx2.rotate(ghostEmotion === "alert" ? sx * -0.22 : Math.sin(t * 1.8 + sx) * 0.04);
       ctx2.scale(0.68, 1.18 * blink * eyeSquint);
       ctx2.beginPath(); ctx2.arc(0, 0, scale * 0.16, 0, Math.PI * 2); ctx2.fill();
+      ctx2.fillStyle = `rgba(255,255,255,${0.55 + 0.35 * Math.sin(t * 5.5 + sx * 4)})`;
+      ctx2.beginPath(); ctx2.arc(-scale * 0.05, -scale * 0.055, scale * 0.032, 0, Math.PI * 2); ctx2.fill();
       ctx2.strokeStyle = accentCss(0.5);
       ctx2.lineWidth = 1;
       ctx2.beginPath();
@@ -505,6 +549,29 @@ function initGhost() {
       ctx2.beginPath();
       ctx2.arc(x, y, scale * (0.045 + ghostPulse * 0.02), 0, Math.PI * 2);
       ctx2.stroke();
+    }
+
+    /* pixie dust: four-point stars that twinkle, drift down, and fade */
+    for (let i = sparkles.length - 1; i >= 0; i--) {
+      const s = sparkles[i];
+      s.life += dt;
+      if (s.life > s.max) { sparkles.splice(i, 1); continue; }
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      s.vy += 16 * dt;
+      s.vx *= 0.985;
+      const fade = 1 - s.life / s.max;
+      const a = fade * (0.55 + 0.45 * Math.sin(s.life * s.tw * Math.PI));
+      const r = s.r * (2.4 - 1.2 * (1 - fade));
+      ctx2.fillStyle = s.gold ? `rgba(255,231,150,${a})` : `rgba(190,255,225,${a})`;
+      ctx2.beginPath();
+      ctx2.moveTo(s.x, s.y - r);
+      ctx2.quadraticCurveTo(s.x, s.y, s.x + r, s.y);
+      ctx2.quadraticCurveTo(s.x, s.y, s.x, s.y + r);
+      ctx2.quadraticCurveTo(s.x, s.y, s.x - r, s.y);
+      ctx2.quadraticCurveTo(s.x, s.y, s.x, s.y - r);
+      ctx2.fill();
+      ctx2.fillStyle = `rgba(255,255,255,${a})`;
+      ctx2.fillRect(s.x - 0.6, s.y - 0.6, 1.2, 1.2);
     }
     ctx2.restore();
     ctx2.globalCompositeOperation = "source-over";
