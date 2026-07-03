@@ -1,4 +1,4 @@
-/* PhantomForce Cockpit — black glass, neon command console.
+/* PhantomForce Phantom — black glass, neon command console.
    One visual system for admin and client; full-width on desktop, clean on phone. */
 
 :root {
@@ -66,9 +66,9 @@ code { font: 500 0.92em "DM Mono", monospace; color: var(--neon); }
 .gate-opt em { font: 500 10.5px "DM Mono", monospace; font-style: normal; letter-spacing: 0.08em; color: var(--dim-2); }
 .gate-note { margin: 22px 0 0; color: var(--dim); font-size: 12.5px; line-height: 1.5; }
 
-/* ---------------- cockpit shell ---------------- */
-.cockpit { min-height: 100vh; display: flex; flex-direction: column; transition: filter 0.4s ease, transform 0.4s ease; }
-body.overlay-open .cockpit { filter: blur(14px) brightness(0.55) saturate(1.15); transform: scale(0.992); pointer-events: none; }
+/* ---------------- phantom shell ---------------- */
+.phantom { min-height: 100vh; display: flex; flex-direction: column; transition: filter 0.4s ease, transform 0.4s ease; }
+body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15); transform: scale(0.992); pointer-events: none; }
 
 .topbar {
   display: flex; align-items: center; gap: 18px;
@@ -447,5 +447,5 @@ body.overlay-open .cockpit { filter: blur(14px) brightness(0.55) saturate(1.15);
 @media (prefers-reduced-motion: reduce) {
   .speakline-hero::before, .ticker-tag, .speak-caret, .say-line, .rcard, .overlay-panel, .widget-alert::before { animation: none !important; }
   .ghost-canvas { display: none; }
-  .cockpit, .widget, .btn, .overlay-x { transition: none; }
+  .phantom, .widget, .btn, .overlay-x { transition: none; }
 }

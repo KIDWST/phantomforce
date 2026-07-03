@@ -1,4 +1,4 @@
-/* PhantomForce Cockpit — workspace surfaces.
+/* PhantomForce Phantom — workspace surfaces.
    Every widget on the mission grid opens one of these as a focused overlay
    above the dashboard. Registry-driven so the grid can scale to hundreds
    of widgets without changing the shell. */
@@ -556,7 +556,7 @@ function renderAdmin(el, rerender) {
     <h3 class="ws-subhead">Access</h3>
     <div class="stack">
       <article class="record record-wide">
-        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full cockpit, this view")}
+        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full Phantom, this view")}
         ${kv("Client host", "<code>app.phantomforce.online</code> — portal view, workspace-scoped")}
         ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
       </article>
@@ -567,7 +567,7 @@ function renderAdmin(el, rerender) {
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
-    reset: () => { if (confirm("Reset all cockpit demo data to the seeded state?")) { store.reset(); rerender(); } },
+    reset: () => { if (confirm("Reset all Phantom demo data to the seeded state?")) { store.reset(); rerender(); } },
   });
 }
 
@@ -591,10 +591,10 @@ export const WORKSPACE_DEFS = {
   proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
-  media: { title: "Media Lab", kicker: "Production cockpit", render: renderMedia },
+  media: { title: "Media Lab", kicker: "Production Phantom", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
-  money: { title: "Money", kicker: "Revenue cockpit", render: renderMoney },
+  money: { title: "Money", kicker: "Revenue Phantom", render: renderMoney },
   workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
   adminos: { title: "Admin OS", kicker: "Operator controls", render: renderAdmin, adminOnly: true },

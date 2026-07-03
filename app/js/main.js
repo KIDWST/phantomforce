@@ -1,4 +1,4 @@
-/* PhantomForce Cockpit — shell, overlay engine, ghost, ticker, command deck. */
+/* PhantomForce Phantom — shell, overlay engine, ghost, ticker, command deck. */
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
@@ -11,13 +11,13 @@ const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 const gate = $("[data-gate]");
-const cockpit = $("[data-cockpit]");
+const phantom = $("[data-phantom]");
 const overlayRoot = $("[data-overlay-root]");
 
 /* ============================ access gate ============================ */
 function showGate() {
   gate.hidden = false;
-  cockpit.hidden = true;
+  phantom.hidden = true;
   gate.querySelectorAll("[data-enter]").forEach((btn) => {
     btn.onclick = () => {
       const kind = btn.dataset.enter;
@@ -25,14 +25,14 @@ function showGate() {
         ? { role: "admin", name: "Jordan", ws: "phantomforce" }
         : { role: "client", name: "Test Client", ws: "test-client" };
       session.set(ctx.session);
-      enterCockpit();
+      enterPhantom();
     };
   });
 }
 
 /* ============================ shell ============================ */
 function renderTopbar() {
-  $("[data-role-sub]").textContent = isAdmin() ? "ADMIN COCKPIT" : "CLIENT PORTAL";
+  $("[data-role-sub]").textContent = isAdmin() ? "ADMIN PHANTOM" : "CLIENT PORTAL";
   const wsLabel = wsName(ctx.session.ws);
   $("[data-identity]").textContent = isAdmin()
     ? `${ctx.session.name} · operator`
@@ -193,7 +193,7 @@ function openWorkspace(id, pushHash = true) {
   document.body.classList.add("overlay-open");
   overlayRoot.innerHTML = `
     <div class="overlay" role="dialog" aria-modal="true" aria-label="${esc(def.title)}">
-      <button class="overlay-backdrop" data-overlay-close aria-label="Back to cockpit"></button>
+      <button class="overlay-backdrop" data-overlay-close aria-label="Back to phantom"></button>
       <section class="overlay-panel">
         <header class="overlay-head">
           <div>
@@ -350,9 +350,9 @@ function initGhost() {
 
 /* ============================ boot ============================ */
 let ghostStarted = false;
-function enterCockpit() {
+function enterPhantom() {
   gate.hidden = true;
-  cockpit.hidden = false;
+  phantom.hidden = false;
   if (!ghostStarted) { ghostStarted = true; initGhost(); }
   renderDashboard();
   const q = new URLSearchParams(location.search);
@@ -361,7 +361,7 @@ function enterCockpit() {
   const m = location.hash.match(/^#ws\/([a-z]+)/);
   if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
   speak(isAdmin()
-    ? "Cockpit's live. Every desk reported in — what do you want handled first?"
+    ? "Phantom is live. Every desk reported in — what do you want handled first?"
     : `Welcome back. Your workspace is moving — ask me anything or check today's plan.`);
 }
 
@@ -369,9 +369,9 @@ function boot() {
   ctx.session = resolveSession();
   wireCommandDeck();
   store.onChange(() => { /* keep rail + grid live after any store write */
-    if (!cockpit.hidden) { renderMission(); renderRail(); }
+    if (!phantom.hidden) { renderMission(); renderRail(); }
   });
-  if (ctx.session) enterCockpit();
+  if (ctx.session) enterPhantom();
   else showGate();
 }
 

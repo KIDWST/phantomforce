@@ -1,9 +1,9 @@
-/* PhantomForce Cockpit — data core.
+/* PhantomForce Phantom — data core.
    Everything runs locally in the browser (localStorage). No sends, no posts,
    no payments, no provider calls happen from here — records move through
    draft → approval → *-ready states and stop there until a connector exists. */
 
-const DB_KEY = "pf.cockpit.v3";
+const DB_KEY = "pf.phantom.v3";
 const SESSION_KEY = "pf.session.v3";
 const DAY = 86400000;
 
@@ -27,7 +27,7 @@ export const daysUntil = (iso) => Math.ceil((new Date(iso).getTime() - Date.now(
 export const PACKAGES = [
   { id: "starter", name: "Starter", price: 750, blurb: "Landing page or content sprint. One clear outcome, fast." },
   { id: "core", name: "Core", price: 1500, blurb: "Site + lead capture + follow-up system. The working baseline." },
-  { id: "pro", name: "Pro", price: 2500, blurb: "Full build: site, store, media plan, review engine, cockpit setup." },
+  { id: "pro", name: "Pro", price: 2500, blurb: "Full build: site, store, media plan, review engine, Phantom setup." },
 ];
 export const RETAINERS = [
   { id: "keeper", name: "Keeper", price: 150, blurb: "Monthly upkeep, security scan, review requests." },
@@ -74,7 +74,7 @@ function seed() {
   const media = [
     { id: "med-halsted", ws: "chicagoshots", title: "Halsted Coffee — launch reel", type: "Reel (vertical, 30s)", status: "brief-ready", angle: "Morning ritual: the first pour, steam, regulars arriving. Warm + fast cuts.", shots: ["Espresso pull close-up", "Steam over cup, backlit window", "Barista handoff + smile", "Latte art top-down", "Sign + street at golden hour"], caption: "The best 8am in Lakeview isn't an accident. ☕ #chicagocoffee #lakeview", proof: null, updated: days(0) },
     { id: "med-chen", ws: "chicagoshots", title: "Chen & Park — listing walkthrough template", type: "Video brief (60–90s)", status: "draft", angle: "Cinematic arrival → hero rooms → lifestyle detail → agent close. Repeatable per property.", shots: ["Drone or gimbal approach", "Door open reveal", "Kitchen slider", "Primary suite light pass", "Agent piece-to-camera"], caption: "New on the market in Lincoln Park — walk it in 60 seconds.", proof: null, updated: days(-1) },
-    { id: "med-pf", ws: "phantomforce", title: "PhantomForce — 'missed call math' promo", type: "Short (45s)", status: "generation-approved", angle: "One missed call = one lost job. Count the cost on screen, then show the cockpit catching it.", shots: ["Phone ringing unanswered (staged)", "Counter: $1,500 gone", "Cockpit ticker catching the lead", "Follow-up draft appearing", "Logo sting"], caption: "Your phone is leaking money. We built the thing that catches it.", proof: "phantomcut/queue/pf-promo-004", updated: days(0) },
+    { id: "med-pf", ws: "phantomforce", title: "PhantomForce — 'missed call math' promo", type: "Short (45s)", status: "generation-approved", angle: "One missed call = one lost job. Count the cost on screen, then show Phantom catching it.", shots: ["Phone ringing unanswered (staged)", "Counter: $1,500 gone", "Phantom ticker catching the lead", "Follow-up draft appearing", "Logo sting"], caption: "Your phone is leaking money. We built the thing that catches it.", proof: "phantomcut/queue/pf-promo-004", updated: days(0) },
     { id: "med-test", ws: "test-client", title: "Grand-opening announcement post", type: "Static + caption", status: "delivered", angle: "Clean product hero with launch-week offer.", shots: ["Hero product on brand color", "Offer overlay"], caption: "Doors open Saturday. First 20 customers get the founder's discount.", proof: "delivered/test-client/open-post-final.png", updated: days(-4) },
   ];
 

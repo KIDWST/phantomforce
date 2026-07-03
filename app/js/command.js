@@ -1,4 +1,4 @@
-/* PhantomForce Cockpit — the Phantom AI command engine.
+/* PhantomForce Phantom — the Phantom AI command engine.
    Turns plain business language into routed actions and real artifacts
    (drafts in the store), never chat-only answers when an action fits.
    Runs fully locally: no provider calls, no sends. */
