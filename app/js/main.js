@@ -9,6 +9,7 @@ import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+const isPhoneView = () => window.matchMedia("(max-width: 640px)").matches;
 
 const gate = $("[data-gate]");
 const phantom = $("[data-phantom]");
@@ -548,8 +549,12 @@ function enterPhantom() {
   const m = location.hash.match(/^#ws\/([a-z]+)/);
   if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
   speak(isAdmin()
-    ? "Phantom is live. Every desk reported in — what do you want handled first?"
-    : `Welcome back. Your workspace is moving — ask me anything or check today's plan.`);
+    ? (isPhoneView()
+      ? "Phantom is live. What should we move?"
+      : "Phantom is live. Every desk reported in — what do you want handled first?")
+    : (isPhoneView()
+      ? "Welcome back. What do you need?"
+      : `Welcome back. Your workspace is moving — ask me anything or check today's plan.`));
 }
 
 async function boot() {
