@@ -85,7 +85,7 @@ function localReply(text) {
 /* ---------------- conversation ---------------- */
 function initConversation() {
   const say = document.querySelector("[data-say]");
-  const orbits = document.querySelector("[data-orbits]");
+  const powerEls = Array.from(document.querySelectorAll("[data-power]"));
   const form = document.querySelector("[data-speak]");
   const input = document.querySelector("[data-speak-input]");
   const downloadCta = document.querySelector("[data-download-cta]");
@@ -95,10 +95,7 @@ function initConversation() {
   const downloadEmail = document.querySelector("[data-download-email]");
   const downloadStatus = document.querySelector("[data-download-status]");
   const hint = document.querySelector("[data-hint]");
-  if (!say || !orbits) return;
-
-  const captured = [];
-  let beat = 0;
+  if (!say) return;
 
   let typeTimer = 0;
   const speak = (text, cls = "") => {
@@ -119,21 +116,43 @@ function initConversation() {
     }
     if (cls !== "user") flare();
   };
-  const setOrbits = (list) => {
-    orbits.replaceChildren(...list.map((t, i) => {
-      const b = document.createElement("button");
-      b.type = "button"; b.dataset.answer = t; b.textContent = t;
-      b.style.animationDelay = `${i * 60}ms`;
-      return b;
-    }));
-  };
-  const think = (then) => { speak("· · ·", "thinking"); flare(); window.setTimeout(then, reduceMotion ? 220 : 760); };
-
   const showDownload = () => { if (downloadCta) downloadCta.hidden = false; };
-  const finish = () => {
-    setOrbits([]);
-    showDownload();
+
+  // ---- the power tour: the entity walks through everything it runs, unprompted ----
+  // one line per chip, same order as the [data-power] buttons in the HTML
+  const powerLines = [
+    "Every lead captured, answered, and chased — nothing slips.",
+    "Your inbox, cleared — replies drafted and waiting on one tap.",
+    "Your calendar runs itself: booked, reminded, reshuffled.",
+    "Quotes sent, invoices chased, the money trail tracked.",
+    "Posts, decks, docs, even video — created on command.",
+    "Scams, leaks, and threats flagged before they cost you.",
+  ];
+  let powerTimer = 0, powerIdx = -1, touring = true;
+  const showPower = (i) => {
+    powerIdx = i;
+    powerEls.forEach((el, j) => el.classList.toggle("on", j === i));
+    speak(powerLines[i]);
   };
+  const scheduleTour = (ms) => {
+    window.clearTimeout(powerTimer);
+    powerTimer = window.setTimeout(() => {
+      if (!touring) return;
+      showPower((powerIdx + 1) % powerLines.length);
+      scheduleTour(4600);
+    }, ms);
+  };
+  const stopTour = () => {
+    touring = false;
+    window.clearTimeout(powerTimer);
+    powerEls.forEach((el) => el.classList.remove("on"));
+  };
+  // a chip click jumps the tour straight to that power — a real answer, not a quiz step
+  powerEls.forEach((el, i) => el.addEventListener("click", () => {
+    touring = true;
+    showPower(i);
+    scheduleTour(7200);
+  }));
 
   const openDownload = () => {
     if (!downloadModal) return;
@@ -199,59 +218,6 @@ function initConversation() {
     });
   });
 
-  // beat content
-  const businessReply = (t) => {
-    const s = t.toLowerCase();
-    if (/serv|trade|clean|repair|contract|plumb|landsc/.test(s)) return "A service business. I'll capture every lead, book the work, and chase the follow-ups you forget.";
-    if (/sport|team|league|coach|athlet|gym/.test(s)) return "A sports org. I'll run registrations, schedules, and parent comms so you stop living in your phone.";
-    if (/media|content|creator|photo|video|film|market/.test(s)) return "Media. I'll keep shoots, clients, and deliverables moving — and spin up content and video on command.";
-    if (/shop|store|ecom|commerce|product|brand/.test(s)) return "E-commerce. I'll handle orders, replies, and the busywork between sales.";
-    return "Locked in. Now — what's the part that actually steals your hours?";
-  };
-  const drainReply = (t) => {
-    const s = t.toLowerCase();
-    if (/lead|inquir|prospect|follow/.test(s)) return "Done. Every lead captured, answered, and followed up — nothing slips.";
-    if (/sched|book|calendar|remind|appoint/.test(s)) return "Done. Bookings, reminders, and changes handled without the back-and-forth.";
-    if (/repl|email|message|comm|text|dm/.test(s)) return "Done. Drafted replies ready the second they're needed — you approve, I send.";
-    if (/quote|price|money|invoice|pay|sales|deal/.test(s)) return "Done. Quotes, follow-ups, and the money trail — drafted and tracked.";
-    if (/content|video|post|deck|doc|social|website|site/.test(s)) return "Done. Posts, docs, decks, video, even your site — generated on command, private to you.";
-    return "Done. I'll fold that into your operator and handle it.";
-  };
-
-  const advance = (text) => {
-    captured.push(text);
-    hint?.classList.add("gone");
-    speak(text, "user");
-    const lower = text.toLowerCase();
-
-    window.setTimeout(() => think(() => {
-      if (beat === 0) {
-        speak(businessReply(text));
-        setOrbits(["Chasing leads", "Scheduling", "Replying to people", "Quotes & money", "Content & video"]);
-        beat = 1;
-      } else if (beat === 1) {
-        speak(drainReply(text));
-        setOrbits(["Build my operator", "How private is this?", "What can't it do?"]);
-        beat = 2;
-      } else {
-        if (/privat|secure|safe|data/.test(lower)) {
-          speak("Everything stays inside your business. It trains no one else. Nothing leaves without you.");
-          setOrbits(["Build my operator", "What can't it do?"]);
-        } else if (/can.?t|limit|won.?t|risk/.test(lower)) {
-          speak("It won't send, post, spend, or sign without your say. You stay in control — always.");
-          setOrbits(["Build my operator", "How private is this?"]);
-        } else {
-          speak("Then it's settled. I've shaped an operator around how you work.");
-          finish();
-        }
-      }
-    }), reduceMotion ? 100 : 480);
-  };
-
-  orbits.addEventListener("click", (e) => {
-    const b = e.target.closest("[data-answer]");
-    if (b) advance(b.dataset.answer);
-  });
   // Typed input = general live assistant (GLM 5.2 when configured; local responder otherwise).
   let typed = 0;
   const FREE_LIMIT = 5; // feel the power, then crave the full thing
@@ -261,6 +227,7 @@ function initConversation() {
     if (!v) return;
     input.value = "";
     hint?.classList.add("gone");
+    stopTour();                       // the visitor is talking now — the tour yields
     speak(v, "user");
     typed += 1;
     window.setTimeout(() => {
@@ -287,11 +254,11 @@ function initConversation() {
     }, reduceMotion ? 80 : 320);
   });
 
-  // boot: the entity wakes and speaks first
+  // boot: the entity wakes, introduces itself, then tours its powers on its own
   say.replaceChildren();
   window.setTimeout(() => {
-    speak("I'm a private cyber-AI that runs your business. Point me at what's eating your time.");
-    window.setTimeout(() => setOrbits(["Service business", "Sports org", "Media / creator", "E-commerce", "Something else"]), 1600);
+    speak("I'm a private cyber-AI that runs your business. All of it.");
+    scheduleTour(4300);
   }, 650);
 }
 
@@ -498,7 +465,7 @@ function initRiskRadar() {
   const active = [];
   const overlaps = (a, b, pad) =>
     a.left - pad < b.right && a.right + pad > b.left && a.top - pad < b.bottom && a.bottom + pad > b.top;
-  const uiSel = "[data-wordmark], [data-say], [data-orbits], [data-speak], [data-download-cta], [data-download-modal]";
+  const uiSel = "[data-wordmark], [data-say], [data-powers], [data-speak], [data-download-cta], [data-download-modal]";
   const place = (ping) => {
     const W = innerWidth, H = innerHeight;
     const obstacles = active.map((e) => e.getBoundingClientRect())

@@ -22,7 +22,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="void.css?v=26" />
+    <link rel="stylesheet" href="void.css?v=27" />
   </head>
   <body>
     <canvas class="void-canvas" data-void aria-hidden="true"></canvas>
@@ -41,16 +41,23 @@
       <div class="phantom-zone" data-phantom-zone aria-hidden="true"></div>
 
       <div class="converse">
-        <!-- the entity speaks; you answer in the box right under it -->
+        <!-- the entity speaks and tours its own powers; no quiz, no dead-end clicks -->
         <div class="say" data-say aria-live="polite">
-          <p class="say-line">I'm a private cyber-AI that runs your business. Point me at what's eating your time.</p>
+          <p class="say-line">I'm a private cyber-AI that runs your business. All of it.</p>
         </div>
-        <div class="orbits" data-orbits></div>
+        <div class="powers" data-powers role="list" aria-label="What PhantomForce handles">
+          <button type="button" role="listitem" data-power>Leads</button>
+          <button type="button" role="listitem" data-power>Replies</button>
+          <button type="button" role="listitem" data-power>Bookings</button>
+          <button type="button" role="listitem" data-power>Quotes &amp; money</button>
+          <button type="button" role="listitem" data-power>Content &amp; video</button>
+          <button type="button" role="listitem" data-power>Threat watch</button>
+        </div>
         <form class="speak" data-speak>
           <span class="speak-caret" aria-hidden="true">›</span>
           <input type="text" data-speak-input autocomplete="off" spellcheck="false" placeholder="ask phantomforce…" aria-label="Speak to PhantomForce" />
         </form>
-        <button class="download-cta" type="button" hidden data-download-cta>
+        <button class="download-cta" type="button" data-download-cta>
           Download PhantomForce <span aria-hidden="true">→</span>
         </button>
       </div>
@@ -82,6 +89,6 @@
       </form>
     </div>
     <p class="hint" data-hint hidden></p>
-    <script type="module" src="void.js?v=25"></script>
+    <script type="module" src="void.js?v=26"></script>
   </body>
 </html>
