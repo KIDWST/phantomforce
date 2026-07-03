@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "admin-sync-20260703-0328";
+      window.PHANTOM_BUILD = "admin-sync-20260703-0415";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,14 +23,53 @@
     </script>
     <title>PhantomForce — Phantom</title>
     <meta name="description" content="PhantomForce Phantom — your AI business operating system." />
-    <meta name="phantom-build" content="admin-sync-20260703-0328" />
+    <meta name="phantom-build" content="admin-sync-20260703-0415" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
+    <style>
+      html,
+      body {
+        margin: 0;
+        min-height: 100%;
+        background: #02060a;
+        color: #eafff4;
+        font-family:
+          "Space Grotesk",
+          system-ui,
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          sans-serif;
+      }
+
+      .boot-fallback {
+        position: fixed;
+        inset: 0;
+        z-index: 1;
+        display: grid;
+        place-items: center;
+        padding: 24px;
+        background:
+          radial-gradient(circle at 50% 42%, rgba(0, 255, 181, 0.18), transparent 32%),
+          #02060a;
+        color: rgba(234, 255, 244, 0.82);
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.18em;
+        text-align: center;
+        text-transform: uppercase;
+      }
+
+      .gate:not([hidden]) ~ .boot-fallback,
+      .phantom:not([hidden]) ~ .boot-fallback {
+        display: none;
+      }
+    </style>
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="phantom.css?v=admin-sync-20260703-0328" />
+    <link rel="stylesheet" href="phantom.css?v=admin-sync-20260703-0415" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -122,9 +161,11 @@
       </main>
     </div>
 
+    <div class="boot-fallback" data-boot-fallback>Loading PhantomForce</div>
+
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="js/main.js?v=admin-sync-20260703-0328"></script>
+    <script type="module" src="js/main.js?v=admin-sync-20260703-0415"></script>
   </body>
 </html>
