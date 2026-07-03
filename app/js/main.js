@@ -2,7 +2,7 @@
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
-  visible, todaysPlan, moneyView, fmtMoney, ago,
+  visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, ownerLogin, verifyLiveSession,
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
@@ -18,6 +18,51 @@ const overlayRoot = $("[data-overlay-root]");
 function showGate() {
   gate.hidden = false;
   phantom.hidden = true;
+  const card = gate.querySelector(".gate-card");
+  if (isLiveAdminHost()) {
+    card.innerHTML = `
+      <p class="gate-kicker">PHANTOMFORCE · LIVE OWNER ACCESS</p>
+      <h1>Sign in to Phantom.</h1>
+      <form class="owner-login" data-owner-login>
+        <label>
+          <span>Owner key</span>
+          <input type="password" data-owner-key autocomplete="current-password" placeholder="Enter owner key" autofocus />
+        </label>
+        <button class="gate-opt gate-submit" type="submit">
+          <span class="gate-opt-icon">⌘</span>
+          <b>Launch Admin Phantom</b>
+          <i>Backend session required. Owner login is enforced on this host.</i>
+        </button>
+        <p class="gate-error" data-owner-error hidden></p>
+      </form>
+      <p class="gate-note">Pangolin provides the private route. PhantomForce owns the visible login and session.</p>`;
+    const form = card.querySelector("[data-owner-login]");
+    const input = card.querySelector("[data-owner-key]");
+    const error = card.querySelector("[data-owner-error]");
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      error.hidden = true;
+      const ownerKey = input.value.trim();
+      if (!ownerKey) {
+        error.textContent = "Enter the owner key.";
+        error.hidden = false;
+        return;
+      }
+      form.classList.add("is-loading");
+      try {
+        ctx.session = await ownerLogin(ownerKey);
+        enterPhantom();
+      } catch (err) {
+        session.clear();
+        error.textContent = err?.message || "Owner login failed.";
+        error.hidden = false;
+      } finally {
+        form.classList.remove("is-loading");
+      }
+    };
+    return;
+  }
+
   gate.querySelectorAll("[data-enter]").forEach((btn) => {
     btn.onclick = () => {
       const kind = btn.dataset.enter;
@@ -53,10 +98,23 @@ function renderTopbar() {
 
 /* ============================ ticker ============================ */
 let tickerTimer = 0, tickerIdx = 0;
+function tickerItems() {
+  const activity = visible(store.state.activity);
+  if (!isAdmin()) return activity;
+  const toolItems = (store.state.toolSpine || []).map((tool) => ({
+    id: `tool-${tool.id}`,
+    ws: "phantomforce",
+    who: tool.worker,
+    text: tool.activity,
+    at: new Date().toISOString(),
+  }));
+  return [...toolItems, ...activity];
+}
+
 function startTicker() {
   const line = $("[data-ticker-line]");
   const feed = () => {
-    const items = visible(store.state.activity);
+    const items = tickerItems();
     if (!items.length) { line.textContent = "The desks are quiet. Ask for something."; return; }
     tickerIdx = (tickerIdx + 1) % items.length;
     const a = items[tickerIdx];
@@ -393,6 +451,7 @@ function initGhost() {
       const sz = 0.82 + depth * 1.25 + talkBeat * 0.35;
       ctx2.fillRect(X, Y, sz, sz);
     }
+
     /* expressive cyber face */
     const blink = (Math.sin(t * 0.9) > 0.995) ? 0.12 : 1;
     const eyeSquint =
@@ -493,8 +552,8 @@ function enterPhantom() {
     : `Welcome back. Your workspace is moving — ask me anything or check today's plan.`);
 }
 
-function boot() {
-  ctx.session = resolveSession();
+async function boot() {
+  ctx.session = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
   wireCommandDeck();
   store.onChange(() => { /* keep rail + grid live after any store write */
     if (!phantom.hidden) { renderMission(); renderRail(); }

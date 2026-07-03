@@ -4,7 +4,7 @@
    of widgets without changing the shell. */
 
 import {
-  store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
+  store, uid, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS,
 } from "./store.js";
@@ -89,7 +89,7 @@ function renderLeads(el, rerender) {
     revive: (id) => { const l = find(id); l.status = "follow-up"; l.next = "Warm re-engage with a proof point"; store.save(); rerender(); },
     review: (id) => {
       const l = find(id);
-      store.state.reviews.unshift({ id: uid("rev"), ws: l.ws, client: `${l.name} — ${l.company}`, status: "draft", channel: "Google", draft: `${l.name.split(" ")[0]} — glad this one landed. A short review helps the next owner find us; two sentences is plenty. Link below.`, link: "g.page/r/phantom-demo/review", received: null, quote: null });
+      store.state.reviews.unshift({ id: uid("rev"), ws: l.ws, client: `${l.name} — ${l.company}`, status: "draft", channel: "Google", draft: `${l.name.split(" ")[0]} — glad this one landed. A short review helps the next owner find us; two sentences is plenty. Link below.`, link: "review-link-ready", received: null, quote: null });
       pushActivity("Review Desk", `drafted a review request for ${l.company}.`, l.ws);
       store.save(); rerender();
     },
@@ -188,7 +188,7 @@ function renderReviews(el, rerender) {
     add: () => {
       const client = prompt("Who are we asking for a review?");
       if (!client) return;
-      store.state.reviews.unshift({ id: uid("rev"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), client: client.trim(), status: "draft", channel: "Google", draft: `${client.trim().split(" ")[0]} — if the work moved the needle, a short review helps the next owner find us. Two sentences is plenty — link below.`, link: "g.page/r/phantom-demo/review", received: null, quote: null });
+      store.state.reviews.unshift({ id: uid("rev"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), client: client.trim(), status: "draft", channel: "Google", draft: `${client.trim().split(" ")[0]} — if the work moved the needle, a short review helps the next owner find us. Two sentences is plenty — link below.`, link: "review-link-ready", received: null, quote: null });
       pushActivity("Review Desk", `drafted a review request for ${client.trim()}.`);
       store.save(); rerender();
     },
@@ -459,6 +459,28 @@ function renderMoney(el, rerender) {
     <p class="ws-note">Quote → approval → invoice-ready → payment-tracked. Real invoices and payment requests stay off until a payment connector is configured.</p>`;
 }
 
+/* ============================= TOOL SPINE ============================= */
+function renderToolSpineCards({ compact = false } = {}) {
+  const tools = store.state.toolSpine || [];
+  return `
+    <div class="${compact ? "tool-spine-compact" : "tool-spine-grid"}">
+      ${tools.map((tool) => `
+        <article class="record tool-card tool-mode-${esc(tool.mode)}">
+          <div class="record-top">
+            <h4><span class="agent-dot"></span>${esc(tool.name)}</h4>
+            <span class="chip chip-${esc(tool.status)}">${esc(statusLabel(tool.status))}</span>
+          </div>
+          <p class="record-sub">${esc(tool.worker)} · internal: ${esc(tool.internal)}</p>
+          <p class="record-next">▸ ${esc(tool.role)}</p>
+          <p class="record-notes"><b>Doing now:</b> ${esc(tool.activity)}</p>
+          <div class="tool-meta">
+            <span>${esc(statusLabel(tool.mode))}</span>
+            <span>${esc(tool.path)}</span>
+          </div>
+        </article>`).join("")}
+    </div>`;
+}
+
 /* ============================= WORKFORCE ============================= */
 function renderWorkforce(el, rerender) {
   const agents = store.state.agents;
@@ -494,7 +516,10 @@ function renderWorkforce(el, rerender) {
           ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
           <p class="agent-bundle">internal lane: ${esc(a.bundle)}</p>
         </article>`).join("")}
-    </div>`;
+    </div>
+    <h3 class="ws-subhead">Tool spine powering the workers</h3>
+    <p class="ws-note">These are the internal programs behind the desks. Clients see outcomes, not tool names.</p>
+    ${renderToolSpineCards({ compact: true })}`;
 }
 
 /* ============================= APPROVALS ============================= */
@@ -536,7 +561,13 @@ function renderAdmin(el, rerender) {
     ["Private access gateway", "active", "admin + client hosts enforced upstream"],
   ];
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients.</p></div>
+    <div class="ws-toolbar">
+      <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients.</p>
+      <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
+    </div>
+    <h3 class="ws-subhead">Active tool spine</h3>
+    <p class="ws-note">Every tool is mapped to a worker lane. “Active” means visible and available to PhantomOps; external actions still require the right connector and approval.</p>
+    ${renderToolSpineCards()}
     <h3 class="ws-subhead">Workspace states</h3>
     <div class="stack">
       ${store.state.workspaces.map((w) => {
@@ -556,18 +587,19 @@ function renderAdmin(el, rerender) {
     <h3 class="ws-subhead">Access</h3>
     <div class="stack">
       <article class="record record-wide">
-        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full Phantom, this view")}
+        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full phantom, this view")}
         ${kv("Client host", "<code>app.phantomforce.online</code> — portal view, workspace-scoped")}
         ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
       </article>
     </div>
     <h3 class="ws-subhead">Diagnostics</h3>
     <div class="record-actions">
-      <button class="btn btn-quiet" data-act="reset">Reset demo data</button>
+      <button class="btn btn-quiet" data-act="reset">Reset local Phantom data</button>
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
-    reset: () => { if (confirm("Reset all Phantom demo data to the seeded state?")) { store.reset(); rerender(); } },
+    "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
+    reset: () => { if (confirm("Reset local Phantom data to the seeded state?")) { store.reset(); rerender(); } },
   });
 }
 
@@ -591,10 +623,10 @@ export const WORKSPACE_DEFS = {
   proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
-  media: { title: "Media Lab", kicker: "Production Phantom", render: renderMedia },
+  media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
-  money: { title: "Money", kicker: "Revenue Phantom", render: renderMoney },
+  money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
   workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
@@ -613,6 +645,7 @@ export function missionWidgets() {
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
   const bks = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
   const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
+  const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "standby", "gated", "sandbox"].includes(tool.mode)).length;
 
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
@@ -623,7 +656,7 @@ export function missionWidgets() {
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
     { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Workforce", stat: `${activeAgents} active`, sub: isAdmin() ? `${store.state.agents.length} desks` : "on your account", alert: false },
+    { id: "workforce", icon: "⬢", title: "Workforce", stat: `${activeAgents} agents`, sub: isAdmin() ? `${activeTools} tools mapped` : "on your account", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });

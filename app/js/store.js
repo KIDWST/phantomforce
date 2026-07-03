@@ -5,6 +5,7 @@
 
 const DB_KEY = "pf.phantom.v3";
 const SESSION_KEY = "pf.session.v3";
+const LIVE_TOKEN_KEY = "pf.live.sessionToken.v1";
 const DAY = 86400000;
 
 export const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 8)}${(Date.now() % 100000).toString(36)}`;
@@ -27,7 +28,7 @@ export const daysUntil = (iso) => Math.ceil((new Date(iso).getTime() - Date.now(
 export const PACKAGES = [
   { id: "starter", name: "Starter", price: 750, blurb: "Landing page or content sprint. One clear outcome, fast." },
   { id: "core", name: "Core", price: 1500, blurb: "Site + lead capture + follow-up system. The working baseline." },
-  { id: "pro", name: "Pro", price: 2500, blurb: "Full build: site, store, media plan, review engine, Phantom setup." },
+  { id: "pro", name: "Pro", price: 2500, blurb: "Full build: site, store, media plan, review engine, phantom setup." },
 ];
 export const RETAINERS = [
   { id: "keeper", name: "Keeper", price: 150, blurb: "Monthly upkeep, security scan, review requests." },
@@ -35,12 +36,147 @@ export const RETAINERS = [
   { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full workforce running weekly: media, pipeline, protection." },
 ];
 
+/* ---------------- internal tool spine ---------------- */
+export const TOOL_SPINE = [
+  {
+    id: "pangolin",
+    name: "Private Gateway",
+    internal: "Pangolin + Newt",
+    worker: "Access Sentinel",
+    mode: "active",
+    status: "watching",
+    role: "Keeps admin Phantom reachable through the private route while hiding raw local ports.",
+    activity: "watching admin.phantomforce.online route and keeping backend ports private.",
+    path: "ops/admin-live",
+    visibleToClients: false,
+  },
+  {
+    id: "hermes",
+    name: "Memory Core",
+    internal: "Hermes",
+    worker: "Memory Keeper",
+    mode: "active",
+    status: "online",
+    role: "Compiles context, receipts, redaction notes, and useful memory for Phantom AI.",
+    activity: "compiled owner context, redacted receipts, and memory hints for Phantom AI.",
+    path: "server/src/phantom-ai/hermes-*",
+    visibleToClients: false,
+  },
+  {
+    id: "obsidian",
+    name: "Process Vault",
+    internal: "Obsidian",
+    worker: "Vault Scribe",
+    mode: "active",
+    status: "indexed",
+    role: "Stores sanitized decisions, process notes, verification logs, and operating memory.",
+    activity: "indexed the PhantomForce Command Center vault for process memory.",
+    path: "C:\\Users\\jorda\\Documents\\Obsidian\\PhantomForce-Command-Center",
+    visibleToClients: false,
+  },
+  {
+    id: "n8n",
+    name: "Automation Desk",
+    internal: "n8n",
+    worker: "Workflow Runner",
+    mode: "standby",
+    status: "scaffolded",
+    role: "Holds local workflow drafts for boring repeatable work after approval.",
+    activity: "detected the local n8n scaffold and ChicagoShots dry-run workflow draft.",
+    path: "ops/n8n",
+    visibleToClients: false,
+  },
+  {
+    id: "openspec",
+    name: "Build Planner",
+    internal: "OpenSpec",
+    worker: "Spec Architect",
+    mode: "active",
+    status: "ready",
+    role: "Turns big requests into scoped proposals, tasks, and implementation guardrails.",
+    activity: "standing by to turn the next feature request into a scoped build plan.",
+    path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\openspec",
+    visibleToClients: false,
+  },
+  {
+    id: "phantomops",
+    name: "Operator Standards",
+    internal: "AgentOS",
+    worker: "PhantomOps",
+    mode: "active",
+    status: "enforcing",
+    role: "Keeps agent work structured around standards, handoffs, and owner-safe execution.",
+    activity: "enforcing PhantomOps standards across command routing and worker handoffs.",
+    path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\agent-os",
+    visibleToClients: false,
+  },
+  {
+    id: "serena",
+    name: "Code Intelligence",
+    internal: "Serena",
+    worker: "Code Navigator",
+    mode: "standby",
+    status: "indexed",
+    role: "Supports read-only semantic repo navigation and code understanding.",
+    activity: "mapped as the read-only code intelligence lane for future repo navigation.",
+    path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\serena",
+    visibleToClients: false,
+  },
+  {
+    id: "ruflo",
+    name: "Squad Planner",
+    internal: "Ruflo",
+    worker: "Swarm Planner",
+    mode: "sandbox",
+    status: "contained",
+    role: "Provides multi-agent planning vocabulary and squad patterns without production autonomy.",
+    activity: "contained in planning mode; squad patterns are available without live autonomy.",
+    path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\ruflo",
+    visibleToClients: false,
+  },
+  {
+    id: "phantomcut",
+    name: "Media Engine",
+    internal: "PhantomCut + Higgsfield",
+    worker: "Media Factory",
+    mode: "gated",
+    status: "ready",
+    role: "Prepares commercial video generation and Resolve/REAPER bridges with paid runs gated.",
+    activity: "ready for controlled Media Lab generation and editor handoff when approved.",
+    path: "C:\\Users\\jorda\\Documents\\PhantomForce-MediaLab\\phantomcut-ai",
+    visibleToClients: false,
+  },
+  {
+    id: "model-lanes",
+    name: "Model Switchboard",
+    internal: "Codex / Claude / GLM",
+    worker: "Brain Router",
+    mode: "active",
+    status: "routed",
+    role: "Routes admin-only thinking, review, coding, and worker model lanes behind Phantom AI.",
+    activity: "routing requests through the correct brain lane while keeping tool names hidden.",
+    path: "server/src/phantom-ai/providers",
+    visibleToClients: false,
+  },
+];
+
+function toolActivitySeed() {
+  return TOOL_SPINE.map((tool, i) => ({
+    id: uid("act"),
+    ws: "phantomforce",
+    who: tool.worker,
+    text: tool.activity,
+    at: days(-(0.02 + i * 0.035)),
+    toolId: tool.id,
+  }));
+}
+
 /* ---------------- seed ---------------- */
 function seed() {
   const workspaces = [
     { id: "phantomforce", name: "PhantomForce", kind: "HQ", tagline: "The agency itself — command level." },
     { id: "chicagoshots", name: "ChicagoShots", kind: "Brand", tagline: "Media brand workspace inside PhantomForce." },
-    { id: "test-client", name: "Test Client", kind: "Client", tagline: "What every client sees. Use it to preview the portal." },
+    { id: "test-client", name: "Test Client", kind: "Client", tagline: "Client workspace surface with scoped work, approvals, and delivery status." },
   ];
 
   const leads = [
@@ -60,8 +196,8 @@ function seed() {
   ];
 
   const reviews = [
-    { id: "rev-dobrev", ws: "chicagoshots", client: "Nina Dobrev — Halsted Coffee", status: "draft", channel: "Google", draft: "Nina — it was a blast shooting the shop. If the photos brought the space to life for you, a quick Google review helps other owners find us. Link below, two sentences is plenty.", link: "g.page/r/phantom-demo/review", received: null, quote: null },
-    { id: "rev-marcus", ws: "phantomforce", client: "Marcus Reed — Reed Landscaping", status: "received", channel: "Google", draft: "Marcus — glad the new booking flow is saving your evenings. Would you drop a quick review?", link: "g.page/r/phantom-demo/review", received: days(-3), quote: "PhantomForce built our site and now runs our follow-ups. I stopped losing jobs to missed calls. Worth every dollar." },
+    { id: "rev-dobrev", ws: "chicagoshots", client: "Nina Dobrev — Halsted Coffee", status: "draft", channel: "Google", draft: "Nina — it was a blast shooting the shop. If the photos brought the space to life for you, a quick Google review helps other owners find us. Link below, two sentences is plenty.", link: "review-link-ready", received: null, quote: null },
+    { id: "rev-marcus", ws: "phantomforce", client: "Marcus Reed — Reed Landscaping", status: "received", channel: "Google", draft: "Marcus — glad the new booking flow is saving your evenings. Would you drop a quick review?", link: "review-link-ready", received: days(-3), quote: "PhantomForce built our site and now runs our follow-ups. I stopped losing jobs to missed calls. Worth every dollar." },
     { id: "rev-tania", ws: "phantomforce", client: "Tania Flores — Flores Catering", status: "publish-ready", channel: "Website", draft: null, link: null, received: days(-9), quote: "They turned my DMs into an actual pipeline. Booked out six weekends straight after the site went live." },
   ];
 
@@ -120,6 +256,7 @@ function seed() {
   ];
 
   const activity = [
+    ...toolActivitySeed(),
     { id: uid("act"), ws: "phantomforce", who: "Lead Hunter", text: "found 2 follow-up opportunities in the missed-lead pile.", at: days(-0.05) },
     { id: uid("act"), ws: "chicagoshots", who: "Proposal Forge", text: "prepared the Chen & Park quote — send-ready, waiting on approval.", at: days(-0.1) },
     { id: uid("act"), ws: "phantomforce", who: "Security Watch", text: "completed monthly scan proof PF-SCAN-2026-06 — posture clean.", at: days(-0.3) },
@@ -130,19 +267,44 @@ function seed() {
     { id: uid("act"), ws: "chicagoshots", who: "Booking Coordinator", text: "confirmed the Halsted shoot for Monday 9am.", at: days(-0.6) },
   ];
 
-  return { version: 3, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, agents, activity };
+  return { version: 3, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, agents, toolSpine: TOOL_SPINE, activity };
 }
 
 /* ---------------- store ---------------- */
+function normalizeData(data) {
+  const seeded = seed();
+  const d = data && typeof data === "object" ? data : seeded;
+  d.workspaces ||= seeded.workspaces;
+  d.leads ||= seeded.leads;
+  d.proposals ||= seeded.proposals;
+  d.reviews ||= seeded.reviews;
+  d.bookings ||= seeded.bookings;
+  d.media ||= seeded.media;
+  d.sites ||= seeded.sites;
+  d.products ||= seeded.products;
+  d.security ||= seeded.security;
+  d.approvals ||= seeded.approvals;
+  d.agents ||= seeded.agents;
+  d.toolSpine = TOOL_SPINE.map((tool) => ({ ...tool, ...(d.toolSpine || []).find((x) => x.id === tool.id) }));
+  d.activity ||= [];
+  const seenToolIds = new Set(d.activity.map((item) => item.toolId).filter(Boolean));
+  for (const item of toolActivitySeed().reverse()) {
+    if (!seenToolIds.has(item.toolId)) d.activity.unshift(item);
+  }
+  d.activity = d.activity.slice(0, 80);
+  d.version = 3;
+  return d;
+}
+
 function load() {
   try {
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      if (d && d.version === 3) return d;
+      if (d && d.version === 3) return normalizeData(d);
     }
   } catch {}
-  return seed();
+  return normalizeData(seed());
 }
 
 const listeners = new Set();
@@ -156,17 +318,39 @@ export const store = {
   reset() { try { localStorage.removeItem(DB_KEY); } catch {} this.state = seed(); this.save(); },
 };
 
-/* ---------------- session (preview access; production access is enforced
-   at the private gateway in front of the app — this never weakens it) ---- */
+/* ---------------- session ---------------- */
 export const session = {
   get() {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
   },
-  set(s) { try { localStorage.setItem(SESSION_KEY, JSON.stringify(s)); } catch {} },
-  clear() { try { localStorage.removeItem(SESSION_KEY); } catch {} },
+  set(s) {
+    try {
+      const { token, ...safeSession } = s || {};
+      localStorage.setItem(SESSION_KEY, JSON.stringify(safeSession));
+      if (token) sessionStorage.setItem(LIVE_TOKEN_KEY, token);
+    } catch {}
+  },
+  token() {
+    try { return sessionStorage.getItem(LIVE_TOKEN_KEY) || ""; } catch { return ""; }
+  },
+  clear() {
+    try {
+      localStorage.removeItem(SESSION_KEY);
+      sessionStorage.removeItem(LIVE_TOKEN_KEY);
+    } catch {}
+  },
 };
 
+export const isLiveAdminHost = () => location.hostname === "admin.phantomforce.online";
+
 export function resolveSession() {
+  if (isLiveAdminHost()) {
+    const saved = session.get();
+    const token = session.token();
+    if (saved?.role === "admin" && token) return { ...saved, token };
+    return null;
+  }
+
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
   if (key === "owner-admin" || key === "admin" || key === "jordan") {
@@ -178,6 +362,47 @@ export function resolveSession() {
     session.set(s); return s;
   }
   return session.get();
+}
+
+export async function ownerLogin(ownerKey) {
+  const response = await fetch("/auth/owner-login", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ sessionId: "owner-admin", ownerKey }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.token || !payload?.session) {
+    throw new Error(payload?.error || "Owner login failed.");
+  }
+  const s = {
+    role: "admin",
+    name: payload.session.label || "Jordan",
+    ws: "phantomforce",
+    token: payload.token,
+  };
+  session.set(s);
+  return s;
+}
+
+export async function verifyLiveSession() {
+  if (!isLiveAdminHost()) return resolveSession();
+  const token = session.token();
+  if (!token) return null;
+  const response = await fetch("/session", {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!response.ok) {
+    session.clear();
+    return null;
+  }
+  const payload = await response.json().catch(() => ({}));
+  if (!payload?.session?.canManageAccess) {
+    session.clear();
+    return null;
+  }
+  const s = { role: "admin", name: payload.session.label || "Jordan", ws: "phantomforce", token };
+  session.set(s);
+  return s;
 }
 
 /* ---------------- selectors ---------------- */
@@ -197,7 +422,24 @@ export const wsName = (id) => store.state.workspaces.find((w) => w.id === id)?.n
 
 export function pushActivity(who, text, ws = currentWs()) {
   store.state.activity.unshift({ id: uid("act"), ws, who, text, at: new Date().toISOString() });
-  store.state.activity = store.state.activity.slice(0, 60);
+  store.state.activity = store.state.activity.slice(0, 80);
+}
+
+export function pushToolPulse(toolId) {
+  const tools = toolId
+    ? store.state.toolSpine.filter((tool) => tool.id === toolId)
+    : store.state.toolSpine;
+  for (const tool of tools.slice().reverse()) {
+    store.state.activity.unshift({
+      id: uid("act"),
+      ws: "phantomforce",
+      who: tool.worker,
+      text: tool.activity,
+      at: new Date().toISOString(),
+      toolId: tool.id,
+    });
+  }
+  store.state.activity = store.state.activity.slice(0, 80);
 }
 
 /* ---------------- derived: money ---------------- */
@@ -253,5 +495,7 @@ export const STATUS_LABEL = {
   "brief-ready": "Brief ready", "generation-approved": "Generation approved", "delivered": "Delivered",
   "publish-ready": "Publish-ready", "approved-to-publish": "Approved to publish", "published-ready": "Published-ready",
   "received": "Received", "pending": "Pending", "declined": "Declined", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
+  "watching": "Watching", "online": "Online", "indexed": "Indexed", "scaffolded": "Scaffolded", "ready": "Ready", "enforcing": "Enforcing", "contained": "Contained", "routed": "Routed",
+  "active": "Active", "standby": "Standby", "sandbox": "Sandbox", "gated": "Gated",
 };
 export const statusLabel = (s) => STATUS_LABEL[s] || s;
