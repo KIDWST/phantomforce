@@ -15,38 +15,51 @@
     <meta property="og:description" content="The private cyber AI that runs your business." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://phantomforce.online/" />
-    <meta name="theme-color" content="#02060a" />
+    <meta name="theme-color" content="#030910" />
     <link rel="icon" type="image/svg+xml" href="favicon.svg" />
     <link rel="canonical" href="https://phantomforce.online/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="void.css?v=25" />
+    <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="void.css?v=26" />
   </head>
   <body>
     <canvas class="void-canvas" data-void aria-hidden="true"></canvas>
     <div class="void-fallback" aria-hidden="true"></div>
     <div class="vignette" aria-hidden="true"></div>
     <div class="riskfield" data-riskfield aria-hidden="true"></div>
+    <div class="grain" aria-hidden="true"></div>
 
     <main class="presence" id="main">
-      <!-- the phantom itself is the 3D entity on the canvas behind (void.js) -->
-      <p class="wordmark" data-wordmark>PHANTOMFORCE</p>
+      <header class="crown">
+        <p class="wordmark" data-wordmark>PHANTOMFORCE</p>
+        <p class="status" aria-hidden="true"><span class="status-dot"></span>online</p>
+      </header>
 
-      <!-- the entity speaks; you answer in the box right under it -->
-      <div class="say" data-say aria-live="polite">
-        <p class="say-line">I'm a private cyber-AI that runs your business. Point me at what's eating your time.</p>
+      <!-- the phantom (3D entity on the canvas behind, void.js) lives in this reserved zone -->
+      <div class="phantom-zone" data-phantom-zone aria-hidden="true"></div>
+
+      <div class="converse">
+        <!-- the entity speaks; you answer in the box right under it -->
+        <div class="say" data-say aria-live="polite">
+          <p class="say-line">I'm a private cyber-AI that runs your business. Point me at what's eating your time.</p>
+        </div>
+        <div class="orbits" data-orbits></div>
+        <form class="speak" data-speak>
+          <span class="speak-caret" aria-hidden="true">›</span>
+          <input type="text" data-speak-input autocomplete="off" spellcheck="false" placeholder="ask phantomforce…" aria-label="Speak to PhantomForce" />
+        </form>
+        <button class="download-cta" type="button" hidden data-download-cta>
+          Download PhantomForce <span aria-hidden="true">→</span>
+        </button>
       </div>
-      <div class="orbits" data-orbits></div>
-      <form class="speak" data-speak>
-        <span class="speak-caret" aria-hidden="true">›</span>
-        <input type="text" data-speak-input autocomplete="off" spellcheck="false" placeholder="ask phantomforce…" aria-label="Speak to PhantomForce" />
-      </form>
-      <button class="download-cta" type="button" hidden data-download-cta>
-        Download PhantomForce <span aria-hidden="true">→</span>
-      </button>
+
+      <p class="creed" aria-hidden="true">
+        <span>Private by design</span><i>·</i><span>Never sleeps</span><i>·</i><span>Nothing sends without you</span>
+      </p>
     </main>
+
     <div class="download-modal" hidden data-download-modal role="dialog" aria-modal="true" aria-labelledby="download-title">
       <button class="download-backdrop" type="button" data-download-close aria-label="Close download form"></button>
       <form class="download-card" data-download-form>
@@ -69,6 +82,6 @@
       </form>
     </div>
     <p class="hint" data-hint hidden></p>
-    <script type="module" src="void.js?v=24"></script>
+    <script type="module" src="void.js?v=25"></script>
   </body>
 </html>

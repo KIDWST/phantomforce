@@ -306,7 +306,7 @@ async function initEntity() {
   try {
     const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
     renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, smallScreen ? 1.2 : 1.6));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, smallScreen ? 1.5 : 1.75));
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
     camera.position.set(0, 0, 7);
@@ -347,9 +347,9 @@ async function initEntity() {
     const EYE_Y = 0.74, EYE_Z = 0.62;
     const makeEye = (sx, tilt) => {
       const g = new THREE.Group(); g.position.set(sx, EYE_Y, EYE_Z); g.rotation.z = tilt; g.renderOrder = 10;
-      const socket = new THREE.Mesh(new THREE.CircleGeometry(0.19, 32), socketMat); socket.scale.set(0.84, 1.5, 1);
+      const socket = new THREE.Mesh(new THREE.CircleGeometry(0.19, 32), socketMat); socket.scale.set(0.8, 1.38, 1);
       const glowEyeMat = onTop(new THREE.MeshBasicMaterial({ color: 0xaeffda, opacity: 0.95, blending: THREE.AdditiveBlending }));
-      const gcore = new THREE.Mesh(new THREE.CircleGeometry(0.12, 26), glowEyeMat); gcore.scale.set(0.8, 1.42, 1); gcore.position.z = 0.01;
+      const gcore = new THREE.Mesh(new THREE.CircleGeometry(0.135, 26), glowEyeMat); gcore.scale.set(0.85, 1.46, 1); gcore.position.z = 0.01;
       g.add(socket, gcore); g.userData.glow = gcore; g.userData.mat = glowEyeMat; return g;
     };
     const eyeL = makeEye(-0.3, -0.16), eyeR = makeEye(0.3, 0.16); ghost.add(eyeL, eyeR);   // inner corners down = fierce
@@ -372,6 +372,24 @@ async function initEntity() {
 
     const resize = () => { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
     resize(); window.addEventListener("resize", resize, { passive: true });
+
+    // the phantom lives in the layout's reserved zone (.phantom-zone), above the
+    // dialogue — measured in pixels, mapped to world units at the ghost's depth
+    const zone = document.querySelector("[data-phantom-zone]");
+    const GHOST_H = 3.4;                                 // world-unit height, crown to tendril tips
+    let targetY = 0.9, targetS = smallScreen ? 0.75 : 1;
+    const measureZone = () => {
+      if (!zone || !innerHeight) return;
+      const r = zone.getBoundingClientRect();
+      if (r.height < 60) return;
+      const wpp = (2 * Math.tan((camera.fov * Math.PI) / 360) * camera.position.z) / innerHeight;
+      targetY = (innerHeight / 2 - (r.top + r.height * 0.52)) * wpp;
+      targetS = Math.min(1.15, Math.max(0.45, (r.height * 0.95 * wpp) / GHOST_H));
+    };
+    measureZone();
+    let gy = targetY - 0.8, gs = targetS * 0.9;          // wakes low + small, drifts into place
+    window.addEventListener("resize", measureZone, { passive: true });
+    if (window.ResizeObserver && zone) new ResizeObserver(measureZone).observe(zone);
 
     // --- gestures: look at cursor + smile on move + play dead on click ---
     let px = 0, py = 0, cpx = 0, cpy = 0;
@@ -415,8 +433,10 @@ async function initEntity() {
       glowMat.color.setHex(isDead ? 0xb00d0d : 0x0d7d50);
       glowMat.opacity = 0.16 + pulse.v * 0.16;
 
-      // float; slump when dead
-      ghost.position.y = Math.sin(t * 1.1) * 0.1 - (isDead ? (1 - dead / DEAD_T) * 0.45 : 0);
+      // settle into the reserved zone, float; slump when dead
+      gy = lerp(gy, targetY, 0.05); gs = lerp(gs, targetS, 0.08);
+      ghost.scale.setScalar(gs);
+      ghost.position.y = gy + Math.sin(t * 1.1) * 0.1 * gs - (isDead ? (1 - dead / DEAD_T) * 0.45 * gs : 0);
 
       // look toward cursor + gentle drift; shake like pac-man when dead
       cpx = lerp(cpx, px, 0.06); cpy = lerp(cpy, py, 0.06);
@@ -426,9 +446,9 @@ async function initEntity() {
 
       // eyes: the glow drifts toward the cursor and intensifies when you move
       const foc = happy > 0 ? 1 : 0;
-      const gx = cpx * 0.05, gy = -cpy * 0.05;
+      const egx = cpx * 0.05, egy = -cpy * 0.05;
       [eyeL, eyeR].forEach((e) => {
-        e.userData.glow.position.x = gx; e.userData.glow.position.y = gy;
+        e.userData.glow.position.x = egx; e.userData.glow.position.y = egy;
         e.userData.mat.opacity = 0.78 + foc * 0.22 + pulse.v * 0.3;
       });
 
