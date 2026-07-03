@@ -33,7 +33,8 @@ const enableOwnerProductionAuth = authProvider === "owner-production";
 const enableGatewayForwardedAuth = authProvider === "gateway-forwarded";
 const ownerEmail = (process.env.PHANTOMFORCE_OWNER_EMAIL ?? "").trim().toLowerCase();
 const ownerLoginKey = process.env.PHANTOMFORCE_OWNER_LOGIN_KEY ?? "";
-const MIN_OWNER_LOGIN_KEY_LENGTH = 16;
+const allowShortOwnerLoginKey = process.env.PHANTOMFORCE_ALLOW_SHORT_OWNER_LOGIN_KEY === "true";
+const MIN_OWNER_LOGIN_KEY_LENGTH = allowShortOwnerLoginKey ? 5 : 16;
 const MIN_SESSION_SECRET_LENGTH = 32;
 const enableLocalSessionLogin = enableDemoAuth || enablePrismaDevAuth || enableOwnerProductionAuth;
 
@@ -250,7 +251,7 @@ export function assertAccessAuthConfiguration() {
 
     if (ownerLoginKey.length < MIN_OWNER_LOGIN_KEY_LENGTH) {
       throw new Error(
-        "PHANTOMFORCE_OWNER_LOGIN_KEY must be set to a strong value (at least 16 characters) for owner-production auth.",
+        `PHANTOMFORCE_OWNER_LOGIN_KEY must be set to a valid value (at least ${MIN_OWNER_LOGIN_KEY_LENGTH} characters) for owner-production auth.`,
       );
     }
 
