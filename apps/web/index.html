@@ -8,22 +8,24 @@
       (() => {
         const adminHost = "admin.phantomforce.online";
         const clientHost = "app.phantomforce.online";
-        if (location.pathname !== "/") return;
+        const phantomEntryPaths = new Set(["/", "/app", "/app/"]);
+        if (!phantomEntryPaths.has(location.pathname)) return;
+        const target = "/app/index.html" + location.search + location.hash;
         if (location.hostname === adminHost) {
-          location.replace("/app/index.html");
+          location.replace(target);
         }
         if (location.hostname === clientHost) {
-          location.replace("/app/index.html");
+          location.replace(target);
         }
       })();
     </script>
     <meta
       name="description"
-      content="The PhantomForce cockpit is a private AI business operating system for command, work, media, reviews, and approvals."
+      content="PhantomForce Phantom is a private AI business operating system for command, work, media, reviews, and approvals."
     />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="icon" href="/assets/operator-core.png" />
-    <title>PhantomForce — Cockpit</title>
+    <title>PhantomForce — Phantom</title>
   </head>
   <body>
     <div id="root"></div>
