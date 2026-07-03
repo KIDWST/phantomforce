@@ -327,6 +327,7 @@ function initGhost() {
   window.addEventListener("resize", resize, { passive: true });
   let px = 0, cpx = 0;
   window.addEventListener("pointermove", (e) => { px = e.clientX / innerWidth - 0.5; }, { passive: true });
+  let lastMood = "idle", spinAt = -1, nextSpin = 0, idleQuirk = 5;   // Midna-style flourish timers
   const t0 = performance.now();
   const accents = {
     calm: [65, 255, 161],
@@ -348,14 +349,48 @@ function initGhost() {
     const cx = w / 2, cy = h * 0.56;
     const scale = Math.min(w, h) * 0.30;
     const spinRate = ghostMood === "thinking" ? 0.72 : ghostMood === "talking" ? 0.44 : 0.24;
-    const rot = t * spinRate + cpx * 0.9 + Math.sin(t * 0.55) * 0.12;
+    /* spin flourishes: a full pirouette when she starts talking, more mid-speech,
+       and the occasional playful roll while idle so she never sits still */
+    if (ghostMood !== lastMood) {
+      if (ghostMood === "talking") { spinAt = t; nextSpin = t + 2.2 + Math.random() * 2.4; }
+      lastMood = ghostMood;
+    }
+    if (ghostMood === "talking" && t > nextSpin) { spinAt = t; nextSpin = t + 2.2 + Math.random() * 2.8; }
+    if (ghostMood === "idle" && t > idleQuirk) { spinAt = t; idleQuirk = t + 8 + Math.random() * 9; }
+    let spinOff = 0, spinHop = 0;
+    if (spinAt >= 0) {
+      const sp = (t - spinAt) / 0.85;
+      if (sp >= 1) spinAt = -1;
+      else {
+        const e = sp < 0.5 ? 4 * sp * sp * sp : 1 - Math.pow(-2 * sp + 2, 3) / 2;   // ease-in-out
+        spinOff = e * Math.PI * 2;
+        spinHop = Math.sin(sp * Math.PI);   // lifts as she twirls
+      }
+    }
+    const rot = t * spinRate + cpx * 0.9 + Math.sin(t * 0.55) * 0.12 + spinOff;
     const cosR = Math.cos(rot), sinR = Math.sin(rot);
     const talkBeat = ghostMood === "talking" ? Math.abs(Math.sin(t * 9.5)) : 0;
     const thinkBeat = ghostMood === "thinking" ? Math.abs(Math.sin(t * 5.2)) : 0;
     const breath = 1 + Math.sin(t * 0.9) * 0.025 + ghostPulse * 0.1 + talkBeat * 0.02;
-    const floatY = Math.sin(t * 1.1) * 4 + Math.sin(t * 3.2) * (ghostMood === "talking" ? 2.2 : 0.7);
+    const floatY = Math.sin(t * 1.1) * 4 + Math.sin(t * 3.2) * (ghostMood === "talking" ? 2.2 : 0.7)
+      - spinHop * scale * 0.14
+      - (ghostMood === "talking" ? Math.abs(Math.sin(t * 4.6)) * scale * 0.06 : 0);
     const accent = accents[ghostEmotion] || accents.calm;
     const accentCss = (alpha) => `rgba(${accent[0]},${accent[1]},${accent[2]},${alpha})`;
+
+    /* whole-body language: head-waggle tilt while talking, pensive cock while
+       thinking, lean-in while listening; squash & stretch on the talk beat */
+    const tilt =
+      ghostMood === "talking" ? Math.sin(t * 3.3) * 0.11 + Math.sin(t * 1.4) * 0.04 :
+      ghostMood === "thinking" ? 0.12 + Math.sin(t * 1.2) * 0.05 :
+      ghostMood === "listening" ? -0.07 :
+      Math.sin(t * 0.7) * 0.035;
+    const squash = talkBeat * 0.05 + spinHop * 0.05 + ghostPulse * 0.03;
+    ctx2.save();
+    ctx2.translate(cx, cy);
+    ctx2.rotate(tilt);
+    ctx2.scale(1 - squash * 0.8, 1 + squash);
+    ctx2.translate(-cx, -cy);
 
     ctx2.globalCompositeOperation = "lighter";
     ctx2.save();
@@ -399,6 +434,7 @@ function initGhost() {
       ghostMood === "thinking" ? 0.62 :
       ghostEmotion === "alert" ? 0.7 :
       ghostMood === "happy" || ghostEmotion === "happy" ? 1.05 :
+      ghostMood === "talking" ? 1 + talkBeat * 0.18 :
       1;
     const eyeY = cy - 0.74 * scale * breath + floatY;
     for (const sx of [-0.3, 0.3]) {
@@ -470,6 +506,7 @@ function initGhost() {
       ctx2.arc(x, y, scale * (0.045 + ghostPulse * 0.02), 0, Math.PI * 2);
       ctx2.stroke();
     }
+    ctx2.restore();
     ctx2.globalCompositeOperation = "source-over";
     requestAnimationFrame(frame);
   };

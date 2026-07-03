@@ -5,6 +5,10 @@ const smallScreen = window.matchMedia("(max-width: 720px)").matches;
 const lerp = (a, b, t) => a + (b - a) * t;
 const pulse = { v: 0 };
 const flare = () => { pulse.v = 1; };
+/* Mood drives the entity's body language: talking = spins/hops/waggles,
+   thinking = pensive tilt, listening = leans in. Expires back to idle. */
+const mood = { state: "idle", until: 0 };
+const setMood = (state, ms = 0) => { mood.state = state; mood.until = ms ? performance.now() + ms : 0; };
 
 /* Live brain: set this to your deployed proxy URL to switch the input from
    the local responder to live Claude (server-side key, 5-prompt daily cap +
@@ -106,6 +110,9 @@ function initConversation() {
     const p = document.createElement("p");
     p.className = `say-line ${cls}`.trim();
     say.replaceChildren(p);
+    if (cls === "user") setMood("listening", 1500);
+    else if (cls === "thinking") setMood("thinking", 6000);
+    else setMood("talking", Math.max(2000, text.length * 34 + 600));
     if (cls === "user" || cls === "thinking" || reduceMotion) {
       p.textContent = text;
     } else {
@@ -376,6 +383,7 @@ async function initEntity() {
     // --- gestures: look at cursor + smile on move + play dead on click ---
     let px = 0, py = 0, cpx = 0, cpy = 0;
     let happy = 0, dead = 0, blink = 3;
+    let lastMood = "idle", spinAt = -1, nextSpin = 0, idleQuirk = 5;   // Midna-style flourish timers
     const DEAD_T = 0.9;   // how long it plays dead (seconds)
     window.addEventListener("pointermove", (e) => {
       px = e.clientX / innerWidth - 0.5; py = e.clientY / innerHeight - 0.5;
@@ -393,6 +401,29 @@ async function initEntity() {
       happy = Math.max(0, happy - dt * 1.1);
       dead = Math.max(0, dead - dt);
       const isDead = dead > 0;
+      if (mood.until && (now || performance.now()) > mood.until) { mood.state = "idle"; mood.until = 0; }
+      const talking = mood.state === "talking" && !isDead;
+      const thinking = mood.state === "thinking" && !isDead;
+      const listening = mood.state === "listening" && !isDead;
+      const talkBeat = talking ? Math.abs(Math.sin(t * 9.2)) : 0;   // syllable bounce
+      // spin flourishes: a full pirouette when she starts talking, more mid-speech,
+      // and the occasional playful roll while idle so she never sits still
+      if (mood.state !== lastMood) {
+        if (talking) { spinAt = t; nextSpin = t + 2.4 + Math.random() * 2.4; }
+        lastMood = mood.state;
+      }
+      if (talking && t > nextSpin) { spinAt = t; nextSpin = t + 2.4 + Math.random() * 3; }
+      if (mood.state === "idle" && !isDead && t > idleQuirk) { spinAt = t; idleQuirk = t + 9 + Math.random() * 9; }
+      let spinY = 0, spinHop = 0;
+      if (spinAt >= 0) {
+        const sp = (t - spinAt) / 0.9;
+        if (sp >= 1) spinAt = -1;
+        else {
+          const e = sp < 0.5 ? 4 * sp * sp * sp : 1 - Math.pow(-2 * sp + 2, 3) / 2;   // ease-in-out
+          spinY = e * Math.PI * 2;
+          spinHop = Math.sin(sp * Math.PI) * 0.3;   // lifts as she twirls
+        }
+      }
       const breath = 1 + Math.sin(t * 0.9) * 0.025 + pulse.v * 0.12;
 
       // ragged flowing hem + gentle breathing across the whole body
@@ -415,26 +446,46 @@ async function initEntity() {
       glowMat.color.setHex(isDead ? 0xb00d0d : 0x0d7d50);
       glowMat.opacity = 0.16 + pulse.v * 0.16;
 
-      // float; slump when dead
-      ghost.position.y = Math.sin(t * 1.1) * 0.1 - (isDead ? (1 - dead / DEAD_T) * 0.45 : 0);
+      // float; hop on the beat while talking; lift through a spin; slump when dead
+      ghost.position.y = Math.sin(t * 1.1) * 0.1 + spinHop
+        + (talking ? Math.abs(Math.sin(t * 4.6)) * 0.14 : 0)
+        - (isDead ? (1 - dead / DEAD_T) * 0.45 : 0);
 
       // look toward cursor + gentle drift; shake like pac-man when dead
       cpx = lerp(cpx, px, 0.06); cpy = lerp(cpy, py, 0.06);
-      let rx = cpy * 0.36, ry = cpx * 0.66 + Math.sin(t * 0.15) * 0.05, rz = 0;
+      let rx = cpy * 0.36, ry = cpx * 0.66 + Math.sin(t * 0.15) * 0.05 + spinY, rz = 0;
+      if (talking) {          // animated storyteller: head waggle, tilt, nod
+        ry += Math.sin(t * 2.2) * 0.22;
+        rz = Math.sin(t * 3.4) * 0.12;
+        rx += Math.sin(t * 2.8) * 0.08 - 0.04;
+      } else if (thinking) {  // pensive: head cocked, gazing up, slow sway
+        rz = 0.14 + Math.sin(t * 1.3) * 0.05;
+        rx -= 0.16;
+        ry += Math.sin(t * 0.9) * 0.3;
+      } else if (listening) { // leans in toward you
+        rx += 0.12;
+        rz = Math.sin(t * 1.6) * 0.04;
+      }
       if (isDead) { const sh = dead / DEAD_T; rz = Math.sin(t * 42) * 0.2 * sh; rx += Math.sin(t * 35) * 0.12 * sh; }
       ghost.rotation.set(rx, ry, rz);
 
-      // eyes: the glow drifts toward the cursor and intensifies when you move
+      // squash & stretch: bounces taller on each syllable and through spins
+      const stretch = talkBeat * 0.06 + (spinAt >= 0 ? 0.05 : 0);
+      ghost.scale.set(1 - stretch * 0.8, 1 + stretch, 1 - stretch * 0.8);
+
+      // eyes: the glow drifts toward the cursor and intensifies when you move;
+      // brightens with speech, drifts upward while thinking
       const foc = happy > 0 ? 1 : 0;
-      const gx = cpx * 0.05, gy = -cpy * 0.05;
+      const gx = cpx * 0.05, gy = -cpy * 0.05 + (thinking ? 0.05 : 0);
       [eyeL, eyeR].forEach((e) => {
         e.userData.glow.position.x = gx; e.userData.glow.position.y = gy;
-        e.userData.mat.opacity = 0.78 + foc * 0.22 + pulse.v * 0.3;
+        e.userData.mat.opacity = 0.78 + foc * 0.22 + pulse.v * 0.3 + talkBeat * 0.15;
       });
 
-      // blink
+      // blink; eyes widen on the talk beat, narrow when pensive
       blink -= dt; if (blink < -0.13) blink = 2.4 + Math.random() * 3.4;
-      const eyeSy = (blink < 0 && !isDead) ? 0.12 : 1;
+      const eyeMood = talking ? 1 + talkBeat * 0.2 : thinking ? 0.6 : 1;
+      const eyeSy = (blink < 0 && !isDead) ? 0.12 : eyeMood;
       eyeL.visible = eyeR.visible = !isDead;
       xL.visible = xR.visible = isDead;
       tongue.visible = isDead;
