@@ -524,7 +524,7 @@ function renderApprovals(el, rerender) {
   });
 }
 
-/* ============================== ADMIN OS ============================== */
+/* ============================== PHANTOMOPS ============================== */
 function renderAdmin(el, rerender) {
   if (!isAdmin()) { el.innerHTML = empty("This area belongs to your PhantomForce operator."); return; }
   const lanes = [
@@ -597,7 +597,7 @@ export const WORKSPACE_DEFS = {
   money: { title: "Money", kicker: "Revenue Phantom", render: renderMoney },
   workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
-  adminos: { title: "Admin OS", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
+  adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
 /* Mission-grid widgets: id → live stat line. Scales by adding entries. */
@@ -626,6 +626,6 @@ export function missionWidgets() {
     { id: "workforce", icon: "⬢", title: "Workforce", stat: `${activeAgents} active`, sub: isAdmin() ? `${store.state.agents.length} desks` : "on your account", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
-  if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "Admin OS", stat: "operator", sub: "workspaces · lanes · access", alert: false });
+  if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
   return w;
 }
