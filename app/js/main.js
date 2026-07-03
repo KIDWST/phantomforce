@@ -314,7 +314,9 @@ function initGhost() {
     else if (v < 0.6) { const u = (v - 0.3) / 0.3; R = 1 - 0.05 * Math.sin(u * Math.PI); y = 0.6 - u; }
     else { const u = (v - 0.6) / 0.4; R = 1 - 0.16 * u; y = -0.4 + u * (hemY + 0.4); }
     const rr = R * (0.9 + 0.1 * (((k * 9301) % 233) / 233));
-    pts.push({ x: Math.cos(angp) * rr, y, z: Math.sin(angp) * rr * 0.58 });
+    /* round body (no front-back flattening) so her silhouette stays the same
+       width from every angle — she never looks like a different shape mid-spin */
+    pts.push({ x: Math.cos(angp) * rr, y, z: Math.sin(angp) * rr });
   }
   let w = 0, h = 0, dpr = 1;
   const resize = () => {
@@ -367,7 +369,6 @@ function initGhost() {
     const scale = Math.min(w, h) * 0.30;
     /* she drifts on a gentle figure-8 arc rather than bobbing in place */
     const cx = w / 2 + Math.sin(t * 0.6) * scale * 0.05, cy = h * 0.56;
-    const spinRate = ghostMood === "thinking" ? 0.72 : ghostMood === "talking" ? 0.44 : 0.24;
     /* spin flourishes: a full pirouette when she starts talking, more mid-speech,
        and the occasional playful roll while idle so she never sits still */
     if (ghostMood !== lastMood) {
@@ -386,26 +387,26 @@ function initGhost() {
         const p = el / WIND;
         spinOff = -0.35 * p * p;                    // winds back the other way
         spinHop = -0.45 * Math.sin(p * Math.PI / 2); // dips down
-        airStretch = -0.45 * p;                      // crouch squash (wide + short)
+        airStretch = -0.3 * p;                       // crouch squash (wide + short)
       } else if (el < WIND + SPIN) {
         const p = (el - WIND) / SPIN;
         const e = p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2;   // ease-in-out
         spinOff = -0.35 * (1 - e) + e * Math.PI * 2;
         spinHop = Math.sin(p * Math.PI);             // leaps as she twirls
-        airStretch = 0.4 * Math.sin(p * Math.PI);    // stretches tall in the air
+        airStretch = 0.28 * Math.sin(p * Math.PI);   // stretches tall in the air
       } else if (el < WIND + SPIN + SETTLE) {
         const p = (el - WIND - SPIN) / SETTLE;
-        settleWob = Math.sin(p * Math.PI * 3) * (1 - p) * 0.12;   // wobbles to rest
+        settleWob = Math.sin(p * Math.PI * 3) * (1 - p) * 0.09;   // wobbles to rest
       } else spinAt = -1;
     }
-    const rot = t * spinRate + cpx * 0.9 + Math.sin(t * 0.55) * 0.12 + spinOff;
+    const rot = t * 0.22 + cpx * 0.45 + spinOff;
     const cosR = Math.cos(rot), sinR = Math.sin(rot);
     const talkBeat = ghostMood === "talking" ? Math.abs(Math.sin(t * 9.5)) : 0;
     const thinkBeat = ghostMood === "thinking" ? Math.abs(Math.sin(t * 5.2)) : 0;
-    const breath = 1 + Math.sin(t * 0.9) * 0.025 + ghostPulse * 0.1 + talkBeat * 0.02;
+    const breath = 1 + Math.sin(t * 0.9) * 0.018 + ghostPulse * 0.05 + talkBeat * 0.012;
     const floatY = Math.sin(t * 1.1) * 4 + Math.sin(t * 3.2) * (ghostMood === "talking" ? 2.2 : 0.7)
       - spinHop * scale * 0.14
-      - (ghostMood === "talking" ? Math.abs(Math.sin(t * 4.6)) * scale * 0.06 : 0);
+      - (ghostMood === "talking" ? Math.abs(Math.sin(t * 4.6)) * scale * 0.045 : 0);
     const accent = accents[ghostEmotion] || accents.calm;
     const accentCss = (alpha) => `rgba(${accent[0]},${accent[1]},${accent[2]},${alpha})`;
 
@@ -417,7 +418,7 @@ function initGhost() {
       ghostMood === "listening" ? -0.07 :
       Math.sin(t * 0.7) * 0.035
     ) + settleWob;
-    const squash = talkBeat * 0.05 + ghostPulse * 0.03 + airStretch * 0.35 + settleWob * 0.5;
+    const squash = talkBeat * 0.03 + ghostPulse * 0.02 + airStretch * 0.3 + settleWob * 0.4;
     /* follow-through: the hem lags behind the head's tilt, whipping after her */
     const tiltV = (tilt - prevTilt) / dt; prevTilt = tilt;
     sway += (tiltV * -0.06 - sway) * Math.min(1, dt * 5);
@@ -466,89 +467,91 @@ function initGhost() {
       const g = Math.round(255 * greenMix + accent[1] * (1 - greenMix));
       const b = Math.round(161 * greenMix + accent[2] * (1 - greenMix));
       ctx2.fillStyle = `rgba(${r},${g},${b},${Math.min(0.92, a)})`;
-      const sz = 0.82 + depth * 1.25 + talkBeat * 0.35;
+      const sz = 0.82 + depth * 1.25 + talkBeat * 0.15;
       ctx2.fillRect(X, Y, sz, sz);
     }
-    /* expressive cyber face */
-    const bp = t % 3.7;   // eased lid sweep every few seconds, not an instant snap
-    const blink = bp < 0.26 ? Math.max(0.1, Math.abs(bp / 0.13 - 1)) : 1;
-    const eyeSquint =
-      ghostMood === "thinking" ? 0.62 :
-      ghostEmotion === "alert" ? 0.7 :
-      ghostMood === "happy" || ghostEmotion === "happy" ? 1.05 :
-      ghostMood === "talking" ? 1 + talkBeat * 0.18 :
-      1;
-    const eyeY = cy - 0.74 * scale * breath + floatY;
-    for (const sx of [-0.3, 0.3]) {
-      const ex = cx + (sx * cosR + 0.62 * sinR * 0.4) * scale * breath;
-      const g = ctx2.createRadialGradient(ex, eyeY, 0, ex, eyeY, scale * 0.16);
-      g.addColorStop(0, `rgba(235,255,246,${0.9 + ghostPulse * 0.1})`);
-      g.addColorStop(0.45, accentCss(0.72 + ghostPulse * 0.2));
-      g.addColorStop(1, accentCss(0));
-      ctx2.fillStyle = g;
-      ctx2.save();
-      ctx2.translate(ex, eyeY);
-      ctx2.rotate(ghostEmotion === "alert" ? sx * -0.22 : Math.sin(t * 1.8 + sx) * 0.04);
-      ctx2.scale(0.68, 1.18 * blink * eyeSquint);
-      ctx2.beginPath(); ctx2.arc(0, 0, scale * 0.16, 0, Math.PI * 2); ctx2.fill();
-      ctx2.fillStyle = `rgba(255,255,255,${0.55 + 0.35 * Math.sin(t * 5.5 + sx * 4)})`;
-      ctx2.beginPath(); ctx2.arc(-scale * 0.05, -scale * 0.055, scale * 0.032, 0, Math.PI * 2); ctx2.fill();
-      ctx2.strokeStyle = accentCss(0.5);
-      ctx2.lineWidth = 1;
-      ctx2.beginPath();
-      ctx2.arc(0, 0, scale * 0.19, Math.PI * 0.08, Math.PI * 1.92);
-      ctx2.stroke();
-      ctx2.restore();
-    }
-
-    const faceY = cy - 0.49 * scale * breath + floatY;
-    ctx2.strokeStyle = accentCss(0.72);
-    ctx2.lineWidth = Math.max(1, scale * 0.012);
-    ctx2.shadowColor = accentCss(0.8);
-    ctx2.shadowBlur = 9 + ghostPulse * 10;
-    ctx2.beginPath();
-    if (ghostMood === "talking") {
-      const width = scale * 0.42;
-      const amp = scale * (0.025 + talkBeat * 0.045);
-      for (let i = 0; i <= 18; i++) {
-        const x = cx - width / 2 + (width * i) / 18;
-        const y = faceY + Math.sin(i * 0.9 + t * 11) * amp;
-        if (i === 0) ctx2.moveTo(x, y);
-        else ctx2.lineTo(x, y);
+    /* ————— her face: big soft eyes with pupils, rosy cheeks, chibi mouth.
+       Anchored to the head (not the spinning cloud) so it never distorts;
+       it fades out mid-pirouette when her back is turned, then returns ————— */
+    const faceA = Math.max(0, Math.cos(spinOff));
+    if (faceA > 0.02) {
+      ctx2.globalCompositeOperation = "source-over";
+      ctx2.globalAlpha = faceA;
+      const bp = t % 3.7;   // eased lid sweep every few seconds, not an instant snap
+      const blink = bp < 0.26 ? Math.max(0.08, Math.abs(bp / 0.13 - 1)) : 1;
+      const happyFace = ghostMood === "happy" || ghostEmotion === "happy";
+      const lookX = cpx * scale * 0.07 + (ghostMood === "talking" ? Math.sin(t * 1.9) * scale * 0.015 : 0);
+      const lookY = ghostMood === "thinking" ? -scale * 0.04 : Math.sin(t * 0.8) * scale * 0.008;
+      const eyeY = cy - 0.78 * scale + floatY;
+      const eyeRx = scale * 0.115, eyeRy = scale * 0.155;
+      const squint = ghostEmotion === "alert" ? 0.74 : happyFace ? 0.9 : 1;
+      for (const sx of [-0.32, 0.32]) {
+        const ex = cx + sx * scale;
+        const g = ctx2.createRadialGradient(ex, eyeY, 0, ex, eyeY, scale * 0.21);
+        g.addColorStop(0, accentCss(0.35));
+        g.addColorStop(1, accentCss(0));
+        ctx2.fillStyle = g;
+        ctx2.beginPath(); ctx2.arc(ex, eyeY, scale * 0.21, 0, Math.PI * 2); ctx2.fill();
+        ctx2.save();
+        ctx2.translate(ex, eyeY);
+        ctx2.rotate(ghostEmotion === "alert" ? sx * -0.18 : 0);
+        ctx2.scale(1, blink * squint);
+        ctx2.beginPath(); ctx2.ellipse(0, 0, eyeRx, eyeRy, 0, 0, Math.PI * 2);
+        ctx2.fillStyle = "rgba(240,255,248,0.97)";
+        ctx2.fill();
+        ctx2.clip();   // pupil + catchlights stay inside the eye
+        ctx2.fillStyle = "rgba(5,38,28,0.94)";
+        ctx2.beginPath(); ctx2.ellipse(lookX, lookY, eyeRx * 0.54, eyeRy * 0.56, 0, 0, Math.PI * 2); ctx2.fill();
+        ctx2.fillStyle = "rgba(255,255,255,0.95)";
+        ctx2.beginPath(); ctx2.arc(lookX - eyeRx * 0.16, lookY - eyeRy * 0.18, eyeRx * 0.17, 0, Math.PI * 2); ctx2.fill();
+        ctx2.fillStyle = "rgba(255,255,255,0.55)";
+        ctx2.beginPath(); ctx2.arc(lookX + eyeRx * 0.16, lookY + eyeRy * 0.14, eyeRx * 0.08, 0, Math.PI * 2); ctx2.fill();
+        ctx2.restore();
       }
-    } else if (ghostMood === "thinking") {
-      for (let i = 0; i < 3; i++) {
-        const x = cx + (i - 1) * scale * 0.13;
-        const y = faceY + Math.sin(t * 5 + i) * scale * 0.018;
-        ctx2.moveTo(x + scale * 0.025, y);
-        ctx2.arc(x, y, scale * (0.02 + thinkBeat * 0.006), 0, Math.PI * 2);
-      }
-    } else if (ghostEmotion === "alert") {
-      ctx2.moveTo(cx - scale * 0.22, faceY);
-      ctx2.lineTo(cx - scale * 0.08, faceY + scale * 0.035);
-      ctx2.lineTo(cx + scale * 0.08, faceY - scale * 0.035);
-      ctx2.lineTo(cx + scale * 0.22, faceY);
-    } else if (ghostEmotion === "happy" || ghostMood === "happy") {
-      ctx2.arc(cx, faceY - scale * 0.02, scale * 0.2, 0.12 * Math.PI, 0.88 * Math.PI);
-    } else {
-      ctx2.moveTo(cx - scale * 0.16, faceY);
-      ctx2.lineTo(cx + scale * 0.16, faceY);
-    }
-    ctx2.stroke();
-    ctx2.shadowBlur = 0;
 
-    const nodeAlpha = ghostMood === "thinking" || ghostEmotion === "alert" ? 0.86 : 0.48;
-    for (const [nx, ny] of [[-0.42, -0.53], [0.42, -0.53], [-0.18, -0.35], [0.18, -0.35], [0, -0.18]]) {
-      const x = cx + (nx * cosR + 0.48 * sinR * 0.2) * scale;
-      const y = cy + ny * scale + floatY;
-      ctx2.fillStyle = accentCss(nodeAlpha);
-      ctx2.beginPath();
-      ctx2.arc(x, y, scale * 0.026, 0, Math.PI * 2);
-      ctx2.fill();
-      ctx2.strokeStyle = accentCss(nodeAlpha * 0.55);
-      ctx2.beginPath();
-      ctx2.arc(x, y, scale * (0.045 + ghostPulse * 0.02), 0, Math.PI * 2);
-      ctx2.stroke();
+      /* rosy cheeks — brighter when she's happy or chatting */
+      ctx2.fillStyle = `rgba(255,145,175,${happyFace ? 0.3 : ghostMood === "talking" ? 0.24 : 0.16})`;
+      for (const sx of [-0.47, 0.47]) {
+        ctx2.beginPath();
+        ctx2.ellipse(cx + sx * scale, cy - 0.56 * scale + floatY, scale * 0.09, scale * 0.05, 0, 0, Math.PI * 2);
+        ctx2.fill();
+      }
+
+      /* chibi mouth */
+      const mouthY = cy - 0.48 * scale + floatY;
+      ctx2.lineCap = "round";
+      ctx2.lineWidth = Math.max(1.5, scale * 0.022);
+      ctx2.strokeStyle = "rgba(235,255,246,0.92)";
+      ctx2.shadowColor = accentCss(0.7);
+      ctx2.shadowBlur = 6;
+      if (ghostMood === "talking") {
+        /* open mouth that bounces with each syllable, little tongue inside */
+        const open = scale * (0.028 + talkBeat * 0.07);
+        const jaw = scale * (0.08 + talkBeat * 0.02);
+        ctx2.fillStyle = "rgba(5,38,28,0.92)";
+        ctx2.beginPath(); ctx2.ellipse(cx, mouthY + open * 0.3, jaw, open, 0, 0, Math.PI * 2);
+        ctx2.fill(); ctx2.stroke();
+        ctx2.save(); ctx2.clip();
+        ctx2.fillStyle = "rgba(255,150,175,0.85)";
+        ctx2.beginPath(); ctx2.ellipse(cx, mouthY + open * 0.95, jaw * 0.62, open * 0.6, 0, 0, Math.PI * 2); ctx2.fill();
+        ctx2.restore();
+      } else if (ghostMood === "thinking") {
+        ctx2.beginPath();
+        ctx2.arc(cx, mouthY, scale * (0.024 + thinkBeat * 0.006), 0, Math.PI * 2);   // pensive little "o"
+        ctx2.stroke();
+      } else if (ghostEmotion === "alert") {
+        ctx2.beginPath();
+        ctx2.moveTo(cx - scale * 0.09, mouthY + scale * 0.015);
+        ctx2.quadraticCurveTo(cx, mouthY - scale * 0.03, cx + scale * 0.09, mouthY + scale * 0.015);   // worried
+        ctx2.stroke();
+      } else {
+        ctx2.beginPath();
+        ctx2.arc(cx, mouthY - scale * 0.03, scale * (happyFace ? 0.15 : 0.1), Math.PI * 0.16, Math.PI * 0.84);   // smile
+        ctx2.stroke();
+      }
+      ctx2.shadowBlur = 0;
+      ctx2.globalAlpha = 1;
+      ctx2.globalCompositeOperation = "lighter";
     }
 
     /* pixie dust: four-point stars that twinkle, drift down, and fade */
