@@ -217,6 +217,11 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 @keyframes summonPulse { 50% { box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4), 0 0 58px rgba(77, 255, 171, 0.65); } }
 .summon span, .download-cta span { transition: transform 0.2s; }
 .summon:hover span, .download-cta:hover span { transform: translateX(4px); }
+/* the coda: while the phantom makes the ask, the button flares */
+.download-cta.beckon { animation: emerge 0.8s ease both, beckonPulse 1.25s ease-in-out infinite; }
+@keyframes beckonPulse {
+  50% { box-shadow: 0 10px 34px rgba(0, 0, 0, 0.4), 0 0 84px rgba(77, 255, 171, 0.85); transform: scale(1.04); }
+}
 
 .creed {
   margin: clamp(14px, 2.6vh, 28px) 0 0; margin-top: auto; padding-top: clamp(14px, 2.6vh, 28px);
