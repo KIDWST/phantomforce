@@ -128,24 +128,36 @@ function initConversation() {
     "Posts, decks, docs, even video — created on command.",
     "Scams, leaks, and threats flagged before they cost you.",
   ];
-  let powerTimer = 0, powerIdx = -1, touring = true;
+  // after a full lap, the coda: every chip lit at once, the ask made plainly
+  const codaLine = "The whole job — handled, around the clock. Take me with you.";
+  let powerTimer = 0, powerIdx = -1, touring = true, beckonTimer = 0;
   const showPower = (i) => {
     powerIdx = i;
     powerEls.forEach((el, j) => el.classList.toggle("on", j === i));
     speak(powerLines[i]);
   };
+  const showCoda = () => {
+    powerIdx = -1;                                  // next tour step starts the lap over
+    powerEls.forEach((el) => el.classList.add("on"));
+    speak(codaLine);
+    downloadCta?.classList.add("beckon");
+    window.clearTimeout(beckonTimer);
+    beckonTimer = window.setTimeout(() => downloadCta?.classList.remove("beckon"), 6200);
+  };
   const scheduleTour = (ms) => {
     window.clearTimeout(powerTimer);
     powerTimer = window.setTimeout(() => {
       if (!touring) return;
-      showPower((powerIdx + 1) % powerLines.length);
-      scheduleTour(4600);
+      if (powerIdx === powerLines.length - 1) { showCoda(); scheduleTour(6600); }
+      else { showPower(powerIdx + 1); scheduleTour(4600); }
     }, ms);
   };
   const stopTour = () => {
     touring = false;
     window.clearTimeout(powerTimer);
+    window.clearTimeout(beckonTimer);
     powerEls.forEach((el) => el.classList.remove("on"));
+    downloadCta?.classList.remove("beckon");
   };
   // a chip click jumps the tour straight to that power — a real answer, not a quiz step
   powerEls.forEach((el, i) => el.addEventListener("click", () => {
