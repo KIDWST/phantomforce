@@ -120,7 +120,7 @@ const subagentDefinitions = [
   { id: "warden", name: "Warden", parent: "Sentinel", specialty: "Flags secrets, suspicious scripts, and risky uploads." },
   { id: "frame", name: "Frame", parent: "CutLab", specialty: "Keeps video/content workflow proof organized." },
   { id: "spec", name: "Spec", parent: "Builder", specialty: "OpenSpec-style acceptance and implementation boundaries." },
-  { id: "standard", name: "Standard", parent: "PhantomAI", specialty: "Agent OS-style working standards and handoffs." },
+  { id: "standard", name: "Standard", parent: "PhantomAI", specialty: "PhantomOps-style working standards and handoffs." },
   { id: "map", name: "Map", parent: "Builder", specialty: "Serena-style code navigation profile." },
   { id: "swarm", name: "Swarm", parent: "Reviewer", specialty: "Ruflo-style squad planning vocabulary, quarantined." },
 ];
@@ -148,7 +148,7 @@ const agentAssignments: Array<{
   {
     id: "site-edit",
     owner: "Builder",
-    title: "Adjust the website from the cockpit",
+    title: "Adjust the website from Phantom",
     detail: "Use Site Studio for public story, offer copy, preview blocks, and launch wording.",
     status: "drafting",
     action_label: "Open Site Studio",

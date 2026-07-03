@@ -21,10 +21,10 @@ const safeActionDefinitions = [
   },
   {
     id: "agent-os-sandbox",
-    label: "Read Agent OS standards posture",
+    label: "Read PhantomOps standards posture",
     worker: "Standard",
-    program: "Agent OS",
-    description: "Reports Agent OS as standards/documentation only. Does not install or sync it.",
+    program: "PhantomOps",
+    description: "Reports PhantomOps as standards/documentation only. Does not install or sync it.",
     script: "run-agent-os-sandbox.ps1",
     mutates_agentlab: false,
   },

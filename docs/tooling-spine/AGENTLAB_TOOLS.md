@@ -38,7 +38,7 @@ The quarantine contains prior accidental demo/runtime artifacts and must not be 
 | Tool | Current mode | Intended PhantomForce role | Sprint 0 classification |
 |---|---|---|---|
 | OpenSpec | Reference-only in AgentLab | Controlled proposal/spec/task workflow before implementation | partially complete in sandbox, absent in PhantomForce |
-| Agent OS | Reference-only in AgentLab | Standards and workflow layer aligned with project docs | partially complete in sandbox, absent in PhantomForce |
+| PhantomOps | Reference-only in AgentLab | Standards and workflow layer aligned with project docs | partially complete in sandbox, absent in PhantomForce |
 | Serena | Reference-only in AgentLab | Read-only semantic repo navigation for Claude/Codex | partially complete in sandbox, absent in PhantomForce |
 | Ruflo | Planning-only candidate | Quarantined idea source for agent squad vocabulary | unsafe for production, sandbox-only |
 
@@ -60,9 +60,9 @@ Blocked until separately approved:
 - Package installation
 - Auto-generated changes to production repo files
 
-## Agent OS Incorporation
+## PhantomOps Incorporation
 
-Agent OS may later provide standards, workflow structure, and alignment across `AGENTS.md`, `CLAUDE.md`, and project docs.
+PhantomOps may later provide standards, workflow structure, and alignment across `AGENTS.md`, `CLAUDE.md`, and project docs.
 
 Future allowed use:
 

@@ -1,13 +1,13 @@
-/* PhantomForce Cockpit — workspace surfaces.
+/* PhantomForce Phantom — workspace surfaces.
    Every widget on the mission grid opens one of these as a focused overlay
    above the dashboard. Registry-driven so the grid can scale to hundreds
    of widgets without changing the shell. */
 
 import {
-  store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
+  store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS,
-} from "./store.js";
+} from "./store.js?v=phantom-brain-20260703-16";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -30,6 +30,51 @@ async function copyText(el, text) {
   const prev = el.textContent;
   el.textContent = "Copied ✓";
   setTimeout(() => { el.textContent = prev; }, 1400);
+}
+
+function authHeaders() {
+  const token = session.token();
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+function renderOwnerMemoryPayload(payload) {
+  const memory = payload?.owner_memory;
+  if (!memory) return `<div class="ws-empty">Owner memory status unavailable.</div>`;
+  const sources = memory.sources || {};
+  const sourceCards = Object.entries(sources).map(([key, source]) => `
+    <article class="record">
+      <div class="record-top"><h4>${esc(key.replaceAll("_", " "))}</h4>${chip(source.exists ? "approved" : "blocked")}</div>
+      <p class="record-sub">${esc(source.purpose || "")}</p>
+      <p class="record-notes"><b>Path:</b> ${esc(source.path || "not configured")}</p>
+      <p class="record-notes"><b>Bytes:</b> ${esc(source.bytes ?? 0)}</p>
+    </article>`).join("");
+  const artifacts = (memory.artifacts || []).slice(0, 12).map((artifact) => `
+    <article class="record record-row">
+      <h4>${esc(artifact.path)}</h4>
+      <p class="record-sub">${esc(artifact.source)} · ${esc(artifact.bytes)} bytes</p>
+      ${artifact.match_snippet ? `<p class="record-notes">${esc(artifact.match_snippet)}</p>` : ""}
+    </article>`).join("");
+  const receipts = (memory.recent_hermes_records || []).slice(0, 6).map((record) => `
+    <article class="record record-row">
+      <h4>${esc(record.tenant_id)} · ${esc(record.task_type)}</h4>
+      <p class="record-sub">${esc(record.actor_user_id)} · ${esc(record.model_id)} · ${esc(record.estimated_tokens)} tokens</p>
+      <p class="record-notes">${esc(record.result_summary || record.user_request_summary || "")}</p>
+    </article>`).join("");
+
+  return `
+    <div class="stat-row">
+      <div class="stat"><span>Owner tenant</span><b>${esc(memory.access_model.owner_default_tenant_id)}</b><i>Jordan/admin default</i></div>
+      <div class="stat"><span>Raw Codex internals</span><b>${memory.access_model.raw_codex_internal_memory_exposed ? "exposed" : "blocked"}</b><i>local artifacts only</i></div>
+      <div class="stat"><span>Artifacts</span><b>${(memory.artifacts || []).length}</b><i>${memory.query ? `query: ${esc(memory.query)}` : "latest indexed"}</i></div>
+      <div class="stat"><span>Clients</span><b>isolated</b><i>tenant-only memory</i></div>
+    </div>
+    <h4 class="ws-subhead">Sources</h4>
+    <div class="card-grid">${sourceCards}</div>
+    <h4 class="ws-subhead">Artifact matches</h4>
+    <div class="stack">${artifacts || empty("No local owner-memory artifacts matched this search.")}</div>
+    <h4 class="ws-subhead">Recent Hermes receipts</h4>
+    <div class="stack">${receipts || empty("No Hermes receipts found yet.")}</div>
+    <p class="ws-note">Safety: admin-only, local files only, redacted, no provider call, no upload/send.</p>`;
 }
 
 /* =============================== LEADS =============================== */
@@ -399,7 +444,7 @@ function renderProtect(el, rerender) {
   const secs = visible(store.state.security);
   el.innerHTML = `
     <div class="ws-toolbar"><p class="ws-note">Defensive posture only: monthly scan proofs, rotation reminders, breach checks on password change or reset. No secrets are stored or shown here.</p></div>
-    <div class="card-grid">
+    ${secs.length ? `<div class="card-grid">
       ${secs.map((s) => `
         <article class="record">
           <div class="record-top">${wsTag(s.ws)}<h4>${esc(wsName(s.ws))} posture ${chip(s.posture === "clean" ? "approved" : "pending")}</h4></div>
@@ -417,7 +462,7 @@ function renderProtect(el, rerender) {
             <button class="btn btn-quiet" data-act="summary" data-id="${s.id}">Copy client-safe summary</button>
           </div>
         </article>`).join("")}
-    </div>`;
+    </div>` : empty("No scan proof yet. This workspace starts clean until a scan is run or imported.")}`;
   bindActions(el, {
     remind: (id) => {
       const s = store.state.security.find((x) => x.id === id);
@@ -450,13 +495,35 @@ function renderMoney(el, rerender) {
         </article>`).join("") || empty("No open proposals — pipeline is either closed or waiting to be built.")}
     </div>
     <h3 class="ws-subhead">Next money actions</h3>
-    <ul class="record-list record-list-lg">
+    ${m.open.length || m.won.length || invoiceReady.length ? `<ul class="record-list record-list-lg">
       ${m.open.filter((p) => p.status === "sent-ready").map((p) => `<li>▸ ${esc(p.client)} is send-ready — get it in front of them and set the follow-up.</li>`).join("")}
       ${m.won.filter((p) => !p.retainer).map((p) => `<li>▸ ${esc(p.client)} closed without a retainer — pitch Keeper ($150/mo) at delivery.</li>`).join("")}
       ${invoiceReady.map((p) => `<li>▸ ${esc(p.client)} is invoice-ready — track payment manually until the connector exists.</li>`).join("")}
       <li>▸ Price-tier check: anything scoped over 20 hours should quote at Pro ($2,500), not Core.</li>
-    </ul>
+    </ul>` : empty("No money actions yet. Quotes, wins, and invoices appear here after this workspace starts using Phantom.")}
     <p class="ws-note">Quote → approval → invoice-ready → payment-tracked. Real invoices and payment requests stay off until a payment connector is configured.</p>`;
+}
+
+/* ============================= TOOL SPINE ============================= */
+function renderToolSpineCards({ compact = false } = {}) {
+  const tools = store.state.toolSpine || [];
+  return `
+    <div class="${compact ? "tool-spine-compact" : "tool-spine-grid"}">
+      ${tools.map((tool) => `
+        <article class="record tool-card tool-mode-${esc(tool.mode)}">
+          <div class="record-top">
+            <h4><span class="agent-dot"></span>${esc(tool.name)}</h4>
+            <span class="chip chip-${esc(tool.status)}">${esc(statusLabel(tool.status))}</span>
+          </div>
+          <p class="record-sub">${esc(tool.worker)} · internal: ${esc(tool.internal)}</p>
+          <p class="record-next">▸ ${esc(tool.role)}</p>
+          <p class="record-notes"><b>Doing now:</b> ${esc(tool.activity)}</p>
+          <div class="tool-meta">
+            <span>${esc(statusLabel(tool.mode))}</span>
+            <span>${esc(tool.path)}</span>
+          </div>
+        </article>`).join("")}
+    </div>`;
 }
 
 /* ============================= WORKFORCE ============================= */
@@ -494,7 +561,10 @@ function renderWorkforce(el, rerender) {
           ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
           <p class="agent-bundle">internal lane: ${esc(a.bundle)}</p>
         </article>`).join("")}
-    </div>`;
+    </div>
+    <h3 class="ws-subhead">Tool spine powering the workers</h3>
+    <p class="ws-note">These are the internal programs behind the desks. Clients see outcomes, not tool names.</p>
+    ${renderToolSpineCards({ compact: true })}`;
 }
 
 /* ============================= APPROVALS ============================= */
@@ -502,7 +572,7 @@ function renderApprovals(el, rerender) {
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
   const done = visible(store.state.approvals).filter((a) => a.status !== "pending").slice(0, 6);
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, deploys. Drafting never waits on you.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, Drive files, publishing, paid generation, invoices, deploys. Drafting never waits on you.</p></div>
     ${pending.length ? `<div class="stack">
       ${pending.map((a) => `
         <article class="record record-wide approval-card">
@@ -524,7 +594,7 @@ function renderApprovals(el, rerender) {
   });
 }
 
-/* ============================== ADMIN OS ============================== */
+/* ============================== PHANTOMOPS ============================== */
 function renderAdmin(el, rerender) {
   if (!isAdmin()) { el.innerHTML = empty("This area belongs to your PhantomForce operator."); return; }
   const lanes = [
@@ -536,7 +606,13 @@ function renderAdmin(el, rerender) {
     ["Private access gateway", "active", "admin + client hosts enforced upstream"],
   ];
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients.</p></div>
+    <div class="ws-toolbar">
+      <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients.</p>
+      <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
+    </div>
+    <h3 class="ws-subhead">Active tool spine</h3>
+    <p class="ws-note">Every tool is mapped to a worker lane. “Active” means visible and available to PhantomOps; external actions still require the right connector and approval.</p>
+    ${renderToolSpineCards()}
     <h3 class="ws-subhead">Workspace states</h3>
     <div class="stack">
       ${store.state.workspaces.map((w) => {
@@ -556,18 +632,51 @@ function renderAdmin(el, rerender) {
     <h3 class="ws-subhead">Access</h3>
     <div class="stack">
       <article class="record record-wide">
-        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full cockpit, this view")}
+        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full phantom, this view")}
         ${kv("Client host", "<code>app.phantomforce.online</code> — portal view, workspace-scoped")}
         ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
       </article>
     </div>
+    <h3 class="ws-subhead">Owner Memory</h3>
+    <div class="stack">
+      <article class="record record-wide">
+        <div class="record-top"><h4>Codex / Hermes / Vault access</h4>${chip("approved")}</div>
+        <p class="record-notes">Jordan/admin can inspect sanitized local owner memory: Hermes receipts, PhantomAI interaction memory, Obsidian process notes, and repo docs. Client accounts remain tenant-only.</p>
+        <div class="record-actions">
+          <input class="inline-input" data-owner-memory-query placeholder="Search owner memory..." aria-label="Search owner memory" />
+          <button class="btn btn-primary" data-act="load-owner-memory">Load owner memory</button>
+        </div>
+      </article>
+      <div data-owner-memory-result>${empty("Owner memory is ready. Load it when you need the full admin picture.")}</div>
+    </div>
     <h3 class="ws-subhead">Diagnostics</h3>
     <div class="record-actions">
-      <button class="btn btn-quiet" data-act="reset">Reset local cockpit data</button>
+      <button class="btn btn-quiet" data-act="reset">Reset local Phantom data</button>
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
-    reset: () => { if (confirm("Reset local cockpit data to the seeded state?")) { store.reset(); rerender(); } },
+    "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
+    "load-owner-memory": async () => {
+      const result = el.querySelector("[data-owner-memory-result]");
+      const query = el.querySelector("[data-owner-memory-query]")?.value?.trim() || "";
+      if (!result) return;
+      result.innerHTML = empty("Loading owner memory...");
+      try {
+        const params = new URLSearchParams();
+        if (query) params.set("q", query);
+        const url = `/phantom-ai/admin/codex-memory/status${params.toString() ? `?${params}` : ""}`;
+        const response = await fetch(url, { headers: authHeaders() });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          result.innerHTML = empty(payload?.error || "Owner memory requires admin backend access.");
+          return;
+        }
+        result.innerHTML = renderOwnerMemoryPayload(payload);
+      } catch (error) {
+        result.innerHTML = empty(`Owner memory could not load: ${error?.message || "request failed"}`);
+      }
+    },
+    reset: () => { if (confirm("Reset local Phantom data to the seeded state?")) { store.reset(); rerender(); } },
   });
 }
 
@@ -579,25 +688,25 @@ function renderPhantom(el) {
       <div class="phantom-log" data-phantom-log></div>
       <form class="speakline" data-phantom-form>
         <span class="speak-caret">›</span>
-        <input type="text" data-phantom-input autocomplete="off" spellcheck="false" placeholder="What do you want PhantomForce to do?" aria-label="Command PhantomForce" />
+        <input type="text" data-phantom-input autocomplete="off" spellcheck="false" placeholder="Tell Phantom what needs handled..." aria-label="Tell Phantom what needs handled" />
       </form>
     </div>`;
 }
 
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
-  phantom: { title: "Phantom AI", kicker: "Command brain", render: renderPhantom },
+  phantom: { title: "Phantom AI", kicker: "Business brain", render: renderPhantom },
   leads: { title: "Leads & Follow-Up", kicker: "Pipeline desk", render: renderLeads },
   proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
-  media: { title: "Media Lab", kicker: "Production cockpit", render: renderMedia },
+  media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
-  money: { title: "Money", kicker: "Revenue cockpit", render: renderMoney },
+  money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
   workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
-  adminos: { title: "Admin OS", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
+  adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
 /* Mission-grid widgets: id → live stat line. Scales by adding entries. */
@@ -613,19 +722,20 @@ export function missionWidgets() {
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
   const bks = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
   const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
+  const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "standby", "gated", "sandbox"].includes(tool.mode)).length;
 
   const w = [
-    { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
-    { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
+    { id: "leads", icon: "◉", title: "Follow-Up Desk", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
+    { id: "proposals", icon: "◆", title: "Quote Forge", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
     { id: "media", icon: "▶", title: "Media Lab", stat: `${briefs.length} ready`, sub: "briefs & generation", alert: false },
     { id: "sites", icon: "▦", title: "Site & Store Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
-    { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
+    { id: "protect", icon: "⬡", title: "Risk Radar", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "fresh", sub: sec ? `leaks · malware · habits` : "no scan yet", alert: sec ? sec.posture !== "clean" : false },
     { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Workforce", stat: `${activeAgents} active`, sub: isAdmin() ? `${store.state.agents.length} desks` : "on your account", alert: false },
+    { id: "workforce", icon: "⬢", title: "Agent Yard", stat: `${activeAgents} agents`, sub: isAdmin() ? `${activeTools} tools mapped` : "on your account", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
-  if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "Admin OS", stat: "operator", sub: "workspaces · lanes · access", alert: false });
+  if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
   return w;
 }

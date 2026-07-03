@@ -8,15 +8,26 @@
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
     </script>
-    <title>PhantomForce — Cockpit</title>
-    <meta name="description" content="The PhantomForce cockpit — your AI business operating system." />
+    <title>PhantomForce — Phantom</title>
+    <meta name="description" content="PhantomForce Phantom — your AI business operating system." />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
+    <meta http-equiv="Cache-Control" content="no-store" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="cockpit.css?v=1" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-brain-20260703-16" />
+    <script>
+      if ("serviceWorker" in navigator) {
+        navigator.serviceWorker.getRegistrations?.()
+          .then((registrations) => registrations.forEach((registration) => registration.unregister()))
+          .catch(() => undefined);
+      }
+      if ("caches" in window) {
+        caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => undefined);
+      }
+    </script>
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -26,18 +37,18 @@
     <div class="gate" data-gate hidden>
       <div class="gate-card">
         <p class="gate-kicker">PHANTOMFORCE · PRIVATE ACCESS</p>
-        <h1>Who's stepping into the cockpit?</h1>
+        <h1>Who is entering Phantom?</h1>
         <div class="gate-options">
           <button class="gate-opt" data-enter="admin">
             <span class="gate-opt-icon">⌘</span>
-            <b>Admin Console</b>
-            <i>Jordan — full command. All workspaces, workforce, approvals, Admin OS.</i>
+            <b>Admin Phantom</b>
+            <i>Jordan — owner access. Every workspace, worker, approval, and PhantomOps surface.</i>
             <em>admin.phantomforce.online</em>
           </button>
           <button class="gate-opt" data-enter="client">
             <span class="gate-opt-icon">◈</span>
-            <b>Client Portal</b>
-            <i>Test Client — the simplified portal your clients live in.</i>
+            <b>Employee Workspace</b>
+            <i>Permission-scoped workspace view. Employees only see what the owner allows.</i>
             <em>app.phantomforce.online</em>
           </button>
         </div>
@@ -45,13 +56,13 @@
       </div>
     </div>
 
-    <!-- =========================== cockpit =========================== -->
-    <div class="cockpit" data-cockpit hidden>
+    <!-- =========================== phantom =========================== -->
+    <div class="phantom" data-phantom hidden>
       <header class="topbar">
         <div class="brand">
           <span class="brand-ghost" aria-hidden="true"></span>
           <span class="brand-word">PHANTOMFORCE</span>
-          <span class="brand-sub" data-role-sub>COCKPIT</span>
+          <span class="brand-sub" data-role-sub>PHANTOM</span>
         </div>
         <div class="topbar-mid">
           <label class="org-switch" data-org-wrap hidden>
@@ -73,44 +84,64 @@
       <main class="deck">
         <section class="command-hero">
           <canvas class="ghost-canvas" data-ghost width="10" height="10" aria-hidden="true"></canvas>
-          <div class="hero-say" data-say aria-live="polite"><p class="say-line">What do you want PhantomForce to do?</p></div>
+          <div class="hero-spacer" aria-hidden="true"></div>
+          <div class="hero-say" data-say aria-live="polite"><p class="say-line">Phantom is here.</p></div>
+          <div class="response-cards" data-response></div>
           <form class="speakline speakline-hero" data-command-form>
             <span class="speak-caret" aria-hidden="true">›</span>
             <input type="text" data-command-input autocomplete="off" spellcheck="false"
-                   placeholder="ask for an outcome — a quote, a video, a page, a security check…"
-                   aria-label="What do you want PhantomForce to do?" />
+                   placeholder="Tell Phantom what you need…"
+                   aria-label="Tell Phantom what you need" />
           </form>
-          <div class="suggests" data-suggests></div>
-          <div class="response-cards" data-response></div>
+          <button class="harbor-toggle" type="button" data-harbor-toggle aria-expanded="false" aria-controls="harbor">
+            <span class="harbor-spark" aria-hidden="true">✦</span><span>Open Harbor</span>
+          </button>
         </section>
-
-        <div class="deck-body">
-          <section class="mission" aria-label="Workspaces">
-            <h2 class="deck-label">Mission grid</h2>
-            <div class="mission-grid" data-mission></div>
-          </section>
-
-          <aside class="rail" aria-label="Intelligence rail">
-            <div class="rail-block" data-rail-plan>
-              <h3>Today's plan</h3><div class="rail-body"></div>
-            </div>
-            <div class="rail-block" data-rail-money>
-              <h3>Money</h3><div class="rail-body"></div>
-            </div>
-            <div class="rail-block" data-rail-approvals>
-              <h3>Waiting on you</h3><div class="rail-body"></div>
-            </div>
-            <div class="rail-block" data-rail-work>
-              <h3>Active work</h3><div class="rail-body"></div>
-            </div>
-          </aside>
-        </div>
       </main>
+
+      <!-- Harbor: capabilities are summoned, never shouting -->
+      <section class="harbor" id="harbor" data-harbor hidden aria-label="Harbor — Phantom's capabilities">
+        <button class="harbor-backdrop" data-harbor-close aria-label="Close Harbor"></button>
+        <div class="harbor-sheet" role="dialog" aria-modal="true" aria-label="Harbor">
+          <header class="harbor-head">
+            <p class="harbor-kicker">HARBOR · QUIET CAPABILITIES</p>
+            <button class="overlay-x" data-harbor-close aria-label="Close Harbor">✕</button>
+          </header>
+          <div class="harbor-body">
+            <label class="org-switch org-switch-harbor" data-org-wrap-harbor hidden>
+              <span>Workspace</span>
+              <select data-org-select-harbor aria-label="Switch workspace"></select>
+            </label>
+            <div class="suggests" data-suggests></div>
+            <div class="deck-body">
+              <section class="mission" aria-label="Workspaces">
+                <h2 class="deck-label">Capabilities</h2>
+                <div class="mission-grid" data-mission></div>
+              </section>
+
+              <aside class="rail" aria-label="Intelligence rail">
+                <div class="rail-block" data-rail-plan>
+                  <h3>Today's plan</h3><div class="rail-body"></div>
+                </div>
+                <div class="rail-block" data-rail-money>
+                  <h3>Money</h3><div class="rail-body"></div>
+                </div>
+                <div class="rail-block" data-rail-approvals>
+                  <h3>Waiting on you</h3><div class="rail-body"></div>
+                </div>
+                <div class="rail-block" data-rail-work>
+                  <h3>Active work</h3><div class="rail-body"></div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </section>
     </div>
 
-    <!-- workspace overlays mount here, above the blurred cockpit -->
+    <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="js/main.js?v=1"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-brain-20260703-16"></script>
   </body>
 </html>

@@ -113,7 +113,7 @@ import {
   readHermesInteractionMemoryStoreRecords,
 } from "./phantom-ai/hermes-interaction-memory-store.js";
 import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
-import { runCodexOperatorChat } from "./phantom-ai/codex-operator.js";
+import { buildOwnerCodexMemoryStatus } from "./phantom-ai/owner-codex-memory.js";
 import { buildToolLanePreview } from "./phantom-ai/tool-lane.js";
 import { buildChicagoShotsLeadIntakePreview } from "./phantom-ai/ops-workflow.js";
 import {
@@ -142,6 +142,8 @@ import {
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
+import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
+import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
 import { evaluateProviderLiveReceiptLedgerContract } from "./phantom-ai/provider-live-receipt-ledger-contract.js";
 import {
@@ -604,6 +606,60 @@ function parseContextModuleData(value: unknown): ContextModuleData[] {
   });
 }
 
+const OWNER_MEMORY_TENANT_ID = "phantomforce-owner";
+const MAX_MEMORY_SCOPE_ID_CHARS = 80;
+
+function cleanMemoryScopeId(value: unknown, fallback = "") {
+  if (typeof value !== "string") return fallback;
+  const trimmed = value.trim().replace(/\s+/g, "-");
+  return trimmed ? trimmed.slice(0, MAX_MEMORY_SCOPE_ID_CHARS) : fallback;
+}
+
+function tenantIdForAccessSession(session: AccessSession) {
+  if (session.canManageAccess) {
+    return OWNER_MEMORY_TENANT_ID;
+  }
+
+  return cleanMemoryScopeId(session.clientId, `client-${session.id}`);
+}
+
+function resolveMemoryScopeFromBody(
+  body: {
+    tenant_id?: unknown;
+    actor_user_id?: unknown;
+  },
+  session: AccessSession,
+) {
+  const requestedTenantId = cleanMemoryScopeId(body.tenant_id);
+  const requestedActorUserId = cleanMemoryScopeId(body.actor_user_id);
+
+  if (!session.canManageAccess) {
+    const tenantId = tenantIdForAccessSession(session);
+    return {
+      tenant_id: tenantId,
+      actor_user_id: cleanMemoryScopeId(session.id, session.id),
+      memory_scope: "client_tenant_only" as const,
+      requested_tenant_id: requestedTenantId || null,
+      requested_actor_user_id: requestedActorUserId || null,
+      tenant_override_blocked: Boolean(requestedTenantId && requestedTenantId !== tenantId),
+      actor_override_blocked: Boolean(requestedActorUserId && requestedActorUserId !== session.id),
+    };
+  }
+
+  const tenantId = requestedTenantId || OWNER_MEMORY_TENANT_ID;
+  const actorUserId = requestedActorUserId || session.id;
+
+  return {
+    tenant_id: tenantId,
+    actor_user_id: actorUserId,
+    memory_scope: tenantId === OWNER_MEMORY_TENANT_ID ? ("owner_private" as const) : ("owner_selected_tenant" as const),
+    requested_tenant_id: requestedTenantId || null,
+    requested_actor_user_id: requestedActorUserId || null,
+    tenant_override_blocked: false,
+    actor_override_blocked: false,
+  };
+}
+
 function buildModelRouterRequestFromBody(
   body: {
     tenant_id?: unknown;
@@ -616,16 +672,17 @@ function buildModelRouterRequestFromBody(
     business_summary?: unknown;
     module_data?: unknown;
   },
-  session: { id: string; canManageAccess: boolean },
+  session: AccessSession,
   requestIdPrefix: string,
 ) {
   const actorRole: ActorRole = session.canManageAccess ? "platform_admin" : "business_owner";
+  const memoryScope = resolveMemoryScopeFromBody(body, session);
 
   return {
-    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id.slice(0, 80) : "phantomforce-owner",
+    tenant_id: memoryScope.tenant_id,
     business_name:
       typeof body.business_name === "string" ? body.business_name.slice(0, 120) : "PhantomForce",
-    actor_user_id: typeof body.actor_user_id === "string" ? body.actor_user_id.slice(0, 80) : session.id,
+    actor_user_id: memoryScope.actor_user_id,
     actor_role: actorRole,
     request_id:
       typeof body.request_id === "string" ? body.request_id.slice(0, 120) : `${requestIdPrefix}-${Date.now()}`,
@@ -640,6 +697,31 @@ function buildModelRouterRequestFromBody(
         ? body.business_summary.slice(0, 900)
         : "Owner-only PhantomForce workspace. External actions approval-only.",
     module_data: parseContextModuleData(body.module_data),
+    memory_scope: memoryScope.memory_scope,
+    requested_tenant_id: memoryScope.requested_tenant_id,
+    requested_actor_user_id: memoryScope.requested_actor_user_id,
+    tenant_override_blocked: memoryScope.tenant_override_blocked,
+    actor_override_blocked: memoryScope.actor_override_blocked,
+  };
+}
+
+function buildMemoryScopeProof(normalized: {
+  memory_scope: string;
+  tenant_id: string;
+  actor_user_id: string;
+  requested_tenant_id: string | null;
+  requested_actor_user_id: string | null;
+  tenant_override_blocked: boolean;
+  actor_override_blocked: boolean;
+}) {
+  return {
+    scope: normalized.memory_scope,
+    tenant_id: normalized.tenant_id,
+    actor_user_id: normalized.actor_user_id,
+    requested_tenant_id: normalized.requested_tenant_id,
+    requested_actor_user_id: normalized.requested_actor_user_id,
+    tenant_override_blocked: normalized.tenant_override_blocked,
+    actor_override_blocked: normalized.actor_override_blocked,
   };
 }
 
@@ -656,15 +738,358 @@ function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
 }
 
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
-  if (lane === "glm_5_2") return "GLM 5.2";
+  if (lane === "glm_5_2") return "Local GLM";
   if (lane === "claude_cli") return "Claude CLI";
-  return "Codex operator";
+  return "Codex";
 }
 
 function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
-  if (lane === "glm_5_2") return "openrouter_glm" as const;
+  if (lane === "glm_5_2") return "local" as const;
   if (lane === "claude_cli") return "claude" as const;
   return "local" as const;
+}
+
+type PendingPrivacyIntent = {
+  kind: "weather";
+  created_at_ms: number;
+  original_request: string;
+};
+
+const pendingPrivacyIntents = new Map<string, PendingPrivacyIntent>();
+const PENDING_PRIVACY_INTENT_TTL_MS = 10 * 60 * 1000;
+
+const weatherCodeLabels: Record<number, string> = {
+  0: "clear",
+  1: "mostly clear",
+  2: "partly cloudy",
+  3: "overcast",
+  45: "foggy",
+  48: "foggy",
+  51: "light drizzle",
+  53: "drizzle",
+  55: "heavy drizzle",
+  61: "light rain",
+  63: "rain",
+  65: "heavy rain",
+  71: "light snow",
+  73: "snow",
+  75: "heavy snow",
+  80: "rain showers",
+  81: "rain showers",
+  82: "heavy rain showers",
+  95: "thunderstorms",
+  96: "thunderstorms with hail",
+  99: "thunderstorms with hail",
+};
+
+function purgeExpiredPendingPrivacyIntents(now = Date.now()) {
+  for (const [key, intent] of pendingPrivacyIntents.entries()) {
+    if (now - intent.created_at_ms > PENDING_PRIVACY_INTENT_TTL_MS) {
+      pendingPrivacyIntents.delete(key);
+    }
+  }
+}
+
+function buildChatMemoryKey(
+  session: AccessSession,
+  normalized: {
+    tenant_id: string;
+    actor_user_id: string;
+  },
+) {
+  return `${session.id}:${normalized.tenant_id}:${normalized.actor_user_id}`;
+}
+
+function cleanLocationCandidate(value: string) {
+  return value
+    .replace(/[?.!,;:]+$/g, "")
+    .replace(/^(?:the\s+)?weather\s+(?:in|for|near|at)\s+/i, "")
+    .replace(/\b(please|pls|thanks|thank you)\b/gi, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function isLikelyBareLocationCandidate(value: string) {
+  const normalized = value.toLowerCase().replace(/\s+/g, " ").trim();
+  if (!normalized) return false;
+  if (/\b(weather|forecast|temperature|temp|rain|snow|storm|humidity|outside|what'?s|whats|what is|how'?s|hows|how is)\b/.test(normalized)) {
+    return false;
+  }
+  return /[a-z0-9]/i.test(normalized);
+}
+
+function extractExplicitWeatherLocation(userRequest: string) {
+  const normalized = userRequest.replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim();
+  const patterns = [
+    /\b(?:what'?s|whats|what is|how'?s|hows|how is)\s+(?:the\s+)?(?:weather|forecast|temperature|temp)\s+(?:in|for|near|at)\s+(.{2,80})$/i,
+    /\b(?:weather|forecast|temperature|temp)\s+(?:in|for|near|at)\s+(.{2,80})$/i,
+    /\b(?:in|for|near|at)\s+([a-z][a-z .'-]{1,80}(?:,\s*[a-z]{2})?|\d{5})(?:\s+(?:weather|forecast|temperature|temp))?$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    const candidate = match?.[1] ? cleanLocationCandidate(match[1]) : "";
+    if (candidate && /[a-z0-9]/i.test(candidate)) return candidate;
+  }
+
+  return null;
+}
+
+function extractLocationFollowUp(userRequest: string) {
+  const normalized = userRequest.replace(/[’‘]/g, "'").replace(/\s+/g, " ").trim();
+  const patterns = [
+    /^(?:ok(?:ay)?[, ]*)?(?:what'?s|whats|what is|how'?s|hows|how is)\s+(?:the\s+)?(?:weather|forecast|temperature|temp)\s+(?:in|for|near|at)\s+(.{2,80})$/i,
+    /^(?:ok(?:ay)?[, ]*)?(?:weather|forecast|temperature|temp)\s+(?:in|for|near|at)\s+(.{2,80})$/i,
+    /^(?:ok(?:ay)?[, ]*)?(?:i'?m|im|i am|we'?re|were|we are)\s+(?:in|near|at)\s+(.{2,80})$/i,
+    /^(?:ok(?:ay)?[, ]*)?(?:use|try|check|make it|set it to)\s+(.{2,80})$/i,
+    /^(?:ok(?:ay)?[, ]*)?(?:my location is|location is|city is|zip is)\s+(.{2,80})$/i,
+    /^([a-z][a-z .'-]{1,80}(?:,\s*[a-z]{2})?|\d{5})$/i,
+  ];
+
+  for (const pattern of patterns) {
+    const match = normalized.match(pattern);
+    const candidate = match?.[1] ? cleanLocationCandidate(match[1]) : "";
+    if (candidate && isLikelyBareLocationCandidate(candidate)) return candidate;
+  }
+
+  return null;
+}
+
+function numberFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringFromRecord(record: Record<string, unknown>, key: string) {
+  const value = record[key];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function isWeatherLookupEnabled() {
+  return process.env.PHANTOM_WEATHER_LOOKUP_ENABLED !== "false";
+}
+
+async function lookupWeatherForExplicitLocation(location: string) {
+  if (!isWeatherLookupEnabled()) {
+    return {
+      ok: false as const,
+      reason: "weather_lookup_disabled",
+      message: "Weather lookup is currently disabled on this PhantomForce backend.",
+    };
+  }
+
+  const geocodeUrl = new URL("https://geocoding-api.open-meteo.com/v1/search");
+  geocodeUrl.searchParams.set("name", location);
+  geocodeUrl.searchParams.set("count", "1");
+  geocodeUrl.searchParams.set("language", "en");
+  geocodeUrl.searchParams.set("format", "json");
+
+  const geocodeResponse = await fetch(geocodeUrl, { headers: { Accept: "application/json" } });
+  if (!geocodeResponse.ok) {
+    return {
+      ok: false as const,
+      reason: "geocode_failed",
+      message: `I could not resolve ${location} for a weather lookup.`,
+    };
+  }
+
+  const geocodeJson = await geocodeResponse.json().catch(() => null);
+  const result = geocodeJson && typeof geocodeJson === "object"
+    ? (geocodeJson as { results?: unknown }).results
+    : null;
+  const first = Array.isArray(result) && result[0] && typeof result[0] === "object"
+    ? (result[0] as Record<string, unknown>)
+    : null;
+
+  if (!first) {
+    return {
+      ok: false as const,
+      reason: "location_not_found",
+      message: `I could not find a weather match for ${location}. Try city + state or ZIP.`,
+    };
+  }
+
+  const latitude = numberFromRecord(first, "latitude");
+  const longitude = numberFromRecord(first, "longitude");
+  const name = stringFromRecord(first, "name") ?? location;
+  const admin1 = stringFromRecord(first, "admin1");
+  const country = stringFromRecord(first, "country");
+
+  if (latitude === null || longitude === null) {
+    return {
+      ok: false as const,
+      reason: "location_coordinates_missing",
+      message: `I found ${location}, but weather coordinates were missing.`,
+    };
+  }
+
+  const forecastUrl = new URL("https://api.open-meteo.com/v1/forecast");
+  forecastUrl.searchParams.set("latitude", String(latitude));
+  forecastUrl.searchParams.set("longitude", String(longitude));
+  forecastUrl.searchParams.set(
+    "current",
+    "temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m",
+  );
+  forecastUrl.searchParams.set("temperature_unit", "fahrenheit");
+  forecastUrl.searchParams.set("wind_speed_unit", "mph");
+  forecastUrl.searchParams.set("precipitation_unit", "inch");
+  forecastUrl.searchParams.set("timezone", "auto");
+
+  const forecastResponse = await fetch(forecastUrl, { headers: { Accept: "application/json" } });
+  if (!forecastResponse.ok) {
+    return {
+      ok: false as const,
+      reason: "forecast_failed",
+      message: `I found ${name}, but the weather service did not return current conditions.`,
+    };
+  }
+
+  const forecastJson = await forecastResponse.json().catch(() => null);
+  const current = forecastJson && typeof forecastJson === "object"
+    ? (forecastJson as { current?: unknown }).current
+    : null;
+  const currentRecord = current && typeof current === "object" ? (current as Record<string, unknown>) : null;
+
+  if (!currentRecord) {
+    return {
+      ok: false as const,
+      reason: "current_conditions_missing",
+      message: `I found ${name}, but current weather was missing from the response.`,
+    };
+  }
+
+  const temperature = numberFromRecord(currentRecord, "temperature_2m");
+  const feelsLike = numberFromRecord(currentRecord, "apparent_temperature");
+  const humidity = numberFromRecord(currentRecord, "relative_humidity_2m");
+  const wind = numberFromRecord(currentRecord, "wind_speed_10m");
+  const precipitation = numberFromRecord(currentRecord, "precipitation");
+  const weatherCode = numberFromRecord(currentRecord, "weather_code");
+  const label = weatherCode === null ? "current conditions" : weatherCodeLabels[weatherCode] ?? "current conditions";
+  const place = [name, admin1, country].filter(Boolean).join(", ");
+  const tempText = temperature === null ? "temperature unavailable" : `${Math.round(temperature)}°F`;
+  const feelsText = feelsLike === null ? "" : `, feels like ${Math.round(feelsLike)}°F`;
+  const windText = wind === null ? "" : ` Wind ${Math.round(wind)} mph.`;
+  const humidityText = humidity === null ? "" : ` Humidity ${Math.round(humidity)}%.`;
+  const rainText = precipitation && precipitation > 0 ? ` Precipitation ${precipitation.toFixed(2)} in.` : "";
+
+  return {
+    ok: true as const,
+    place,
+    label,
+    temperature,
+    feels_like: feelsLike,
+    humidity,
+    wind_speed: wind,
+    precipitation,
+    weather_code: weatherCode,
+    message: `${place}: ${tempText}${feelsText}, ${label}.${windText}${humidityText}${rainText}`,
+  };
+}
+
+async function buildWeatherReadyReply(location: string, session: AccessSession, reason: string) {
+  const weather = await lookupWeatherForExplicitLocation(location);
+  const content = weather.ok
+    ? `${weather.message}\n\nPrivacy note: I used only the location you typed. No device, IP, browser, or account location was used.`
+    : `${weather.message} Privacy note: I still did not use device, IP, browser, or account location.`;
+
+  return {
+    ok: true,
+    session,
+    provider_choice: "phantom",
+    model_id: weather.ok ? "phantom-weather-explicit-location" : "phantom-privacy-weather-context",
+    message: {
+      role: "assistant",
+      content,
+    },
+    weather,
+    privacy_guard: {
+      location_accessed: false,
+      location_inferred: false,
+      device_location_used: false,
+      ip_location_used: false,
+      explicit_location_received: true,
+      explicit_location: location,
+      requires_explicit_location: false,
+      requires_live_lookup_approval: false,
+      user_provided_location_only: true,
+      reason,
+    },
+    provider_request_body_created: false,
+    live_provider_called: false,
+    network_call_performed: weather.ok,
+    approval_executed: false,
+    queue_written: false,
+    production_ledger_write: false,
+    payment_request_created: false,
+    invoice_created: false,
+  };
+}
+
+async function buildPrivacyFirstLocationReply(userRequest: string, session: AccessSession, chatMemoryKey: string) {
+  purgeExpiredPendingPrivacyIntents();
+  const normalized = userRequest.toLowerCase().replace(/\s+/g, " ").trim();
+  const asksOwnLocation =
+    /\b(where am i|my location|where do you think i am|do you know where i am|what city am i in)\b/.test(normalized);
+  const asksWeather =
+    /\b(weather|forecast|temperature|temp|rain|snow|storm|humidity|wind chill|heat index)\b/.test(normalized) ||
+    /\b(how'?s|how is|what'?s|what is)\s+(it\s+)?outside\b/.test(normalized);
+
+  const pendingIntent = pendingPrivacyIntents.get(chatMemoryKey);
+  const followUpLocation = pendingIntent?.kind === "weather" ? extractLocationFollowUp(userRequest) : null;
+
+  if (pendingIntent?.kind === "weather" && followUpLocation) {
+    pendingPrivacyIntents.delete(chatMemoryKey);
+    return await buildWeatherReadyReply(followUpLocation, session, "weather_location_followup_received");
+  }
+
+  if (!asksOwnLocation && !asksWeather) return null;
+
+  const explicitWeatherLocation = asksWeather ? extractExplicitWeatherLocation(userRequest) : null;
+
+  if (asksWeather && explicitWeatherLocation) {
+    pendingPrivacyIntents.delete(chatMemoryKey);
+    return await buildWeatherReadyReply(explicitWeatherLocation, session, "weather_request_explicit_location_received");
+  }
+
+  const content = asksWeather
+    ? "I can help with weather, but PhantomForce does not access or infer your location. Send a city or ZIP, or explicitly approve a live weather lookup, and I will use only that location."
+    : "I do not have access to your location, and PhantomForce will not infer it from your device, IP, browser, or account. If you want location-based help, tell me the city or place to use.";
+
+  if (asksWeather) {
+    pendingPrivacyIntents.set(chatMemoryKey, {
+      kind: "weather",
+      created_at_ms: Date.now(),
+      original_request: userRequest.slice(0, 240),
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    provider_choice: "phantom",
+    model_id: "phantom-privacy-location-guard",
+    message: {
+      role: "assistant",
+      content,
+    },
+    privacy_guard: {
+      location_accessed: false,
+      location_inferred: false,
+      device_location_used: false,
+      ip_location_used: false,
+      requires_explicit_location: true,
+      pending_intent_saved: asksWeather,
+      reason: asksWeather ? "weather_request_requires_explicit_location" : "location_request_blocked",
+    },
+    provider_request_body_created: false,
+    live_provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    queue_written: false,
+    production_ledger_write: false,
+    payment_request_created: false,
+    invoice_created: false,
+  };
 }
 
 function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string) {
@@ -1411,16 +1836,17 @@ function buildHermesInteractionMemoryPreviewFromBody(
     summary?: unknown;
     metadata?: unknown;
   },
-  session: { id: string },
+  session: AccessSession,
 ) {
   const metadata =
     body.metadata && typeof body.metadata === "object" && !Array.isArray(body.metadata)
       ? (body.metadata as Record<string, string | number | boolean | null>)
       : undefined;
+  const memoryScope = resolveMemoryScopeFromBody(body, session);
 
   return buildHermesInteractionMemoryPreview({
-    tenant_id: typeof body.tenant_id === "string" ? body.tenant_id : session.id,
-    actor_user_id: typeof body.actor_user_id === "string" ? body.actor_user_id : session.id,
+    tenant_id: memoryScope.tenant_id,
+    actor_user_id: memoryScope.actor_user_id,
     task_id: typeof body.task_id === "string" ? body.task_id : null,
     interaction_type: typeof body.interaction_type === "string" ? body.interaction_type : "phantom_ai_activity",
     summary: typeof body.summary === "string" ? body.summary : "",
@@ -2291,6 +2717,19 @@ app.get("/phantom-ai/ops/status", async (request, reply) => {
     getHermesInteractionMemoryStoreStatus(),
     buildToolLanePreview({ toolId: "n8n" }),
   ]);
+  const localGlmModelId =
+    process.env.PHANTOM_LOCAL_GLM_MODEL?.trim() ||
+    process.env.PHANTOM_OLLAMA_MODEL?.trim() ||
+    process.env.OLLAMA_MODEL?.trim() ||
+    "hf.co/unsloth/GLM-5.2-GGUF:UD-IQ1_S";
+  const localGlmFallbackModelId =
+    process.env.PHANTOM_OLLAMA_FALLBACK_MODEL?.trim() ||
+    process.env.PHANTOM_LOCAL_GLM_FALLBACK_MODEL?.trim() ||
+    null;
+  const localGlmMode =
+    process.env.PHANTOM_MODEL_ROUTER_MODE === "local" ||
+    Boolean(process.env.OLLAMA_BASE_URL?.trim()) ||
+    Boolean(process.env.PHANTOM_LOCAL_GLM_MODEL?.trim());
 
   return {
     ok: true,
@@ -2313,17 +2752,19 @@ app.get("/phantom-ai/ops/status", async (request, reply) => {
         production_write_allowed: interactionMemoryStatus.production_write_allowed,
       },
       glm_worker: {
-        configured: providerStatus.openrouter_glm.configured,
-        model_id: providerStatus.openrouter_glm.model_id,
-        live_transport_enabled: providerStatus.openrouter_glm.live_transport_enabled,
-        live_call_ready: providerStatus.openrouter_glm.live_call_ready,
-        status: providerStatus.openrouter_glm.live_call_ready ? "ready" : "gated_or_off",
-        key_present_masked_boolean: providerStatus.openrouter_glm.configured,
-        setup_required: providerStatus.openrouter_glm.setup_required,
-        payment_setup_needed: providerStatus.openrouter_glm.payment_setup_needed,
-        detail: providerStatus.openrouter_glm.live_call_ready
-          ? "GLM worker lane is admin-selected and live flags are enabled."
-          : "GLM worker lane is gated/off unless admin env flags and provider readiness are enabled.",
+        configured: localGlmMode || providerStatus.openrouter_glm.configured,
+        model_id: localGlmMode ? localGlmModelId : providerStatus.openrouter_glm.model_id,
+        live_transport_enabled: localGlmMode || providerStatus.openrouter_glm.live_transport_enabled,
+        live_call_ready: localGlmMode || providerStatus.openrouter_glm.live_call_ready,
+        status: localGlmMode ? "local_configured" : providerStatus.openrouter_glm.live_call_ready ? "ready" : "gated_or_off",
+        key_present_masked_boolean: localGlmMode ? false : providerStatus.openrouter_glm.configured,
+        setup_required: localGlmMode ? [] : providerStatus.openrouter_glm.setup_required,
+        payment_setup_needed: localGlmMode ? false : providerStatus.openrouter_glm.payment_setup_needed,
+        detail: localGlmMode
+          ? `GLM lane is routed to localhost Ollama. Target: ${localGlmModelId}${localGlmFallbackModelId ? `; fallback: ${localGlmFallbackModelId}` : ""}. OpenRouter is not required.`
+          : providerStatus.openrouter_glm.live_call_ready
+            ? "GLM worker lane is admin-selected and live flags are enabled."
+            : "GLM worker lane is gated/off unless admin env flags and provider readiness are enabled.",
       },
       tool_lane_status: {
         status: toolLaneStatus.status,
@@ -2430,6 +2871,30 @@ app.post("/phantom-ai/tool-lane/preview", async (request, reply) => {
   };
 });
 
+app.get("/phantom-ai/admin/codex-memory/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { q?: string; limit?: string } | undefined;
+  const owner_memory = await buildOwnerCodexMemoryStatus({
+    query: query?.q,
+    limit: query?.limit,
+  });
+
+  return {
+    ok: true,
+    session,
+    owner_memory,
+    provider_called: false,
+    network_call_performed: false,
+    upload_send_post: false,
+    credentials_returned: false,
+  };
+});
+
 app.post("/phantom-ai/hermes/memory-context/preview", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -2476,6 +2941,7 @@ app.post("/phantom-ai/hermes/memory-context/preview", async (request, reply) => 
     queue_written: false,
     approval_executed: false,
     production_ledger_write: false,
+    memory_scope: buildMemoryScopeProof(normalized),
     memory_context,
   };
 });
@@ -2534,6 +3000,7 @@ app.post("/phantom-ai/context-preview", async (request, reply) => {
     provider_readiness: result.provider_invocation.readiness_result,
     provider_invocation: result.provider_invocation,
     memory_context: memoryContext,
+    memory_scope: buildMemoryScopeProof(normalized),
     context: {
       compact_context: redactSensitiveText(memoryContext.augmented_context_preview),
       base_compact_context: redactSensitiveText(result.context_packet.compact_context),
@@ -2669,16 +3136,46 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     session,
     "chat",
   );
+  const chatMemoryKey = buildChatMemoryKey(session, normalized);
+  const privacyFirstLocationReply = await buildPrivacyFirstLocationReply(normalized.user_request, session, chatMemoryKey);
+
+  if (privacyFirstLocationReply) {
+    return privacyFirstLocationReply;
+  }
 
   if (session.canManageAccess) {
     const adminModelLane = parseAdminPhantomAiModelLane(body.admin_model ?? body.model_lane ?? body.provider);
     const adminProviderRoute = adminPhantomAiProviderRoute(adminModelLane);
     const adminModelLabel = adminPhantomAiModelLabel(adminModelLane);
+    if (/^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/i.test(normalized.user_request.trim())) {
+      return {
+        ok: true,
+        session,
+        provider_choice: "phantom",
+        admin_model_lane: adminModelLane,
+        admin_model_label: adminModelLabel,
+        model_id: "phantom-instant-router",
+        message: {
+          role: "assistant",
+          content: "Hey Jordan. What do you want handled?",
+        },
+        provider_request_body_created: false,
+        live_provider_called: false,
+        network_call_performed: false,
+        approval_executed: false,
+        queue_written: false,
+        production_ledger_write: false,
+        payment_request_created: false,
+        invoice_created: false,
+        memory_scope: buildMemoryScopeProof(normalized),
+      };
+    }
     const preview = previewModelRouterFoundation(normalized, {
       env: {
         ...process.env,
-        PHANTOM_MODEL_ROUTER_MODE:
-          adminProviderRoute === "openrouter_glm" ? "openrouter" : adminProviderRoute === "claude" ? "claude" : "local",
+        PHANTOM_MODEL_ROUTER_MODE: adminProviderRoute === "claude" ? "claude" : "local",
+        PHANTOM_LOCAL_MODEL_AVAILABLE: adminProviderRoute === "local" ? "true" : process.env.PHANTOM_LOCAL_MODEL_AVAILABLE,
+        OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434",
       },
     });
     const memoryContext = await buildHermesMemoryContextPreview({
@@ -2696,28 +3193,51 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     const approvalRequired = preview.decision.approval_required || preview.action_preview.approval_required;
     const adminResult =
       adminModelLane === "glm_5_2"
-        ? {
-            lane: adminModelLane,
-            model_id: (await callOpenRouterGlm52(
-              {
-                requestId: normalized.request_id,
-                businessName: normalized.business_name,
-                taskType: normalized.task_type,
-                userMessage: normalized.user_request,
-                compactContext: memoryContext.augmented_context_preview,
-                sensitivityLevel: preview.decision.sensitivity_level,
-                approvalRequired,
-                adminOperatorLane: true,
-              },
-              {
-                env: {
-                  ...process.env,
-                  PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
-                  PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
+        ? process.env.PHANTOM_FORCE_OPENROUTER_GLM === "true"
+          ? {
+              lane: adminModelLane,
+              model_id: await callOpenRouterGlm52(
+                {
+                  requestId: normalized.request_id,
+                  businessName: normalized.business_name,
+                  taskType: normalized.task_type,
+                  userMessage: normalized.user_request,
+                  compactContext: memoryContext.augmented_context_preview,
+                  sensitivityLevel: preview.decision.sensitivity_level,
+                  approvalRequired,
+                  adminOperatorLane: true,
                 },
-              },
-            )),
-          }
+                {
+                  env: {
+                    ...process.env,
+                    PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
+                    PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
+                  },
+                },
+              ),
+            }
+          : {
+              lane: adminModelLane,
+              model_id: await callLocalOllamaChat(
+                {
+                  requestId: normalized.request_id,
+                  businessName: normalized.business_name,
+                  taskType: normalized.task_type,
+                  userMessage: normalized.user_request,
+                  compactContext: memoryContext.augmented_context_preview,
+                  sensitivityLevel: preview.decision.sensitivity_level,
+                  approvalRequired,
+                  adminOperatorLane: true,
+                },
+                {
+                  env: {
+                    ...process.env,
+                    OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434",
+                    PHANTOM_LOCAL_MODEL_AVAILABLE: "true",
+                  },
+                },
+              ),
+            }
         : adminModelLane === "claude_cli"
           ? {
               lane: adminModelLane,
@@ -2733,9 +3253,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             }
           : {
               lane: adminModelLane,
-              model_id: await runCodexOperatorChat({
+              model_id: await callCodexCliChat({
                 requestId: normalized.request_id,
                 businessName: normalized.business_name,
+                taskType: normalized.task_type,
                 userMessage: normalized.user_request,
                 compactContext: memoryContext.augmented_context_preview,
                 approvalRequired,
@@ -2816,7 +3337,28 @@ app.post("/phantom-ai/chat", async (request, reply) => {
               tool_result: modelResult.tool_result,
             }
           : null,
-      openrouter: adminModelLane === "glm_5_2" ? modelResult : null,
+      codex_cli:
+        adminModelLane === "codex" && "provider_id" in modelResult && modelResult.provider_id === "codex_cli"
+          ? {
+              status: modelResult.status,
+              model_id: modelResult.model_id,
+              seconds: modelResult.seconds,
+              admin_only: modelResult.admin_only,
+              localhost_only: modelResult.localhost_only,
+              approval_executed: modelResult.approval_executed,
+              external_action_executed: modelResult.external_action_executed,
+              queue_written: modelResult.queue_written,
+              ledger_written: modelResult.ledger_written,
+            }
+          : null,
+      openrouter:
+        adminModelLane === "glm_5_2" && "provider_id" in modelResult && modelResult.provider_id === "openrouter_glm"
+          ? modelResult
+          : null,
+      local_ollama:
+        adminModelLane === "glm_5_2" && "provider_id" in modelResult && modelResult.provider_id === "local_ollama"
+          ? modelResult
+          : null,
       claude_cli: adminModelLane === "claude_cli" ? modelResult : null,
       hermes: {
         context_used: true,
@@ -2824,6 +3366,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         provider_route: adminProviderRoute,
         recalled_memory_count: memoryContext.memory.recalled_count,
       },
+      memory_scope: buildMemoryScopeProof(normalized),
       memory_context: {
         scope: memoryContext.scope,
         recalled_memory_count: memoryContext.memory.recalled_count,
@@ -2840,8 +3383,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     };
   }
 
-  const providerStatus = getProviderSetupStatus(process.env);
-  const shouldTryGlmChat = providerChoice === "openrouter_glm" || providerStatus.openrouter_glm.configured;
+  const shouldTryGlmChat = providerChoice === "openrouter_glm" && process.env.PHANTOM_FORCE_OPENROUTER_GLM === "true";
 
   if (shouldTryGlmChat) {
     const preview = previewModelRouterFoundation(normalized, {
@@ -2937,6 +3479,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             compact_context_chars: memoryContext.augmented_context_chars,
             redaction: memoryContext.redaction,
           },
+          memory_scope: buildMemoryScopeProof(normalized),
           ledger_record: redactHermesLedgerRecord(ledgerRecord),
           provider_request_body_created: openrouter.request_body_prepared,
           live_provider_called: false,
@@ -2965,6 +3508,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         compact_context_chars: memoryContext.augmented_context_chars,
         redaction: memoryContext.redaction,
       },
+      memory_scope: buildMemoryScopeProof(normalized),
       ledger_record: redactHermesLedgerRecord(ledgerRecord),
       provider_request_body_created: openrouter.request_body_prepared,
       live_provider_called: openrouter.provider_called,
@@ -2992,6 +3536,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     decision: result.decision,
     ledger_record: redactHermesLedgerRecord(result.ledger_record),
     interaction_memory: interactionMemory,
+    memory_scope: buildMemoryScopeProof(normalized),
     provider_request_body_created: false,
     live_provider_called: false,
     network_call_performed: false,

@@ -1,4 +1,4 @@
-/* PhantomForce cockpit — ambient living entity behind the operations UI.
+/* PhantomForce phantom — ambient living entity behind the operations UI.
    Injects a fixed background canvas and runs a subtle breathing phantom so the
    private app feels like it's running inside PhantomForce. Defensive: no WebGL
    or reduced-motion -> it simply does nothing (the CSS void backdrop remains). */
@@ -145,12 +145,12 @@ async function initVoidBg(): Promise<void> {
 }
 
 /* Ambient threat radar: a faint reminder of the risks PhantomForce watches,
-   drifting in the periphery behind the cockpit. Subtle by design. */
-function initCockpitRadar(): void {
+   drifting in the periphery behind Phantom. Subtle by design. */
+function initPhantomRadar(): void {
   if (reduceMotion) return;
-  if (document.querySelector("[data-cockpit-radar]")) return;
+  if (document.querySelector("[data-phantom-radar]")) return;
   const field = document.createElement("div");
-  field.setAttribute("data-cockpit-radar", "");
+  field.setAttribute("data-phantom-radar", "");
   field.setAttribute("aria-hidden", "true");
   Object.assign(field.style, {
     position: "fixed", inset: "0", zIndex: "0", pointerEvents: "none", overflow: "hidden",
@@ -161,7 +161,7 @@ function initCockpitRadar(): void {
   const spawn = () => {
     if (document.hidden) return;
     const ping = document.createElement("div");
-    ping.className = "cockpit-ping";
+    ping.className = "phantom-ping";
     const right = Math.random() < 0.5;
     ping.style.left = (right ? 80 + Math.random() * 16 : 4 + Math.random() * 14) + "%";
     ping.style.top = 14 + Math.random() * 72 + "%";
@@ -177,7 +177,7 @@ function initCockpitRadar(): void {
   window.setInterval(spawn, 2600);
 }
 
-function boot(): void { void initVoidBg(); initCockpitRadar(); }
+function boot(): void { void initVoidBg(); initPhantomRadar(); }
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", boot);
 } else {

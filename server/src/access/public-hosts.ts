@@ -1,8 +1,7 @@
 import type { AccessSession } from "./session.js";
 
 export const ADMIN_PUBLIC_HOST = "admin.phantomforce.online";
-export const CLIENT_PUBLIC_HOST = "app.chicagoshots.online";
-export const LEGACY_CLIENT_PUBLIC_HOST = "app.phantomforce.online";
+export const CLIENT_PUBLIC_HOST = "app.phantomforce.online";
 
 export const ADMIN_PUBLIC_URL = `https://${ADMIN_PUBLIC_HOST}`;
 export const CLIENT_PUBLIC_URL = `https://${CLIENT_PUBLIC_HOST}`;
@@ -10,7 +9,6 @@ export const CLIENT_PUBLIC_URL = `https://${CLIENT_PUBLIC_HOST}`;
 export const PUBLIC_WEB_ORIGINS = [
   ADMIN_PUBLIC_URL,
   CLIENT_PUBLIC_URL,
-  `https://${LEGACY_CLIENT_PUBLIC_HOST}`,
 ] as const;
 
 export function normalizePublicHost(value: string | undefined) {
@@ -51,7 +49,7 @@ export function publicHostScope(host: string | undefined): "admin" | "client" | 
   const normalized = normalizePublicHost(host);
 
   if (normalized === ADMIN_PUBLIC_HOST) return "admin";
-  if (normalized === CLIENT_PUBLIC_HOST || normalized === LEGACY_CLIENT_PUBLIC_HOST) return "client";
+  if (normalized === CLIENT_PUBLIC_HOST) return "client";
   return "local";
 }
 

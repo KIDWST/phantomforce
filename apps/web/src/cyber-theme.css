@@ -54,7 +54,7 @@ body::after {
 /* keep real app content above the backdrop + ambient entity */
 #root { position: relative; z-index: 1; }
 .app-shell { position: relative; z-index: 2; background: transparent; }
-/* let the living entity glow through the cockpit: dim the grid a touch */
+/* let the living entity glow through Phantom: dim the grid a touch */
 body::before { opacity: 0.7; }
 [data-void-bg] { mix-blend-mode: screen; }
 
@@ -336,18 +336,18 @@ input:focus, select:focus, button:focus-visible {
 /* slim the side rail so graphics lead, not text */
 .command-side .asset-panel p { color: var(--muted); }
 
-/* ---------- ambient threat radar (subtle, behind the cockpit) ---------- */
-.cockpit-ping {
+/* ---------- ambient threat radar (subtle, behind Phantom) ---------- */
+.phantom-ping {
   position: absolute; display: flex; align-items: center; gap: 7px;
   transform: translate(-50%, -50%); opacity: 0; transition: opacity 0.8s ease;
 }
-.cockpit-ping.on { opacity: 0.34; }
-.cockpit-ping .d {
+.phantom-ping.on { opacity: 0.34; }
+.phantom-ping .d {
   width: 7px; height: 7px; border-radius: 50%; background: #ff4d63;
   box-shadow: 0 0 8px #ff4d63, 0 0 18px rgba(255, 77, 99, 0.5);
   animation: pingRipple 2.4s ease-out infinite;
 }
-.cockpit-ping .l { font: 500 9px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a96; white-space: nowrap; }
+.phantom-ping .l { font: 500 9px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: #ff8a96; white-space: nowrap; }
 @keyframes pingRipple { 0% { box-shadow: 0 0 8px #ff4d63, 0 0 0 0 rgba(255, 77, 99, 0.4); } 100% { box-shadow: 0 0 8px #ff4d63, 0 0 0 14px rgba(255, 77, 99, 0); } }
 
 /* ---------- reduced motion ---------- */

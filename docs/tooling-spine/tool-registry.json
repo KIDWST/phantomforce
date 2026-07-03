@@ -78,7 +78,7 @@
     },
     {
       "id": "agent-os",
-      "display_name": "Agent OS",
+      "display_name": "PhantomOps",
       "path_or_repo": "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\agent-os",
       "intended_role": "standards and workflow layer aligned with AGENTS.md and CLAUDE.md",
       "allowed_mode": "agentlab_reference_only",

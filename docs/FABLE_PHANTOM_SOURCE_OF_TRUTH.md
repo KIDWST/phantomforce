@@ -1,6 +1,6 @@
-# Fable Cockpit Source Of Truth
+# Fable Phantom Source Of Truth
 
-This document prevents confusion between the public Pages cockpit and the live admin cockpit.
+This document prevents confusion between the public Pages Phantom and the live admin Phantom.
 
 ## Active admin repo
 
@@ -11,14 +11,14 @@ C:\Users\jorda\Documents\Codex\worktrees\phantomforce-client-sim-truth-20260629
 This is the repo to edit when Jordan asks to update:
 
 - `admin.phantomforce.online`
-- the admin cockpit
+- the admin phantom
 - the private owner dashboard
 - the backend-connected admin/client product shell
 - the live local production preview behind Pangolin
 
-## Admin cockpit files
+## Admin phantom files
 
-The Fable/Claude cockpit is mounted inside the admin web app here:
+The Fable/Claude phantom is mounted inside the admin web app here:
 
 ```text
 apps\web\public\app
@@ -42,7 +42,7 @@ acceptable for local/static preview contexts.
 
 ## Public Pages repo
 
-The public/static Pages cockpit source is separate:
+The public/static Pages phantom source is separate:
 
 ```text
 C:\Users\jorda\Documents\Codex\2026-06-18\when-should-i-use-my-rate\outputs\phantomforce-site\app
@@ -54,7 +54,7 @@ Expected public demo entry:
 https://phantomforce.online/app/
 ```
 
-That repo is useful as a public/demo cockpit, but editing it alone does not update the Pangolin-backed admin host.
+That repo is useful as a public/demo phantom, but editing it alone does not update the Pangolin-backed admin host.
 
 ## Rule
 
@@ -64,13 +64,13 @@ If the admin dashboard must change, update this repo:
 apps\web\public\app
 ```
 
-If the public Pages demo must also match, sync the same cockpit changes into:
+If the public Pages demo must also match, sync the same phantom changes into:
 
 ```text
 C:\Users\jorda\Documents\Codex\2026-06-18\when-should-i-use-my-rate\outputs\phantomforce-site\app
 ```
 
-Do not overwrite the Fable cockpit with the older React dashboard unless Jordan explicitly asks for that rollback.
+Do not overwrite the Fable phantom with the older React dashboard unless Jordan explicitly asks for that rollback.
 
 ## Safe verification
 
@@ -95,14 +95,14 @@ Invoke-WebRequest -UseBasicParsing "https://admin.phantomforce.online/app/js/mai
 ## Claude handoff prompt
 
 ```text
-You are Claude working on Jordan West's PhantomForce cockpit.
+You are Claude working on Jordan West's PhantomForce Phantom.
 
 Important source-of-truth rule:
-The live admin cockpit is not only the public Pages repo. The admin host uses the admin worktree:
+The live admin phantom is not only the public Pages repo. The admin host uses the admin worktree:
 
 C:\Users\jorda\Documents\Codex\worktrees\phantomforce-client-sim-truth-20260629
 
-The Fable cockpit files that power admin.phantomforce.online are mounted at:
+The Fable phantom files that power admin.phantomforce.online are mounted at:
 
 apps\web\public\app
 
@@ -110,7 +110,7 @@ When Jordan asks to improve the admin dashboard, update that folder in the admin
 
 C:\Users\jorda\Documents\Codex\2026-06-18\when-should-i-use-my-rate\outputs\phantomforce-site\app
 
-unless the task is specifically the public Pages/demo cockpit. If both public and admin should match, update both intentionally and say so.
+unless the task is specifically the public Pages/demo Phantom. If both public and admin should match, update both intentionally and say so.
 
-Preserve the Fable cockpit style. Do not replace it with the older React dashboard. Do not expose secrets. Do not send external messages, run paid providers, push, or change gateway/DNS unless explicitly approved.
+Preserve the Fable phantom style. Do not replace it with the older React dashboard. Do not expose secrets. Do not send external messages, run paid providers, push, or change gateway/DNS unless explicitly approved.
 ```

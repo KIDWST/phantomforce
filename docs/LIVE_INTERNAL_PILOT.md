@@ -6,7 +6,7 @@ external/dangerous actions still controlled by the owner.
 
 ## What is live internal (real, today)
 
-- **Operator cockpit** — local backend + web app; admin/operator dashboard.
+- **Operator phantom** — local backend + web app; admin/operator dashboard.
 - **Embedded Phantom AI** — context brain (`GET /phantom-ai/ops/context`,
   role-aware) lives inside the dashboard; `assistant.mode = live_internal_pilot`.
 - **ChicagoShots lead → proposal → follow-up** — real local intake/quote/

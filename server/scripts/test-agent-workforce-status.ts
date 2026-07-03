@@ -134,7 +134,7 @@ try {
   assert(adminBody.workforce.workers.every((worker) => typeof worker.tokens_last_24h === "number"), "Workers should expose token usage.");
   assert(adminBody.workforce.tool_stack.some((tool) => tool.id === "n8n"), "Tool stack should include n8n.");
   assert(adminBody.workforce.tool_stack.some((tool) => tool.id === "openspec"), "Tool stack should include OpenSpec.");
-  assert(adminBody.workforce.tool_stack.some((tool) => tool.id === "agent-os"), "Tool stack should include Agent OS.");
+  assert(adminBody.workforce.tool_stack.some((tool) => tool.id === "agent-os"), "Tool stack should include PhantomOps.");
   assert(adminBody.workforce.assignments.length >= 6, "Admin should see functional workforce assignment cards.");
   assert(
     adminBody.workforce.assignments.some((assignment) => assignment.destination_route === "security"),

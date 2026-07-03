@@ -12,7 +12,7 @@ Hermes remains the memory, context, approval, budget, redaction, and audit layer
 
 n8n is only a proposed future automation worker. It must not become a second brain, autonomous dispatcher, public webhook surface, or approval bypass.
 
-AgentLab remains a sandbox for evaluating Agent OS, OpenSpec, Serena, and Ruflo. AgentLab tools do not become active PhantomForce runtime dependencies during Sprint 0.
+AgentLab remains a sandbox for evaluating PhantomOps, OpenSpec, Serena, and Ruflo. AgentLab tools do not become active PhantomForce runtime dependencies during Sprint 0.
 
 ## Sprint 0 Scope
 
@@ -34,7 +34,7 @@ No code scaffold, runtime scaffold, workflow export, credential template, or pro
 | Current dirty/untracked files | unsafe to proceed in active worktree | Dirty files included `.env.example`, `apps/web/src/App.tsx`, `apps/web/src/styles.css`, `server/src/index.ts`, `server/src/phantom-ai/model-router.ts`, `server/src/phantom-ai/types.ts`, plus untracked OpenRouter live transport files. |
 | Existing Phantom AI tool/provider/fetch/approval code | partially complete | Phantom AI has model routing, provider policy, provider readiness, budget hard gate, provider invocation firewall, OpenRouter dry-run adapter, live-smoke preflight, and approval queue preview/transition code. Clean base does not include a general online fetch lane. |
 | Existing Hermes memory/context/approval queue code | partially complete | Hermes has memory context, memory recall, interaction memory, local interaction memory store, ledger helpers, live receipt contracts, approval queue previews, and approval transitions. These are not the same as an n8n worker or general tool lane. |
-| AgentLab folder contents | partially complete | AgentLab has setup notes, safety gates, tool matrix, status/preflight scripts, and quarantine evidence for Agent OS, OpenSpec, Serena, and Ruflo. It remains sandbox/reference only. |
+| AgentLab folder contents | partially complete | AgentLab has setup notes, safety gates, tool matrix, status/preflight scripts, and quarantine evidence for PhantomOps, OpenSpec, Serena, and Ruflo. It remains sandbox/reference only. |
 | Existing docs/scripts mentioning n8n/tooling spine | absent | Clean base had no tracked `docs/tooling-spine`, n8n plan, AgentLab incorporation plan, or tool registry. |
 | Existing docs/scripts mentioning MCP, online fetch, web fetch, tool execution, OpenSpec, Serena, Ruflo | absent in clean PhantomForce repo | These terms were not present in the clean base search. AgentLab mentions MCP and candidate tools in sandbox docs. |
 | Existing workflow/approval docs | partially complete | Core product docs and UI copy mention approval-gated workflows, but they are not a dedicated tooling spine plan. |
@@ -45,7 +45,7 @@ No code scaffold, runtime scaffold, workflow export, credential template, or pro
 - Hermes context, memory, recall, ledger, local approval preview, and safety metadata.
 - Provider policy, readiness, budget hard gate, invocation firewall, and OpenRouter dry-run adapter contracts.
 - `/phantom-ai/approvals/execute` remains intentionally absent; live-smoke preflight expects 404 for approval execution.
-- AgentLab sandbox docs for Agent OS, OpenSpec, Serena, and Ruflo.
+- AgentLab sandbox docs for PhantomOps, OpenSpec, Serena, and Ruflo.
 - AgentLab quarantine for accidental runtime/demo artifacts.
 
 ## What Is Duplicated
@@ -64,7 +64,7 @@ Some safety language already exists in README, CLAUDE notes, Phantom AI code, UI
 
 - Editing the dirty active worktree directly.
 - Running or enabling live OpenRouter/provider transport from uncommitted Phase 1g work.
-- Starting n8n, public webhooks, MCP servers, Serena health checks, Ruflo daemons, Agent OS sync, or OpenSpec init against PhantomForce.
+- Starting n8n, public webhooks, MCP servers, Serena health checks, Ruflo daemons, PhantomOps sync, or OpenSpec init against PhantomForce.
 - Adding credentials or credential templates that imply real secrets should be filled in.
 - Executing sends, uploads, posts, live provider calls, queue actions, production ledger writes, or approval execution.
 
@@ -90,7 +90,7 @@ no webhooks, no credentials, no execution.
 
 - Actual n8n local install and inactive workflow import.
 - OpenSpec proposal/spec/task scaffolding inside PhantomForce.
-- Agent OS standards and `AGENTS.md` or `CLAUDE.md` alignment.
+- PhantomOps standards and `AGENTS.md` or `CLAUDE.md` alignment.
 - Serena read-only semantic navigation setup.
 - Any Ruflo runtime evaluation.
 - Phantom AI online fetch implementation.

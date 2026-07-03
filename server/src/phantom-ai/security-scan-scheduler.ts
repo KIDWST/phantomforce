@@ -121,7 +121,7 @@ function autonomousTargets(): AutonomousScanTarget[] {
       mode: "website",
       filename: "phantomforce-dashboard-copy.txt",
       content:
-        "PhantomForce owner cockpit. Mission bundles, agents, approvals, review queue, site studio, store builder, scanner, bookings, content, media, and access controls.",
+        "PhantomForce owner Phantom. Mission bundles, agents, approvals, review queue, site studio, store builder, scanner, bookings, content, media, and access controls.",
     },
     {
       id: "store-builder-default",

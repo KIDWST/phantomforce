@@ -1,4 +1,4 @@
-/* PhantomForce Cockpit — the Phantom AI command engine.
+/* PhantomForce Phantom — the Phantom AI command engine.
    Turns plain business language into routed actions and real artifacts
    (drafts in the store), never chat-only answers when an action fits.
    Runs fully locally: no provider calls, no sends. */
@@ -6,7 +6,7 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil,
-} from "./store.js";
+} from "./store.js?v=phantom-brain-20260703-16";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -18,6 +18,47 @@ function subjectOf(text) {
   return m[1].replace(/[.?!]\s*$/, "").replace(/^(the|a|an)\s+/i, "").trim();
 }
 const title = (s) => s.replace(/\b\w/g, (c) => c.toUpperCase());
+
+function cleanDriveFilename(name = "") {
+  const cleaned = name
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 96);
+  if (!cleaned) return "phantom-note.txt";
+  return /\.[a-z0-9]{2,5}$/i.test(cleaned) ? cleaned : `${cleaned}.txt`;
+}
+
+function cleanDriveContent(content = "") {
+  const cleaned = content
+    .replace(/^(?:contents?|content|says?|saying|with)\s+/i, "")
+    .replace(/[.?!]\s*$/g, "")
+    .trim();
+  return cleaned || "Draft file prepared by PhantomForce.";
+}
+
+function extractDriveFileIntent(text) {
+  const s = text.toLowerCase();
+  const mentionsDrive = /\b(google\s+drive|gdrive|drive)\b/.test(s);
+  const action = /\b(create|make|write|save|add|put|upload|draft)\b/.test(s);
+  const fileish = /\b(file|txt|text file|doc|document|note)\b/.test(s) || /\b[a-z0-9][a-z0-9_.-]{0,80}\.(txt|md|csv|json|docx?)\b/i.test(text);
+  if (!mentionsDrive || !action || !fileish) return null;
+
+  const bareFilenameMatches = [...text.matchAll(/\b([a-z0-9][a-z0-9_.-]{0,80}\.(?:txt|md|csv|json|docx?))\b/gi)];
+  const filenameMatch =
+    text.match(/[`'"]([^`'"]+\.(?:txt|md|csv|json|docx?))[`'"]/i) ||
+    bareFilenameMatches.at(-1);
+  const namedMatch = text.match(/\b(?:called|named|as)\s+[`'"]?([^`'"]{2,80}?)(?:[`'"]|\s+(?:with|that|and|in|on)\b|$)/i);
+  const filename = cleanDriveFilename(filenameMatch?.[1] || namedMatch?.[1] || "phantom-note.txt");
+
+  const quotedContent =
+    text.match(/\b(?:contents?|content|says?|saying|with)\s+[`'"]([^`'"]{1,500})[`'"]/i) ||
+    text.match(/\b(?:write|save|put)\s+[`'"]([^`'"]{1,500})[`'"]\s+(?:in|to|as|on)\b/i);
+  const tailContent = text.match(/\b(?:contents?|content|says?|saying|with)\s+(.{1,300})$/i);
+  const content = cleanDriveContent(quotedContent?.[1] || tailContent?.[1] || "");
+
+  return { filename, content };
+}
 
 function card(kicker, name, body, actions = [], meta = "") {
   return { kicker, title: name, body, actions, meta };
@@ -121,6 +162,52 @@ export function handleCommand(raw) {
   const subject = subjectOf(text);
   const admin = isAdmin();
 
+  if (/^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/.test(s)) {
+    return {
+      say: admin ? "Hey Jordan. What do you want handled?" : "Hey. What do you need?",
+      cards: [],
+      open: null,
+      skipBrain: true,
+    };
+  }
+
+  /* --- admin files / Google Drive --- */
+  const driveFile = extractDriveFileIntent(text);
+  if (driveFile) {
+    if (!admin) {
+      return {
+        say: "Drive file actions are admin-only. I can still draft the content here if you want it prepared for review.",
+        cards: [card("Admin-only action", "Google Drive file request", "Clients never get raw Drive write controls from Phantom.", [])],
+        open: null,
+        skipBrain: true,
+      };
+    }
+    const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+    const preview = driveFile.content.length > 180 ? `${driveFile.content.slice(0, 177)}...` : driveFile.content;
+    const action = {
+      id: uid("app"), ws, type: "drive-file",
+      title: `Create Google Drive file: ${driveFile.filename}`,
+      detail: `Prepared file contents: ${preview}`,
+      ref: driveFile.filename, status: "pending", requestedBy: "Drive Desk", at: new Date().toISOString(),
+      action: {
+        provider: "google_drive",
+        operation: "create_file",
+        filename: driveFile.filename,
+        content: driveFile.content,
+        execution: "connector_required",
+      },
+    };
+    store.state.approvals.unshift(action);
+    pushActivity("Drive Desk", `staged ${driveFile.filename} for Google Drive approval.`, ws);
+    store.save();
+    return {
+      say: `Staged ${driveFile.filename} in Harbor. The content is ready and waiting for approval. No Google Drive write happened yet.`,
+      cards: [card("Drive action staged", driveFile.filename, `Contents: ${preview}`, [openAction("Open Harbor", "approvals")], "Google Drive connector required")],
+      open: "approvals",
+      skipBrain: true,
+    };
+  }
+
   /* --- money / pipeline --- */
   if (/pipeline|revenue|money|how much.*(made|worth|owed)|unpaid|invoice|cash/.test(s)) {
     const m = moneyView();
@@ -207,7 +294,7 @@ export function handleCommand(raw) {
   }
 
   /* --- security --- */
-  if (/(security|scan|breach|malware|phish|password|protect|hack|threat)/.test(s)) {
+  if (/(security|scan|breach|malware|phish|password|protect|hack|threat|leak|radar|bad habit|exposed)/.test(s)) {
     const sec = visible(store.state.security)[0];
     return {
       say: sec
@@ -247,7 +334,7 @@ export function handleCommand(raw) {
   }
 
   /* --- approvals --- */
-  if (/(approv|sign.?off|waiting on me|pending|queue)/.test(s)) {
+  if (/(approv|sign.?off|waiting on me|needs my eyes|my eyes|pending|queue)/.test(s)) {
     const pend = visible(store.state.approvals).filter((a) => a.status === "pending");
     return {
       say: pend.length ? `${pend.length} decision${pend.length === 1 ? "" : "s"} waiting on you. Everything else is moving.` : "Approval queue is clear.",
@@ -268,7 +355,7 @@ export function handleCommand(raw) {
   }
 
   /* --- plan / today / status --- */
-  if (/(today|plan|what('| i)s next|priorit|status|morning|catch me up|summary)/.test(s)) {
+  if (/(today|today'?s plan|what('| i)s next|priorit|status|morning|catch me up|summary)/.test(s)) {
     const plan = todaysPlan();
     return {
       say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "Nothing urgent. The desks are working the routine.",
@@ -280,9 +367,9 @@ export function handleCommand(raw) {
   /* --- help / what can you do --- */
   if (/(help|what can you|how do|what do you do|\?$)/.test(s) && s.length < 60) {
     return {
-      say: "Ask in plain business language. I route it to the right desk and hand you something real — a draft, a plan, or the workspace it lives in.",
+      say: "Ask me anything. For business work, give me the outcome and I’ll route it to the right desk, draft, plan, or workspace.",
       cards: [card("Try one of these", "Commands that create things",
-        "“Draft a proposal for Sarah's gym” · “Create a video brief for the taco truck” · “Build a store for Okafor Fitness” · “Run a security check” · “What's my pipeline?”", [])],
+        "“Draft a proposal for a new client” · “Create a video brief for a product launch” · “Build a store for a local brand” · “Check my risk radar” · “What's my pipeline?”", [])],
       open: null,
     };
   }
@@ -306,6 +393,6 @@ export function handleCommand(raw) {
 /* Suggestion chips under the command input. */
 export function commandSuggestions() {
   return isAdmin()
-    ? ["Catch me up", "What's my pipeline?", "Draft a proposal for Brooks Plumbing", "Create a video brief for Halsted Coffee", "Run a security check", "What's waiting on me?"]
-    : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Run a security check"];
+    ? ["Catch me up", "What needs my eyes?", "Check my risk radar", "What's my pipeline?", "Draft a proposal for a new client", "Create a video brief for a launch"]
+    : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Check my risk radar"];
 }

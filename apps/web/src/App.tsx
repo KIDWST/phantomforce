@@ -7,7 +7,6 @@ import {
   CalendarDays,
   Check,
   Clock3,
-  Command,
   Copy,
   Download,
   FileText,
@@ -36,6 +35,12 @@ import {
   Zap,
 } from "lucide-react";
 import { ChangeEvent, CSSProperties, FormEvent, MouseEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import {
+  phantomWidgetRegistry,
+  type PhantomWidgetDefinition,
+  type PhantomWidgetTarget,
+} from "./phantomWidgetRegistry";
 
 type Route =
   | "command"
@@ -561,6 +566,17 @@ type AgentTickerItem = {
   timestamp: string;
 };
 
+type AgentPulseEvent = {
+  id: string;
+  agent: string;
+  role: string;
+  action: string;
+  source: string;
+  time: string;
+  tone: "good" | "watch" | "warn" | "blocked";
+  workspace: PhantomDeckWorkspaceId;
+};
+
 type AgentClientSummary = {
   visible_to_client?: boolean;
   active_agent_count: number;
@@ -681,16 +697,46 @@ type PhantomDeckWorkspaceId =
   | "help";
 type PhantomDeckMood = "calm" | "alert" | "thinking" | "blocked";
 type PhantomDeckPulseTone = "good" | "warn" | "alert" | "muted";
-type PhantomSystemNodeStatus = "active" | "ready" | "watch" | "blocked" | "planned";
+type PhantomWidgetView = PhantomWidgetDefinition & {
+  emphasis?: boolean;
+  safetyNote?: string;
+};
+type PhantomBrainNodeStatus =
+  | "active"
+  | "ready"
+  | "gated"
+  | "manual"
+  | "planned"
+  | "disabled"
+  | "needs_review"
+  | "blocked";
+type PhantomBrainNodeCategory = "core" | "business" | "create" | "safety" | "systems";
 
-type PhantomSystemNode = {
+type PhantomBrainNode = {
   id: string;
   label: string;
   detail: string;
   value: string;
-  status: PhantomSystemNodeStatus;
+  status: PhantomBrainNodeStatus;
+  category: PhantomBrainNodeCategory;
+  x: number;
+  y: number;
   workspace: PhantomDeckWorkspaceId;
+  adminOnly?: boolean;
+  speech?: string;
+  safety?: string;
+  inside?: Array<{ label: string; state: string }>;
   icon: ReactNode;
+};
+
+type PhantomBrainEdgeState = "live" | "ready" | "gated" | "planned" | "blocked";
+
+type PhantomBrainEdge = {
+  id: string;
+  from: string;
+  to: string;
+  state: PhantomBrainEdgeState;
+  label?: string;
 };
 
 type PhantomDeckSalesConnectorStatus = {
@@ -767,9 +813,9 @@ const adminMissionBundles: MissionBundle[] = [
     command: "/help",
     aliases: ["/commands"],
     title: "Show mission menu",
-    short: "List the admin command bundles.",
+    short: "List the admin mission shortcuts.",
     deliverable: "Mission menu",
-    proof: "Active workspace command catalog",
+    proof: "Active workspace mission catalog",
     nextAction: "Choose the mission that matches the business outcome.",
     prompt: "Show Jordan the available PhantomAI mission bundles and explain when to use each one.",
     sample: "/help",
@@ -880,10 +926,10 @@ const adminMissionBundles: MissionBundle[] = [
     title: "Create a media asset",
     short: "Content angle, video brief, caption, and proof.",
     deliverable: "Media asset brief",
-    proof: "Creative angle, shot list, proof source, and client-safe language",
+    proof: "Creative angle, shot list, proof source, and brand-safe language",
     nextAction: "Review the creative direction before generation or publishing.",
     prompt:
-      "Build a media package. Return the creative angle, video concept, caption, shot list, proof source, client-safe language, and next approval step.",
+      "Build a media package. Return the creative angle, video concept, caption, shot list, proof source, brand-safe language, and next approval step.",
     sample: "/video make a private sports business promo concept",
     route: "media",
     cta: "Build media",
@@ -911,7 +957,7 @@ const adminMissionBundles: MissionBundle[] = [
     aliases: ["/workforce", "/crew"],
     title: "Manage workforce",
     short: "Show who is working and what bundles are ready.",
-    deliverable: "Workforce command map",
+    deliverable: "Workforce signal map",
     proof: "Agent status, token/task telemetry, safe bundles, and blocked lanes",
     nextAction: "Assign the next mission to the correct crew.",
     prompt:
@@ -959,7 +1005,7 @@ const ownerQuickTools: OwnerQuickTool[] = [
   {
     id: "obsidian-capture",
     title: "Obsidian Capture",
-    lane: "Command Center",
+    lane: "Operating Brain",
     description: "Open the central vault and log the mission, decisions, proof, and next action.",
     status: "vault linked",
     cta: "Capture",
@@ -974,9 +1020,9 @@ const ownerQuickTools: OwnerQuickTool[] = [
   },
   {
     id: "higgsfield-factory",
-    title: "Higgsfield Factory",
+    title: "PhantomCut Production",
     lane: "Media",
-    description: "Build fresh ad/video briefs with credit tracking and no recycled-looking assets.",
+    description: "Build fresh ad/video briefs through PhantomCut with Higgsfield credit tracking and no recycled-looking assets.",
     status: "credit aware",
     cta: "Brief",
     route: "media",
@@ -1099,7 +1145,7 @@ function buildQuickToolHandoff(tool: OwnerQuickTool) {
     "Checks:",
     ...tool.bullets.map((bullet) => `- ${bullet}`),
     "",
-    "Mission command:",
+    "Mission shortcut:",
     tool.command,
   ].join("\n");
 }
@@ -2046,26 +2092,26 @@ const CORE_MOBILE_ROUTES = new Set<Route>(["command", "approvals", "access"]);
 
 const initialSessions: AppSession[] = [
   {
-    id: "admin-jordan",
-    label: "Jordan (admin)",
+    id: "owner-admin",
+    label: "PhantomForce Owner",
     role: "admin",
     canManageAccess: true,
   },
   {
     id: "client-sports-demo",
-    label: "Test Client",
+    label: "Test Employee",
     role: "client",
     clientId: "client-sports-demo",
     canManageAccess: false,
   },
 ];
 
-// Three simple tabs. The Studio (command route) is the chat+assistants+preview
+// Three simple tabs. The Focus route is the chat+assistants+preview
 // home that absorbs the old Home/Agents/Site/Leads/Money/Create/Video/Scanner/
 // Bookings/Work screens; those views still render when an assistant opens its
 // full surface, they are just no longer separate nav destinations.
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
-  { id: "command", label: "Command", icon: <Command size={18} /> },
+  { id: "command", label: "Focus", icon: <Sparkles size={18} /> },
   { id: "approvals", label: "Review", icon: <ShieldCheck size={18} /> },
   { id: "access", label: "Access", icon: <KeyRound size={18} /> },
 ];
@@ -2181,7 +2227,7 @@ const phantomDeckWorkspaces: Array<{
     id: "access",
     label: "Access",
     command: "clients",
-    detail: "Admin and client separation",
+    detail: "Admin and employee permissions",
     icon: <Users size={18} />,
     route: "access",
   },
@@ -2205,8 +2251,8 @@ const phantomDeckWorkspaces: Array<{
     id: "help",
     label: "Help",
     command: "help",
-    detail: "Command list",
-    icon: <Command size={18} />,
+    detail: "Signal map",
+    icon: <Sparkles size={18} />,
   },
 ];
 
@@ -2238,7 +2284,7 @@ function resolvePhantomDeckWorkspace(value: string, canManageAccess = true): Pha
 
   if (!text) return null;
   if (/\b(help|commands?|what can|menu)\b/.test(text)) return "help";
-  if (/\b(all tools|tools?|orbit|launcher|modules?)\b/.test(text)) return "help";
+  if (/\b(all tools|tools?|orbit|harbor|launcher|modules?)\b/.test(text)) return "help";
   if (/\b(proposals?|quote|quote builder|build proposal|lead intake)\b/.test(text)) return allow("proposal");
   if (/\b(follow[-\s]?ups?|follow up|manual send|manual-send)\b/.test(text)) return allow("followup");
   if (/\b(leads?|pipeline|proposal packets?)\b/.test(text)) {
@@ -2388,7 +2434,7 @@ const initialActivity: ActivityItem[] = [
   {
     id: "act-3",
     title: "Private controls protected",
-    detail: "Developer tools, credentials, logs, and engine settings stay out of the client workspace.",
+    detail: "Developer tools, credentials, logs, and engine settings stay out of the employee workspace.",
     time: "8:58 AM",
     level: "warn",
   },
@@ -2413,9 +2459,9 @@ const initialReviewClients: ReviewClient[] = [
     result: "Delivered short-form media assets and a clean delivery workflow.",
     channel: "manual",
     status: "ready",
-    reviewLink: "app.chicagoshots.online/review/chicagoshots-media-client",
+    reviewLink: "app.phantomforce.online/review/chicagoshots-media-client",
     draftMessage:
-      "Appreciate you working with us. Could you leave a quick review about the media day / highlight workflow? It helps other teams understand what the process feels like. Link: app.chicagoshots.online/review/chicagoshots-media-client",
+      "Appreciate you working with us. Could you leave a quick review about the media day / highlight workflow? It helps other teams understand what the process feels like. Link: app.phantomforce.online/review/chicagoshots-media-client",
     submittedReview: {
       rating: "5",
       author: "Sports media client",
@@ -2432,9 +2478,9 @@ const initialReviewClients: ReviewClient[] = [
     result: "Organized follow-ups, offer copy, and next-step workflow.",
     channel: "email",
     status: "ready",
-    reviewLink: "app.chicagoshots.online/review/local-service-ops-sprint",
+    reviewLink: "app.phantomforce.online/review/local-service-ops-sprint",
     draftMessage:
-      "Quick ask: would you leave a short review about the setup sprint and how it helped organize follow-ups, offers, and next steps? Link: app.chicagoshots.online/review/local-service-ops-sprint",
+      "Quick ask: would you leave a short review about the setup sprint and how it helped organize follow-ups, offers, and next steps? Link: app.phantomforce.online/review/local-service-ops-sprint",
     submittedReview: {
       rating: "5",
       author: "Local service owner",
@@ -2451,9 +2497,9 @@ const initialReviewClients: ReviewClient[] = [
     result: "Prepared a media package and delivery structure for team content.",
     channel: "text",
     status: "ready",
-    reviewLink: "app.chicagoshots.online/review/team-media-workflow",
+    reviewLink: "app.phantomforce.online/review/team-media-workflow",
     draftMessage:
-      "Would you mind leaving a quick review about the team media workflow? A few lines about the communication, content, and delivery process would help. Link: app.chicagoshots.online/review/team-media-workflow",
+      "Would you mind leaving a quick review about the team media workflow? A few lines about the communication, content, and delivery process would help. Link: app.phantomforce.online/review/team-media-workflow",
   },
 ];
 
@@ -2475,7 +2521,7 @@ const connections: Connection[] = [
   {
     id: "falcon",
     name: "Private action engine",
-    description: "Future typed backend jobs. No raw command execution in the client app.",
+    description: "Future typed backend jobs. No raw job execution in the client app.",
     status: "locked",
     scopes: ["Typed jobs only", "Staff diagnostics", "Kill switch"],
   },
@@ -2490,32 +2536,32 @@ const initialClientAccess: ClientAccess[] = [
     paymentStatus: "paid",
     accessStatus: "active",
     gateway: "Pangolin",
-    privateRoute: "app.chicagoshots.online/chicagoshots",
-    modules: ["Command", "Content", "Tasks", "Approvals", "Activity"],
+    privateRoute: "app.phantomforce.online/chicagoshots",
+    modules: ["Focus", "Content", "Tasks", "Approvals", "Activity"],
     lastAudit: "Access confirmed for partner workspace",
   },
   {
     id: "client-sports-demo",
-    business: "Test Client",
-    owner: "Demo Client",
-    plan: "Test client workspace",
+    business: "Test Employee",
+    owner: "Demo Employee",
+    plan: "Employee workspace",
     paymentStatus: "paid",
     accessStatus: "active",
     gateway: "Pangolin",
-    privateRoute: "app.chicagoshots.online/test-client",
-    modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts", "Video"],
+    privateRoute: "app.phantomforce.online/test-client",
+    modules: ["Focus", "Calendar", "Tasks", "Approvals", "Contacts", "Video"],
     lastAudit: "Deposit paid; workspace active",
   },
   {
     id: "client-past-due",
     business: "The Force",
-    owner: "Client Owner",
+    owner: "Org Owner",
     plan: "$1,250/mo Ops Support",
     paymentStatus: "failed",
     accessStatus: "revoked",
     gateway: "Pangolin",
-    privateRoute: "app.chicagoshots.online/the-force",
-    modules: ["Command", "Tasks", "Reports"],
+    privateRoute: "app.phantomforce.online/the-force",
+    modules: ["Focus", "Tasks", "Reports"],
     lastAudit: "Payment failed; private route revoked",
   },
 ];
@@ -2524,12 +2570,12 @@ function normalizeClientAccessRecord(record: ClientAccess): ClientAccess {
   if (record.id === "client-sports-demo") {
     return {
       ...record,
-      business: "Test Client",
-      owner: record.owner === "Client Owner" || record.owner === "Sports Ops Demo Owner" ? "Demo Client" : record.owner,
-      plan: record.plan === "$2,000 Team Media Day" ? "Test client workspace" : record.plan,
+      business: "Test Employee",
+      owner: record.owner === "Client Owner" || record.owner === "Sports Ops Demo Owner" ? "Demo Employee" : record.owner,
+      plan: record.plan === "$2,000 Team Media Day" ? "Employee workspace" : record.plan,
       privateRoute:
         record.privateRoute === "app.phantomforce.online/sports-ops-demo"
-          ? "app.chicagoshots.online/test-client"
+          ? "app.phantomforce.online/test-client"
           : record.privateRoute,
     };
   }
@@ -2540,7 +2586,7 @@ function normalizeClientAccessRecord(record: ClientAccess): ClientAccess {
       business: "The Force",
       privateRoute:
         record.privateRoute === "app.phantomforce.online/past-due-pilot"
-          ? "app.chicagoshots.online/the-force"
+          ? "app.phantomforce.online/the-force"
           : record.privateRoute,
       lastAudit: record.lastAudit.replace(/Past Due Pilot/g, "The Force"),
     };
@@ -2550,7 +2596,8 @@ function normalizeClientAccessRecord(record: ClientAccess): ClientAccess {
 }
 
 function phantomAiModeLabel(choice: AiProviderChoice): string {
-  if (choice === "glm_5_2") return "Deep thinking";
+  if (choice === "codex") return "Codex";
+  if (choice === "glm_5_2") return "Local fallback";
   if (choice === "claude_cli") return "Second opinion";
   return "Auto";
 }
@@ -2559,10 +2606,10 @@ function normalizePangolinRoutePlan(plan: PangolinRoutePlan): PangolinRoutePlan 
   if (plan.clientId === "client-sports-demo") {
     return {
       ...plan,
-      business: "Test Client",
+      business: "Test Employee",
       privateRoute:
         plan.privateRoute === "app.phantomforce.online/sports-ops-demo"
-          ? "app.chicagoshots.online/test-client"
+          ? "app.phantomforce.online/test-client"
           : plan.privateRoute,
     };
   }
@@ -2573,7 +2620,7 @@ function normalizePangolinRoutePlan(plan: PangolinRoutePlan): PangolinRoutePlan 
       business: "The Force",
       privateRoute:
         plan.privateRoute === "app.phantomforce.online/past-due-pilot"
-          ? "app.chicagoshots.online/the-force"
+          ? "app.phantomforce.online/the-force"
           : plan.privateRoute,
     };
   }
@@ -2588,7 +2635,7 @@ function accessStatusFromGuardMode(mode: GuardedWorkspace["mode"]): ClientAccess
 }
 
 const modules = [
-  "AI Command",
+  "AI Focus",
   "Email",
   "Calendar",
   "Work",
@@ -2600,7 +2647,7 @@ const modules = [
 ];
 
 const clientModuleCatalog = [
-  "Command",
+  "Focus",
   "Calendar",
   "Work",
   "Review",
@@ -2649,7 +2696,7 @@ const truthStatusLabels: TruthLabel[] = [
       "The UI prepares work for review. External sends, uploads, deploys, billing, and destructive actions stay off until explicitly connected.",
   },
   {
-    label: "Client Mode",
+    label: "Employee Mode",
     value: "PhantomForce + ChicagoShots",
     state: "real",
     detail: "The visible workspace is focused on PhantomForce operations and ChicagoShots media/content workflows.",
@@ -2675,7 +2722,7 @@ const customerStatusLabels: TruthLabel[] = [
     label: "ChicagoShots",
     value: "Workflow ready",
     state: "real",
-    detail: "Lead intake, quote drafts, proposal packets, and local follow-up status are available from the cockpit.",
+    detail: "Lead intake, quote drafts, proposal packets, and local follow-up status are available inside Phantom.",
   },
   {
     label: "Actions",
@@ -2713,7 +2760,7 @@ const businessOpsSimulation = {
     name: "Jordan West",
     business: "PhantomForce",
     market: "AI-assisted business ops, media, websites, apps, dashboards, and content systems",
-    mode: "Internal owner cockpit",
+    mode: "Internal owner Phantom",
   },
   services: [
     {
@@ -2723,7 +2770,7 @@ const businessOpsSimulation = {
     },
     {
       title: "$1,500 Core Sprint",
-      detail: "Command center setup, lead workflow, proposal/quote package, content plan, and delivery handoff.",
+      detail: "Operating brain setup, lead workflow, proposal/quote package, content plan, and delivery handoff.",
       status: "default",
     },
     {
@@ -2733,7 +2780,7 @@ const businessOpsSimulation = {
     },
   ],
   leads: [
-    { title: "Jordan Test Client", detail: "Needs ChicagoShots sports media packet and follow-up timing.", status: "hot" },
+    { title: "Jordan Test Lead", detail: "Needs ChicagoShots sports media packet and follow-up timing.", status: "hot" },
     { title: "Local service business", detail: "Needs website/backend cleanup and a simple booking workflow.", status: "warm" },
     { title: "Coach/team owner", detail: "Needs media day offer, parent communication, and highlight delivery structure.", status: "new" },
   ],
@@ -2802,7 +2849,7 @@ const businessOpsSimulation = {
     { title: "Business surfaces", detail: "PhantomForce, ChicagoShots, video output, and offer ladder are aligned.", status: "done" },
     { title: "Send controls", detail: "External actions require an explicit final click.", status: "done" },
     { title: "Send adapter", detail: "Next build step before real email/test sends.", status: "required" },
-    { title: "Client-safe dashboard mode", detail: "Developer and engine internals stay off the normal cockpit.", status: "done" },
+    { title: "Client-safe dashboard mode", detail: "Developer and engine internals stay off normal Phantom surfaces.", status: "done" },
   ],
   launchBlockers: [
     { title: "Send adapter", detail: "Real sending needs allowlist, confirmation phrase, and audit receipts.", status: "required" },
@@ -2819,15 +2866,12 @@ const businessOpsSimulation = {
     { title: "Jordan / PhantomForce", detail: "Platform super-admin concept and final control layer.", status: "operator" },
     { title: "Business owner", detail: "Admin only for this business workspace.", status: "owner admin" },
     { title: "Employees", detail: "Disabled/future until roles, audit, and permission rules are implemented.", status: "disabled" },
-    { title: "Client portal users", detail: "Optional/future. Current workspaces focus on scoped client actions.", status: "future" },
+    { title: "Employee seats", detail: "Optional/future. Current workspaces focus on scoped employee actions.", status: "future" },
   ],
 };
 
-const API_BASE_URL =
-  (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL?.replace(/\/$/, "") ??
-  "http://127.0.0.1:5190";
 const ADMIN_PUBLIC_HOST = "admin.phantomforce.online";
-const CLIENT_PUBLIC_HOST = "app.chicagoshots.online";
+const CLIENT_PUBLIC_HOST = "app.phantomforce.online";
 const ADMIN_PUBLIC_URL = `https://${ADMIN_PUBLIC_HOST}`;
 const CLIENT_PUBLIC_URL = `https://${CLIENT_PUBLIC_HOST}`;
 const MONEY_DEMO_CLIENT_ID = "client-money-demo";
@@ -2838,8 +2882,19 @@ function currentPublicHost() {
 }
 
 function isAdminPublicHost() {
-  return currentPublicHost() === ADMIN_PUBLIC_HOST;
+  const host = currentPublicHost();
+  return host === ADMIN_PUBLIC_HOST;
 }
+
+function defaultApiBaseUrl() {
+  const host = currentPublicHost();
+  if (host === ADMIN_PUBLIC_HOST || host === CLIENT_PUBLIC_HOST) return "";
+  return "http://127.0.0.1:5190";
+}
+
+const configuredApiBaseUrl = (import.meta as unknown as { env?: { VITE_API_BASE_URL?: string } }).env
+  ?.VITE_API_BASE_URL;
+const API_BASE_URL = configuredApiBaseUrl === undefined ? defaultApiBaseUrl() : configuredApiBaseUrl.replace(/\/$/, "");
 
 const defaultProviderSetupStatus: ProviderSetupStatus = {
   router_mode: "mock",
@@ -3608,11 +3663,21 @@ function formatLastRun(value: string | null) {
   }).format(new Date(parsed));
 }
 
+function formatAgentClock(value: Date | string | null) {
+  const date = value instanceof Date ? value : value ? new Date(value) : new Date();
+  if (!Number.isFinite(date.getTime())) return "time unknown";
+  return new Intl.DateTimeFormat("en-US", {
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(date);
+}
+
 function App() {
   const [route, setRoute] = useState<Route>("command");
   const [signedIn, setSignedIn] = useState(false);
   const [previewLinkApplied, setPreviewLinkApplied] = useState(false);
-  const [activeSessionId, setActiveSessionId] = useState("admin-jordan");
+  const [activeSessionId, setActiveSessionId] = useState("owner-admin");
   const [sessionToken, setSessionToken] = useState("");
   const [commandText, setCommandText] = useState("");
   const [messages, setMessages] = useState<Message[]>(initialMessages);
@@ -3707,11 +3772,11 @@ function App() {
     return headers;
   }
 
-  async function signIn(sessionId: string, preferredRoute: Route = "command") {
+  async function signIn(sessionId: string, preferredRoute: Route = "command", ownerKey?: string) {
     const session = availableSessions.find((item) => item.id === sessionId) ?? availableSessions[0] ?? initialSessions[0];
 
     if (adminHostOnly && !session.canManageAccess) {
-      addActivity("Admin host blocked client login", "admin.phantomforce.online only allows owner/admin access.", "warn");
+      addActivity("Admin host blocked employee login", "admin.phantomforce.online only allows owner/admin access.", "warn");
       return;
     }
 
@@ -3727,15 +3792,19 @@ function App() {
     setSessionToken("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/demo-login`, {
+      const trimmedOwnerKey = ownerKey?.trim();
+      const response = await fetch(`${API_BASE_URL}${trimmedOwnerKey ? "/auth/owner-login" : "/auth/demo-login"}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: session.id }),
+        body: JSON.stringify({ sessionId: session.id, ownerKey: trimmedOwnerKey || undefined }),
       });
 
       if (response.ok) {
         const data = (await response.json()) as { token?: string };
         setSessionToken(data.token ?? "");
+      } else if (trimmedOwnerKey) {
+        addActivity("PhantomForce login rejected", "Owner key was not accepted by the backend.", "warn");
+        return;
       } else {
         const gatewayResponse = await fetch(`${API_BASE_URL}/session`);
 
@@ -3821,7 +3890,7 @@ function App() {
         const workspaceRecord = normalizeClientAccessRecord({
           id: data.workspace.id,
           business: data.workspace.business,
-          owner: "Client Owner",
+          owner: "Org Employee",
           plan: "Workspace",
           paymentStatus: "paid",
           accessStatus: accessStatusFromGuardMode(data.workspace.mode),
@@ -3847,7 +3916,7 @@ function App() {
         const workspaceRecord = normalizeClientAccessRecord({
           id: data.record.id,
           business: data.record.business,
-          owner: "Client Owner",
+          owner: "Org Employee",
           plan: "Workspace",
           paymentStatus: "paid",
           accessStatus: accessStatusFromGuardMode(data.decision.mode),
@@ -4409,10 +4478,10 @@ function App() {
           id: makeId("msg-assistant"),
           role: "assistant",
           content:
-            "This client workspace is in demo mode. You can see how PhantomForce prepares replies, quotes, bookings, content, and approvals, but the real operator console and infrastructure stay private.",
+            "This employee workspace is in demo mode. You can see how PhantomForce prepares replies, quotes, bookings, content, and approvals, but the full admin suite and infrastructure stay private.",
         },
       ]);
-      addActivity("Client operator demo protected", "No operator endpoint was called for this client session.", "info");
+      addActivity("Employee operator demo protected", "No operator endpoint was called for this employee session.", "info");
       return;
     }
 
@@ -4422,10 +4491,10 @@ function App() {
         {
           id: makeId("msg-assistant"),
           role: "assistant",
-          content: `Use normal language by default. Use slash commands only when you want to force a mission bundle:\n${missionHelpText()}`,
+          content: `Use normal language by default. Mission shortcuts are optional when you want a specific bundle:\n${missionHelpText()}`,
         },
       ]);
-      addActivity("Mission menu shown", "Admin command bundles were listed without starting external work.", "info");
+      addActivity("Mission menu shown", "Admin mission shortcuts were listed without starting external work.", "info");
       return;
     }
 
@@ -4449,7 +4518,7 @@ function App() {
           method: "POST",
           headers: sessionHeaders(true),
           body: JSON.stringify({
-            provider: canManageAccess && aiProvider === "glm_5_2" ? "openrouter_glm" : "phantom",
+            provider: "phantom",
             admin_model: canManageAccess ? aiProvider : undefined,
             message: messageForBackend,
             tenant_id: activeSession.clientId ?? "phantomforce-owner",
@@ -4459,11 +4528,11 @@ function App() {
             task_type: mission ? `mission_bundle_${mission.bundle.id}` : "content_idea_summary",
             sensitivity_level: "low",
             business_summary: mission
-              ? `Owner command center mission bundle: ${mission.bundle.title}. Internal workers are bundled behind PhantomAI. External actions, sends, uploads, billing, deletes, deploys, and credential changes require explicit confirmation.`
-              : "Owner command center request. External actions, sends, uploads, billing, deletes, deploys, and credential changes require explicit confirmation.",
+              ? `Owner operating brain mission bundle: ${mission.bundle.title}. Internal workers are bundled behind PhantomAI. External actions, sends, uploads, billing, deletes, deploys, and credential changes require explicit confirmation.`
+              : "Owner operating brain request. External actions, sends, uploads, billing, deletes, deploys, and credential changes require explicit confirmation.",
             module_data: [
               {
-                module: "Command Center",
+                module: "Operating Brain",
                 summary: "Current local workspace state for Phantom AI response.",
                 items: [
                   { title: "Needs confirmation", status: String(stats.pending), detail: "Review before external action." },
@@ -4872,13 +4941,13 @@ function App() {
       body: JSON.stringify({
         clientId: MONEY_DEMO_CLIENT_ID,
         business: "Money Demo Athletics",
-        owner: "New Client Owner",
+        owner: "New Org Owner",
         plan: "$2,000 Launch Ops",
         source: "nexprospex",
         sourceRecordId: paid ? "nxp-money-demo-paid" : "nxp-money-demo-signed",
         winStatus: paid ? "payment_received" : "signed_agreement",
         paymentStatus,
-        modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts"],
+        modules: ["Focus", "Calendar", "Tasks", "Approvals", "Contacts"],
         reason,
         proposedBy: "Jordan",
       }),
@@ -5024,12 +5093,12 @@ function App() {
             <span className="status-dot locked" />
             <p>Workspace status</p>
           </div>
-          <strong>Action cockpit online.</strong>
+          <strong>Action phantom online.</strong>
           <small>Phantom AI, ChicagoShots proposals, and next-step planning are active locally.</small>
         </div>
       </aside>
 
-      <main className="workspace">
+      <main className={`workspace${route === "command" ? " workspace-command" : ""}`}>
           <>
         <Topbar activeSession={activeSession} selectedOrg={selectedOrg} pending={stats.pending} />
         {subscription && subscription.canView && !subscription.canWrite ? (
@@ -5052,6 +5121,8 @@ function App() {
             messages={messages}
             commandText={commandText}
             setCommandText={setCommandText}
+            runPhantomCommand={runPhantomCommand}
+            phantomAiBusy={phantomAiBusy}
             canManageAccess={canManageAccess}
             selectedOrg={selectedOrg}
             selectedWorkspaceClient={selectedWorkspaceClient}
@@ -5214,13 +5285,14 @@ function LoginScreen({
   activeSessionId: string;
   sessions: AppSession[];
   setActiveSessionId: (sessionId: string) => void;
-  onSignIn: (sessionId: string) => void | Promise<void>;
+  onSignIn: (sessionId: string, preferredRoute?: Route, ownerKey?: string) => void | Promise<void>;
   adminHostOnly: boolean;
 }) {
   // Sessions (the list + switcher) are an admin-only feature. A client never
   // sees a session list — they enter their single workspace. Operators reveal
   // the picker explicitly.
   const [operatorMode, setOperatorMode] = useState(false);
+  const [ownerKey, setOwnerKey] = useState("");
   const adminDefault = sessions.find((session) => session.canManageAccess) ?? sessions[0];
   const clientDefault = sessions.find((session) => !session.canManageAccess) ?? sessions[0];
   const targetSessionId = adminHostOnly
@@ -5237,7 +5309,7 @@ function LoginScreen({
           </div>
           <div>
             <strong>PhantomForce AI</strong>
-            <span>AI business command center</span>
+            <span>AI business operating brain</span>
           </div>
         </div>
         <h1>Ask once. Get the finished work.</h1>
@@ -5250,14 +5322,19 @@ function LoginScreen({
       </section>
       <section className="login-panel">
         <span className="panel-label">{adminHostOnly ? "Admin access" : "Pilot access"}</span>
-        <h2>{adminHostOnly ? "Owner command access." : "One login. One business brain."}</h2>
+        <h2>{adminHostOnly ? "Owner brain access." : "One login. One business brain."}</h2>
         <label>
           Email
           <input defaultValue="jordan@phantomforce.online" />
         </label>
         <label>
           Password
-          <input type="password" defaultValue="phantomforce" />
+          <input
+            type="password"
+            value={ownerKey}
+            onChange={(event) => setOwnerKey(event.target.value)}
+            autoComplete="current-password"
+          />
         </label>
         {operatorMode && !adminHostOnly ? (
           <label>
@@ -5271,13 +5348,13 @@ function LoginScreen({
             </select>
           </label>
         ) : null}
-        <button className="primary-action" type="button" onClick={() => void onSignIn(targetSessionId)}>
+        <button className="primary-action" type="button" onClick={() => void onSignIn(targetSessionId, "command", ownerKey)}>
           <KeyRound size={18} />
-          {adminHostOnly ? "Enter Admin Cockpit" : "Enter PhantomForce"}
+          {adminHostOnly ? "Enter Admin Phantom" : "Enter PhantomForce"}
         </button>
         {!adminHostOnly ? (
           <button className="ghost-small operator-toggle" type="button" onClick={() => setOperatorMode((value) => !value)}>
-            {operatorMode ? "Back to client sign-in" : "Operator sign-in"}
+            {operatorMode ? "Back to employee sign-in" : "Operator sign-in"}
           </button>
         ) : null}
         <p className="account-disclaimer">
@@ -5317,7 +5394,7 @@ function Topbar({
         <span className="eyebrow">Workspace</span>
         <h1>{selectedOrg}</h1>
         <span className={`session-chip ${activeSession.role}`}>
-          {activeSession.role === "admin" ? "Admin access" : "Client workspace"}
+          {activeSession.role === "admin" ? "Admin access" : "Employee workspace"}
         </span>
       </div>
       <div className="topbar-actions">
@@ -5340,6 +5417,8 @@ function PhantomDeck({
   messages,
   commandText,
   setCommandText,
+  runPhantomCommand,
+  phantomAiBusy,
   canManageAccess,
   selectedOrg,
   selectedWorkspaceClient,
@@ -5361,6 +5440,8 @@ function PhantomDeck({
   messages: Message[];
   commandText: string;
   setCommandText: (value: string) => void;
+  runPhantomCommand: (text: string) => Promise<void>;
+  phantomAiBusy: boolean;
   canManageAccess: boolean;
   selectedOrg: string;
   selectedWorkspaceClient?: ClientAccess;
@@ -5380,11 +5461,16 @@ function PhantomDeck({
   setRoute: (route: Route) => void;
 }) {
   const [activeWorkspace, setActiveWorkspace] = useState<PhantomDeckWorkspaceId | null>(null);
+  const [selectedBrainNodeId, setSelectedBrainNodeId] = useState<string | null>(null);
   const [commandFocused, setCommandFocused] = useState(false);
-  const [deckNotice, setDeckNotice] = useState("Ask PhantomForce what to do.");
+  const [deckNotice, setDeckNotice] = useState("PhantomForce is watching for the next signal.");
   const [deckLoading, setDeckLoading] = useState(true);
+  const [deckClock, setDeckClock] = useState(() => new Date());
   const [toolsOpen, setToolsOpen] = useState(false);
+  const [glanceOpen, setGlanceOpen] = useState(false);
   const [commandSuggestions, setCommandSuggestions] = useState<PhantomDeckWorkspaceId[]>([]);
+  const [answerMode, setAnswerMode] = useState(false);
+  const [submittedPrompt, setSubmittedPrompt] = useState("");
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const [proposalHistory, setProposalHistory] = useState<ChicagoShotsProposalHistoryRecord[]>([]);
@@ -5416,9 +5502,124 @@ function PhantomDeck({
     agentWorkforceStatus.role === "admin"
       ? `${agentWorkforceStatus.summary.active_workers}/${agentWorkforceStatus.summary.total_workers} active`
       : agentWorkforceStatus.summary.label;
+  const deckPosture = providerReady
+    ? "Live AI"
+    : phantomAiOpsStatus.safety_flags.execution_disabled
+      ? "Protected"
+      : "Review locks";
+  const sendPosture = effectiveSendReadiness.send_enabled ? "send review" : "manual action gate";
+  const adminWorkforce = agentWorkforceStatus.role === "admin" ? agentWorkforceStatus : null;
+  const agentWindowHours = adminWorkforce?.summary.window_hours ?? 24;
+  const agentActiveCount = adminWorkforce?.summary.active_workers ?? (canManageAccess ? 5 : 1);
+  const agentTotalCount = adminWorkforce?.summary.total_workers ?? (canManageAccess ? 5 : 1);
+  const agentTasksInWindow =
+    adminWorkforce?.summary.tasks_in_window ??
+    proposalCounts.total + stats.today + pendingApprovals.length + (n8nRunning ? 1 : 0);
+  const agentTokensInWindow = adminWorkforce?.summary.tokens_in_window ?? 0;
+  const agentSpendInWindow = adminWorkforce?.summary.estimated_cost_usd_in_window ?? 0;
+  const agentLastRun =
+    adminWorkforce?.summary.generated_at ??
+    adminWorkforce?.ticker[0]?.timestamp ??
+    null;
+  const agentPulseEvents: AgentPulseEvent[] = [
+    {
+      id: "charles-protect",
+      agent: "Charles",
+      role: "Leak hunter",
+      action: pendingApprovals.length
+        ? `flagged ${pendingApprovals.length} item${pendingApprovals.length === 1 ? "" : "s"} that need owner review.`
+        : "checked the leak lane; nothing is allowed to leave without review.",
+      source: "Review + Protect",
+      time: formatAgentClock(agentLastRun ?? deckClock),
+      tone: pendingApprovals.length ? "warn" : "good",
+      workspace: "protect",
+    },
+    {
+      id: "mara-pipeline",
+      agent: "Mara",
+      role: "Revenue scout",
+      action: proposalCounts.follow_up_needed
+        ? `found ${proposalCounts.follow_up_needed} follow-up${proposalCounts.follow_up_needed === 1 ? "" : "s"} worth chasing.`
+        : `scouted ${proposalCounts.total} proposal packet${proposalCounts.total === 1 ? "" : "s"}; no hot follow-up blocking.`,
+      source: "ChicagoShots proposal history",
+      time: formatAgentClock(agentLastRun ?? deckClock),
+      tone: proposalCounts.follow_up_needed ? "watch" : "good",
+      workspace: proposalCounts.follow_up_needed ? "followup" : "leads",
+    },
+    {
+      id: "otto-automation",
+      agent: "Otto",
+      role: "Workflow mechanic",
+      action: n8nRunning
+        ? "confirmed the automation worker is on, with execution still gated."
+        : n8nScaffolded
+          ? "found the automation bay scaffolded, parked, and not pushing buttons."
+          : "is waiting on the automation scaffold before workflows can be previewed.",
+      source: "n8n dry-run lane",
+      time: formatAgentClock(agentLastRun ?? deckClock),
+      tone: n8nRunning ? "good" : n8nScaffolded ? "watch" : "blocked",
+      workspace: "n8n",
+    },
+    {
+      id: "knox-access",
+      agent: "Knox",
+      role: "Door guard",
+      action: `checked ${clientAccess.length} org workspace${clientAccess.length === 1 ? "" : "s"} and employee gates.`,
+      source: "Access records",
+      time: formatAgentClock(agentLastRun ?? deckClock),
+      tone: stats.revoked ? "warn" : "good",
+      workspace: "access",
+    },
+    {
+      id: "pixel-media",
+      agent: "Pixel",
+      role: "Media runner",
+      action: "kept PhantomCut ready for briefs while paid generation stays approval-gated.",
+      source: "Media Lab",
+      time: formatAgentClock(agentLastRun ?? deckClock),
+      tone: "good",
+      workspace: "video",
+    },
+  ];
+  const agentCapabilityChips = [
+    {
+      label: "Build",
+      detail: "Codex-grade app/site work",
+      intent: "Build the site/app and show proof.",
+      workspace: "site" as PhantomDeckWorkspaceId,
+    },
+    {
+      label: "Scan",
+      detail: "Protect + repo risk checks",
+      intent: "Scan current work for risks.",
+      workspace: "protect" as PhantomDeckWorkspaceId,
+    },
+    {
+      label: "Sell",
+      detail: "Leads, quotes, follow-ups",
+      intent: "Find the best sales follow-up.",
+      workspace: "leads" as PhantomDeckWorkspaceId,
+    },
+    {
+      label: "Cut",
+      detail: "PhantomCut media plans",
+      intent: "Plan the next video without spend.",
+      workspace: "video" as PhantomDeckWorkspaceId,
+    },
+    {
+      label: "Flow",
+      detail: "n8n dry-run automation",
+      intent: "Map automation before execution.",
+      workspace: "n8n" as PhantomDeckWorkspaceId,
+    },
+  ].filter((capability) => canOpenPhantomDeckWorkspace(capability.workspace, canManageAccess));
 
   useEffect(() => {
-    if (!canManageAccess) return;
+    if (!canManageAccess) {
+      setDeckLoading(false);
+      setDeckNotice("PhantomForce is ready. Tell it what needs attention.");
+      return;
+    }
     let active = true;
 
     async function readJson<T>(url: string, init?: RequestInit): Promise<T | null> {
@@ -5479,9 +5680,14 @@ function PhantomDeck({
   }, [activeWorkspace, canManageAccess]);
 
   useEffect(() => {
+    const timer = window.setInterval(() => setDeckClock(new Date()), 30000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  useEffect(() => {
     function handleKeyboardShortcut(event: KeyboardEvent) {
       const target = event.target as HTMLElement | null;
-      const tagName = target?.tagName.toLowerCase();
+      const tagName = target?.tagName?.toLowerCase();
       const typing = tagName === "input" || tagName === "textarea" || target?.isContentEditable;
 
       if ((event.key === "/" && !typing) || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k")) {
@@ -5491,8 +5697,12 @@ function PhantomDeck({
 
       if (event.key === "Escape") {
         setActiveWorkspace(null);
+        setSelectedBrainNodeId(null);
         setToolsOpen(false);
+        setGlanceOpen(false);
         setCommandSuggestions([]);
+        setAnswerMode(false);
+        setSubmittedPrompt("");
         commandInputRef.current?.blur();
       }
     }
@@ -5554,14 +5764,21 @@ function PhantomDeck({
 
   const companionSignal = (() => {
     if (proposalCounts.follow_up_needed > 0) {
-      const noun = proposalCounts.follow_up_needed === 1 ? "proposal needs" : "proposals need";
-      return { text: `${proposalCounts.follow_up_needed} ${noun} follow-up.`, workspace: "followup" as PhantomDeckWorkspaceId };
+      const target = priorityProposal?.client_name ?? "the hottest lead";
+      const noun = proposalCounts.follow_up_needed === 1 ? "follow-up" : "follow-ups";
+      return {
+        text: `Phantom sees ${proposalCounts.follow_up_needed} ${noun}. Start with ${target}.`,
+        workspace: "followup" as PhantomDeckWorkspaceId,
+      };
     }
     if (priorityProposal?.proposal_priority_label === "send_now") {
-      return { text: `${priorityProposal.client_name} is ready for manual send.`, workspace: "proposal" as PhantomDeckWorkspaceId };
+      return {
+        text: `Phantom says ${priorityProposal.client_name} is ready for manual send.`,
+        workspace: "proposal" as PhantomDeckWorkspaceId,
+      };
     }
     if (priorityProposal) {
-      return { text: `Fastest money move: ${priorityProposal.client_name}.`, workspace: "money" as PhantomDeckWorkspaceId };
+      return { text: `Magic 8-ball says: follow up with ${priorityProposal.client_name}.`, workspace: "money" as PhantomDeckWorkspaceId };
     }
     if (n8nRunning) return { text: "Automation worker is running locally.", workspace: "n8n" as PhantomDeckWorkspaceId };
     if (n8nScaffolded) return { text: "Automation is scaffolded and controlled.", workspace: "n8n" as PhantomDeckWorkspaceId };
@@ -5580,126 +5797,328 @@ function PhantomDeck({
         ? "blocked"
         : "calm";
 
-  const systemNodes: PhantomSystemNode[] = [
+  const executionLocked = phantomAiOpsStatus.safety_flags.execution_disabled;
+  const brainNodes: PhantomBrainNode[] = [
     {
       id: "phantom-ai",
       label: "Phantom AI",
-      detail: "Routes commands into the right owner workspace.",
+      detail: "The operator brain. Reads intent and opens the right workspace.",
       value: phantomAiOpsStatus.product_status,
       status: "active",
-      workspace: "brain",
+      category: "core",
+      x: 120,
+      y: 285,
+      workspace: canManageAccess ? "brain" : "status",
+      speech: "Tell me what matters. I will find the right move.",
+      safety: "No provider call, no send, no execution starts from this map.",
+      inside: [
+        { label: "Intent router", state: "active" },
+        { label: "Hermes memory", state: phantomAiOpsStatus.hermes.ready ? "ready" : "planned" },
+        { label: "GLM worker lane", state: phantomAiOpsStatus.glm_worker.status === "ready" ? "gated" : "gated / off" },
+        { label: "Live transport", state: phantomAiOpsStatus.safety_flags.provider_transport_allowed ? "review" : "blocked" },
+      ],
       icon: <Bot size={18} />,
+    },
+    {
+      id: "hermes",
+      label: "Hermes",
+      detail: "Memory, context, and proof. Local append-only ledger and recall.",
+      value: phantomAiOpsStatus.hermes.ready
+        ? `${opsContext?.memory?.recalled_count ?? 0} memories`
+        : "not live",
+      status: phantomAiOpsStatus.hermes.ready ? "active" : "planned",
+      category: "systems",
+      x: 120,
+      y: 495,
+      workspace: "brain",
+      adminOnly: true,
+      speech: phantomAiOpsStatus.hermes.ready ? "Hermes memory is live and local." : "Hermes is scaffolded, not live.",
+      safety: "Read-only from Phantom. No ledger writes from this map.",
+      inside: [
+        { label: "Ledger", state: phantomAiOpsStatus.hermes.ledger_exists ? "active" : "planned" },
+        { label: "Context compiler", state: phantomAiOpsStatus.hermes.context_compiler_enabled ? "active" : "planned" },
+        { label: "Interaction memory", state: phantomAiOpsStatus.hermes.interaction_memory_store_enabled ? "active" : "planned" },
+        { label: "Proof / audit lane", state: "manual" },
+      ],
+      icon: <Sparkles size={18} />,
     },
     {
       id: "leads",
       label: "Leads",
-      detail: "Saved packets, follow-ups, and proposal priority.",
-      value: `${proposalCounts.total || stats.urgent} live`,
-      status: proposalCounts.follow_up_needed || stats.urgent ? "watch" : "ready",
+      detail: "ChicagoShots pipeline. Saved packets and next actions.",
+      value: proposalCounts.total ? `${proposalCounts.total} packets` : "no data yet",
+      status: proposalCounts.follow_up_needed ? "needs_review" : proposalCounts.total ? "active" : "ready",
+      category: "business",
+      x: 335,
+      y: 95,
       workspace: "leads",
+      speech: proposalCounts.total
+        ? `${proposalCounts.total} packet${proposalCounts.total === 1 ? "" : "s"} saved. ${proposalCounts.follow_up_needed} need${proposalCounts.follow_up_needed === 1 ? "s" : ""} follow-up.`
+        : "No saved lead packets yet.",
+      inside: [
+        { label: "Draft", state: String(proposalCounts.draft) },
+        { label: "Sent manually", state: String(proposalCounts.sent_manually) },
+        { label: "Follow-up needed", state: String(proposalCounts.follow_up_needed) },
+        { label: "Won / lost", state: `${proposalCounts.won} / ${proposalCounts.lost}` },
+      ],
       icon: <Inbox size={18} />,
+    },
+    {
+      id: "proposal-history",
+      label: "Proposals",
+      detail: "Quote drafts, saved history, status, and priority intelligence.",
+      value: proposalHistory.length ? `${proposalHistory.length} records` : "no data yet",
+      status: proposalHistory.length ? "active" : "ready",
+      category: "business",
+      x: 530,
+      y: 95,
+      workspace: "proposal",
+      speech: priorityProposal
+        ? `${priorityProposal.client_name} is the priority packet.`
+        : "History is empty. Build a proposal.",
+      inside: [
+        { label: "Quote builder", state: "active" },
+        { label: "Priority scoring", state: "active" },
+        { label: "Status tracking", state: "active" },
+        { label: "External send", state: "blocked" },
+      ],
+      icon: <FileText size={18} />,
     },
     {
       id: "work",
       label: "Work",
-      detail: "Tasks, bookings, schedule, and delivery moves.",
-      value: `${stats.today} today`,
-      status: stats.today ? "watch" : "ready",
+      detail: "Due follow-ups, bookings, and manual operator moves.",
+      value: stats.today ? `${stats.today} today` : "clear",
+      status: stats.today ? "needs_review" : "ready",
+      category: "business",
+      x: 725,
+      y: 95,
       workspace: "work",
+      speech: stats.today ? `${stats.today} work items due today.` : "Work lane is clear.",
       icon: <SquareCheckBig size={18} />,
     },
     {
       id: "money",
       label: "Money",
-      detail: "Open proposal value and won/lost tracking.",
-      value: estimatedPipelineValue ? formatUsd(estimatedPipelineValue) : "waiting",
-      status: estimatedPipelineValue ? "active" : "planned",
+      detail: "Open proposal value from saved quote ranges. No accounting yet.",
+      value: estimatedPipelineValue ? formatUsd(estimatedPipelineValue) : "no data yet",
+      status: estimatedPipelineValue ? "active" : "ready",
+      category: "business",
+      x: 735,
+      y: 225,
       workspace: "money",
+      speech: estimatedPipelineValue
+        ? `${formatUsd(estimatedPipelineValue)} open in pipeline.`
+        : "No pipeline value yet.",
+      safety: "No payment, invoice, or accounting route exists.",
       icon: <BarChart3 size={18} />,
     },
     {
       id: "video",
-      label: "Media Lab",
-      detail: "Creative generation planning, PhantomCut, Resolve, Reaper.",
+      label: "Video / PhantomCut",
+      detail: "PhantomCut media engine with gated commercial generation.",
       value: "draft-ready",
       status: "ready",
+      category: "create",
+      x: 335,
+      y: 285,
       workspace: "video",
+      speech: "PhantomCut is ready for media planning.",
+      safety: "No paid generation runs without explicit approval.",
+      inside: [
+        { label: "PhantomCut engine", state: "ready" },
+        { label: "Higgsfield provider", state: "gated" },
+        { label: "Resolve bridge", state: "ready" },
+        { label: "Reaper bridge", state: "ready" },
+      ],
       icon: <Play size={18} />,
     },
     {
       id: "site",
-      label: "Site + Store",
-      detail: "Website, app, dashboard, and storefront build lane.",
+      label: "Site Studio",
+      detail: "Website, app, and storefront build lane.",
       value: "builder",
       status: "ready",
+      category: "create",
+      x: 530,
+      y: 285,
       workspace: "site",
+      speech: "Site Studio is ready for build drafts.",
+      safety: "No deployment without approval.",
       icon: <ShoppingCart size={18} />,
     },
     {
       id: "protect",
       label: "Protect",
-      detail: "Autonomous scan posture, password reminders, send locks.",
-      value: phantomAiOpsStatus.safety_flags.execution_disabled ? "locked" : "review",
-      status: phantomAiOpsStatus.safety_flags.execution_disabled ? "ready" : "blocked",
+      detail: "Safety locks, send posture, and planned scanners.",
+      value: executionLocked ? "locks on" : "locks off",
+      status: executionLocked ? "gated" : "blocked",
+      category: "safety",
+      x: 335,
+      y: 460,
       workspace: "protect",
+      speech: "Protect locks are on. No scans running.",
+      safety: "No credential harvesting. No plaintext passwords. No dark web scraping.",
+      inside: [
+        { label: "Execution locks", state: executionLocked ? "active" : "off" },
+        { label: "Medusa key scanner", state: "planned" },
+        { label: "Robin breach scanner", state: "planned" },
+        { label: "Scans running", state: "none" },
+      ],
       icon: <ShieldCheck size={18} />,
+    },
+    {
+      id: "send-readiness",
+      label: "Send Readiness",
+      detail: "Draft-only posture. Every send stays manual and operator-confirmed.",
+      value: effectiveSendReadiness.send_enabled ? "review" : "draft-only",
+      status: "manual",
+      category: "safety",
+      x: 530,
+      y: 460,
+      workspace: "protect",
+      adminOnly: true,
+      speech: "Send readiness is draft-only.",
+      safety: "No email, social, or client message leaves this system.",
+      inside: [
+        { label: "Send route", state: effectiveSendReadiness.send_route_present ? "present" : "absent" },
+        { label: "Approval required", state: effectiveSendReadiness.approval_required ? "yes" : "no" },
+        { label: "Operator confirmation", state: effectiveSendReadiness.manual_operator_confirmation_required ? "required" : "off" },
+        { label: "Credentials", state: effectiveSendReadiness.credentials_configured ? "configured" : "not read" },
+      ],
+      icon: <Send size={18} />,
+    },
+    {
+      id: "sales-connector",
+      label: "Sales Connector",
+      detail: "Planned CRM and outreach connector. Hard-disabled until real.",
+      value: salesConnector?.status ?? "planned",
+      status: "disabled",
+      category: "safety",
+      x: 735,
+      y: 460,
+      workspace: canManageAccess ? "status" : "protect",
+      adminOnly: true,
+      speech: "Sales connector is planned, not live.",
+      safety: salesConnector?.reason ?? "Disabled until a real connector is implemented and approved.",
+      icon: <Link2 size={18} />,
     },
     {
       id: "review",
       label: "Review",
-      detail: "Human approvals before risky or external action.",
+      detail: "Human checkpoint before anything risky or external.",
       value: pendingApprovals.length ? `${pendingApprovals.length} pending` : "clear",
-      status: pendingApprovals.length ? "watch" : "ready",
+      status: pendingApprovals.length ? "needs_review" : "ready",
+      category: "safety",
+      x: 910,
+      y: 155,
       workspace: "review",
+      speech: pendingApprovals.length
+        ? `${pendingApprovals.length} item${pendingApprovals.length === 1 ? "" : "s"} need your review.`
+        : "Review queue is clear.",
+      safety: "No approval execution endpoint exists.",
       icon: <Bell size={18} />,
+    },
+    {
+      id: "n8n",
+      label: "Automation / n8n",
+      detail: "Local workflow worker. Scaffolded, execution disabled.",
+      value: n8nRunning ? "worker on" : n8nScaffolded ? "scaffolded / off" : "planned",
+      status: n8nRunning ? "active" : n8nScaffolded ? "manual" : "planned",
+      category: "systems",
+      x: 910,
+      y: 330,
+      workspace: "n8n",
+      adminOnly: true,
+      speech: n8nRunning
+        ? "n8n worker is on. Execution stays gated."
+        : n8nScaffolded
+          ? "n8n is offline, but scaffolded."
+          : "Automation worker is planned.",
+      safety: "No workflow executes and no webhook opens from Phantom.",
+      inside: [
+        { label: "Local worker", state: n8nRunning ? "running" : "off" },
+        { label: "Workflow drafts", state: String(phantomAiOpsStatus.n8n.workflow_drafts.length) },
+        { label: "Execution", state: "disabled" },
+        { label: "Public webhooks", state: "blocked" },
+      ],
+      icon: <Settings size={18} />,
     },
     {
       id: "agentlab",
       label: "AgentLab",
-      detail: "Internal workforce map and worker receipts.",
+      detail: "Internal workforce. Source-truth, review, and governance lanes.",
       value: agentSummary,
       status: "active",
+      category: "systems",
+      x: 910,
+      y: 495,
       workspace: "agentlab",
-      icon: <Sparkles size={18} />,
-    },
-    {
-      id: "access",
-      label: "Access",
-      detail: "Admin/client separation and business workspaces.",
-      value: `${clientAccess.length} users`,
-      status: stats.revoked ? "watch" : "ready",
-      workspace: "access",
-      icon: <Users size={18} />,
+      adminOnly: true,
+      speech: "Internal workforce is admin-only.",
+      safety: "Agents propose; humans approve. Nothing executes externally.",
+      inside: [
+        { label: "Codex source-truth", state: "active" },
+        { label: "Claude reviewer", state: "read-only" },
+        { label: "Agent Bridge spine", state: "manual" },
+        { label: "OpenSpec / PhantomOps", state: "reference" },
+        { label: "Serena", state: "planned" },
+        { label: "Ruflo", state: "blocked" },
+      ],
+      icon: <Bot size={18} />,
     },
   ];
-  const visibleSystemNodes = systemNodes.filter((node) =>
-    canOpenPhantomDeckWorkspace(node.workspace, canManageAccess),
+
+  const brainEdges: PhantomBrainEdge[] = [
+    { id: "ai-leads", from: "phantom-ai", to: "leads", state: proposalCounts.total ? "live" : "ready" },
+    { id: "leads-history", from: "leads", to: "proposal-history", state: proposalHistory.length ? "live" : "ready" },
+    { id: "history-work", from: "proposal-history", to: "work", state: proposalCounts.follow_up_needed ? "live" : "ready" },
+    { id: "history-money", from: "proposal-history", to: "money", state: estimatedPipelineValue ? "live" : "ready" },
+    { id: "work-review", from: "work", to: "review", state: pendingApprovals.length ? "live" : "ready" },
+    { id: "ai-video", from: "phantom-ai", to: "video", state: "ready" },
+    { id: "ai-site", from: "phantom-ai", to: "site", state: "ready" },
+    { id: "ai-protect", from: "phantom-ai", to: "protect", state: executionLocked ? "live" : "blocked" },
+    { id: "protect-sends", from: "protect", to: "send-readiness", state: "gated" },
+    { id: "sends-review", from: "send-readiness", to: "review", state: "gated", label: "manual send" },
+    { id: "sends-sales", from: "send-readiness", to: "sales-connector", state: "planned" },
+    { id: "ai-hermes", from: "phantom-ai", to: "hermes", state: phantomAiOpsStatus.hermes.ready ? "live" : "planned" },
+    { id: "ai-n8n", from: "phantom-ai", to: "n8n", state: n8nRunning ? "live" : "gated" },
+    { id: "agentlab-ai", from: "agentlab", to: "phantom-ai", state: "live" },
+  ];
+
+  const visibleBrainNodes = brainNodes.filter(
+    (node) => (canManageAccess || !node.adminOnly) && canOpenPhantomDeckWorkspace(node.workspace, canManageAccess),
   );
+  const visibleBrainNodeIds = new Set(visibleBrainNodes.map((node) => node.id));
+  const visibleBrainEdges = brainEdges.filter(
+    (edge) => visibleBrainNodeIds.has(edge.from) && visibleBrainNodeIds.has(edge.to),
+  );
+  const selectedBrainNode = visibleBrainNodes.find((node) => node.id === selectedBrainNodeId) ?? null;
+  const companionMessage = selectedBrainNode
+    ? {
+        text: selectedBrainNode.speech ?? `${selectedBrainNode.label}: ${selectedBrainNode.value}.`,
+        workspace: selectedBrainNode.workspace,
+      }
+    : companionSignal;
 
   const tickerItems = [
     ...(agentWorkforceStatus.role === "admin" ? agentWorkforceStatus.ticker.slice(0, 5).map((item) => item.text) : []),
     proposalCounts.follow_up_needed ? `${proposalCounts.follow_up_needed} proposal follow-up${proposalCounts.follow_up_needed === 1 ? "" : "s"} waiting.` : "Proposal follow-up lane is clear.",
-    stats.today ? `${stats.today} work items active today.` : "No urgent work items blocking the cockpit.",
+    stats.today ? `${stats.today} work items active today.` : "No urgent work items blocking Phantom.",
     providerReady ? "Model lane is configured; external calls still stay gated by controls." : "Model lane gated/off until admin enables provider posture.",
     n8nRunning ? "Automation worker detected locally." : "Automation lane remains scaffolded and controlled.",
   ].filter(Boolean);
 
-  const missionTiles: Array<{ label: string; detail: string; workspace: PhantomDeckWorkspaceId; icon: ReactNode }> = [
-    { label: "Launch Sprint", detail: "Build the next move", workspace: "work", icon: <Zap size={20} /> },
-    { label: "Handle Lead", detail: "Prioritize follow-up", workspace: "leads", icon: <UserRound size={20} /> },
-    { label: "Build Quote", detail: "Create proposal packet", workspace: "proposal", icon: <FileText size={20} /> },
-    { label: "Security Scan", detail: "Check posture", workspace: "protect", icon: <ShieldCheck size={20} /> },
-    { label: "Media Factory", detail: "Video command lane", workspace: "video", icon: <Play size={20} /> },
-    { label: "Store Builder", detail: "Site + shop drafts", workspace: "site", icon: <ShoppingCart size={20} /> },
-    { label: "Agent Floor", detail: "Worker map", workspace: "agentlab", icon: <Bot size={20} /> },
-    { label: "Vault Access", detail: "Users + boundaries", workspace: "access", icon: <KeyRound size={20} /> },
-    { label: "Command Center", detail: "System status", workspace: "status", icon: <Command size={20} /> },
-    { label: "Analytics", detail: "Money and pipeline", workspace: "money", icon: <BarChart3 size={20} /> },
-    { label: "Automation", detail: "Runbook drafts", workspace: "n8n", icon: <Settings size={20} /> },
-    { label: "View All", detail: "Capability orbit", workspace: "help", icon: <Plus size={20} /> },
+  const quickMoves: Array<{ label: string; workspace: PhantomDeckWorkspaceId; icon: ReactNode }> = [
+    { label: "Handle Lead", workspace: "leads", icon: <Inbox size={14} /> },
+    { label: "Build Quote", workspace: "proposal", icon: <FileText size={14} /> },
+    { label: "Run Scan", workspace: "protect", icon: <ShieldCheck size={14} /> },
+    { label: "Plan Work", workspace: "work", icon: <SquareCheckBig size={14} /> },
+    { label: "Make Video", workspace: "video", icon: <Play size={14} /> },
+    { label: "Review Queue", workspace: "review", icon: <Bell size={14} /> },
   ];
-  const visibleMissionTiles = missionTiles.filter((tile) =>
-    canOpenPhantomDeckWorkspace(tile.workspace, canManageAccess),
+  const visibleQuickMoves = quickMoves.filter((move) =>
+    canOpenPhantomDeckWorkspace(move.workspace, canManageAccess),
   );
 
   const atAGlanceItems = [
@@ -5717,7 +6136,7 @@ function PhantomDeck({
       workspace: priorityProposal ? ("followup" as PhantomDeckWorkspaceId) : ("proposal" as PhantomDeckWorkspaceId),
     },
     {
-      title: "Media Factory",
+      title: "PhantomCut",
       detail: "Video and creative generation requests stay gated.",
       status: "READY",
       workspace: "video" as PhantomDeckWorkspaceId,
@@ -5735,6 +6154,124 @@ function PhantomDeck({
       workspace: "site" as PhantomDeckWorkspaceId,
     },
   ];
+  const activeTasks = tasks.filter((task) => task.status !== "done");
+  const nextTask = activeTasks[0] ?? tasks[0] ?? null;
+  const draftReplyCount = emails.filter((email) => email.status === "needs-reply").length;
+  const proposalReviewCount = proposalCounts.draft + proposalCounts.follow_up_needed;
+  const openProposalCount = Math.max(
+    0,
+    proposalCounts.total - proposalCounts.won - proposalCounts.lost,
+  );
+  const compactPipelineValue = estimatedPipelineValue ? formatUsd(estimatedPipelineValue).replace(".00", "") : "$0";
+  const glanceSignalCount = pendingApprovals.length + stats.today + proposalCounts.follow_up_needed;
+  const protectRadarSignalCount =
+    pendingApprovals.length +
+    stats.revoked +
+    (executionLocked ? 0 : 1) +
+    (effectiveSendReadiness.send_enabled ? 1 : 0);
+  const phantomWidgets: PhantomWidgetView[] = phantomWidgetRegistry.map((widget) => {
+    switch (widget.id) {
+      case "phantom-radar":
+        return {
+          ...widget,
+          count: protectRadarSignalCount ? String(protectRadarSignalCount) : "Watch",
+          shortStatus: protectRadarSignalCount
+            ? `${protectRadarSignalCount} risk signal${protectRadarSignalCount === 1 ? "" : "s"} · leaks/breaches/malware watch`
+            : "Quiet watch for leaks, breaches, malware, and risky habits.",
+          emphasis: protectRadarSignalCount > 0,
+          safetyNote: "Read-only. No cleanup or external action.",
+        };
+      case "proposal-forge":
+        return {
+          ...widget,
+          count: String(proposalReviewCount),
+          shortStatus: `${proposalCounts.draft} draft${proposalCounts.draft === 1 ? "" : "s"} · ${proposalCounts.follow_up_needed} need review`,
+          emphasis: proposalReviewCount > 0,
+          safetyNote: "Manual approval before send.",
+        };
+      case "work-board":
+        return {
+          ...widget,
+          count: String(activeTasks.length || stats.today),
+          shortStatus: nextTask ? `${nextTask.title} · ${nextTask.due}` : "No work item blocking Phantom.",
+        };
+      case "review-queue":
+        return {
+          ...widget,
+          count: String(pendingApprovals.length),
+          shortStatus: pendingApprovals.length
+            ? `${pendingApprovals.length} waiting · nothing sends without approval`
+            : "Clear · manual-send locks stay on",
+          emphasis: pendingApprovals.length > 0,
+          safetyNote: "Ask → Review → Approve → Act.",
+        };
+      case "access-keys":
+        return {
+          ...widget,
+          count: String(clientAccess.length),
+          shortStatus: `${stats.revoked} locked · admin/employee permissions`,
+          emphasis: stats.revoked > 0,
+        };
+      case "money-pulse":
+        return {
+          ...widget,
+          count: compactPipelineValue,
+          shortStatus: `${openProposalCount} open proposal${openProposalCount === 1 ? "" : "s"} · invoices/payments planned`,
+          safetyNote: "No invoice or payment route.",
+        };
+      case "site-studio":
+        return {
+          ...widget,
+          count: "Ready",
+          shortStatus: "Pages and app tasks are draft-only; deploy remains approval-gated.",
+          safetyNote: "No deploy from this card.",
+        };
+      case "media-lab":
+        return {
+          ...widget,
+          count: String(businessOpsSimulation.mediaRequests.length),
+          shortStatus: "Video briefs, clips, and scheduled posts stay review-first.",
+          safetyNote: "No upload or paid render.",
+        };
+      case "inbox-client-comms":
+        return {
+          ...widget,
+          count: String(draftReplyCount),
+          shortStatus: `${draftReplyCount} draft repl${draftReplyCount === 1 ? "y" : "ies"} · manual-send safe`,
+          emphasis: draftReplyCount > 0,
+          safetyNote: "No email leaves automatically.",
+        };
+      case "security-protect":
+        return {
+          ...widget,
+          count: executionLocked ? "Locked" : "Review",
+          shortStatus: executionLocked
+            ? "Execution locks on · keys/passwords/routes watched"
+            : "Review safety posture before enabling actions",
+          emphasis: !executionLocked,
+        };
+      case "harbor-status":
+        return {
+          ...widget,
+          count: providerReady ? "Live" : "Off",
+          shortStatus: `${providerReady ? "GLM live" : "Provider off"} · ${
+            n8nRunning ? "worker on" : "worker off"
+          } · approval before external action`,
+          safetyNote: "Status only.",
+        };
+      case "glance":
+        return {
+          ...widget,
+          count: String(glanceSignalCount),
+          shortStatus: `${pendingApprovals.length} approvals · ${nextTask?.title ?? "no next task"} · ${
+            priorityProposal?.client_name ?? "no hot proposal"
+          }`,
+          emphasis: glanceSignalCount > 0,
+        };
+      default:
+        return widget;
+    }
+  });
 
   const deckStyle = {
     "--ghost-look-x": `${pointer.x}px`,
@@ -5757,59 +6294,230 @@ function PhantomDeck({
     if (!canOpenPhantomDeckWorkspace(workspace, canManageAccess)) {
       setActiveWorkspace("status");
       setToolsOpen(false);
+      setGlanceOpen(false);
       setCommandSuggestions([]);
       setDeckNotice("That workspace is owner/admin-only.");
       return;
     }
 
     setActiveWorkspace(workspace);
+    setAnswerMode(false);
+    const highlighted =
+      workspace === "status"
+        ? visibleBrainNodes.find((node) => node.id === "phantom-ai")
+        : visibleBrainNodes.find((node) => node.workspace === workspace);
+    setSelectedBrainNodeId(highlighted?.id ?? null);
     setToolsOpen(false);
+    setGlanceOpen(false);
     setCommandSuggestions([]);
     setDeckNotice(`${phantomDeckWorkspaceLabel(workspace)} workspace summoned.`);
   }
 
+  function selectBrainNode(node: PhantomBrainNode) {
+    if (selectedBrainNodeId === node.id) {
+      openWorkspace(node.workspace);
+      return;
+    }
+
+    setSelectedBrainNodeId(node.id);
+    setDeckNotice(`${node.label}: ${node.detail}`);
+  }
+
   function openToolOrbit() {
     setActiveWorkspace(null);
+    setAnswerMode(false);
     setToolsOpen(true);
+    setGlanceOpen(false);
     setCommandSuggestions([]);
-    setDeckNotice("Capability orbit opened.");
+    setDeckNotice(canManageAccess ? "Phantom Harbor unlocked." : "Capability harbor opened.");
   }
 
   function toggleToolOrbit() {
     if (toolsOpen) {
       setToolsOpen(false);
-      setDeckNotice("Capability orbit closed.");
+      setDeckNotice("Phantom Harbor closed.");
       return;
     }
 
     openToolOrbit();
   }
 
-  function submitDeckCommand(event: FormEvent) {
-    event.preventDefault();
-    const nextWorkspace = resolvePhantomDeckWorkspace(commandText, canManageAccess);
-    if (nextWorkspace) {
-      if (nextWorkspace === "help") {
-        openToolOrbit();
+  function toggleGlance() {
+    setGlanceOpen((open) => {
+      const next = !open;
+      if (next) {
+        setActiveWorkspace(null);
+        setAnswerMode(false);
+        setToolsOpen(false);
+        setCommandSuggestions([]);
+        setDeckNotice("Glance summoned.");
       } else {
-        openWorkspace(nextWorkspace);
+        setDeckNotice("Glance hidden.");
       }
-      setCommandText("");
+      return next;
+    });
+  }
+
+  function activatePhantomWidget(target: PhantomWidgetTarget) {
+    const workspaceByTarget: Partial<Record<PhantomWidgetTarget, PhantomDeckWorkspaceId>> = {
+      leads: "leads",
+      proposal: "proposal",
+      work: "work",
+      review: "review",
+      access: "access",
+      money: "money",
+      site: "site",
+      video: "video",
+      protect: "protect",
+    };
+
+    if (target === "harbor") {
+      openToolOrbit();
       return;
     }
 
+    if (target === "glance") {
+      setActiveWorkspace(null);
+      setSelectedBrainNodeId(null);
+      setAnswerMode(false);
+      setToolsOpen(false);
+      setGlanceOpen(true);
+      setCommandSuggestions([]);
+      setDeckNotice("Glance summoned.");
+      return;
+    }
+
+    if (target === "inbox") {
+      setRoute("inbox");
+      setDeckNotice("Inbox opened. Drafts remain manual-send safe.");
+      return;
+    }
+
+    const workspace = workspaceByTarget[target];
+    if (workspace) {
+      openWorkspace(workspace);
+      return;
+    }
+
+    setActiveWorkspace("status");
     setToolsOpen(false);
-    setCommandSuggestions(suggestPhantomDeckWorkspaces(commandText, canManageAccess));
-    setDeckNotice("No exact command yet. Closest workspaces are ready below.");
+    setGlanceOpen(false);
+    setCommandSuggestions([]);
+    setDeckNotice("Safe module shell opened.");
+  }
+
+  function seedAgentCapabilityIntent(intent: string, workspace: PhantomDeckWorkspaceId) {
+    setCommandText(intent);
+    setActiveWorkspace(null);
+    setAnswerMode(false);
+    setToolsOpen(false);
+    setGlanceOpen(false);
+    setCommandSuggestions([workspace]);
+    setDeckNotice("Intent loaded. Send it when ready, or edit first.");
+    window.setTimeout(() => commandInputRef.current?.focus(), 0);
+  }
+
+  async function submitDeckCommand(event: FormEvent) {
+    event.preventDefault();
+    const rawCommand = commandText.trim();
+    if (!rawCommand || phantomAiBusy) return;
+
+    setSubmittedPrompt(rawCommand);
+    setAnswerMode(true);
+    setActiveWorkspace(null);
+    setSelectedBrainNodeId(null);
+    setToolsOpen(false);
+    setGlanceOpen(false);
+    setCommandSuggestions([]);
+
+    const normalizedCommand = commandText.trim().toLowerCase();
+    if (/\b(glance|overview|snapshot|brief|what'?s up)\b/.test(normalizedCommand)) {
+      setDeckNotice("PhantomForce is answering and opening the glance.");
+      await runPhantomCommand(rawCommand);
+      setGlanceOpen(true);
+      return;
+    }
+
+    const nextWorkspace = resolvePhantomDeckWorkspace(commandText, canManageAccess);
+    setDeckNotice(nextWorkspace ? `PhantomForce is answering and routing ${phantomDeckWorkspaceLabel(nextWorkspace)}.` : "PhantomForce is answering.");
+    await runPhantomCommand(rawCommand);
+
+    if (nextWorkspace && nextWorkspace !== "help") {
+      setCommandSuggestions([nextWorkspace]);
+      setSelectedBrainNodeId(visibleBrainNodes.find((node) => node.workspace === nextWorkspace)?.id ?? null);
+      setDeckNotice(`Answer ready. ${phantomDeckWorkspaceLabel(nextWorkspace)} is the matching workspace.`);
+      return;
+    }
+
+    if (nextWorkspace === "help") {
+      setCommandSuggestions([]);
+      setDeckNotice("Answer ready. Phantom Harbor can show the available lanes.");
+      return;
+    }
+
+    const suggestions = suggestPhantomDeckWorkspaces(rawCommand, canManageAccess);
+    setCommandSuggestions(suggestions);
+    setDeckNotice(suggestions.length ? "Answer ready. Closest moves are ready below." : "Answer ready.");
   }
 
   function closeWorkspace() {
     setActiveWorkspace(null);
+    setAnswerMode(false);
     setDeckNotice("Workspace minimized.");
   }
 
+  const assistantAnswerText =
+    phantomAiBusy && submittedPrompt
+        ? `Working on: ${submittedPrompt}`
+      : answerMode && latestAssistant
+        ? latestAssistant.content
+        : companionMessage.text;
+  const answerModeActive = answerMode || Boolean(phantomAiBusy && submittedPrompt);
+  const workspaceOverlay =
+    activeWorkspace && activeWorkspaceMeta ? (
+      <ActiveWorkspace
+        workspace={activeWorkspace}
+        workspaceMeta={activeWorkspaceMeta}
+        deckLoading={deckLoading}
+        deckNotice={deckNotice}
+        proposalHistory={proposalHistory}
+        proposalCounts={proposalCounts}
+        priorityProposal={priorityProposal}
+        estimatedPipelineValue={estimatedPipelineValue}
+        phantomAiOpsStatus={phantomAiOpsStatus}
+        opsContext={opsContext}
+        salesConnector={salesConnector}
+        sendReadiness={effectiveSendReadiness}
+        toolLanePreview={toolLanePreview}
+        n8nLocalUrl={n8nLocalUrl}
+        providerReady={providerReady}
+        agentSummary={agentSummary}
+        latestAssistant={latestAssistant}
+        stats={stats}
+        approvals={approvals}
+        pendingApprovals={pendingApprovals}
+        approveAction={approveAction}
+        rejectAction={rejectAction}
+        emails={emails}
+        events={events}
+        tasks={tasks}
+        activity={activity}
+        clientAccess={clientAccess}
+        sessionHeaders={sessionHeaders}
+        canManageAccess={canManageAccess}
+        selectedOrg={selectedOrg}
+        selectedWorkspaceClient={selectedWorkspaceClient}
+        setRoute={setRoute}
+        closeWorkspace={closeWorkspace}
+      />
+    ) : null;
+
   return (
-    <section className={`phantom-deck v2 v3${activeWorkspace ? " has-workspace" : ""}${toolsOpen ? " tools-open" : ""}`} style={deckStyle} onMouseMove={handlePointerMove}>
+    <section
+      className={`phantom-deck v2 v3${activeWorkspace ? " has-workspace" : ""}${toolsOpen ? " tools-open" : ""}${glanceOpen ? " glance-open" : ""}`}
+      style={deckStyle}
+      onMouseMove={handlePointerMove}
+    >
       <div className="phantom-deck-main">
         <header className="phantom-deck-header">
           <div className="phantom-brand-lockup">
@@ -5820,12 +6528,12 @@ function PhantomDeck({
             </div>
           </div>
           <div className="phantom-top-chips" aria-label="Live deck readouts">
-            <span>{selectedOrg}</span>
-            <span>Live Internal</span>
-            <span>{phantomAiOpsStatus.safety_flags.execution_disabled ? "Protected" : "Review Locks"}</span>
-            <span>{effectiveSendReadiness.send_enabled ? "Send Review" : "Manual Send"}</span>
-            {canManageAccess ? <span>{n8nRunning ? "Worker On" : "Worker Off"}</span> : null}
-            {viewingClientWorkspace ? <span>Client mirror</span> : null}
+            <span className="chip-primary">{deckPosture} · {sendPosture}</span>
+            <span className="chip-secondary">{selectedOrg}</span>
+            <span className="chip-secondary">{canManageAccess ? "Admin" : "Employee"}</span>
+            <span className="chip-secondary">Live Internal</span>
+            {canManageAccess ? <span className="chip-secondary">{n8nRunning ? "Worker On" : "Worker Off"}</span> : null}
+            {viewingClientWorkspace ? <span className="chip-secondary">Employee mirror</span> : null}
           </div>
           <div className="phantom-top-actions">
             <button type="button" title="Search">
@@ -5837,74 +6545,103 @@ function PhantomDeck({
           </div>
         </header>
 
-        <section className="phantom-command-stage" aria-label="Phantom command center">
+        <section className="phantom-command-stage" aria-label="Phantom intelligence center">
           <div className="phantom-command-orb" aria-hidden="true" />
           <div className="phantom-command-core">
             <div className="mission-control-panel">
               <div className="mission-control-head">
-                <span className="eyebrow">Mission Control</span>
-                <strong>What do you want PhantomForce to do?</strong>
+                <span className="eyebrow">AI Command Center</span>
+                <strong>Phantom Sense</strong>
+                <p>What's the mission, Commander?</p>
               </div>
               <div className="phantom-command-dock">
                 <form className={`phantom-command ${commandFocused ? "focused" : ""}`} onSubmit={submitDeckCommand}>
-                  <span className="phantom-command-label">Phantom Command</span>
-                  <Command size={25} />
+                  <span className="phantom-command-label">Intent</span>
+                  <Sparkles size={25} />
                   <input
                     ref={commandInputRef}
                     value={commandText}
                     onChange={(event) => setCommandText(event.target.value)}
                     onFocus={() => setCommandFocused(true)}
                     onBlur={() => setCommandFocused(false)}
-                    placeholder="Ask PhantomForce anything..."
+                    placeholder="Ask Phantom Sense anything..."
+                    disabled={phantomAiBusy}
                   />
-                  <button type="submit" title="Summon workspace">
-                    <ArrowRight size={21} />
+                  <button type="submit" title="Run command" disabled={phantomAiBusy}>
+                    {phantomAiBusy ? <RefreshCcw size={20} /> : <ArrowRight size={21} />}
                   </button>
                 </form>
                 <button
-                  className={`tool-orbit-button${toolsOpen ? " active" : ""}`}
+                  className={`tool-orbit-button harbor${toolsOpen ? " active" : ""}`}
                   type="button"
                   onClick={toggleToolOrbit}
                   aria-expanded={toolsOpen}
-                  title="Open capability orbit"
+                  title="Open more actions"
                 >
                   <Sparkles size={18} />
-                  <span>Orbit</span>
+                  <span>More</span>
                 </button>
               </div>
-              <div className="mission-tile-grid" aria-label="Fast PhantomForce actions">
-                {visibleMissionTiles.map((tile) => (
-                  <button key={tile.label} type="button" onClick={() => openWorkspace(tile.workspace)}>
-                    {tile.icon}
-                    <strong>{tile.label}</strong>
-                    <small>{tile.detail}</small>
+              <PhantomWidgetRail widgets={phantomWidgets} activateWidget={activatePhantomWidget} />
+              <PhantomOpsLivePanel
+                activeCount={agentActiveCount}
+                totalCount={agentTotalCount}
+                taskCount={agentTasksInWindow}
+                tokenCount={agentTokensInWindow}
+                spend={agentSpendInWindow}
+                windowHours={agentWindowHours}
+                events={agentPulseEvents}
+                capabilities={agentCapabilityChips}
+                openWorkspace={openWorkspace}
+                seedIntent={seedAgentCapabilityIntent}
+              />
+              <div className="quick-moves" aria-label="Suggested PhantomForce moves">
+                {visibleQuickMoves.map((move) => (
+                  <button
+                    key={move.label}
+                    className={activeWorkspace === move.workspace ? "active" : ""}
+                    type="button"
+                    onClick={() => openWorkspace(move.workspace)}
+                  >
+                    {move.icon}
+                    <span>{move.label}</span>
                   </button>
                 ))}
+                <button
+                  className={`glance-toggle${glanceOpen ? " active" : ""}`}
+                  type="button"
+                  onClick={toggleGlance}
+                >
+                  <BarChart3 size={14} />
+                  <span>Glance</span>
+                </button>
               </div>
             </div>
 
             <div className="phantom-holo-stage" aria-label="PhantomForce AI hologram">
               <PhantomCompanion
                 mood={companionMood}
-                speech={companionSignal.text}
-                thinking={commandFocused || deckLoading}
-                onSpeechClick={() => openWorkspace(companionSignal.workspace)}
+                speech={assistantAnswerText}
+                thinking={commandFocused || deckLoading || phantomAiBusy}
+                oracle={Boolean(assistantAnswerText)}
+                answerMode={answerModeActive}
+                onSpeechClick={answerModeActive ? undefined : () => openWorkspace(companionMessage.workspace)}
               />
               <span className="holo-label">PHANTOMFORCE AI</span>
             </div>
 
-            <div className="phantom-intel-stack" aria-label="Command intelligence">
+            <div className={`phantom-intel-stack${glanceOpen ? " summoned" : ""}`} aria-label="Phantom intelligence">
               {canManageAccess ? (
                 <section className="intel-card workspace-context-card">
                   <div className="section-head compact">
                     <h3>Viewing</h3>
-                    <span>{viewingClientWorkspace ? "Client" : "Owner"}</span>
+                    <span>{viewingClientWorkspace ? "Employee" : "Owner"}</span>
                   </div>
                   <strong>{selectedOrg}</strong>
                   <p>
                     {viewingClientWorkspace
                       ? `Admin mirror of ${selectedWorkspaceClient?.business ?? selectedOrg}: ${selectedWorkspaceClient?.plan ?? "workspace"}`
-                      : "Owner cockpit with all business workspaces available."}
+                      : "Admin phantom with the full business suite available."}
                   </p>
                 </section>
               ) : null}
@@ -5950,7 +6687,14 @@ function PhantomDeck({
             </div>
 
             {toolsOpen ? (
-              <div className="tool-orbit-menu" aria-label="PhantomForce capability orbit">
+              <div className="tool-orbit-menu" aria-label="Phantom Harbor unlocked capabilities">
+                {canManageAccess ? (
+                  <div className="harbor-head">
+                    <Sparkles size={15} />
+                    <strong>Phantom Harbor</strong>
+                    <span>Admin capabilities unlocked</span>
+                  </div>
+                ) : null}
                 {visibleToolGroups.map((group) => (
                   <div key={group.id} className={`tool-orbit-cluster ${group.id}`}>
                     <span className="tool-orbit-group-label">{group.label}</span>
@@ -5984,59 +6728,237 @@ function PhantomDeck({
         <PulseStrip items={pulseItems} activeWorkspace={activeWorkspace} setActiveWorkspace={openWorkspace} />
 
         <div className={`phantom-deck-body ${activeWorkspace ? "has-active-workspace" : "brain-default"}`} aria-live="polite">
-          <PhantomNervousSystem
-            nodes={visibleSystemNodes}
+          <PhantomBrainMap
+            nodes={visibleBrainNodes}
+            edges={visibleBrainEdges}
             activeWorkspace={activeWorkspace}
+            selectedNode={selectedBrainNode}
             suggestions={commandSuggestions}
             deckNotice={deckNotice}
             deckLoading={deckLoading}
+            selectNode={selectBrainNode}
             openWorkspace={openWorkspace}
           />
-          {activeWorkspace && activeWorkspaceMeta ? (
-            <ActiveWorkspace
-              workspace={activeWorkspace}
-              workspaceMeta={activeWorkspaceMeta}
-              deckLoading={deckLoading}
-              deckNotice={deckNotice}
-              proposalHistory={proposalHistory}
-              proposalCounts={proposalCounts}
-              priorityProposal={priorityProposal}
-              estimatedPipelineValue={estimatedPipelineValue}
-              phantomAiOpsStatus={phantomAiOpsStatus}
-              opsContext={opsContext}
-              salesConnector={salesConnector}
-              sendReadiness={effectiveSendReadiness}
-              toolLanePreview={toolLanePreview}
-              n8nLocalUrl={n8nLocalUrl}
-              providerReady={providerReady}
-              agentSummary={agentSummary}
-              latestAssistant={latestAssistant}
-              stats={stats}
-              approvals={approvals}
-              pendingApprovals={pendingApprovals}
-              approveAction={approveAction}
-              rejectAction={rejectAction}
-              emails={emails}
-              events={events}
-              tasks={tasks}
-              activity={activity}
-              clientAccess={clientAccess}
-              sessionHeaders={sessionHeaders}
-              canManageAccess={canManageAccess}
-              selectedOrg={selectedOrg}
-              selectedWorkspaceClient={selectedWorkspaceClient}
-              setRoute={setRoute}
-              closeWorkspace={closeWorkspace}
-            />
-          ) : null}
         </div>
+      </div>
+      {workspaceOverlay && typeof document !== "undefined" ? createPortal(
+        <div className="workspace-focus-overlay" role="dialog" aria-modal="true" aria-label={`${activeWorkspaceMeta?.label ?? "Workspace"} workspace`}>
+          <button
+            className="workspace-focus-backdrop"
+            type="button"
+            aria-label="Close workspace overlay"
+            onClick={closeWorkspace}
+          />
+          <div className="workspace-focus-panel">{workspaceOverlay}</div>
+        </div>,
+        document.body,
+      ) : null}
+    </section>
+  );
+}
+
+function phantomWidgetIcon(iconKey: string, size = 17) {
+  switch (iconKey) {
+    case "radar":
+      return <Search size={size} />;
+    case "proposal":
+      return <FileText size={size} />;
+    case "work":
+      return <SquareCheckBig size={size} />;
+    case "review":
+      return <ShieldCheck size={size} />;
+    case "keys":
+      return <KeyRound size={size} />;
+    case "money":
+      return <BarChart3 size={size} />;
+    case "site":
+      return <Link2 size={size} />;
+    case "media":
+      return <Play size={size} />;
+    case "inbox":
+      return <MessageSquare size={size} />;
+    case "protect":
+      return <Lock size={size} />;
+    case "harbor":
+      return <Sparkles size={size} />;
+    case "glance":
+      return <Star size={size} />;
+    default:
+      return <Sparkles size={size} />;
+  }
+}
+
+const phantomWidgetSafetyLabels: Record<PhantomWidgetView["safetyLevel"], string> = {
+  safe: "Safe",
+  manual: "Manual",
+  approval: "Approval",
+  planned: "Planned",
+};
+
+function PhantomWidgetRail({
+  widgets,
+  activateWidget,
+}: {
+  widgets: PhantomWidgetView[];
+  activateWidget: (target: PhantomWidgetTarget) => void;
+}) {
+  return (
+    <section className="phantom-widget-section" aria-label="PhantomForce magic widgets">
+      <div className="phantom-widget-section-head">
+        <span>Live tools</span>
+        <strong>Ask first. Review before action.</strong>
+      </div>
+      <div className="phantom-widget-rail">
+        {widgets.map((widget) => (
+          <PhantomWidget key={widget.id} widget={widget} activateWidget={activateWidget} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function PhantomWidget({
+  widget,
+  activateWidget,
+}: {
+  widget: PhantomWidgetView;
+  activateWidget: (target: PhantomWidgetTarget) => void;
+}) {
+  const count = widget.count ?? "";
+  const safetyLabel = phantomWidgetSafetyLabels[widget.safetyLevel];
+
+  return (
+    <button
+      className={`phantom-widget variant-${widget.animationVariant} safety-${widget.safetyLevel}${
+        widget.emphasis ? " is-hot" : ""
+      }`}
+      type="button"
+      onClick={() => activateWidget(widget.target)}
+      aria-label={`${widget.title}: ${widget.shortStatus}. ${widget.primaryActionLabel}.`}
+    >
+      <span className="phantom-widget-aura" aria-hidden="true">
+        <i />
+        <i />
+        <i />
+      </span>
+      <span className="phantom-widget-topline">
+        <span className="phantom-widget-icon">{phantomWidgetIcon(widget.iconKey)}</span>
+        {count ? <strong>{count}</strong> : null}
+      </span>
+      <span className="phantom-widget-copy">
+        <span>{widget.title}</span>
+        <small>{widget.shortStatus}</small>
+      </span>
+      <span className="phantom-widget-footer">
+        <em>{safetyLabel}</em>
+        {widget.requiresApproval ? <b>Review</b> : null}
+        <i>{widget.primaryActionLabel}</i>
+      </span>
+      {widget.safetyNote ? <span className="phantom-widget-safety">{widget.safetyNote}</span> : null}
+    </button>
+  );
+}
+
+function PhantomOpsLivePanel({
+  activeCount,
+  totalCount,
+  taskCount,
+  tokenCount,
+  spend,
+  windowHours,
+  events,
+  capabilities,
+  openWorkspace,
+  seedIntent,
+}: {
+  activeCount: number;
+  totalCount: number;
+  taskCount: number;
+  tokenCount: number;
+  spend: number;
+  windowHours: number;
+  events: AgentPulseEvent[];
+  capabilities: Array<{ label: string; detail: string; intent: string; workspace: PhantomDeckWorkspaceId }>;
+  openWorkspace: (workspace: PhantomDeckWorkspaceId) => void;
+  seedIntent: (intent: string, workspace: PhantomDeckWorkspaceId) => void;
+}) {
+  const leadEvent = events[0];
+
+  return (
+    <section className="phantomops-live-panel" aria-label="PhantomOps live proof">
+      <div className="phantomops-panel-head">
+        <div>
+          <span className="eyebrow">PhantomOps</span>
+          <h3>{activeCount} specialists watching</h3>
+        </div>
+        <span className="phantomops-deploy-badge">
+          <i />
+          {totalCount} mapped
+        </span>
+      </div>
+
+      <div className="phantomops-metrics" aria-label="PhantomOps status metrics">
+        <article>
+          <strong>{formatNumber(taskCount)}</strong>
+          <span>{windowHours}h actions</span>
+        </article>
+        <article>
+          <strong>{formatNumber(tokenCount)}</strong>
+          <span>tokens</span>
+        </article>
+        <article>
+          <strong>{formatUsd(spend)}</strong>
+          <span>tracked</span>
+        </article>
+      </div>
+
+      {leadEvent ? (
+        <button
+          className={`phantomops-lead-event tone-${leadEvent.tone}`}
+          type="button"
+          onClick={() => openWorkspace(leadEvent.workspace)}
+        >
+          <span className="agent-avatar">{leadEvent.agent.slice(0, 1)}</span>
+          <span>
+            <strong>{leadEvent.agent}</strong>
+            <small>{leadEvent.role} · {leadEvent.time}</small>
+            <em>{leadEvent.action}</em>
+          </span>
+        </button>
+      ) : null}
+
+      <div className="phantomops-feed" aria-label="Named agent activity feed">
+        {events.slice(1).map((event) => (
+          <button
+            key={event.id}
+            className={`phantomops-feed-item tone-${event.tone}`}
+            type="button"
+            onClick={() => openWorkspace(event.workspace)}
+          >
+            <span className="agent-pulse-dot" />
+            <span>
+              <strong>{event.agent}</strong>
+              <em>{event.action}</em>
+              <small>{event.source} · {event.time}</small>
+            </span>
+          </button>
+        ))}
+      </div>
+
+      <div className="phantomops-capability-strip" aria-label="PhantomOps capabilities">
+        {capabilities.map((capability) => (
+          <button key={capability.label} type="button" onClick={() => seedIntent(capability.intent, capability.workspace)}>
+            <strong>{capability.label}</strong>
+            <span>{capability.detail}</span>
+          </button>
+        ))}
       </div>
     </section>
   );
 }
 
 function PhantomActivityTicker({ items }: { items: string[] }) {
-  const ticker = items.length ? items : ["PhantomForce is standing by for the next command."];
+  const ticker = items.length ? items : ["PhantomForce is watching for the next signal."];
 
   return (
     <section className="phantom-live-ticker" aria-label="Live PhantomForce activity">
@@ -6052,72 +6974,197 @@ function PhantomActivityTicker({ items }: { items: string[] }) {
   );
 }
 
-function PhantomNervousSystem({
+const BRAIN_MAP_WIDTH = 1000;
+const BRAIN_MAP_HEIGHT = 560;
+
+const brainStatusLabels: Record<PhantomBrainNodeStatus, string> = {
+  active: "Active",
+  ready: "Ready",
+  gated: "Gated",
+  manual: "Manual",
+  planned: "Planned",
+  disabled: "Disabled",
+  needs_review: "Needs review",
+  blocked: "Blocked",
+};
+
+function brainEdgePath(from: PhantomBrainNode, to: PhantomBrainNode, sag = 0) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) < 48) {
+    return `M ${from.x} ${from.y} C ${from.x} ${from.y + dy * 0.4}, ${to.x} ${to.y - dy * 0.4}, ${to.x} ${to.y}`;
+  }
+  return `M ${from.x} ${from.y} C ${from.x + dx * 0.42} ${from.y + sag}, ${to.x - dx * 0.42} ${to.y + sag}, ${to.x} ${to.y}`;
+}
+
+const brainEdgeSags: Record<string, number> = {
+  "ai-n8n": 110,
+  "agentlab-ai": 70,
+};
+
+function PhantomBrainMap({
   nodes,
+  edges,
   activeWorkspace,
+  selectedNode,
   suggestions,
   deckNotice,
   deckLoading,
+  selectNode,
   openWorkspace,
 }: {
-  nodes: PhantomSystemNode[];
+  nodes: PhantomBrainNode[];
+  edges: PhantomBrainEdge[];
   activeWorkspace: PhantomDeckWorkspaceId | null;
+  selectedNode: PhantomBrainNode | null;
   suggestions: PhantomDeckWorkspaceId[];
   deckNotice: string;
   deckLoading: boolean;
+  selectNode: (node: PhantomBrainNode) => void;
   openWorkspace: (workspace: PhantomDeckWorkspaceId) => void;
 }) {
+  const nodeById = new Map(nodes.map((node) => [node.id, node]));
   const suggestedWorkspaces = suggestions
     .map((id) => phantomDeckWorkspaces.find((workspace) => workspace.id === id))
     .filter(Boolean) as Array<(typeof phantomDeckWorkspaces)[number]>;
+  const legendStatuses = (Object.keys(brainStatusLabels) as PhantomBrainNodeStatus[]).filter((status) =>
+    nodes.some((node) => node.status === status),
+  );
+  const connectedToSelected = selectedNode
+    ? edges
+        .flatMap((edge) => {
+          if (edge.from !== selectedNode.id && edge.to !== selectedNode.id) return [];
+          const other = nodeById.get(edge.from === selectedNode.id ? edge.to : edge.from);
+          if (!other) return [];
+          return [{ node: other, direction: edge.from === selectedNode.id ? "out" : "in", state: edge.state, label: edge.label }];
+        })
+    : [];
 
   return (
-    <section className={`phantom-nervous-system${activeWorkspace ? " compact" : ""}`} aria-label="PhantomForce living system map">
+    <section
+      className={`phantom-nervous-system brain-map${activeWorkspace ? " compact" : ""}`}
+      aria-label="PhantomForce living system map"
+    >
       <div className="nervous-head">
         <div>
-          <span className="eyebrow">{deckLoading ? "Syncing system" : "Living command map"}</span>
-          <h2>One command routes the business.</h2>
+          <span className="eyebrow">{deckLoading ? "Syncing system" : "Living system map"}</span>
+          <h2>One signal finds the right move.</h2>
           <p>{deckNotice}</p>
         </div>
-        <div className="nervous-core">
-          <span>PhantomAI</span>
-          <strong>Operator brain</strong>
-          <small>Local-first, approval-aware</small>
+        <div className="brain-legend" aria-label="Node status legend">
+          {legendStatuses.map((status) => (
+            <span key={status} className={`status-${status}`}>
+              <i />
+              {brainStatusLabels[status]}
+            </span>
+          ))}
         </div>
       </div>
 
-      <div className="nervous-flow-grid">
+      <div className="brain-map-stage" role="group" aria-label="System nodes and flows">
+        <svg
+          className="brain-edges"
+          viewBox={`0 0 ${BRAIN_MAP_WIDTH} ${BRAIN_MAP_HEIGHT}`}
+          preserveAspectRatio="none"
+          aria-hidden="true"
+        >
+          {edges.map((edge) => {
+            const from = nodeById.get(edge.from);
+            const to = nodeById.get(edge.to);
+            if (!from || !to) return null;
+            const dimmed = selectedNode && edge.from !== selectedNode.id && edge.to !== selectedNode.id;
+            return (
+              <g key={edge.id} className={`brain-edge ${edge.state}${dimmed ? " dimmed" : ""}`}>
+                <path id={`brain-edge-${edge.id}`} d={brainEdgePath(from, to, brainEdgeSags[edge.id] ?? 0)} />
+                {edge.state === "live" ? (
+                  <>
+                    <circle className="brain-pulse" r="3.2">
+                      <animateMotion dur="5.2s" repeatCount="indefinite">
+                        <mpath href={`#brain-edge-${edge.id}`} />
+                      </animateMotion>
+                    </circle>
+                    <circle className="brain-pulse faint" r="2.1">
+                      <animateMotion dur="5.2s" begin="-2.6s" repeatCount="indefinite">
+                        <mpath href={`#brain-edge-${edge.id}`} />
+                      </animateMotion>
+                    </circle>
+                  </>
+                ) : null}
+              </g>
+            );
+          })}
+        </svg>
+
         {nodes.map((node) => (
           <button
             key={node.id}
-            className={`nervous-node ${node.status}${activeWorkspace === node.workspace ? " active" : ""}`}
+            className={`brain-node status-${node.status}${node.id === "phantom-ai" ? " hub" : ""}${
+              selectedNode?.id === node.id ? " selected" : ""
+            }${activeWorkspace === node.workspace ? " routed" : ""}`}
+            style={{
+              left: `${(node.x / BRAIN_MAP_WIDTH) * 100}%`,
+              top: `${(node.y / BRAIN_MAP_HEIGHT) * 100}%`,
+            }}
             type="button"
-            onClick={() => openWorkspace(node.workspace)}
+            onClick={() => selectNode(node)}
+            title={node.detail}
           >
-            <span className="nervous-node-icon">{node.icon}</span>
-            <span className="nervous-node-copy">
+            <span className="brain-node-icon">{node.icon}</span>
+            <span className="brain-node-copy">
               <strong>{node.label}</strong>
-              <small>{node.detail}</small>
+              <small>{node.value}</small>
             </span>
-            <em>{node.value}</em>
+            <i className="brain-node-dot" aria-hidden="true" />
           </button>
         ))}
       </div>
 
-      <div className="nervous-rails" aria-label="Command flow">
-        <span>Ask</span>
-        <i />
-        <span>Route</span>
-        <i />
-        <span>Create artifact</span>
-        <i />
-        <span>Review</span>
-        <i />
-        <span>Manual send</span>
-      </div>
+      {selectedNode ? (
+        <div className="brain-detail" aria-live="polite">
+          <div className="brain-detail-head">
+            <span className={`brain-status-chip status-${selectedNode.status}`}>
+              {brainStatusLabels[selectedNode.status]}
+            </span>
+            <strong>{selectedNode.label}</strong>
+            <em>{selectedNode.value}</em>
+            <button className="brain-detail-open" type="button" onClick={() => openWorkspace(selectedNode.workspace)}>
+              <span>Open workspace</span>
+              <ArrowRight size={14} />
+            </button>
+          </div>
+          <p>{selectedNode.detail}</p>
+          {selectedNode.inside?.length ? (
+            <div className="brain-detail-inside">
+              {selectedNode.inside.map((item) => (
+                <span key={item.label}>
+                  <strong>{item.label}</strong>
+                  <em>{item.state}</em>
+                </span>
+              ))}
+            </div>
+          ) : null}
+          {connectedToSelected.length ? (
+            <div className="brain-detail-flows">
+              <span>Flows</span>
+              {connectedToSelected.map((connection) => (
+                <button key={connection.node.id} type="button" onClick={() => selectNode(connection.node)}>
+                  {connection.direction === "out" ? "→" : "←"} {connection.node.label}
+                  {connection.label ? <small>{connection.label}</small> : null}
+                </button>
+              ))}
+            </div>
+          ) : null}
+          {selectedNode.safety ? (
+            <p className="brain-detail-safety">
+              <Lock size={12} />
+              {selectedNode.safety}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
 
       {suggestedWorkspaces.length ? (
-        <div className="phantom-command-suggestions" aria-label="Closest command matches">
+        <div className="phantom-command-suggestions" aria-label="Closest intent matches">
           <span>Closest moves</span>
           {suggestedWorkspaces.map((workspace) => (
             <button key={workspace.id} type="button" onClick={() => openWorkspace(workspace.id)}>
@@ -6149,7 +7196,7 @@ function PulseStrip({
         return (
           <button
             key={item.key}
-            className={`pulse-chip ${item.tone}${active ? " active" : ""}`}
+            className={`pulse-chip ${item.tone} tone-${item.tone}${active ? " active" : ""}`}
             type="button"
             onClick={() => setActiveWorkspace(workspace)}
           >
@@ -6166,32 +7213,68 @@ function PhantomCompanion({
   mood,
   speech,
   thinking,
+  oracle = false,
+  answerMode = false,
   onSpeechClick,
 }: {
   mood: PhantomDeckMood;
   speech: string;
   thinking: boolean;
+  oracle?: boolean;
+  answerMode?: boolean;
   onSpeechClick?: () => void;
 }) {
   return (
-    <aside className={`phantom-companion ${mood}${thinking ? " thinking" : ""}`} aria-label="Phantom companion">
-      {onSpeechClick ? (
-        <button className="phantom-speech" type="button" onClick={onSpeechClick}>
-          {speech}
-        </button>
+    <aside
+      className={`phantom-companion ${mood}${thinking ? " thinking" : ""}${oracle ? " oracle" : ""}${answerMode ? " answer-mode" : ""}`}
+      aria-label="Phantom companion"
+    >
+      {answerMode ? (
+        <div className="phantom-answer-card" role="status" aria-live="polite">
+          <span>{speech.startsWith("Working on:") ? "PhantomForce is working" : "PhantomForce answer"}</span>
+          <div className="phantom-answer-body">{renderPhantomAnswerText(speech)}</div>
+        </div>
+      ) : onSpeechClick ? (
+          <button className="phantom-speech" type="button" onClick={onSpeechClick}>
+            {speech}
+          </button>
       ) : (
         <div className="phantom-speech">{speech}</div>
       )}
-      <div className="phantom-ghost" aria-hidden="true">
-        <span className="ghost-alert-dot" />
-        <span className="ghost-eye left" />
-        <span className="ghost-eye right" />
-        <span className="ghost-tail one" />
-        <span className="ghost-tail two" />
-        <span className="ghost-tail three" />
-      </div>
+      {answerMode ? null : (
+        <div className="phantom-ghost" aria-hidden="true">
+          <span className="ghost-particle-field" />
+          <span className="ghost-alert-dot" />
+          <span className="ghost-eye left" />
+          <span className="ghost-eye right" />
+          <span className="ghost-tail one" />
+          <span className="ghost-tail two" />
+          <span className="ghost-tail three" />
+        </div>
+      )}
     </aside>
   );
+}
+
+function renderPhantomAnswerText(value: string) {
+  const lines = value
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+
+  return (lines.length ? lines : [value]).map((line, lineIndex) => (
+    <p key={`${line}-${lineIndex}`}>{renderPhantomAnswerInline(line)}</p>
+  ));
+}
+
+function renderPhantomAnswerInline(value: string) {
+  return value.split(/(\*\*[^*]+\*\*)/g).map((part, index) => {
+    if (part.startsWith("**") && part.endsWith("**")) {
+      return <strong key={`${part}-${index}`}>{part.slice(2, -2)}</strong>;
+    }
+
+    return <span key={`${part}-${index}`}>{part}</span>;
+  });
 }
 
 function ActiveWorkspace({
@@ -6310,7 +7393,7 @@ function ActiveWorkspace({
           <DeckMetric
             label="Workforce"
             value={canManageAccess ? agentSummary : "Hidden"}
-            detail={canManageAccess ? "Internal workforce status stays admin-only." : "Client view shows outcomes, not worker internals."}
+            detail={canManageAccess ? "Internal workforce status stays admin-only." : "Employee view shows assigned outcomes, not worker internals."}
             tone="good"
           />
           <DeckMetric
@@ -6343,7 +7426,7 @@ function ActiveWorkspace({
               </div>
               <TruthBadge state="real" label="No provider call from deck" />
             </div>
-            <p>{latestAssistant?.content ?? "The deck command bar opens local workspaces. PhantomAI chat remains preserved elsewhere in the app contract."}</p>
+            <p>{latestAssistant?.content ?? "The deck input opens local workspaces. PhantomAI chat remains preserved elsewhere in the app contract."}</p>
           </section>
         </div>
       ) : null}
@@ -6372,7 +7455,7 @@ function ActiveWorkspace({
                 />
               ))
             ) : (
-              <EmptyState icon={<Inbox size={20} />} title="No saved lead packets" detail="Use proposal command to create the first local ChicagoShots packet." />
+              <EmptyState icon={<Inbox size={20} />} title="No saved lead packets" detail="Open Proposal to create the first local ChicagoShots packet." />
             )}
           </section>
         </div>
@@ -6477,11 +7560,11 @@ function ActiveWorkspace({
       {workspace === "video" ? (
         <div className="deck-grid">
           <DeckMetric label="Media Lab" value="Draft-ready" detail="Commercial video stays routed through gated creative generation." tone="good" />
-          <DeckMetric label="PhantomCut" value="Cockpit linked" detail="Local video proof and provider readiness stay inside Media Lab." tone="good" />
+          <DeckMetric label="PhantomCut" value="Phantom linked" detail="Local video proof and provider readiness stay inside Media Lab." tone="good" />
           <DeckMetric label="Resolve + Reaper" value="Bridge-ready" detail="Editing apps are launcher/plan surfaces until a human applies work." tone="muted" />
           <section className="deck-wide-card">
             <div className="section-head compact">
-              <h3>Creative command</h3>
+              <h3>Creative signal</h3>
               <button className="deck-icon-button" type="button" onClick={() => setRoute("media")}>
                 <Play size={17} />
                 <span>Open Media Lab</span>
@@ -6547,8 +7630,8 @@ function ActiveWorkspace({
         <div className="deck-grid">
           <DeckMetric label="Site Studio" value="Available" detail="Website/app build lane opens as a full surface." tone="good" />
           <DeckMetric label="Store Builder" value="Concept-ready" detail="Products, offers, checkout notes, and catalog drafts belong here." tone="good" />
-          <DeckMetric label="Admin route" value="admin.phantomforce.online" detail="Client workspaces stay on app.chicagoshots.online." tone="good" />
-          <DeckMetric label="Client workspaces" value={String(clientAccess.length)} detail="Access remains permission-gated." tone="muted" />
+          <DeckMetric label="Admin route" value="admin.phantomforce.online" detail="Employee workspaces stay permission-scoped." tone="good" />
+          <DeckMetric label="Employee workspaces" value={String(clientAccess.length)} detail="Access remains permission-gated." tone="muted" />
           <section className="deck-wide-card">
             <div className="section-head compact">
               <h3>Website, app, and store lane</h3>
@@ -6575,19 +7658,19 @@ function ActiveWorkspace({
           <DeckMetric
             label="Hermes"
             value={phantomAiOpsStatus.hermes.ready ? "Ready" : phantomAiOpsStatus.hermes.status}
-            detail={`${opsContext?.memory?.recalled_count ?? 0} recalled memories available to the owner cockpit.`}
+            detail={`${opsContext?.memory?.recalled_count ?? 0} recalled memories available to owner Phantom.`}
             tone={phantomAiOpsStatus.hermes.ready ? "good" : "muted"}
           />
           <DeckMetric
             label="Companion"
-            value="Command-first"
-            detail="The visible bot routes workspaces instead of exposing raw tools to users."
+            value="Intent-first"
+            detail="The visible brain reads intent instead of exposing raw tools to users."
             tone="good"
           />
           <DeckMetric
             label="Model lane"
             value={providerReady ? "Configured" : "Gated/off"}
-            detail="No live model call happens from this command map."
+            detail="No live model call happens from this intent map."
             tone={providerReady ? "warn" : "good"}
           />
           <DeckMetric
@@ -6603,7 +7686,7 @@ function ActiveWorkspace({
             </div>
             <p>
               PhantomAI should feel like one brain to users. The internal stack remains hidden behind owner/admin surfaces:
-              memory, model readiness, command routing, and proof status.
+              memory, model readiness, intent routing, and proof status.
             </p>
           </section>
         </div>
@@ -6612,7 +7695,7 @@ function ActiveWorkspace({
       {workspace === "agentlab" ? (
         <div className="deck-grid">
           <DeckMetric label="Workforce" value={agentSummary} detail="Internal worker status stays owner/admin-only." tone="good" />
-          <DeckMetric label="Command lane" value={opsContext?.assistant?.mode_label ?? "Internal"} detail={opsContext?.assistant?.external_sends ?? "External actions remain gated."} tone="good" />
+          <DeckMetric label="Signal lane" value={opsContext?.assistant?.mode_label ?? "Internal"} detail={opsContext?.assistant?.external_sends ?? "External actions remain gated."} tone="good" />
           <DeckMetric label="Review" value={pendingApprovals.length ? `${pendingApprovals.length} pending` : "Clear"} detail="Human review stays ahead of risky actions." tone={pendingApprovals.length ? "alert" : "good"} />
           <section className="deck-wide-card">
             <div className="section-head compact">
@@ -6630,14 +7713,14 @@ function ActiveWorkspace({
       {workspace === "access" ? (
         <div className="deck-stack">
           <div className="deck-grid compact-metrics">
-            <DeckMetric label="Users" value={String(clientAccess.length)} detail="Admin and test-client access records." tone="good" />
-            <DeckMetric label="Revoked" value={String(stats.revoked)} detail="Blocked users stay out of client surfaces." tone={stats.revoked ? "warn" : "good"} />
-            <DeckMetric label="Boundary" value="Separated" detail="Admin sees internals; clients see outcomes only." tone="good" />
-            <DeckMetric label="Organizations" value="3 visible" detail="PhantomForce, ChicagoShots, and Test Client remain the clean set." tone="good" />
+            <DeckMetric label="Users" value={String(clientAccess.length)} detail="Admin and test-employee access records." tone="good" />
+            <DeckMetric label="Revoked" value={String(stats.revoked)} detail="Blocked users stay out of employee surfaces." tone={stats.revoked ? "warn" : "good"} />
+            <DeckMetric label="Boundary" value="Separated" detail="Admins see the full suite; employees see assigned tools only." tone="good" />
+            <DeckMetric label="Organizations" value="3 visible" detail="PhantomForce, ChicagoShots, and Test Employee remain the clean set." tone="good" />
           </div>
           <section className="deck-list-card">
             <div className="section-head compact">
-              <h3>Client/admin access</h3>
+              <h3>Admin/employee access</h3>
               <button className="deck-icon-button" type="button" onClick={() => setRoute("access")}>
                 <Users size={17} />
                 <span>Open Access</span>
@@ -6681,7 +7764,7 @@ function ActiveWorkspace({
       {workspace === "help" ? (
         <section className="deck-list-card">
           <div className="section-head compact">
-            <h3>Supported commands</h3>
+            <h3>Signals PhantomForce understands</h3>
             <span>Local deterministic</span>
           </div>
           <div className="deck-command-list">
@@ -7115,11 +8198,11 @@ function CommandCenter({
       <section className="chat-card studio-chat">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Mission control</span>
+            <span className="eyebrow">Phantom Sense</span>
             <h3>What outcome do you want?</h3>
           </div>
           <span className="safe-pill admin-operator-pill">
-            <Command size={15} />
+            <Sparkles size={15} />
             Mode: {aiProviderLabel}
           </span>
         </div>
@@ -7162,8 +8245,8 @@ function CommandCenter({
                   onChange={(event) => setAiProvider(event.target.value as AiProviderChoice)}
                   disabled={phantomAiBusy}
                 >
-                  <option value="codex">Auto</option>
-                  <option value="glm_5_2">Deeper thinking</option>
+                  <option value="codex">Codex</option>
+                  <option value="glm_5_2">Local fallback</option>
                   <option value="claude_cli">Second opinion</option>
                 </select>
               </label>
@@ -7179,7 +8262,7 @@ function CommandCenter({
               placeholder={activeAssistant ? `Tell PhantomAI the outcome for "${activeAssistant.title.toLowerCase()}"...` : "Tell PhantomAI the outcome..."}
               disabled={phantomAiBusy}
             />
-            <button type="submit" title="Send command" disabled={phantomAiBusy}>
+            <button type="submit" title="Send intent" disabled={phantomAiBusy}>
               {phantomAiBusy ? <RefreshCcw size={18} /> : <Send size={18} />}
             </button>
           </form>
@@ -7273,7 +8356,7 @@ function quickToolIcon(tool: OwnerQuickTool) {
   if (tool.id === "security-intake" || tool.id === "repo-scan") return <Search size={18} />;
   if (tool.id === "revenue-sprint") return <Zap size={18} />;
   if (tool.id === "ai-route-health") return <Link2 size={18} />;
-  return <Command size={18} />;
+  return <Sparkles size={18} />;
 }
 
 function OwnerQuickTools({
@@ -7371,7 +8454,7 @@ const clientOperatorDemoFlow = [
   },
   {
     title: "Quote/proposal draft",
-    detail: "The operator prepares a client-ready draft for human review.",
+    detail: "The operator prepares an admin-ready draft for human review.",
     icon: <FileText size={18} />,
   },
   {
@@ -7409,7 +8492,7 @@ function ClientOperatorDemoDashboard({
   const clientActions = [
     {
       title: "Draft follow-up",
-      detail: "Create a review-ready reply for the next client touch.",
+      detail: "Create a review-ready reply for the next assigned touch.",
       action: createFollowUpPlan,
       icon: <Mail size={18} />,
     },
@@ -7437,11 +8520,11 @@ function ClientOperatorDemoDashboard({
     <div className="client-operator-demo" data-testid="client-operator-demo">
       <section className="client-demo-hero">
         <div>
-          <span className="eyebrow">Client command center</span>
+          <span className="eyebrow">Employee operating center</span>
           <h2>Your AI operations team, ready.</h2>
           <p>
-            Clients see outcomes they can use: follow-ups, quotes, bookings, proof, and next steps. Private operator
-            controls stay hidden unless Jordan grants admin access.
+            Employees see assigned outcomes they can use: follow-ups, quotes, bookings, proof, and next steps. Full-suite
+            controls stay hidden unless the org admin grants access.
           </p>
         </div>
         <div className="client-demo-lock">
@@ -7451,14 +8534,14 @@ function ClientOperatorDemoDashboard({
         </div>
       </section>
 
-      <section className="client-demo-status-strip" aria-label="Client demo safety status">
+      <section className="client-demo-status-strip" aria-label="Employee demo safety status">
         <span>Action-ready workspace</span>
         <span>Owner approval required</span>
         <span>Private tools hidden</span>
-        <span>Client-safe proof</span>
+        <span>Employee-safe proof</span>
       </section>
 
-      <section className="client-action-grid" aria-label="Client actions">
+      <section className="client-action-grid" aria-label="Employee actions">
         {clientActions.map((action) => (
           <button className="client-action-card" key={action.title} type="button" onClick={action.action}>
             <span>{action.icon}</span>
@@ -7482,7 +8565,7 @@ function ClientOperatorDemoDashboard({
 
       <section className="client-demo-grid">
         <article className="client-demo-card">
-          <span className="eyebrow">What customers see</span>
+          <span className="eyebrow">What employees see</span>
           <h3>Business-ready output lanes</h3>
           <div className="client-demo-chip-grid">
             {clientDemoOutcomes.map((item) => (
@@ -7507,7 +8590,7 @@ function ClientOperatorDemoDashboard({
           <span />
           <span />
           <span />
-          <strong>PhantomForce client workspace preview</strong>
+          <strong>PhantomForce employee workspace preview</strong>
         </div>
         <div className="client-demo-output-grid">
           <article>
@@ -7786,7 +8869,7 @@ function ApprovalsView({
       : businessOpsSimulation.approvals;
 
   return (
-    <Page title="Review queue" kicker="Pending commands">
+    <Page title="Review queue" kicker="Pending review">
       <section className="module-panel simulation-section">
         <div className="section-head">
           <div>
@@ -7835,7 +8918,7 @@ function ApprovalsView({
             <span>
               <ShieldCheck size={18} />
             </span>
-            <h3>Command review</h3>
+            <h3>Review needed</h3>
           </div>
           <SimulationList items={demoApprovals} />
         </section>
@@ -8034,7 +9117,7 @@ function MediaLabView({
         </div>
       </section>
 
-      <section className="module-panel higgsfield-cockpit-panel">
+      <section className="module-panel higgsfield-phantom-panel">
         <div className="section-head">
           <div>
             <span className="eyebrow">Generate Video</span>
@@ -8139,7 +9222,7 @@ function MediaLabView({
               </button>
             </>
           ) : (
-            <p>No paid job has run. Create a draft to see the exact command and stage it for Review.</p>
+            <p>No paid job has run. Create a draft to see the exact run plan and stage it for Review.</p>
           )}
           <button className="ghost-small" type="button" disabled>
             <Lock size={16} />
@@ -8416,7 +9499,7 @@ function SecurityScannerView({
   return (
     <Page
       title="Security Scanner"
-      kicker={canManageAccess ? "Admin and client protection" : "Client upload protection"}
+      kicker={canManageAccess ? "Admin and employee protection" : "Employee upload protection"}
       action={
         <span className="safe-pill">
           <ShieldCheck size={15} />
@@ -8537,7 +9620,7 @@ function SecurityScannerView({
         ) : (
           <p className="autonomous-security-note">
             {autonomousStatus?.details_redacted
-              ? "Client view only shows that autonomous protection is active."
+              ? "Employee view only shows that autonomous protection is active."
               : "The server will run the monthly catch-up automatically the next time the backend starts or the monthly check is due."}
           </p>
         )}
@@ -8647,7 +9730,7 @@ function SecurityScannerView({
             <EmptyState
               icon={<ShieldCheck size={20} />}
               title="Ready to scan"
-              detail="Use this before adding content to admin pages, client pages, proposal packets, or uploads."
+              detail="Use this before adding content to admin pages, employee pages, proposal packets, or uploads."
             />
           )}
         </section>
@@ -8871,7 +9954,7 @@ function AgentControlCenter({
     const icons: Record<string, ReactNode> = {
       "phantom-ai": <Bot size={20} />,
       hermes: <Clock3 size={20} />,
-      builder: <Command size={20} />,
+      builder: <Sparkles size={20} />,
       strategist: <Sparkles size={20} />,
       reviewer: <MessageSquare size={20} />,
       gatekeeper: <KeyRound size={20} />,
@@ -9001,7 +10084,7 @@ function AgentControlCenter({
     }
   }
   const workflowStages = [
-    { label: "Ask", detail: "Jordan gives the mission", icon: <Command size={18} /> },
+    { label: "Signal", detail: "Jordan gives the mission context", icon: <Sparkles size={18} /> },
     { label: "Route", detail: "PhantomAI picks the worker lane", icon: <Bot size={18} /> },
     { label: "Work", detail: `${formatNumber(taskCount)} logged tasks in ${windowHours}h`, icon: <Zap size={18} /> },
     { label: "Watch", detail: `${formatNumber(tokenCount)} tokens tracked`, icon: <BarChart3 size={18} /> },
@@ -9010,7 +10093,7 @@ function AgentControlCenter({
   const nextPanels = [
     {
       title: "Ask PhantomAI",
-      detail: "Create the work. This is where commands belong.",
+      detail: "Create the work. PhantomAI reads the mission here.",
       route: "command" as Route,
       icon: <Sparkles size={18} />,
     },
@@ -9041,8 +10124,8 @@ function AgentControlCenter({
           <span className="eyebrow">Not a chat room</span>
           <h3>See who is working for you and what they are handling.</h3>
           <p>
-            Agents are shown like a private operations crew. Clients may eventually see employees or departments here;
-            Jordan sees the machine behind PhantomForce.
+            Agents are shown like a private operations crew. Employees see only the departments and tools their admin allows;
+            admins see the machine behind PhantomForce.
           </p>
           <div className="agent-floor-actions">
             {nextPanels.map((panel) => (
@@ -9054,7 +10137,7 @@ function AgentControlCenter({
           </div>
         </div>
         <div className="agent-command-node">
-          <span>Mission Control</span>
+          <span>Phantom Control</span>
           <strong>Jordan</strong>
           <small>{workers.length} workers / {subagents.length} subagents mapped</small>
         </div>
@@ -9100,7 +10183,7 @@ function AgentControlCenter({
           <small>{formatUsd(spend)} estimated</small>
         </article>
         <article>
-          <span>Client view</span>
+          <span>Employee view</span>
           <strong>{clientSummary.label}</strong>
           <small>No tokens or tools exposed</small>
         </article>
@@ -9126,7 +10209,7 @@ function AgentControlCenter({
         <div className="section-head">
           <div>
             <span className="eyebrow">Manage the workforce</span>
-            <h3>Assign work by sending each agent to the correct cockpit surface.</h3>
+            <h3>Assign work by sending each agent to the correct phantom surface.</h3>
           </div>
           <TruthBadge state="real" label="Functional routes" />
         </div>
@@ -9214,7 +10297,7 @@ function AgentControlCenter({
                 <span>Backend offline</span>
               </div>
               <p>The named specialist map appears after the admin agent-status route loads.</p>
-              <small>Client workspaces never see token/tool detail.</small>
+              <small>Employee workspaces never see token/tool detail unless an admin allows it.</small>
             </article>
           )}
         </div>
@@ -9263,7 +10346,7 @@ function AgentControlCenter({
         </div>
         <p className="agent-program-note">
           The installed programs are now treated like internal employees under a mission. Admins can run bundled safe
-          checks here; clients only see simple business outcomes.
+          checks here; employees only see the tools and outcomes their admin allows.
         </p>
         {agentActionResult ? (
           <article className={`agent-action-result ${agentActionResult.ok ? "ok" : "blocked"}`}>
@@ -9280,18 +10363,18 @@ function AgentControlCenter({
       <div className="agent-ops-grid">
         <article className="operator-result-card">
           <span className="eyebrow">Operator rule</span>
-          <h4>Visibility here. Commands on Home.</h4>
+          <h4>Visibility here. Intent starts on Home.</h4>
           <p>
             This page is the dashboard map of active workers and their cost/activity. To create work, use Home. To inspect risk, use Scanner.
             To edit the site, use Site Studio.
           </p>
         </article>
         <article className="operator-result-card">
-          <span className="eyebrow">Client version later</span>
-          <h4>{clientSummary.label} is all clients need.</h4>
+          <span className="eyebrow">Employee version</span>
+          <h4>{clientSummary.label} is all employees need.</h4>
           <p>
-            Operators see workers, tools, tokens, and spend. Client workspaces can simplify this into Sales, Media,
-            Support, Bookings, and Delivery.
+            Admins see workers, tools, tokens, and spend. Employee workspaces simplify this into the assigned lanes:
+            Sales, Media, Support, Bookings, and Delivery.
           </p>
         </article>
         <article className="operator-result-card">
@@ -9322,7 +10405,7 @@ function SiteStudioView({
   const [siteDraft, setSiteDraft] = useState({
     hero: "PhantomForce builds the system behind your business.",
     subhead:
-      "Ask PhantomAI for replies, quotes, bookings, docs, content, and video plans from one owner cockpit.",
+      "Ask PhantomAI for replies, quotes, bookings, docs, content, and video plans from one owner Phantom.",
     offer: "Start with an Ops + Content Setup Sprint: $750 Starter, $1,500 Core, or $2,500 Pro.",
     cta: "Book a 15-minute setup call",
   });
@@ -9331,7 +10414,7 @@ function SiteStudioView({
     headline: "Buy the system, not another random service.",
     product: "Ops + Content Setup Sprint",
     price: "$1,500",
-    description: "We map the mess, build the working command system, and prepare your next sales/content workflow.",
+    description: "We map the mess, build the working operating system, and prepare your next sales/content workflow.",
     fulfillment: "Delivered as a private setup sprint with owner approval before sends, posts, bookings, or billing actions.",
     checkoutNote: "Checkout is draft-only here. Live payment links require a separate approval and billing gate.",
     cta: "Request setup sprint",
@@ -9629,7 +10712,7 @@ function SiteStudioView({
         ) : null}
         <PangolinSummaryPanel pangolinPlan={pangolinPlan} pangolinStatus={pangolinStatus} />
         <article className="operator-result-card">
-          <span className="eyebrow">Admin OS rule</span>
+          <span className="eyebrow">PhantomOps rule</span>
           <h4>Draft here. Confirm before anything leaves.</h4>
           <ul>
             <li>No public publish from this pass.</li>
@@ -9802,7 +10885,7 @@ function AccessView({
             ))}
           </div>
           <div className="money-demo-proof">
-            <span>{moneyDemoClient?.privateRoute ?? "app.chicagoshots.online/money-demo-athletics"}</span>
+            <span>{moneyDemoClient?.privateRoute ?? "app.phantomforce.online/money-demo-athletics"}</span>
             <span>Calendar credential ref: local-demo:{MONEY_DEMO_CLIENT_ID}:calendar</span>
             <span>Confirmation and audit required</span>
           </div>
@@ -10198,7 +11281,7 @@ function DeploymentModelPanel({ status }: { status: DeploymentModelStatus }) {
       <div className="provider-grid">
         <ProviderStatusCard
           label="Customer app"
-          value="Online cockpit"
+          value="Online phantom"
           detail={`Primary surface: ${status.public_app_url}. Users log into PhantomForce instead of touching repos or source files.`}
           state="real"
         />
@@ -12694,7 +13777,7 @@ function ChicagoShotsLeadIntakePanel({
           <input
             value={leadForm.client_name}
             onChange={(event) => updateLeadField("client_name", event.target.value)}
-            placeholder="Jordan Test Client"
+            placeholder="Jordan Test Lead"
           />
         </label>
         <label>

@@ -4,7 +4,7 @@ Last updated: 2026-07-01
 
 ## Product Decision
 
-PhantomForce should be a cloud-first SaaS operating cockpit with an optional customer-owned local connector.
+PhantomForce should be a cloud-first SaaS operating phantom with an optional customer-owned local connector.
 
 This is the CapCut/Figma/ChatGPT Desktop style model:
 
@@ -26,7 +26,7 @@ Customers should see:
 
 Customers should not see:
 
-- Codex, Claude, GLM, OpenRouter, n8n, Agent OS, OpenSpec, Serena, source paths, repo names, or provider keys.
+- Codex, Claude, GLM, OpenRouter, n8n, PhantomOps, OpenSpec, Serena, source paths, repo names, or provider keys.
 - GitHub/source files.
 - Raw server controls.
 - Jordan's private admin operating system.
@@ -110,7 +110,7 @@ The status route is read-only:
 
 ## Next Build Steps
 
-1. Keep polishing the hosted app as the primary business cockpit.
+1. Keep polishing the hosted app as the primary business Phantom.
 2. Promote tenant/workspace boundaries over local demo state.
 3. Build a signed desktop connector prototype only after the cloud boundary is stable.
 4. Add device registration and revocation.

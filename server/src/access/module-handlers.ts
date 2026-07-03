@@ -150,7 +150,7 @@ const moduleDefinitions: Record<string, ModuleDefinition> = {
   },
   video: {
     title: "Video Studio",
-    summary: "Subscriber video generation cockpit backed by PhantomForce Media Lab and Higgsfield drafts.",
+    summary: "Subscriber video generation phantom backed by PhantomForce Media Lab and Higgsfield drafts.",
     widgets: [
       { id: "provider", label: "Provider", value: "Higgsfield" },
       { id: "mode", label: "Mode", value: "Draft first" },

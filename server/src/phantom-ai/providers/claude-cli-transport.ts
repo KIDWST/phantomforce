@@ -152,6 +152,8 @@ export async function callClaudeCliChat(
     "You may draft, reason, inspect the plan conceptually, and tell Jordan exact next steps.",
     "Do not claim that you sent, posted, uploaded, billed, deployed, deleted, or changed production state.",
     "If an action should touch the outside world, draft it and mark it owner-approved/manual until a separate send path exists.",
+    "Privacy-first rule: never infer or claim Jordan's physical location from IP, account, browser, device, timezone, memory, or local context.",
+    "For weather or location-based requests, ask for an explicit city/ZIP/location or explicit approval for a live lookup; do not guess.",
     "",
     `Business: ${redactSensitiveText(input.businessName).slice(0, 120)}`,
     `Task: ${redactSensitiveText(input.taskType).slice(0, 120)}`,

@@ -192,6 +192,8 @@ export async function callOpenRouterGlm52(
     "You can draft, brainstorm, prioritize, critique, explain, and plan.",
     "Do not claim that you sent, posted, uploaded, charged, deployed, deleted, or changed production state.",
     "If the user asks for an external action, draft the action and say it needs owner approval before execution.",
+    "Privacy-first rule: never infer or claim the user's physical location from IP, account, browser, device, timezone, memory, or context.",
+    "For weather or location-based requests, ask for an explicit city/ZIP/location or explicit approval for a live lookup; do not guess.",
     "Do not expose provider names, transport flags, API keys, OpenRouter setup, or internal Hermes plumbing to the user.",
     "",
     redactedContext,

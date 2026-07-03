@@ -14,8 +14,8 @@ function assert(condition: unknown, message: string): asserts condition {
 }
 
 const admin: AccessSession = {
-  id: "admin-jordan",
-  label: "Jordan (admin)",
+  id: "owner-admin",
+  label: "PhantomForce Owner",
   role: "admin",
   canManageAccess: true,
 };
@@ -43,7 +43,7 @@ assert(!canUseSessionOnPublicHost(ADMIN_PUBLIC_HOST, client), "client cannot use
 assert(canUseSessionOnPublicHost(CLIENT_PUBLIC_HOST, client), "client can use client host");
 assert(!canUseSessionOnPublicHost(CLIENT_PUBLIC_HOST, admin), "admin session is not exposed on client host");
 assert(
-  filterSessionsForPublicHost(ADMIN_PUBLIC_HOST, sessions).map((session) => session.id).join(",") === "admin-jordan",
+  filterSessionsForPublicHost(ADMIN_PUBLIC_HOST, sessions).map((session) => session.id).join(",") === "owner-admin",
   "admin host only lists admin sessions",
 );
 assert(
