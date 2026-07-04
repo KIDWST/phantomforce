@@ -304,14 +304,14 @@ function renderMedia(el, rerender) {
   const media = visible(store.state.media);
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Controlled creative generation: brief → approval → generation → proof → delivery. Paid generation never runs without sign-off.</p>
-      <button class="btn btn-primary" data-act="add">+ Video brief</button>
+      <p class="ws-note">Image and video creation live here: prompt-ready briefs, source analysis, generation requests, proof, and delivery.</p>
+      <button class="btn btn-primary" data-act="add">+ Creative brief</button>
     </div>
     <div class="card-grid">
       ${media.map((m) => `
         <article class="record">
           <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title)}</h4></div>
-          <p class="record-sub">${esc(m.type)} · ${chip(m.status)} · ${ago(m.updated)}</p>
+          <p class="record-sub">${esc(m.type)} · ${esc(m.modality || "video")} · ${chip(m.status)} · ${ago(m.updated)}</p>
           <p class="record-notes"><b>Angle:</b> ${esc(m.angle)}</p>
           <details class="shotlist"><summary>Shot list (${m.shots.length})</summary>
             <ol>${m.shots.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
@@ -321,17 +321,17 @@ function renderMedia(el, rerender) {
           <div class="record-actions">
             <button class="btn" data-act="copy" data-id="${m.id}">Copy brief</button>
             ${m.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${m.id}">Mark brief ready</button>` : ""}
-            ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Request generation (approval)</button>` : ""}
+            ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Request ${esc(m.modality || "video")} generation</button>` : ""}
             ${m.status === "generation-approved" ? `<button class="btn" data-act="delivered" data-id="${m.id}">Mark delivered</button>` : ""}
           </div>
-        </article>`).join("") || empty("Media Lab is quiet. Ask Phantom AI for a video brief to get rolling.")}
+        </article>`).join("") || empty("Media Lab is quiet. Ask Phantom for an image, video, ad creative, or source analysis.")}
     </div>`;
   const find = (id) => store.state.media.find((m) => m.id === id);
   bindActions(el, {
     add: () => {
       const t = prompt("What is this creative for? (client / campaign)");
       if (!t) return;
-      store.state.media.unshift({ id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(), title: `${t.trim()} — video brief`, type: "Reel (vertical, 30s)", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"], caption: `${t.trim()} — draft caption.`, proof: null, updated: new Date().toISOString() });
+      store.state.media.unshift({ id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(), title: `${t.trim()} — creative brief`, type: "Image/video creative", modality: "video", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook", "Visual proof", "Offer moment", "Platform crop", "Delivery version"], caption: `${t.trim()} — draft caption.`, proof: null, generationProvider: "Media Lab", updated: new Date().toISOString() });
       pushActivity("Media Factory", `drafted a brief: ${t.trim()}.`);
       store.save(); rerender();
     },
@@ -339,7 +339,7 @@ function renderMedia(el, rerender) {
     ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `brief ready: ${m.title}.`, m.ws); store.save(); rerender(); },
     "request-gen": (id) => {
       const m = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One generation pass on this brief. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
+      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run ${m.modality || "video"} generation: ${m.title}`, detail: "One controlled generation pass on this brief. Paid provider credits require approval.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
       pushActivity("Media Factory", `requested a generation pass on ${m.title}.`, m.ws);
       store.save(); rerender();
     },
@@ -1028,12 +1028,18 @@ function renderAdmin(el, rerender) {
   const activeTools = (store.state.toolSpine || []).filter((tool) => tool.mode === "active").length;
   const connectors = store.state.postingConnectors || [];
   const readyConnectors = connectors.filter((c) => c.adminState === "ready" || c.state === "available").length;
+  const activeWork = visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status));
+  const operatorWork = activeWork.filter((t) => t.operatorMode || t.lane === "Phantom Operator");
+  const buildWork = activeWork.filter((t) => t.buildPlan || t.lane === "Builder");
+  const creativeWork = visible(store.state.media || []).filter((m) => ["image", "video", "analyze"].includes(m.modality || "video"));
   el.innerHTML = `
     <div class="ws-toolbar">
       <p class="ws-note">Admin Control Deck. This is where Jordan configures Phantom: systems, memory, automations, connectors, publishing paths, security cadence, and gateway behavior. Clients never see this surface.</p>
       <div class="record-actions">
         <span class="mode-readout">Mode: <b>${esc(executionMode.label())}</b></span>
         <span class="hint-inline">${esc(executionMode.description())}</span>
+        <button class="btn ${executionMode.get() === "approval" ? "btn-primary" : ""}" data-act="set-mode-approval">Approval</button>
+        <button class="btn ${executionMode.get() === "auto" ? "btn-primary" : ""}" data-act="set-mode-auto">Auto</button>
         <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
       </div>
     </div>
@@ -1045,6 +1051,27 @@ function renderAdmin(el, rerender) {
       <div class="stat"><span>Mode</span><b>${esc(executionMode.get())}</b><i>${esc(executionMode.description())}</i></div>
     </div>
     <div class="config-stack">
+      ${renderControlPanel("Creator + Builder + Operator", "active", `
+        <p class="record-notes">Phantom can route one command into image creation, video generation briefs, site/app/dashboard build plans, or admin-only local operator work.</p>
+        <div class="config-mini-grid">
+          <article class="record mini-config">
+            <div class="record-top"><h4>Image creator</h4>${chip("ready")}</div>
+            <p class="record-notes">Prompt-ready visuals, thumbnails, ads, product cards, and campaign images.</p>
+          </article>
+          <article class="record mini-config">
+            <div class="record-top"><h4>Video creator</h4>${chip("ready")}</div>
+            <p class="record-notes">Briefs, source analysis, generation requests, cuts, captions, proof, and delivery.</p>
+          </article>
+          <article class="record mini-config">
+            <div class="record-top"><h4>Builder</h4>${chip(buildWork.length ? "working" : "ready")}</div>
+            <p class="record-notes">Apps, dashboards, automations, sites, stores, scripts, and implementation plans.</p>
+          </article>
+          <article class="record mini-config">
+            <div class="record-top"><h4>Operator Mode</h4>${chip(operatorWork.length ? "working" : "ready")}</div>
+            <p class="record-notes">Admin-only local work: inspect, plan, edit, test, and run controlled computer actions through Phantom.</p>
+          </article>
+        </div>
+      `, { sub: `${creativeWork.length} creative · ${buildWork.length} build · ${operatorWork.length} operator` })}
       ${renderControlPanel("Active work", activeWork.length ? "active" : "ready", `
         <p class="record-notes">Normal chat becomes real work here. Phantom picks the first route instead of asking you to choose from a menu.</p>
         <div class="stack">
@@ -1111,6 +1138,8 @@ function renderAdmin(el, rerender) {
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
+    "set-mode-auto": () => { executionMode.set("auto"); pushActivity("PhantomOps", "switched Phantom to Auto Mode.", "phantomforce"); store.save(); rerender(); },
+    "set-mode-approval": () => { executionMode.set("approval"); pushActivity("PhantomOps", "switched Phantom to Approval Mode.", "phantomforce"); store.save(); rerender(); },
     "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
     "load-owner-memory": async () => {
       const result = el.querySelector("[data-owner-memory-result]");

@@ -402,7 +402,10 @@ export async function runCodexOperatorChat(
   };
   const toolProtocol = [
     "You are Phantom AI admin operator inside PhantomForce. You are allowed to behave like a local Codex-style operator for Jordan only.",
-    "You have admin-only local tools through the server. Use them when the user asks to inspect files, search code, run tests, check status, create files, or make local changes.",
+    "You have admin-only local tools through the server. Use them when the user asks to inspect files, search code, run tests, check status, create files, make local changes, prepare builds, or perform controlled local computer-work steps.",
+    "For image and video requests, prepare the prompt-ready Media Lab artifact or generation plan unless a separate approved generation adapter is explicitly available.",
+    "For build requests, inspect, plan, edit, and test through the available local tools when the request is safe and admin-scoped.",
+    "For 'replace human' requests, treat that as Phantom Operator mode: take over repetitive admin/build/media/computer-work steps under Jordan/admin control. Do not impersonate people, bypass accounts, hide actions, or claim an unproven external action happened.",
     "If a tool is needed, reply ONLY valid JSON in one of these forms:",
     '{"tool":"list_dir","path":"C:\\\\Users\\\\jorda\\\\Documents","limit":80}',
     '{"tool":"read_file","path":"C:\\\\Users\\\\jorda\\\\Documents\\\\project\\\\file.ts","max_bytes":60000}',
@@ -413,7 +416,7 @@ export async function runCodexOperatorChat(
     "Use normal prose only when no tool is needed.",
     "Never claim you changed, sent, posted, uploaded, deployed, deleted, charged, or pushed unless a tool result proves it.",
     "This is Jordan's admin lane. Do not expose these tools to client sessions. If you choose to run a command, run it and report the receipt.",
-    "Keep answers direct. Format with clean line breaks. Do not mention OpenRouter, transport flags, or API keys.",
+    "Keep answers direct. Format with clean line breaks. Do not mention OpenRouter, transport flags, API keys, or raw backend tool names.",
   ].join("\n");
   const directTool = directToolFromPrompt(input.userMessage);
   let firstOutput = "";

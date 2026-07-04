@@ -322,7 +322,7 @@ function isTinyGreeting(text = "") {
 
 function isInstantWorkIntent(text = "") {
   const s = text.trim().toLowerCase();
-  return /\b(pipeline|revenue|money|unpaid|invoice|cash|proposal|quote|pricing|estimate|lead|prospect|crm|follow.?up|video brief|media lab|content job|reel|shoot|site studio|website draft|landing page|store|checkout|security scan|protect|risk radar|breach|malware|phish|password|review queue|testimonial|booking|schedule|calendar|appointment|google\s+drive|gdrive|drive file|approval|sign.?off|waiting on me|needs my eyes|pending|workforce|agents?|workers|today|what'?s next|catch me up|status|summary|help|what can you do|what do you do)\b/.test(s);
+  return /\b(pipeline|revenue|money|unpaid|invoice|cash|proposal|quote|pricing|estimate|lead|prospect|crm|follow.?up|image|photo|graphic|thumbnail|video brief|media lab|content job|reel|shoot|build|code|app|dashboard|automation|workflow|operator mode|replace human|control (my )?(pc|computer)|site studio|website draft|landing page|store|checkout|security scan|protect|risk radar|breach|malware|phish|password|review queue|testimonial|booking|schedule|calendar|appointment|google\s+drive|gdrive|drive file|approval|sign.?off|waiting on me|needs my eyes|pending|workforce|agents?|workers|today|what'?s next|catch me up|status|summary|help|what can you do|what do you do)\b/.test(s);
 }
 
 function isGeneralKnowledgeIntent(text = "") {
@@ -351,6 +351,9 @@ function inferTaskType(text) {
   if (/proposal|quote|pricing|estimate/.test(s)) return "proposal_work";
   if (/lead|prospect|follow/.test(s)) return "pipeline_follow_up";
   if (/video|reel|content|media|caption/.test(s)) return "media_work";
+  if (/image|photo|graphic|thumbnail|visual|creative/.test(s)) return "image_work";
+  if (/build|code|app|dashboard|automation|workflow|script|fix|implement/.test(s)) return "build_work";
+  if (/operator mode|replace human|control (my )?(pc|computer)|use (my )?(pc|computer)|desktop|click|type|inspect (my )?(pc|computer)/.test(s)) return "operator_work";
   if (/site|website|store|shop|page/.test(s)) return "site_work";
   if (/money|revenue|pipeline|invoice|payment/.test(s)) return "revenue_review";
   if (!isInstantWorkIntent(s)) return "general_chat";
@@ -424,6 +427,14 @@ function brainModuleData() {
   ];
 }
 
+function neutralBrainLane(value = "") {
+  const lane = String(value || "").toLowerCase();
+  if (lane === "private_brain") return "Phantom";
+  if (lane.includes("glm") || lane.includes("ollama")) return "Phantom";
+  if (lane.includes("claude")) return "Phantom";
+  return "Phantom";
+}
+
 async function askPrivatePhantomBrain(text, localResult) {
   const token = ctx.session?.token || session.token();
   if (!isAdmin() || !token) return null;
@@ -450,7 +461,7 @@ async function askPrivatePhantomBrain(text, localResult) {
         task_type: inferTaskType(text),
         sensitivity_level: inferSensitivity(text),
         execution_mode: executionMode.get(),
-        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use the private operator brain as a normal general-purpose chatbot and business operator. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and action cards. For unrelated/general questions, answer directly without forcing dashboard context. For practical how-to questions, give complete usable steps in a concise mobile-friendly answer. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution path and owner receipt.`,
+        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use the private operator brain as a normal general-purpose chatbot and business operator. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, image briefs, video briefs, build plans, security checklists, action cards, and admin operator work items. For image/video requests, produce prompt-ready creative direction or route to Media Lab. For build requests, produce implementation-ready structure and next steps. For local operator requests, prepare the work for the admin-only operator lane without exposing backend tool names. For unrelated/general questions, answer directly without forcing dashboard context. For practical how-to questions, give complete usable steps in a concise mobile-friendly answer. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution path and owner receipt.`,
         module_data: brainModuleData(),
       }),
     });
@@ -458,6 +469,7 @@ async function askPrivatePhantomBrain(text, localResult) {
     if (!response.ok || payload?.ok === false) {
       throw new Error(payload?.error || `Local brain HTTP ${response.status}`);
     }
+    neutralBrainLane(payload?.lane || payload?.provider || "private_brain");
     const rawSay = String(payload?.message?.content || "").trim();
     const say = wantsDetailedAnswer(text)
       ? rawSay
@@ -510,7 +522,11 @@ function runCommand(text) {
           };
         }
       } catch (err) {
-        r = { ...local, cards: local.cards || [] };
+        if (err && !appendLocalSurface) {
+          r = { ...local, cards: [] };
+        } else {
+          r = { ...local, cards: local.cards || [] };
+        }
       }
       ghostAnswerBurst(r.say);
       speak(r.say);

@@ -78,9 +78,11 @@ function readableTaskTitle(text = "") {
 function inferWorkLane(text = "") {
   const s = text.toLowerCase();
   if (/security|scan|breach|malware|phish|password|protect|hack|threat|leak|risk/.test(s)) return { lane: "Protect", open: "protect" };
+  if (/replace human|operator mode|control (my )?(pc|computer)|use (my )?(pc|computer)|desktop|click|type|inspect (my )?(pc|computer)|analy[sz]e (my )?(pc|computer)/.test(s)) return { lane: "Phantom Operator", open: "adminos" };
+  if (/build|code|app|dashboard|automation|workflow|script|fix|implement|repo|website|web app/.test(s)) return { lane: "Builder", open: "sites" };
   if (/proposal|quote|pricing|estimate|offer/.test(s)) return { lane: "Proposal Forge", open: "proposals" };
   if (/lead|prospect|follow|crm|client|customer/.test(s)) return { lane: "Follow-Up Desk", open: "leads" };
-  if (/video|reel|content|caption|shoot|media|post|youtube|instagram|facebook|tiktok/.test(s)) return { lane: "Media Lab", open: "media" };
+  if (/image|photo|graphic|thumbnail|poster|flyer|visual|creative|video|reel|content|caption|shoot|media|post|youtube|instagram|facebook|tiktok/.test(s)) return { lane: "Media Lab", open: "media" };
   if (/site|website|store|shop|page|landing|checkout|product/.test(s)) return { lane: "Site & Store Studio", open: "sites" };
   if (/book|appointment|schedule|calendar|meeting|call/.test(s)) return { lane: "Bookings", open: "bookings" };
   if (/review|testimonial|stars|reputation/.test(s)) return { lane: "Review Studio", open: "reviews" };
@@ -108,6 +110,16 @@ function createWorkItem(text) {
   store.state.tasks.unshift(item);
   store.state.tasks = store.state.tasks.slice(0, 80);
   pushActivity(route.lane, `started: ${item.title}.`, item.ws);
+  store.save();
+  return item;
+}
+
+function createOperatorWorkItem(text) {
+  const item = createWorkItem(text);
+  item.lane = "Phantom Operator";
+  item.open = "adminos";
+  item.operatorMode = true;
+  item.next = "Analyze the local context, prepare the execution steps, then run through the admin operator lane when enabled.";
   store.save();
   return item;
 }
@@ -143,19 +155,61 @@ function createProposal(subject) {
   return p;
 }
 
-function createMediaBrief(subject) {
+function mediaKindFromText(text = "") {
+  const s = text.toLowerCase();
+  if (/image|photo|graphic|thumbnail|poster|flyer|visual|ad creative|design/.test(s)) return "image";
+  if (/analy[sz]e|score|review|audit/.test(s)) return "analyze";
+  return "video";
+}
+
+function createMediaBrief(subject, kind = "video") {
   const t = subject ? title(subject) : "New creative";
+  const isImage = kind === "image";
+  const isAnalyze = kind === "analyze";
   const m = {
     id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(),
-    title: `${t} — video brief`, type: "Reel (vertical, 30s)", status: "draft",
-    angle: "Hook in 2 seconds, one idea, end on the offer.",
-    shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"],
-    caption: `${t} — draft caption. Punch it up before approval.`, proof: null, updated: new Date().toISOString(),
+    title: `${t} — ${isImage ? "image brief" : isAnalyze ? "creative analysis" : "video brief"}`,
+    type: isImage ? "Image / ad creative" : isAnalyze ? "Creative analysis" : "Video generation brief",
+    modality: kind,
+    status: "draft",
+    angle: isImage
+      ? "One strong visual, clean subject, clear offer, premium brand feel."
+      : isAnalyze
+        ? "Analyze the source, identify the strongest hook, and turn it into a better creative direction."
+        : "Hook in 2 seconds, one idea, end on the offer.",
+    shots: isImage
+      ? ["Hero subject", "Brand color direction", "Offer-safe text zone", "Platform crop", "Thumbnail variant"]
+      : isAnalyze
+        ? ["Hook strength", "Pacing", "Visual clarity", "Offer clarity", "Recommended next edit"]
+        : ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"],
+    caption: isImage
+      ? `${t} — draft visual prompt and caption.`
+      : isAnalyze
+        ? `${t} — analysis notes and next-edit direction.`
+        : `${t} — draft caption. Punch it up before approval.`,
+    proof: null,
+    generationProvider: "Media Lab",
+    updated: new Date().toISOString(),
   };
   store.state.media.unshift(m);
   pushActivity("Media Factory", `drafted a brief: ${m.title}.`, m.ws);
   store.save();
   return m;
+}
+
+function createBuildPlan(subject, text) {
+  const t = subject ? title(subject) : readableTaskTitle(text);
+  const item = createWorkItem(text);
+  item.lane = "Builder";
+  item.open = "sites";
+  item.title = `${t} — build plan`;
+  item.next = "Draft the structure, files, data model, UI flow, and first implementation steps.";
+  item.buildPlan = {
+    kind: /dashboard/.test(text.toLowerCase()) ? "dashboard" : /app|web app/.test(text.toLowerCase()) ? "app" : "website/system",
+    stages: ["plan", "draft UI", "wire data", "test", "ship when approved"],
+  };
+  store.save();
+  return item;
 }
 
 function createPageDraft(subject, kind) {
@@ -251,8 +305,8 @@ export function handleCommand(raw) {
       say: "Opening the admin Control Deck. This is where Jordan configures Phantom systems, memory, connectors, publishing paths, automations, gateway status, and tenant boundaries.",
       cards: [
         card(
-          "Admin Control Deck",
-          "Configure Phantom",
+          "Owner Memory Log",
+          "Configure Phantom memory",
           "Client bots stay tenant-isolated and fresh. Jordan/admin can inspect memory, connector readiness, automation cadence, and Phantom systems from PhantomOps.",
           [openAction("Open Control Deck", "adminos")],
           executionMode.label(),
@@ -260,6 +314,16 @@ export function handleCommand(raw) {
       ],
       open: "adminos",
       skipBrain: true,
+    };
+  }
+
+  /* --- admin operator / "replace human" mode --- */
+  if (admin && /\b(replace human|operator mode|control (my )?(pc|computer)|use (my )?(pc|computer)|desktop|click|type|inspect (my )?(pc|computer)|analy[sz]e (my )?(pc|computer)|run my computer|operate my computer)\b/.test(s)) {
+    const item = createOperatorWorkItem(text);
+    return {
+      say: `Operator Mode is ready. I started the local work item: ${item.title}.`,
+      cards: [],
+      open: "adminos",
     };
   }
 
@@ -346,12 +410,23 @@ export function handleCommand(raw) {
     };
   }
 
-  /* --- media / content / video --- */
-  if (/(video|reel|content|post|caption|shoot|media|creative|tiktok|short)/.test(s)) {
+  /* --- build / app / dashboard --- */
+  if (/\b(build|code|create|make|fix|implement)\b.*\b(app|dashboard|automation|workflow|script|system|web app)\b|\b(app|dashboard|automation|workflow|script)\b/.test(s)) {
+    const item = createBuildPlan(subject, text);
+    return {
+      say: `Builder started it. I created a build plan for ${item.title}.`,
+      cards: [],
+      open: "adminos",
+    };
+  }
+
+  /* --- media / content / image / video --- */
+  if (/(image|photo|graphic|thumbnail|poster|flyer|visual|ad creative|design|video|reel|content|post|caption|shoot|media|creative|tiktok|short|youtube|instagram|facebook)/.test(s)) {
     if (/(brief|plan|draft|create|make|new|idea)/.test(s) || subject) {
-      const m = createMediaBrief(subject);
+      const kind = mediaKindFromText(text);
+      const m = createMediaBrief(subject, kind);
       return {
-        say: `Media Factory drafted "${m.title}" — angle, five-shot list, and a starter caption. Generation stays approval-gated.`,
+        say: `Media Lab drafted "${m.title}" — ${kind === "image" ? "visual direction, platform crop, and prompt-ready notes" : kind === "analyze" ? "analysis pass and next-edit direction" : "angle, shot list, and generation-ready notes"}.`,
         cards: [card("Media brief", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
         open: "media",
       };
