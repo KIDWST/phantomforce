@@ -288,6 +288,7 @@ function seed() {
   const products = [];
   const security = [];
   const approvals = [];
+  const tasks = [];
 
   const agents = [
     { id: "ag-router", name: "Command Router", role: "Reads requests and routes them to the right Phantom system.", status: "active", mission: "Standing by for the first real command.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Route the first client request.", bundle: "PhantomOps router · model system A" },
@@ -320,7 +321,7 @@ function seed() {
     reviewEngine: { state: "ready", cadence: "after delivery", mode: "request, collect, approve, publish-ready" },
   };
 
-  return { version: 5, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, agents, toolSpine: TOOL_SPINE, postingConnectors, automationConfig, activity, workspaceMemory };
+  return { version: 5, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, tasks, agents, toolSpine: TOOL_SPINE, postingConnectors, automationConfig, activity, workspaceMemory };
 }
 
 /* ---------------- store ---------------- */
@@ -337,6 +338,7 @@ function normalizeData(data) {
   d.products ||= seeded.products;
   d.security ||= seeded.security;
   d.approvals ||= seeded.approvals;
+  d.tasks ||= seeded.tasks;
   d.agents = seeded.agents.map((agent) => ({ ...(d.agents || []).find((x) => x.id === agent.id), ...agent }));
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...tool, ...(d.toolSpine || []).find((x) => x.id === tool.id) }));
   d.postingConnectors = POSTING_CONNECTORS.map((connector) => {
@@ -579,6 +581,8 @@ export function todaysPlan() {
     .forEach((p) => items.push({ icon: "▸", text: `Proposal send-ready: ${p.client}`, kind: "proposal", open: "proposals" }));
   visible(store.state.media).filter((m) => m.status === "brief-ready")
     .forEach((m) => items.push({ icon: "▸", text: `Media brief ready: ${m.title}`, kind: "media", open: "media" }));
+  visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status))
+    .forEach((t) => items.push({ icon: "▸", text: t.title, kind: "task", open: t.open || "adminos" }));
   visible(store.state.security).forEach((s) => {
     if (daysUntil(s.rotationDue) <= 30) items.push({ icon: "⚠", text: `Password rotation window closes in ${daysUntil(s.rotationDue)} days`, kind: "security", open: "protect" });
   });
@@ -609,6 +613,7 @@ export const STATUS_LABEL = {
   "brief-ready": "Brief ready", "generation-approved": "Generation approved", "delivered": "Delivered",
   "publish-ready": "Publish-ready", "approved-to-publish": "Approved to publish", "published-ready": "Published-ready",
   "received": "Received", "pending": "Pending", "declined": "Declined", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
+  "working": "Working",
   "watching": "Watching", "online": "Online", "indexed": "Indexed", "scaffolded": "Scaffolded", "ready": "Ready", "enforcing": "Enforcing", "contained": "Contained", "routed": "Routed",
   "active": "Active", "standby": "Standby", "sandbox": "Sandbox", "gated": "Gated",
   "available": "Available", "setup-needed": "Configure", "configure": "Configure", "locked": "Locked",

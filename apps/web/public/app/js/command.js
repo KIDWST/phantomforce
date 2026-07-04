@@ -6,7 +6,7 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-chat-mode-20260703-01";
+} from "./store.js?v=phantom-no-question-chat-20260703-01";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -64,6 +64,53 @@ function card(kicker, name, body, actions = [], meta = "") {
   return { kicker, title: name, body, actions, meta };
 }
 const openAction = (label, ws) => ({ label, open: ws });
+
+function readableTaskTitle(text = "") {
+  const clean = text
+    .replace(/\s+/g, " ")
+    .replace(/[.?!]\s*$/g, "")
+    .trim();
+  if (!clean) return "New Phantom task";
+  const trimmed = clean.length > 72 ? `${clean.slice(0, 69).trim()}...` : clean;
+  return trimmed.replace(/^\w/, (c) => c.toUpperCase());
+}
+
+function inferWorkLane(text = "") {
+  const s = text.toLowerCase();
+  if (/security|scan|breach|malware|phish|password|protect|hack|threat|leak|risk/.test(s)) return { lane: "Protect", open: "protect" };
+  if (/proposal|quote|pricing|estimate|offer/.test(s)) return { lane: "Proposal Forge", open: "proposals" };
+  if (/lead|prospect|follow|crm|client|customer/.test(s)) return { lane: "Follow-Up Desk", open: "leads" };
+  if (/video|reel|content|caption|shoot|media|post|youtube|instagram|facebook|tiktok/.test(s)) return { lane: "Media Lab", open: "media" };
+  if (/site|website|store|shop|page|landing|checkout|product/.test(s)) return { lane: "Site & Store Studio", open: "sites" };
+  if (/book|appointment|schedule|calendar|meeting|call/.test(s)) return { lane: "Bookings", open: "bookings" };
+  if (/review|testimonial|stars|reputation/.test(s)) return { lane: "Review Studio", open: "reviews" };
+  if (/money|revenue|invoice|payment|pipeline|cash/.test(s)) return { lane: "Money", open: "money" };
+  if (/drive|doc|document|file|note|sheet|folder/.test(s)) return { lane: "Drive workspace", open: "adminos" };
+  return { lane: "Phantom", open: "adminos" };
+}
+
+function createWorkItem(text) {
+  const route = inferWorkLane(text);
+  const item = {
+    id: uid("task"),
+    ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(),
+    title: readableTaskTitle(text),
+    request: text,
+    lane: route.lane,
+    open: route.open,
+    status: "working",
+    mode: executionMode.get(),
+    source: "Phantom command",
+    next: "Phantom picked the route and started the first useful internal work item.",
+    createdAt: new Date().toISOString(),
+  };
+  store.state.tasks ||= [];
+  store.state.tasks.unshift(item);
+  store.state.tasks = store.state.tasks.slice(0, 80);
+  pushActivity(route.lane, `started: ${item.title}.`, item.ws);
+  store.save();
+  return item;
+}
 
 /* ---------------- artifact builders ---------------- */
 function createLead(subject) {
@@ -410,27 +457,28 @@ export function handleCommand(raw) {
   }
 
   /* --- help / what can you do --- */
-  if (/(help|what can you|how do|what do you do|\?$)/.test(s) && s.length < 60) {
+  if (/^(help|what can you do|what do you do|how do i use phantom|how does phantom work)[\s.!?]*$/.test(s)) {
     return {
-      say: "Ask me anything. For business work, give me the outcome and I’ll route it to the right Phantom system, draft, plan, or workspace.",
-      cards: [card("Try one of these", "Commands that create things",
-        "“Draft a proposal for a new client” · “Create a video brief for a product launch” · “Build a store for a local brand” · “Check my risk radar” · “What's my pipeline?”", [])],
+      say: "Ask normally. If it is business work, Phantom will choose the route and start the draft, plan, workspace item, or approval path without making you pick from a menu.",
+      cards: [],
       open: null,
     };
   }
 
-  /* --- fallback: still useful --- */
-  const plan = todaysPlan();
+  /* --- general knowledge: let the private brain answer, do not create fake app work --- */
+  if (/^(who|what|when|where|why|how|which|define|explain|tell me about|tell me why|can you tell|can you explain|is |are |do |does |should |could |would )\b/.test(s) || /\?$/.test(s)) {
+    return {
+      say: "I’m checking that.",
+      cards: [],
+      open: null,
+    };
+  }
+
+  /* --- universal fallback: make work instead of asking questions --- */
+  const item = createWorkItem(text);
   return {
-    say: subject
-      ? `Noted. I filed “${text}” and can turn it into a lead, a proposal, or a brief — say which, or open a workspace below.`
-      : "I can turn that into work — a lead, a proposal, a media brief, a page, a booking, or a security check. Say the outcome you want.",
-    cards: [
-      card("Quick routes", "Where this usually goes",
-        "Handle a lead · Build a quote · Create a media plan · Build a page or store · Run a security check · Check pipeline",
-        [openAction("Leads", "leads"), openAction("Proposal Forge", "proposals"), openAction("Media Lab", "media")]),
-      ...(plan.length ? [card("Meanwhile — today", plan[0].text, "", [openAction("Open", plan[0].open)])] : []),
-    ],
+    say: `Handled. I routed this to ${item.lane} and started a work item: ${item.title}.`,
+    cards: [],
     open: null,
   };
 }

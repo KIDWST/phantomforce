@@ -4,9 +4,9 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-chat-mode-20260703-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-chat-mode-20260703-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-chat-mode-20260703-01";
+} from "./store.js?v=phantom-no-question-chat-20260703-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-no-question-chat-20260703-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-no-question-chat-20260703-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -374,6 +374,7 @@ function brainModuleData() {
   const approvals = visible(store.state.approvals || []).filter((a) => a.status === "pending");
   const media = visible(store.state.media || []);
   const sites = visible(store.state.sites || []);
+  const tasks = visible(store.state.tasks || []);
   const security = visible(store.state.security || []);
   const agents = store.state.agents || [];
   const plan = todaysPlan();
@@ -389,6 +390,11 @@ function brainModuleData() {
       module: "Approvals",
       summary: `${approvals.length} item${approvals.length === 1 ? "" : "s"} waiting on owner review. Nothing sends or publishes automatically.`,
       items: approvals.slice(0, 5).map((a) => moduleItem(a.title, a.type, a.detail)),
+    },
+    {
+      module: "Work items",
+      summary: `${tasks.length} active work item${tasks.length === 1 ? "" : "s"} captured from normal chat.`,
+      items: tasks.slice(0, 5).map((t) => moduleItem(t.title, t.lane, t.next || t.request)),
     },
     {
       module: "Pipeline",
@@ -461,16 +467,6 @@ async function askPrivatePhantomBrain(text, localResult) {
     if (!say) return null;
 
     const cards = [];
-    if (payload.private_brain?.status && payload.private_brain.status !== "called") {
-      cards.push(responseCard(
-        "Phantom Core",
-        "Core needs attention",
-        "Phantom Core did not complete this request. The local workspace router handled it instead.",
-        [],
-        "No action executed",
-      ));
-    }
-
     return {
       say,
       cards,
@@ -514,16 +510,7 @@ function runCommand(text) {
           };
         }
       } catch (err) {
-        if (isAdmin() && (ctx.session?.token || session.token()) && !appendLocalSurface) {
-          const msg = err?.name === "AbortError" ? "Phantom Core timed out." : "Phantom Core is not reachable right now.";
-          r = {
-            ...local,
-            cards: [
-              responseCard("Phantom Core", "Core needs attention", `${msg} The local workspace router handled it instead.`, [], "No outside action executed"),
-              ...(local.cards || []),
-            ].slice(0, 4),
-          };
-        }
+        r = { ...local, cards: local.cards || [] };
       }
       ghostAnswerBurst(r.say);
       speak(r.say);

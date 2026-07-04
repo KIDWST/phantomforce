@@ -7,7 +7,7 @@ import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-chat-mode-20260703-01";
+} from "./store.js?v=phantom-no-question-chat-20260703-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -1041,9 +1041,20 @@ function renderAdmin(el, rerender) {
       <div class="stat"><span>Phantom systems</span><b>${activeAgents}/${store.state.agents.length}</b><i>business modules ready</i></div>
       <div class="stat"><span>Tool spine</span><b>${activeTools}/${(store.state.toolSpine || []).length}</b><i>operator systems active</i></div>
       <div class="stat"><span>Connectors</span><b>${readyConnectors}/${connectors.length}</b><i>ready or configurable</i></div>
+      <div class="stat"><span>Active work</span><b>${activeWork.length}</b><i>captured from chat</i></div>
       <div class="stat"><span>Mode</span><b>${esc(executionMode.get())}</b><i>${esc(executionMode.description())}</i></div>
     </div>
     <div class="config-stack">
+      ${renderControlPanel("Active work", activeWork.length ? "active" : "ready", `
+        <p class="record-notes">Normal chat becomes real work here. Phantom picks the first route instead of asking you to choose from a menu.</p>
+        <div class="stack">
+          ${activeWork.slice(0, 10).map((t) => `<article class="record record-row">
+            <h4>${esc(t.title)}</h4>
+            <p class="record-sub">${esc(t.lane)} · ${esc(t.mode || "approval")}</p>
+            <span class="admin-ws-stats">${esc(t.next || "Started from Phantom chat.")}</span>
+          </article>`).join("") || empty("No active chat-captured work yet.")}
+        </div>
+      `, { sub: `${activeWork.length} work items` })}
       ${renderControlPanel("System intelligence", "active", `
         <p class="record-notes">The Phantom systems are grouped by outcome: leads, proposals, sites/stores, media, reviews, bookings, security, money, delivery, and data cleanup. These are capabilities/business modules, not employees or user logins.</p>
         <div class="record-actions">
