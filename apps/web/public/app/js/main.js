@@ -4,11 +4,11 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-flow-map-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-flow-map-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-flow-map-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-flow-map-20260704-01";
-import { PhantomFlow } from "./flow-map.js?v=phantom-flow-map-20260704-01";
+} from "./store.js?v=phantom-flow-map-20260704-03";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-flow-map-20260704-03";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-flow-map-20260704-03";
+import { imageStyle } from "./media-image.js?v=phantom-flow-map-20260704-03";
+import { PhantomFlow } from "./flow-map.js?v=phantom-flow-map-20260704-03";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -247,12 +247,12 @@ function renderHomeMission() {
 }
 
 const FLOW_STATIONS = [
-  { id: "leads", label: "Leads", icon: "◉", x: 10, y: 50, workspace: "leads" },
-  { id: "quotes", label: "Quotes", icon: "◆", x: 24, y: 30, workspace: "proposals" },
-  { id: "money", label: "Money", icon: "◈", x: 40, y: 54, workspace: "money" },
-  { id: "delivery", label: "Delivery", icon: "▶", x: 58, y: 34, workspace: "media" },
-  { id: "site", label: "Site + Store", icon: "▦", x: 73, y: 55, workspace: "sites" },
-  { id: "protect", label: "Protect", icon: "⬡", x: 88, y: 38, workspace: "protect" },
+  { id: "leads", label: "Leads", icon: "◉", x: 18, y: 63, workspace: "leads" },
+  { id: "quotes", label: "Quotes", icon: "◆", x: 32, y: 35, workspace: "proposals" },
+  { id: "money", label: "Money", icon: "$", x: 50, y: 70, workspace: "money" },
+  { id: "delivery", label: "Delivery", icon: "▶", x: 68, y: 36, workspace: "media" },
+  { id: "site", label: "Site", icon: "▦", x: 82, y: 63, workspace: "sites" },
+  { id: "protect", label: "Protect", icon: "⬡", x: 50, y: 20, workspace: "protect" },
 ];
 
 let flowMap = null;
@@ -312,10 +312,10 @@ function renderFlowMap() {
   if (!flowMap) {
     flowMap = PhantomFlow.mount(host, {
       stations: FLOW_STATIONS,
-      height: compactScreen ? 390 : 315,
+      height: compactScreen ? 272 : 286,
       speed: 9,
       kicker: "The Flow",
-      title: "Work moves from signal to delivery.",
+      title: "Signal to delivery.",
       pulseLabel: "Live",
       onSelect: (station) => {
         setGhostMood("harbor", { emotion: "bright", ms: 900 });
