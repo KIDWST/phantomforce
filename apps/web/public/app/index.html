@@ -19,7 +19,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-map-clean-20260704-01" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-control-center-20260704-01" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -29,7 +29,7 @@
       if ("caches" in window) {
         caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => undefined);
       }
-      window.__PHANTOM_BUILD__ = "phantom-map-clean-20260704-01";
+      window.__PHANTOM_BUILD__ = "phantom-control-center-20260704-01";
       try {
         localStorage.setItem("phantom:last-build", window.__PHANTOM_BUILD__);
       } catch {}
@@ -126,17 +126,17 @@
             </div>
           </div>
           <button class="harbor-toggle" type="button" data-harbor-toggle aria-expanded="false" aria-controls="harbor">
-            <span class="harbor-spark" aria-hidden="true">✦</span><span>Open Map</span>
+            <span class="harbor-spark" aria-hidden="true">✦</span><span>Control Center</span>
           </button>
         </section>
 
       </main>
 
       <!-- Map: capabilities are summoned, never shouting -->
-      <section class="harbor" id="harbor" data-harbor hidden aria-label="Phantom map">
-        <button class="harbor-backdrop" data-harbor-close aria-label="Close Phantom map"></button>
-        <div class="harbor-sheet" role="dialog" aria-modal="true" aria-label="Phantom map">
-          <button class="overlay-x harbor-close" data-harbor-close aria-label="Close Phantom map">✕</button>
+      <section class="harbor" id="harbor" data-harbor hidden aria-label="Control Center">
+        <button class="harbor-backdrop" data-harbor-close aria-label="Close Control Center"></button>
+        <div class="harbor-sheet" role="dialog" aria-modal="true" aria-label="Control Center">
+          <button class="overlay-x harbor-close" data-harbor-close aria-label="Close Control Center">✕</button>
           <div class="harbor-body">
             <section class="living-map-slot" data-living-map aria-label="Living command map"></section>
             <div class="deck-body">
@@ -168,6 +168,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-map-clean-20260704-01"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-control-center-20260704-01"></script>
   </body>
 </html>
