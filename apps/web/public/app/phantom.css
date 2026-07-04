@@ -613,6 +613,9 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   gap: 12px;
   padding: 0 2px;
 }
+.flow-map-slot {
+  width: 100%;
+}
 .micro-link {
   border: 1px solid rgba(65, 255, 161, 0.24);
   border-radius: 999px;

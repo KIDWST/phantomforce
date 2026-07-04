@@ -4,10 +4,11 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-mobile-chat-ux-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-mobile-chat-ux-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-mobile-chat-ux-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-mobile-chat-ux-20260704-01";
+} from "./store.js?v=phantom-flow-map-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-flow-map-20260704-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-flow-map-20260704-01";
+import { imageStyle } from "./media-image.js?v=phantom-flow-map-20260704-01";
+import { PhantomFlow } from "./flow-map.js?v=phantom-flow-map-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -225,6 +226,8 @@ function renderMission() {
 }
 
 function renderHomeMission() {
+  renderFlowMap();
+
   const grid = $("[data-home-mission]");
   if (grid) {
     grid.innerHTML = missionWidgets().slice(0, isAdmin() ? 10 : 8).map((w) => `
@@ -241,6 +244,86 @@ function renderHomeMission() {
     map.innerHTML = livingMapHtml();
     wireLivingMap(map, renderHomeMission);
   }
+}
+
+const FLOW_STATIONS = [
+  { id: "leads", label: "Leads", icon: "◉", x: 10, y: 50, workspace: "leads" },
+  { id: "quotes", label: "Quotes", icon: "◆", x: 24, y: 30, workspace: "proposals" },
+  { id: "money", label: "Money", icon: "◈", x: 40, y: 54, workspace: "money" },
+  { id: "delivery", label: "Delivery", icon: "▶", x: 58, y: 34, workspace: "media" },
+  { id: "site", label: "Site + Store", icon: "▦", x: 73, y: 55, workspace: "sites" },
+  { id: "protect", label: "Protect", icon: "⬡", x: 88, y: 38, workspace: "protect" },
+];
+
+let flowMap = null;
+
+function flowMapStats() {
+  const leads = visible(store.state.leads || []);
+  const openLeads = leads.filter((l) => !["won", "lost"].includes(l.status));
+  const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
+  const proposals = visible(store.state.proposals || []);
+  const m = moneyView();
+  const media = visible(store.state.media || []);
+  const delivery = media.filter((item) => item.status !== "delivered");
+  const briefs = media.filter((item) => ["brief-ready", "generation-approved"].includes(item.status));
+  const sites = visible(store.state.sites || []);
+  const security = visible(store.state.security || [])[0];
+  return {
+    leads: {
+      stat: `${openLeads.length} open`,
+      sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current",
+      alert: dueLeads.length > 0,
+    },
+    quotes: {
+      stat: `${m.open.length} live`,
+      sub: `${fmtMoney(m.pipeline)} open`,
+      alert: proposals.some((p) => p.status === "sent-ready"),
+    },
+    money: {
+      stat: fmtMoney(m.pipeline),
+      sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`,
+      alert: false,
+    },
+    delivery: {
+      stat: `${delivery.length} moving`,
+      sub: briefs.length ? `${briefs.length} generation-ready` : "media + delivery",
+      alert: briefs.length > 0,
+    },
+    site: {
+      stat: `${sites.length} builds`,
+      sub: sites.some((p) => p.status === "publish-ready") ? "publish-ready" : "site + store",
+      alert: sites.some((p) => p.status === "publish-ready"),
+    },
+    protect: {
+      stat: security ? (security.posture === "clean" ? "clean" : "attention") : "fresh",
+      sub: security ? "leaks · malware · habits" : "no scan yet",
+      alert: security ? security.posture !== "clean" : false,
+    },
+  };
+}
+
+function renderFlowMap() {
+  const host = $("[data-flow-map]");
+  if (!host || !isAdmin()) {
+    if (host) host.hidden = true;
+    return;
+  }
+  host.hidden = false;
+  if (!flowMap) {
+    flowMap = PhantomFlow.mount(host, {
+      stations: FLOW_STATIONS,
+      height: compactScreen ? 390 : 315,
+      speed: 9,
+      kicker: "The Flow",
+      title: "Work moves from signal to delivery.",
+      pulseLabel: "Live",
+      onSelect: (station) => {
+        setGhostMood("harbor", { emotion: "bright", ms: 900 });
+        openWorkspace(station.workspace || station.id);
+      },
+    });
+  }
+  flowMap.refresh(flowMapStats());
 }
 
 /* ============================ rail ============================ */

@@ -19,7 +19,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-mobile-chat-ux-20260704-01" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-flow-map-20260704-01" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -29,7 +29,7 @@
       if ("caches" in window) {
         caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => undefined);
       }
-      window.__PHANTOM_BUILD__ = "phantom-mobile-chat-ux-20260704-01";
+      window.__PHANTOM_BUILD__ = "phantom-flow-map-20260704-01";
       try {
         localStorage.setItem("phantom:last-build", window.__PHANTOM_BUILD__);
       } catch {}
@@ -135,6 +135,7 @@
             <span class="deck-label">Phantom systems</span>
             <button class="micro-link" type="button" data-harbor-toggle aria-expanded="false" aria-controls="harbor">Full map</button>
           </div>
+          <div class="flow-map-slot" data-flow-map></div>
           <div class="home-mission-grid" data-home-mission></div>
           <section class="home-map" data-home-map aria-label="Live system map preview"></section>
         </section>
@@ -184,6 +185,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-mobile-chat-ux-20260704-01"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-flow-map-20260704-01"></script>
   </body>
 </html>
