@@ -19,7 +19,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-admin-revamp-20260704-03" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-mobile-chat-ux-20260704-01" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -29,7 +29,7 @@
       if ("caches" in window) {
         caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => undefined);
       }
-      window.__PHANTOM_BUILD__ = "phantom-admin-revamp-20260704-03";
+      window.__PHANTOM_BUILD__ = "phantom-mobile-chat-ux-20260704-01";
       try {
         localStorage.setItem("phantom:last-build", window.__PHANTOM_BUILD__);
       } catch {}
@@ -94,28 +94,37 @@
           <div class="hero-spacer" aria-hidden="true"></div>
           <div class="hero-say" data-say aria-live="polite"><p class="say-line">Phantom is here.</p></div>
           <div class="response-cards" data-response></div>
-          <div class="mode-panel" data-mode-panel hidden>
-            <div class="mode-panel-copy">
-              <span class="mode-panel-kicker">Action mode</span>
-              <strong data-mode-label>Approval Mode</strong>
-              <small data-mode-description>Approval stages actions for review before execution.</small>
-            </div>
-            <div class="mode-switch mode-switch-panel" data-mode-switch aria-label="Execution mode">
-              <button type="button" data-mode="approval">Approval</button>
-              <button type="button" data-mode="auto">Auto</button>
-            </div>
-          </div>
           <form class="speakline speakline-hero" data-command-form>
-            <span class="speak-caret" aria-hidden="true">›</span>
-            <input type="text" data-command-input autocomplete="off" spellcheck="false"
-                   placeholder="Tell Phantom what you need…"
-                   aria-label="Tell Phantom what you need" />
-            <div class="mode-switch mode-switch-inline" data-mode-switch hidden aria-label="Request mode">
-              <button type="button" data-mode="approval">Review</button>
-              <button type="button" data-mode="auto">Auto</button>
-            </div>
+            <button class="chat-control-toggle" data-chat-controls-toggle type="button"
+                    aria-label="Open Phantom settings" aria-expanded="false" aria-controls="chat-controls-sheet">
+              <span class="control-bolt" aria-hidden="true">⚡</span>
+              <span class="control-dot" data-mode-dot aria-hidden="true"></span>
+            </button>
+            <textarea data-command-input rows="1" autocomplete="off" spellcheck="false"
+                      placeholder="Tell Phantom what you need…"
+                      aria-label="Tell Phantom what you need"></textarea>
             <button class="speak-send" type="submit" aria-label="Send command">→</button>
           </form>
+          <div class="chat-controls-sheet" id="chat-controls-sheet" data-chat-controls hidden>
+            <div class="chat-controls-card">
+              <div class="chat-controls-head">
+                <span>Phantom Settings</span>
+                <button class="chat-controls-close" data-chat-controls-close type="button" aria-label="Close Phantom settings">×</button>
+              </div>
+              <div class="chat-mode-summary">
+                <span class="mode-status-dot" data-mode-dot aria-hidden="true"></span>
+                <div>
+                  <b data-mode-current>Review Mode</b>
+                  <small data-mode-description>Outside actions wait for your call.</small>
+                </div>
+              </div>
+              <div class="mode-switch mode-switch-sheet" data-mode-switch aria-label="Phantom mode">
+                <button type="button" data-mode="approval">Review</button>
+                <button type="button" data-mode="auto">Auto</button>
+              </div>
+              <p class="chat-controls-note">Phantom still handles the request. This only changes how much waits for review.</p>
+            </div>
+          </div>
           <button class="harbor-toggle" type="button" data-harbor-toggle aria-expanded="false" aria-controls="harbor">
             <span class="harbor-spark" aria-hidden="true">✦</span><span>Open Map</span>
           </button>
@@ -175,6 +184,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-admin-revamp-20260704-03"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-mobile-chat-ux-20260704-01"></script>
   </body>
 </html>

@@ -6,8 +6,8 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-admin-revamp-20260704-03";
-import { makeImageArtifact } from "./media-image.js?v=phantom-admin-revamp-20260704-03";
+} from "./store.js?v=phantom-mobile-chat-ux-20260704-01";
+import { makeImageArtifact } from "./media-image.js?v=phantom-mobile-chat-ux-20260704-01";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -282,11 +282,11 @@ export function handleCommand(raw) {
   if (admin && /\b(read.?only|unleash(?:ed)?|can you change|can phantom change|what can you actually do|ability|powerful|make.*business|zero to amazing)\b/.test(s)) {
     const auto = executionMode.get() === "auto";
     return {
-      say: `Phantom is in Full Effect. ${auto ? "Auto Mode is on: safe internal workspace work can happen immediately." : "Approval Mode is on: outward or destructive work moves through the receipt lane."} Tell me the outcome and I will route it.`,
+      say: `Phantom is in Full Effect. ${auto ? "Auto is on: safe internal workspace work can happen immediately." : "Review is on: outward or destructive work moves through the receipt lane."} Tell me the outcome and I will route it.`,
       cards: [
         card(
           "Full Effect model",
-          auto ? "Auto for safe internal work" : "Approval for controlled execution",
+          auto ? "Auto for safe internal work" : "Review for controlled execution",
           "Plans, leads, proposals, site/store drafts, media briefs, security notes, and memory lookups stay inside Phantom. Outward-facing moves use the right execution path with receipts.",
           [
             openAction("Open Control", "adminos"),

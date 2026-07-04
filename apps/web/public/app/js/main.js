@@ -4,10 +4,10 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-admin-revamp-20260704-03";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-admin-revamp-20260704-03";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-admin-revamp-20260704-03";
-import { imageStyle } from "./media-image.js?v=phantom-admin-revamp-20260704-03";
+} from "./store.js?v=phantom-mobile-chat-ux-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-mobile-chat-ux-20260704-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-mobile-chat-ux-20260704-01";
+import { imageStyle } from "./media-image.js?v=phantom-mobile-chat-ux-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -116,14 +116,20 @@ function renderTopbar() {
 function renderModeControls() {
   const admin = isAdmin();
   const mode = executionMode.get();
-  document.querySelectorAll("[data-mode-panel]").forEach((panel) => {
-    panel.hidden = !admin;
-    panel.classList.toggle("is-auto", mode === "auto");
-    panel.classList.toggle("is-approval", mode !== "auto");
-    const label = panel.querySelector("[data-mode-label]");
-    const description = panel.querySelector("[data-mode-description]");
-    if (label) label.textContent = executionMode.label();
-    if (description) description.textContent = executionMode.description();
+  document.querySelectorAll("[data-chat-controls-toggle], [data-chat-controls]").forEach((el) => {
+    if (!admin) el.hidden = true;
+  });
+  document.querySelectorAll("[data-mode-current]").forEach((label) => {
+    label.textContent = mode === "auto" ? "Auto Mode" : "Review Mode";
+  });
+  document.querySelectorAll("[data-mode-description]").forEach((description) => {
+    description.textContent = mode === "auto"
+      ? "Safe internal work can move."
+      : "Outside actions wait for your call.";
+  });
+  document.querySelectorAll("[data-mode-dot]").forEach((dot) => {
+    dot.classList.toggle("is-auto", mode === "auto");
+    dot.classList.toggle("is-approval", mode !== "auto");
   });
   document.querySelectorAll("[data-mode-switch]").forEach((modeSwitch) => {
     modeSwitch.hidden = !admin;
@@ -149,6 +155,24 @@ function setExecutionMode(mode, options = {}) {
   }
   renderModeControls();
   return next;
+}
+
+function setChatControls(open) {
+  const sheet = $("[data-chat-controls]");
+  const toggle = $("[data-chat-controls-toggle]");
+  if (!sheet || !toggle || !isAdmin()) return;
+  sheet.hidden = !open;
+  toggle.setAttribute("aria-expanded", String(open));
+  phantom?.classList.toggle("is-chat-controls", open);
+  if (open) setGhostMood("listening", { emotion: "curious" });
+  else if (ghostMood === "listening") setGhostMood("idle", { emotion: "calm", ms: 500 });
+}
+
+function autosizeCommandInput(input) {
+  if (!input) return;
+  input.style.height = "auto";
+  const max = window.matchMedia("(max-width: 700px)").matches ? 112 : 130;
+  input.style.height = `${Math.min(max, Math.max(26, input.scrollHeight))}px`;
 }
 
 /* ============================ ticker ============================ */
@@ -590,17 +614,60 @@ function renderSuggests() {
 function wireCommandDeck() {
   const form = $("[data-command-form]");
   const input = $("[data-command-input]");
-  input.addEventListener("focus", () => setGhostMood("listening", { emotion: "calm" }));
-  input.addEventListener("input", () => setGhostMood("listening", { emotion: "bright" }));
-  input.addEventListener("blur", () => setGhostMood("idle", { emotion: "calm", ms: 600 }));
-  form.addEventListener("submit", (e) => {
-    e.preventDefault();
+  const submitCommand = () => {
     const v = input.value.trim();
     if (!v) return;
     input.value = "";
+    autosizeCommandInput(input);
+    form.classList.remove("is-expanded");
+    setChatControls(false);
     runCommand(v);
+  };
+  form.addEventListener("click", (e) => {
+    if (e.target.closest("button")) return;
+    input.focus();
+  });
+  input.addEventListener("focus", () => {
+    form.classList.add("is-expanded");
+    setGhostMood("listening", { emotion: "calm" });
+  });
+  input.addEventListener("input", () => {
+    form.classList.add("is-expanded");
+    autosizeCommandInput(input);
+    setGhostMood("listening", { emotion: "bright" });
+  });
+  input.addEventListener("blur", () => {
+    if (!input.value.trim()) form.classList.remove("is-expanded");
+    setGhostMood("idle", { emotion: "calm", ms: 600 });
+  });
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      submitCommand();
+    }
+  });
+  form.addEventListener("submit", (e) => {
+    e.preventDefault();
+    submitCommand();
   });
   document.addEventListener("click", (e) => {
+    const controlsToggle = e.target.closest("[data-chat-controls-toggle]");
+    if (controlsToggle) {
+      e.preventDefault();
+      e.stopPropagation();
+      const sheet = $("[data-chat-controls]");
+      setChatControls(sheet?.hidden !== false);
+      return;
+    }
+    if (e.target.closest("[data-chat-controls-close]")) {
+      e.preventDefault();
+      e.stopPropagation();
+      setChatControls(false);
+      return;
+    }
+    if (!e.target.closest("[data-chat-controls]") && !e.target.closest("[data-chat-controls-toggle]")) {
+      setChatControls(false);
+    }
     const modeBtn = e.target.closest("[data-mode]");
     if (modeBtn) {
       e.preventDefault();

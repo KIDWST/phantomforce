@@ -429,12 +429,12 @@ export const executionMode = {
     return clean;
   },
   label() {
-    return executionMode.get() === "auto" ? "Auto Mode" : "Approval Mode";
+    return executionMode.get() === "auto" ? "Auto Mode" : "Review Mode";
   },
   description() {
     return executionMode.get() === "auto"
       ? "Auto runs safe internal workspace actions. External/world-changing actions still need a proper system path and receipt."
-      : "Approval stages actions for review before execution.";
+      : "Outside actions wait for review before execution.";
   },
 };
 
