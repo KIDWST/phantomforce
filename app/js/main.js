@@ -7,6 +7,7 @@ import {
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
+import { renderFlowMap } from "./flowmap.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -172,6 +173,7 @@ function renderRail() {
 
 function renderDashboard() {
   renderTopbar();
+  renderFlowMap();
   renderMission();
   renderRail();
   renderSuggests();
@@ -566,7 +568,7 @@ async function boot() {
   ctx.session = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
   wireCommandDeck();
   store.onChange(() => { /* keep rail + grid live after any store write */
-    if (!phantom.hidden) { renderMission(); renderRail(); }
+    if (!phantom.hidden) { renderFlowMap(); renderMission(); renderRail(); }
   });
   if (ctx.session) enterPhantom();
   else showGate();

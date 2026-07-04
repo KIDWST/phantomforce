@@ -241,6 +241,58 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .rcard-meta { margin: 0 0 4px; font: 400 11px "DM Mono", monospace; color: var(--dim); }
 .rcard-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
+/* ---------------- systems flow map ---------------- */
+.flowmap { margin-top: clamp(20px, 3.4vh, 38px); max-width: 100%; min-width: 0; }
+.flow-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.flow-kicker { margin: 0 0 4px; font: 500 10.5px "DM Mono", monospace; letter-spacing: 0.26em; text-transform: uppercase; color: var(--dim); }
+.flow-head h2 { margin: 0; font-size: clamp(19px, 2.5vw, 26px); letter-spacing: -0.02em; }
+.flow-live {
+  display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  padding: 5px 12px; border: 1px solid var(--line); border-radius: 999px;
+  font: 500 10px "DM Mono", monospace; letter-spacing: 0.2em; text-transform: uppercase;
+  color: var(--neon); background: rgba(65, 255, 161, 0.05);
+}
+.flow-live i { width: 6px; height: 6px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 10px var(--neon); animation: livePulse 2.4s ease-in-out infinite; }
+.flow-stage {
+  position: relative; border: 1px solid var(--line); border-radius: 22px; overflow: hidden;
+  background:
+    linear-gradient(rgba(65, 255, 161, 0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(65, 255, 161, 0.04) 1px, transparent 1px),
+    radial-gradient(90% 130% at 50% 0%, rgba(65, 255, 161, 0.08), transparent 62%),
+    linear-gradient(170deg, rgba(8, 22, 16, 0.74), rgba(2, 8, 9, 0.8));
+  background-size: 36px 36px, 36px 36px, auto, auto;
+  box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.35), 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+.flow-stage svg { display: block; width: 100%; height: auto; }
+.flow-edge { fill: none; stroke: rgba(65, 255, 161, 0.2); stroke-width: 1.5; }
+.flow-edge-watch { fill: none; stroke: rgba(30, 240, 255, 0.24); stroke-width: 1.3; stroke-dasharray: 2 7; stroke-linecap: round; }
+.flow-edge-pulse {
+  fill: none; stroke: var(--neon); stroke-width: 2.2; stroke-linecap: round;
+  stroke-dasharray: 10 130;
+  filter: drop-shadow(0 0 6px rgba(65, 255, 161, 0.8));
+  animation: flowDash 3.4s linear infinite;
+}
+@keyframes flowDash { to { stroke-dashoffset: -140; } }
+.flow-node { cursor: pointer; }
+.flow-node:focus { outline: none; }
+.flow-halo { fill: rgba(65, 255, 161, 0.14); animation: flowHalo 3.6s ease-in-out infinite; }
+@keyframes flowHalo { 0%, 100% { opacity: 0.28; } 50% { opacity: 0.8; } }
+.flow-core {
+  fill: url(#flowNodeFill); stroke: rgba(65, 255, 161, 0.55); stroke-width: 1.4;
+  filter: drop-shadow(0 0 10px rgba(65, 255, 161, 0.35));
+  transition: stroke 0.2s, filter 0.2s;
+}
+.flow-node:hover .flow-core,
+.flow-node:focus-visible .flow-core { stroke: var(--neon); filter: drop-shadow(0 0 16px rgba(65, 255, 161, 0.65)); }
+.flow-ring { fill: none; stroke: rgba(65, 255, 161, 0.28); stroke-width: 1; }
+.flow-icon { fill: #eafff2; font: 600 14px "Space Grotesk", sans-serif; text-anchor: middle; }
+.flow-tag-bg { fill: rgba(3, 12, 9, 0.8); stroke: rgba(65, 255, 161, 0.18); }
+.flow-label { fill: #eafff2; font: 600 13px "Space Grotesk", sans-serif; text-anchor: middle; }
+.flow-stat { fill: var(--neon); font: 500 10.5px "DM Mono", monospace; letter-spacing: 0.04em; text-anchor: middle; }
+.flow-node-alert .flow-core { stroke: rgba(255, 209, 102, 0.7); }
+.flow-node-alert .flow-stat { fill: var(--warn); }
+.flow-node-alert .flow-halo { fill: rgba(255, 209, 102, 0.12); }
+
 /* ---------------- deck body: mission grid + rail ---------------- */
 .deck-body { display: grid; grid-template-columns: 1fr minmax(280px, 340px); gap: clamp(16px, 2vw, 28px); margin-top: clamp(18px, 3vh, 34px); align-items: start; }
 .deck-label { margin: 0 0 12px; font: 500 10.5px "DM Mono", monospace; letter-spacing: 0.26em; text-transform: uppercase; color: var(--dim); }
@@ -617,6 +669,10 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .suggests::-webkit-scrollbar,
   .mission-grid::-webkit-scrollbar { display: none; }
   .suggest { flex: 0 0 auto; font-size: 11px; padding: 7px 12px; scroll-snap-align: start; }
+  .flowmap { margin-top: 18px; }
+  .flow-head { align-items: center; }
+  .flow-head h2 { font-size: 19px; }
+  .flow-stage { border-radius: 18px; background-size: 28px 28px, 28px 28px, auto, auto; }
   .deck-body { display: block; width: 100%; margin-top: 16px; }
   .deck-label { margin-left: 2px; }
   .mission-grid {
@@ -652,7 +708,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .gate-options { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .speakline-hero::before, .ticker-tag, .speak-caret, .say-line, .rcard, .overlay-panel, .widget-alert::before, .tool-card::before { animation: none !important; }
+  .speakline-hero::before, .ticker-tag, .speak-caret, .say-line, .rcard, .overlay-panel, .widget-alert::before, .tool-card::before, .flow-halo, .flow-live i { animation: none !important; }
+  .flow-edge-pulse { animation: none !important; stroke-dasharray: none; opacity: 0.3; }
   .ghost-canvas { display: none; }
   .phantom, .widget, .btn, .overlay-x { transition: none; }
 }

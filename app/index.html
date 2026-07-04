@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "admin-sync-20260703-0530";
+      window.PHANTOM_BUILD = "admin-flow-20260704-1900";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — Phantom</title>
     <meta name="description" content="PhantomForce Phantom — your AI business operating system." />
-    <meta name="phantom-build" content="admin-sync-20260703-0530" />
+    <meta name="phantom-build" content="admin-flow-20260704-1900" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -69,7 +69,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=admin-sync-20260703-0530" />
+    <link rel="stylesheet" href="/app/phantom.css?v=admin-flow-20260704-1900" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -137,6 +137,17 @@
           <div class="response-cards" data-response></div>
         </section>
 
+        <section class="flowmap" aria-label="Phantom systems flow">
+          <div class="flow-head">
+            <div>
+              <p class="flow-kicker">Phantom systems · The flow</p>
+              <h2>Signal to delivery.</h2>
+            </div>
+            <span class="flow-live"><i aria-hidden="true"></i>Live</span>
+          </div>
+          <div class="flow-stage" data-flowmap></div>
+        </section>
+
         <div class="deck-body">
           <section class="mission" aria-label="Workspaces">
             <h2 class="deck-label">Mission grid</h2>
@@ -166,6 +177,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=admin-sync-20260703-0530"></script>
+    <script type="module" src="/app/js/main.js?v=admin-flow-20260704-1900"></script>
   </body>
 </html>
