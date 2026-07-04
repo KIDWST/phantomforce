@@ -141,6 +141,10 @@ import {
   previewModelRouterFoundation,
   runModelRouterFoundation,
 } from "./phantom-ai/model-router.js";
+import {
+  clientSafeMediaLabImageToolchainStatus,
+  getMediaLabImageToolchainStatus,
+} from "./phantom-ai/media-lab-image-toolchain.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
 import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
@@ -2597,6 +2601,32 @@ app.get("/phantom-ai/media-lab/higgsfield/status", async (request, reply) => {
       explicit_confirmation_required: "RUN_HIGGSFIELD_PAID_JOB",
       no_public_posting: true,
     },
+  };
+});
+
+app.get("/phantom-ai/media-lab/image-toolchain/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const status = getMediaLabImageToolchainStatus();
+
+  if (!session.canManageAccess) {
+    return {
+      ok: true,
+      session,
+      admin_access: false,
+      image_toolchain: clientSafeMediaLabImageToolchainStatus(status),
+    };
+  }
+
+  return {
+    ok: true,
+    session,
+    admin_access: true,
+    image_toolchain: status,
   };
 });
 

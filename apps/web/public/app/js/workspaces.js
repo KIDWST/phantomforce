@@ -24,6 +24,54 @@ const imageFilterButtons = (asset = {}) => Object.keys(IMAGE_FILTERS).map((name)
 const imageCropButtons = (asset = {}) => Object.keys(IMAGE_CROPS).map((name) => (
   `<button class="mini-pill ${asset.crop === name ? "is-on" : ""}" data-act="image-crop" data-id="${asset.id || ""}" data-crop="${name}">${esc(name)}</button>`
 )).join("");
+const connectorStateClass = (state = "") => `connector-${String(state).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+
+function imageToolchainFallbackHtml() {
+  const connectors = [
+    ["Prompt image draft", "active", "Visible image appears in chat and Media Lab."],
+    ["Crop + PNG export", "active", "1:1, 4:5, 9:16, 16:9 saved from the editor."],
+    ["Creative looks", "active", "Studio, punch, cinematic, neon, clean, mono."],
+    ["Variant maker", "active", "Duplicate and re-seed concepts locally."],
+    ["Local CLI stack", "check", "Load admin status for rembg, ffmpeg, ImageMagick, Python, GIF, WebP, upscale tools."],
+    ["Provider bridge", "gated", "Paid generation remains separate and explicit."],
+  ];
+  return `
+    <div class="image-tool-grid">
+      ${connectors.map(([label, state, role]) => `
+        <article class="image-tool ${connectorStateClass(state)}">
+          <span>${esc(state)}</span>
+          <b>${esc(label)}</b>
+          <p>${esc(role)}</p>
+        </article>
+      `).join("")}
+    </div>`;
+}
+
+function renderImageToolchainPayload(payload) {
+  const stack = payload?.image_toolchain;
+  if (!stack) return empty("Image stack status is unavailable.");
+  const connectors = stack.connectors || [];
+  const summary = stack.summary || {};
+  return `
+    <div class="image-tool-summary">
+      <div><span>Total</span><b>${esc(summary.connectors_total ?? summary.visible_connectors ?? connectors.length)}</b></div>
+      <div><span>Ready</span><b>${esc(summary.active_or_available ?? 0)}</b></div>
+      <div><span>Local CLIs</span><b>${esc(summary.local_cli_available ?? "redacted")}</b></div>
+      <div><span>Paid calls</span><b>${stack.safety_flags?.paid_job_called ? "ran" : "off"}</b></div>
+    </div>
+    <div class="image-tool-grid">
+      ${connectors.map((tool) => `
+        <article class="image-tool ${connectorStateClass(tool.state)}">
+          <span>${esc(tool.state)}</span>
+          <b>${esc(tool.label)}</b>
+          <p>${esc(tool.role)}</p>
+          ${tool.detected_path ? `<code>${esc(tool.detected_path)}</code>` : ""}
+          ${tool.capabilities?.length ? `<small>${tool.capabilities.map(esc).join(" · ")}</small>` : ""}
+        </article>
+      `).join("")}
+    </div>
+    <p class="ws-note">Status only. No paid provider, upload, external send, or destructive action ran.</p>`;
+}
 
 function bindActions(root, handlers) {
   root.querySelectorAll("[data-act]").forEach((el) => {
@@ -316,6 +364,17 @@ function renderMedia(el, rerender) {
       <p class="ws-note">Image and video creation live here. Image prompts now create visible editable drafts: crop, tune, background pass, variants, save, and download.</p>
       <button class="btn btn-primary" data-act="add">+ Creative brief</button>
     </div>
+    <section class="image-stack-panel">
+      <div class="record-top">
+        <div>
+          <p class="ws-mini-kicker">Media Lab guts</p>
+          <h4>Image power stack</h4>
+        </div>
+        <button class="btn" data-act="load-image-toolchain">Load local stack</button>
+      </div>
+      <p class="record-notes">Phantom can keep adding tools here without turning the chat into a tool menu. Browser edits run now; local CLI and provider bridges report their readiness separately.</p>
+      <div data-image-toolchain-result>${imageToolchainFallbackHtml()}</div>
+    </section>
     <div class="card-grid">
       ${media.map((m) => `
         <article class="record ${m.asset?.src ? "record-image" : ""}">
@@ -357,6 +416,28 @@ function renderMedia(el, rerender) {
       store.state.media.unshift({ id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(), title: `${t.trim()} — creative brief`, type: "Image/video creative", modality: "video", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook", "Visual proof", "Offer moment", "Platform crop", "Delivery version"], caption: `${t.trim()} — draft caption.`, proof: null, generationProvider: "Media Lab", updated: new Date().toISOString() });
       pushActivity("Media Factory", `drafted a brief: ${t.trim()}.`);
       store.save(); rerender();
+    },
+    "load-image-toolchain": async (_id, btn) => {
+      const result = el.querySelector("[data-image-toolchain-result]");
+      if (!result) return;
+      const prev = btn.textContent;
+      btn.textContent = "Loading...";
+      result.innerHTML = empty("Checking local image stack...");
+      try {
+        const response = await fetch("/phantom-ai/media-lab/image-toolchain/status", { headers: authHeaders() });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload?.ok) {
+          result.innerHTML = empty(payload?.error || "Image stack requires signed-in backend access.");
+        } else {
+          result.innerHTML = renderImageToolchainPayload(payload);
+          pushActivity("Image Creator", "refreshed Media Lab image stack status.");
+          store.save();
+        }
+      } catch (error) {
+        result.innerHTML = empty(`Image stack could not load: ${error?.message || "request failed"}`);
+      } finally {
+        btn.textContent = prev;
+      }
     },
     copy: (id, btn) => { const m = find(id); copyText(btn, `${m.title}\n${m.type}\n\nAngle: ${m.angle}\n\nRecipe:\n${(m.shots || []).map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nCaption: ${m.caption}${m.asset?.prompt ? `\n\nPrompt: ${m.asset.prompt}` : ""}`); },
     "image-filter": (id, btn) => {
