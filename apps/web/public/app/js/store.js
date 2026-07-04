@@ -17,7 +17,10 @@ export const fmtDateTime = (iso) =>
   new Date(iso).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 export const fmtMoney = (n) => "$" + Number(n || 0).toLocaleString();
 export const ago = (iso) => {
-  const m = Math.max(1, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (!iso) return "just now";
+  const time = new Date(iso).getTime();
+  if (!Number.isFinite(time)) return "just now";
+  const m = Math.max(1, Math.round((Date.now() - time) / 60000));
   if (m < 60) return `${m}m ago`;
   const h = Math.round(m / 60);
   if (h < 24) return `${h}h ago`;
@@ -585,7 +588,7 @@ export function todaysPlan() {
   visible(store.state.proposals).filter((p) => p.status === "sent-ready")
     .forEach((p) => items.push({ icon: "▸", text: `Proposal send-ready: ${p.client}`, kind: "proposal", open: "proposals" }));
   visible(store.state.media).filter((m) => m.status === "brief-ready")
-    .forEach((m) => items.push({ icon: "▸", text: `Media brief ready: ${m.title}`, kind: "media", open: "media" }));
+    .forEach((m) => items.push({ icon: "▸", text: `Media ready: ${m.title}`, kind: "media", open: "media" }));
   visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status))
     .forEach((t) => items.push({ icon: "▸", text: t.title, kind: "task", open: t.open || "adminos" }));
   visible(store.state.security).forEach((s) => {
@@ -615,7 +618,7 @@ export function resolveApproval(id, approved) {
 export const STATUS_LABEL = {
   "new": "New", "follow-up": "Follow-up", "proposal": "Proposal out", "won": "Won", "lost": "Lost",
   "draft": "Draft", "sent-ready": "Send-ready", "sent": "Sent", "approved": "Approved",
-  "brief-ready": "Brief ready", "image-ready": "Image ready", "asset-saved": "Saved", "generation-approved": "Generation ready", "delivered": "Delivered",
+  "brief-ready": "Ready", "image-ready": "Image ready", "asset-saved": "Saved", "generation-approved": "Approved", "delivered": "Delivered",
   "publish-ready": "Publish-ready", "approved-to-publish": "Approved to publish", "published-ready": "Published-ready",
   "received": "Received", "pending": "Pending", "declined": "Declined", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
   "working": "Working",

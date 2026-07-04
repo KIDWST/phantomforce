@@ -7,10 +7,10 @@ import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-mobile-composer-flex-20260704-01";
+} from "./store.js?v=phantom-simple-business-copy-20260704-01";
 import {
   IMAGE_CROPS, IMAGE_FILTERS, downloadImage, editImageArtifact, imageStyle, makeImageArtifact,
-} from "./media-image.js?v=phantom-mobile-composer-flex-20260704-01";
+} from "./media-image.js?v=phantom-simple-business-copy-20260704-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -25,6 +25,55 @@ const imageCropButtons = (asset = {}) => Object.keys(IMAGE_CROPS).map((name) => 
   `<button class="mini-pill ${asset.crop === name ? "is-on" : ""}" data-act="image-crop" data-id="${asset.id || ""}" data-crop="${name}">${esc(name)}</button>`
 )).join("");
 const connectorStateClass = (state = "") => `connector-${String(state).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
+const plural = (count, label) => `${count} ${label}${Number(count) === 1 ? "" : "s"}`;
+
+function isFileDropMedia(m = {}) {
+  return m.source === "phantom-chat-file-intake" || /^Media intake:/i.test(m.title || "");
+}
+
+function mediaCountText(m = {}) {
+  const parts = [];
+  if (Number(m.imageCount) > 0) parts.push(plural(m.imageCount, "image"));
+  if (Number(m.videoCount) > 0) parts.push(plural(m.videoCount, "video"));
+  if (!parts.length && Number(m.fileCount) > 0) parts.push(plural(m.fileCount, "file"));
+  return parts.join(", ") || "Media";
+}
+
+function mediaCardTitle(m = {}) {
+  if (isFileDropMedia(m)) return `${mediaCountText(m)} ready`;
+  return m.title || "Media project";
+}
+
+function mediaMetaHtml(m = {}) {
+  const parts = [];
+  if (isFileDropMedia(m)) {
+    parts.push(`${mediaCountText(m)} saved here`);
+  } else {
+    if (m.type) parts.push(esc(m.type));
+    if (m.modality) parts.push(esc(m.modality));
+  }
+  parts.push(chip(m.status));
+  parts.push(esc(ago(m.updated || m.createdAt)));
+  return parts.filter(Boolean).join(" · ");
+}
+
+function mediaPlanText(m = {}) {
+  if (isFileDropMedia(m)) return "Saved here. Ready to crop, edit, analyze, or turn into a video plan.";
+  return m.angle || "Ready for the next edit.";
+}
+
+function mediaShotListHtml(m = {}) {
+  const shots = m.shots || [];
+  if (!shots.length) return "";
+  return `<details class="shotlist"><summary>${m.asset?.src ? "Edit plan" : "Shots"} (${shots.length})</summary>
+    <ol>${shots.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+  </details>`;
+}
+
+function mediaCaptionHtml(m = {}) {
+  if (!m.caption) return "";
+  return `<p class="record-notes"><b>Post text:</b> ${esc(m.caption)}</p>`;
+}
 
 function imageToolchainFallbackHtml() {
   const connectors = [
@@ -32,8 +81,8 @@ function imageToolchainFallbackHtml() {
     ["Crop + PNG export", "active", "1:1, 4:5, 9:16, 16:9 saved from the editor."],
     ["Creative looks", "active", "Studio, punch, cinematic, neon, clean, mono."],
     ["Variant maker", "active", "Duplicate and re-seed concepts locally."],
-    ["Local CLI stack", "check", "Load admin status for rembg, ffmpeg, ImageMagick, Python, GIF, WebP, upscale tools."],
-    ["Provider bridge", "gated", "Paid generation remains separate and explicit."],
+    ["Pro edit tools", "check", "Check background removal, video tools, GIF, WebP, and upscaling helpers."],
+    ["Paid video tools", "gated", "Paid generation stays off until you approve it."],
   ];
   return `
     <div class="image-tool-grid">
@@ -56,8 +105,8 @@ function renderImageToolchainPayload(payload) {
     <div class="image-tool-summary">
       <div><span>Total</span><b>${esc(summary.connectors_total ?? summary.visible_connectors ?? connectors.length)}</b></div>
       <div><span>Ready</span><b>${esc(summary.active_or_available ?? 0)}</b></div>
-      <div><span>Local CLIs</span><b>${esc(summary.local_cli_available ?? "redacted")}</b></div>
-      <div><span>Paid calls</span><b>${stack.safety_flags?.paid_job_called ? "ran" : "off"}</b></div>
+      <div><span>Local tools</span><b>${esc(summary.local_cli_available ?? "hidden")}</b></div>
+      <div><span>Paid runs</span><b>${stack.safety_flags?.paid_job_called ? "ran" : "off"}</b></div>
     </div>
     <div class="image-tool-grid">
       ${connectors.map((tool) => `
@@ -70,7 +119,7 @@ function renderImageToolchainPayload(payload) {
         </article>
       `).join("")}
     </div>
-    <p class="ws-note">Status only. No paid provider, upload, external send, or destructive action ran.</p>`;
+    <p class="ws-note">Status only. Nothing was sent, uploaded, paid for, or changed outside this app.</p>`;
 }
 
 function bindActions(root, handlers) {
@@ -131,7 +180,7 @@ function renderOwnerMemoryPayload(payload) {
     <div class="stack">${artifacts || empty("No local owner-memory artifacts matched this search.")}</div>
     <h4 class="ws-subhead">Recent memory receipts</h4>
     <div class="stack">${receipts || empty("No memory receipts found yet.")}</div>
-    <p class="ws-note">Safety: admin-only, local files only, redacted, no provider call, no upload/send.</p>`;
+    <p class="ws-note">Safety: admin-only, local files only, redacted, no uploads or sends.</p>`;
 }
 
 /* =============================== LEADS =============================== */
@@ -361,25 +410,25 @@ function renderMedia(el, rerender) {
   const media = visible(store.state.media);
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Image and video creation live here. Image prompts now create visible editable drafts: crop, tune, background pass, variants, save, and download.</p>
-      <button class="btn btn-primary" data-act="add">+ Creative brief</button>
+      <p class="ws-note">Make images, videos, ads, and edits here. Drop files or tell Phantom what you want.</p>
+      <button class="btn btn-primary" data-act="add">+ New creative</button>
     </div>
     <section class="image-stack-panel">
       <div class="record-top">
         <div>
-          <p class="ws-mini-kicker">Media Lab guts</p>
-          <h4>Image power stack</h4>
+          <p class="ws-mini-kicker">Media Lab tools</p>
+          <h4>Image tools</h4>
         </div>
-        <button class="btn" data-act="load-image-toolchain">Load local stack</button>
+        <button class="btn" data-act="load-image-toolchain">Check tools</button>
       </div>
-      <p class="record-notes">Phantom can keep adding tools here without turning the chat into a tool menu. Browser edits run now; local CLI and provider bridges report their readiness separately.</p>
+      <p class="record-notes">Use this when you want to edit images directly. Most work can still start by asking Phantom.</p>
       <div data-image-toolchain-result>${imageToolchainFallbackHtml()}</div>
     </section>
     <div class="card-grid">
       ${media.map((m) => `
         <article class="record ${m.asset?.src ? "record-image" : ""}">
-          <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title)}</h4></div>
-          <p class="record-sub">${esc(m.type)} · ${esc(m.modality || "video")} · ${chip(m.status)} · ${ago(m.updated)}</p>
+          <div class="record-top">${wsTag(m.ws)}<h4>${esc(mediaCardTitle(m))}</h4></div>
+          <p class="record-sub">${mediaMetaHtml(m)}</p>
           ${m.asset?.src ? `
             <figure class="media-image-stage ${m.asset.bgRemoved ? "is-bg-removed" : ""}" style="${imageStyle(m.asset)}">
               <img src="${m.asset.src}" alt="${esc(m.title)}" loading="lazy">
@@ -388,22 +437,20 @@ function renderMedia(el, rerender) {
               <div><b>Crop</b>${imageCropButtons({ ...m.asset, id: m.id })}</div>
               <div><b>Tweak</b>${imageFilterButtons({ ...m.asset, id: m.id })}</div>
             </div>
-            <p class="record-notes"><b>Image chain:</b> local generator · canvas/SVG editor · rembg-ready background removal · variant saver.</p>
+            <p class="record-notes"><b>Image tools:</b> crop, style, remove background, save variants.</p>
           ` : ""}
-          <p class="record-notes"><b>Angle:</b> ${esc(m.angle)}</p>
-          <details class="shotlist"><summary>${m.asset?.src ? "Creative recipe" : "Shot list"} (${(m.shots || []).length})</summary>
-            <ol>${(m.shots || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
-          </details>
-          <p class="record-notes"><b>Caption:</b> ${esc(m.caption)}</p>
+          <p class="record-notes"><b>Plan:</b> ${esc(mediaPlanText(m))}</p>
+          ${mediaShotListHtml(m)}
+          ${mediaCaptionHtml(m)}
           ${m.proof ? `<p class="record-proof">Proof: <code>${esc(m.proof)}</code></p>` : ""}
           <div class="record-actions">
-            <button class="btn" data-act="copy" data-id="${m.id}">Copy brief</button>
+            <button class="btn" data-act="copy" data-id="${m.id}">Copy plan</button>
             ${m.asset?.src ? `<button class="btn btn-good" data-act="save-image" data-id="${m.id}">Save image</button>
               <button class="btn" data-act="bg-remove" data-id="${m.id}">${m.asset.bgRemoved ? "Restore BG" : "Remove BG"}</button>
               <button class="btn" data-act="variant" data-id="${m.id}">Duplicate variant</button>
               <button class="btn btn-quiet" data-act="download-image" data-id="${m.id}">Download</button>` : ""}
-            ${m.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${m.id}">Mark brief ready</button>` : ""}
-            ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Request ${esc(m.modality || "video")} generation</button>` : ""}
+            ${m.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${m.id}">Mark ready</button>` : ""}
+            ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Make ${esc(m.modality || "video")}</button>` : ""}
             ${m.status === "generation-approved" ? `<button class="btn" data-act="delivered" data-id="${m.id}">Mark delivered</button>` : ""}
           </div>
         </article>`).join("") || empty("Media Lab is quiet. Ask Phantom for an image, video, ad creative, or source analysis.")}
@@ -439,7 +486,21 @@ function renderMedia(el, rerender) {
         btn.textContent = prev;
       }
     },
-    copy: (id, btn) => { const m = find(id); copyText(btn, `${m.title}\n${m.type}\n\nAngle: ${m.angle}\n\nRecipe:\n${(m.shots || []).map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nCaption: ${m.caption}${m.asset?.prompt ? `\n\nPrompt: ${m.asset.prompt}` : ""}`); },
+    copy: (id, btn) => {
+      const m = find(id);
+      const lines = [
+        mediaCardTitle(m),
+        m.type || mediaCountText(m),
+        "",
+        `Plan: ${mediaPlanText(m)}`,
+      ];
+      if ((m.shots || []).length) {
+        lines.push("", "Steps:", ...(m.shots || []).map((s, i) => `${i + 1}. ${s}`));
+      }
+      if (m.caption) lines.push("", `Post text: ${m.caption}`);
+      if (m.asset?.prompt) lines.push("", `Prompt: ${m.asset.prompt}`);
+      copyText(btn, lines.join("\n"));
+    },
     "image-filter": (id, btn) => {
       const m = find(id);
       if (!m?.asset) return;
@@ -494,11 +555,11 @@ function renderMedia(el, rerender) {
       const m = find(id);
       if (m?.asset) downloadImage(m.asset, m.title);
     },
-    ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `brief ready: ${m.title}.`, m.ws); store.save(); rerender(); },
+    ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `ready: ${mediaCardTitle(m)}.`, m.ws); store.save(); rerender(); },
     "request-gen": (id) => {
       const m = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run ${m.modality || "video"} generation: ${m.title}`, detail: "One controlled generation pass on this brief. Paid provider credits require approval.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
-      pushActivity("Media Factory", `requested a generation pass on ${m.title}.`, m.ws);
+      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Make ${m.modality || "video"}: ${mediaCardTitle(m)}`, detail: "One paid run from this plan. Approval is required first.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
+      pushActivity("Media Factory", `requested ${m.modality || "video"} for ${mediaCardTitle(m)}.`, m.ws);
       store.save(); rerender();
     },
     delivered: (id) => { const m = find(id); m.status = "delivered"; m.updated = new Date().toISOString(); pushActivity("Delivery Manager", `delivered ${m.title}.`, m.ws); store.save(); rerender(); },

@@ -4,10 +4,10 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-mobile-composer-flex-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-mobile-composer-flex-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-mobile-composer-flex-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-mobile-composer-flex-20260704-01";
+} from "./store.js?v=phantom-simple-business-copy-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-simple-business-copy-20260704-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-simple-business-copy-20260704-01";
+import { imageStyle } from "./media-image.js?v=phantom-simple-business-copy-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -410,7 +410,7 @@ function mediaPreviews(accepted = []) {
 
 function handleMediaIntake(files) {
   if (!isAdmin()) {
-    speak("Media intake is available from the admin Phantom only.");
+    speak("File drop is available from the admin Phantom only.");
     return;
   }
   const summary = summarizeMediaFiles(files);
@@ -419,7 +419,7 @@ function handleMediaIntake(files) {
     speak("I can take images or videos here. Drop photos, graphics, clips, reels, or source footage.");
     if (respBox) {
       respBox.innerHTML = [responseCard(
-        "Media intake",
+        "Files",
         "No usable media found",
         `${summary.rejected.length || summary.all.length} file(s) skipped. Accepted: images and videos only.`,
         [{ label: "Open Media Lab", open: "media" }],
@@ -432,8 +432,11 @@ function handleMediaIntake(files) {
   const batchId = uid("media-batch");
   const fileNames = summary.accepted.map(({ file }) => file.name || "untitled");
   const preview = mediaPreviews(summary.accepted);
-  const title = `Media intake: ${summary.imageCount} image${summary.imageCount === 1 ? "" : "s"}, ${summary.videoCount} video${summary.videoCount === 1 ? "" : "s"}`;
-  const meta = `${summary.accepted.length} file(s) · ${formatBytes(summary.size)} · ${summary.rejected.length ? `${summary.rejected.length} skipped · ` : ""}local only`;
+  const titleParts = [];
+  if (summary.imageCount) titleParts.push(`${summary.imageCount} image${summary.imageCount === 1 ? "" : "s"}`);
+  if (summary.videoCount) titleParts.push(`${summary.videoCount} video${summary.videoCount === 1 ? "" : "s"}`);
+  const title = `${titleParts.join(", ") || `${summary.accepted.length} file${summary.accepted.length === 1 ? "" : "s"}`} ready`;
+  const meta = `${summary.accepted.length} file${summary.accepted.length === 1 ? "" : "s"} · ${formatBytes(summary.size)} · ${summary.rejected.length ? `${summary.rejected.length} skipped · ` : ""}saved here`;
 
   store.state.media ||= [];
   store.state.tasks ||= [];
@@ -442,7 +445,7 @@ function handleMediaIntake(files) {
     ws,
     title,
     status: "brief-ready",
-    angle: "Local drag/drop intake staged in Phantom chat. No upload or provider call.",
+    angle: "Saved here. Ready to crop, edit, analyze, or turn into a video plan.",
     source: "phantom-chat-file-intake",
     fileCount: summary.accepted.length,
     imageCount: summary.imageCount,
@@ -450,35 +453,36 @@ function handleMediaIntake(files) {
     sizeBytes: summary.size,
     files: fileNames.slice(0, MEDIA_INTAKE_LIMIT),
     createdAt: new Date().toISOString(),
+    updated: new Date().toISOString(),
   });
   store.state.tasks.unshift({
     id: uid("task"),
     ws,
-    title: `Analyze and edit ${summary.accepted.length} staged media file${summary.accepted.length === 1 ? "" : "s"}`,
+    title: `Work on ${summary.accepted.length} media file${summary.accepted.length === 1 ? "" : "s"}`,
     status: "new",
     open: "media",
     createdAt: new Date().toISOString(),
   });
-  pushActivity("Media Lab", `staged ${summary.accepted.length} local media file${summary.accepted.length === 1 ? "" : "s"} for analysis/editing.`, ws);
+  pushActivity("Media Lab", `added ${summary.accepted.length} local media file${summary.accepted.length === 1 ? "" : "s"} for editing.`, ws);
   store.save();
 
-  speak(`Got ${summary.accepted.length} media file${summary.accepted.length === 1 ? "" : "s"}. I staged them for Media Lab and kept them local.`);
+  speak(`Got ${summary.accepted.length} media file${summary.accepted.length === 1 ? "" : "s"}. ${summary.accepted.length === 1 ? "It is" : "They are"} ready in Media Lab and stayed local.`);
   if (respBox) {
     respBox.innerHTML = [
       responseCard(
-        "Media intake",
+        "Files added",
         title,
-        "Ready to analyze, crop, edit, brief, or build a video/image job from this batch.",
+        "Ready to crop, edit, analyze, or make a video plan.",
         [{ label: "Open Media Lab", open: "media" }],
         meta,
         { media: preview },
       ),
       responseCard(
-        "What Phantom read",
-        "Batch summary",
+        "What Phantom saw",
+        "File list",
         fileNames.slice(0, 6).join(" · ") + (fileNames.length > 6 ? ` · +${fileNames.length - 6} more` : ""),
-        [{ label: "Create edit plan", open: "media" }],
-        "No upload. No paid generation. No external send.",
+        [{ label: "Make edit plan", open: "media" }],
+        "Local only. No paid run.",
       ),
     ].map(cardHtml).join("");
   }

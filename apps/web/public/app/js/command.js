@@ -6,8 +6,8 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-mobile-composer-flex-20260704-01";
-import { makeImageArtifact } from "./media-image.js?v=phantom-mobile-composer-flex-20260704-01";
+} from "./store.js?v=phantom-simple-business-copy-20260704-01";
+import { makeImageArtifact } from "./media-image.js?v=phantom-simple-business-copy-20260704-01";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -361,7 +361,7 @@ export function handleCommand(raw) {
       },
     };
     store.state.approvals.unshift(action);
-    pushActivity("Drive System", `staged ${driveFile.filename} for Google Drive approval.`, ws);
+    pushActivity("Drive System", `prepared ${driveFile.filename} for Google Drive approval.`, ws);
     store.save();
     return {
       say: `Prepared ${driveFile.filename}. It is waiting in Review before any Drive write.`,
