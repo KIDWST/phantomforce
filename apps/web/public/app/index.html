@@ -12,12 +12,14 @@
     <meta name="description" content="PhantomForce Phantom — your AI business operating system." />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
-    <meta http-equiv="Cache-Control" content="no-store" />
+    <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate, max-age=0" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <link rel="icon" type="image/svg+xml" href="../favicon.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-admin-revamp-20260704-02" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-admin-revamp-20260704-03" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -27,6 +29,10 @@
       if ("caches" in window) {
         caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => undefined);
       }
+      window.__PHANTOM_BUILD__ = "phantom-admin-revamp-20260704-03";
+      try {
+        localStorage.setItem("phantom:last-build", window.__PHANTOM_BUILD__);
+      } catch {}
     </script>
   </head>
   <body>
@@ -169,6 +175,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-admin-revamp-20260704-02"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-admin-revamp-20260704-03"></script>
   </body>
 </html>
