@@ -19,7 +19,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-open-map-only-20260704-01" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-map-clean-20260704-01" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -29,7 +29,7 @@
       if ("caches" in window) {
         caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => undefined);
       }
-      window.__PHANTOM_BUILD__ = "phantom-open-map-only-20260704-01";
+      window.__PHANTOM_BUILD__ = "phantom-map-clean-20260704-01";
       try {
         localStorage.setItem("phantom:last-build", window.__PHANTOM_BUILD__);
       } catch {}
@@ -136,16 +136,8 @@
       <section class="harbor" id="harbor" data-harbor hidden aria-label="Phantom map">
         <button class="harbor-backdrop" data-harbor-close aria-label="Close Phantom map"></button>
         <div class="harbor-sheet" role="dialog" aria-modal="true" aria-label="Phantom map">
-          <header class="harbor-head">
-            <p class="harbor-kicker">PHANTOM MAP</p>
-            <button class="overlay-x" data-harbor-close aria-label="Close Phantom map">✕</button>
-          </header>
+          <button class="overlay-x harbor-close" data-harbor-close aria-label="Close Phantom map">✕</button>
           <div class="harbor-body">
-            <label class="org-switch org-switch-harbor" data-org-wrap-harbor hidden>
-              <span>Workspace</span>
-              <select data-org-select-harbor aria-label="Switch workspace"></select>
-            </label>
-            <div class="suggests" data-suggests></div>
             <section class="living-map-slot" data-living-map aria-label="Living command map"></section>
             <div class="deck-body">
               <section class="mission" aria-label="Workspaces">
@@ -176,6 +168,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-open-map-only-20260704-01"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-map-clean-20260704-01"></script>
   </body>
 </html>

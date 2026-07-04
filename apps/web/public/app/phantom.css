@@ -577,10 +577,16 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 @keyframes harborUp { from { opacity: 0; transform: translateY(44px); } to { opacity: 1; transform: none; } }
 .harbor-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 16px clamp(16px, 2.4vw, 26px) 10px; }
 .harbor-kicker { margin: 0; font: 500 10px "DM Mono", monospace; letter-spacing: 0.28em; color: var(--neon); }
+.harbor-close {
+  position: absolute;
+  top: clamp(14px, 2vw, 22px);
+  right: clamp(14px, 2vw, 22px);
+  z-index: 5;
+}
 .harbor-body {
   overflow-y: auto; -webkit-overflow-scrolling: touch;
   display: grid; gap: 16px; align-content: start;
-  padding: 4px clamp(16px, 2.4vw, 26px) calc(26px + env(safe-area-inset-bottom));
+  padding: clamp(18px, 2.4vw, 28px) clamp(16px, 2.4vw, 26px) calc(26px + env(safe-area-inset-bottom));
 }
 .harbor-body .deck-body { margin-top: 4px; }
 .org-switch-harbor { justify-content: flex-start; }

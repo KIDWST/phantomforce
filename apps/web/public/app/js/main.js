@@ -4,10 +4,10 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-open-map-only-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-open-map-only-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-open-map-only-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-open-map-only-20260704-01";
+} from "./store.js?v=phantom-map-clean-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-map-clean-20260704-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-map-clean-20260704-01";
+import { imageStyle } from "./media-image.js?v=phantom-map-clean-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -607,7 +607,9 @@ function runCommand(text) {
 }
 
 function renderSuggests() {
-  $("[data-suggests]").innerHTML = commandSuggestions()
+  const target = $("[data-suggests]");
+  if (!target) return;
+  target.innerHTML = commandSuggestions()
     .map((s) => `<button class="suggest" data-suggest="${esc(s)}">${esc(s)}</button>`).join("");
 }
 
