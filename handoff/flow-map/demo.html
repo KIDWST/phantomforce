@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>PhantomFlow — demo</title>
+    <style>
+      :root { color-scheme: dark; }
+      body { margin: 0; min-height: 100vh; background: #02060a; color: #eafff4; font-family: "Space Grotesk", system-ui, sans-serif; display: grid; place-items: center; }
+      main { width: min(1100px, calc(100vw - 48px)); }
+      h1 { font-size: 15px; letter-spacing: .18em; text-transform: uppercase; color: rgba(65,255,161,.8); }
+      p { color: rgba(234,255,244,.5); font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>PhantomFlow demo</h1>
+      <p>Stats update live every few seconds. Click a station — it reports which desk it would open.</p>
+      <div id="flow-here"></div>
+    </main>
+    <script src="flow-map.js"></script>
+    <script>
+      const flow = PhantomFlow.mount("#flow-here", {
+        subtitle: "work in motion — tap a station to open its desk",
+        onStationClick: (id) => alert("would open the “" + id + "” desk"),
+      });
+      flow.refresh({
+        leads: "5 open", quotes: "2 live", approvals: "4 waiting",
+        bookings: "3 pending", delivery: "2 ready", reviews: "3 in pipe", money: "$4,000",
+      });
+      // simulate live store updates
+      setInterval(() => {
+        flow.refresh({
+          leads: (3 + Math.floor(Math.random() * 5)) + " open",
+          money: "$" + (3 + Math.floor(Math.random() * 4)) + ",000",
+        });
+      }, 4000);
+    </script>
+  </body>
+</html>
