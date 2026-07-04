@@ -4,9 +4,9 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-brain-20260703-19";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-19";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-19";
+} from "./store.js?v=phantom-brain-20260703-20";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-20";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-20";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -289,7 +289,12 @@ function wantsDetailedAnswer(text = "") {
   return /\b(detail|detailed|deep|full|explain|novel|report|audit|step by step|strategy|write|cover letter|long)\b/i.test(text);
 }
 
-function compactReply(text = "", max = compactScreen ? 145 : 220) {
+function wantsPracticalSteps(text = "") {
+  return /\b(how\s+to|how\s+(do|can|should)\s+i|teach me to|show me how|steps?\s+(for|to))\b/i.test(text.trim());
+}
+
+function compactReply(text = "", max = compactScreen ? 145 : 220, options = {}) {
+  const preferFirstSentence = options.preferFirstSentence !== false;
   const clean = String(text || "")
     .replace(/\r/g, "")
     .replace(/\n+\s*[-*•]\s*/g, " · ")
@@ -299,7 +304,7 @@ function compactReply(text = "", max = compactScreen ? 145 : 220) {
   if (clean.length <= max) return clean;
   const sentenceMatch = clean.match(/^(.{24,}?[.!?])\s/);
   const firstSentence = sentenceMatch?.[1]?.trim();
-  if (firstSentence && firstSentence.length <= max) return firstSentence;
+  if (preferFirstSentence && firstSentence && firstSentence.length <= max) return firstSentence;
   const slice = clean.slice(0, max + 1);
   const lastSpace = slice.lastIndexOf(" ");
   return `${slice.slice(0, lastSpace > 80 ? lastSpace : max).trim()}...`;
@@ -433,7 +438,7 @@ async function askPrivatePhantomBrain(text, localResult) {
         task_type: inferTaskType(text),
         sensitivity_level: inferSensitivity(text),
         execution_mode: executionMode.get(),
-        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use the private operator brain as a normal general-purpose chatbot and business operator. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and action cards. For unrelated/general questions, answer directly without forcing dashboard context. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution lane and owner receipt.`,
+        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use the private operator brain as a normal general-purpose chatbot and business operator. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and action cards. For unrelated/general questions, answer directly without forcing dashboard context. For practical how-to questions, give complete usable steps in a concise mobile-friendly answer. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution lane and owner receipt.`,
         module_data: brainModuleData(),
       }),
     });
@@ -442,7 +447,11 @@ async function askPrivatePhantomBrain(text, localResult) {
       throw new Error(payload?.error || `Local brain HTTP ${response.status}`);
     }
     const rawSay = String(payload?.message?.content || "").trim();
-    const say = wantsDetailedAnswer(text) ? rawSay : compactReply(rawSay);
+    const say = wantsDetailedAnswer(text)
+      ? rawSay
+      : wantsPracticalSteps(text)
+        ? compactReply(rawSay, compactScreen ? 520 : 760, { preferFirstSentence: false })
+        : compactReply(rawSay);
     if (!say) return null;
 
     const cards = [];

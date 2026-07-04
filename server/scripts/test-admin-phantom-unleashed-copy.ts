@@ -44,9 +44,10 @@ const openrouterTransport = await readFile(
 const publicAppBundle = [appIndex, appCommand, appMain, appStore, appWorkspaces].join("\n");
 
 assert(!codexTransport.includes("This chat run is read-only"), "Codex lane must not tell admin Phantom it is read-only.");
-assert(codexTransport.includes("Phantom is an admin command cockpit"), "Codex lane must frame Phantom as an admin command cockpit.");
+assert(codexTransport.includes("Phantom is an admin command cockpit"), "Private brain lane must frame Phantom as an admin command cockpit.");
 assert(codexTransport.includes("business artifacts"), "Codex lane must describe artifact creation capability.");
 assert(codexTransport.includes("action adapter returned a receipt"), "Codex lane must preserve truthful execution receipts.");
+assert(codexTransport.includes("For practical how-to questions, give 4-6 short usable steps."), "Private brain lane must answer how-to questions with useful steps.");
 
 assert(localOllamaTransport.includes("Phantom is an admin command cockpit with action lanes"), "Local model lane must use action-lane framing.");
 assert(appCommand.includes("Phantom is not read-only"), "Browser command router must answer read-only capability questions directly.");
@@ -57,6 +58,8 @@ assert(appIndex.includes("data-mode-switch"), "Admin UI must include the mode sw
 assert(appIndex.includes("data-memory-log"), "Admin UI must include the memory log shortcut.");
 assert(appMain.includes("execution_mode: executionMode.get()"), "Admin chat must send execution_mode to the backend.");
 assert(appMain.includes("openOwnerMemoryLog"), "App shell must provide a direct owner memory log opener.");
+assert(appMain.includes("wantsPracticalSteps"), "App shell must detect practical how-to prompts.");
+assert(appMain.includes("preferFirstSentence: false"), "How-to prompts must not be clipped to the first sentence on mobile.");
 assert(!/\bcodex\b/i.test(publicAppBundle), "Public app shell must not expose Codex naming in browser-shipped code.");
 assert(appMain.includes("private_brain"), "App shell must consume neutral private brain status.");
 assert(appWorkspaces.includes("/phantom-ai/admin/owner-memory/status"), "Owner memory UI must use neutral owner-memory route.");
