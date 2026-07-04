@@ -583,12 +583,247 @@ function initGhost() {
   requestAnimationFrame(frame);
 }
 
+/* ============================ the flow (living map of the offer chain) ============================ */
+/* Leads → Quotes → Approvals → Bookings → Delivery → Reviews → Money, drawn as
+   a glowing constellation above the mission grid. Comet sparks ride the chain;
+   each station flares and pops its live number as one passes. Self-contained:
+   injects its own DOM + styles so it works regardless of the host page HTML. */
+function initFlowMap() {
+  const missionEl = $("[data-mission]");
+  if (!missionEl || document.querySelector("[data-flowmap]")) return;
+  const host = missionEl.closest("section") || missionEl;
+
+  const style = document.createElement("style");
+  style.textContent = `
+    .flowmap { margin: 26px 0 6px; }
+    .flowmap-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 2px; }
+    .flowmap-kicker { font: 500 10px "DM Mono", monospace; letter-spacing: .22em; text-transform: uppercase; color: rgba(65,255,161,.75); }
+    .flowmap-sub { font: 400 11px "DM Mono", monospace; color: rgba(234,255,244,.4); }
+    .flowmap canvas { display: block; width: 100%; height: 190px; }
+    @media (max-width: 720px) { .flowmap canvas { height: 170px; } }
+  `;
+  document.head.appendChild(style);
+
+  const sec = document.createElement("section");
+  sec.className = "flowmap";
+  sec.setAttribute("aria-label", "The Flow — how work moves through Phantom");
+  sec.innerHTML = `
+    <div class="flowmap-head">
+      <span class="flowmap-kicker">The Flow</span>
+      <span class="flowmap-sub">watch work move — tap a station to open its desk</span>
+    </div>
+    <canvas data-flowmap></canvas>`;
+  host.parentElement.insertBefore(sec, host);
+
+  const canvas = sec.querySelector("[data-flowmap]");
+  const ctx2 = canvas.getContext("2d");
+  if (!ctx2) return;
+
+  const FULL = [
+    { ws: "leads", label: "Leads" },
+    { ws: "proposals", label: "Quotes" },
+    { ws: "approvals", label: "Approvals" },
+    { ws: "bookings", label: "Bookings" },
+    { ws: "media", label: "Delivery" },
+    { ws: "reviews", label: "Reviews" },
+    { ws: "money", label: "Money", gold: true },
+  ];
+
+  let stats = {};
+  const refreshStats = () => {
+    stats = {};
+    for (const wgt of missionWidgets()) stats[wgt.id] = wgt;
+    if (reduceMotion) scene(0, 0);
+  };
+
+  let w = 0, h = 0, dpr = 1, nodes = [], samples = [], nodeU = [], cum = [], totalLen = 1;
+  const layout = () => {
+    const r = canvas.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, 2);
+    w = Math.max(1, r.width); h = Math.max(1, r.height);
+    canvas.width = w * dpr; canvas.height = h * dpr;
+    const chain = w < 640 ? FULL.filter((n) => n.ws !== "approvals" && n.ws !== "media") : FULL;
+    const padX = Math.max(44, w * 0.055);
+    nodes = chain.map((n, i) => ({
+      ...n,
+      x: padX + (i * (w - padX * 2)) / (chain.length - 1),
+      y: h * 0.52 + (i % 2 ? 1 : -1) * h * 0.14,
+      flare: 0,
+    }));
+    /* sample a Catmull-Rom curve through the stations for constant-speed travel */
+    const STEPS = 18;
+    const pts = nodes.map((n) => [n.x, n.y]);
+    const crom = (p0, p1, p2, p3, s) => {
+      const s2 = s * s, s3 = s2 * s;
+      return [
+        0.5 * (2 * p1[0] + (-p0[0] + p2[0]) * s + (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * s2 + (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * s3),
+        0.5 * (2 * p1[1] + (-p0[1] + p2[1]) * s + (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * s2 + (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * s3),
+      ];
+    };
+    samples = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)], p3 = pts[Math.min(pts.length - 1, i + 2)];
+      for (let j = 0; j < STEPS; j++) samples.push(crom(p0, pts[i], pts[i + 1], p3, j / STEPS));
+    }
+    samples.push(pts[pts.length - 1]);
+    cum = [0]; totalLen = 0;
+    for (let i = 1; i < samples.length; i++) {
+      totalLen += Math.hypot(samples[i][0] - samples[i - 1][0], samples[i][1] - samples[i - 1][1]);
+      cum.push(totalLen);
+    }
+    nodeU = nodes.map((_, i) => cum[Math.min(cum.length - 1, i * STEPS)] / totalLen);
+  };
+  const posAt = (u) => {
+    const target = Math.max(0, Math.min(1, u)) * totalLen;
+    let lo = 0, hi = cum.length - 1;
+    while (lo < hi) { const mi = (lo + hi) >> 1; if (cum[mi] < target) lo = mi + 1; else hi = mi; }
+    const i = Math.max(1, lo);
+    const seg = cum[i] - cum[i - 1] || 1;
+    const f = (target - cum[i - 1]) / seg;
+    return [samples[i - 1][0] + (samples[i][0] - samples[i - 1][0]) * f, samples[i - 1][1] + (samples[i][1] - samples[i - 1][1]) * f];
+  };
+
+  const drawPath = (t) => {
+    ctx2.lineCap = "round"; ctx2.lineJoin = "round";
+    ctx2.beginPath();
+    ctx2.moveTo(samples[0][0], samples[0][1]);
+    for (let i = 1; i < samples.length; i++) ctx2.lineTo(samples[i][0], samples[i][1]);
+    ctx2.strokeStyle = "rgba(65,255,161,0.07)";
+    ctx2.lineWidth = 7;
+    ctx2.stroke();
+    ctx2.strokeStyle = "rgba(65,255,161,0.4)";
+    ctx2.lineWidth = 1.3;
+    ctx2.setLineDash([3, 9]);
+    ctx2.lineDashOffset = -t * 26;   // the whole line drifts toward Money
+    ctx2.stroke();
+    ctx2.setLineDash([]);
+  };
+
+  const TRAV = 3, prevU = [0, 0, 0], dust = [];
+  const drawTravelers = (t, dt) => {
+    const speed = 0.055;   // full runs of the chain per second
+    for (let k = 0; k < TRAV; k++) {
+      const u = (t * speed + k / TRAV) % 1;
+      for (let i = 0; i < nodeU.length; i++) {
+        const nu = nodeU[i];
+        const crossed = prevU[k] <= u ? (nu > prevU[k] && nu <= u) : (nu > prevU[k] || nu <= u);
+        if (crossed) nodes[i].flare = 1;
+      }
+      prevU[k] = u;
+      /* the spark turns gold as it closes in on the Money station */
+      const gmix = Math.max(0, (u - 0.8) / 0.2);
+      const rc = Math.round(120 + 135 * gmix), gc = Math.round(255 - 41 * gmix), bc = Math.round(200 - 80 * gmix);
+      for (let j = 10; j >= 0; j--) {
+        const [x, y] = posAt(u - j * 0.0075);
+        const a = (1 - j / 11) * 0.6;
+        ctx2.fillStyle = `rgba(${rc},${gc},${bc},${a})`;
+        ctx2.beginPath(); ctx2.arc(x, y, 1 + (1 - j / 11) * 2.6, 0, Math.PI * 2); ctx2.fill();
+      }
+      const [hx, hy] = posAt(u);
+      const hg = ctx2.createRadialGradient(hx, hy, 0, hx, hy, 9);
+      hg.addColorStop(0, "rgba(255,255,255,0.95)");
+      hg.addColorStop(0.35, `rgba(${rc},${gc},${bc},0.7)`);
+      hg.addColorStop(1, `rgba(${rc},${gc},${bc},0)`);
+      ctx2.fillStyle = hg;
+      ctx2.beginPath(); ctx2.arc(hx, hy, 9, 0, Math.PI * 2); ctx2.fill();
+      if (Math.random() < 0.25 && dust.length < 40)
+        dust.push({ x: hx, y: hy, vx: (Math.random() - 0.5) * 16, vy: 6 + Math.random() * 14, life: 0, max: 0.5 + Math.random() * 0.6, r: 0.8 + Math.random() * 1.6 });
+    }
+  };
+  const drawDust = (dt) => {
+    for (let i = dust.length - 1; i >= 0; i--) {
+      const s = dust[i];
+      s.life += dt;
+      if (s.life > s.max) { dust.splice(i, 1); continue; }
+      s.x += s.vx * dt; s.y += s.vy * dt;
+      ctx2.strokeStyle = `rgba(210,255,235,${(1 - s.life / s.max) * 0.8})`;
+      ctx2.lineWidth = 1;
+      ctx2.beginPath();
+      ctx2.moveTo(s.x - s.r * 2, s.y); ctx2.lineTo(s.x + s.r * 2, s.y);
+      ctx2.moveTo(s.x, s.y - s.r * 2); ctx2.lineTo(s.x, s.y + s.r * 2);
+      ctx2.stroke();
+    }
+  };
+
+  let hover = -1;
+  const drawNodes = (dt) => {
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      n.flare = Math.max(0, n.flare - dt * 1.6);
+      const s = stats[n.ws] || {};
+      const [cr, cg, cb] = n.gold ? [255, 214, 120] : [65, 255, 161];
+      const col = (a) => `rgba(${cr},${cg},${cb},${a})`;
+      const R = (w < 640 ? 14 : 17) + (hover === i ? 2.5 : 0) + n.flare * 2;
+      const glow = ctx2.createRadialGradient(n.x, n.y, 0, n.x, n.y, R * 3.2);
+      glow.addColorStop(0, col(0.28 + n.flare * 0.3));
+      glow.addColorStop(1, col(0));
+      ctx2.fillStyle = glow;
+      ctx2.beginPath(); ctx2.arc(n.x, n.y, R * 3.2, 0, Math.PI * 2); ctx2.fill();
+      if (n.flare > 0.01) {   // ripple ring as a spark lands
+        ctx2.strokeStyle = col(n.flare * 0.55);
+        ctx2.lineWidth = 1.5;
+        ctx2.beginPath(); ctx2.arc(n.x, n.y, R + (1 - n.flare) * 20, 0, Math.PI * 2); ctx2.stroke();
+      }
+      ctx2.fillStyle = "rgba(3,12,8,0.92)";
+      ctx2.beginPath(); ctx2.arc(n.x, n.y, R, 0, Math.PI * 2); ctx2.fill();
+      ctx2.strokeStyle = col(0.85);
+      ctx2.lineWidth = 1.5 + n.flare;
+      ctx2.stroke();
+      ctx2.fillStyle = col(0.95);
+      ctx2.font = `${Math.round(R * 0.9)}px "Space Grotesk", system-ui, sans-serif`;
+      ctx2.textAlign = "center"; ctx2.textBaseline = "middle";
+      ctx2.fillText(s.icon || "◇", n.x, n.y + 1);
+      /* label + live stat, kept on the side of the node away from the path */
+      const up = n.y <= h * 0.52;
+      const ly = up ? n.y - R - 26 : n.y + R + 14;
+      ctx2.font = '500 10px "DM Mono", monospace';
+      ctx2.fillStyle = "rgba(234,255,244,0.55)";
+      ctx2.fillText(n.label.toUpperCase(), n.x, ly);
+      ctx2.font = `600 ${Math.round(12 + n.flare * 2)}px "Space Grotesk", system-ui, sans-serif`;
+      ctx2.fillStyle = n.gold ? col(0.95) : "rgba(234,255,244,0.92)";
+      ctx2.fillText(s.stat || "—", n.x, ly + 13);
+    }
+  };
+
+  const scene = (t, dt) => {
+    ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx2.clearRect(0, 0, w, h);
+    drawPath(t);
+    if (!reduceMotion) { drawTravelers(t, dt); drawDust(dt); }
+    drawNodes(dt);
+  };
+
+  canvas.addEventListener("pointermove", (e) => {
+    const r = canvas.getBoundingClientRect();
+    const mx = e.clientX - r.left, my = e.clientY - r.top;
+    hover = nodes.findIndex((n) => Math.hypot(mx - n.x, my - n.y) < 26);
+    canvas.style.cursor = hover >= 0 ? "pointer" : "default";
+  });
+  canvas.addEventListener("click", () => { if (hover >= 0) openWorkspace(nodes[hover].ws); });
+
+  layout();
+  refreshStats();
+  store.onChange(refreshStats);
+  window.addEventListener("resize", () => { layout(); if (reduceMotion) scene(0, 0); }, { passive: true });
+  if (reduceMotion) { scene(0, 0); return; }
+  let last = performance.now();
+  const frame = (now) => {
+    if (!document.hidden) {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      scene(now * 0.001, dt);
+    }
+    last = now;
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
 /* ============================ boot ============================ */
 let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; initGhost(); }
+  if (!ghostStarted) { ghostStarted = true; initGhost(); initFlowMap(); }
   renderDashboard();
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
