@@ -4,9 +4,9 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-brain-20260703-21";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-21";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-21";
+} from "./store.js?v=phantom-map-20260703-22";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-map-20260703-22";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-map-20260703-22";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -168,6 +168,11 @@ function renderMission() {
       <span class="widget-stat">${esc(w.stat)}</span>
       <span class="widget-sub">${esc(w.sub)}</span>
     </button>`).join("");
+  const map = $("[data-living-map]");
+  if (map) {
+    map.innerHTML = livingMapHtml();
+    wireLivingMap(map, renderMission);
+  }
 }
 
 /* ============================ rail ============================ */

@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-brain-20260703-21" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-map-20260703-22" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -118,6 +118,7 @@
               <select data-org-select-harbor aria-label="Switch workspace"></select>
             </label>
             <div class="suggests" data-suggests></div>
+            <section class="living-map-slot" data-living-map aria-label="Living command map"></section>
             <div class="deck-body">
               <section class="mission" aria-label="Workspaces">
                 <h2 class="deck-label">Capabilities</h2>
@@ -147,6 +148,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-brain-20260703-21"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-map-20260703-22"></script>
   </body>
 </html>

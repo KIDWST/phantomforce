@@ -7,7 +7,7 @@ import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-brain-20260703-21";
+} from "./store.js?v=phantom-map-20260703-22";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -595,6 +595,369 @@ function renderApprovals(el, rerender) {
   bindActions(el, {
     approve: (id) => { resolveApproval(id, true); rerender(); },
     decline: (id) => { resolveApproval(id, false); rerender(); },
+  });
+}
+
+/* ========================= LIVING COMMAND MAP ========================= */
+const MAP_W = 1000;
+const MAP_H = 560;
+let selectedLivingNodeId = "phantom";
+
+const mapStatusLabels = {
+  active: "Active",
+  ready: "Ready",
+  gated: "Gated",
+  manual: "Manual",
+  planned: "Planned",
+  needs_review: "Needs review",
+  blocked: "Blocked",
+};
+
+function edgePath(from, to, sag = 0) {
+  const dx = to.x - from.x;
+  const dy = to.y - from.y;
+  if (Math.abs(dx) < 48) {
+    return `M ${from.x} ${from.y} C ${from.x} ${from.y + dy * 0.4}, ${to.x} ${to.y - dy * 0.4}, ${to.x} ${to.y}`;
+  }
+  return `M ${from.x} ${from.y} C ${from.x + dx * 0.42} ${from.y + sag}, ${to.x - dx * 0.42} ${to.y + sag}, ${to.x} ${to.y}`;
+}
+
+function nodeStatus({ count = 0, waiting = false, gated = false, planned = false, blocked = false } = {}) {
+  if (blocked) return "blocked";
+  if (waiting) return "needs_review";
+  if (gated) return "gated";
+  if (count > 0) return "active";
+  if (planned) return "planned";
+  return "ready";
+}
+
+function buildLivingMap() {
+  const leads = visible(store.state.leads);
+  const openLeads = leads.filter((l) => !["won", "lost"].includes(l.status));
+  const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
+  const proposals = visible(store.state.proposals);
+  const liveProposals = proposals.filter((p) => ["draft", "sent-ready", "won", "invoice-ready"].includes(p.status));
+  const media = visible(store.state.media);
+  const mediaReady = media.filter((m) => ["brief-ready", "generation-approved"].includes(m.status));
+  const pages = visible(store.state.sites);
+  const livePages = pages.filter((p) => ["draft", "publish-ready", "approved-to-publish"].includes(p.status));
+  const reviews = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
+  const bookings = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
+  const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
+  const security = visible(store.state.security)[0];
+  const money = moneyView();
+  const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
+  const activeTools = (store.state.toolSpine || []).filter((tool) => tool.mode === "active").length;
+  const connectors = store.state.postingConnectors || [];
+  const readyConnectors = connectors.filter((c) => c.adminState === "ready" || c.state === "available").length;
+  const currentName = wsName(currentWs());
+
+  const nodes = [
+    {
+      id: "phantom",
+      label: "Phantom",
+      value: isAdmin() ? `${activeAgents} desks online` : `${currentName} brain`,
+      status: "active",
+      workspace: "phantom",
+      x: 500,
+      y: 280,
+      icon: "⌁",
+      detail: "The command router. It turns one request into the right business move and keeps the rest of the system quiet until needed.",
+      inside: [
+        { label: "Mode", state: isAdmin() ? executionMode.get() : "workspace" },
+        { label: "Workspace", state: currentName },
+        { label: "Memory", state: isAdmin() ? "owner" : "tenant" },
+      ],
+      safety: "Clients only see their own workspace. Admin sees all routes and controls.",
+    },
+    {
+      id: "leads",
+      label: "Follow-Up Desk",
+      value: `${openLeads.length} open`,
+      status: nodeStatus({ count: openLeads.length, waiting: dueLeads.length > 0 }),
+      workspace: "leads",
+      x: 150,
+      y: 150,
+      icon: "◉",
+      detail: dueLeads.length ? `${dueLeads.length} lead follow-up is due now.` : "Captures leads, keeps the next follow-up clear, and feeds qualified work into quotes.",
+      inside: [
+        { label: "Open", state: openLeads.length },
+        { label: "Due", state: dueLeads.length },
+      ],
+    },
+    {
+      id: "proposals",
+      label: "Quote Forge",
+      value: `${liveProposals.length} live`,
+      status: nodeStatus({ count: liveProposals.length }),
+      workspace: "proposals",
+      x: 305,
+      y: 95,
+      icon: "◆",
+      detail: "Builds scoped offers from the real offer ladder and moves them toward send-ready status.",
+      inside: [
+        { label: "Pipeline", state: fmtMoney(money.pipeline) },
+        { label: "Retainers", state: fmtMoney(money.retainerMonthly) },
+      ],
+    },
+    {
+      id: "media",
+      label: "Media Lab",
+      value: `${mediaReady.length} ready`,
+      status: nodeStatus({ count: mediaReady.length, gated: true }),
+      workspace: "media",
+      x: 715,
+      y: 115,
+      icon: "▶",
+      detail: "Prepares video briefs, captions, shot lists, PhantomCut/Higgsfield-ready generation, and content packages.",
+      inside: [
+        { label: "Briefs", state: media.length },
+        { label: "Ready", state: mediaReady.length },
+      ],
+      safety: "Paid generation and posting stay behind receipts and configured connectors.",
+    },
+    {
+      id: "sites",
+      label: "Site + Store",
+      value: `${livePages.length} builds`,
+      status: nodeStatus({ count: livePages.length }),
+      workspace: "sites",
+      x: 870,
+      y: 245,
+      icon: "▦",
+      detail: "Drafts pages, landing pages, product/service cards, store structure, and publish-ready site work.",
+      inside: [
+        { label: "Pages", state: pages.length },
+        { label: "Builds", state: livePages.length },
+      ],
+    },
+    {
+      id: "protect",
+      label: "Risk Radar",
+      value: security ? (security.posture === "clean" ? "clean" : "attention") : "ready",
+      status: nodeStatus({ count: security ? 1 : 0, waiting: security ? security.posture !== "clean" : false }),
+      workspace: "protect",
+      x: 845,
+      y: 420,
+      icon: "⬡",
+      detail: "Tracks malware posture, password rotation windows, exposure checks, and proof of monthly scans.",
+      inside: [
+        { label: "Scan", state: security ? statusLabel(security.status || security.posture) : "fresh" },
+        { label: "Cadence", state: "monthly" },
+      ],
+    },
+    {
+      id: "reviews",
+      label: "Review Desk",
+      value: `${reviews.length} in pipe`,
+      status: nodeStatus({ count: reviews.length }),
+      workspace: "reviews",
+      x: 650,
+      y: 475,
+      icon: "★",
+      detail: "Requests reviews after delivery, stages received testimonials, and queues publish approval.",
+      inside: [
+        { label: "Requests", state: reviews.length },
+        { label: "Publish", state: "approval" },
+      ],
+    },
+    {
+      id: "bookings",
+      label: "Bookings",
+      value: `${bookings.length} pending`,
+      status: nodeStatus({ count: bookings.length, gated: bookings.length > 0 }),
+      workspace: "bookings",
+      x: 360,
+      y: 475,
+      icon: "◷",
+      detail: "Creates appointment drafts, confirmations, reschedules, and booking copy before calendar writes.",
+      inside: [
+        { label: "Drafts", state: bookings.length },
+        { label: "Calendar", state: "gated" },
+      ],
+    },
+    {
+      id: "money",
+      label: "Money",
+      value: fmtMoney(money.pipeline),
+      status: nodeStatus({ count: money.open.length }),
+      workspace: "money",
+      x: 145,
+      y: 390,
+      icon: "◈",
+      detail: "Shows open proposal value, wins, retainer path, and invoice-ready work without creating invoices automatically.",
+      inside: [
+        { label: "Won", state: fmtMoney(money.wonValue) },
+        { label: "Monthly", state: fmtMoney(money.retainerMonthly) },
+      ],
+    },
+    {
+      id: "approvals",
+      label: "Approvals",
+      value: `${pending.length} waiting`,
+      status: nodeStatus({ waiting: pending.length > 0 }),
+      workspace: "approvals",
+      x: 500,
+      y: 360,
+      icon: "✓",
+      detail: "Only outward-facing actions wait here: sends, bookings, publishing, paid generation, deploys, invoices, and deletes.",
+      inside: [
+        { label: "Waiting", state: pending.length },
+        { label: "Mode", state: executionMode.get() },
+      ],
+    },
+    {
+      id: "workforce",
+      label: "Workforce",
+      value: `${activeAgents} active`,
+      status: "active",
+      workspace: "workforce",
+      x: 500,
+      y: 150,
+      icon: "⬢",
+      detail: "The worker desks behind Phantom. You watch what each lane is doing instead of chatting with raw tools.",
+      inside: [
+        { label: "Desks", state: store.state.agents.length },
+        { label: "Tools", state: activeTools },
+      ],
+    },
+  ];
+
+  if (isAdmin()) {
+    nodes.push(
+      {
+        id: "connectors",
+        label: "Connectors",
+        value: `${readyConnectors}/${connectors.length} ready`,
+        status: nodeStatus({ count: readyConnectors, gated: readyConnectors < connectors.length }),
+        workspace: "adminos",
+        x: 500,
+        y: 525,
+        icon: "⌬",
+        detail: "Admin-only connector posture for Gmail, Calendar, Drive, YouTube, Instagram, Facebook, and TikTok.",
+        inside: [
+          { label: "Ready", state: readyConnectors },
+          { label: "Total", state: connectors.length },
+        ],
+        safety: "Clients never see raw connector controls.",
+      },
+    );
+  }
+
+  const liveState = (id) => {
+    const node = nodes.find((n) => n.id === id);
+    if (!node) return "planned";
+    if (node.status === "needs_review") return "gated";
+    if (node.status === "active") return "live";
+    if (node.status === "gated") return "gated";
+    return "ready";
+  };
+  const edges = [
+    ["phantom-workforce", "phantom", "workforce", "live", 0],
+    ["phantom-leads", "phantom", "leads", liveState("leads"), -18],
+    ["phantom-proposals", "phantom", "proposals", liveState("proposals"), -80],
+    ["phantom-media", "phantom", "media", liveState("media"), -75],
+    ["phantom-sites", "phantom", "sites", liveState("sites"), 10],
+    ["phantom-protect", "phantom", "protect", liveState("protect"), 42],
+    ["phantom-reviews", "phantom", "reviews", liveState("reviews"), 40],
+    ["phantom-bookings", "phantom", "bookings", liveState("bookings"), 38],
+    ["phantom-money", "phantom", "money", liveState("money"), 25],
+    ["phantom-approvals", "phantom", "approvals", pending.length ? "gated" : "ready", 0],
+    ["leads-proposals", "leads", "proposals", liveState("proposals"), 28],
+    ["proposals-money", "proposals", "money", liveState("money"), 85],
+    ["media-approvals", "media", "approvals", "gated", 40],
+    ["sites-approvals", "sites", "approvals", "ready", -30],
+    ["reviews-approvals", "reviews", "approvals", "ready", -20],
+    ["bookings-approvals", "bookings", "approvals", "gated", 20],
+    ["protect-approvals", "protect", "approvals", liveState("protect"), -15],
+  ];
+  if (isAdmin()) edges.push(["approvals-connectors", "approvals", "connectors", readyConnectors ? "ready" : "gated", 0]);
+
+  return {
+    nodes,
+    edges: edges
+      .map(([id, from, to, state, sag]) => ({ id, from, to, state, sag }))
+      .filter((edge) => nodes.some((n) => n.id === edge.from) && nodes.some((n) => n.id === edge.to)),
+    notice: pending.length
+      ? `${pending.length} outward-facing move${pending.length === 1 ? "" : "s"} need review before execution.`
+      : "Every desk is mapped. Click a node to open the workspace behind it.",
+  };
+}
+
+export function livingMapHtml() {
+  const { nodes, edges, notice } = buildLivingMap();
+  if (!nodes.some((node) => node.id === selectedLivingNodeId)) selectedLivingNodeId = "phantom";
+  const selected = nodes.find((node) => node.id === selectedLivingNodeId) || nodes[0];
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const statuses = Object.keys(mapStatusLabels).filter((status) => nodes.some((node) => node.status === status));
+  const connected = selected
+    ? edges.flatMap((edge) => {
+        if (edge.from !== selected.id && edge.to !== selected.id) return [];
+        const other = byId.get(edge.from === selected.id ? edge.to : edge.from);
+        return other ? [{ node: other, direction: edge.from === selected.id ? "out" : "in", state: edge.state }] : [];
+      })
+    : [];
+
+  return `
+    <section class="phantom-nervous-system brain-map" aria-label="PhantomForce living system map">
+      <div class="nervous-head">
+        <div>
+          <span class="deck-label">Living command map</span>
+          <h2>One request routes the whole business.</h2>
+          <p>${esc(notice)}</p>
+        </div>
+        <div class="brain-legend" aria-label="Node status legend">
+          ${statuses.map((status) => `<span class="status-${esc(status)}"><i></i>${esc(mapStatusLabels[status])}</span>`).join("")}
+        </div>
+      </div>
+      <div class="brain-map-stage" role="group" aria-label="System nodes and flows">
+        <svg class="brain-edges" viewBox="0 0 ${MAP_W} ${MAP_H}" preserveAspectRatio="none" aria-hidden="true">
+          ${edges.map((edge) => {
+            const from = byId.get(edge.from);
+            const to = byId.get(edge.to);
+            if (!from || !to) return "";
+            const dim = selected && edge.from !== selected.id && edge.to !== selected.id ? " dimmed" : "";
+            const pathId = `living-edge-${edge.id}`;
+            return `<g class="brain-edge ${esc(edge.state)}${dim}">
+              <path id="${esc(pathId)}" d="${esc(edgePath(from, to, edge.sag || 0))}"></path>
+              ${edge.state === "live" ? `<circle class="brain-pulse" r="3.2"><animateMotion dur="5.2s" repeatCount="indefinite"><mpath href="#${esc(pathId)}"></mpath></animateMotion></circle><circle class="brain-pulse faint" r="2.1"><animateMotion dur="5.2s" begin="-2.6s" repeatCount="indefinite"><mpath href="#${esc(pathId)}"></mpath></animateMotion></circle>` : ""}
+            </g>`;
+          }).join("")}
+        </svg>
+        ${nodes.map((node) => `
+          <button class="brain-node status-${esc(node.status)}${node.id === "phantom" ? " hub" : ""}${selected?.id === node.id ? " selected" : ""}"
+            style="left:${(node.x / MAP_W) * 100}%;top:${(node.y / MAP_H) * 100}%"
+            type="button" data-map-node="${esc(node.id)}" title="${esc(node.detail)}">
+            <span class="brain-node-icon">${esc(node.icon)}</span>
+            <span class="brain-node-copy"><strong>${esc(node.label)}</strong><small>${esc(node.value)}</small></span>
+            <i class="brain-node-dot" aria-hidden="true"></i>
+          </button>
+        `).join("")}
+      </div>
+      ${selected ? `
+        <div class="brain-detail" aria-live="polite">
+          <div class="brain-detail-head">
+            <span class="brain-status-chip status-${esc(selected.status)}">${esc(mapStatusLabels[selected.status] || selected.status)}</span>
+            <strong>${esc(selected.label)}</strong>
+            <em>${esc(selected.value)}</em>
+            <button class="brain-detail-open" type="button" data-open-ws="${esc(selected.workspace)}">Open workspace <span aria-hidden="true">→</span></button>
+          </div>
+          <p>${esc(selected.detail)}</p>
+          ${selected.inside?.length ? `<div class="brain-detail-inside">${selected.inside.map((item) => `<span><strong>${esc(item.label)}</strong><em>${esc(item.state)}</em></span>`).join("")}</div>` : ""}
+          ${connected.length ? `<div class="brain-detail-flows"><span>Flows</span>${connected.map((connection) => `<button type="button" data-map-node="${esc(connection.node.id)}">${connection.direction === "out" ? "→" : "←"} ${esc(connection.node.label)}<small>${esc(connection.state)}</small></button>`).join("")}</div>` : ""}
+          ${selected.safety ? `<p class="brain-detail-safety"><span aria-hidden="true">◇</span>${esc(selected.safety)}</p>` : ""}
+        </div>
+      ` : ""}
+    </section>`;
+}
+
+export function wireLivingMap(root, rerender) {
+  root.querySelectorAll("[data-map-node]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      selectedLivingNodeId = button.dataset.mapNode || "phantom";
+      rerender();
+    });
   });
 }
 
