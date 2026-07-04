@@ -4,10 +4,10 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-mode-labels-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-mode-labels-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-mode-labels-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-mode-labels-20260704-01";
+} from "./store.js?v=phantom-control-center-single-entry-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-control-center-single-entry-20260704-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-control-center-single-entry-20260704-01";
+import { imageStyle } from "./media-image.js?v=phantom-control-center-single-entry-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

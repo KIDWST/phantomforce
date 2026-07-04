@@ -1844,8 +1844,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     grid-template-columns: minmax(0, 1fr) 58px;
     grid-template-areas:
       "brand exit"
-      "workspace workspace"
-      "controls controls";
+      "workspace workspace";
     align-items: center;
     gap: 8px 8px;
     width: 100%;
@@ -1859,17 +1858,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .brand-word { letter-spacing: 0.15em; font-size: 10.4px; white-space: nowrap; }
   .brand-sub { display: none; }
   .topbar-right { display: contents; }
-  .memory-shortcut {
-    grid-area: controls;
-    position: static;
-    justify-self: end;
-    background: rgba(2, 10, 8, 0.92);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
-    box-shadow: 0 0 24px rgba(65, 255, 161, 0.14);
-    font-size: 8.5px;
-    padding: 7px 9px;
-  }
   .btn-exit { grid-area: exit; justify-self: end; width: 58px; min-width: 58px; padding: 5px 7px; font-size: 10px; }
   .topbar-mid {
     grid-area: workspace;
