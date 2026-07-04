@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-mode-panels-20260703-01" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-chat-mode-20260703-01" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -71,12 +71,6 @@
           </label>
         </div>
         <div class="topbar-right">
-          <div class="mode-switch" data-mode-switch hidden aria-label="Phantom execution mode">
-            <span class="mode-label">Mode</span>
-            <button type="button" data-mode="approval">Approval</button>
-            <button type="button" data-mode="auto">Auto</button>
-            <span class="mode-current" data-mode-current></span>
-          </div>
           <button class="memory-shortcut" data-memory-log hidden type="button">Control Deck</button>
           <span class="identity" data-identity></span>
           <button class="btn btn-quiet btn-exit" data-signout>Switch</button>
@@ -96,6 +90,10 @@
           <div class="response-cards" data-response></div>
           <form class="speakline speakline-hero" data-command-form>
             <span class="speak-caret" aria-hidden="true">›</span>
+            <div class="mode-switch mode-switch-inline" data-mode-switch hidden aria-label="Request mode">
+              <button type="button" data-mode="approval">Approval</button>
+              <button type="button" data-mode="auto">Auto</button>
+            </div>
             <input type="text" data-command-input autocomplete="off" spellcheck="false"
                    placeholder="Tell Phantom what you need…"
                    aria-label="Tell Phantom what you need" />
@@ -150,6 +148,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-mode-panels-20260703-01"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-chat-mode-20260703-01"></script>
   </body>
 </html>

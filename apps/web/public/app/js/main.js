@@ -4,9 +4,9 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-mode-panels-20260703-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-mode-panels-20260703-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-mode-panels-20260703-01";
+} from "./store.js?v=phantom-chat-mode-20260703-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-chat-mode-20260703-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-chat-mode-20260703-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -103,11 +103,9 @@ function renderTopbar() {
       wrap.hidden = true;
     }
   }
-  const modeSwitch = $("[data-mode-switch]");
-  if (modeSwitch) {
+  const modeSwitches = document.querySelectorAll("[data-mode-switch]");
+  modeSwitches.forEach((modeSwitch) => {
     modeSwitch.hidden = !isAdmin();
-    const current = modeSwitch.querySelector("[data-mode-current]");
-    if (current) current.textContent = executionMode.label();
     modeSwitch.querySelectorAll("[data-mode]").forEach((btn) => {
       const active = executionMode.get() === btn.dataset.mode;
       btn.classList.toggle("is-active", active);
@@ -120,7 +118,7 @@ function renderTopbar() {
         renderDashboard();
       };
     });
-  }
+  });
   const memoryBtn = $("[data-memory-log]");
   if (memoryBtn) {
     memoryBtn.hidden = !isAdmin();
