@@ -4,10 +4,10 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-admin-slash-commands-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-admin-slash-commands-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-admin-slash-commands-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-admin-slash-commands-20260704-01";
+} from "./store.js?v=phantom-chat-file-drop-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-chat-file-drop-20260704-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-chat-file-drop-20260704-01";
+import { imageStyle } from "./media-image.js?v=phantom-chat-file-drop-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -350,14 +350,140 @@ function cardHtml(c) {
       <p class="rcard-kicker">${esc(c.kicker)}</p>
       <h4>${esc(c.title)}</h4>
       ${c.image?.src ? `<figure class="rcard-image" style="${imageStyle(c.image)}"><img src="${c.image.src}" alt="${esc(c.title)}" loading="lazy"></figure>` : ""}
+      ${c.media?.length ? `<div class="rcard-media-grid">${c.media.map((m) => `
+        <figure class="rcard-media-thumb">
+          ${m.kind === "video" ? `<video src="${esc(m.src)}" muted playsinline controls preload="metadata"></video>` : `<img src="${esc(m.src)}" alt="${esc(m.name)}" loading="lazy">`}
+          <span>${esc(m.kind)}</span>
+        </figure>
+      `).join("")}</div>` : ""}
       ${c.body ? `<p class="rcard-body">${esc(c.body)}</p>` : ""}
       ${c.meta ? `<p class="rcard-meta">${esc(c.meta)}</p>` : ""}
       ${c.actions?.length ? `<div class="rcard-actions">${c.actions.map((a) => `<button class="btn" data-open-ws="${a.open}">${esc(a.label)}</button>`).join("")}</div>` : ""}
     </article>`;
 }
 
-function responseCard(kicker, title, body, actions = [], meta = "") {
-  return { kicker, title, body, actions, meta };
+function responseCard(kicker, title, body, actions = [], meta = "", extra = {}) {
+  return { kicker, title, body, actions, meta, ...extra };
+}
+
+const MEDIA_INTAKE_LIMIT = 50;
+
+function mediaKind(file) {
+  const type = String(file?.type || "").toLowerCase();
+  const name = String(file?.name || "").toLowerCase();
+  if (type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp|heic|heif|avif|tiff?)$/i.test(name)) return "image";
+  if (type.startsWith("video/") || /\.(mp4|mov|m4v|webm|avi|mkv)$/i.test(name)) return "video";
+  return "other";
+}
+
+function formatBytes(bytes = 0) {
+  const value = Number(bytes) || 0;
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+  if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+  return `${(value / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+}
+
+function summarizeMediaFiles(files = []) {
+  const all = Array.from(files);
+  const accepted = [];
+  const rejected = [];
+  for (const file of all) {
+    const kind = mediaKind(file);
+    if (kind === "other") rejected.push(file);
+    else if (accepted.length < MEDIA_INTAKE_LIMIT) accepted.push({ file, kind });
+    else rejected.push(file);
+  }
+  const imageCount = accepted.filter((item) => item.kind === "image").length;
+  const videoCount = accepted.filter((item) => item.kind === "video").length;
+  const size = accepted.reduce((sum, item) => sum + (item.file.size || 0), 0);
+  return { all, accepted, rejected, imageCount, videoCount, size };
+}
+
+function mediaPreviews(accepted = []) {
+  return accepted.slice(0, 9).map(({ file, kind }) => ({
+    kind,
+    name: file.name || kind,
+    src: URL.createObjectURL(file),
+  }));
+}
+
+function handleMediaIntake(files) {
+  if (!isAdmin()) {
+    speak("Media intake is available from the admin Phantom only.");
+    return;
+  }
+  const summary = summarizeMediaFiles(files);
+  const respBox = $("[data-response]");
+  if (!summary.accepted.length) {
+    speak("I can take images or videos here. Drop photos, graphics, clips, reels, or source footage.");
+    if (respBox) {
+      respBox.innerHTML = [responseCard(
+        "Media intake",
+        "No usable media found",
+        `${summary.rejected.length || summary.all.length} file(s) skipped. Accepted: images and videos only.`,
+        [{ label: "Open Media Lab", open: "media" }],
+      )].map(cardHtml).join("");
+    }
+    return;
+  }
+
+  const ws = currentWs();
+  const batchId = uid("media-batch");
+  const fileNames = summary.accepted.map(({ file }) => file.name || "untitled");
+  const preview = mediaPreviews(summary.accepted);
+  const title = `Media intake: ${summary.imageCount} image${summary.imageCount === 1 ? "" : "s"}, ${summary.videoCount} video${summary.videoCount === 1 ? "" : "s"}`;
+  const meta = `${summary.accepted.length} file(s) · ${formatBytes(summary.size)} · ${summary.rejected.length ? `${summary.rejected.length} skipped · ` : ""}local only`;
+
+  store.state.media ||= [];
+  store.state.tasks ||= [];
+  store.state.media.unshift({
+    id: batchId,
+    ws,
+    title,
+    status: "brief-ready",
+    angle: "Local drag/drop intake staged in Phantom chat. No upload or provider call.",
+    source: "phantom-chat-file-intake",
+    fileCount: summary.accepted.length,
+    imageCount: summary.imageCount,
+    videoCount: summary.videoCount,
+    sizeBytes: summary.size,
+    files: fileNames.slice(0, MEDIA_INTAKE_LIMIT),
+    createdAt: new Date().toISOString(),
+  });
+  store.state.tasks.unshift({
+    id: uid("task"),
+    ws,
+    title: `Analyze and edit ${summary.accepted.length} staged media file${summary.accepted.length === 1 ? "" : "s"}`,
+    status: "new",
+    open: "media",
+    createdAt: new Date().toISOString(),
+  });
+  pushActivity("Media Lab", `staged ${summary.accepted.length} local media file${summary.accepted.length === 1 ? "" : "s"} for analysis/editing.`, ws);
+  store.save();
+
+  speak(`Got ${summary.accepted.length} media file${summary.accepted.length === 1 ? "" : "s"}. I staged them for Media Lab and kept them local.`);
+  if (respBox) {
+    respBox.innerHTML = [
+      responseCard(
+        "Media intake",
+        title,
+        "Ready to analyze, crop, edit, brief, or build a video/image job from this batch.",
+        [{ label: "Open Media Lab", open: "media" }],
+        meta,
+        { media: preview },
+      ),
+      responseCard(
+        "What Phantom read",
+        "Batch summary",
+        fileNames.slice(0, 6).join(" · ") + (fileNames.length > 6 ? ` · +${fileNames.length - 6} more` : ""),
+        [{ label: "Create edit plan", open: "media" }],
+        "No upload. No paid generation. No external send.",
+      ),
+    ].map(cardHtml).join("");
+  }
+  setGhostMood("talking", { emotion: "bright", ms: 1800 });
+  renderDashboard();
 }
 
 function wantsDetailedAnswer(text = "") {
@@ -622,6 +748,7 @@ const ADMIN_SLASH_COMMANDS = [
   { key: "site", title: "Site + store", hint: "Page, store, checkout plan", kind: "fill", prompt: "Build a page or store for " },
   { key: "video", title: "Video brief", hint: "Media Lab brief", kind: "fill", prompt: "Create a video brief for " },
   { key: "image", title: "Image brief", hint: "Generate/edit visual brief", kind: "fill", prompt: "Create an image brief for " },
+  { key: "upload", title: "Add media", hint: "Drop photos/videos", kind: "file" },
   { key: "post", title: "Post everywhere", hint: "Draft social content", kind: "fill", prompt: "Draft a post for all connected platforms about " },
   { key: "schedule", title: "Booking", hint: "Appointment workflow", kind: "fill", prompt: "Set up a booking workflow for " },
   { key: "drive", title: "Drive note", hint: "Doc/note request", kind: "fill", prompt: "Create a Google Drive note for " },
@@ -702,6 +829,11 @@ function applySlashCommand(cmd, input) {
     setHarbor(true);
     return;
   }
+  if (cmd.kind === "file") {
+    if (input) input.value = "";
+    $("[data-file-intake]")?.click();
+    return;
+  }
   if (cmd.kind === "fill") {
     input.value = cmd.prompt;
     autosizeCommandInput(input);
@@ -719,6 +851,8 @@ function applySlashCommand(cmd, input) {
 function wireCommandDeck() {
   const form = $("[data-command-form]");
   const input = $("[data-command-input]");
+  const fileInput = $("[data-file-intake]");
+  const fileButton = $("[data-file-intake-button]");
   const submitCommand = () => {
     const v = input.value.trim();
     if (!v) return;
@@ -782,6 +916,38 @@ function wireCommandDeck() {
     e.preventDefault();
     submitCommand();
   });
+  if (!isAdmin()) {
+    fileButton?.setAttribute("hidden", "");
+    fileInput?.setAttribute("disabled", "");
+  } else {
+    fileButton?.removeAttribute("hidden");
+    fileButton?.addEventListener("click", () => fileInput?.click());
+    fileInput?.addEventListener("change", () => {
+      handleMediaIntake(fileInput.files || []);
+      fileInput.value = "";
+    });
+    const clearDrag = () => form.classList.remove("is-dragging");
+    ["dragenter", "dragover"].forEach((type) => {
+      form.addEventListener(type, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        form.classList.add("is-dragging");
+        setGhostMood("listening", { emotion: "bright" });
+      });
+    });
+    ["dragleave", "dragend"].forEach((type) => {
+      form.addEventListener(type, (e) => {
+        if (type === "dragleave" && e.relatedTarget && form.contains(e.relatedTarget)) return;
+        clearDrag();
+      });
+    });
+    form.addEventListener("drop", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearDrag();
+      handleMediaIntake(e.dataTransfer?.files || []);
+    });
+  }
   document.addEventListener("click", (e) => {
     const slashBtn = e.target.closest("[data-slash-command]");
     if (slashBtn) {

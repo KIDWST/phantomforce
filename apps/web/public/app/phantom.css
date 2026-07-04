@@ -341,7 +341,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .speakline:focus-within::before { animation-duration: 2.2s; }
 @keyframes gleam { to { --gleam: 360deg; } }
 .speakline:focus-within { border-color: var(--neon); box-shadow: 0 0 60px rgba(65, 255, 161, 0.28); }
-.chat-control-toggle {
+.chat-control-toggle,
+.file-intake-button {
   position: relative;
   z-index: 2;
   flex: 0 0 38px;
@@ -358,12 +359,43 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   transition: transform 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
 }
 .chat-control-toggle:hover,
-.chat-control-toggle:focus-visible {
+.chat-control-toggle:focus-visible,
+.file-intake-button:hover,
+.file-intake-button:focus-visible {
   outline: none;
   transform: translateY(-1px);
   border-color: var(--neon);
   background: rgba(65, 255, 161, 0.12);
   box-shadow: 0 0 28px rgba(65, 255, 161, 0.22);
+}
+.file-intake-button {
+  color: #bfffe2;
+  font: 800 20px/1 "DM Mono", monospace;
+  background: rgba(30, 240, 255, 0.045);
+}
+.file-intake-button[hidden] { display: none !important; }
+.speakline.is-dragging {
+  border-color: var(--neon-2);
+  background:
+    radial-gradient(circle at 18% 20%, rgba(30, 240, 255, 0.16), transparent 34%),
+    rgba(3, 14, 12, 0.92);
+  box-shadow: 0 0 72px rgba(30, 240, 255, 0.3), inset 0 0 34px rgba(65, 255, 161, 0.1);
+}
+.speakline.is-dragging::after {
+  content: "drop media";
+  position: absolute;
+  left: 50%;
+  top: -28px;
+  transform: translateX(-50%);
+  padding: 6px 11px;
+  border: 1px solid rgba(30, 240, 255, 0.35);
+  border-radius: 999px;
+  background: rgba(1, 9, 7, 0.92);
+  color: var(--neon-2);
+  font: 800 10px/1 "DM Mono", monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  box-shadow: 0 0 24px rgba(30, 240, 255, 0.22);
 }
 .control-bolt {
   font-size: 15px;
@@ -697,6 +729,40 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .rcard h4 { margin: 0 0 6px; font-size: 15.5px; }
 .rcard-body { margin: 0 0 6px; font-size: 13px; line-height: 1.5; color: #c4e6d2; }
 .rcard-meta { margin: 0 0 4px; font: 400 11px "DM Mono", monospace; color: var(--dim); }
+.rcard-media-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+  margin: 10px 0 9px;
+}
+.rcard-media-thumb {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 1;
+  border: 1px solid rgba(65, 255, 161, 0.18);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.28);
+  box-shadow: inset 0 0 18px rgba(65, 255, 161, 0.04);
+}
+.rcard-media-thumb img,
+.rcard-media-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.rcard-media-thumb span {
+  position: absolute;
+  left: 6px;
+  bottom: 6px;
+  padding: 3px 5px;
+  border-radius: 999px;
+  background: rgba(1, 9, 7, 0.78);
+  color: #caffe2;
+  font: 700 8px/1 "DM Mono", monospace;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
 .rcard-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
 
 /* ---------------- home systems ---------------- */
@@ -1877,16 +1943,17 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   }
   .speakline-hero {
     display: grid;
-    grid-template-columns: 38px minmax(0, 1fr) 46px;
+    grid-template-columns: 38px 38px minmax(0, 1fr) 46px;
     gap: 10px;
     align-items: center;
   }
   .speakline-hero .speak-send {
-    grid-column: 3;
+    grid-column: 4;
     grid-row: 1;
     align-self: center;
   }
-  .chat-control-toggle {
+  .chat-control-toggle,
+  .file-intake-button {
     width: 38px;
     height: 38px;
   }
