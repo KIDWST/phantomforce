@@ -316,6 +316,16 @@ function requestPublicHost(request: FastifyRequest) {
   return publicHostFromHeaders(request.headers as Record<string, unknown>);
 }
 
+app.get("/", async (request, reply) => {
+  const publicHost = requestPublicHost(request);
+  const hostName = String(request.headers.host ?? "").split(":")[0]?.toLowerCase();
+  const target = publicHost === "admin.phantomforce.online" || hostName === "admin.phantomforce.online"
+    ? "https://admin.phantomforce.online/app/index.html"
+    : "/app/index.html";
+
+  return reply.code(302).header("Location", target).send();
+});
+
 app.get("/sessions", async (request) => {
   const authConfiguration = getAccessAuthConfiguration();
   const publicHost = requestPublicHost(request);

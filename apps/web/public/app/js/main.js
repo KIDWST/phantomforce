@@ -3,11 +3,11 @@
 import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
-  ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-media-stack-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-media-stack-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-media-stack-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-media-stack-20260704-01";
+  ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
+} from "./store.js?v=phantom-admin-revamp-20260704-02";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-admin-revamp-20260704-02";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-admin-revamp-20260704-02";
+import { imageStyle } from "./media-image.js?v=phantom-admin-revamp-20260704-02";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -104,28 +104,51 @@ function renderTopbar() {
       wrap.hidden = true;
     }
   }
-  const modeSwitches = document.querySelectorAll("[data-mode-switch]");
-  modeSwitches.forEach((modeSwitch) => {
-    modeSwitch.hidden = !isAdmin();
-    modeSwitch.querySelectorAll("[data-mode]").forEach((btn) => {
-      const active = executionMode.get() === btn.dataset.mode;
-      btn.classList.toggle("is-active", active);
-      btn.setAttribute("aria-pressed", String(active));
-      btn.title = active ? `${executionMode.label()} is active` : `Switch to ${btn.dataset.mode === "auto" ? "Auto Mode" : "Approval Mode"}`;
-      btn.onclick = () => {
-        const mode = executionMode.set(btn.dataset.mode);
-        pushActivity("PhantomOps", `switched Phantom to ${mode === "auto" ? "Auto Mode" : "Approval Mode"}.`, "phantomforce");
-        store.save();
-        renderDashboard();
-      };
-    });
-  });
+  renderModeControls();
   const memoryBtn = $("[data-memory-log]");
   if (memoryBtn) {
     memoryBtn.hidden = !isAdmin();
     memoryBtn.onclick = () => openOwnerMemoryLog();
   }
   $("[data-signout]").onclick = () => { session.clear(); ctx.session = null; closeOverlay(true); showGate(); };
+}
+
+function renderModeControls() {
+  const admin = isAdmin();
+  const mode = executionMode.get();
+  document.querySelectorAll("[data-mode-panel]").forEach((panel) => {
+    panel.hidden = !admin;
+    panel.classList.toggle("is-auto", mode === "auto");
+    panel.classList.toggle("is-approval", mode !== "auto");
+    const label = panel.querySelector("[data-mode-label]");
+    const description = panel.querySelector("[data-mode-description]");
+    if (label) label.textContent = executionMode.label();
+    if (description) description.textContent = executionMode.description();
+  });
+  document.querySelectorAll("[data-mode-switch]").forEach((modeSwitch) => {
+    modeSwitch.hidden = !admin;
+    modeSwitch.classList.toggle("is-auto", mode === "auto");
+    modeSwitch.classList.toggle("is-approval", mode !== "auto");
+    modeSwitch.querySelectorAll("[data-mode]").forEach((btn) => {
+      const active = mode === btn.dataset.mode;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", String(active));
+      btn.title = active
+        ? `${executionMode.label()} is active`
+        : `Switch to ${btn.dataset.mode === "auto" ? "Auto" : "Review"}`;
+    });
+  });
+}
+
+function setExecutionMode(mode, options = {}) {
+  const before = executionMode.get();
+  const next = executionMode.set(mode);
+  if (options.announce !== false && before !== next) {
+    pushActivity("PhantomOps", `switched Phantom to ${next === "auto" ? "Auto" : "Review"}.`, "phantomforce");
+    store.save();
+  }
+  renderModeControls();
+  return next;
 }
 
 /* ============================ ticker ============================ */
@@ -177,6 +200,25 @@ function renderMission() {
   }
 }
 
+function renderHomeMission() {
+  const grid = $("[data-home-mission]");
+  if (grid) {
+    grid.innerHTML = missionWidgets().slice(0, isAdmin() ? 10 : 8).map((w) => `
+      <button class="home-system ${w.alert ? "is-hot" : ""}" data-open-ws="${w.id}">
+        <span class="home-system-icon" aria-hidden="true">${w.icon}</span>
+        <span class="home-system-title">${esc(w.title)}</span>
+        <strong>${esc(w.stat)}</strong>
+        <small>${esc(w.sub)}</small>
+      </button>`).join("");
+  }
+
+  const map = $("[data-home-map]");
+  if (map) {
+    map.innerHTML = livingMapHtml();
+    wireLivingMap(map, renderHomeMission);
+  }
+}
+
 /* ============================ rail ============================ */
 function renderRail() {
   const plan = todaysPlan();
@@ -207,6 +249,7 @@ function renderRail() {
 function renderDashboard() {
   renderTopbar();
   renderMission();
+  renderHomeMission();
   renderRail();
   renderSuggests();
   startTicker();
@@ -463,7 +506,7 @@ async function askPrivatePhantomBrain(text, localResult) {
         task_type: inferTaskType(text),
         sensitivity_level: inferSensitivity(text),
         execution_mode: executionMode.get(),
-        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use the private operator brain as a normal general-purpose chatbot and business operator. Phantom is in Full Effect for admin: it creates workspace artifacts, plans, proposals, site/store drafts, image briefs, video briefs, build plans, security checklists, action cards, and admin operator work items. For image/video requests, produce prompt-ready creative direction or route to Media Lab. For build requests, produce implementation-ready structure and next steps. For local operator requests, prepare the work for the admin-only operator lane without exposing backend tool names. For unrelated/general questions, answer directly without forcing dashboard context. For practical how-to questions, give complete usable steps in a concise mobile-friendly answer. Outward-facing moves use the correct execution lane and owner receipt.`,
+        business_summary: `PhantomForce admin mobile command surface. Phantom is in Full Effect for admin. Current mode: ${executionMode.label()} — ${executionMode.description()} Answer as Phantom: direct, useful, capable, privacy-first, and never exposing backend tool names. For business requests, create or route the useful artifact: lead, proposal, site/store draft, image brief, video brief, build plan, security checklist, booking, review request, or admin work item. For general questions, answer normally and remember the conversation context. For practical how-to questions, give complete usable steps in a concise mobile-friendly answer. External sends, public posts, paid generation, calendar writes, deploys, invoices, destructive file work, and credentials use the proper execution lane and receipt.`,
         module_data: brainModuleData(),
       }),
     });
@@ -558,6 +601,16 @@ function wireCommandDeck() {
     runCommand(v);
   });
   document.addEventListener("click", (e) => {
+    const modeBtn = e.target.closest("[data-mode]");
+    if (modeBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      const next = setExecutionMode(modeBtn.dataset.mode);
+      speak(next === "auto"
+        ? "Auto on. Safe internal work can move."
+        : "Review on. Outside actions wait for your call.");
+      return;
+    }
     const sug = e.target.closest("[data-suggest]");
     if (sug) { setHarbor(false); runCommand(sug.dataset.suggest); return; }
     const opener = e.target.closest("[data-open-ws]");
@@ -579,12 +632,14 @@ function setHarbor(open) {
   phantom?.classList.toggle("is-harbor", open);
   if (open) { setGhostMood("harbor", { emotion: "happy" }); ghostPulse = Math.max(ghostPulse, 0.7); }
   else if (ghostMood === "harbor") setGhostMood("idle", { emotion: "calm" });
-  const toggle = $("[data-harbor-toggle]");
-  if (toggle) toggle.setAttribute("aria-expanded", String(open));
+  document.querySelectorAll("[data-harbor-toggle]").forEach((toggle) => {
+    toggle.setAttribute("aria-expanded", String(open));
+  });
 }
 function wireHarbor() {
-  const toggle = $("[data-harbor-toggle]");
-  if (toggle) toggle.addEventListener("click", () => setHarbor(harbor.hidden));
+  document.querySelectorAll("[data-harbor-toggle]").forEach((toggle) => {
+    toggle.addEventListener("click", () => setHarbor(harbor.hidden));
+  });
   harbor?.querySelectorAll("[data-harbor-close]").forEach((b) => b.addEventListener("click", () => setHarbor(false)));
 }
 
@@ -1276,8 +1331,9 @@ async function boot() {
   ctx.session = isLiveAdminHost() ? await verifyLiveSession() : resolveSession();
   wireCommandDeck();
   wireHarbor();
+  window.addEventListener("phantom:execution-mode", renderModeControls);
   store.onChange(() => { /* keep rail + grid live after any store write */
-    if (!phantom.hidden) { renderMission(); renderRail(); }
+    if (!phantom.hidden) { renderMission(); renderRail(); renderModeControls(); }
   });
   if (ctx.session) enterPhantom();
   else showGate();

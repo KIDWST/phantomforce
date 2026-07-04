@@ -7,10 +7,10 @@ import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-media-stack-20260704-01";
+} from "./store.js?v=phantom-admin-revamp-20260704-02";
 import {
   IMAGE_CROPS, IMAGE_FILTERS, downloadImage, editImageArtifact, imageStyle, makeImageArtifact,
-} from "./media-image.js?v=phantom-media-stack-20260704-01";
+} from "./media-image.js?v=phantom-admin-revamp-20260704-02";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -129,8 +129,8 @@ function renderOwnerMemoryPayload(payload) {
     <div class="card-grid">${sourceCards}</div>
     <h4 class="ws-subhead">Artifact matches</h4>
     <div class="stack">${artifacts || empty("No local owner-memory artifacts matched this search.")}</div>
-    <h4 class="ws-subhead">Recent Hermes receipts</h4>
-    <div class="stack">${receipts || empty("No Hermes receipts found yet.")}</div>
+    <h4 class="ws-subhead">Recent memory receipts</h4>
+    <div class="stack">${receipts || empty("No memory receipts found yet.")}</div>
     <p class="ws-note">Safety: admin-only, local files only, redacted, no provider call, no upload/send.</p>`;
 }
 
@@ -672,18 +672,17 @@ function renderToolSpineCards({ compact = false } = {}) {
           <summary class="tool-summary">
             <span>
               <b><span class="agent-dot"></span>${esc(tool.name)}</b>
-              <i>${esc(tool.worker)}</i>
+              <i>${esc(tool.status)}</i>
             </span>
             <span class="chip chip-${esc(tool.status)}">${esc(statusLabel(tool.status))}</span>
           </summary>
-          <p class="record-sub">System role: ${esc(tool.worker)}</p>
+          <p class="record-sub">Role: ${esc(tool.worker)}</p>
           <p class="record-next">▸ ${esc(tool.role)}</p>
           <p class="record-notes"><b>Doing now:</b> ${esc(tool.activity)}</p>
           <div class="tool-meta">
             <span>${esc(statusLabel(tool.mode))}</span>
-            <span>${esc(tool.internal)}</span>
+            <span>${esc(statusLabel(tool.status))}</span>
           </div>
-          <p class="record-proof">${esc(tool.path)}</p>
         </details>`).join("")}
     </div>`;
 }
@@ -708,7 +707,7 @@ function renderWorkforce(el, rerender) {
     return;
   }
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Your Phantom systems. These are app modules/business departments, not employees or users who logged in. Statuses: active · idle · waiting · controlled · ready.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Your Phantom systems. These are business capabilities, not employees or user accounts.</p></div>
     <div class="card-grid">
       ${agents.map((a) => `
         <article class="record agent-card agent-${esc(a.status)}">
@@ -721,11 +720,11 @@ function renderWorkforce(el, rerender) {
           </div>
           <p class="record-notes"><b>Last output:</b> ${esc(a.last)}</p>
           ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
-          <p class="agent-bundle">internal system: ${esc(a.bundle)}</p>
+          <p class="agent-bundle">${esc(a.bundle)}</p>
         </article>`).join("")}
     </div>
-    <h3 class="ws-subhead">Tool spine powering Phantom</h3>
-    <p class="ws-note">These are the internal programs behind the Phantom systems. Clients see outcomes, not tool names.</p>
+    <h3 class="ws-subhead">Private systems</h3>
+    <p class="ws-note">Admin-only. Clients see outcomes, not internal programs.</p>
     ${renderToolSpineCards({ compact: true })}`;
 }
 
@@ -1192,46 +1191,46 @@ function renderAdmin(el, rerender) {
   const creativeWork = visible(store.state.media || []).filter((m) => ["image", "video", "analyze"].includes(m.modality || "video"));
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Admin Control Deck. This is where Jordan configures Phantom: systems, memory, automations, connectors, publishing paths, security cadence, and gateway behavior. Clients never see this surface.</p>
+      <p class="ws-note">Admin Control. Configure Phantom memory, connectors, automations, access, publishing, and workspace boundaries.</p>
       <div class="record-actions">
         <span class="mode-readout">Mode: <b>${esc(executionMode.label())}</b></span>
         <span class="hint-inline">${esc(executionMode.description())}</span>
         <button class="btn ${executionMode.get() === "approval" ? "btn-primary" : ""}" data-act="set-mode-approval">Approval</button>
         <button class="btn ${executionMode.get() === "auto" ? "btn-primary" : ""}" data-act="set-mode-auto">Auto</button>
-        <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
+        <button class="btn btn-primary" data-act="pulse-tools">Pulse live bar</button>
       </div>
     </div>
     <div class="stat-row">
       <div class="stat"><span>Phantom systems</span><b>${activeAgents}/${store.state.agents.length}</b><i>business modules ready</i></div>
-      <div class="stat"><span>Tool spine</span><b>${activeTools}/${(store.state.toolSpine || []).length}</b><i>operator systems active</i></div>
+      <div class="stat"><span>Private systems</span><b>${activeTools}/${(store.state.toolSpine || []).length}</b><i>active</i></div>
       <div class="stat"><span>Connectors</span><b>${readyConnectors}/${connectors.length}</b><i>ready or configurable</i></div>
       <div class="stat"><span>Active work</span><b>${activeWork.length}</b><i>captured from chat</i></div>
       <div class="stat"><span>Mode</span><b>${esc(executionMode.get())}</b><i>${esc(executionMode.description())}</i></div>
     </div>
     <div class="config-stack">
-      ${renderControlPanel("Creator + Builder + Operator", "active", `
-        <p class="record-notes">Phantom can route one command into image creation, video generation briefs, site/app/dashboard build plans, or admin-only local operator work.</p>
+      ${renderControlPanel("Create + Build + Operate", "active", `
+        <p class="record-notes">One command can become a visual, video brief, page, store, dashboard, workflow, or admin work item.</p>
         <div class="config-mini-grid">
           <article class="record mini-config">
-            <div class="record-top"><h4>Image creator</h4>${chip("ready")}</div>
-            <p class="record-notes">Prompt-ready visuals, thumbnails, ads, product cards, and campaign images.</p>
+            <div class="record-top"><h4>Images</h4>${chip("ready")}</div>
+            <p class="record-notes">Generate, crop, tweak, save.</p>
           </article>
           <article class="record mini-config">
-            <div class="record-top"><h4>Video creator</h4>${chip("ready")}</div>
-            <p class="record-notes">Briefs, source analysis, generation requests, cuts, captions, proof, and delivery.</p>
+            <div class="record-top"><h4>Video</h4>${chip("ready")}</div>
+            <p class="record-notes">Brief, generate, cut, caption.</p>
           </article>
           <article class="record mini-config">
             <div class="record-top"><h4>Builder</h4>${chip(buildWork.length ? "working" : "ready")}</div>
-            <p class="record-notes">Apps, dashboards, automations, sites, stores, scripts, and implementation plans.</p>
+            <p class="record-notes">Sites, stores, apps, dashboards.</p>
           </article>
           <article class="record mini-config">
-            <div class="record-top"><h4>Operator Mode</h4>${chip(operatorWork.length ? "working" : "ready")}</div>
-            <p class="record-notes">Admin-only local work: inspect, plan, edit, test, and run controlled computer actions through Phantom.</p>
+            <div class="record-top"><h4>Operator</h4>${chip(operatorWork.length ? "working" : "ready")}</div>
+            <p class="record-notes">Admin-only computer work.</p>
           </article>
         </div>
       `, { sub: `${creativeWork.length} creative · ${buildWork.length} build · ${operatorWork.length} operator` })}
       ${renderControlPanel("Active work", activeWork.length ? "active" : "ready", `
-        <p class="record-notes">Normal chat becomes real work here. Phantom picks the first route instead of asking you to choose from a menu.</p>
+        <p class="record-notes">Chat becomes work. Phantom picks the route.</p>
         <div class="stack">
           ${activeWork.slice(0, 10).map((t) => `<article class="record record-row">
             <h4>${esc(t.title)}</h4>
@@ -1240,26 +1239,26 @@ function renderAdmin(el, rerender) {
           </article>`).join("") || empty("No active chat-captured work yet.")}
         </div>
       `, { sub: `${activeWork.length} work items` })}
-      ${renderControlPanel("System intelligence", "active", `
-        <p class="record-notes">The Phantom systems are grouped by outcome: leads, proposals, sites/stores, media, reviews, bookings, security, money, delivery, and data cleanup. These are capabilities/business modules, not employees or user logins.</p>
+      ${renderControlPanel("System map", "active", `
+        <p class="record-notes">Leads, quotes, media, sites, reviews, bookings, protect, money, delivery, and cleanup.</p>
         <div class="record-actions">
           <button class="btn" data-open-ws="workforce">Open systems map</button>
           <button class="btn" data-act="pulse-tools">Pulse system activity</button>
         </div>
       `, { sub: `${activeAgents} systems ready` })}
       ${renderControlPanel("Connectors", readyConnectors ? "ready" : "configure", `
-        <p class="record-notes">Connect apps once. Phantom can draft, schedule, publish, upload, file, and follow up per workspace.</p>
+        <p class="record-notes">Connect once. Draft, schedule, publish, upload, file, and follow up per workspace.</p>
         ${renderConnectorCards()}
-        <p class="ws-note">Rule: create in Phantom → approve → send/post/upload.</p>
+        <p class="ws-note">Rule: create in Phantom -> approve -> send/post/upload.</p>
       `, { sub: "Gmail · Calendar · Drive · socials" })}
       ${renderControlPanel("Automation cadence", "ready", `
-        <p class="record-notes">These are the business routines Phantom should run on a schedule once backend automation is connected: monthly protection scans, daily content drafts, review requests after delivery, and follow-up loops.</p>
+        <p class="record-notes">Monthly scans, daily content drafts, review requests, and follow-up loops.</p>
         ${renderAutomationConfig()}
       `, { sub: "monthly scans · daily content · review engine" })}
       ${renderControlPanel("Memory and tenants", "ready", `
         <article class="record record-wide">
-          <div class="record-top"><h4>Owner memory / Hermes / Vault access</h4>${chip("ready")}</div>
-          <p class="record-notes">Jordan/admin can inspect sanitized local owner memory: receipts, PhantomAI interaction memory, Obsidian process notes, and repo docs. Client bots start clean and stay tenant-isolated.</p>
+          <div class="record-top"><h4>Owner memory</h4>${chip("ready")}</div>
+          <p class="record-notes">Jordan keeps owner context. Client bots start clean and stay isolated.</p>
           <div class="record-actions">
             <input class="inline-input" data-owner-memory-query placeholder="Search owner memory..." aria-label="Search owner memory" />
             <button class="btn btn-primary" data-act="load-owner-memory">Load owner memory</button>
@@ -1279,12 +1278,12 @@ function renderAdmin(el, rerender) {
         </div>
       `, { sub: "PhantomForce · ChicagoShots · Test Client" })}
       ${renderControlPanel("Tool spine", "active", `
-        <p class="record-notes">These are the internal programs behind Phantom. Clients see outcomes, not tool names. Expand each system to inspect what it is responsible for.</p>
+        <p class="record-notes">Admin-only systems behind Phantom. Expand only when you need detail.</p>
         ${renderToolSpineCards()}
-      `, { sub: `${activeTools} active systems` })}
+      `, { sub: `${activeTools} active` })}
       ${renderControlPanel("Private access gateway", "active", `
         <article class="record record-wide">
-          ${kv("Admin host", "<code>admin.phantomforce.online</code> — full Phantom control deck")}
+          ${kv("Admin host", "<code>admin.phantomforce.online</code> — full Phantom control")}
           ${kv("Client host", "<code>app.phantomforce.online</code> — workspace-scoped employee/client view")}
           ${kv("Gateway", "private access gateway sits in front of both — auth is enforced upstream and in the app session")}
         </article>
@@ -1296,8 +1295,8 @@ function renderAdmin(el, rerender) {
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
-    "set-mode-auto": () => { executionMode.set("auto"); pushActivity("PhantomOps", "switched Phantom to Auto Mode.", "phantomforce"); store.save(); rerender(); },
-    "set-mode-approval": () => { executionMode.set("approval"); pushActivity("PhantomOps", "switched Phantom to Approval Mode.", "phantomforce"); store.save(); rerender(); },
+    "set-mode-auto": () => { executionMode.set("auto"); pushActivity("PhantomOps", "switched Phantom to Auto.", "phantomforce"); store.save(); rerender(); },
+    "set-mode-approval": () => { executionMode.set("approval"); pushActivity("PhantomOps", "switched Phantom to Review.", "phantomforce"); store.save(); rerender(); },
     "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
     "load-owner-memory": async () => {
       const result = el.querySelector("[data-owner-memory-result]");
@@ -1332,6 +1331,7 @@ function renderPhantom(el) {
       <form class="speakline" data-phantom-form>
         <span class="speak-caret">›</span>
         <input type="text" data-phantom-input autocomplete="off" spellcheck="false" placeholder="Tell Phantom what needs handled..." aria-label="Tell Phantom what needs handled" />
+        <button class="speak-send" type="submit" aria-label="Send to Phantom">→</button>
       </form>
     </div>`;
 }

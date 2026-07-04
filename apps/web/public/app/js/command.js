@@ -6,8 +6,8 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-media-stack-20260704-01";
-import { makeImageArtifact } from "./media-image.js?v=phantom-media-stack-20260704-01";
+} from "./store.js?v=phantom-admin-revamp-20260704-02";
+import { makeImageArtifact } from "./media-image.js?v=phantom-admin-revamp-20260704-02";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -289,10 +289,10 @@ export function handleCommand(raw) {
           auto ? "Auto for safe internal work" : "Approval for controlled execution",
           "Plans, leads, proposals, site/store drafts, media briefs, security notes, and memory lookups stay inside Phantom. Outward-facing moves use the right execution path with receipts.",
           [
-            openAction("Open Harbor", "adminos"),
+            openAction("Open Control", "adminos"),
             openAction("Open Review", "approvals"),
           ],
-          "PhantomOps · Hermes memory · connector-ready",
+          "PhantomOps · memory · connectors",
         ),
         card(
           "Try it",
@@ -309,13 +309,13 @@ export function handleCommand(raw) {
 
   if (admin && /\b(memory|memory log|activity log|ledger|receipt|receipts|hermes|operator memory|owner memory|vault|what did you remember|show.*memory|show.*log|pull.*log)\b/.test(s)) {
     return {
-      say: "Opening the admin Control Deck. This is where Jordan configures Phantom systems, memory, connectors, publishing paths, automations, gateway status, and tenant boundaries.",
+      say: "Opening Control. Configure Phantom systems, memory, connectors, automations, access, and workspace boundaries here.",
       cards: [
         card(
           "Owner Memory Log",
           "Configure Phantom memory",
-          "Client bots stay tenant-isolated and fresh. Jordan/admin can inspect memory, connector readiness, automation cadence, and Phantom systems from PhantomOps.",
-          [openAction("Open Control Deck", "adminos")],
+          "Jordan sees owner context. Client workspaces start clean and stay isolated.",
+          [openAction("Open Control", "adminos")],
           executionMode.label(),
         ),
       ],
@@ -364,8 +364,8 @@ export function handleCommand(raw) {
     pushActivity("Drive System", `staged ${driveFile.filename} for Google Drive approval.`, ws);
     store.save();
     return {
-      say: `Staged ${driveFile.filename} in Harbor. The content is ready and waiting for approval. No Google Drive write happened yet.`,
-      cards: [card("Drive action staged", driveFile.filename, `Contents: ${preview}`, [openAction("Open Harbor", "approvals")], "Google Drive connector required")],
+      say: `Prepared ${driveFile.filename}. It is waiting in Review before any Drive write.`,
+      cards: [card("Drive action ready", driveFile.filename, `Contents: ${preview}`, [openAction("Open Review", "approvals")], "Drive connector required")],
       open: "approvals",
       skipBrain: true,
     };

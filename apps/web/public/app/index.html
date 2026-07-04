@@ -17,7 +17,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-media-stack-20260704-01" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-admin-revamp-20260704-02" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -71,7 +71,7 @@
           </label>
         </div>
         <div class="topbar-right">
-          <button class="memory-shortcut" data-memory-log hidden type="button">Control Deck</button>
+          <button class="memory-shortcut" data-memory-log hidden type="button">Control</button>
           <span class="identity" data-identity></span>
           <button class="btn btn-quiet btn-exit" data-signout>Switch</button>
         </div>
@@ -88,29 +88,50 @@
           <div class="hero-spacer" aria-hidden="true"></div>
           <div class="hero-say" data-say aria-live="polite"><p class="say-line">Phantom is here.</p></div>
           <div class="response-cards" data-response></div>
-          <form class="speakline speakline-hero" data-command-form>
-            <span class="speak-caret" aria-hidden="true">›</span>
-            <div class="mode-switch mode-switch-inline" data-mode-switch hidden aria-label="Request mode">
+          <div class="mode-panel" data-mode-panel hidden>
+            <div class="mode-panel-copy">
+              <span class="mode-panel-kicker">Action mode</span>
+              <strong data-mode-label>Approval Mode</strong>
+              <small data-mode-description>Approval stages actions for review before execution.</small>
+            </div>
+            <div class="mode-switch mode-switch-panel" data-mode-switch aria-label="Execution mode">
               <button type="button" data-mode="approval">Approval</button>
               <button type="button" data-mode="auto">Auto</button>
             </div>
+          </div>
+          <form class="speakline speakline-hero" data-command-form>
+            <span class="speak-caret" aria-hidden="true">›</span>
             <input type="text" data-command-input autocomplete="off" spellcheck="false"
                    placeholder="Tell Phantom what you need…"
                    aria-label="Tell Phantom what you need" />
+            <div class="mode-switch mode-switch-inline" data-mode-switch hidden aria-label="Request mode">
+              <button type="button" data-mode="approval">Review</button>
+              <button type="button" data-mode="auto">Auto</button>
+            </div>
+            <button class="speak-send" type="submit" aria-label="Send command">→</button>
           </form>
           <button class="harbor-toggle" type="button" data-harbor-toggle aria-expanded="false" aria-controls="harbor">
-            <span class="harbor-spark" aria-hidden="true">✦</span><span>Open Harbor</span>
+            <span class="harbor-spark" aria-hidden="true">✦</span><span>Open Map</span>
           </button>
+        </section>
+
+        <section class="home-phalanx" aria-label="Phantom command surfaces">
+          <div class="home-phalanx-head">
+            <span class="deck-label">Phantom systems</span>
+            <button class="micro-link" type="button" data-harbor-toggle aria-expanded="false" aria-controls="harbor">Full map</button>
+          </div>
+          <div class="home-mission-grid" data-home-mission></div>
+          <section class="home-map" data-home-map aria-label="Live system map preview"></section>
         </section>
       </main>
 
-      <!-- Harbor: capabilities are summoned, never shouting -->
-      <section class="harbor" id="harbor" data-harbor hidden aria-label="Harbor — Phantom's capabilities">
-        <button class="harbor-backdrop" data-harbor-close aria-label="Close Harbor"></button>
-        <div class="harbor-sheet" role="dialog" aria-modal="true" aria-label="Harbor">
+      <!-- Map: capabilities are summoned, never shouting -->
+      <section class="harbor" id="harbor" data-harbor hidden aria-label="Phantom map">
+        <button class="harbor-backdrop" data-harbor-close aria-label="Close Phantom map"></button>
+        <div class="harbor-sheet" role="dialog" aria-modal="true" aria-label="Phantom map">
           <header class="harbor-head">
-            <p class="harbor-kicker">HARBOR · QUIET CAPABILITIES</p>
-            <button class="overlay-x" data-harbor-close aria-label="Close Harbor">✕</button>
+            <p class="harbor-kicker">PHANTOM MAP</p>
+            <button class="overlay-x" data-harbor-close aria-label="Close Phantom map">✕</button>
           </header>
           <div class="harbor-body">
             <label class="org-switch org-switch-harbor" data-org-wrap-harbor hidden>
@@ -148,6 +169,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-media-stack-20260704-01"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-admin-revamp-20260704-02"></script>
   </body>
 </html>
