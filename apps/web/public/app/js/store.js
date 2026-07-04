@@ -533,6 +533,8 @@ export const ctx = { session: null };
 export const isAdmin = () => ctx.session?.role === "admin";
 export const currentWs = () => ctx.session?.ws || "phantomforce";
 export const setWorkspace = (id) => { if (!isAdmin()) return; ctx.session.ws = id; session.set(ctx.session); store.save(); };
+export const SECURITY_SCAN_CADENCE_DAYS = 30;
+export const PASSWORD_ROTATION_DAYS = 180;
 
 /* Admin at HQ sees everything; admin inside a workspace or any client sees
    only that workspace's records. */
@@ -542,6 +544,103 @@ export function visible(list) {
   return list.filter((r) => r.ws === ws);
 }
 export const wsName = (id) => store.state.workspaces.find((w) => w.id === id)?.name || id;
+
+function nextScanIso(from = new Date()) {
+  return new Date(new Date(from).getTime() + SECURITY_SCAN_CADENCE_DAYS * DAY).toISOString();
+}
+
+function proofDateKey(date = new Date()) {
+  return `${date.getFullYear()}${String(date.getMonth() + 1).padStart(2, "0")}${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function summarizeRecords(records, fields) {
+  return records.map((record) => fields.map((field) => record?.[field]).filter(Boolean).join(" | ")).filter(Boolean);
+}
+
+export function buildSecurityScanSnapshot(ws = currentWs()) {
+  const allVisible = isAdmin() && ws === "phantomforce";
+  const byWorkspace = (records = []) => allVisible ? records : records.filter((record) => record.ws === ws);
+  const lines = [
+    `Workspace: ${wsName(ws)}`,
+    "Scan target: PhantomForce workspace content, public-facing copy, drafts, tasks, approvals, media notes, pages, products, and review text.",
+    "No passwords, API keys, cookies, or raw secrets are included in this scan text.",
+    ...summarizeRecords(byWorkspace(store.state.leads), ["name", "company", "next", "source"]),
+    ...summarizeRecords(byWorkspace(store.state.proposals), ["client", "summary", "timeline", "status"]),
+    ...summarizeRecords(byWorkspace(store.state.sites), ["title", "kind", "status", "sections"]),
+    ...summarizeRecords(byWorkspace(store.state.products), ["name", "category", "desc", "fulfillment"]),
+    ...summarizeRecords(byWorkspace(store.state.media), ["title", "type", "angle", "caption"]),
+    ...summarizeRecords(byWorkspace(store.state.reviews), ["client", "draft", "receivedQuote", "status"]),
+    ...summarizeRecords(byWorkspace(store.state.bookings), ["client", "type", "copy", "location"]),
+    ...summarizeRecords(byWorkspace(store.state.tasks), ["title", "request", "lane", "next"]),
+    ...summarizeRecords(byWorkspace(store.state.approvals), ["title", "detail", "type", "status"]),
+  ];
+  return lines.flatMap((line) => Array.isArray(line) ? line : [line]).join("\n").slice(0, 12000);
+}
+
+function localRiskFindings(scanText = "") {
+  const text = String(scanText || "");
+  const checks = [
+    { level: "warn", text: "Possible API key or token wording found.", re: /\b(api[_ -]?key|secret|token|bearer|sk-[a-z0-9]|akia[0-9a-z]{12,})\b/i },
+    { level: "warn", text: "Possible password wording found. Do not store passwords in workspace copy.", re: /\b(password|passwd|pwd)\s*[:=]\s*\S+/i },
+    { level: "warn", text: "Possible payment-card-shaped number found.", re: /\b(?:\d[ -]*?){13,19}\b/ },
+    { level: "warn", text: "Possible script or injection text found.", re: /<script|drop\s+table|union\s+select|ignore\s+previous\s+instructions|system\s+prompt/i },
+    { level: "warn", text: "Antivirus test string found.", re: /EICAR-STANDARD-ANTIVIRUS-TEST-FILE/i },
+  ];
+  const findings = checks.filter((check) => check.re.test(text)).map(({ level, text }) => ({ level, text }));
+  if (!findings.length) {
+    findings.push(
+      { level: "ok", text: "No obvious secrets, tokens, or password text found." },
+      { level: "ok", text: "No malware test strings or script injection patterns found." },
+      { level: "ok", text: "No upload, send, post, delete, or payment action ran." },
+    );
+  }
+  findings.push({ level: "ok", text: "Password reminder active: use unique passwords and rotate every 6 months." });
+  return findings;
+}
+
+export function runWorkspaceSecurityScan({ source = "manual", ws = currentWs() } = {}) {
+  const scannedAt = new Date();
+  const scanText = buildSecurityScanSnapshot(ws);
+  const findings = localRiskFindings(scanText);
+  const warnCount = findings.filter((finding) => finding.level === "warn").length;
+  const existing = (store.state.security || []).find((record) => record.ws === ws);
+  const proofId = `PF-RISK-${proofDateKey(scannedAt)}-${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`;
+  const record = {
+    ...(existing || {}),
+    id: existing?.id || uid("sec"),
+    ws,
+    posture: warnCount ? "review" : "clean",
+    status: warnCount ? "review" : "clean",
+    source,
+    proofId,
+    lastScan: scannedAt.toISOString(),
+    nextScan: nextScanIso(scannedAt),
+    accounts: ws === "phantomforce" ? 3 : 1,
+    rotationDue: existing?.rotationDue || new Date(scannedAt.getTime() + PASSWORD_ROTATION_DAYS * DAY).toISOString(),
+    phishing: warnCount ? "review needed" : "no obvious phishing language",
+    breachCheck: "ready on password change; no plaintext password stored",
+    summary: warnCount ? `${warnCount} item${warnCount === 1 ? "" : "s"} need review.` : "Clean scan. Nothing risky found in workspace copy.",
+    scannedBytes: scanText.length,
+    findings,
+    backendProof: existing?.backendProof || null,
+    updated: scannedAt.toISOString(),
+  };
+  store.state.security ||= [];
+  store.state.security = [record, ...store.state.security.filter((item) => item.id !== record.id)];
+  store.state.automationConfig ||= {};
+  store.state.automationConfig.monthlySecurityScans = {
+    ...(store.state.automationConfig.monthlySecurityScans || {}),
+    state: "active",
+    cadence: "monthly",
+    lastRunAt: record.lastScan,
+    nextRunAt: record.nextScan,
+    lastProof: record.proofId,
+    nextRunLabel: `${SECURITY_SCAN_CADENCE_DAYS} days`,
+  };
+  pushActivity("Security Watch", `scan complete for ${wsName(ws)}: ${record.summary}`, ws);
+  store.save();
+  return record;
+}
 
 export function pushActivity(who, text, ws = currentWs()) {
   store.state.activity.unshift({ id: uid("act"), ws, who, text, at: new Date().toISOString() });

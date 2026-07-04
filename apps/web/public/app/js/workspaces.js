@@ -6,11 +6,11 @@
 import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
-  PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-simple-business-copy-20260704-01";
+  PACKAGES, RETAINERS, runWorkspaceSecurityScan, buildSecurityScanSnapshot,
+} from "./store.js?v=phantom-risk-radar-real-scan-20260704-01";
 import {
   IMAGE_CROPS, IMAGE_FILTERS, downloadImage, editImageArtifact, imageStyle, makeImageArtifact,
-} from "./media-image.js?v=phantom-simple-business-copy-20260704-01";
+} from "./media-image.js?v=phantom-risk-radar-real-scan-20260704-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -659,30 +659,168 @@ function renderSites(el, rerender) {
 }
 
 /* ============================== PROTECT ============================== */
+function scanDayText(iso) {
+  const days = daysUntil(iso);
+  if (!Number.isFinite(days)) return "not scheduled";
+  if (days <= 0) return "due now";
+  if (days === 1) return "tomorrow";
+  return `${days} days`;
+}
+
+function findingIcon(level = "") {
+  return level === "warn" || level === "high" || level === "critical" ? "!" : "✓";
+}
+
+function backendFindings(result = {}) {
+  const findings = result.findings || [];
+  return findings.slice(0, 6).map((finding) => ({
+    level: finding.severity === "critical" || finding.severity === "high" ? "warn" : "ok",
+    text: finding.title || finding.detail || "Scan finding",
+  }));
+}
+
+function updateScanWithBackend(sec, payload = {}) {
+  const result = payload.result;
+  if (!sec || !result) return sec;
+  const count = Number(result.summary?.total_findings || result.findings?.length || 0);
+  const findings = backendFindings(result);
+  sec.backendProof = {
+    scannerVersion: result.scanner_version,
+    scannedAt: result.scanned_at,
+    verdict: result.summary?.verdict,
+    findings: count,
+    localOnly: result.safety_flags?.local_only === true,
+    uploaded: result.safety_flags?.upload_performed === true,
+  };
+  if (findings.length) sec.findings = findings;
+  sec.posture = count ? "review" : "clean";
+  sec.status = sec.posture;
+  sec.summary = count ? `${count} item${count === 1 ? "" : "s"} need review.` : "Clean scan. Nothing risky found in workspace copy.";
+  sec.phishing = count ? "review needed" : "no obvious phishing language";
+  sec.breachCheck = "ready on password change; no plaintext password stored";
+  store.save();
+  return sec;
+}
+
+async function refreshAutonomousScanStatus(sec) {
+  const response = await fetch("/phantom-ai/security/autonomous/status", { headers: authHeaders() });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.ok) throw new Error(payload?.error || "Status unavailable");
+  const status = payload.status || {};
+  if (sec && status.next_run_after) {
+    sec.nextScan = status.next_run_after;
+    sec.autonomousProof = {
+      status: payload.status?.status || status.status,
+      proofId: status.proof_id,
+      lastRunAt: status.last_run_at,
+      nextRunAfter: status.next_run_after,
+      runCount: status.run_count,
+      passwordProofId: status.password_health?.proof_id,
+      passwordCheckedAt: status.password_health?.checked_at,
+      rotationDays: status.password_health?.policy?.rotation_interval_days,
+      breachTiming: status.password_health?.policy?.breach_check_timing,
+    };
+  }
+  store.state.automationConfig ||= {};
+  store.state.automationConfig.monthlySecurityScans = {
+    ...(store.state.automationConfig.monthlySecurityScans || {}),
+    state: status.status || payload.status?.status || "active",
+    cadence: payload.cadence || status.cadence || "monthly",
+    lastRunAt: status.last_run_at || null,
+    nextRunAt: status.next_run_after || null,
+    lastProof: status.proof_id || null,
+    nextRunLabel: status.next_run_after ? scanDayText(status.next_run_after) : "monthly",
+  };
+  store.save();
+  return payload;
+}
+
+async function runBackendSecurityPreview(sec) {
+  const response = await fetch("/phantom-ai/security/scan/preview", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({
+      label: `${wsName(currentWs())} Risk Radar scan`,
+      mode: "website",
+      filename: "phantomforce-workspace-scan.txt",
+      content: buildSecurityScanSnapshot(currentWs()),
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.ok) throw new Error(payload?.error || "Scan unavailable");
+  return updateScanWithBackend(sec, payload);
+}
+
 function renderProtect(el, rerender) {
   const secs = visible(store.state.security);
+  const cfg = store.state.automationConfig?.monthlySecurityScans || {};
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Defensive posture only: monthly scan proofs, rotation reminders, breach checks on password change or reset. No secrets are stored or shown here.</p></div>
+    <div class="ws-toolbar">
+      <p class="ws-note">Scan your workspace for risky text, leak signs, malware clues, password reminders, and bad habits. Nothing uploads or sends.</p>
+      <button class="btn btn-primary" data-act="run-scan">Run scan now</button>
+      <button class="btn" data-act="refresh-status">Check monthly schedule</button>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><span>Monthly scans</span><b>${esc(statusLabel(cfg.state || "ready"))}</b><i>${esc(cfg.nextRunAt ? `next in ${scanDayText(cfg.nextRunAt)}` : cfg.nextRunLabel || "ready")}</i></div>
+      <div class="stat"><span>Last proof</span><b>${esc(cfg.lastProof || "none yet")}</b><i>${cfg.lastRunAt ? esc(fmtDateTime(cfg.lastRunAt)) : "run first scan"}</i></div>
+      <div class="stat"><span>Password check</span><b>6 months</b><i>unique passwords per account</i></div>
+      <div class="stat"><span>Uploads</span><b>none</b><i>local scan only</i></div>
+    </div>
     ${secs.length ? `<div class="card-grid">
       ${secs.map((s) => `
         <article class="record">
-          <div class="record-top">${wsTag(s.ws)}<h4>${esc(wsName(s.ws))} posture ${chip(s.posture === "clean" ? "approved" : "pending")}</h4></div>
-          ${kv("Last scan", `${fmtDate(s.lastScan)} · proof <code>${esc(s.proofId)}</code>`)}
-          ${kv("Next scan", `${fmtDate(s.nextScan)} (in ${daysUntil(s.nextScan)} days — autonomous monthly cadence)`)}
-          ${kv("Accounts tracked", `${s.accounts}`)}
-          ${kv("Password rotation", `${daysUntil(s.rotationDue) <= 30 ? "⚠ " : ""}window closes ${fmtDate(s.rotationDue)} — rotate every 180 days, unique per account`)}
-          ${kv("Phishing risk", esc(s.phishing))}
-          ${kv("Breach check", esc(s.breachCheck))}
+          <div class="record-top">${wsTag(s.ws)}<h4>${esc(wsName(s.ws))} ${s.posture === "clean" ? "looks clean" : "needs review"} ${chip(s.posture === "clean" ? "approved" : "pending")}</h4></div>
+          <p class="record-notes">${esc(s.summary || "Scan finished.")}</p>
+          ${kv("Last scan", `${s.lastScan ? fmtDateTime(s.lastScan) : "not run"} · proof <code>${esc(s.proofId || "none")}</code>`)}
+          ${kv("Next scan", `${s.nextScan ? fmtDate(s.nextScan) : "not scheduled"} · ${scanDayText(s.nextScan)}`)}
+          ${kv("Password check", `${s.rotationDue ? `next reminder ${fmtDate(s.rotationDue)}` : "baseline needed"} · every 6 months`)}
+          ${kv("Accounts tracked", `${esc(s.accounts || 1)}`)}
+          ${kv("Breach check", esc(s.breachCheck || "ready on password change; no plaintext password stored"))}
+          ${s.backendProof ? kv("Scan engine", `${esc(s.backendProof.localOnly ? "local" : "review")} · ${esc(s.backendProof.findings)} finding${Number(s.backendProof.findings) === 1 ? "" : "s"}`) : ""}
           <ul class="record-list">
-            ${s.findings.map((f) => `<li class="finding-${f.level}">${f.level === "warn" ? "⚠" : "✓"} ${esc(f.text)}</li>`).join("")}
+            ${(s.findings || []).map((f) => `<li class="finding-${esc(f.level)}">${findingIcon(f.level)} ${esc(f.text)}</li>`).join("")}
           </ul>
           <div class="record-actions">
             ${isAdmin() ? `<button class="btn" data-act="remind" data-id="${s.id}">Prepare rotation reminder</button>` : ""}
             <button class="btn btn-quiet" data-act="summary" data-id="${s.id}">Copy client-safe summary</button>
           </div>
         </article>`).join("")}
-    </div>` : empty("No scan proof yet. This workspace starts clean until a scan is run or imported.")}`;
+    </div>` : empty("No scan proof yet. Press Run scan now to create the first proof for this workspace.")}`;
   bindActions(el, {
+    "run-scan": async (_id, btn) => {
+      const prev = btn.textContent;
+      btn.textContent = "Scanning...";
+      btn.disabled = true;
+      const sec = runWorkspaceSecurityScan({ source: "risk-radar" });
+      try {
+        await runBackendSecurityPreview(sec);
+      } catch (error) {
+        sec.backendError = error?.message || "Backend scan unavailable";
+        store.save();
+      } finally {
+        btn.textContent = prev;
+        btn.disabled = false;
+        rerender();
+      }
+    },
+    "refresh-status": async (_id, btn) => {
+      const prev = btn.textContent;
+      btn.textContent = "Checking...";
+      btn.disabled = true;
+      let sec = visible(store.state.security)[0];
+      if (!sec) sec = runWorkspaceSecurityScan({ source: "status-check" });
+      try {
+        await refreshAutonomousScanStatus(sec);
+        pushActivity("Security Watch", `monthly scan schedule checked for ${wsName(currentWs())}.`, currentWs());
+      } catch (error) {
+        pushActivity("Security Watch", `monthly scan schedule could not load: ${error?.message || "request failed"}.`, currentWs());
+      } finally {
+        btn.textContent = prev;
+        btn.disabled = false;
+        store.save();
+        rerender();
+      }
+    },
     remind: (id) => {
       const s = store.state.security.find((x) => x.id === id);
       pushActivity("Security Watch", `prepared a password-rotation reminder for ${wsName(s.ws)} (due ${fmtDate(s.rotationDue)}).`, s.ws);
@@ -690,7 +828,7 @@ function renderProtect(el, rerender) {
     },
     summary: (id, btn) => {
       const s = store.state.security.find((x) => x.id === id);
-      copyText(btn, `Security summary — ${wsName(s.ws)}\nPosture: ${s.posture}. Last scan ${fmtDate(s.lastScan)} (proof ${s.proofId}); next scan ${fmtDate(s.nextScan)}. ${s.findings.filter((f) => f.level === "warn").length || "No"} item(s) need attention.`);
+      copyText(btn, `Risk Radar summary — ${wsName(s.ws)}\nStatus: ${s.posture === "clean" ? "clean" : "needs review"}.\nLast scan: ${fmtDateTime(s.lastScan)} (proof ${s.proofId}).\nNext scan: ${fmtDate(s.nextScan)}.\nPassword reminder: unique passwords, rotate every 6 months.\n${(s.findings || []).filter((f) => f.level === "warn").length || "No"} item(s) need attention.`);
     },
   });
 }

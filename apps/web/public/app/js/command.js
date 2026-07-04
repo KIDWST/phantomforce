@@ -5,9 +5,9 @@
 
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
-  PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-simple-business-copy-20260704-01";
-import { makeImageArtifact } from "./media-image.js?v=phantom-simple-business-copy-20260704-01";
+  PACKAGES, RETAINERS, fmtMoney, fmtDate, statusLabel, daysUntil, executionMode, runWorkspaceSecurityScan,
+} from "./store.js?v=phantom-risk-radar-real-scan-20260704-01";
+import { makeImageArtifact } from "./media-image.js?v=phantom-risk-radar-real-scan-20260704-01";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -471,15 +471,17 @@ export function handleCommand(raw) {
 
   /* --- security --- */
   if (/(security|scan|breach|malware|phish|password|protect|hack|threat|leak|radar|bad habit|exposed)/.test(s)) {
-    const sec = visible(store.state.security)[0];
+    const shouldRun = /\b(run|scan|check|find|look|search|possible|any|all|now)\b/.test(s);
+    const sec = shouldRun || !visible(store.state.security)[0]
+      ? runWorkspaceSecurityScan({ source: "phantom-chat" })
+      : visible(store.state.security)[0];
     return {
-      say: sec
-        ? `Protection posture: ${sec.posture === "clean" ? "clean" : "needs attention"}. Last scan proof ${sec.proofId}, next scan in ${daysUntil(sec.nextScan)} days.`
-        : "Opening Protect.",
-      cards: sec ? [card("Security check", `Scan proof ${sec.proofId}`,
-        sec.findings.map((f) => f.text).join(" "), [openAction("Open Protect", "protect")],
-        `Next scan: ${daysUntil(sec.nextScan)} days`)] : [],
+      say: `Risk scan complete. ${sec.posture === "clean" ? "Nothing risky found." : sec.summary} Next scan: ${fmtDate(sec.nextScan)}.`,
+      cards: [card("Risk Radar", `Proof ${sec.proofId}`,
+        `${sec.summary} ${sec.findings.slice(0, 3).map((f) => f.text).join(" ")}`, [openAction("Open Risk Radar", "protect")],
+        `Next scan: ${daysUntil(sec.nextScan)} days`)],
       open: "protect",
+      skipBrain: true,
     };
   }
 
