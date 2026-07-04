@@ -19,7 +19,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-chat-file-drop-20260704-01" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-mode-labels-20260704-01" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -29,7 +29,7 @@
       if ("caches" in window) {
         caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => undefined);
       }
-      window.__PHANTOM_BUILD__ = "phantom-chat-file-drop-20260704-01";
+      window.__PHANTOM_BUILD__ = "phantom-mode-labels-20260704-01";
       try {
         localStorage.setItem("phantom:last-build", window.__PHANTOM_BUILD__);
       } catch {}
@@ -118,15 +118,15 @@
               <div class="chat-mode-summary">
                 <span class="mode-status-dot" data-mode-dot aria-hidden="true"></span>
                 <div>
-                  <b data-mode-current>Review Mode</b>
-                  <small data-mode-description>Outside actions wait for your call.</small>
+                  <b data-mode-current>Approval Mode</b>
+                  <small data-mode-description>Outside actions wait for your approval.</small>
                 </div>
               </div>
               <div class="mode-switch mode-switch-sheet" data-mode-switch aria-label="Phantom mode">
-                <button type="button" data-mode="approval">Review</button>
+                <button type="button" data-mode="approval">Approval</button>
                 <button type="button" data-mode="auto">Auto</button>
               </div>
-              <p class="chat-controls-note">Phantom still handles the request. This only changes how much waits for review.</p>
+              <p class="chat-controls-note">Approval asks first. Auto can make changes on your computer without asking for every step.</p>
             </div>
           </div>
           <button class="harbor-toggle" type="button" data-harbor-toggle aria-expanded="false" aria-controls="harbor">
@@ -172,6 +172,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-chat-file-drop-20260704-01"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-mode-labels-20260704-01"></script>
   </body>
 </html>

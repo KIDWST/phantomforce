@@ -429,12 +429,12 @@ export const executionMode = {
     return clean;
   },
   label() {
-    return executionMode.get() === "auto" ? "Auto Mode" : "Review Mode";
+    return executionMode.get() === "auto" ? "Auto Mode" : "Approval Mode";
   },
   description() {
     return executionMode.get() === "auto"
-      ? "Auto runs safe internal workspace actions. External/world-changing actions still need a proper system path and receipt."
-      : "Outside actions wait for review before execution.";
+      ? "Auto can make changes on your computer without asking for every step. Use it only when you want Phantom to act."
+      : "Outside actions wait for approval before execution.";
   },
 };
 

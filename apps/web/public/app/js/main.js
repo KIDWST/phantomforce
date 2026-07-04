@@ -4,10 +4,10 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-chat-file-drop-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-chat-file-drop-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-chat-file-drop-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-chat-file-drop-20260704-01";
+} from "./store.js?v=phantom-mode-labels-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-mode-labels-20260704-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-mode-labels-20260704-01";
+import { imageStyle } from "./media-image.js?v=phantom-mode-labels-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -120,12 +120,12 @@ function renderModeControls() {
     if (!admin) el.hidden = true;
   });
   document.querySelectorAll("[data-mode-current]").forEach((label) => {
-    label.textContent = mode === "auto" ? "Auto Mode" : "Review Mode";
+    label.textContent = mode === "auto" ? "Auto Mode" : "Approval Mode";
   });
   document.querySelectorAll("[data-mode-description]").forEach((description) => {
     description.textContent = mode === "auto"
-      ? "Safe internal work can move."
-      : "Outside actions wait for your call.";
+      ? "Can make changes on your computer without asking for every step."
+      : "Outside actions wait for your approval.";
   });
   document.querySelectorAll("[data-mode-dot]").forEach((dot) => {
     dot.classList.toggle("is-auto", mode === "auto");
@@ -141,7 +141,7 @@ function renderModeControls() {
       btn.setAttribute("aria-pressed", String(active));
       btn.title = active
         ? `${executionMode.label()} is active`
-        : `Switch to ${btn.dataset.mode === "auto" ? "Auto" : "Review"}`;
+        : `Switch to ${btn.dataset.mode === "auto" ? "Auto" : "Approval"}`;
     });
   });
 }
@@ -150,7 +150,7 @@ function setExecutionMode(mode, options = {}) {
   const before = executionMode.get();
   const next = executionMode.set(mode);
   if (options.announce !== false && before !== next) {
-    pushActivity("PhantomOps", `switched Phantom to ${next === "auto" ? "Auto" : "Review"}.`, "phantomforce");
+    pushActivity("PhantomOps", `switched Phantom to ${next === "auto" ? "Auto" : "Approval"}.`, "phantomforce");
     store.save();
   }
   renderModeControls();
@@ -982,8 +982,8 @@ function wireCommandDeck() {
       e.stopPropagation();
       const next = setExecutionMode(modeBtn.dataset.mode);
       speak(next === "auto"
-        ? "Auto on. Safe internal work can move."
-        : "Review on. Outside actions wait for your call.");
+        ? "Auto on. Phantom can make changes on your computer without asking for every step."
+        : "Approval on. Outside actions wait for your call.");
       return;
     }
     const sug = e.target.closest("[data-suggest]");
