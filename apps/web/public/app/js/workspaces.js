@@ -7,7 +7,7 @@ import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-brain-20260703-20";
+} from "./store.js?v=phantom-brain-20260703-21";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -510,19 +510,23 @@ function renderToolSpineCards({ compact = false } = {}) {
   return `
     <div class="${compact ? "tool-spine-compact" : "tool-spine-grid"}">
       ${tools.map((tool) => `
-        <article class="record tool-card tool-mode-${esc(tool.mode)}">
-          <div class="record-top">
-            <h4><span class="agent-dot"></span>${esc(tool.name)}</h4>
+        <details class="record tool-card tool-mode-${esc(tool.mode)}" ${compact ? "" : "open"}>
+          <summary class="tool-summary">
+            <span>
+              <b><span class="agent-dot"></span>${esc(tool.name)}</b>
+              <i>${esc(tool.worker)}</i>
+            </span>
             <span class="chip chip-${esc(tool.status)}">${esc(statusLabel(tool.status))}</span>
-          </div>
-          <p class="record-sub">${esc(tool.worker)} · internal: ${esc(tool.internal)}</p>
+          </summary>
+          <p class="record-sub">Worker lane: ${esc(tool.worker)}</p>
           <p class="record-next">▸ ${esc(tool.role)}</p>
           <p class="record-notes"><b>Doing now:</b> ${esc(tool.activity)}</p>
           <div class="tool-meta">
             <span>${esc(statusLabel(tool.mode))}</span>
-            <span>${esc(tool.path)}</span>
+            <span>${esc(tool.internal)}</span>
           </div>
-        </article>`).join("")}
+          <p class="record-proof">${esc(tool.path)}</p>
+        </details>`).join("")}
     </div>`;
 }
 
@@ -594,64 +598,139 @@ function renderApprovals(el, rerender) {
   });
 }
 
+function connectorChip(connector) {
+  const state = connector.adminState || connector.state || "ready";
+  return chip(state === "ready" || state === "available" ? "ready" : state);
+}
+
+function renderConnectorCards() {
+  const connectors = store.state.postingConnectors || [];
+  return `
+    <div class="connector-grid">
+      ${connectors.map((connector) => `
+        <details class="record connector-card connector-${esc(connector.state)}" ${connector.state === "available" ? "open" : ""}>
+          <summary class="connector-summary">
+            <span>
+              <b>${esc(connector.name)}</b>
+              <i>${esc(connector.worker)}</i>
+            </span>
+            ${connectorChip(connector)}
+          </summary>
+          <p class="record-sub">${esc(connector.category)} · ${esc(connector.access)}</p>
+          <p class="record-next">▸ ${esc(connector.cadence)}</p>
+          <p class="record-notes"><b>Next setup:</b> ${esc(connector.next)}</p>
+          <div class="tool-meta">
+            <span>Admin: ${esc(statusLabel(connector.adminState || connector.state))}</span>
+            <span>Client: ${esc(statusLabel(connector.clientState || "locked"))}</span>
+          </div>
+        </details>`).join("")}
+    </div>`;
+}
+
+function renderAutomationConfig() {
+  const cfg = store.state.automationConfig || {};
+  const rows = [
+    ["Monthly security scans", cfg.monthlySecurityScans?.state || "ready", cfg.monthlySecurityScans?.cadence || "monthly", cfg.monthlySecurityScans?.nextRunLabel || "ready after workspace setup"],
+    ["Daily content engine", cfg.dailyContentEngine?.state || "ready", cfg.dailyContentEngine?.cadence || "daily", cfg.dailyContentEngine?.mode || "draft-pack first, publish after connector approval"],
+    ["Review engine", cfg.reviewEngine?.state || "ready", cfg.reviewEngine?.cadence || "after delivery", cfg.reviewEngine?.mode || "request, collect, approve, publish-ready"],
+  ];
+  return `
+    <div class="config-mini-grid">
+      ${rows.map(([name, state, cadence, detail]) => `
+        <article class="record mini-config">
+          <div class="record-top"><h4>${esc(name)}</h4>${chip(state === "ready" ? "ready" : state)}</div>
+          <p class="record-sub">${esc(cadence)}</p>
+          <p class="record-notes">${esc(detail)}</p>
+        </article>`).join("")}
+    </div>`;
+}
+
+function renderControlPanel(title, status, body, options = {}) {
+  return `
+    <details class="config-panel" ${options.open === false ? "" : "open"}>
+      <summary>
+        <span>
+          <b>${esc(title)}</b>
+          ${options.sub ? `<i>${esc(options.sub)}</i>` : ""}
+        </span>
+        ${chip(status)}
+      </summary>
+      <div class="config-body">${body}</div>
+    </details>`;
+}
+
 /* ============================== PHANTOMOPS ============================== */
 function renderAdmin(el, rerender) {
   if (!isAdmin()) { el.innerHTML = empty("This area belongs to your PhantomForce operator."); return; }
-  const lanes = [
-    ["Workforce intelligence", "ready", "planning / spec / build lanes loaded"],
-    ["Memory & context", "ready", "backend context store reachable"],
-    ["Model lanes A/B/C", "ready", "operator lanes standing by"],
-    ["Automation lane", "standby", "workflow runner configured, not armed"],
-    ["Media generation lane", "gated", "paid — every run needs approval"],
-    ["Private access gateway", "active", "admin + client hosts enforced upstream"],
-  ];
+  const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
+  const activeTools = (store.state.toolSpine || []).filter((tool) => tool.mode === "active").length;
+  const connectors = store.state.postingConnectors || [];
+  const readyConnectors = connectors.filter((c) => c.adminState === "ready" || c.state === "available").length;
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients. Current mode: ${esc(executionMode.label())} — ${esc(executionMode.description())}</p>
+      <p class="ws-note">Admin Control Deck. This is where Jordan configures Phantom: workers, memory, automations, connectors, publishing lanes, security cadence, and gateway behavior. Clients never see this surface.</p>
       <div class="record-actions">
         <button class="btn ${executionMode.get() === "approval" ? "btn-primary" : "btn-quiet"}" data-act="set-mode-approval">Approval Mode</button>
         <button class="btn ${executionMode.get() === "auto" ? "btn-primary" : "btn-quiet"}" data-act="set-mode-auto">Auto Mode</button>
         <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
       </div>
     </div>
-    <h3 class="ws-subhead">Active tool spine</h3>
-    <p class="ws-note">Every tool is mapped to a worker lane. “Active” means visible and available to PhantomOps; external actions still require the right connector and approval.</p>
-    ${renderToolSpineCards()}
-    <h3 class="ws-subhead">Workspace states</h3>
-    <div class="stack">
-      ${store.state.workspaces.map((w) => {
-        const leads = store.state.leads.filter((l) => l.ws === w.id && !["won", "lost"].includes(l.status)).length;
-        const appr = store.state.approvals.filter((a) => a.ws === w.id && a.status === "pending").length;
-        const props = store.state.proposals.filter((p) => p.ws === w.id && ["draft", "sent-ready"].includes(p.status)).length;
-        return `<article class="record record-row"><h4>${esc(w.name)}</h4><p class="record-sub">${esc(w.tagline)}</p>
-          <span class="admin-ws-stats">${leads} open leads · ${props} live proposals · ${appr} pending approvals</span></article>`;
-      }).join("")}
+    <div class="stat-row">
+      <div class="stat"><span>Workforce</span><b>${activeAgents}/${store.state.agents.length}</b><i>active desks</i></div>
+      <div class="stat"><span>Tool spine</span><b>${activeTools}/${(store.state.toolSpine || []).length}</b><i>operator lanes active</i></div>
+      <div class="stat"><span>Connectors</span><b>${readyConnectors}/${connectors.length}</b><i>ready or configurable</i></div>
+      <div class="stat"><span>Mode</span><b>${esc(executionMode.get())}</b><i>${esc(executionMode.description())}</i></div>
     </div>
-    <h3 class="ws-subhead">Internal lanes (never shown to clients)</h3>
-    <div class="card-grid">
-      ${lanes.map(([name, state, note]) => `
-        <article class="record"><div class="record-top"><h4>${esc(name)}</h4>${chip(state === "ready" || state === "active" ? "approved" : "pending")}</div>
-        <p class="record-sub">${esc(note)}</p></article>`).join("")}
-    </div>
-    <h3 class="ws-subhead">Access</h3>
-    <div class="stack">
-      <article class="record record-wide">
-        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full phantom, this view")}
-        ${kv("Client host", "<code>app.phantomforce.online</code> — portal view, workspace-scoped")}
-        ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
-      </article>
-    </div>
-    <h3 class="ws-subhead">Owner Memory Log</h3>
-    <div class="stack">
-      <article class="record record-wide">
-        <div class="record-top"><h4>Operator brain / Hermes / Vault access</h4>${chip("approved")}</div>
-        <p class="record-notes">Jordan/admin can inspect sanitized local owner memory: Hermes receipts, PhantomAI interaction memory, Obsidian process notes, and repo docs. Client accounts remain tenant-only.</p>
+    <div class="config-stack">
+      ${renderControlPanel("Workforce intelligence", "active", `
+        <p class="record-notes">The workers are grouped by outcome: leads, proposals, sites/stores, media, reviews, bookings, security, money, delivery, and data cleanup. This panel is for seeing the workforce, not chatting with every raw tool.</p>
         <div class="record-actions">
-          <input class="inline-input" data-owner-memory-query placeholder="Search owner memory..." aria-label="Search owner memory" />
-          <button class="btn btn-primary" data-act="load-owner-memory">Load owner memory</button>
+          <button class="btn" data-open-ws="workforce">Open workforce map</button>
+          <button class="btn" data-act="pulse-tools">Pulse workforce activity</button>
         </div>
-      </article>
-      <div data-owner-memory-result>${empty("Owner memory is ready. Load it when you need the full admin picture.")}</div>
+      `, { sub: `${activeAgents} active desks` })}
+      ${renderControlPanel("Publishing and connector desk", readyConnectors ? "ready" : "configure", `
+        <p class="record-notes">Admin can configure Gmail, Calendar, Drive, YouTube, Instagram, Facebook, and TikTok as workspace connectors. Client workspaces stay locked until a specific connector is configured for that client.</p>
+        ${renderConnectorCards()}
+        <p class="ws-note">Publishing model: generate or draft inside Phantom → approval receipt → connector posts/sends/uploads. No hidden social posting runs from this UI.</p>
+      `, { sub: "daily content, email, files, and calendar lanes" })}
+      ${renderControlPanel("Automation cadence", "ready", `
+        <p class="record-notes">These are the business routines Phantom should run on a schedule once the backend workers are connected: monthly protection scans, daily content drafts, review requests after delivery, and follow-up loops.</p>
+        ${renderAutomationConfig()}
+      `, { sub: "monthly scans · daily content · review engine" })}
+      ${renderControlPanel("Memory and tenants", "ready", `
+        <article class="record record-wide">
+          <div class="record-top"><h4>Owner memory / Hermes / Vault access</h4>${chip("ready")}</div>
+          <p class="record-notes">Jordan/admin can inspect sanitized local owner memory: receipts, PhantomAI interaction memory, Obsidian process notes, and repo docs. Client bots start clean and stay tenant-isolated.</p>
+          <div class="record-actions">
+            <input class="inline-input" data-owner-memory-query placeholder="Search owner memory..." aria-label="Search owner memory" />
+            <button class="btn btn-primary" data-act="load-owner-memory">Load owner memory</button>
+          </div>
+        </article>
+        <div data-owner-memory-result>${empty("Owner memory is ready. Load it when you need the full admin picture.")}</div>
+      `, { sub: "Jordan full context · clients isolated" })}
+      ${renderControlPanel("Workspace states", "ready", `
+        <div class="stack">
+          ${store.state.workspaces.map((w) => {
+            const leads = store.state.leads.filter((l) => l.ws === w.id && !["won", "lost"].includes(l.status)).length;
+            const appr = store.state.approvals.filter((a) => a.ws === w.id && a.status === "pending").length;
+            const props = store.state.proposals.filter((p) => p.ws === w.id && ["draft", "sent-ready"].includes(p.status)).length;
+            return `<article class="record record-row"><h4>${esc(w.name)}</h4><p class="record-sub">${esc(w.tagline)}</p>
+              <span class="admin-ws-stats">${leads} open leads · ${props} live proposals · ${appr} approvals</span></article>`;
+          }).join("")}
+        </div>
+      `, { sub: "PhantomForce · ChicagoShots · Test Client" })}
+      ${renderControlPanel("Tool spine", "active", `
+        <p class="record-notes">These are the internal programs behind the workforce. Clients see outcomes, not tool names. Expand each lane to inspect what it is responsible for.</p>
+        ${renderToolSpineCards()}
+      `, { sub: `${activeTools} active lanes` })}
+      ${renderControlPanel("Private access gateway", "active", `
+        <article class="record record-wide">
+          ${kv("Admin host", "<code>admin.phantomforce.online</code> — full Phantom control deck")}
+          ${kv("Client host", "<code>app.phantomforce.online</code> — workspace-scoped employee/client view")}
+          ${kv("Gateway", "private access gateway sits in front of both — auth is enforced upstream and in the app session")}
+        </article>
+      `, { sub: "admin/client boundary" })}
     </div>
     <h3 class="ws-subhead">Diagnostics</h3>
     <div class="record-actions">

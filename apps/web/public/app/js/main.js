@@ -4,9 +4,9 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-brain-20260703-20";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-20";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-20";
+} from "./store.js?v=phantom-brain-20260703-21";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-21";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-21";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -558,10 +558,6 @@ function openOwnerMemoryLog() {
   if (!isAdmin()) return;
   setHarbor(false);
   openWorkspace("adminos");
-  setTimeout(() => {
-    const btn = overlayRoot?.querySelector("[data-act='load-owner-memory']");
-    btn?.click();
-  }, 160);
 }
 
 /* ============================ harbor ============================ */

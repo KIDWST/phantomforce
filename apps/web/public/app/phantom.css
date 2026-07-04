@@ -405,10 +405,10 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .chip-won, .chip-approved, .chip-active, .chip-delivered, .chip-published-ready, .chip-confirmed, .chip-received, .chip-invoice-ready, .chip-generation-approved, .chip-approved-to-publish, .chip-online, .chip-indexed, .chip-ready, .chip-enforcing, .chip-routed, .chip-watching {
   border-color: rgba(65, 255, 161, 0.5); color: var(--neon); background: rgba(65, 255, 161, 0.08);
 }
-.chip-sent-ready, .chip-publish-ready, .chip-brief-ready, .chip-pending, .chip-waiting, .chip-needs-approval, .chip-standby, .chip-sent, .chip-scaffolded {
+.chip-sent-ready, .chip-publish-ready, .chip-brief-ready, .chip-pending, .chip-waiting, .chip-needs-approval, .chip-standby, .chip-sent, .chip-scaffolded, .chip-configure, .chip-setup-needed {
   border-color: rgba(255, 209, 102, 0.5); color: var(--warn); background: rgba(255, 209, 102, 0.07);
 }
-.chip-lost, .chip-declined, .chip-blocked, .chip-not-wired, .chip-contained, .chip-sandbox, .chip-gated {
+.chip-lost, .chip-declined, .chip-blocked, .chip-not-wired, .chip-contained, .chip-sandbox, .chip-gated, .chip-locked {
   border-color: rgba(255, 77, 99, 0.5); color: #ff97a4; background: rgba(255, 77, 99, 0.07);
 }
 
@@ -553,6 +553,88 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .agent-stats { display: flex; flex-wrap: wrap; gap: 7px 14px; margin: 8px 0; font-size: 11px; color: var(--dim); }
 .agent-stats b { font: 500 13px "DM Mono", monospace; color: #d9f7e6; margin-right: 3px; }
 .agent-bundle { margin: 7px 0 0; font: 400 10px "DM Mono", monospace; color: var(--dim-2); }
+.config-stack {
+  display: grid;
+  gap: 14px;
+}
+.config-panel {
+  padding: 0;
+  overflow: hidden;
+  border-color: rgba(65, 255, 161, 0.24);
+  background:
+    radial-gradient(circle at 8% 0%, rgba(65, 255, 161, 0.1), transparent 38%),
+    linear-gradient(165deg, rgba(6, 18, 15, 0.92), rgba(2, 8, 9, 0.94));
+}
+.config-panel > summary,
+.tool-summary,
+.connector-summary {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  list-style: none;
+  cursor: pointer;
+  padding: 16px 16px 14px;
+}
+.tool-summary,
+.connector-summary {
+  padding: 0 0 10px;
+}
+.config-panel > summary::-webkit-details-marker,
+.tool-summary::-webkit-details-marker,
+.connector-summary::-webkit-details-marker { display: none; }
+.config-panel > summary::after,
+.tool-summary::after,
+.connector-summary::after {
+  content: "⌄";
+  flex: 0 0 auto;
+  color: var(--neon);
+  font: 500 15px "DM Mono", monospace;
+  transition: transform 0.18s ease;
+}
+.config-panel[open] > summary::after,
+.tool-card[open] > .tool-summary::after,
+.connector-card[open] > .connector-summary::after { transform: rotate(180deg); }
+.config-panel > summary span,
+.tool-summary span,
+.connector-summary span { display: grid; gap: 3px; min-width: 0; }
+.config-panel > summary b,
+.tool-summary b,
+.connector-summary b {
+  color: #ecfff4;
+  font-size: 15px;
+  line-height: 1.2;
+}
+.config-panel > summary i,
+.tool-summary i,
+.connector-summary i {
+  color: var(--dim);
+  font-style: normal;
+  font: 400 11px "DM Mono", monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.config-body {
+  display: grid;
+  gap: 13px;
+  padding: 0 16px 16px;
+}
+.connector-grid,
+.config-mini-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 11px;
+}
+.connector-card,
+.mini-config {
+  border-color: rgba(65, 255, 161, 0.18);
+  background: rgba(1, 10, 8, 0.42);
+}
+.connector-setup-needed {
+  border-color: rgba(255, 209, 102, 0.28);
+}
 .tool-spine-grid,
 .tool-spine-compact {
   display: grid;
@@ -570,6 +652,14 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   background:
     radial-gradient(circle at 18% 12%, rgba(65, 255, 161, 0.13), transparent 34%),
     linear-gradient(145deg, rgba(6, 18, 15, 0.95), rgba(2, 8, 9, 0.93));
+}
+.tool-card .record-sub,
+.tool-card .record-next,
+.tool-card .record-notes,
+.tool-card .tool-meta,
+.tool-card .record-proof {
+  position: relative;
+  z-index: 1;
 }
 .tool-card::before {
   content: "";
@@ -752,7 +842,14 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .mission-grid { grid-template-columns: 1fr; gap: 9px; }
   .deck-label { letter-spacing: 0.2em; }
   .tool-spine-grid,
-  .tool-spine-compact { grid-template-columns: 1fr; }
+  .tool-spine-compact,
+  .connector-grid,
+  .config-mini-grid { grid-template-columns: 1fr; }
+  .config-panel > summary { padding: 14px 13px 12px; }
+  .config-body { padding: 0 13px 14px; }
+  .config-panel > summary b,
+  .tool-summary b,
+  .connector-summary b { font-size: 13.5px; }
   .widget { padding: 13px 12px 12px; border-radius: 15px; }
   .widget-title { font-size: 13px; }
   .rail { grid-template-columns: 1fr; }

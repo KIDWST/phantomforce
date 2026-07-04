@@ -3,7 +3,7 @@
    no payments, no provider calls happen from here — records move through
    draft → approval → *-ready states and stop there until a connector exists. */
 
-const DB_KEY = "pf.phantom.v4";
+const DB_KEY = "pf.phantom.v5";
 const SESSION_KEY = "pf.session.v3";
 const LIVE_TOKEN_KEY = "pf.live.sessionToken.v1";
 const EXECUTION_MODE_KEY = "pf.admin.executionMode.v1";
@@ -35,6 +35,93 @@ export const RETAINERS = [
   { id: "keeper", name: "Keeper", price: 150, blurb: "Monthly upkeep, security scan, review requests." },
   { id: "operator", name: "Operator", price: 300, blurb: "Upkeep + lead follow-up desk + monthly content drop." },
   { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full workforce running weekly: media, pipeline, protection." },
+];
+
+export const POSTING_CONNECTORS = [
+  {
+    id: "gmail",
+    name: "Gmail",
+    worker: "Inbox Operator",
+    category: "email",
+    state: "available",
+    adminState: "ready",
+    clientState: "locked",
+    cadence: "draft replies, review requests, outreach follow-up",
+    access: "admin Google connector",
+    next: "Choose the workspace and approve the sender identity before any outbound send.",
+  },
+  {
+    id: "google-calendar",
+    name: "Google Calendar",
+    worker: "Booking Coordinator",
+    category: "calendar",
+    state: "available",
+    adminState: "ready",
+    clientState: "locked",
+    cadence: "booking holds, reminders, schedule cleanup",
+    access: "admin Google connector",
+    next: "Connect client calendar permissions per workspace before real booking writes.",
+  },
+  {
+    id: "google-drive",
+    name: "Google Drive",
+    worker: "Asset Librarian",
+    category: "files",
+    state: "available",
+    adminState: "ready",
+    clientState: "locked",
+    cadence: "documents, folders, deliverables, proof packs",
+    access: "admin Google connector",
+    next: "Select target Drive/folder before write actions leave Phantom.",
+  },
+  {
+    id: "youtube",
+    name: "YouTube",
+    worker: "Video Publisher",
+    category: "social",
+    state: "setup-needed",
+    adminState: "configure",
+    clientState: "locked",
+    cadence: "daily/weekly video posts after approval",
+    access: "platform OAuth required",
+    next: "Add channel OAuth, upload rules, title/description templates, and approval receipts.",
+  },
+  {
+    id: "instagram",
+    name: "Instagram",
+    worker: "Social Publisher",
+    category: "social",
+    state: "setup-needed",
+    adminState: "configure",
+    clientState: "locked",
+    cadence: "short-form posts, reels, captions, hashtags",
+    access: "Meta business OAuth required",
+    next: "Connect Meta business account and map approved asset/caption workflow.",
+  },
+  {
+    id: "facebook",
+    name: "Facebook",
+    worker: "Community Publisher",
+    category: "social",
+    state: "setup-needed",
+    adminState: "configure",
+    clientState: "locked",
+    cadence: "page posts, events, local updates",
+    access: "Meta page OAuth required",
+    next: "Connect page permissions and define post approval policy.",
+  },
+  {
+    id: "tiktok",
+    name: "TikTok",
+    worker: "Shorts Publisher",
+    category: "social",
+    state: "setup-needed",
+    adminState: "configure",
+    clientState: "locked",
+    cadence: "daily short-form publishing after approval",
+    access: "TikTok developer/OAuth required",
+    next: "Connect account, upload policy, caption rules, and approval receipts.",
+  },
 ];
 
 export function tenantIdForWorkspace(id = "phantomforce") {
@@ -85,10 +172,10 @@ export const TOOL_SPINE = [
     name: "Automation Desk",
     internal: "n8n",
     worker: "Workflow Runner",
-    mode: "standby",
-    status: "scaffolded",
-    role: "Holds local workflow drafts for boring repeatable work after approval.",
-    activity: "automation lane scaffolded; no workflow executing.",
+    mode: "active",
+    status: "ready",
+    role: "Holds workflow drafts for repeatable work, daily content plans, and connector-ready automations.",
+    activity: "automation lane ready; waiting for an approved workflow to run.",
     path: "ops/n8n",
     visibleToClients: false,
   },
@@ -107,7 +194,7 @@ export const TOOL_SPINE = [
   {
     id: "phantomops",
     name: "Operator Standards",
-    internal: "AgentOS",
+    internal: "PhantomOps standards layer",
     worker: "PhantomOps",
     mode: "active",
     status: "enforcing",
@@ -121,7 +208,7 @@ export const TOOL_SPINE = [
     name: "Code Intelligence",
     internal: "Serena",
     worker: "Code Navigator",
-    mode: "standby",
+    mode: "active",
     status: "indexed",
     role: "Supports read-only semantic repo navigation and code understanding.",
     activity: "code intelligence lane ready; no repo scan running.",
@@ -133,10 +220,10 @@ export const TOOL_SPINE = [
     name: "Squad Planner",
     internal: "Ruflo",
     worker: "Swarm Planner",
-    mode: "sandbox",
-    status: "contained",
-    role: "Provides multi-agent planning vocabulary and squad patterns without production autonomy.",
-    activity: "squad planning lane contained; no autonomous swarm running.",
+    mode: "active",
+    status: "ready",
+    role: "Provides multi-agent planning vocabulary and squad patterns for owner-controlled work.",
+    activity: "squad planning lane ready; coordinating desks by outcome.",
     path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\ruflo",
     visibleToClients: false,
   },
@@ -145,10 +232,10 @@ export const TOOL_SPINE = [
     name: "Media Engine",
     internal: "PhantomCut + Higgsfield",
     worker: "Media Factory",
-    mode: "gated",
+    mode: "active",
     status: "ready",
-    role: "Prepares commercial video generation and Resolve/REAPER bridges with paid runs gated.",
-    activity: "media generation lane gated; no paid run active.",
+    role: "Prepares commercial video generation, Resolve/REAPER bridges, and daily content packaging.",
+    activity: "media generation lane ready; paid runs require a receipt.",
     path: "C:\\Users\\jorda\\Documents\\PhantomForce-MediaLab\\phantomcut-ai",
     visibleToClients: false,
   },
@@ -197,18 +284,18 @@ function seed() {
 
   const agents = [
     { id: "ag-router", name: "Command Router", role: "Reads requests and routes them to the right desk.", status: "active", mission: "Standing by for the first real command.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Route the first client request.", bundle: "PhantomOps router · model lane A" },
-    { id: "ag-leads", name: "Lead Hunter", role: "Captures and qualifies leads once they exist.", status: "standby", mission: "No leads captured yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Capture first lead.", bundle: "PhantomOps + intake specs" },
-    { id: "ag-forge", name: "Proposal Forge", role: "Turns qualified leads into priced, scoped proposals.", status: "standby", mission: "No proposals drafted yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first proposal.", bundle: "Spec templates + pricing ladder" },
-    { id: "ag-media", name: "Media Factory", role: "Briefs, shot lists, captions, and controlled generation.", status: "standby", mission: "No media briefs yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first media brief.", bundle: "PhantomCut lane (paid, approval-gated)" },
-    { id: "ag-site", name: "Site Builder", role: "Drafts pages, landing pages, and site rebuilds.", status: "standby", mission: "No site drafts yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Build first page or store.", bundle: "Build lane + section library" },
-    { id: "ag-store", name: "Store Builder", role: "Catalogs, product cards, and checkout readiness.", status: "standby", mission: "No products yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Add first product or service.", bundle: "Catalog specs · checkout unwired" },
-    { id: "ag-sec", name: "Security Watch", role: "Monthly scans, breach checks, rotation reminders.", status: "standby", mission: "No scan proof recorded yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Run first approved scan.", bundle: "Scan cadence + posture checks" },
-    { id: "ag-review", name: "Review Desk", role: "Requests, collects, and stages testimonials.", status: "standby", mission: "No review requests yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first review request.", bundle: "Request→approve→publish pipeline" },
-    { id: "ag-follow", name: "Follow-Up Desk", role: "Keeps open threads from going quiet.", status: "standby", mission: "No follow-ups due yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first follow-up.", bundle: "Cadence engine + drafts" },
-    { id: "ag-money", name: "Revenue Tracker", role: "Pipeline, proposals, retainers, and what's unpaid.", status: "standby", mission: "No revenue tracked yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Track first quote or win.", bundle: "Ledger view · invoicing unwired" },
-    { id: "ag-book", name: "Booking Coordinator", role: "Appointment drafts, confirmations, reschedules.", status: "standby", mission: "No appointments drafted yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first appointment.", bundle: "Calendar lane (approval-gated)" },
-    { id: "ag-deliver", name: "Delivery Manager", role: "Keeps sold work moving to done.", status: "standby", mission: "No deliverables yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first delivery item.", bundle: "Task + deliverable tracking" },
-    { id: "ag-clean", name: "Data Cleaner", role: "Dedupes, tags, and keeps records tidy.", status: "standby", mission: "No records to clean yet.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Clean when data exists.", bundle: "Hygiene rules + memory sync" },
+    { id: "ag-leads", name: "Lead Hunter", role: "Captures and qualifies leads once they exist.", status: "active", mission: "Ready for the first real lead.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Capture first lead.", bundle: "PhantomOps + intake specs" },
+    { id: "ag-forge", name: "Proposal Forge", role: "Turns qualified leads into priced, scoped proposals.", status: "active", mission: "Ready to draft the first proposal.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first proposal.", bundle: "Spec templates + pricing ladder" },
+    { id: "ag-media", name: "Media Factory", role: "Briefs, shot lists, captions, and controlled generation.", status: "active", mission: "Ready to create the first media brief.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first media brief.", bundle: "PhantomCut lane (paid, approval-gated)" },
+    { id: "ag-site", name: "Site Builder", role: "Drafts pages, landing pages, and site rebuilds.", status: "active", mission: "Ready to build the first page or store.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Build first page or store.", bundle: "Build lane + section library" },
+    { id: "ag-store", name: "Store Builder", role: "Catalogs, product cards, and checkout readiness.", status: "active", mission: "Ready to add the first product or service.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Add first product or service.", bundle: "Catalog specs · checkout unwired" },
+    { id: "ag-sec", name: "Security Watch", role: "Monthly scans, breach checks, rotation reminders.", status: "active", mission: "Ready for the first approved scan.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Run first approved scan.", bundle: "Scan cadence + posture checks" },
+    { id: "ag-review", name: "Review Desk", role: "Requests, collects, and stages testimonials.", status: "active", mission: "Ready to draft the first review request.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first review request.", bundle: "Request→approve→publish pipeline" },
+    { id: "ag-follow", name: "Follow-Up Desk", role: "Keeps open threads from going quiet.", status: "active", mission: "Ready to create the first follow-up.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first follow-up.", bundle: "Cadence engine + drafts" },
+    { id: "ag-money", name: "Revenue Tracker", role: "Pipeline, proposals, retainers, and what's unpaid.", status: "active", mission: "Ready to track the first quote or win.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Track first quote or win.", bundle: "Ledger view · invoicing unwired" },
+    { id: "ag-book", name: "Booking Coordinator", role: "Appointment drafts, confirmations, reschedules.", status: "active", mission: "Ready to draft the first appointment.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first appointment.", bundle: "Calendar lane (approval-gated)" },
+    { id: "ag-deliver", name: "Delivery Manager", role: "Keeps sold work moving to done.", status: "active", mission: "Ready for the first delivery item.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first delivery item.", bundle: "Task + deliverable tracking" },
+    { id: "ag-clean", name: "Data Cleaner", role: "Dedupes, tags, and keeps records tidy.", status: "active", mission: "Ready when data exists.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Clean when data exists.", bundle: "Hygiene rules + memory sync" },
   ];
 
   const activity = [];
@@ -219,7 +306,14 @@ function seed() {
     createdAt: new Date().toISOString(),
   }]));
 
-  return { version: 4, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, agents, toolSpine: TOOL_SPINE, activity, workspaceMemory };
+  const postingConnectors = POSTING_CONNECTORS;
+  const automationConfig = {
+    monthlySecurityScans: { state: "ready", cadence: "monthly", nextRunLabel: "after first workspace scan setup" },
+    dailyContentEngine: { state: "ready", cadence: "daily", channels: ["YouTube", "Instagram", "Facebook", "TikTok"], mode: "draft-pack first, publish after connector approval" },
+    reviewEngine: { state: "ready", cadence: "after delivery", mode: "request, collect, approve, publish-ready" },
+  };
+
+  return { version: 5, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, agents, toolSpine: TOOL_SPINE, postingConnectors, automationConfig, activity, workspaceMemory };
 }
 
 /* ---------------- store ---------------- */
@@ -236,8 +330,13 @@ function normalizeData(data) {
   d.products ||= seeded.products;
   d.security ||= seeded.security;
   d.approvals ||= seeded.approvals;
-  d.agents ||= seeded.agents;
+  d.agents = seeded.agents.map((agent) => ({ ...(d.agents || []).find((x) => x.id === agent.id), ...agent }));
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...tool, ...(d.toolSpine || []).find((x) => x.id === tool.id) }));
+  d.postingConnectors = POSTING_CONNECTORS.map((connector) => ({
+    ...connector,
+    ...(d.postingConnectors || []).find((x) => x.id === connector.id),
+  }));
+  d.automationConfig = { ...seeded.automationConfig, ...(d.automationConfig || {}) };
   d.workspaceMemory ||= Object.fromEntries(d.workspaces.map((w) => [w.id, {
     tenantId: tenantIdForWorkspace(w.id),
     summary: "",
@@ -246,7 +345,7 @@ function normalizeData(data) {
   }]));
   d.activity ||= [];
   d.activity = d.activity.slice(0, 80);
-  d.version = 4;
+  d.version = 5;
   return d;
 }
 
@@ -255,7 +354,7 @@ function load() {
     const raw = localStorage.getItem(DB_KEY);
     if (raw) {
       const d = JSON.parse(raw);
-      if (d && d.version === 4) return normalizeData(d);
+      if (d && d.version === 5) return normalizeData(d);
     }
   } catch {}
   return normalizeData(seed());
@@ -499,5 +598,6 @@ export const STATUS_LABEL = {
   "received": "Received", "pending": "Pending", "declined": "Declined", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
   "watching": "Watching", "online": "Online", "indexed": "Indexed", "scaffolded": "Scaffolded", "ready": "Ready", "enforcing": "Enforcing", "contained": "Contained", "routed": "Routed",
   "active": "Active", "standby": "Standby", "sandbox": "Sandbox", "gated": "Gated",
+  "available": "Available", "setup-needed": "Configure", "configure": "Configure", "locked": "Locked",
 };
 export const statusLabel = (s) => STATUS_LABEL[s] || s;

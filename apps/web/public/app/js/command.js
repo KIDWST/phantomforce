@@ -6,7 +6,7 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-brain-20260703-20";
+} from "./store.js?v=phantom-brain-20260703-21";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -201,13 +201,13 @@ export function handleCommand(raw) {
 
   if (admin && /\b(memory|memory log|activity log|ledger|receipt|receipts|hermes|operator memory|owner memory|vault|what did you remember|show.*memory|show.*log|pull.*log)\b/.test(s)) {
     return {
-      say: "Opening Owner Memory Log. This pulls the admin memory surface: Hermes receipts, PhantomAI interaction memory, operator process notes, and repo docs.",
+      say: "Opening the admin Control Deck. This is where Jordan configures workers, memory, connectors, publishing lanes, automations, gateway status, and tenant boundaries.",
       cards: [
         card(
-          "Owner Memory Log",
-          "Admin-only memory surface",
-          "Client bots stay tenant-isolated and fresh. Jordan/admin can inspect the owner memory log from PhantomOps.",
-          [openAction("Open Memory Log", "adminos")],
+          "Admin Control Deck",
+          "Configure Phantom",
+          "Client bots stay tenant-isolated and fresh. Jordan/admin can inspect memory, connector readiness, automation cadence, and worker lanes from PhantomOps.",
+          [openAction("Open Control Deck", "adminos")],
           executionMode.label(),
         ),
       ],
