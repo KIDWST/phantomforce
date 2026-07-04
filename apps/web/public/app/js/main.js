@@ -145,7 +145,7 @@ function startTicker() {
   const line = $("[data-ticker-line]");
   const feed = () => {
     const items = tickerItems();
-    if (!items.length) { line.textContent = "The desks are quiet. Ask for something."; return; }
+    if (!items.length) { line.textContent = "The worker lanes are quiet. Ask for something."; return; }
     tickerIdx = (tickerIdx + 1) % items.length;
     const a = items[tickerIdx];
     line.classList.remove("ticker-in");
@@ -180,7 +180,7 @@ function renderRail() {
   const plan = todaysPlan();
   $("[data-rail-plan] .rail-body").innerHTML = plan.length
     ? plan.map((p) => `<button class="rail-item" data-open-ws="${p.open}"><i>${p.icon}</i><span>${esc(p.text)}</span></button>`).join("")
-    : `<p class="rail-empty">Clear runway. The desks are working the routine.</p>`;
+    : `<p class="rail-empty">Clear runway. The worker lanes are standing by.</p>`;
 
   const m = moneyView();
   $("[data-rail-money] .rail-body").innerHTML = `
@@ -594,7 +594,7 @@ function phantomBrief() {
   if (pending === 1) return "One item needs review.";
   if (pending > 1) return `${pending} items need review.`;
   if (plan) return `${plan} thing${plan === 1 ? "" : "s"} need attention. I'll surface what matters first.`;
-  return "All clear. I'm watching every desk.";
+  return "All clear. I'm watching every business lane.";
 }
 
 /* ============================ overlay engine ============================ */

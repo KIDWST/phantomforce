@@ -33,7 +33,7 @@ export const PACKAGES = [
 ];
 export const RETAINERS = [
   { id: "keeper", name: "Keeper", price: 150, blurb: "Monthly upkeep, security scan, review requests." },
-  { id: "operator", name: "Operator", price: 300, blurb: "Upkeep + lead follow-up desk + monthly content drop." },
+  { id: "operator", name: "Operator", price: 300, blurb: "Upkeep + lead follow-up lane + monthly content drop." },
   { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full workforce running weekly: media, pipeline, protection." },
 ];
 
@@ -223,7 +223,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "ready",
     role: "Provides multi-agent planning vocabulary and squad patterns for owner-controlled work.",
-    activity: "squad planning lane ready; coordinating desks by outcome.",
+    activity: "squad planning lane ready; coordinating worker lanes by outcome.",
     path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\ruflo",
     visibleToClients: false,
   },
@@ -283,7 +283,7 @@ function seed() {
   const approvals = [];
 
   const agents = [
-    { id: "ag-router", name: "Command Router", role: "Reads requests and routes them to the right desk.", status: "active", mission: "Standing by for the first real command.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Route the first client request.", bundle: "PhantomOps router · model lane A" },
+    { id: "ag-router", name: "Command Router", role: "Reads requests and routes them to the right worker lane.", status: "active", mission: "Standing by for the first real command.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Route the first client request.", bundle: "PhantomOps router · model lane A" },
     { id: "ag-leads", name: "Lead Hunter", role: "Captures and qualifies leads once they exist.", status: "active", mission: "Ready for the first real lead.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Capture first lead.", bundle: "PhantomOps + intake specs" },
     { id: "ag-forge", name: "Proposal Forge", role: "Turns qualified leads into priced, scoped proposals.", status: "active", mission: "Ready to draft the first proposal.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first proposal.", bundle: "Spec templates + pricing ladder" },
     { id: "ag-media", name: "Media Factory", role: "Briefs, shot lists, captions, and controlled generation.", status: "active", mission: "Ready to create the first media brief.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first media brief.", bundle: "PhantomCut lane (paid, approval-gated)" },

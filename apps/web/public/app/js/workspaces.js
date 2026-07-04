@@ -538,7 +538,7 @@ function renderWorkforce(el, rerender) {
     const inflight = visible(store.state.media).filter((x) => x.status !== "delivered").length + visible(store.state.sites).filter((x) => x.status === "draft").length;
     el.innerHTML = `
       <div class="stat-row">
-        <div class="stat"><span>Workers on your account</span><b>${active}</b><i>active right now</i></div>
+        <div class="stat"><span>Service lanes available</span><b>${active}</b><i>Phantom capabilities, not logged-in people</i></div>
         <div class="stat"><span>Deliverables in progress</span><b>${inflight}</b><i>moving through the pipeline</i></div>
         <div class="stat"><span>Confidence</span><b>●●●●○</b><i>on schedule</i></div>
       </div>
@@ -550,7 +550,7 @@ function renderWorkforce(el, rerender) {
     return;
   }
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Your AI workforce, desk by desk. Statuses: active · idle · waiting · blocked · needs approval.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Your AI workforce lanes. These are Phantom capabilities/work departments, not users who logged in. Statuses: active · idle · waiting · blocked · needs approval.</p></div>
     <div class="card-grid">
       ${agents.map((a) => `
         <article class="record agent-card agent-${esc(a.status)}">
@@ -567,7 +567,7 @@ function renderWorkforce(el, rerender) {
         </article>`).join("")}
     </div>
     <h3 class="ws-subhead">Tool spine powering the workers</h3>
-    <p class="ws-note">These are the internal programs behind the desks. Clients see outcomes, not tool names.</p>
+    <p class="ws-note">These are the internal programs behind the worker lanes. Clients see outcomes, not tool names.</p>
     ${renderToolSpineCards({ compact: true })}`;
 }
 
@@ -656,13 +656,13 @@ function buildLivingMap() {
     {
       id: "phantom",
       label: "Phantom",
-      value: isAdmin() ? `${activeAgents} desks online` : `${currentName} brain`,
+      value: isAdmin() ? `${activeAgents} lanes ready` : `${currentName} brain`,
       status: "active",
       workspace: "phantom",
       x: 500,
       y: 280,
       icon: "⌁",
-      detail: "The command router. It turns one request into the right business move and keeps the rest of the system quiet until needed.",
+      detail: "The command router. It turns one request into the right business move. Lanes are Phantom capabilities, not people currently logged in.",
       inside: [
         { label: "Mode", state: isAdmin() ? executionMode.get() : "workspace" },
         { label: "Workspace", state: currentName },
@@ -815,9 +815,9 @@ function buildLivingMap() {
       x: 500,
       y: 150,
       icon: "⬢",
-      detail: "The worker desks behind Phantom. You watch what each lane is doing instead of chatting with raw tools.",
+      detail: "The Phantom worker lanes behind the app. You watch what each capability is doing instead of chatting with raw tools.",
       inside: [
-        { label: "Desks", state: store.state.agents.length },
+        { label: "Lanes", state: store.state.agents.length },
         { label: "Tools", state: activeTools },
       ],
     },
@@ -880,7 +880,7 @@ function buildLivingMap() {
       .filter((edge) => nodes.some((n) => n.id === edge.from) && nodes.some((n) => n.id === edge.to)),
     notice: pending.length
       ? `${pending.length} outward-facing move${pending.length === 1 ? "" : "s"} need review before execution.`
-      : "Every desk is mapped. Click a node to open the workspace behind it.",
+      : "Every business lane is mapped. Click a node to open the workspace behind it.",
   };
 }
 
@@ -1039,20 +1039,20 @@ function renderAdmin(el, rerender) {
       </div>
     </div>
     <div class="stat-row">
-      <div class="stat"><span>Workforce</span><b>${activeAgents}/${store.state.agents.length}</b><i>active desks</i></div>
+      <div class="stat"><span>Workforce lanes</span><b>${activeAgents}/${store.state.agents.length}</b><i>Phantom capabilities ready</i></div>
       <div class="stat"><span>Tool spine</span><b>${activeTools}/${(store.state.toolSpine || []).length}</b><i>operator lanes active</i></div>
       <div class="stat"><span>Connectors</span><b>${readyConnectors}/${connectors.length}</b><i>ready or configurable</i></div>
       <div class="stat"><span>Mode</span><b>${esc(executionMode.get())}</b><i>${esc(executionMode.description())}</i></div>
     </div>
     <div class="config-stack">
       ${renderControlPanel("Workforce intelligence", "active", `
-        <p class="record-notes">The workers are grouped by outcome: leads, proposals, sites/stores, media, reviews, bookings, security, money, delivery, and data cleanup. This panel is for seeing the workforce, not chatting with every raw tool.</p>
+        <p class="record-notes">The worker lanes are grouped by outcome: leads, proposals, sites/stores, media, reviews, bookings, security, money, delivery, and data cleanup. These are capabilities/work departments, not user logins.</p>
         <div class="record-actions">
           <button class="btn" data-open-ws="workforce">Open workforce map</button>
           <button class="btn" data-act="pulse-tools">Pulse workforce activity</button>
         </div>
-      `, { sub: `${activeAgents} active desks` })}
-      ${renderControlPanel("Publishing and connector desk", readyConnectors ? "ready" : "configure", `
+      `, { sub: `${activeAgents} worker lanes ready` })}
+      ${renderControlPanel("Publishing and connector lane", readyConnectors ? "ready" : "configure", `
         <p class="record-notes">Admin can configure Gmail, Calendar, Drive, YouTube, Instagram, Facebook, and TikTok as workspace connectors. Client workspaces stay locked until a specific connector is configured for that client.</p>
         ${renderConnectorCards()}
         <p class="ws-note">Publishing model: generate or draft inside Phantom → approval receipt → connector posts/sends/uploads. No hidden social posting runs from this UI.</p>
@@ -1154,10 +1154,10 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business brain", render: renderPhantom },
-  leads: { title: "Leads & Follow-Up", kicker: "Pipeline desk", render: renderLeads },
+  leads: { title: "Leads & Follow-Up", kicker: "Pipeline lane", render: renderLeads },
   proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
-  reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
-  bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
+  reviews: { title: "Review Studio", kicker: "Reputation engine", render: renderReviews },
+  bookings: { title: "Bookings", kicker: "Schedule lane", render: renderBookings },
   media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
@@ -1191,7 +1191,7 @@ export function missionWidgets() {
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Risk Radar", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "fresh", sub: sec ? `leaks · malware · habits` : "no scan yet", alert: sec ? sec.posture !== "clean" : false },
     { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Agent Yard", stat: `${activeAgents} agents`, sub: isAdmin() ? `${activeTools} tools mapped` : "on your account", alert: false },
+    { id: "workforce", icon: "⬢", title: "Workforce Map", stat: `${activeAgents} lanes`, sub: isAdmin() ? `${activeTools} internal tools mapped` : "available capabilities", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });

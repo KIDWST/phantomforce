@@ -393,8 +393,8 @@ export function handleCommand(raw) {
     const active = store.state.agents.filter((a) => a.status === "active").length;
     return {
       say: admin
-        ? `${active} of ${store.state.agents.length} desks are active right now. Opening the workforce board.`
-        : `${active} workers are on your account right now. Opening your workforce view.`,
+        ? `${active} of ${store.state.agents.length} Phantom worker lanes are ready. These are capabilities, not logged-in people. Opening the workforce board.`
+        : `${active} service lanes are available on your workspace. Opening your workforce view.`,
       cards: [], open: "workforce",
     };
   }
@@ -403,7 +403,7 @@ export function handleCommand(raw) {
   if (/(today|today'?s plan|what('| i)s next|priorit|status|morning|catch me up|summary)/.test(s)) {
     const plan = todaysPlan();
     return {
-      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "Nothing urgent. The desks are working the routine.",
+      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "Nothing urgent. The worker lanes are standing by.",
       cards: plan.slice(0, 3).map((p) => card("Today", p.text, "", [openAction("Open", p.open)])),
       open: null,
     };
@@ -412,7 +412,7 @@ export function handleCommand(raw) {
   /* --- help / what can you do --- */
   if (/(help|what can you|how do|what do you do|\?$)/.test(s) && s.length < 60) {
     return {
-      say: "Ask me anything. For business work, give me the outcome and I’ll route it to the right desk, draft, plan, or workspace.",
+      say: "Ask me anything. For business work, give me the outcome and I’ll route it to the right worker lane, draft, plan, or workspace.",
       cards: [card("Try one of these", "Commands that create things",
         "“Draft a proposal for a new client” · “Create a video brief for a product launch” · “Build a store for a local brand” · “Check my risk radar” · “What's my pipeline?”", [])],
       open: null,
