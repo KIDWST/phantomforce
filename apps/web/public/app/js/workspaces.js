@@ -8,6 +8,9 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
 } from "./store.js?v=phantom-no-question-chat-20260703-01";
+import {
+  IMAGE_CROPS, IMAGE_FILTERS, downloadImage, editImageArtifact, imageStyle, makeImageArtifact,
+} from "./media-image.js?v=phantom-image-studio-20260704-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -15,6 +18,12 @@ const chip = (status) => `<span class="chip chip-${esc(status)}">${esc(statusLab
 const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
+const imageFilterButtons = (asset = {}) => Object.keys(IMAGE_FILTERS).map((name) => (
+  `<button class="mini-pill ${asset.filter === name ? "is-on" : ""}" data-act="image-filter" data-id="${asset.id || ""}" data-filter="${name}">${esc(name)}</button>`
+)).join("");
+const imageCropButtons = (asset = {}) => Object.keys(IMAGE_CROPS).map((name) => (
+  `<button class="mini-pill ${asset.crop === name ? "is-on" : ""}" data-act="image-crop" data-id="${asset.id || ""}" data-crop="${name}">${esc(name)}</button>`
+)).join("");
 
 function bindActions(root, handlers) {
   root.querySelectorAll("[data-act]").forEach((el) => {
@@ -304,22 +313,36 @@ function renderMedia(el, rerender) {
   const media = visible(store.state.media);
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Image and video creation live here: prompt-ready briefs, source analysis, generation requests, proof, and delivery.</p>
+      <p class="ws-note">Image and video creation live here. Image prompts now create visible editable drafts: crop, tune, background pass, variants, save, and download.</p>
       <button class="btn btn-primary" data-act="add">+ Creative brief</button>
     </div>
     <div class="card-grid">
       ${media.map((m) => `
-        <article class="record">
+        <article class="record ${m.asset?.src ? "record-image" : ""}">
           <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title)}</h4></div>
           <p class="record-sub">${esc(m.type)} · ${esc(m.modality || "video")} · ${chip(m.status)} · ${ago(m.updated)}</p>
+          ${m.asset?.src ? `
+            <figure class="media-image-stage ${m.asset.bgRemoved ? "is-bg-removed" : ""}" style="${imageStyle(m.asset)}">
+              <img src="${m.asset.src}" alt="${esc(m.title)}" loading="lazy">
+            </figure>
+            <div class="image-edit-strip">
+              <div><b>Crop</b>${imageCropButtons({ ...m.asset, id: m.id })}</div>
+              <div><b>Tweak</b>${imageFilterButtons({ ...m.asset, id: m.id })}</div>
+            </div>
+            <p class="record-notes"><b>Image chain:</b> local generator · canvas/SVG editor · rembg-ready background removal · variant saver.</p>
+          ` : ""}
           <p class="record-notes"><b>Angle:</b> ${esc(m.angle)}</p>
-          <details class="shotlist"><summary>Shot list (${m.shots.length})</summary>
-            <ol>${m.shots.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+          <details class="shotlist"><summary>${m.asset?.src ? "Creative recipe" : "Shot list"} (${(m.shots || []).length})</summary>
+            <ol>${(m.shots || []).map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
           </details>
           <p class="record-notes"><b>Caption:</b> ${esc(m.caption)}</p>
           ${m.proof ? `<p class="record-proof">Proof: <code>${esc(m.proof)}</code></p>` : ""}
           <div class="record-actions">
             <button class="btn" data-act="copy" data-id="${m.id}">Copy brief</button>
+            ${m.asset?.src ? `<button class="btn btn-good" data-act="save-image" data-id="${m.id}">Save image</button>
+              <button class="btn" data-act="bg-remove" data-id="${m.id}">${m.asset.bgRemoved ? "Restore BG" : "Remove BG"}</button>
+              <button class="btn" data-act="variant" data-id="${m.id}">Duplicate variant</button>
+              <button class="btn btn-quiet" data-act="download-image" data-id="${m.id}">Download</button>` : ""}
             ${m.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${m.id}">Mark brief ready</button>` : ""}
             ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Request ${esc(m.modality || "video")} generation</button>` : ""}
             ${m.status === "generation-approved" ? `<button class="btn" data-act="delivered" data-id="${m.id}">Mark delivered</button>` : ""}
@@ -335,7 +358,61 @@ function renderMedia(el, rerender) {
       pushActivity("Media Factory", `drafted a brief: ${t.trim()}.`);
       store.save(); rerender();
     },
-    copy: (id, btn) => { const m = find(id); copyText(btn, `${m.title}\n${m.type}\n\nAngle: ${m.angle}\n\nShots:\n${m.shots.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nCaption: ${m.caption}`); },
+    copy: (id, btn) => { const m = find(id); copyText(btn, `${m.title}\n${m.type}\n\nAngle: ${m.angle}\n\nRecipe:\n${(m.shots || []).map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nCaption: ${m.caption}${m.asset?.prompt ? `\n\nPrompt: ${m.asset.prompt}` : ""}`); },
+    "image-filter": (id, btn) => {
+      const m = find(id);
+      if (!m?.asset) return;
+      m.asset = editImageArtifact(m.asset, { filter: btn.dataset.filter, label: `filter:${btn.dataset.filter}` });
+      m.updated = new Date().toISOString();
+      pushActivity("Image Creator", `applied ${btn.dataset.filter} look to ${m.title}.`, m.ws);
+      store.save(); rerender();
+    },
+    "image-crop": (id, btn) => {
+      const m = find(id);
+      if (!m?.asset) return;
+      m.asset = editImageArtifact(m.asset, { crop: btn.dataset.crop, label: `crop:${btn.dataset.crop}` });
+      m.updated = new Date().toISOString();
+      pushActivity("Image Creator", `set ${btn.dataset.crop} crop for ${m.title}.`, m.ws);
+      store.save(); rerender();
+    },
+    "bg-remove": (id) => {
+      const m = find(id);
+      if (!m?.asset) return;
+      m.asset = editImageArtifact(m.asset, { bgRemoved: !m.asset.bgRemoved, label: m.asset.bgRemoved ? "restore-background" : "background-removal-preview" });
+      m.updated = new Date().toISOString();
+      pushActivity("Image Creator", `${m.asset.bgRemoved ? "previewed background removal" : "restored background"} for ${m.title}.`, m.ws);
+      store.save(); rerender();
+    },
+    "save-image": (id) => {
+      const m = find(id);
+      if (!m?.asset) return;
+      m.status = "asset-saved";
+      m.proof = `Saved in Media Lab · ${m.asset.crop || "1:1"} · ${m.asset.filter || "studio"} · ${m.asset.bgRemoved ? "bg pass" : "full bg"}`;
+      m.updated = new Date().toISOString();
+      pushActivity("Image Creator", `saved image asset: ${m.title}.`, m.ws);
+      store.save(); rerender();
+    },
+    variant: (id) => {
+      const m = find(id);
+      if (!m?.asset) return;
+      const prompt = `${m.asset.prompt || m.title} alternate premium variant`;
+      const variant = {
+        ...m,
+        id: uid("med"),
+        title: `${m.title.replace(/\s+variant\s+\d+$/i, "")} variant`,
+        status: "image-ready",
+        asset: editImageArtifact(makeImageArtifact(prompt, `${m.title} variant`, { crop: m.asset.crop, filter: m.asset.filter }), { label: "variant-generated" }),
+        proof: null,
+        updated: new Date().toISOString(),
+      };
+      store.state.media.unshift(variant);
+      pushActivity("Image Creator", `created image variant: ${variant.title}.`, variant.ws);
+      store.save(); rerender();
+    },
+    "download-image": (id) => {
+      const m = find(id);
+      if (m?.asset) downloadImage(m.asset, m.title);
+    },
     ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `brief ready: ${m.title}.`, m.ws); store.save(); rerender(); },
     "request-gen": (id) => {
       const m = find(id);

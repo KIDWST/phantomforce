@@ -7,6 +7,7 @@ import {
 } from "./store.js?v=phantom-no-question-chat-20260703-01";
 import { handleCommand, commandSuggestions } from "./command.js?v=phantom-no-question-chat-20260703-01";
 import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-no-question-chat-20260703-01";
+import { imageStyle } from "./media-image.js?v=phantom-image-studio-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -281,6 +282,7 @@ function cardHtml(c) {
     <article class="rcard">
       <p class="rcard-kicker">${esc(c.kicker)}</p>
       <h4>${esc(c.title)}</h4>
+      ${c.image?.src ? `<figure class="rcard-image" style="${imageStyle(c.image)}"><img src="${c.image.src}" alt="${esc(c.title)}" loading="lazy"></figure>` : ""}
       ${c.body ? `<p class="rcard-body">${esc(c.body)}</p>` : ""}
       ${c.meta ? `<p class="rcard-meta">${esc(c.meta)}</p>` : ""}
       ${c.actions?.length ? `<div class="rcard-actions">${c.actions.map((a) => `<button class="btn" data-open-ws="${a.open}">${esc(a.label)}</button>`).join("")}</div>` : ""}

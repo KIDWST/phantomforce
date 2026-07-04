@@ -612,7 +612,7 @@ export function resolveApproval(id, approved) {
 export const STATUS_LABEL = {
   "new": "New", "follow-up": "Follow-up", "proposal": "Proposal out", "won": "Won", "lost": "Lost",
   "draft": "Draft", "sent-ready": "Send-ready", "sent": "Sent", "approved": "Approved",
-  "brief-ready": "Brief ready", "generation-approved": "Generation ready", "delivered": "Delivered",
+  "brief-ready": "Brief ready", "image-ready": "Image ready", "asset-saved": "Saved", "generation-approved": "Generation ready", "delivered": "Delivered",
   "publish-ready": "Publish-ready", "approved-to-publish": "Approved to publish", "published-ready": "Published-ready",
   "received": "Received", "pending": "Pending", "declined": "Declined", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
   "working": "Working",

@@ -7,6 +7,7 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
 } from "./store.js?v=phantom-no-question-chat-20260703-01";
+import { makeImageArtifact } from "./media-image.js?v=phantom-image-studio-20260704-01";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -60,8 +61,8 @@ function extractDriveFileIntent(text) {
   return { filename, content };
 }
 
-function card(kicker, name, body, actions = [], meta = "") {
-  return { kicker, title: name, body, actions, meta };
+function card(kicker, name, body, actions = [], meta = "", image = null) {
+  return { kicker, title: name, body, actions, meta, image };
 }
 const openAction = (label, ws) => ({ label, open: ws });
 
@@ -166,12 +167,16 @@ function createMediaBrief(subject, kind = "video") {
   const t = subject ? title(subject) : "New creative";
   const isImage = kind === "image";
   const isAnalyze = kind === "analyze";
+  const prompt = isImage
+    ? `${t}. Premium social-ready image. Clean subject, strong lighting, sharp composition, no text baked into image.`
+    : "";
+  const asset = isImage ? makeImageArtifact(prompt, `${t} — image`) : null;
   const m = {
     id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(),
-    title: `${t} — ${isImage ? "image brief" : isAnalyze ? "creative analysis" : "video brief"}`,
-    type: isImage ? "Image / ad creative" : isAnalyze ? "Creative analysis" : "Video generation brief",
+    title: `${t} — ${isImage ? "image draft" : isAnalyze ? "creative analysis" : "video brief"}`,
+    type: isImage ? "Generated image draft" : isAnalyze ? "Creative analysis" : "Video generation brief",
     modality: kind,
-    status: "draft",
+    status: isImage ? "image-ready" : "draft",
     angle: isImage
       ? "One strong visual, clean subject, clear offer, premium brand feel."
       : isAnalyze
@@ -188,11 +193,13 @@ function createMediaBrief(subject, kind = "video") {
         ? `${t} — analysis notes and next-edit direction.`
         : `${t} — draft caption. Punch it up before approval.`,
     proof: null,
+    asset,
+    prompt,
     generationProvider: "Media Lab",
     updated: new Date().toISOString(),
   };
   store.state.media.unshift(m);
-  pushActivity("Media Factory", `drafted a brief: ${m.title}.`, m.ws);
+  pushActivity("Media Factory", `${isImage ? "generated image draft" : "drafted a brief"}: ${m.title}.`, m.ws);
   store.save();
   return m;
 }
@@ -426,8 +433,10 @@ export function handleCommand(raw) {
       const kind = mediaKindFromText(text);
       const m = createMediaBrief(subject, kind);
       return {
-        say: `Media Lab drafted "${m.title}" — ${kind === "image" ? "visual direction, platform crop, and prompt-ready notes" : kind === "analyze" ? "analysis pass and next-edit direction" : "angle, shot list, and generation-ready notes"}.`,
-        cards: [card("Media brief", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
+        say: kind === "image"
+          ? `Media Lab generated "${m.title}". Open it to crop, edit, tweak, remove background, duplicate variants, and save.`
+          : `Media Lab drafted "${m.title}" — ${kind === "analyze" ? "analysis pass and next-edit direction" : "angle, shot list, and generation-ready notes"}.`,
+        cards: [card(kind === "image" ? "Generated image" : "Media brief", m.title, m.angle, [openAction("Edit in Media Lab", "media")], m.type, m.asset)],
         open: "media",
       };
     }
