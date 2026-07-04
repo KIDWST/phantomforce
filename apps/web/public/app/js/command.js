@@ -6,8 +6,8 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-flow-map-20260704-03";
-import { makeImageArtifact } from "./media-image.js?v=phantom-flow-map-20260704-03";
+} from "./store.js?v=phantom-remove-flow-chart-20260704-01";
+import { makeImageArtifact } from "./media-image.js?v=phantom-remove-flow-chart-20260704-01";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
