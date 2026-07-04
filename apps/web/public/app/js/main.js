@@ -4,10 +4,10 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-control-center-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-control-center-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-control-center-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-control-center-20260704-01";
+} from "./store.js?v=phantom-chat-stable-focus-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-chat-stable-focus-20260704-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-chat-stable-focus-20260704-01";
+import { imageStyle } from "./media-image.js?v=phantom-chat-stable-focus-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -630,12 +630,11 @@ function wireCommandDeck() {
     input.focus();
   });
   input.addEventListener("focus", () => {
-    form.classList.add("is-expanded");
     setGhostMood("listening", { emotion: "calm" });
   });
   input.addEventListener("input", () => {
-    form.classList.add("is-expanded");
     autosizeCommandInput(input);
+    form.classList.toggle("is-expanded", input.value.includes("\n") || input.scrollHeight > 40);
     setGhostMood("listening", { emotion: "bright" });
   });
   input.addEventListener("blur", () => {
