@@ -33,8 +33,8 @@ export const PACKAGES = [
 ];
 export const RETAINERS = [
   { id: "keeper", name: "Keeper", price: 150, blurb: "Monthly upkeep, security scan, review requests." },
-  { id: "operator", name: "Operator", price: 300, blurb: "Upkeep + lead follow-up lane + monthly content drop." },
-  { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full workforce running weekly: media, pipeline, protection." },
+  { id: "operator", name: "Operator", price: 300, blurb: "Upkeep + lead follow-up system + monthly content drop." },
+  { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full operating system running weekly: media, pipeline, protection." },
 ];
 
 export const POSTING_CONNECTORS = [
@@ -139,7 +139,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "watching",
     role: "Keeps admin Phantom reachable through the private route while hiding raw local ports.",
-    activity: "gateway lane ready; no client route change running.",
+    activity: "gateway system ready; no client route change running.",
     path: "ops/admin-live",
     visibleToClients: false,
   },
@@ -151,7 +151,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "online",
     role: "Compiles context, receipts, redaction notes, and useful memory for Phantom AI.",
-    activity: "memory lane ready; waiting for workspace-specific client history.",
+    activity: "memory system ready; waiting for workspace-specific client history.",
     path: "server/src/phantom-ai/hermes-*",
     visibleToClients: false,
   },
@@ -175,7 +175,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "ready",
     role: "Holds workflow drafts for repeatable work, daily content plans, and connector-ready automations.",
-    activity: "automation lane ready; waiting for an approved workflow to run.",
+    activity: "automation system ready; waiting for an approved workflow to run.",
     path: "ops/n8n",
     visibleToClients: false,
   },
@@ -187,7 +187,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "ready",
     role: "Turns big requests into scoped proposals, tasks, and implementation guardrails.",
-    activity: "build-planning lane ready; no client spec running.",
+    activity: "build-planning system ready; no client spec running.",
     path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\openspec",
     visibleToClients: false,
   },
@@ -211,7 +211,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "indexed",
     role: "Supports read-only semantic repo navigation and code understanding.",
-    activity: "code intelligence lane ready; no repo scan running.",
+    activity: "code intelligence system ready; no repo scan running.",
     path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\serena",
     visibleToClients: false,
   },
@@ -223,7 +223,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "ready",
     role: "Provides multi-agent planning vocabulary and squad patterns for owner-controlled work.",
-    activity: "squad planning lane ready; coordinating worker lanes by outcome.",
+    activity: "squad planning system ready; coordinating Phantom systems by outcome.",
     path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\ruflo",
     visibleToClients: false,
   },
@@ -235,19 +235,19 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "ready",
     role: "Prepares commercial video generation, Resolve/REAPER bridges, and daily content packaging.",
-    activity: "media generation lane ready; paid runs require a receipt.",
+    activity: "media generation system ready; paid runs require a receipt.",
     path: "C:\\Users\\jorda\\Documents\\PhantomForce-MediaLab\\phantomcut-ai",
     visibleToClients: false,
   },
   {
     id: "model-lanes",
     name: "Model Switchboard",
-    internal: "Private model lanes",
+    internal: "Private model systems",
     worker: "Brain Router",
     mode: "active",
     status: "routed",
-    role: "Routes admin-only thinking, review, coding, and worker model lanes behind Phantom AI.",
-    activity: "brain routing lane ready; workspace memory stays scoped.",
+    role: "Routes admin-only thinking, review, coding, and model systems behind Phantom AI.",
+    activity: "brain routing system ready; workspace memory stays scoped.",
     path: "server/src/phantom-ai/providers",
     visibleToClients: false,
   },
@@ -283,17 +283,17 @@ function seed() {
   const approvals = [];
 
   const agents = [
-    { id: "ag-router", name: "Command Router", role: "Reads requests and routes them to the right worker lane.", status: "active", mission: "Standing by for the first real command.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Route the first client request.", bundle: "PhantomOps router · model lane A" },
+    { id: "ag-router", name: "Command Router", role: "Reads requests and routes them to the right Phantom system.", status: "active", mission: "Standing by for the first real command.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Route the first client request.", bundle: "PhantomOps router · model system A" },
     { id: "ag-leads", name: "Lead Hunter", role: "Captures and qualifies leads once they exist.", status: "active", mission: "Ready for the first real lead.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Capture first lead.", bundle: "PhantomOps + intake specs" },
     { id: "ag-forge", name: "Proposal Forge", role: "Turns qualified leads into priced, scoped proposals.", status: "active", mission: "Ready to draft the first proposal.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first proposal.", bundle: "Spec templates + pricing ladder" },
-    { id: "ag-media", name: "Media Factory", role: "Briefs, shot lists, captions, and controlled generation.", status: "active", mission: "Ready to create the first media brief.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first media brief.", bundle: "PhantomCut lane (paid, approval-gated)" },
-    { id: "ag-site", name: "Site Builder", role: "Drafts pages, landing pages, and site rebuilds.", status: "active", mission: "Ready to build the first page or store.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Build first page or store.", bundle: "Build lane + section library" },
+    { id: "ag-media", name: "Media Factory", role: "Briefs, shot lists, captions, and controlled generation.", status: "active", mission: "Ready to create the first media brief.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first media brief.", bundle: "PhantomCut system (paid, approval-gated)" },
+    { id: "ag-site", name: "Site Builder", role: "Drafts pages, landing pages, and site rebuilds.", status: "active", mission: "Ready to build the first page or store.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Build first page or store.", bundle: "Build system + section library" },
     { id: "ag-store", name: "Store Builder", role: "Catalogs, product cards, and checkout readiness.", status: "active", mission: "Ready to add the first product or service.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Add first product or service.", bundle: "Catalog specs · checkout unwired" },
     { id: "ag-sec", name: "Security Watch", role: "Monthly scans, breach checks, rotation reminders.", status: "active", mission: "Ready for the first approved scan.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Run first approved scan.", bundle: "Scan cadence + posture checks" },
     { id: "ag-review", name: "Review Desk", role: "Requests, collects, and stages testimonials.", status: "active", mission: "Ready to draft the first review request.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first review request.", bundle: "Request→approve→publish pipeline" },
     { id: "ag-follow", name: "Follow-Up Desk", role: "Keeps open threads from going quiet.", status: "active", mission: "Ready to create the first follow-up.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first follow-up.", bundle: "Cadence engine + drafts" },
     { id: "ag-money", name: "Revenue Tracker", role: "Pipeline, proposals, retainers, and what's unpaid.", status: "active", mission: "Ready to track the first quote or win.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Track first quote or win.", bundle: "Ledger view · invoicing unwired" },
-    { id: "ag-book", name: "Booking Coordinator", role: "Appointment drafts, confirmations, reschedules.", status: "active", mission: "Ready to draft the first appointment.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first appointment.", bundle: "Calendar lane (approval-gated)" },
+    { id: "ag-book", name: "Booking Coordinator", role: "Appointment drafts, confirmations, reschedules.", status: "active", mission: "Ready to draft the first appointment.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first appointment.", bundle: "Calendar system (approval-gated)" },
     { id: "ag-deliver", name: "Delivery Manager", role: "Keeps sold work moving to done.", status: "active", mission: "Ready for the first delivery item.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first delivery item.", bundle: "Task + deliverable tracking" },
     { id: "ag-clean", name: "Data Cleaner", role: "Dedupes, tags, and keeps records tidy.", status: "active", mission: "Ready when data exists.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Clean when data exists.", bundle: "Hygiene rules + memory sync" },
   ];
@@ -413,7 +413,7 @@ export const executionMode = {
   },
   description() {
     return executionMode.get() === "auto"
-      ? "Auto runs safe internal workspace actions. External/world-changing actions still need a proper lane and receipt."
+      ? "Auto runs safe internal workspace actions. External/world-changing actions still need a proper system path and receipt."
       : "Approval stages actions for review before execution.";
   },
 };

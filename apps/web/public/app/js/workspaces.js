@@ -518,7 +518,7 @@ function renderToolSpineCards({ compact = false } = {}) {
             </span>
             <span class="chip chip-${esc(tool.status)}">${esc(statusLabel(tool.status))}</span>
           </summary>
-          <p class="record-sub">Worker lane: ${esc(tool.worker)}</p>
+          <p class="record-sub">System role: ${esc(tool.worker)}</p>
           <p class="record-next">▸ ${esc(tool.role)}</p>
           <p class="record-notes"><b>Doing now:</b> ${esc(tool.activity)}</p>
           <div class="tool-meta">
@@ -538,7 +538,7 @@ function renderWorkforce(el, rerender) {
     const inflight = visible(store.state.media).filter((x) => x.status !== "delivered").length + visible(store.state.sites).filter((x) => x.status === "draft").length;
     el.innerHTML = `
       <div class="stat-row">
-        <div class="stat"><span>Service lanes available</span><b>${active}</b><i>Phantom capabilities, not logged-in people</i></div>
+        <div class="stat"><span>Service systems available</span><b>${active}</b><i>Phantom modules, not employees or user accounts</i></div>
         <div class="stat"><span>Deliverables in progress</span><b>${inflight}</b><i>moving through the pipeline</i></div>
         <div class="stat"><span>Confidence</span><b>●●●●○</b><i>on schedule</i></div>
       </div>
@@ -550,7 +550,7 @@ function renderWorkforce(el, rerender) {
     return;
   }
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Your AI workforce lanes. These are Phantom capabilities/work departments, not users who logged in. Statuses: active · idle · waiting · blocked · needs approval.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Your Phantom systems. These are app modules/business departments, not employees or users who logged in. Statuses: active · idle · waiting · blocked · needs approval.</p></div>
     <div class="card-grid">
       ${agents.map((a) => `
         <article class="record agent-card agent-${esc(a.status)}">
@@ -563,11 +563,11 @@ function renderWorkforce(el, rerender) {
           </div>
           <p class="record-notes"><b>Last output:</b> ${esc(a.last)}</p>
           ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
-          <p class="agent-bundle">internal lane: ${esc(a.bundle)}</p>
+          <p class="agent-bundle">internal system: ${esc(a.bundle)}</p>
         </article>`).join("")}
     </div>
-    <h3 class="ws-subhead">Tool spine powering the workers</h3>
-    <p class="ws-note">These are the internal programs behind the worker lanes. Clients see outcomes, not tool names.</p>
+    <h3 class="ws-subhead">Tool spine powering Phantom</h3>
+    <p class="ws-note">These are the internal programs behind the Phantom systems. Clients see outcomes, not tool names.</p>
     ${renderToolSpineCards({ compact: true })}`;
 }
 
@@ -656,13 +656,13 @@ function buildLivingMap() {
     {
       id: "phantom",
       label: "Phantom",
-      value: isAdmin() ? `${activeAgents} lanes ready` : `${currentName} brain`,
+      value: isAdmin() ? `${activeAgents} systems ready` : `${currentName} brain`,
       status: "active",
       workspace: "phantom",
       x: 500,
       y: 280,
       icon: "⌁",
-      detail: "The command router. It turns one request into the right business move. Lanes are Phantom capabilities, not people currently logged in.",
+      detail: "The command router. It turns one request into the right business move. Systems are Phantom capabilities, not people currently logged in.",
       inside: [
         { label: "Mode", state: isAdmin() ? executionMode.get() : "workspace" },
         { label: "Workspace", state: currentName },
@@ -815,9 +815,9 @@ function buildLivingMap() {
       x: 500,
       y: 150,
       icon: "⬢",
-      detail: "The Phantom worker lanes behind the app. You watch what each capability is doing instead of chatting with raw tools.",
+      detail: "The Phantom systems behind the app. You watch what each capability is doing instead of chatting with raw tools.",
       inside: [
-        { label: "Lanes", state: store.state.agents.length },
+        { label: "Systems", state: store.state.agents.length },
         { label: "Tools", state: activeTools },
       ],
     },
@@ -880,7 +880,7 @@ function buildLivingMap() {
       .filter((edge) => nodes.some((n) => n.id === edge.from) && nodes.some((n) => n.id === edge.to)),
     notice: pending.length
       ? `${pending.length} outward-facing move${pending.length === 1 ? "" : "s"} need review before execution.`
-      : "Every business lane is mapped. Click a node to open the workspace behind it.",
+      : "Every business system is mapped. Click a node to open the workspace behind it.",
   };
 }
 
@@ -1031,7 +1031,7 @@ function renderAdmin(el, rerender) {
   const readyConnectors = connectors.filter((c) => c.adminState === "ready" || c.state === "available").length;
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Admin Control Deck. This is where Jordan configures Phantom: workers, memory, automations, connectors, publishing lanes, security cadence, and gateway behavior. Clients never see this surface.</p>
+      <p class="ws-note">Admin Control Deck. This is where Jordan configures Phantom: systems, memory, automations, connectors, publishing paths, security cadence, and gateway behavior. Clients never see this surface.</p>
       <div class="record-actions">
         <button class="btn ${executionMode.get() === "approval" ? "btn-primary" : "btn-quiet"}" data-act="set-mode-approval">Approval Mode</button>
         <button class="btn ${executionMode.get() === "auto" ? "btn-primary" : "btn-quiet"}" data-act="set-mode-auto">Auto Mode</button>
@@ -1039,26 +1039,26 @@ function renderAdmin(el, rerender) {
       </div>
     </div>
     <div class="stat-row">
-      <div class="stat"><span>Workforce lanes</span><b>${activeAgents}/${store.state.agents.length}</b><i>Phantom capabilities ready</i></div>
-      <div class="stat"><span>Tool spine</span><b>${activeTools}/${(store.state.toolSpine || []).length}</b><i>operator lanes active</i></div>
+      <div class="stat"><span>Phantom systems</span><b>${activeAgents}/${store.state.agents.length}</b><i>business modules ready</i></div>
+      <div class="stat"><span>Tool spine</span><b>${activeTools}/${(store.state.toolSpine || []).length}</b><i>operator systems active</i></div>
       <div class="stat"><span>Connectors</span><b>${readyConnectors}/${connectors.length}</b><i>ready or configurable</i></div>
       <div class="stat"><span>Mode</span><b>${esc(executionMode.get())}</b><i>${esc(executionMode.description())}</i></div>
     </div>
     <div class="config-stack">
-      ${renderControlPanel("Workforce intelligence", "active", `
-        <p class="record-notes">The worker lanes are grouped by outcome: leads, proposals, sites/stores, media, reviews, bookings, security, money, delivery, and data cleanup. These are capabilities/work departments, not user logins.</p>
+      ${renderControlPanel("System intelligence", "active", `
+        <p class="record-notes">The Phantom systems are grouped by outcome: leads, proposals, sites/stores, media, reviews, bookings, security, money, delivery, and data cleanup. These are capabilities/business modules, not employees or user logins.</p>
         <div class="record-actions">
-          <button class="btn" data-open-ws="workforce">Open workforce map</button>
-          <button class="btn" data-act="pulse-tools">Pulse workforce activity</button>
+          <button class="btn" data-open-ws="workforce">Open systems map</button>
+          <button class="btn" data-act="pulse-tools">Pulse system activity</button>
         </div>
-      `, { sub: `${activeAgents} worker lanes ready` })}
-      ${renderControlPanel("Publishing and connector lane", readyConnectors ? "ready" : "configure", `
+      `, { sub: `${activeAgents} systems ready` })}
+      ${renderControlPanel("Publishing and connector systems", readyConnectors ? "ready" : "configure", `
         <p class="record-notes">Admin can configure Gmail, Calendar, Drive, YouTube, Instagram, Facebook, and TikTok as workspace connectors. Client workspaces stay locked until a specific connector is configured for that client.</p>
         ${renderConnectorCards()}
         <p class="ws-note">Publishing model: generate or draft inside Phantom → approval receipt → connector posts/sends/uploads. No hidden social posting runs from this UI.</p>
-      `, { sub: "daily content, email, files, and calendar lanes" })}
+      `, { sub: "daily content, email, files, and calendar systems" })}
       ${renderControlPanel("Automation cadence", "ready", `
-        <p class="record-notes">These are the business routines Phantom should run on a schedule once the backend workers are connected: monthly protection scans, daily content drafts, review requests after delivery, and follow-up loops.</p>
+        <p class="record-notes">These are the business routines Phantom should run on a schedule once backend automation is connected: monthly protection scans, daily content drafts, review requests after delivery, and follow-up loops.</p>
         ${renderAutomationConfig()}
       `, { sub: "monthly scans · daily content · review engine" })}
       ${renderControlPanel("Memory and tenants", "ready", `
@@ -1084,9 +1084,9 @@ function renderAdmin(el, rerender) {
         </div>
       `, { sub: "PhantomForce · ChicagoShots · Test Client" })}
       ${renderControlPanel("Tool spine", "active", `
-        <p class="record-notes">These are the internal programs behind the workforce. Clients see outcomes, not tool names. Expand each lane to inspect what it is responsible for.</p>
+        <p class="record-notes">These are the internal programs behind Phantom. Clients see outcomes, not tool names. Expand each system to inspect what it is responsible for.</p>
         ${renderToolSpineCards()}
-      `, { sub: `${activeTools} active lanes` })}
+      `, { sub: `${activeTools} active systems` })}
       ${renderControlPanel("Private access gateway", "active", `
         <article class="record record-wide">
           ${kv("Admin host", "<code>admin.phantomforce.online</code> — full Phantom control deck")}
@@ -1154,15 +1154,15 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business brain", render: renderPhantom },
-  leads: { title: "Leads & Follow-Up", kicker: "Pipeline lane", render: renderLeads },
+  leads: { title: "Leads & Follow-Up", kicker: "Pipeline system", render: renderLeads },
   proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
   reviews: { title: "Review Studio", kicker: "Reputation engine", render: renderReviews },
-  bookings: { title: "Bookings", kicker: "Schedule lane", render: renderBookings },
+  bookings: { title: "Bookings", kicker: "Schedule system", render: renderBookings },
   media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
-  workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
+  workforce: { title: "Systems Map", kicker: "Phantom modules", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
@@ -1191,9 +1191,9 @@ export function missionWidgets() {
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Risk Radar", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "fresh", sub: sec ? `leaks · malware · habits` : "no scan yet", alert: sec ? sec.posture !== "clean" : false },
     { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Workforce Map", stat: `${activeAgents} lanes`, sub: isAdmin() ? `${activeTools} internal tools mapped` : "available capabilities", alert: false },
+    { id: "workforce", icon: "⬢", title: "Systems Map", stat: `${activeAgents} systems`, sub: isAdmin() ? `${activeTools} internal tools mapped` : "available modules", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
-  if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
+  if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · systems · access", alert: false });
   return w;
 }

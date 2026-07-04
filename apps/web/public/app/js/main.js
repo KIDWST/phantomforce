@@ -145,7 +145,7 @@ function startTicker() {
   const line = $("[data-ticker-line]");
   const feed = () => {
     const items = tickerItems();
-    if (!items.length) { line.textContent = "The worker lanes are quiet. Ask for something."; return; }
+    if (!items.length) { line.textContent = "Phantom systems are quiet. Ask for something."; return; }
     tickerIdx = (tickerIdx + 1) % items.length;
     const a = items[tickerIdx];
     line.classList.remove("ticker-in");
@@ -180,7 +180,7 @@ function renderRail() {
   const plan = todaysPlan();
   $("[data-rail-plan] .rail-body").innerHTML = plan.length
     ? plan.map((p) => `<button class="rail-item" data-open-ws="${p.open}"><i>${p.icon}</i><span>${esc(p.text)}</span></button>`).join("")
-    : `<p class="rail-empty">Clear runway. The worker lanes are standing by.</p>`;
+    : `<p class="rail-empty">Clear runway. Phantom systems are standing by.</p>`;
 
   const m = moneyView();
   $("[data-rail-money] .rail-body").innerHTML = `
@@ -410,8 +410,8 @@ function brainModuleData() {
       items: (security[0]?.findings || []).slice(0, 5).map((f) => moduleItem(f.text, f.level, "Security finding")),
     },
     {
-      module: "Workers",
-      summary: `${agents.filter((a) => a.status === "active").length} active worker${agents.filter((a) => a.status === "active").length === 1 ? "" : "s"} out of ${agents.length}.`,
+      module: "Phantom systems",
+      summary: `${agents.filter((a) => a.status === "active").length} active system${agents.filter((a) => a.status === "active").length === 1 ? "" : "s"} out of ${agents.length}.`,
       items: agents.slice(0, 5).map((a) => moduleItem(a.name, a.status, a.mission)),
     },
   ];
@@ -443,7 +443,7 @@ async function askPrivatePhantomBrain(text, localResult) {
         task_type: inferTaskType(text),
         sensitivity_level: inferSensitivity(text),
         execution_mode: executionMode.get(),
-        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use the private operator brain as a normal general-purpose chatbot and business operator. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and action cards. For unrelated/general questions, answer directly without forcing dashboard context. For practical how-to questions, give complete usable steps in a concise mobile-friendly answer. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution lane and owner receipt.`,
+        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use the private operator brain as a normal general-purpose chatbot and business operator. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and action cards. For unrelated/general questions, answer directly without forcing dashboard context. For practical how-to questions, give complete usable steps in a concise mobile-friendly answer. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution path and owner receipt.`,
         module_data: brainModuleData(),
       }),
     });
@@ -462,9 +462,9 @@ async function askPrivatePhantomBrain(text, localResult) {
     const cards = [];
     if (payload.private_brain?.status && payload.private_brain.status !== "called") {
       cards.push(responseCard(
-        "Private brain",
-        "Brain lane needs attention",
-        "The private brain lane did not complete this request. Phantom used the local workspace router instead.",
+        "Phantom Core",
+        "Core needs attention",
+        "Phantom Core did not complete this request. The local workspace router handled it instead.",
         [],
         "No action executed",
       ));
@@ -514,11 +514,11 @@ function runCommand(text) {
         }
       } catch (err) {
         if (isAdmin() && (ctx.session?.token || session.token()) && !appendLocalSurface) {
-          const msg = err?.name === "AbortError" ? "The private brain lane timed out." : "The private brain lane is not reachable right now.";
+          const msg = err?.name === "AbortError" ? "Phantom Core timed out." : "Phantom Core is not reachable right now.";
           r = {
             ...local,
             cards: [
-              responseCard("Private brain", "Brain lane needs attention", `${msg} Phantom used the local workspace router instead.`, [], "No outside action executed"),
+              responseCard("Phantom Core", "Core needs attention", `${msg} The local workspace router handled it instead.`, [], "No outside action executed"),
               ...(local.cards || []),
             ].slice(0, 4),
           };
@@ -594,7 +594,7 @@ function phantomBrief() {
   if (pending === 1) return "One item needs review.";
   if (pending > 1) return `${pending} items need review.`;
   if (plan) return `${plan} thing${plan === 1 ? "" : "s"} need attention. I'll surface what matters first.`;
-  return "All clear. I'm watching every business lane.";
+  return "All clear. I'm watching every Phantom system.";
 }
 
 /* ============================ overlay engine ============================ */

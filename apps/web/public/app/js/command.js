@@ -179,7 +179,7 @@ export function handleCommand(raw) {
         card(
           "Admin action model",
           auto ? "Auto for safe internal work" : "Approval for controlled execution",
-          "Plans, leads, proposals, site/store drafts, media briefs, security notes, and memory lookups stay inside Phantom. Sends, publishing, billing, deploys, credential changes, and deletes still need the right execution lane with receipts.",
+          "Plans, leads, proposals, site/store drafts, media briefs, security notes, and memory lookups stay inside Phantom. Sends, publishing, billing, deploys, credential changes, and deletes still need the right execution path with receipts.",
           [
             openAction("Open Harbor", "adminos"),
             openAction("Open Review", "approvals"),
@@ -191,7 +191,7 @@ export function handleCommand(raw) {
           "Tell Phantom an outcome",
           "Example: build a launch plan for a new plumbing company, draft the offer, create the site outline, set the follow-up workflow, and stage the approval cards.",
           [],
-          "One command → artifacts → action lanes",
+          "One command → artifacts → action systems",
         ),
       ],
       open: null,
@@ -201,12 +201,12 @@ export function handleCommand(raw) {
 
   if (admin && /\b(memory|memory log|activity log|ledger|receipt|receipts|hermes|operator memory|owner memory|vault|what did you remember|show.*memory|show.*log|pull.*log)\b/.test(s)) {
     return {
-      say: "Opening the admin Control Deck. This is where Jordan configures workers, memory, connectors, publishing lanes, automations, gateway status, and tenant boundaries.",
+      say: "Opening the admin Control Deck. This is where Jordan configures Phantom systems, memory, connectors, publishing paths, automations, gateway status, and tenant boundaries.",
       cards: [
         card(
           "Admin Control Deck",
           "Configure Phantom",
-          "Client bots stay tenant-isolated and fresh. Jordan/admin can inspect memory, connector readiness, automation cadence, and worker lanes from PhantomOps.",
+          "Client bots stay tenant-isolated and fresh. Jordan/admin can inspect memory, connector readiness, automation cadence, and Phantom systems from PhantomOps.",
           [openAction("Open Control Deck", "adminos")],
           executionMode.label(),
         ),
@@ -233,7 +233,7 @@ export function handleCommand(raw) {
       id: uid("app"), ws, type: "drive-file",
       title: `Create Google Drive file: ${driveFile.filename}`,
       detail: `Prepared file contents: ${preview}`,
-      ref: driveFile.filename, status: "pending", requestedBy: "Drive Desk", at: new Date().toISOString(),
+      ref: driveFile.filename, status: "pending", requestedBy: "Drive System", at: new Date().toISOString(),
       action: {
         provider: "google_drive",
         operation: "create_file",
@@ -243,7 +243,7 @@ export function handleCommand(raw) {
       },
     };
     store.state.approvals.unshift(action);
-    pushActivity("Drive Desk", `staged ${driveFile.filename} for Google Drive approval.`, ws);
+    pushActivity("Drive System", `staged ${driveFile.filename} for Google Drive approval.`, ws);
     store.save();
     return {
       say: `Staged ${driveFile.filename} in Harbor. The content is ready and waiting for approval. No Google Drive write happened yet.`,
@@ -357,12 +357,12 @@ export function handleCommand(raw) {
     if (/(request|ask|draft|prepare|get|new)/.test(s)) {
       const r = createReviewRequest(subject);
       return {
-        say: `Review Desk drafted the request for ${r.client}. It sits in the queue until you approve it to go out.`,
-        cards: [card("Review request", r.client, r.draft, [openAction("Open Review Desk", "reviews")], "Status: Draft")],
+        say: `Review Studio drafted the request for ${r.client}. It sits in the queue until you approve it to go out.`,
+        cards: [card("Review request", r.client, r.draft, [openAction("Open Review Studio", "reviews")], "Status: Draft")],
         open: "reviews",
       };
     }
-    return { say: "Review Desk is open — requests, received quotes, and the publish queue.", cards: [], open: "reviews" };
+    return { say: "Review Studio is open — requests, received quotes, and the publish queue.", cards: [], open: "reviews" };
   }
 
   /* --- bookings --- */
@@ -393,8 +393,8 @@ export function handleCommand(raw) {
     const active = store.state.agents.filter((a) => a.status === "active").length;
     return {
       say: admin
-        ? `${active} of ${store.state.agents.length} Phantom worker lanes are ready. These are capabilities, not logged-in people. Opening the workforce board.`
-        : `${active} service lanes are available on your workspace. Opening your workforce view.`,
+        ? `${active} of ${store.state.agents.length} Phantom systems are ready. These are app capabilities, not employees or logins. Opening the Systems Map.`
+        : `${active} service systems are available in your workspace. Opening your systems view.`,
       cards: [], open: "workforce",
     };
   }
@@ -403,7 +403,7 @@ export function handleCommand(raw) {
   if (/(today|today'?s plan|what('| i)s next|priorit|status|morning|catch me up|summary)/.test(s)) {
     const plan = todaysPlan();
     return {
-      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "Nothing urgent. The worker lanes are standing by.",
+      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "Nothing urgent. Phantom systems are standing by.",
       cards: plan.slice(0, 3).map((p) => card("Today", p.text, "", [openAction("Open", p.open)])),
       open: null,
     };
@@ -412,7 +412,7 @@ export function handleCommand(raw) {
   /* --- help / what can you do --- */
   if (/(help|what can you|how do|what do you do|\?$)/.test(s) && s.length < 60) {
     return {
-      say: "Ask me anything. For business work, give me the outcome and I’ll route it to the right worker lane, draft, plan, or workspace.",
+      say: "Ask me anything. For business work, give me the outcome and I’ll route it to the right Phantom system, draft, plan, or workspace.",
       cards: [card("Try one of these", "Commands that create things",
         "“Draft a proposal for a new client” · “Create a video brief for a product launch” · “Build a store for a local brand” · “Check my risk radar” · “What's my pipeline?”", [])],
       open: null,
