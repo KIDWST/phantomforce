@@ -596,11 +596,17 @@ function initFlowMap() {
   const style = document.createElement("style");
   style.textContent = `
     .flowmap { margin: 26px 0 6px; }
-    .flowmap-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 2px; }
-    .flowmap-kicker { font: 500 10px "DM Mono", monospace; letter-spacing: .22em; text-transform: uppercase; color: rgba(65,255,161,.75); }
-    .flowmap-sub { font: 400 11px "DM Mono", monospace; color: rgba(234,255,244,.4); }
-    .flowmap canvas { display: block; width: 100%; height: 190px; }
-    @media (max-width: 720px) { .flowmap canvas { height: 170px; } }
+    .flowmap-panel { position: relative; overflow: hidden; border: 1px solid rgba(65,255,161,.16); border-radius: 22px;
+      background:
+        radial-gradient(120% 180% at 12% -30%, rgba(65,255,161,.09), transparent 55%),
+        radial-gradient(130% 200% at 88% 130%, rgba(255,214,120,.06), transparent 55%),
+        rgba(3,10,7,.55);
+      box-shadow: 0 0 50px rgba(65,255,161,.05); }
+    .flowmap-head { position: absolute; top: 15px; left: 20px; z-index: 1; display: flex; align-items: baseline; gap: 12px; pointer-events: none; }
+    .flowmap-kicker { font: 500 10px "DM Mono", monospace; letter-spacing: .24em; text-transform: uppercase; color: rgba(65,255,161,.8); }
+    .flowmap-sub { font: 400 11px "DM Mono", monospace; color: rgba(234,255,244,.38); }
+    .flowmap canvas { display: block; width: 100%; height: 280px; }
+    @media (max-width: 720px) { .flowmap canvas { height: 230px; } .flowmap-sub { display: none; } }
   `;
   document.head.appendChild(style);
 
@@ -608,11 +614,13 @@ function initFlowMap() {
   sec.className = "flowmap";
   sec.setAttribute("aria-label", "The Flow — how work moves through Phantom");
   sec.innerHTML = `
-    <div class="flowmap-head">
-      <span class="flowmap-kicker">The Flow</span>
-      <span class="flowmap-sub">watch work move — tap a station to open its desk</span>
-    </div>
-    <canvas data-flowmap></canvas>`;
+    <div class="flowmap-panel">
+      <div class="flowmap-head">
+        <span class="flowmap-kicker">The Flow</span>
+        <span class="flowmap-sub">work in motion — tap a station to open its desk</span>
+      </div>
+      <canvas data-flowmap></canvas>
+    </div>`;
   host.parentElement.insertBefore(sec, host);
 
   const canvas = sec.querySelector("[data-flowmap]");
@@ -636,18 +644,23 @@ function initFlowMap() {
     if (reduceMotion) scene(0, 0);
   };
 
-  let w = 0, h = 0, dpr = 1, nodes = [], samples = [], nodeU = [], cum = [], totalLen = 1;
+  let w = 0, h = 0, dpr = 1, nodes = [], samples = [], nodeU = [], cum = [], totalLen = 1, stars = [];
   const layout = () => {
     const r = canvas.getBoundingClientRect();
     dpr = Math.min(window.devicePixelRatio || 1, 2);
     w = Math.max(1, r.width); h = Math.max(1, r.height);
     canvas.width = w * dpr; canvas.height = h * dpr;
+    stars = Array.from({ length: Math.round(w / 16) }, () => ({
+      x: Math.random() * w, y: Math.random() * h,
+      r: 0.7 + Math.random() * 1.4, a: 0.08 + Math.random() * 0.26,
+      tw: 1 + Math.random() * 3.5, ph: Math.random() * Math.PI * 2,
+    }));
     const chain = w < 640 ? FULL.filter((n) => n.ws !== "approvals" && n.ws !== "media") : FULL;
-    const padX = Math.max(44, w * 0.055);
+    const padX = Math.max(52, w * 0.06);
     nodes = chain.map((n, i) => ({
       ...n,
       x: padX + (i * (w - padX * 2)) / (chain.length - 1),
-      y: h * 0.52 + (i % 2 ? 1 : -1) * h * 0.14,
+      y: h * 0.55 + (i % 2 ? 1 : -1) * h * 0.13,
       flare: 0,
     }));
     /* sample a Catmull-Rom curve through the stations for constant-speed travel */
@@ -683,23 +696,47 @@ function initFlowMap() {
     return [samples[i - 1][0] + (samples[i][0] - samples[i - 1][0]) * f, samples[i - 1][1] + (samples[i][1] - samples[i - 1][1]) * f];
   };
 
+  const drawBackdrop = (t) => {
+    for (const s of stars) {
+      ctx2.fillStyle = `rgba(190,255,228,${s.a * (0.55 + 0.45 * Math.sin(t * s.tw + s.ph))})`;
+      ctx2.fillRect(s.x, s.y, s.r, s.r);
+    }
+    ctx2.strokeStyle = "rgba(65,255,161,0.045)";   // faint orbit contours behind each station
+    ctx2.lineWidth = 1;
+    for (const n of nodes) {
+      ctx2.beginPath(); ctx2.arc(n.x, n.y, 50, 0, Math.PI * 2); ctx2.stroke();
+    }
+  };
+
+  /* the path is a ribbon of light shifting green → cyan → gold toward Money */
   const drawPath = (t) => {
+    const grad = ctx2.createLinearGradient(nodes[0].x, 0, nodes[nodes.length - 1].x, 0);
+    grad.addColorStop(0, "rgb(65,255,161)");
+    grad.addColorStop(0.55, "rgb(30,240,255)");
+    grad.addColorStop(1, "rgb(255,214,120)");
     ctx2.lineCap = "round"; ctx2.lineJoin = "round";
     ctx2.beginPath();
     ctx2.moveTo(samples[0][0], samples[0][1]);
     for (let i = 1; i < samples.length; i++) ctx2.lineTo(samples[i][0], samples[i][1]);
-    ctx2.strokeStyle = "rgba(65,255,161,0.07)";
-    ctx2.lineWidth = 7;
-    ctx2.stroke();
-    ctx2.strokeStyle = "rgba(65,255,161,0.4)";
-    ctx2.lineWidth = 1.3;
-    ctx2.setLineDash([3, 9]);
-    ctx2.lineDashOffset = -t * 26;   // the whole line drifts toward Money
+    ctx2.strokeStyle = grad;
+    ctx2.globalAlpha = 0.07; ctx2.lineWidth = 11; ctx2.stroke();
+    ctx2.globalAlpha = 0.16; ctx2.lineWidth = 3.5; ctx2.stroke();
+    ctx2.globalAlpha = 0.55; ctx2.lineWidth = 1.2;
+    ctx2.setLineDash([4, 10]);
+    ctx2.lineDashOffset = -t * 30;   // energy drifts toward Money
     ctx2.stroke();
     ctx2.setLineDash([]);
+    ctx2.globalAlpha = 1;
   };
 
   const TRAV = 3, prevU = [0, 0, 0], dust = [];
+  const burst = (n) => {
+    const c = n.gold ? "255,220,140" : "150,255,215";
+    for (let b = 0; b < 7 && dust.length < 70; b++) {
+      const ang = Math.random() * Math.PI * 2, sp = 24 + Math.random() * 46;
+      dust.push({ x: n.x, y: n.y, vx: Math.cos(ang) * sp, vy: Math.sin(ang) * sp - 8, life: 0, max: 0.5 + Math.random() * 0.5, r: 1 + Math.random() * 1.8, c });
+    }
+  };
   const drawTravelers = (t, dt) => {
     const speed = 0.055;   // full runs of the chain per second
     for (let k = 0; k < TRAV; k++) {
@@ -707,26 +744,33 @@ function initFlowMap() {
       for (let i = 0; i < nodeU.length; i++) {
         const nu = nodeU[i];
         const crossed = prevU[k] <= u ? (nu > prevU[k] && nu <= u) : (nu > prevU[k] || nu <= u);
-        if (crossed) nodes[i].flare = 1;
+        if (crossed) { nodes[i].flare = 1; burst(nodes[i]); }
       }
       prevU[k] = u;
       /* the spark turns gold as it closes in on the Money station */
       const gmix = Math.max(0, (u - 0.8) / 0.2);
       const rc = Math.round(120 + 135 * gmix), gc = Math.round(255 - 41 * gmix), bc = Math.round(200 - 80 * gmix);
-      for (let j = 10; j >= 0; j--) {
-        const [x, y] = posAt(u - j * 0.0075);
-        const a = (1 - j / 11) * 0.6;
-        ctx2.fillStyle = `rgba(${rc},${gc},${bc},${a})`;
-        ctx2.beginPath(); ctx2.arc(x, y, 1 + (1 - j / 11) * 2.6, 0, Math.PI * 2); ctx2.fill();
+      for (let j = 16; j >= 0; j--) {   // long tapered comet tail
+        const [x, y] = posAt(u - j * 0.006);
+        ctx2.fillStyle = `rgba(${rc},${gc},${bc},${(1 - j / 17) * 0.55})`;
+        ctx2.beginPath(); ctx2.arc(x, y, 0.8 + (1 - j / 17) * 3, 0, Math.PI * 2); ctx2.fill();
       }
       const [hx, hy] = posAt(u);
-      const hg = ctx2.createRadialGradient(hx, hy, 0, hx, hy, 9);
+      const hg = ctx2.createRadialGradient(hx, hy, 0, hx, hy, 12);
       hg.addColorStop(0, "rgba(255,255,255,0.95)");
-      hg.addColorStop(0.35, `rgba(${rc},${gc},${bc},0.7)`);
+      hg.addColorStop(0.35, `rgba(${rc},${gc},${bc},0.75)`);
       hg.addColorStop(1, `rgba(${rc},${gc},${bc},0)`);
       ctx2.fillStyle = hg;
-      ctx2.beginPath(); ctx2.arc(hx, hy, 9, 0, Math.PI * 2); ctx2.fill();
-      if (Math.random() < 0.25 && dust.length < 40)
+      ctx2.beginPath(); ctx2.arc(hx, hy, 12, 0, Math.PI * 2); ctx2.fill();
+      /* four-point lens flare on the comet head */
+      const fl = 7 + Math.sin(t * 9 + k * 2) * 2.5;
+      ctx2.strokeStyle = `rgba(255,255,255,${0.5 + 0.3 * Math.sin(t * 12 + k)})`;
+      ctx2.lineWidth = 1;
+      ctx2.beginPath();
+      ctx2.moveTo(hx - fl, hy); ctx2.lineTo(hx + fl, hy);
+      ctx2.moveTo(hx, hy - fl); ctx2.lineTo(hx, hy + fl);
+      ctx2.stroke();
+      if (Math.random() < 0.4 && dust.length < 70)
         dust.push({ x: hx, y: hy, vx: (Math.random() - 0.5) * 16, vy: 6 + Math.random() * 14, life: 0, max: 0.5 + Math.random() * 0.6, r: 0.8 + Math.random() * 1.6 });
     }
   };
@@ -736,7 +780,7 @@ function initFlowMap() {
       s.life += dt;
       if (s.life > s.max) { dust.splice(i, 1); continue; }
       s.x += s.vx * dt; s.y += s.vy * dt;
-      ctx2.strokeStyle = `rgba(210,255,235,${(1 - s.life / s.max) * 0.8})`;
+      ctx2.strokeStyle = `rgba(${s.c || "210,255,235"},${(1 - s.life / s.max) * 0.85})`;
       ctx2.lineWidth = 1;
       ctx2.beginPath();
       ctx2.moveTo(s.x - s.r * 2, s.y); ctx2.lineTo(s.x + s.r * 2, s.y);
@@ -746,57 +790,68 @@ function initFlowMap() {
   };
 
   let hover = -1;
-  const drawNodes = (dt) => {
+  const drawNodes = (dt, t) => {
     for (let i = 0; i < nodes.length; i++) {
       const n = nodes[i];
       n.flare = Math.max(0, n.flare - dt * 1.6);
       const s = stats[n.ws] || {};
       const [cr, cg, cb] = n.gold ? [255, 214, 120] : [65, 255, 161];
       const col = (a) => `rgba(${cr},${cg},${cb},${a})`;
-      const R = (w < 640 ? 14 : 17) + (hover === i ? 2.5 : 0) + n.flare * 2;
-      const glow = ctx2.createRadialGradient(n.x, n.y, 0, n.x, n.y, R * 3.2);
-      glow.addColorStop(0, col(0.28 + n.flare * 0.3));
+      const R = (w < 640 ? 16 : 21) + (hover === i ? 2.5 : 0) + n.flare * 2.5;
+      const glow = ctx2.createRadialGradient(n.x, n.y, 0, n.x, n.y, R * 3.4);
+      glow.addColorStop(0, col(0.3 + n.flare * 0.35));
       glow.addColorStop(1, col(0));
       ctx2.fillStyle = glow;
-      ctx2.beginPath(); ctx2.arc(n.x, n.y, R * 3.2, 0, Math.PI * 2); ctx2.fill();
+      ctx2.beginPath(); ctx2.arc(n.x, n.y, R * 3.4, 0, Math.PI * 2); ctx2.fill();
       if (n.flare > 0.01) {   // ripple ring as a spark lands
-        ctx2.strokeStyle = col(n.flare * 0.55);
+        ctx2.strokeStyle = col(n.flare * 0.6);
         ctx2.lineWidth = 1.5;
-        ctx2.beginPath(); ctx2.arc(n.x, n.y, R + (1 - n.flare) * 20, 0, Math.PI * 2); ctx2.stroke();
+        ctx2.beginPath(); ctx2.arc(n.x, n.y, R + (1 - n.flare) * 26, 0, Math.PI * 2); ctx2.stroke();
       }
-      ctx2.fillStyle = "rgba(3,12,8,0.92)";
+      /* slow-turning dashed orbit ring, brighter under the cursor */
+      ctx2.strokeStyle = col(0.4 + (hover === i ? 0.35 : 0) + n.flare * 0.2);
+      ctx2.lineWidth = 1;
+      ctx2.setLineDash([5, 7]);
+      ctx2.lineDashOffset = t * (i % 2 ? 16 : -16);
+      ctx2.beginPath(); ctx2.arc(n.x, n.y, R + 7, 0, Math.PI * 2); ctx2.stroke();
+      ctx2.setLineDash([]);
+      const disc = ctx2.createRadialGradient(n.x, n.y - R * 0.4, 0, n.x, n.y, R);
+      disc.addColorStop(0, "rgba(10,30,22,0.96)");
+      disc.addColorStop(1, "rgba(2,10,7,0.96)");
+      ctx2.fillStyle = disc;
       ctx2.beginPath(); ctx2.arc(n.x, n.y, R, 0, Math.PI * 2); ctx2.fill();
-      ctx2.strokeStyle = col(0.85);
-      ctx2.lineWidth = 1.5 + n.flare;
+      ctx2.strokeStyle = col(0.9);
+      ctx2.lineWidth = 1.6 + n.flare;
       ctx2.stroke();
       ctx2.fillStyle = col(0.95);
-      ctx2.font = `${Math.round(R * 0.9)}px "Space Grotesk", system-ui, sans-serif`;
+      ctx2.font = `${Math.round(R * 0.85)}px "Space Grotesk", system-ui, sans-serif`;
       ctx2.textAlign = "center"; ctx2.textBaseline = "middle";
       ctx2.fillText(s.icon || "◇", n.x, n.y + 1);
       /* label + live stat, kept on the side of the node away from the path */
-      const up = n.y <= h * 0.52;
-      const ly = up ? n.y - R - 26 : n.y + R + 14;
+      const up = n.y <= h * 0.55;
+      const ly = up ? n.y - R - 34 : n.y + R + 18;
       ctx2.font = '500 10px "DM Mono", monospace';
-      ctx2.fillStyle = "rgba(234,255,244,0.55)";
+      ctx2.fillStyle = `rgba(234,255,244,${hover === i ? 0.85 : 0.55})`;
       ctx2.fillText(n.label.toUpperCase(), n.x, ly);
-      ctx2.font = `600 ${Math.round(12 + n.flare * 2)}px "Space Grotesk", system-ui, sans-serif`;
+      ctx2.font = `600 ${Math.round(15 + n.flare * 3)}px "Space Grotesk", system-ui, sans-serif`;
       ctx2.fillStyle = n.gold ? col(0.95) : "rgba(234,255,244,0.92)";
-      ctx2.fillText(s.stat || "—", n.x, ly + 13);
+      ctx2.fillText(s.stat || "—", n.x, ly + 16);
     }
   };
 
   const scene = (t, dt) => {
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx2.clearRect(0, 0, w, h);
+    drawBackdrop(t);
     drawPath(t);
     if (!reduceMotion) { drawTravelers(t, dt); drawDust(dt); }
-    drawNodes(dt);
+    drawNodes(dt, t);
   };
 
   canvas.addEventListener("pointermove", (e) => {
     const r = canvas.getBoundingClientRect();
     const mx = e.clientX - r.left, my = e.clientY - r.top;
-    hover = nodes.findIndex((n) => Math.hypot(mx - n.x, my - n.y) < 26);
+    hover = nodes.findIndex((n) => Math.hypot(mx - n.x, my - n.y) < 32);
     canvas.style.cursor = hover >= 0 ? "pointer" : "default";
   });
   canvas.addEventListener("click", () => { if (hover >= 0) openWorkspace(nodes[hover].ws); });
