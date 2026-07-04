@@ -4,10 +4,10 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
-} from "./store.js?v=phantom-chat-stable-focus-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-chat-stable-focus-20260704-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-chat-stable-focus-20260704-01";
-import { imageStyle } from "./media-image.js?v=phantom-chat-stable-focus-20260704-01";
+} from "./store.js?v=phantom-admin-slash-commands-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-admin-slash-commands-20260704-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-admin-slash-commands-20260704-01";
+import { imageStyle } from "./media-image.js?v=phantom-admin-slash-commands-20260704-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -613,6 +613,109 @@ function renderSuggests() {
     .map((s) => `<button class="suggest" data-suggest="${esc(s)}">${esc(s)}</button>`).join("");
 }
 
+const ADMIN_SLASH_COMMANDS = [
+  { key: "catchup", title: "Catch me up", hint: "What matters first today", kind: "run", prompt: "Catch me up on the business. Show only what matters first." },
+  { key: "pipeline", title: "Pipeline", hint: "Money, leads, proposals", kind: "run", prompt: "Show my pipeline, open money, proposals, and follow-ups." },
+  { key: "lead", title: "New lead", hint: "Create a lead card", kind: "fill", prompt: "Create a new lead from this: " },
+  { key: "proposal", title: "Proposal", hint: "Draft a client proposal", kind: "fill", prompt: "Draft a proposal for " },
+  { key: "quote", title: "Quote", hint: "Build pricing fast", kind: "fill", prompt: "Build a quote for " },
+  { key: "site", title: "Site + store", hint: "Page, store, checkout plan", kind: "fill", prompt: "Build a page or store for " },
+  { key: "video", title: "Video brief", hint: "Media Lab brief", kind: "fill", prompt: "Create a video brief for " },
+  { key: "image", title: "Image brief", hint: "Generate/edit visual brief", kind: "fill", prompt: "Create an image brief for " },
+  { key: "post", title: "Post everywhere", hint: "Draft social content", kind: "fill", prompt: "Draft a post for all connected platforms about " },
+  { key: "schedule", title: "Booking", hint: "Appointment workflow", kind: "fill", prompt: "Set up a booking workflow for " },
+  { key: "drive", title: "Drive note", hint: "Doc/note request", kind: "fill", prompt: "Create a Google Drive note for " },
+  { key: "reviews", title: "Reviews", hint: "Ask past clients", kind: "run", prompt: "Prepare review request follow-ups for previous clients and put them in review." },
+  { key: "security", title: "Risk check", hint: "Scan posture + proof", kind: "run", prompt: "Run a security check and show proof, date, and next required action." },
+  { key: "approvals", title: "Approvals", hint: "Waiting on me", kind: "open", open: "approvals" },
+  { key: "agents", title: "PhantomOps", hint: "Show active systems", kind: "open", open: "adminos" },
+  { key: "media", title: "Media Lab", hint: "Image/video workspace", kind: "open", open: "media" },
+  { key: "control", title: "Control Center", hint: "Open the system map", kind: "harbor" },
+  { key: "help", title: "Slash commands", hint: "Show the admin command list", kind: "run", prompt: "Show my admin slash commands and what each one does." },
+];
+
+let slashIndex = 0;
+let slashMatches = [];
+
+function slashQuery(value = "") {
+  const raw = String(value || "");
+  if (!raw.startsWith("/") || raw.includes("\n")) return null;
+  return raw.slice(1).trim().toLowerCase();
+}
+
+function matchingSlashCommands(query = "") {
+  if (!query) return ADMIN_SLASH_COMMANDS;
+  return ADMIN_SLASH_COMMANDS.filter((cmd) => (
+    cmd.key.includes(query)
+    || cmd.title.toLowerCase().includes(query)
+    || cmd.hint.toLowerCase().includes(query)
+  ));
+}
+
+function renderSlashMenu(input) {
+  const menu = $("[data-slash-menu]");
+  if (!menu) return;
+  const query = slashQuery(input?.value);
+  if (!isAdmin() || query === null) {
+    menu.hidden = true;
+    slashMatches = [];
+    slashIndex = 0;
+    return;
+  }
+  slashMatches = matchingSlashCommands(query).slice(0, 9);
+  slashIndex = Math.min(slashIndex, Math.max(0, slashMatches.length - 1));
+  if (!slashMatches.length) {
+    menu.hidden = false;
+    menu.innerHTML = `<div class="slash-empty">No admin command found.</div>`;
+    return;
+  }
+  menu.hidden = false;
+  menu.innerHTML = `
+    <div class="slash-head"><span>Admin commands</span><kbd>/</kbd></div>
+    <div class="slash-list">
+      ${slashMatches.map((cmd, idx) => `
+        <button class="slash-item ${idx === slashIndex ? "is-active" : ""}" type="button" data-slash-command="${esc(cmd.key)}" role="option" aria-selected="${idx === slashIndex}">
+          <span class="slash-name">/${esc(cmd.key)}</span>
+          <b>${esc(cmd.title)}</b>
+          <small>${esc(cmd.hint)}</small>
+        </button>
+      `).join("")}
+    </div>`;
+}
+
+function hideSlashMenu() {
+  const menu = $("[data-slash-menu]");
+  if (menu) menu.hidden = true;
+}
+
+function applySlashCommand(cmd, input) {
+  if (!cmd || !isAdmin()) return;
+  hideSlashMenu();
+  if (cmd.kind === "open") {
+    if (input) input.value = "";
+    setHarbor(false);
+    openWorkspace(cmd.open);
+    return;
+  }
+  if (cmd.kind === "harbor") {
+    if (input) input.value = "";
+    setHarbor(true);
+    return;
+  }
+  if (cmd.kind === "fill") {
+    input.value = cmd.prompt;
+    autosizeCommandInput(input);
+    input.focus();
+    input.setSelectionRange(input.value.length, input.value.length);
+    setGhostMood("listening", { emotion: "bright" });
+    return;
+  }
+  input.value = "";
+  autosizeCommandInput(input);
+  input.closest("[data-command-form]")?.classList.remove("is-expanded");
+  runCommand(cmd.prompt);
+}
+
 function wireCommandDeck() {
   const form = $("[data-command-form]");
   const input = $("[data-command-input]");
@@ -622,6 +725,7 @@ function wireCommandDeck() {
     input.value = "";
     autosizeCommandInput(input);
     form.classList.remove("is-expanded");
+    hideSlashMenu();
     setChatControls(false);
     runCommand(v);
   };
@@ -631,17 +735,44 @@ function wireCommandDeck() {
   });
   input.addEventListener("focus", () => {
     setGhostMood("listening", { emotion: "calm" });
+    renderSlashMenu(input);
   });
   input.addEventListener("input", () => {
     autosizeCommandInput(input);
     form.classList.toggle("is-expanded", input.value.includes("\n") || input.scrollHeight > 40);
     setGhostMood("listening", { emotion: "bright" });
+    renderSlashMenu(input);
   });
   input.addEventListener("blur", () => {
     if (!input.value.trim()) form.classList.remove("is-expanded");
     setGhostMood("idle", { emotion: "calm", ms: 600 });
   });
   input.addEventListener("keydown", (e) => {
+    const menuOpen = !$("[data-slash-menu]")?.hidden && slashMatches.length;
+    if (menuOpen && ["ArrowDown", "ArrowUp", "Tab", "Enter", "Escape"].includes(e.key)) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        slashIndex = (slashIndex + 1) % slashMatches.length;
+        renderSlashMenu(input);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        slashIndex = (slashIndex - 1 + slashMatches.length) % slashMatches.length;
+        renderSlashMenu(input);
+        return;
+      }
+      if (e.key === "Tab" || e.key === "Enter") {
+        e.preventDefault();
+        applySlashCommand(slashMatches[slashIndex], input);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        hideSlashMenu();
+        return;
+      }
+    }
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submitCommand();
@@ -652,6 +783,13 @@ function wireCommandDeck() {
     submitCommand();
   });
   document.addEventListener("click", (e) => {
+    const slashBtn = e.target.closest("[data-slash-command]");
+    if (slashBtn) {
+      e.preventDefault();
+      e.stopPropagation();
+      applySlashCommand(ADMIN_SLASH_COMMANDS.find((cmd) => cmd.key === slashBtn.dataset.slashCommand), input);
+      return;
+    }
     const controlsToggle = e.target.closest("[data-chat-controls-toggle]");
     if (controlsToggle) {
       e.preventDefault();
@@ -668,6 +806,9 @@ function wireCommandDeck() {
     }
     if (!e.target.closest("[data-chat-controls]") && !e.target.closest("[data-chat-controls-toggle]")) {
       setChatControls(false);
+    }
+    if (!e.target.closest("[data-slash-menu]") && !e.target.closest("[data-command-form]")) {
+      hideSlashMenu();
     }
     const modeBtn = e.target.closest("[data-mode]");
     if (modeBtn) {

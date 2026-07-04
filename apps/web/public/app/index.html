@@ -19,7 +19,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-chat-stable-focus-20260704-01" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-admin-slash-commands-20260704-01" />
     <script>
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker.getRegistrations?.()
@@ -29,7 +29,7 @@
       if ("caches" in window) {
         caches.keys().then((keys) => keys.forEach((key) => caches.delete(key))).catch(() => undefined);
       }
-      window.__PHANTOM_BUILD__ = "phantom-chat-stable-focus-20260704-01";
+      window.__PHANTOM_BUILD__ = "phantom-admin-slash-commands-20260704-01";
       try {
         localStorage.setItem("phantom:last-build", window.__PHANTOM_BUILD__);
       } catch {}
@@ -104,6 +104,7 @@
                       placeholder="Tell Phantom what you need…"
                       aria-label="Tell Phantom what you need"></textarea>
             <button class="speak-send" type="submit" aria-label="Send command">→</button>
+            <div class="slash-menu" data-slash-menu hidden role="listbox" aria-label="Admin slash commands"></div>
           </form>
           <div class="chat-controls-sheet" id="chat-controls-sheet" data-chat-controls hidden>
             <div class="chat-controls-card">
@@ -168,6 +169,6 @@
     <!-- workspace overlays mount here, above the blurred phantom -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-chat-stable-focus-20260704-01"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-admin-slash-commands-20260704-01"></script>
   </body>
 </html>

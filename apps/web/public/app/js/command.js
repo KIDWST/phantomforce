@@ -6,8 +6,8 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-chat-stable-focus-20260704-01";
-import { makeImageArtifact } from "./media-image.js?v=phantom-chat-stable-focus-20260704-01";
+} from "./store.js?v=phantom-admin-slash-commands-20260704-01";
+import { makeImageArtifact } from "./media-image.js?v=phantom-admin-slash-commands-20260704-01";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
