@@ -1930,14 +1930,12 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     box-shadow: 0 0 44px rgba(65, 255, 161, 0.16), inset 0 0 22px rgba(65, 255, 161, 0.06);
   }
   .speakline-hero {
-    display: grid;
-    grid-template-columns: 38px 38px minmax(0, 1fr) 46px;
+    display: flex;
     gap: 10px;
     align-items: center;
   }
   .speakline-hero .speak-send {
-    grid-column: 4;
-    grid-row: 1;
+    flex: 0 0 46px;
     align-self: center;
   }
   .chat-control-toggle,
@@ -1946,18 +1944,21 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     height: 38px;
   }
   .speakline textarea {
+    flex: 1 1 auto;
+    width: 100%;
+    min-width: 0;
     min-height: 28px;
     max-height: 112px;
     font-size: 16px;
     line-height: 24px;
   }
   .speakline.is-expanded {
-    min-height: 118px;
+    min-height: 70px;
     border-radius: 30px;
-    align-items: flex-end;
+    align-items: center;
   }
   .speakline.is-expanded textarea {
-    min-height: 76px;
+    min-height: 28px;
   }
   .chat-controls-sheet {
     width: 100%;
