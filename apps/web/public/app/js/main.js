@@ -4,9 +4,9 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-connectors-20260703-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-connectors-20260703-01";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-connectors-20260703-01";
+} from "./store.js?v=phantom-mode-panels-20260703-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-mode-panels-20260703-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-mode-panels-20260703-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -106,10 +106,13 @@ function renderTopbar() {
   const modeSwitch = $("[data-mode-switch]");
   if (modeSwitch) {
     modeSwitch.hidden = !isAdmin();
+    const current = modeSwitch.querySelector("[data-mode-current]");
+    if (current) current.textContent = executionMode.label();
     modeSwitch.querySelectorAll("[data-mode]").forEach((btn) => {
       const active = executionMode.get() === btn.dataset.mode;
       btn.classList.toggle("is-active", active);
       btn.setAttribute("aria-pressed", String(active));
+      btn.title = active ? `${executionMode.label()} is active` : `Switch to ${btn.dataset.mode === "auto" ? "Auto Mode" : "Approval Mode"}`;
       btn.onclick = () => {
         const mode = executionMode.set(btn.dataset.mode);
         pushActivity("PhantomOps", `switched Phantom to ${mode === "auto" ? "Auto Mode" : "Approval Mode"}.`, "phantomforce");

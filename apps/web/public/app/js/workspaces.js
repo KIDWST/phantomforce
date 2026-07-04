@@ -7,7 +7,7 @@ import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-connectors-20260703-01";
+} from "./store.js?v=phantom-mode-panels-20260703-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -510,7 +510,7 @@ function renderToolSpineCards({ compact = false } = {}) {
   return `
     <div class="${compact ? "tool-spine-compact" : "tool-spine-grid"}">
       ${tools.map((tool) => `
-        <details class="record tool-card tool-mode-${esc(tool.mode)}" ${compact ? "" : "open"}>
+        <details class="record tool-card tool-mode-${esc(tool.mode)}">
           <summary class="tool-summary">
             <span>
               <b><span class="agent-dot"></span>${esc(tool.name)}</b>
@@ -1007,8 +1007,9 @@ function renderAutomationConfig() {
 }
 
 function renderControlPanel(title, status, body, options = {}) {
+  const open = options.open === true;
   return `
-    <details class="config-panel" ${options.open === false ? "" : "open"}>
+    <details class="config-panel" ${open ? "open" : ""}>
       <summary>
         <span>
           <b>${esc(title)}</b>
@@ -1031,8 +1032,8 @@ function renderAdmin(el, rerender) {
     <div class="ws-toolbar">
       <p class="ws-note">Admin Control Deck. This is where Jordan configures Phantom: systems, memory, automations, connectors, publishing paths, security cadence, and gateway behavior. Clients never see this surface.</p>
       <div class="record-actions">
-        <button class="btn ${executionMode.get() === "approval" ? "btn-primary" : "btn-quiet"}" data-act="set-mode-approval">Approval Mode</button>
-        <button class="btn ${executionMode.get() === "auto" ? "btn-primary" : "btn-quiet"}" data-act="set-mode-auto">Auto Mode</button>
+        <span class="mode-readout">Mode: <b>${esc(executionMode.label())}</b></span>
+        <span class="hint-inline">${esc(executionMode.description())}</span>
         <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
       </div>
     </div>
@@ -1099,18 +1100,6 @@ function renderAdmin(el, rerender) {
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
-    "set-mode-approval": () => {
-      executionMode.set("approval");
-      pushActivity("PhantomOps", "switched Phantom to Approval Mode.", "phantomforce");
-      store.save();
-      rerender();
-    },
-    "set-mode-auto": () => {
-      executionMode.set("auto");
-      pushActivity("PhantomOps", "switched Phantom to Auto Mode.", "phantomforce");
-      store.save();
-      rerender();
-    },
     "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
     "load-owner-memory": async () => {
       const result = el.querySelector("[data-owner-memory-result]");
