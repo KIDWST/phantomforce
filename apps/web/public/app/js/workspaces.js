@@ -5,9 +5,9 @@
 
 import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
-  moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
+  moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-brain-20260703-16";
+} from "./store.js?v=phantom-brain-20260703-17";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -607,8 +607,12 @@ function renderAdmin(el, rerender) {
   ];
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients.</p>
-      <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
+      <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients. Current mode: ${esc(executionMode.label())} — ${esc(executionMode.description())}</p>
+      <div class="record-actions">
+        <button class="btn ${executionMode.get() === "approval" ? "btn-primary" : "btn-quiet"}" data-act="set-mode-approval">Approval Mode</button>
+        <button class="btn ${executionMode.get() === "auto" ? "btn-primary" : "btn-quiet"}" data-act="set-mode-auto">Auto Mode</button>
+        <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
+      </div>
     </div>
     <h3 class="ws-subhead">Active tool spine</h3>
     <p class="ws-note">Every tool is mapped to a worker lane. “Active” means visible and available to PhantomOps; external actions still require the right connector and approval.</p>
@@ -637,7 +641,7 @@ function renderAdmin(el, rerender) {
         ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
       </article>
     </div>
-    <h3 class="ws-subhead">Owner Memory</h3>
+    <h3 class="ws-subhead">Owner Memory Log</h3>
     <div class="stack">
       <article class="record record-wide">
         <div class="record-top"><h4>Codex / Hermes / Vault access</h4>${chip("approved")}</div>
@@ -655,6 +659,18 @@ function renderAdmin(el, rerender) {
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
+    "set-mode-approval": () => {
+      executionMode.set("approval");
+      pushActivity("PhantomOps", "switched Phantom to Approval Mode.", "phantomforce");
+      store.save();
+      rerender();
+    },
+    "set-mode-auto": () => {
+      executionMode.set("auto");
+      pushActivity("PhantomOps", "switched Phantom to Auto Mode.", "phantomforce");
+      store.save();
+      rerender();
+    },
     "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
     "load-owner-memory": async () => {
       const result = el.querySelector("[data-owner-memory-result]");

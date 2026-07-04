@@ -13,6 +13,7 @@ export type ClaudeCliChatInput = {
   compactContext: string;
   sensitivityLevel: SensitivityLevel;
   approvalRequired: boolean;
+  executionMode?: "approval" | "auto";
   cwd?: string;
   timeoutMs?: number;
 };
@@ -158,6 +159,10 @@ export async function callClaudeCliChat(
     `Business: ${redactSensitiveText(input.businessName).slice(0, 120)}`,
     `Task: ${redactSensitiveText(input.taskType).slice(0, 120)}`,
     `Sensitivity: ${input.sensitivityLevel}`,
+    `Execution mode: ${input.executionMode === "auto" ? "auto" : "approval"}`,
+    input.executionMode === "auto"
+      ? "Auto Mode: safe internal workspace artifacts and action cards may be prepared without asking again; external/world-changing actions still need the right adapter receipt."
+      : "Approval Mode: stage actions for review before execution.",
     `Approval-sensitive: ${input.approvalRequired}`,
     "",
     "Hermes context:",

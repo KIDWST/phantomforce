@@ -5,8 +5,8 @@
 
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
-  PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil,
-} from "./store.js?v=phantom-brain-20260703-16";
+  PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
+} from "./store.js?v=phantom-brain-20260703-17";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -172,13 +172,14 @@ export function handleCommand(raw) {
   }
 
   if (admin && /\b(read.?only|unleash(?:ed)?|can you change|can phantom change|what can you actually do|ability|powerful|make.*business|zero to amazing)\b/.test(s)) {
+    const auto = executionMode.get() === "auto";
     return {
-      say: "Phantom is not read-only. It is command-first: I can create the plan, proposal, site/store draft, content brief, follow-up workflow, scan proof, and approval-ready action card from one request.",
+      say: `Phantom is not read-only. ${auto ? "Auto Mode is on: safe internal workspace work can happen immediately." : "Approval Mode is on: risky or outward work waits for review."} Tell me the outcome and I will route it.`,
       cards: [
         card(
           "Admin action model",
-          "Phantom builds, then routes execution",
-          "Safe internal work happens in the workspace. External moves like sends, publishing, billing, deploys, credential changes, or deletes go through the right execution lane with owner approval and receipts.",
+          auto ? "Auto for safe internal work" : "Approval for controlled execution",
+          "Plans, leads, proposals, site/store drafts, media briefs, security notes, and memory lookups stay inside Phantom. Sends, publishing, billing, deploys, credential changes, and deletes still need the right execution lane with receipts.",
           [
             openAction("Open Harbor", "adminos"),
             openAction("Open Review", "approvals"),
@@ -194,6 +195,23 @@ export function handleCommand(raw) {
         ),
       ],
       open: null,
+      skipBrain: true,
+    };
+  }
+
+  if (admin && /\b(memory|memory log|activity log|ledger|receipt|receipts|hermes|codex memory|vault|what did you remember|show.*memory|show.*log|pull.*log)\b/.test(s)) {
+    return {
+      say: "Opening Owner Memory Log. This pulls the admin memory surface: Hermes receipts, PhantomAI interaction memory, Codex-visible process notes, and repo docs.",
+      cards: [
+        card(
+          "Owner Memory Log",
+          "Admin-only memory surface",
+          "Client bots stay tenant-isolated and fresh. Jordan/admin can inspect the owner memory log from PhantomOps.",
+          [openAction("Open Memory Log", "adminos")],
+          executionMode.label(),
+        ),
+      ],
+      open: "adminos",
       skipBrain: true,
     };
   }

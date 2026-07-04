@@ -30,6 +30,7 @@ export type OpenRouterGlm52ChatInput = {
   compactContext: string;
   sensitivityLevel: SensitivityLevel;
   approvalRequired: boolean;
+  executionMode?: "approval" | "auto";
   maxTokens?: number;
   adminOperatorLane?: boolean;
 };
@@ -187,6 +188,7 @@ export async function callOpenRouterGlm52(
   const prompt = [
     `Business: ${redactSensitiveText(input.businessName).slice(0, 120)}`,
     `Task: ${redactSensitiveText(input.taskType).slice(0, 120)}`,
+    `Execution mode: ${input.executionMode === "auto" ? "auto" : "approval"}. ${input.executionMode === "auto" ? "Safe internal workspace artifacts/action cards may be created automatically; external actions still require adapter receipts." : "Stage actions for review before execution."}`,
     "Use the compact Hermes context. Respond like a normal adaptive business assistant inside PhantomForce.",
     "Match the user's intent and tone. Be direct, useful, and specific.",
     "You can draft, brainstorm, prioritize, critique, explain, and plan.",

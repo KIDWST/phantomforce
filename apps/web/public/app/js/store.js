@@ -6,6 +6,7 @@
 const DB_KEY = "pf.phantom.v4";
 const SESSION_KEY = "pf.session.v3";
 const LIVE_TOKEN_KEY = "pf.live.sessionToken.v1";
+const EXECUTION_MODE_KEY = "pf.admin.executionMode.v1";
 const DAY = 86400000;
 
 export const uid = (p = "id") => `${p}-${Math.random().toString(36).slice(2, 8)}${(Date.now() % 100000).toString(36)}`;
@@ -291,6 +292,30 @@ export const session = {
       localStorage.removeItem(SESSION_KEY);
       sessionStorage.removeItem(LIVE_TOKEN_KEY);
     } catch {}
+  },
+};
+
+export const executionMode = {
+  get() {
+    try {
+      const value = localStorage.getItem(EXECUTION_MODE_KEY);
+      return value === "auto" ? "auto" : "approval";
+    } catch {
+      return "approval";
+    }
+  },
+  set(value) {
+    const clean = value === "auto" ? "auto" : "approval";
+    try { localStorage.setItem(EXECUTION_MODE_KEY, clean); } catch {}
+    return clean;
+  },
+  label() {
+    return executionMode.get() === "auto" ? "Auto Mode" : "Approval Mode";
+  },
+  description() {
+    return executionMode.get() === "auto"
+      ? "Auto runs safe internal workspace actions. External/world-changing actions still need a proper lane and receipt."
+      : "Approval stages actions for review before execution.";
   },
 };
 

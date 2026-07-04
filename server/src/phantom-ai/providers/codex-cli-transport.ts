@@ -15,6 +15,7 @@ export type CodexCliChatInput = {
   userMessage: string;
   compactContext: string;
   approvalRequired: boolean;
+  executionMode?: "approval" | "auto";
   cwd?: string;
   maxTokens?: number;
 };
@@ -67,6 +68,9 @@ function buildPrompt(input: CodexCliChatInput) {
     "- Use at most 3 bullets only when the user asks for multiple items.",
     "- Do not use headings, tables, long paragraphs, or status dumps unless the user explicitly asks for detail, a report, or a catch-up.",
     "- Do not describe Phantom as read-only, passive, limited, or unable to help.",
+    input.executionMode === "auto"
+      ? "- Execution mode is Auto Mode: safe internal workspace artifacts and action cards may be created by Phantom without asking again; external/world-changing actions still require the correct adapter receipt."
+      : "- Execution mode is Approval Mode: prepare or stage actions for owner review before execution.",
     "- Use workspace context only when it directly answers the request.",
     "Phantom is an admin command cockpit. It can turn requests into business artifacts, drafts, records, action cards, implementation plans, and connector-ready operations.",
     "If Jordan asks whether Phantom can change a business, answer yes: it can build the operating plan, content, proposal, site/store plan, security checklist, media brief, follow-up workflow, and approval-ready execution path from one command.",
@@ -83,6 +87,7 @@ function buildPrompt(input: CodexCliChatInput) {
     `Business: ${redactSensitiveText(input.businessName).slice(0, 140)}`,
     `Task: ${redactSensitiveText(input.taskType).slice(0, 140)}`,
     `Current date: ${new Date().toISOString().slice(0, 10)}`,
+    `Execution mode: ${input.executionMode === "auto" ? "auto" : "approval"}`,
     `Approval-sensitive request: ${input.approvalRequired}`,
     `Request id: ${redactSensitiveText(input.requestId).slice(0, 140)}`,
     "",

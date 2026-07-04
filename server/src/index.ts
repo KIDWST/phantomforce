@@ -3104,6 +3104,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     request_id?: unknown;
     task_type?: unknown;
     sensitivity_level?: unknown;
+    execution_mode?: unknown;
     user_request?: unknown;
     business_summary?: unknown;
     module_data?: unknown;
@@ -3147,6 +3148,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     const adminModelLane = parseAdminPhantomAiModelLane(body.admin_model ?? body.model_lane ?? body.provider);
     const adminProviderRoute = adminPhantomAiProviderRoute(adminModelLane);
     const adminModelLabel = adminPhantomAiModelLabel(adminModelLane);
+    const adminExecutionMode = body.execution_mode === "auto" ? "auto" : "approval";
     if (/^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/i.test(normalized.user_request.trim())) {
       return {
         ok: true,
@@ -3205,6 +3207,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
                   compactContext: memoryContext.augmented_context_preview,
                   sensitivityLevel: preview.decision.sensitivity_level,
                   approvalRequired,
+                  executionMode: adminExecutionMode,
                   adminOperatorLane: true,
                 },
                 {
@@ -3227,6 +3230,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
                   compactContext: memoryContext.augmented_context_preview,
                   sensitivityLevel: preview.decision.sensitivity_level,
                   approvalRequired,
+                  executionMode: adminExecutionMode,
                   adminOperatorLane: true,
                 },
                 {
@@ -3249,6 +3253,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
                 compactContext: memoryContext.augmented_context_preview,
                 sensitivityLevel: preview.decision.sensitivity_level,
                 approvalRequired,
+                executionMode: adminExecutionMode,
               }),
             }
           : {
@@ -3260,6 +3265,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
                 userMessage: normalized.user_request,
                 compactContext: memoryContext.augmented_context_preview,
                 approvalRequired,
+                executionMode: adminExecutionMode,
                 cwd: process.cwd(),
               }),
             };
@@ -3320,6 +3326,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       provider_choice: "phantom",
       admin_model_lane: adminModelLane,
       admin_model_label: adminModelLabel,
+      admin_execution_mode: adminExecutionMode,
       model_id: modelResult.model_id,
       message: {
         role: "assistant",

@@ -3,10 +3,10 @@
 import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
-  ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace,
-} from "./store.js?v=phantom-brain-20260703-16";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-16";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-16";
+  ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
+} from "./store.js?v=phantom-brain-20260703-17";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-17";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-17";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -102,6 +102,26 @@ function renderTopbar() {
     } else {
       wrap.hidden = true;
     }
+  }
+  const modeSwitch = $("[data-mode-switch]");
+  if (modeSwitch) {
+    modeSwitch.hidden = !isAdmin();
+    modeSwitch.querySelectorAll("[data-mode]").forEach((btn) => {
+      const active = executionMode.get() === btn.dataset.mode;
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", String(active));
+      btn.onclick = () => {
+        const mode = executionMode.set(btn.dataset.mode);
+        pushActivity("PhantomOps", `switched Phantom to ${mode === "auto" ? "Auto Mode" : "Approval Mode"}.`, "phantomforce");
+        store.save();
+        renderDashboard();
+      };
+    });
+  }
+  const memoryBtn = $("[data-memory-log]");
+  if (memoryBtn) {
+    memoryBtn.hidden = !isAdmin();
+    memoryBtn.onclick = () => openOwnerMemoryLog();
   }
   $("[data-signout]").onclick = () => { session.clear(); ctx.session = null; closeOverlay(true); showGate(); };
 }
@@ -412,7 +432,8 @@ async function askCodexPhantomBrain(text, localResult) {
         request_id: `app-codex-${uid("req")}`,
         task_type: inferTaskType(text),
         sensitivity_level: inferSensitivity(text),
-        business_summary: "PhantomForce admin mobile command deck. Use Codex as the operator brain and a normal general-purpose chatbot. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and approval-ready action cards. For unrelated/general questions, answer directly without forcing dashboard context. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution lane and owner approval.",
+        execution_mode: executionMode.get(),
+        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use Codex as the operator brain and a normal general-purpose chatbot. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and action cards. For unrelated/general questions, answer directly without forcing dashboard context. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution lane and owner receipt.`,
         module_data: brainModuleData(),
       }),
     });
@@ -522,6 +543,16 @@ function wireCommandDeck() {
     const opener = e.target.closest("[data-open-ws]");
     if (opener) { setHarbor(false); openWorkspace(opener.dataset.openWs); }
   });
+}
+
+function openOwnerMemoryLog() {
+  if (!isAdmin()) return;
+  setHarbor(false);
+  openWorkspace("adminos");
+  setTimeout(() => {
+    const btn = overlayRoot?.querySelector("[data-act='load-owner-memory']");
+    btn?.click();
+  }, 160);
 }
 
 /* ============================ harbor ============================ */
