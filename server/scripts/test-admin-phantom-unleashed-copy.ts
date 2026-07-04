@@ -48,10 +48,12 @@ assert(codexTransport.includes("Phantom is an admin command cockpit"), "Private 
 assert(codexTransport.includes("business artifacts"), "Codex lane must describe artifact creation capability.");
 assert(codexTransport.includes("action adapter returned a receipt"), "Codex lane must preserve truthful execution receipts.");
 assert(codexTransport.includes("For practical how-to questions, give 4-6 short usable steps."), "Private brain lane must answer how-to questions with useful steps.");
+assert(codexTransport.includes("PHANTOM_CODEX_SANDBOX"), "Codex lane must expose a configurable admin execution sandbox.");
+assert(codexTransport.includes("workspace-write"), "Codex lane must default admin execution to workspace-write.");
 
 assert(localOllamaTransport.includes("Phantom is an admin command cockpit with action lanes"), "Local model lane must use action-lane framing.");
-assert(appCommand.includes("Phantom is not read-only"), "Browser command router must answer read-only capability questions directly.");
-assert(appMain.includes("Phantom is not read-only"), "UI backend prompt summary must preserve admin action framing.");
+assert(appCommand.includes("Phantom is in Full Effect"), "Browser command router must answer capability questions with Full Effect framing.");
+assert(appMain.includes("Phantom is in Full Effect for admin"), "UI backend prompt summary must preserve admin full-effect framing.");
 assert(appStore.includes("export const executionMode"), "App store must expose an admin execution mode.");
 assert(appStore.includes("pf.admin.executionMode.v1"), "Execution mode must persist locally.");
 assert(appIndex.includes("data-mode-switch"), "Admin UI must include the mode switch control.");

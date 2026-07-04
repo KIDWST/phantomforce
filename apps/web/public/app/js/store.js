@@ -217,7 +217,7 @@ export const TOOL_SPINE = [
     worker: "Code Navigator",
     mode: "active",
     status: "indexed",
-    role: "Supports read-only semantic repo navigation and code understanding.",
+    role: "Supports semantic repo navigation and code understanding.",
     activity: "code intelligence system ready; no repo scan running.",
     path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\serena",
     visibleToClients: false,
@@ -237,7 +237,7 @@ export const TOOL_SPINE = [
   {
     id: "phantomcut",
     name: "Media Engine",
-    internal: "PhantomCut + Higgsfield",
+    internal: "Media Lab engine",
     worker: "Media Factory",
     mode: "active",
     status: "ready",
@@ -294,7 +294,7 @@ function seed() {
     { id: "ag-router", name: "Command Router", role: "Reads requests and routes them to the right Phantom system.", status: "active", mission: "Standing by for the first real command.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Route the first client request.", bundle: "PhantomOps router · model system A" },
     { id: "ag-leads", name: "Lead Hunter", role: "Captures and qualifies leads once they exist.", status: "active", mission: "Ready for the first real lead.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Capture first lead.", bundle: "PhantomOps + intake specs" },
     { id: "ag-forge", name: "Proposal Forge", role: "Turns qualified leads into priced, scoped proposals.", status: "active", mission: "Ready to draft the first proposal.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first proposal.", bundle: "Spec templates + pricing ladder" },
-    { id: "ag-media", name: "Media Factory", role: "Briefs, shot lists, captions, and controlled generation.", status: "active", mission: "Ready to create the first media brief.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first media brief.", bundle: "PhantomCut system (paid, approval-gated)" },
+    { id: "ag-media", name: "Media Factory", role: "Briefs, shot lists, captions, and controlled generation.", status: "active", mission: "Ready to create the first media brief.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first media brief.", bundle: "Media Lab system (paid, receipt-based)" },
     { id: "ag-image", name: "Image Creator", role: "Turns prompts into image briefs, thumbnails, ads, and product visuals.", status: "active", mission: "Ready to create the first image brief.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No image work yet.", next: "Create first image brief.", bundle: "Media Lab image lane" },
     { id: "ag-operator", name: "Phantom Operator", role: "Admin-only local operator work: inspect, plan, edit, test, and run controlled computer actions.", status: "active", mission: "Ready for the first admin operator task.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No operator task yet.", next: "Prepare first operator task.", bundle: "Private admin operator lane" },
     { id: "ag-site", name: "Site Builder", role: "Drafts pages, landing pages, and site rebuilds.", status: "active", mission: "Ready to build the first page or store.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Build first page or store.", bundle: "Build system + section library" },
@@ -303,7 +303,7 @@ function seed() {
     { id: "ag-review", name: "Review Desk", role: "Requests, collects, and stages testimonials.", status: "active", mission: "Ready to draft the first review request.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first review request.", bundle: "Request→approve→publish pipeline" },
     { id: "ag-follow", name: "Follow-Up Desk", role: "Keeps open threads from going quiet.", status: "active", mission: "Ready to create the first follow-up.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first follow-up.", bundle: "Cadence engine + drafts" },
     { id: "ag-money", name: "Revenue Tracker", role: "Pipeline, proposals, retainers, and what's unpaid.", status: "active", mission: "Ready to track the first quote or win.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Track first quote or win.", bundle: "Ledger view · invoicing unwired" },
-    { id: "ag-book", name: "Booking Coordinator", role: "Appointment drafts, confirmations, reschedules.", status: "active", mission: "Ready to draft the first appointment.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first appointment.", bundle: "Calendar system (approval-gated)" },
+    { id: "ag-book", name: "Booking Coordinator", role: "Appointment drafts, confirmations, reschedules.", status: "active", mission: "Ready to draft the first appointment.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Draft first appointment.", bundle: "Calendar system (receipt-based)" },
     { id: "ag-deliver", name: "Delivery Manager", role: "Keeps sold work moving to done.", status: "active", mission: "Ready for the first delivery item.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Create first delivery item.", bundle: "Task + deliverable tracking" },
     { id: "ag-clean", name: "Data Cleaner", role: "Dedupes, tags, and keeps records tidy.", status: "active", mission: "Ready when data exists.", d1: 0, d7: 0, d30: 0, tokens: "0", cost: "$0.00", last: "No client work yet.", next: "Clean when data exists.", bundle: "Hygiene rules + memory sync" },
   ];
@@ -612,12 +612,12 @@ export function resolveApproval(id, approved) {
 export const STATUS_LABEL = {
   "new": "New", "follow-up": "Follow-up", "proposal": "Proposal out", "won": "Won", "lost": "Lost",
   "draft": "Draft", "sent-ready": "Send-ready", "sent": "Sent", "approved": "Approved",
-  "brief-ready": "Brief ready", "generation-approved": "Generation approved", "delivered": "Delivered",
+  "brief-ready": "Brief ready", "generation-approved": "Generation ready", "delivered": "Delivered",
   "publish-ready": "Publish-ready", "approved-to-publish": "Approved to publish", "published-ready": "Published-ready",
   "received": "Received", "pending": "Pending", "declined": "Declined", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
   "working": "Working",
   "watching": "Watching", "online": "Online", "indexed": "Indexed", "scaffolded": "Scaffolded", "ready": "Ready", "enforcing": "Enforcing", "contained": "Contained", "routed": "Routed",
-  "active": "Active", "standby": "Standby", "sandbox": "Sandbox", "gated": "Gated",
+  "active": "Active", "standby": "Standby", "sandbox": "Sandbox", "gated": "Controlled",
   "available": "Available", "setup-needed": "Configure", "configure": "Configure", "locked": "Locked",
 };
 export const statusLabel = (s) => STATUS_LABEL[s] || s;

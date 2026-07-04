@@ -43,7 +43,7 @@ function renderOwnerMemoryPayload(payload) {
   const sources = memory.sources || {};
   const sourceCards = Object.entries(sources).map(([key, source]) => `
     <article class="record">
-      <div class="record-top"><h4>${esc(key.replaceAll("_", " "))}</h4>${chip(source.exists ? "approved" : "blocked")}</div>
+      <div class="record-top"><h4>${esc(key.replaceAll("_", " "))}</h4>${chip(source.exists ? "approved" : "paused")}</div>
       <p class="record-sub">${esc(source.purpose || "")}</p>
       <p class="record-notes"><b>Path:</b> ${esc(source.path || "not configured")}</p>
       <p class="record-notes"><b>Bytes:</b> ${esc(source.bytes ?? 0)}</p>
@@ -64,7 +64,7 @@ function renderOwnerMemoryPayload(payload) {
   return `
     <div class="stat-row">
       <div class="stat"><span>Owner tenant</span><b>${esc(memory.access_model.owner_default_tenant_id)}</b><i>Jordan/admin default</i></div>
-      <div class="stat"><span>Raw operator internals</span><b>${memory.access_model.raw_operator_internal_memory_exposed ? "exposed" : "blocked"}</b><i>local artifacts only</i></div>
+      <div class="stat"><span>Raw operator internals</span><b>${memory.access_model.raw_operator_internal_memory_exposed ? "exposed" : "private"}</b><i>local artifacts only</i></div>
       <div class="stat"><span>Artifacts</span><b>${(memory.artifacts || []).length}</b><i>${memory.query ? `query: ${esc(memory.query)}` : "latest indexed"}</i></div>
       <div class="stat"><span>Clients</span><b>isolated</b><i>tenant-only memory</i></div>
     </div>
@@ -400,7 +400,7 @@ function renderSites(el, rerender) {
     "add-page": () => {
       const t = prompt("Page for which client / purpose?");
       if (!t) return;
-      store.state.sites.unshift({ id: uid("site"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), title: `${t.trim()} — landing page`, kind: "Landing page", status: "draft", sections: ["Hero with one clear promise", "Proof / reviews section", "Offer + pricing", "Call-to-action (approval-gated)"], url: null, updated: new Date().toISOString() });
+      store.state.sites.unshift({ id: uid("site"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), title: `${t.trim()} — landing page`, kind: "Landing page", status: "draft", sections: ["Hero with one clear promise", "Proof / reviews section", "Offer + pricing", "Call-to-action receipt lane"], url: null, updated: new Date().toISOString() });
       pushActivity("Site Builder", `drafted a landing page for ${t.trim()}.`);
       store.save(); rerender();
     },
@@ -550,7 +550,7 @@ function renderWorkforce(el, rerender) {
     return;
   }
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Your Phantom systems. These are app modules/business departments, not employees or users who logged in. Statuses: active · idle · waiting · blocked · needs approval.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Your Phantom systems. These are app modules/business departments, not employees or users who logged in. Statuses: active · idle · waiting · controlled · ready.</p></div>
     <div class="card-grid">
       ${agents.map((a) => `
         <article class="record agent-card agent-${esc(a.status)}">
@@ -606,11 +606,11 @@ let selectedLivingNodeId = "phantom";
 const mapStatusLabels = {
   active: "Active",
   ready: "Ready",
-  gated: "Gated",
+  gated: "Controlled",
   manual: "Manual",
   planned: "Planned",
   needs_review: "Needs review",
-  blocked: "Blocked",
+  blocked: "Paused",
 };
 
 function edgePath(from, to, sag = 0) {
@@ -709,7 +709,7 @@ function buildLivingMap() {
       x: 715,
       y: 115,
       icon: "▶",
-      detail: "Prepares video briefs, captions, shot lists, PhantomCut/Higgsfield-ready generation, and content packages.",
+      detail: "Prepares video briefs, captions, shot lists, controlled generation, and content packages.",
       inside: [
         { label: "Briefs", state: media.length },
         { label: "Ready", state: mediaReady.length },
@@ -773,7 +773,7 @@ function buildLivingMap() {
       detail: "Creates appointment drafts, confirmations, reschedules, and booking copy before calendar writes.",
       inside: [
         { label: "Drafts", state: bookings.length },
-        { label: "Calendar", state: "gated" },
+        { label: "Calendar", state: "controlled" },
       ],
     },
     {

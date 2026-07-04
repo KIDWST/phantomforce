@@ -219,7 +219,7 @@ function createPageDraft(subject, kind) {
     title: `${t} — ${kind.toLowerCase()}`, kind, status: "draft",
     sections: kind === "Store"
       ? ["Storefront hero", "Product grid", "Offer section", "Checkout — payment connector not wired yet"]
-      : ["Hero with one clear promise", "Proof / reviews section", "Offer + pricing", "Call-to-action (approval-gated)"],
+      : ["Hero with one clear promise", "Proof / reviews section", "Offer + pricing", "Call-to-action receipt lane"],
     url: null, updated: new Date().toISOString(),
   };
   store.state.sites.unshift(s);
@@ -275,12 +275,12 @@ export function handleCommand(raw) {
   if (admin && /\b(read.?only|unleash(?:ed)?|can you change|can phantom change|what can you actually do|ability|powerful|make.*business|zero to amazing)\b/.test(s)) {
     const auto = executionMode.get() === "auto";
     return {
-      say: `Phantom is not read-only. ${auto ? "Auto Mode is on: safe internal workspace work can happen immediately." : "Approval Mode is on: risky or outward work waits for review."} Tell me the outcome and I will route it.`,
+      say: `Phantom is in Full Effect. ${auto ? "Auto Mode is on: safe internal workspace work can happen immediately." : "Approval Mode is on: outward or destructive work moves through the receipt lane."} Tell me the outcome and I will route it.`,
       cards: [
         card(
-          "Admin action model",
+          "Full Effect model",
           auto ? "Auto for safe internal work" : "Approval for controlled execution",
-          "Plans, leads, proposals, site/store drafts, media briefs, security notes, and memory lookups stay inside Phantom. Sends, publishing, billing, deploys, credential changes, and deletes still need the right execution path with receipts.",
+          "Plans, leads, proposals, site/store drafts, media briefs, security notes, and memory lookups stay inside Phantom. Outward-facing moves use the right execution path with receipts.",
           [
             openAction("Open Harbor", "adminos"),
             openAction("Open Review", "approvals"),
@@ -452,7 +452,7 @@ export function handleCommand(raw) {
     if (/(build|create|draft|make|new)/.test(s)) {
       const d = createPageDraft(subject, /landing/.test(s) ? "Landing page" : "Website");
       return {
-        say: `Site Builder drafted "${d.title}". Publishing stays approval-gated.`,
+        say: `Site Builder drafted "${d.title}". Publishing is ready for the proper receipt lane.`,
         cards: [card("Page draft", d.title, d.sections.join(" · "), [openAction("Open in Site & Store Studio", "sites")])],
         open: "sites",
       };

@@ -39,10 +39,10 @@ const safeActionDefinitions = [
   },
   {
     id: "serena-readonly-profile",
-    label: "Generate Serena read-only profile",
+    label: "Generate Serena code map profile",
     worker: "Map",
     program: "Serena",
-    description: "Prints the planned read-only code navigation profile. Does not start Serena.",
+    description: "Prints the planned code navigation profile. Does not start Serena.",
     script: "serena-readonly-profile.ps1",
     mutates_agentlab: false,
   },

@@ -359,7 +359,7 @@ function buildProgramUse(toolStack: Array<{
     n8n: "Check automation bay",
     openspec: "Draft local proposal",
     "agent-os": "Read standards posture",
-    serena: "Generate read-only profile",
+    serena: "Generate code map profile",
     ruflo: "Check planning posture",
     "phantom-ai-online-fetch": "Run AgentLab preflight",
   };
@@ -367,7 +367,7 @@ function buildProgramUse(toolStack: Array<{
     n8n: "Automation draft bay for local workflow plans and inactive workflow JSON.",
     openspec: "Acceptance criteria and implementation-boundary thinking before code changes.",
     "agent-os": "Operating standards for handoffs, constraints, and worker behavior.",
-    serena: "Future read-only code navigation profile for worker context.",
+    serena: "Future code navigation profile for worker context.",
     ruflo: "Quarantined squad-planning vocabulary for future multi-agent work.",
     "phantom-ai-online-fetch": "Planned allowlisted research lane behind Hermes controls.",
   };

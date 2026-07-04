@@ -68,7 +68,7 @@ function buildPrompt(input: CodexCliChatInput) {
     "- For practical how-to questions, give 4-6 short usable steps. Do not stop after only the setup step.",
     "- Use bullets when they make a how-to answer easier to follow.",
     "- Do not use headings, tables, long paragraphs, or status dumps unless the user explicitly asks for detail, a report, or a catch-up.",
-    "- Do not describe Phantom as read-only, passive, limited, or unable to help.",
+    "- Describe Phantom as active, capable, and in Full Effect for admin work.",
     input.executionMode === "auto"
       ? "- Execution mode is Auto Mode: safe internal workspace artifacts and action cards may be created by Phantom without asking again; external/world-changing actions still require the correct adapter receipt."
       : "- Execution mode is Approval Mode: prepare or stage actions for owner review before execution.",
@@ -78,10 +78,10 @@ function buildPrompt(input: CodexCliChatInput) {
     "For image requests, produce prompt-ready art direction, platform crop, subject, style, and delivery notes. Route the artifact through Media Lab.",
     "For video requests, produce a generation-ready brief, source analysis if relevant, shot list, pacing notes, caption, and approval path. Route the artifact through Media Lab.",
     "For build requests, produce a practical implementation plan: app/site/dashboard structure, data model, UI flow, files/modules likely needed, test path, and next action.",
-    "For local operator requests, behave like Phantom Operator: analyze the request, produce the concrete execution plan, and use the admin execution lane when available. Do not expose backend tool names or say that the product is read-only.",
+    "For local operator requests, behave like Phantom Operator: analyze the request, produce the concrete execution plan, and use the admin execution lane when available. Do not expose backend tool names or describe the product as passive.",
     "Do not claim that Phantom literally replaces employees. Say Phantom can take over repetitive admin, build, media, analysis, and computer-work workflows under Jordan/admin control.",
     "Do not answer capability questions with 'No, I can only...' unless the requested capability is impossible or unsafe.",
-    "The operator subprocess is sandboxed for the chat response, but that is an implementation detail. Do not lead with sandbox/read-only language in the product response.",
+    "The operator subprocess execution boundary is an implementation detail. Do not lead with sandbox or limitation language in the product response.",
     "Do not claim that you already edited files, deployed, sent messages, posted content, charged money, or wrote production records unless a specific Phantom action adapter returned a receipt in the context.",
     "For file, account, money, send, publish, deploy, delete, or credential changes, return the concrete artifact/action plan and say it is ready for the proper execution lane or final owner approval.",
     "When a connector is missing, say exactly what Phantom prepared and which connector/action lane must be enabled next; do not sound blocked unless nothing useful can be prepared.",
@@ -125,6 +125,10 @@ export async function callCodexCliChat(input: CodexCliChatInput): Promise<CodexC
   const cwd = resolveCodexCwd(input.cwd);
   const model = process.env.PHANTOM_CODEX_MODEL?.trim() || DEFAULT_CODEX_MODEL;
   const timeout = Number(process.env.PHANTOM_CODEX_TIMEOUT_MS ?? 120000);
+  const configuredSandbox = process.env.PHANTOM_CODEX_SANDBOX?.trim() || "workspace-write";
+  const sandbox = ["read-only", "workspace-write", "danger-full-access"].includes(configuredSandbox)
+    ? configuredSandbox
+    : "workspace-write";
 
   await writeFile(promptPath, buildPrompt(input), "utf8");
 
@@ -135,7 +139,8 @@ export async function callCodexCliChat(input: CodexCliChatInput): Promise<CodexC
       `$workdir = ${psSingleQuoted(cwd)}`,
       `$outputPath = ${psSingleQuoted(outputPath)}`,
       `$model = ${psSingleQuoted(model)}`,
-      "Get-Content -Raw -LiteralPath $promptPath | codex exec - --cd $workdir --sandbox read-only --model $model --output-last-message $outputPath --color never",
+      `$sandbox = ${psSingleQuoted(sandbox)}`,
+      "Get-Content -Raw -LiteralPath $promptPath | codex exec - --cd $workdir --sandbox $sandbox --model $model --output-last-message $outputPath --color never",
       "exit $LASTEXITCODE",
     ].join("\n");
     await writeFile(scriptPath, script, "utf8");
