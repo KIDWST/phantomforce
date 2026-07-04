@@ -7,7 +7,7 @@ import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-map-20260703-22";
+} from "./store.js?v=phantom-connectors-20260703-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -971,21 +971,19 @@ function renderConnectorCards() {
   return `
     <div class="connector-grid">
       ${connectors.map((connector) => `
-        <details class="record connector-card connector-${esc(connector.state)}" ${connector.state === "available" ? "open" : ""}>
+        <details class="record connector-card connector-${esc(connector.state)}">
           <summary class="connector-summary">
             <span>
               <b>${esc(connector.name)}</b>
-              <i>${esc(connector.worker)}</i>
+              <i>${esc(connector.cadence)}</i>
             </span>
             ${connectorChip(connector)}
           </summary>
-          <p class="record-sub">${esc(connector.category)} · ${esc(connector.access)}</p>
-          <p class="record-next">▸ ${esc(connector.cadence)}</p>
-          <p class="record-notes"><b>Next setup:</b> ${esc(connector.next)}</p>
-          <div class="tool-meta">
-            <span>Admin: ${esc(statusLabel(connector.adminState || connector.state))}</span>
-            <span>Client: ${esc(statusLabel(connector.clientState || "locked"))}</span>
+          <div class="connector-capabilities">
+            ${(connector.capabilities || []).map((item) => `<span>${esc(item)}</span>`).join("")}
           </div>
+          <p class="record-sub">${esc(connector.access)} · ${esc(connector.next)}</p>
+          <div class="tool-meta"><span>Admin ${esc(statusLabel(connector.adminState || connector.state))}</span><span>Client ${esc(statusLabel(connector.clientState || "locked"))}</span></div>
         </details>`).join("")}
     </div>`;
 }
@@ -1052,11 +1050,11 @@ function renderAdmin(el, rerender) {
           <button class="btn" data-act="pulse-tools">Pulse system activity</button>
         </div>
       `, { sub: `${activeAgents} systems ready` })}
-      ${renderControlPanel("Publishing and connector systems", readyConnectors ? "ready" : "configure", `
-        <p class="record-notes">Admin can configure Gmail, Calendar, Drive, YouTube, Instagram, Facebook, and TikTok as workspace connectors. Client workspaces stay locked until a specific connector is configured for that client.</p>
+      ${renderControlPanel("Connectors", readyConnectors ? "ready" : "configure", `
+        <p class="record-notes">Connect apps once. Phantom can draft, schedule, publish, upload, file, and follow up per workspace.</p>
         ${renderConnectorCards()}
-        <p class="ws-note">Publishing model: generate or draft inside Phantom → approval receipt → connector posts/sends/uploads. No hidden social posting runs from this UI.</p>
-      `, { sub: "daily content, email, files, and calendar systems" })}
+        <p class="ws-note">Rule: create in Phantom → approve → send/post/upload.</p>
+      `, { sub: "Gmail · Calendar · Drive · socials" })}
       ${renderControlPanel("Automation cadence", "ready", `
         <p class="record-notes">These are the business routines Phantom should run on a schedule once backend automation is connected: monthly protection scans, daily content drafts, review requests after delivery, and follow-up loops.</p>
         ${renderAutomationConfig()}

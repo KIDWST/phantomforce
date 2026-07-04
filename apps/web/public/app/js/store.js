@@ -46,9 +46,10 @@ export const POSTING_CONNECTORS = [
     state: "available",
     adminState: "ready",
     clientState: "locked",
-    cadence: "draft replies, review requests, outreach follow-up",
-    access: "admin Google connector",
-    next: "Choose the workspace and approve the sender identity before any outbound send.",
+    cadence: "email · follow-up · reviews",
+    capabilities: ["Draft", "Reply", "Follow up", "Review ask"],
+    access: "Google",
+    next: "Pick workspace + sender.",
   },
   {
     id: "google-calendar",
@@ -58,9 +59,10 @@ export const POSTING_CONNECTORS = [
     state: "available",
     adminState: "ready",
     clientState: "locked",
-    cadence: "booking holds, reminders, schedule cleanup",
-    access: "admin Google connector",
-    next: "Connect client calendar permissions per workspace before real booking writes.",
+    cadence: "bookings · reminders · schedule",
+    capabilities: ["Book", "Hold", "Remind", "Reschedule"],
+    access: "Google",
+    next: "Connect client calendar.",
   },
   {
     id: "google-drive",
@@ -70,21 +72,23 @@ export const POSTING_CONNECTORS = [
     state: "available",
     adminState: "ready",
     clientState: "locked",
-    cadence: "documents, folders, deliverables, proof packs",
-    access: "admin Google connector",
-    next: "Select target Drive/folder before write actions leave Phantom.",
+    cadence: "docs · assets · deliverables",
+    capabilities: ["Docs", "Folders", "Assets", "Proof"],
+    access: "Google",
+    next: "Choose target folder.",
   },
   {
     id: "youtube",
     name: "YouTube",
-    worker: "Video Publisher",
+    worker: "Channel Publisher",
     category: "social",
     state: "setup-needed",
     adminState: "configure",
     clientState: "locked",
-    cadence: "daily/weekly video posts after approval",
+    cadence: "videos · shorts · posts · images",
+    capabilities: ["Videos", "Shorts", "Posts", "Thumbnails"],
     access: "platform OAuth required",
-    next: "Add channel OAuth, upload rules, title/description templates, and approval receipts.",
+    next: "Connect channel.",
   },
   {
     id: "instagram",
@@ -94,9 +98,10 @@ export const POSTING_CONNECTORS = [
     state: "setup-needed",
     adminState: "configure",
     clientState: "locked",
-    cadence: "short-form posts, reels, captions, hashtags",
+    cadence: "reels · posts · stories · images",
+    capabilities: ["Reels", "Posts", "Carousels", "Stories"],
     access: "Meta business OAuth required",
-    next: "Connect Meta business account and map approved asset/caption workflow.",
+    next: "Connect Meta.",
   },
   {
     id: "facebook",
@@ -106,9 +111,10 @@ export const POSTING_CONNECTORS = [
     state: "setup-needed",
     adminState: "configure",
     clientState: "locked",
-    cadence: "page posts, events, local updates",
+    cadence: "posts · reels · events · images",
+    capabilities: ["Posts", "Reels", "Events", "Photos"],
     access: "Meta page OAuth required",
-    next: "Connect page permissions and define post approval policy.",
+    next: "Connect page.",
   },
   {
     id: "tiktok",
@@ -118,9 +124,10 @@ export const POSTING_CONNECTORS = [
     state: "setup-needed",
     adminState: "configure",
     clientState: "locked",
-    cadence: "daily short-form publishing after approval",
+    cadence: "videos · photo posts · captions",
+    capabilities: ["Videos", "Photo posts", "Captions", "Trends"],
     access: "TikTok developer/OAuth required",
-    next: "Connect account, upload policy, caption rules, and approval receipts.",
+    next: "Connect account.",
   },
 ];
 
@@ -332,10 +339,16 @@ function normalizeData(data) {
   d.approvals ||= seeded.approvals;
   d.agents = seeded.agents.map((agent) => ({ ...(d.agents || []).find((x) => x.id === agent.id), ...agent }));
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...tool, ...(d.toolSpine || []).find((x) => x.id === tool.id) }));
-  d.postingConnectors = POSTING_CONNECTORS.map((connector) => ({
-    ...connector,
-    ...(d.postingConnectors || []).find((x) => x.id === connector.id),
-  }));
+  d.postingConnectors = POSTING_CONNECTORS.map((connector) => {
+    const saved = (d.postingConnectors || []).find((x) => x.id === connector.id);
+    return {
+      ...saved,
+      ...connector,
+      state: saved?.state || connector.state,
+      adminState: saved?.adminState || connector.adminState,
+      clientState: saved?.clientState || connector.clientState,
+    };
+  });
   d.automationConfig = { ...seeded.automationConfig, ...(d.automationConfig || {}) };
   d.workspaceMemory ||= Object.fromEntries(d.workspaces.map((w) => [w.id, {
     tenantId: tenantIdForWorkspace(w.id),

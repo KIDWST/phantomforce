@@ -992,6 +992,22 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .connector-setup-needed {
   border-color: rgba(255, 209, 102, 0.28);
 }
+.connector-capabilities {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 4px 0 10px;
+}
+.connector-capabilities span {
+  border: 1px solid rgba(65, 255, 161, 0.2);
+  border-radius: 999px;
+  padding: 5px 8px;
+  color: #eafff4;
+  background: rgba(65, 255, 161, 0.07);
+  font: 700 10px/1 "DM Mono", monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 .tool-spine-grid,
 .tool-spine-compact {
   display: grid;

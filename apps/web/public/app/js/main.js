@@ -4,9 +4,9 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-map-20260703-22";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-map-20260703-22";
-import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-map-20260703-22";
+} from "./store.js?v=phantom-connectors-20260703-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-connectors-20260703-01";
+import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-connectors-20260703-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
