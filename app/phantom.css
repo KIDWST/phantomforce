@@ -256,16 +256,34 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .flow-stage {
   position: relative; border: 1px solid var(--line); border-radius: 22px; overflow: hidden;
   background:
-    linear-gradient(rgba(65, 255, 161, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(65, 255, 161, 0.04) 1px, transparent 1px),
     radial-gradient(90% 130% at 50% 0%, rgba(65, 255, 161, 0.08), transparent 62%),
     linear-gradient(170deg, rgba(8, 22, 16, 0.74), rgba(2, 8, 9, 0.8));
-  background-size: 36px 36px, 36px 36px, auto, auto;
   box-shadow: inset 0 0 60px rgba(0, 0, 0, 0.35), 0 18px 50px rgba(0, 0, 0, 0.35);
 }
-.flow-stage svg { display: block; width: 100%; height: auto; }
+.flow-stage::before {
+  content: ""; position: absolute; inset: -44px; pointer-events: none;
+  background:
+    linear-gradient(rgba(65, 255, 161, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(65, 255, 161, 0.05) 1px, transparent 1px);
+  background-size: 36px 36px;
+  animation: flowGridPan 16s linear infinite;
+}
+@keyframes flowGridPan { to { transform: translate3d(36px, 36px, 0); } }
+.flow-stage::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(100deg, transparent 20%, rgba(65, 255, 161, 0.07) 50%, transparent 80%);
+  transform: translateX(-130%);
+  animation: flowSweep 8s ease-in-out infinite;
+}
+@keyframes flowSweep { 0%, 55% { transform: translateX(-130%); } 100% { transform: translateX(130%); } }
+.flow-stage svg { position: relative; z-index: 1; display: block; width: 100%; height: auto; }
 .flow-edge { fill: none; stroke: rgba(65, 255, 161, 0.2); stroke-width: 1.5; }
-.flow-edge-watch { fill: none; stroke: rgba(30, 240, 255, 0.24); stroke-width: 1.3; stroke-dasharray: 2 7; stroke-linecap: round; }
+.flow-edge-watch {
+  fill: none; stroke: rgba(30, 240, 255, 0.24); stroke-width: 1.3;
+  stroke-dasharray: 2 7; stroke-linecap: round;
+  animation: flowCrawl 14s linear infinite;
+}
+@keyframes flowCrawl { to { stroke-dashoffset: -90; } }
 .flow-edge-pulse {
   fill: none; stroke: var(--neon); stroke-width: 2.2; stroke-linecap: round;
   stroke-dasharray: 10 130;
@@ -273,10 +291,27 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   animation: flowDash 3.4s linear infinite;
 }
 @keyframes flowDash { to { stroke-dashoffset: -140; } }
-.flow-node { cursor: pointer; }
+.flow-packet { fill: #e9fff4; filter: drop-shadow(0 0 7px rgba(65, 255, 161, 0.95)); }
+.flow-packet-trail { fill: rgba(65, 255, 161, 0.7); filter: drop-shadow(0 0 5px rgba(65, 255, 161, 0.7)); }
+.flow-spark { fill: rgba(65, 255, 161, 0.45); transform-box: fill-box; animation: flowSpark 5s ease-in-out infinite; }
+@keyframes flowSpark {
+  0%, 100% { transform: translateY(6px); opacity: 0; }
+  30% { opacity: 0.75; }
+  50% { transform: translateY(-6px); }
+  80% { opacity: 0.2; }
+}
+.flow-node { cursor: pointer; animation: flowIn 0.7s ease both; }
+@keyframes flowIn { from { opacity: 0; } to { opacity: 1; } }
 .flow-node:focus { outline: none; }
+.flow-orb {
+  transform-box: fill-box; transform-origin: center;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.flow-node:hover .flow-orb,
+.flow-node:focus-visible .flow-orb { transform: scale(1.08); }
 .flow-halo { fill: rgba(65, 255, 161, 0.14); animation: flowHalo 3.6s ease-in-out infinite; }
 @keyframes flowHalo { 0%, 100% { opacity: 0.28; } 50% { opacity: 0.8; } }
+.flow-ping { fill: none; stroke: rgba(65, 255, 161, 0.55); stroke-width: 1.2; }
 .flow-core {
   fill: url(#flowNodeFill); stroke: rgba(65, 255, 161, 0.55); stroke-width: 1.4;
   filter: drop-shadow(0 0 10px rgba(65, 255, 161, 0.35));
@@ -284,9 +319,11 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .flow-node:hover .flow-core,
 .flow-node:focus-visible .flow-core { stroke: var(--neon); filter: drop-shadow(0 0 16px rgba(65, 255, 161, 0.65)); }
-.flow-ring { fill: none; stroke: rgba(65, 255, 161, 0.28); stroke-width: 1; }
+.flow-ticks circle { fill: none; stroke: rgba(65, 255, 161, 0.32); stroke-width: 1; stroke-dasharray: 3 9; stroke-linecap: round; }
+.flow-radar path { fill: rgba(30, 240, 255, 0.09); }
 .flow-icon { fill: #eafff2; font: 600 14px "Space Grotesk", sans-serif; text-anchor: middle; }
-.flow-tag-bg { fill: rgba(3, 12, 9, 0.8); stroke: rgba(65, 255, 161, 0.18); }
+.flow-tag-bg { fill: rgba(3, 12, 9, 0.8); stroke: rgba(65, 255, 161, 0.18); transition: stroke 0.2s; }
+.flow-node:hover .flow-tag-bg { stroke: rgba(65, 255, 161, 0.45); }
 .flow-label { fill: #eafff2; font: 600 13px "Space Grotesk", sans-serif; text-anchor: middle; }
 .flow-stat { fill: var(--neon); font: 500 10.5px "DM Mono", monospace; letter-spacing: 0.04em; text-anchor: middle; }
 .flow-node-alert .flow-core { stroke: rgba(255, 209, 102, 0.7); }
@@ -672,7 +709,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .flowmap { margin-top: 18px; }
   .flow-head { align-items: center; }
   .flow-head h2 { font-size: 19px; }
-  .flow-stage { border-radius: 18px; background-size: 28px 28px, 28px 28px, auto, auto; }
+  .flow-stage { border-radius: 18px; }
+  .flow-stage::before { background-size: 30px 30px; }
   .deck-body { display: block; width: 100%; margin-top: 16px; }
   .deck-label { margin-left: 2px; }
   .mission-grid {
@@ -708,7 +746,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .gate-options { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .speakline-hero::before, .ticker-tag, .speak-caret, .say-line, .rcard, .overlay-panel, .widget-alert::before, .tool-card::before, .flow-halo, .flow-live i { animation: none !important; }
+  .speakline-hero::before, .ticker-tag, .speak-caret, .say-line, .rcard, .overlay-panel, .widget-alert::before, .tool-card::before, .flow-halo, .flow-live i, .flow-node, .flow-spark, .flow-edge-watch, .flow-stage::before, .flow-stage::after { animation: none !important; }
   .flow-edge-pulse { animation: none !important; stroke-dasharray: none; opacity: 0.3; }
   .ghost-canvas { display: none; }
   .phantom, .widget, .btn, .overlay-x { transition: none; }
