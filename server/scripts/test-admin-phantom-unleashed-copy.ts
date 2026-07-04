@@ -56,6 +56,15 @@ assert(appIndex.includes("data-mode-switch"), "Admin UI must include the mode sw
 assert(appIndex.includes("data-memory-log"), "Admin UI must include the memory log shortcut.");
 assert(appMain.includes("execution_mode: executionMode.get()"), "Admin chat must send execution_mode to the backend.");
 assert(appMain.includes("openOwnerMemoryLog"), "App shell must provide a direct owner memory log opener.");
+assert(
+  appMain.indexOf("if (isInstantWorkIntent(s) && !wantsDetailedAnswer(s)) return false;") <
+    appMain.indexOf("if (isAdmin() && (ctx.session?.token || session.token())) return true;"),
+  "Known app commands must route locally before trying the admin Codex lane.",
+);
+assert(
+  appMain.includes("&& !appendLocalSurface"),
+  "Background brain failures must not show debug failure cards for already-handled local actions.",
+);
 assert(appCommand.includes("Owner Memory Log"), "Command router must support memory log requests.");
 assert(appWorkspaces.includes("set-mode-auto"), "PhantomOps must expose Auto Mode control.");
 assert(appWorkspaces.includes("set-mode-approval"), "PhantomOps must expose Approval Mode control.");

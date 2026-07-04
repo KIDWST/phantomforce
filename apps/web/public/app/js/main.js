@@ -4,9 +4,9 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-brain-20260703-17";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-17";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-17";
+} from "./store.js?v=phantom-brain-20260703-18";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-18";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-18";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -328,9 +328,9 @@ function shouldUseCodexBrain(text = "", localResult = {}) {
   const s = text.trim().toLowerCase();
   if (!s || isTinyGreeting(s)) return false;
   if (localResult?.skipBrain) return false;
+  if (isInstantWorkIntent(s) && !wantsDetailedAnswer(s)) return false;
   if (isAdmin() && (ctx.session?.token || session.token())) return true;
   if (wantsDetailedAnswer(s) || isGeneralKnowledgeIntent(s)) return true;
-  if (isInstantWorkIntent(s)) return false;
   return true;
 }
 
@@ -499,7 +499,7 @@ function runCommand(text) {
           };
         }
       } catch (err) {
-        if (isAdmin() && (ctx.session?.token || session.token())) {
+        if (isAdmin() && (ctx.session?.token || session.token()) && !appendLocalSurface) {
           const msg = err?.name === "AbortError" ? "Codex timed out." : (err?.message || "Codex unavailable.");
           r = {
             ...local,

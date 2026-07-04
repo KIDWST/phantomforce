@@ -6,7 +6,7 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-brain-20260703-17";
+} from "./store.js?v=phantom-brain-20260703-18";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
