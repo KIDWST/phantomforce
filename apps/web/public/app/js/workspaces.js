@@ -7,10 +7,10 @@ import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS, runWorkspaceSecurityScan, buildSecurityScanSnapshot,
-} from "./store.js?v=phantom-risk-radar-real-scan-20260704-01";
+} from "./store.js?v=phantom-external-monitor-20260704-01";
 import {
   IMAGE_CROPS, IMAGE_FILTERS, downloadImage, editImageArtifact, imageStyle, makeImageArtifact,
-} from "./media-image.js?v=phantom-risk-radar-real-scan-20260704-01";
+} from "./media-image.js?v=phantom-external-monitor-20260704-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -702,6 +702,73 @@ function updateScanWithBackend(sec, payload = {}) {
   return sec;
 }
 
+function monitoredDomains(ws = currentWs()) {
+  if (ws === "chicagoshots") return ["chicagoshots.online"];
+  if (ws === "test-client") return [];
+  return ["phantomforce.online", "admin.phantomforce.online", "app.phantomforce.online"];
+}
+
+function connectorById(connectors = [], id) {
+  return connectors.find((connector) => connector.id === id) || {};
+}
+
+function externalFindings(result = {}) {
+  return (result.findings || []).slice(0, 8).map((finding) => ({
+    level: finding.severity === "blocked" || finding.severity === "warn" ? "warn" : "ok",
+    text: finding.title || finding.detail || "Risk Radar finding",
+  }));
+}
+
+function updateScanWithExternalMonitor(sec, payload = {}) {
+  const result = payload.result;
+  if (!sec || !result) return sec;
+  const clamav = connectorById(result.connectors || [], "clamav");
+  const defender = connectorById(result.connectors || [], "windows_defender");
+  const hibp = connectorById(result.connectors || [], "hibp_account_breach");
+  const vt = connectorById(result.connectors || [], "virustotal");
+  const safeBrowsing = connectorById(result.connectors || [], "google_safe_browsing");
+  const domainsChecked = Number(result.summary?.domains_checked || 0);
+  const warnings = Number(result.summary?.warnings || 0);
+  const blocked = Number(result.summary?.blocked || 0);
+  const findings = externalFindings(result);
+  const connectorSummary = [
+    `ClamAV ${clamav.active ? "on" : "missing"}`,
+    `Defender ${defender.active ? "on" : "missing"}`,
+    `breach feed ${hibp.active ? "ready" : "needs key"}`,
+    `reputation feeds ${vt.active || safeBrowsing.active ? "ready" : "need keys"}`,
+  ].join(" · ");
+
+  sec.externalProof = {
+    monitorVersion: result.monitor_version,
+    scannedAt: result.scanned_at,
+    verdict: result.summary?.verdict || "review",
+    domainsChecked,
+    emailsChecked: Number(result.summary?.emails_checked || 0),
+    warnings,
+    blocked,
+    findings: Number(result.summary?.findings || 0),
+    antivirusEngine: result.antivirus?.engine || "none",
+    antivirusAvailable: result.antivirus?.available === true,
+    antivirusScanned: result.antivirus?.scanned === true,
+    antivirusClean: result.antivirus?.clean,
+    connectors: connectorSummary,
+    externalCallsAttempted: result.safety_flags?.external_calls_attempted === true,
+    uploaded: result.safety_flags?.upload_performed === true,
+    destructiveAction: result.safety_flags?.destructive_action === true,
+  };
+  if (findings.length) sec.findings = findings;
+  sec.posture = blocked || warnings ? "review" : "clean";
+  sec.status = sec.posture;
+  sec.summary = blocked
+    ? "Risk Radar blocked something. Review before using it."
+    : warnings
+      ? `${warnings} outside risk${warnings === 1 ? "" : "s"} need review.`
+      : "Clean scan. Website, email, and local file checks look good.";
+  sec.breachCheck = hibp.active ? "breach feed ready" : "breach feed needs API key";
+  store.save();
+  return sec;
+}
+
 async function refreshAutonomousScanStatus(sec) {
   const response = await fetch("/phantom-ai/security/autonomous/status", { headers: authHeaders() });
   const payload = await response.json().catch(() => ({}));
@@ -751,6 +818,25 @@ async function runBackendSecurityPreview(sec) {
   return updateScanWithBackend(sec, payload);
 }
 
+async function runExternalSecurityMonitor(sec) {
+  const domains = monitoredDomains(currentWs());
+  const response = await fetch("/phantom-ai/security/external-monitor/run", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({
+      label: `${wsName(currentWs())} Risk Radar monitor`,
+      domains,
+      emails: [],
+      filename: "phantomforce-workspace-scan.txt",
+      content: buildSecurityScanSnapshot(currentWs()),
+      enable_external_calls: true,
+    }),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.ok) throw new Error(payload?.error || "External monitor unavailable");
+  return updateScanWithExternalMonitor(sec, payload);
+}
+
 function renderProtect(el, rerender) {
   const secs = visible(store.state.security);
   const cfg = store.state.automationConfig?.monthlySecurityScans || {};
@@ -764,7 +850,7 @@ function renderProtect(el, rerender) {
       <div class="stat"><span>Monthly scans</span><b>${esc(statusLabel(cfg.state || "ready"))}</b><i>${esc(cfg.nextRunAt ? `next in ${scanDayText(cfg.nextRunAt)}` : cfg.nextRunLabel || "ready")}</i></div>
       <div class="stat"><span>Last proof</span><b>${esc(cfg.lastProof || "none yet")}</b><i>${cfg.lastRunAt ? esc(fmtDateTime(cfg.lastRunAt)) : "run first scan"}</i></div>
       <div class="stat"><span>Password check</span><b>6 months</b><i>unique passwords per account</i></div>
-      <div class="stat"><span>Uploads</span><b>none</b><i>local scan only</i></div>
+      <div class="stat"><span>Outside checks</span><b>${isAdmin() ? "admin" : "hidden"}</b><i>${isAdmin() ? "domain + antivirus" : "client-safe view"}</i></div>
     </div>
     ${secs.length ? `<div class="card-grid">
       ${secs.map((s) => `
@@ -777,6 +863,8 @@ function renderProtect(el, rerender) {
           ${kv("Accounts tracked", `${esc(s.accounts || 1)}`)}
           ${kv("Breach check", esc(s.breachCheck || "ready on password change; no plaintext password stored"))}
           ${s.backendProof ? kv("Scan engine", `${esc(s.backendProof.localOnly ? "local" : "review")} · ${esc(s.backendProof.findings)} finding${Number(s.backendProof.findings) === 1 ? "" : "s"}`) : ""}
+          ${s.externalProof ? kv("Outside monitor", `${esc(s.externalProof.verdict)} · ${esc(s.externalProof.domainsChecked)} domain${Number(s.externalProof.domainsChecked) === 1 ? "" : "s"} · ${esc(s.externalProof.connectors)}`) : ""}
+          ${s.externalProof ? kv("Antivirus", `${esc(s.externalProof.antivirusEngine)} · ${s.externalProof.antivirusAvailable ? "found" : "missing"} · ${s.externalProof.antivirusScanned ? (s.externalProof.antivirusClean === false ? "flagged" : "clean") : "ready"}`) : ""}
           <ul class="record-list">
             ${(s.findings || []).map((f) => `<li class="finding-${esc(f.level)}">${findingIcon(f.level)} ${esc(f.text)}</li>`).join("")}
           </ul>
@@ -791,9 +879,10 @@ function renderProtect(el, rerender) {
       const prev = btn.textContent;
       btn.textContent = "Scanning...";
       btn.disabled = true;
-      const sec = runWorkspaceSecurityScan({ source: "risk-radar" });
+      const sec = runWorkspaceSecurityScan({ source: "radar-manual" });
       try {
         await runBackendSecurityPreview(sec);
+        if (isAdmin()) await runExternalSecurityMonitor(sec);
       } catch (error) {
         sec.backendError = error?.message || "Backend scan unavailable";
         store.save();

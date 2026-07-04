@@ -133,6 +133,11 @@ import {
   SecurityScanRequestSchema,
 } from "./phantom-ai/security-scanner.js";
 import {
+  ExternalSecurityMonitorRequestSchema,
+  getExternalSecurityMonitorStatus,
+  runExternalSecurityMonitor,
+} from "./phantom-ai/external-security-monitor.js";
+import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
 } from "./phantom-ai/security-scan-scheduler.js";
@@ -2524,6 +2529,81 @@ app.get("/phantom-ai/security/scan/status", async (request, reply) => {
       filesystem_scan_enabled: false,
       admin_filesystem_scan_required: false,
     },
+  };
+});
+
+app.get("/phantom-ai/security/external-monitor/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const monitor = getExternalSecurityMonitorStatus();
+
+  if (!session.canManageAccess) {
+    return {
+      ok: true,
+      session,
+      admin_only: true,
+      details_redacted: true,
+      monitor: {
+        monitor_version: monitor.monitor_version,
+        configured: monitor.configured,
+        connectors: monitor.connectors.map((connector) => ({
+          id: connector.id,
+          name: connector.name,
+          configured: connector.configured,
+          active: connector.active,
+        })),
+        safety: monitor.safety,
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    session,
+    admin_only: true,
+    monitor,
+  };
+});
+
+app.post("/phantom-ai/security/external-monitor/run", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = ExternalSecurityMonitorRequestSchema.safeParse(request.body ?? {});
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+      monitor: getExternalSecurityMonitorStatus(),
+      safety_flags: {
+        admin_only: true,
+        destructive_action: false,
+        upload_performed: false,
+        deletes_files: false,
+        plaintext_passwords_accepted: false,
+        raw_credentials_returned: false,
+      },
+    });
+  }
+
+  const result = await runExternalSecurityMonitor(parsed.data);
+
+  return {
+    ok: true,
+    session,
+    admin_only: true,
+    result,
+    provider_called: false,
+    upload_performed: false,
+    destructive_action: false,
   };
 });
 

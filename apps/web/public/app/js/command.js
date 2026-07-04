@@ -6,8 +6,8 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, fmtDate, statusLabel, daysUntil, executionMode, runWorkspaceSecurityScan,
-} from "./store.js?v=phantom-risk-radar-real-scan-20260704-01";
-import { makeImageArtifact } from "./media-image.js?v=phantom-risk-radar-real-scan-20260704-01";
+} from "./store.js?v=phantom-external-monitor-20260704-01";
+import { makeImageArtifact } from "./media-image.js?v=phantom-external-monitor-20260704-01";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();

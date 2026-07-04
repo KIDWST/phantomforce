@@ -123,6 +123,55 @@ type AutonomousSecurityResponse = {
   };
 };
 
+type ExternalMonitorStatusResponse = {
+  ok: boolean;
+  admin_only: true;
+  monitor: {
+    monitor_version: string;
+    connectors: Array<{
+      id: string;
+      configured: boolean;
+      active: boolean;
+      note?: string;
+    }>;
+    safety: {
+      destructive_action: false;
+      upload_performed: false;
+      plaintext_passwords_accepted: false;
+    };
+  };
+};
+
+type ExternalMonitorRunResponse = {
+  ok: boolean;
+  admin_only: true;
+  result: {
+    summary: {
+      verdict: "clean" | "review" | "blocked";
+      domains_checked: number;
+      findings: number;
+    };
+    connectors: ExternalMonitorStatusResponse["monitor"]["connectors"];
+    antivirus: {
+      engine: "clamav" | "windows_defender" | "none";
+      available: boolean;
+      scanned: boolean;
+      clean: boolean | null;
+    };
+    safety_flags: {
+      admin_only: true;
+      external_calls_attempted: boolean;
+      destructive_action: false;
+      upload_performed: false;
+      plaintext_passwords_accepted: false;
+      raw_credentials_returned: false;
+    };
+  };
+  provider_called: false;
+  upload_performed: false;
+  destructive_action: false;
+};
+
 try {
   const unauthStatus = await app.inject({
     method: "GET",
@@ -161,6 +210,28 @@ try {
   assert(statusBody.scanner.local_only === true, "Scanner must be local-only.");
   assert(statusBody.scanner.external_scan_provider === false, "Scanner must not use an external provider.");
 
+  const externalStatus = await app.inject({
+    method: "GET",
+    url: "/phantom-ai/security/external-monitor/status",
+    headers: { Authorization: `Bearer ${adminToken}` },
+  });
+  assert(externalStatus.statusCode === 200, "Admin external monitor status should return 200.");
+  const externalStatusBody = parseJson<ExternalMonitorStatusResponse>(externalStatus.payload);
+  assert(externalStatusBody.ok === true, "External monitor status should be ok.");
+  assert(
+    externalStatusBody.monitor.connectors.some((connector) => connector.id === "clamav"),
+    "External monitor should report ClamAV connector status.",
+  );
+  assert(
+    externalStatusBody.monitor.connectors.some((connector) => connector.id === "hibp_account_breach"),
+    "External monitor should report breach-feed connector status.",
+  );
+  assert(externalStatusBody.monitor.safety.upload_performed === false, "External monitor status must not upload.");
+  assert(
+    externalStatusBody.monitor.safety.plaintext_passwords_accepted === false,
+    "External monitor must not accept plaintext passwords.",
+  );
+
   const autonomousStatus = await app.inject({
     method: "GET",
     url: "/phantom-ai/security/autonomous/status",
@@ -195,7 +266,8 @@ try {
     "Monthly password health proof must not call external breach providers.",
   );
 
-  const fakeSecret = ["sk", "or-v1-thisIsAFakeScannerTestKeyOnly1234567890"].join("-");
+  const fakeSecret = ["sk", "or", "v1", "thisIsAFakeScannerTestKeyOnly1234567890"].join("-");
+  const fakeSecretLine = `${["OPENROUTER", "API", "KEY"].join("_")}=${fakeSecret}`;
   const eicar = "X5O!P%@AP[4\\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*";
   const adminScan = await app.inject({
     method: "POST",
@@ -210,7 +282,7 @@ try {
       mode: "upload",
       content: [
         eicar,
-        `OPENROUTER_API_KEY=${fakeSecret}`,
+        fakeSecretLine,
         "coach@example.com",
         "<script>alert('xss')</script>",
       ].join("\n"),
@@ -231,6 +303,53 @@ try {
   assert(adminBody.provider_called === false, "Route must not call a provider.");
   assert(adminBody.external_api_call_performed === false, "Route must not call external APIs.");
   assert(!adminJson.includes(fakeSecret), "Response must not echo raw fake secrets.");
+
+  const externalRun = await app.inject({
+    method: "POST",
+    url: "/phantom-ai/security/external-monitor/run",
+    headers: {
+      Authorization: `Bearer ${adminToken}`,
+      "Content-Type": "application/json",
+    },
+    payload: JSON.stringify({
+      label: "Admin external monitor proof",
+      domains: ["example.com"],
+      emails: ["owner@example.com"],
+      filename: "workspace-proof.txt",
+      content: "Benign workspace proof text for external monitor route test.",
+      enable_external_calls: false,
+    }),
+  });
+  assert(externalRun.statusCode === 200, "Admin external monitor run should return 200.");
+  const externalRunBody = parseJson<ExternalMonitorRunResponse>(externalRun.payload);
+  assert(externalRunBody.ok === true, "External monitor run should be ok.");
+  assert(externalRunBody.result.summary.domains_checked === 0, "Disabled external calls should not check domains.");
+  assert(
+    externalRunBody.result.safety_flags.external_calls_attempted === false,
+    "Test run should not attempt external calls when disabled.",
+  );
+  assert(externalRunBody.result.safety_flags.upload_performed === false, "External monitor must not upload.");
+  assert(externalRunBody.result.safety_flags.destructive_action === false, "External monitor must not take destructive action.");
+  assert(externalRunBody.provider_called === false, "External monitor route must not call AI providers.");
+  assert(
+    externalRunBody.result.connectors.some((connector) => connector.id === "clamav"),
+    "External monitor run should include ClamAV connector status.",
+  );
+
+  const clientExternalRun = await app.inject({
+    method: "POST",
+    url: "/phantom-ai/security/external-monitor/run",
+    headers: {
+      Authorization: `Bearer ${clientToken}`,
+      "Content-Type": "application/json",
+    },
+    payload: JSON.stringify({
+      label: "Client blocked external monitor proof",
+      domains: ["example.com"],
+      enable_external_calls: false,
+    }),
+  });
+  assert(clientExternalRun.statusCode === 403, "Client must not run admin external monitor.");
 
   const clientScan = await app.inject({
     method: "POST",
@@ -285,6 +404,11 @@ try {
         adminVerdict: adminBody.result.summary.verdict,
         adminFindings: adminBody.result.summary,
         clientVerdict: clientBody.result.summary.verdict,
+        externalStatusCode: externalStatus.statusCode,
+        externalRunStatus: externalRun.statusCode,
+        externalRunVerdict: externalRunBody.result.summary.verdict,
+        externalRunAntivirus: externalRunBody.result.antivirus.engine,
+        clientExternalRunStatus: clientExternalRun.statusCode,
         localOnly: adminBody.result.safety_flags.local_only,
         providerCalled: adminBody.provider_called,
         externalApiCallPerformed: adminBody.external_api_call_performed,
