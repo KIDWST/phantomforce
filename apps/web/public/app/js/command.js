@@ -6,7 +6,7 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, executionMode,
-} from "./store.js?v=phantom-brain-20260703-18";
+} from "./store.js?v=phantom-brain-20260703-19";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -199,9 +199,9 @@ export function handleCommand(raw) {
     };
   }
 
-  if (admin && /\b(memory|memory log|activity log|ledger|receipt|receipts|hermes|codex memory|vault|what did you remember|show.*memory|show.*log|pull.*log)\b/.test(s)) {
+  if (admin && /\b(memory|memory log|activity log|ledger|receipt|receipts|hermes|operator memory|owner memory|vault|what did you remember|show.*memory|show.*log|pull.*log)\b/.test(s)) {
     return {
-      say: "Opening Owner Memory Log. This pulls the admin memory surface: Hermes receipts, PhantomAI interaction memory, Codex-visible process notes, and repo docs.",
+      say: "Opening Owner Memory Log. This pulls the admin memory surface: Hermes receipts, PhantomAI interaction memory, operator process notes, and repo docs.",
       cards: [
         card(
           "Owner Memory Log",

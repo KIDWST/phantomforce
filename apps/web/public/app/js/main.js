@@ -4,9 +4,9 @@ import {
   store, uid, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode,
-} from "./store.js?v=phantom-brain-20260703-18";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-18";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-18";
+} from "./store.js?v=phantom-brain-20260703-19";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-brain-20260703-19";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-brain-20260703-19";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -324,7 +324,7 @@ function isGeneralKnowledgeIntent(text = "") {
     || /\?$/.test(s);
 }
 
-function shouldUseCodexBrain(text = "", localResult = {}) {
+function shouldUsePrivateBrain(text = "", localResult = {}) {
   const s = text.trim().toLowerCase();
   if (!s || isTinyGreeting(s)) return false;
   if (localResult?.skipBrain) return false;
@@ -407,10 +407,10 @@ function brainModuleData() {
   ];
 }
 
-async function askCodexPhantomBrain(text, localResult) {
+async function askPrivatePhantomBrain(text, localResult) {
   const token = ctx.session?.token || session.token();
   if (!isAdmin() || !token) return null;
-  if (!shouldUseCodexBrain(text, localResult)) return null;
+  if (!shouldUsePrivateBrain(text, localResult)) return null;
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 135000);
@@ -424,16 +424,16 @@ async function askCodexPhantomBrain(text, localResult) {
       signal: ctrl.signal,
       body: JSON.stringify({
         provider: "phantom",
-        admin_model: "codex",
+        admin_model: "phantom",
         message: text,
         tenant_id: tenantIdForWorkspace(currentWs()),
         business_name: wsName(currentWs()),
         actor_user_id: "owner-admin",
-        request_id: `app-codex-${uid("req")}`,
+        request_id: `app-brain-${uid("req")}`,
         task_type: inferTaskType(text),
         sensitivity_level: inferSensitivity(text),
         execution_mode: executionMode.get(),
-        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use Codex as the operator brain and a normal general-purpose chatbot. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and action cards. For unrelated/general questions, answer directly without forcing dashboard context. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution lane and owner receipt.`,
+        business_summary: `PhantomForce admin mobile command deck. Current execution mode: ${executionMode.label()} — ${executionMode.description()} Use the private operator brain as a normal general-purpose chatbot and business operator. Phantom is not read-only: it creates workspace artifacts, plans, proposals, site/store drafts, media briefs, security checklists, and action cards. For unrelated/general questions, answer directly without forcing dashboard context. External sends, publishing, billing, deploys, credential changes, and destructive actions require the correct execution lane and owner receipt.`,
         module_data: brainModuleData(),
       }),
     });
@@ -446,11 +446,11 @@ async function askCodexPhantomBrain(text, localResult) {
     if (!say) return null;
 
     const cards = [];
-    if (payload.codex_cli?.status && payload.codex_cli.status !== "called") {
+    if (payload.private_brain?.status && payload.private_brain.status !== "called") {
       cards.push(responseCard(
-        "Brain lane",
-        "Codex needs attention",
-        "Codex did not complete this request, so I used the safe dashboard router instead.",
+        "Private brain",
+        "Brain lane needs attention",
+        "The private brain lane did not complete this request. Phantom used the local workspace router instead.",
         [],
         "No action executed",
       ));
@@ -474,7 +474,7 @@ function runCommand(text) {
   respBox.innerHTML = "";
   const local = handleCommand(text);
   const appendLocalSurface = isInstantWorkIntent(text);
-  if (!shouldUseCodexBrain(text, local)) {
+  if (!shouldUsePrivateBrain(text, local)) {
     setTimeout(() => {
       ghostAnswerBurst(local.say);
       speak(local.say);
@@ -489,7 +489,7 @@ function runCommand(text) {
     setTimeout(async () => {
       let r = local;
       try {
-        const brain = await askCodexPhantomBrain(text, local);
+        const brain = await askPrivatePhantomBrain(text, local);
         if (brain?.say) {
           r = {
             ...local,
@@ -500,11 +500,11 @@ function runCommand(text) {
         }
       } catch (err) {
         if (isAdmin() && (ctx.session?.token || session.token()) && !appendLocalSurface) {
-          const msg = err?.name === "AbortError" ? "Codex timed out." : (err?.message || "Codex unavailable.");
+          const msg = err?.name === "AbortError" ? "The private brain lane timed out." : "The private brain lane is not reachable right now.";
           r = {
             ...local,
             cards: [
-              responseCard("Brain lane", "Codex unavailable", `${msg} I used the safe dashboard router instead.`, [], "No action executed"),
+              responseCard("Private brain", "Brain lane needs attention", `${msg} Phantom used the local workspace router instead.`, [], "No outside action executed"),
               ...(local.cards || []),
             ].slice(0, 4),
           };
@@ -665,7 +665,7 @@ function wirePhantomConsole(body) {
     const local = handleCommand(v);
     let r = local;
     try {
-      const brain = await askCodexPhantomBrain(v, local);
+      const brain = await askPrivatePhantomBrain(v, local);
       if (brain?.say) {
         r = { ...local, say: brain.say, cards: [...(brain.cards || []), ...(local.cards || [])].slice(0, 4) };
       }

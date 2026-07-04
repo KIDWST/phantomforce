@@ -136,7 +136,7 @@ try {
   });
   const adminCodexBody = parseJson<Record<string, unknown>>(adminCodexChat.payload);
   assert(adminCodexChat.statusCode === 200, "Admin Codex chat route should succeed.");
-  assert(adminCodexBody.admin_model_lane === "codex", "Admin Codex route should report codex lane.");
+  assert(adminCodexBody.admin_model_lane === "private_brain", "Admin private brain route should report neutral lane.");
   assert(Boolean(adminCodexBody.operator), "Admin Codex route should return operator metadata.");
   assert(
     JSON.stringify(adminCodexBody).includes("admin-route-shell-ok"),

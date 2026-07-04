@@ -155,7 +155,7 @@ export const TOOL_SPINE = [
   {
     id: "model-lanes",
     name: "Model Switchboard",
-    internal: "Codex / Claude / GLM",
+    internal: "Private model lanes",
     worker: "Brain Router",
     mode: "active",
     status: "routed",

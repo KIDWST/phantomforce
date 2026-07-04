@@ -41,6 +41,7 @@ const openrouterTransport = await readFile(
   new URL("../src/phantom-ai/providers/openrouter-live-transport.ts", import.meta.url),
   "utf8",
 );
+const publicAppBundle = [appIndex, appCommand, appMain, appStore, appWorkspaces].join("\n");
 
 assert(!codexTransport.includes("This chat run is read-only"), "Codex lane must not tell admin Phantom it is read-only.");
 assert(codexTransport.includes("Phantom is an admin command cockpit"), "Codex lane must frame Phantom as an admin command cockpit.");
@@ -56,6 +57,9 @@ assert(appIndex.includes("data-mode-switch"), "Admin UI must include the mode sw
 assert(appIndex.includes("data-memory-log"), "Admin UI must include the memory log shortcut.");
 assert(appMain.includes("execution_mode: executionMode.get()"), "Admin chat must send execution_mode to the backend.");
 assert(appMain.includes("openOwnerMemoryLog"), "App shell must provide a direct owner memory log opener.");
+assert(!/\bcodex\b/i.test(publicAppBundle), "Public app shell must not expose Codex naming in browser-shipped code.");
+assert(appMain.includes("private_brain"), "App shell must consume neutral private brain status.");
+assert(appWorkspaces.includes("/phantom-ai/admin/owner-memory/status"), "Owner memory UI must use neutral owner-memory route.");
 assert(
   appMain.indexOf("if (isInstantWorkIntent(s) && !wantsDetailedAnswer(s)) return false;") <
     appMain.indexOf("if (isAdmin() && (ctx.session?.token || session.token())) return true;"),

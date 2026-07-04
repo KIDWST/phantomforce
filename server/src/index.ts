@@ -740,7 +740,11 @@ function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
   if (lane === "glm_5_2") return "Local GLM";
   if (lane === "claude_cli") return "Claude CLI";
-  return "Codex";
+  return "Private Brain";
+}
+
+function publicAdminPhantomAiModelLane(lane: AdminPhantomAiModelLane) {
+  return lane === "codex" ? "private_brain" : lane;
 }
 
 function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
@@ -2871,7 +2875,7 @@ app.post("/phantom-ai/tool-lane/preview", async (request, reply) => {
   };
 });
 
-app.get("/phantom-ai/admin/codex-memory/status", async (request, reply) => {
+async function handleOwnerMemoryStatus(request: FastifyRequest, reply: FastifyReply) {
   const session = requireAdminAccessSession(request, reply);
 
   if (!session) {
@@ -2879,10 +2883,18 @@ app.get("/phantom-ai/admin/codex-memory/status", async (request, reply) => {
   }
 
   const query = request.query as { q?: string; limit?: string } | undefined;
-  const owner_memory = await buildOwnerCodexMemoryStatus({
+  const ownerMemoryRaw = await buildOwnerCodexMemoryStatus({
     query: query?.q,
     limit: query?.limit,
   });
+  const owner_memory = {
+    ...ownerMemoryRaw,
+    access_model: {
+      ...ownerMemoryRaw.access_model,
+      raw_operator_internal_memory_exposed: ownerMemoryRaw.access_model.raw_codex_internal_memory_exposed,
+      sanitized_local_operator_artifacts_exposed: ownerMemoryRaw.access_model.sanitized_local_codex_artifacts_exposed,
+    },
+  };
 
   return {
     ok: true,
@@ -2893,7 +2905,10 @@ app.get("/phantom-ai/admin/codex-memory/status", async (request, reply) => {
     upload_send_post: false,
     credentials_returned: false,
   };
-});
+}
+
+app.get("/phantom-ai/admin/owner-memory/status", handleOwnerMemoryStatus);
+app.get("/phantom-ai/admin/codex-memory/status", handleOwnerMemoryStatus);
 
 app.post("/phantom-ai/hermes/memory-context/preview", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
@@ -3154,7 +3169,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         ok: true,
         session,
         provider_choice: "phantom",
-        admin_model_lane: adminModelLane,
+        admin_model_lane: publicAdminPhantomAiModelLane(adminModelLane),
         admin_model_label: adminModelLabel,
         model_id: "phantom-instant-router",
         message: {
@@ -3324,10 +3339,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       ok: true,
       session,
       provider_choice: "phantom",
-      admin_model_lane: adminModelLane,
+      admin_model_lane: publicAdminPhantomAiModelLane(adminModelLane),
       admin_model_label: adminModelLabel,
       admin_execution_mode: adminExecutionMode,
-      model_id: modelResult.model_id,
+      model_id: adminModelLane === "codex" ? "phantom-private-brain" : modelResult.model_id,
       message: {
         role: "assistant",
         content: resultError ? `${resultOutput}\n\n${adminModelLabel} error: ${resultError}` : resultOutput,
@@ -3344,11 +3359,11 @@ app.post("/phantom-ai/chat", async (request, reply) => {
               tool_result: modelResult.tool_result,
             }
           : null,
-      codex_cli:
+      private_brain:
         adminModelLane === "codex" && "provider_id" in modelResult && modelResult.provider_id === "codex_cli"
           ? {
               status: modelResult.status,
-              model_id: modelResult.model_id,
+              model_id: "phantom-private-brain",
               seconds: modelResult.seconds,
               admin_only: modelResult.admin_only,
               localhost_only: modelResult.localhost_only,

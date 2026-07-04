@@ -7,7 +7,7 @@ import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-brain-20260703-18";
+} from "./store.js?v=phantom-brain-20260703-19";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -64,7 +64,7 @@ function renderOwnerMemoryPayload(payload) {
   return `
     <div class="stat-row">
       <div class="stat"><span>Owner tenant</span><b>${esc(memory.access_model.owner_default_tenant_id)}</b><i>Jordan/admin default</i></div>
-      <div class="stat"><span>Raw Codex internals</span><b>${memory.access_model.raw_codex_internal_memory_exposed ? "exposed" : "blocked"}</b><i>local artifacts only</i></div>
+      <div class="stat"><span>Raw operator internals</span><b>${memory.access_model.raw_operator_internal_memory_exposed ? "exposed" : "blocked"}</b><i>local artifacts only</i></div>
       <div class="stat"><span>Artifacts</span><b>${(memory.artifacts || []).length}</b><i>${memory.query ? `query: ${esc(memory.query)}` : "latest indexed"}</i></div>
       <div class="stat"><span>Clients</span><b>isolated</b><i>tenant-only memory</i></div>
     </div>
@@ -644,7 +644,7 @@ function renderAdmin(el, rerender) {
     <h3 class="ws-subhead">Owner Memory Log</h3>
     <div class="stack">
       <article class="record record-wide">
-        <div class="record-top"><h4>Codex / Hermes / Vault access</h4>${chip("approved")}</div>
+        <div class="record-top"><h4>Operator brain / Hermes / Vault access</h4>${chip("approved")}</div>
         <p class="record-notes">Jordan/admin can inspect sanitized local owner memory: Hermes receipts, PhantomAI interaction memory, Obsidian process notes, and repo docs. Client accounts remain tenant-only.</p>
         <div class="record-actions">
           <input class="inline-input" data-owner-memory-query placeholder="Search owner memory..." aria-label="Search owner memory" />
@@ -680,7 +680,7 @@ function renderAdmin(el, rerender) {
       try {
         const params = new URLSearchParams();
         if (query) params.set("q", query);
-        const url = `/phantom-ai/admin/codex-memory/status${params.toString() ? `?${params}` : ""}`;
+        const url = `/phantom-ai/admin/owner-memory/status${params.toString() ? `?${params}` : ""}`;
         const response = await fetch(url, { headers: authHeaders() });
         const payload = await response.json().catch(() => ({}));
         if (!response.ok) {
