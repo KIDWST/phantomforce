@@ -190,8 +190,10 @@ let ghostMoodUntil = 0;
 
 function emotionForText(text = "") {
   const s = text.toLowerCase();
+  if (/\bwon\b|closed|delivered|booked|launched|published|5 stars|celebrat/.test(s)) return "excited";
+  if (/\blost\b|declined|went quiet|overdue|no leads|slipped|empty|ghosted/.test(s)) return "sad";
   if (/security|scan|breach|risk|threat|password|malware|approval|waiting|blocked|paid/.test(s)) return "alert";
-  if (/money|pipeline|won|revenue|quote|proposal|ready|captured|drafted|live/.test(s)) return "bright";
+  if (/money|pipeline|revenue|quote|proposal|ready|captured|drafted|live/.test(s)) return "bright";
   if (/clear|current|nothing waiting|clean|welcome/.test(s)) return "happy";
   return "calm";
 }

@@ -129,7 +129,13 @@ function initConversation() {
     }
     if (cls === "user") setCharMood("listening", "calm", 1600);
     else if (cls === "thinking") setCharMood("thinking", "bright", 5000);
-    else setCharMood("talking", "calm", Math.max(1600, text.length * 42));
+    else {
+      const emo =
+        /couldn'?t|limit|try again|that'?s your free|sorry/i.test(text) ? "sad" :
+        /never sleeps|24\/7|worth every|handled|watch it (go|disappear)|stopped losing/i.test(text) ? "excited" :
+        "calm";
+      setCharMood("talking", emo, Math.max(1600, text.length * 42));
+    }
     if (cls !== "user") flare();
   };
   const showDownload = () => { if (downloadCta) downloadCta.hidden = false; };
