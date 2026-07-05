@@ -1,5 +1,6 @@
 param(
   [switch]$Build,
+  [switch]$OpenBrowser,
   [int]$FrontendPort = 5177,
   [int]$BackendPort = 5190
 )
@@ -55,6 +56,19 @@ function Start-NodeProcess {
     -RedirectStandardError $ErrLog | Out-Null
 }
 
+function Find-Browser {
+  $candidates = @(
+    "$env:ProgramFiles\BraveSoftware\Brave-Browser\Application\brave.exe",
+    "$env:LOCALAPPDATA\BraveSoftware\Brave-Browser\Application\brave.exe",
+    "$env:ProgramFiles\Google\Chrome\Application\chrome.exe",
+    "$env:ProgramFiles(x86)\Microsoft\Edge\Application\msedge.exe"
+  )
+  foreach ($candidate in $candidates) {
+    if (Test-Path -LiteralPath $candidate) { return $candidate }
+  }
+  return $null
+}
+
 $webDist = Join-Path $RepoRoot "apps\web\dist\index.html"
 $serverDist = Join-Path $RepoRoot "server\dist\index.js"
 
@@ -106,10 +120,32 @@ if (-not $frontendPid) {
   $frontendPid = Get-ListenerProcessId -Port $FrontendPort
 }
 
+$adminUrl = "http://127.0.0.1:$FrontendPort/app/?session=admin&launcher=admin-live"
+
+if (-not (Wait-ForHttp -Url $adminUrl -TimeoutSeconds 20)) {
+  throw "Admin app did not become reachable at $adminUrl."
+}
+
+if ($OpenBrowser) {
+  $browser = Find-Browser
+  if ($browser) {
+    $profilePath = Join-Path (Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live") "browser-admin"
+    New-Item -ItemType Directory -Force -Path $profilePath | Out-Null
+    Start-Process -FilePath $browser -ArgumentList @(
+      "--app=$adminUrl",
+      "--user-data-dir=$profilePath",
+      "--no-first-run"
+    ) | Out-Null
+  } else {
+    Start-Process $adminUrl | Out-Null
+  }
+}
+
 [pscustomobject]@{
   ok = $true
   repo = $RepoRoot.Path
   frontend = "http://127.0.0.1:$FrontendPort"
+  adminUrl = $adminUrl
   frontendProcess = $frontendPid
   backend = "http://127.0.0.1:$BackendPort"
   backendProcess = $backendPid

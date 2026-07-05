@@ -16,6 +16,12 @@ This folder keeps `admin.phantomforce.online` reliable without exposing the back
 .\ops\admin-live\Start-PhantomForceAdmin.ps1
 ```
 
+Open the local admin app after the runtime is ready:
+
+```powershell
+.\ops\admin-live\Start-PhantomForceAdmin.ps1 -OpenBrowser
+```
+
 Use `-Build` after source changes:
 
 ```powershell
@@ -37,10 +43,14 @@ Use `-Build` after source changes:
 The health check confirms:
 
 - local frontend responds
+- local admin app responds at `http://127.0.0.1:5177/app/?session=admin`
 - proxied `/sessions` responds through the frontend
 - public admin URL responds
 - public admin URL serves production assets, not Vite dev source
 - owner-production auth is visible in `/sessions`
+
+If the local checks pass but the public admin URL fails with DNS errors, the local admin app is running and the
+remaining fix is external DNS/Pangolin routing for `admin.phantomforce.online`.
 
 ## Register local startup
 
