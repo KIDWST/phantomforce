@@ -85,7 +85,7 @@ function localReply(text) {
   if (/sched|book|calendar|remind|appoint|reschedul/.test(s)) return pick(["Bookings, reminders, and changes — handled without the back-and-forth.", "Your calendar runs itself. I book, remind, and reshuffle."]);
   if (/repl|email|message|inbox|comm|\btext\b|\bdm\b|whatsapp|messenger/.test(s)) return pick(["Replies drafted the second they're needed — you approve, I send.", "I clear the inbox: answers waiting for one tap from you."]);
   if (/quote|invoic|money|\bpay\b|sales|deal|proposal/.test(s)) return pick(["Quotes, proposals, and the money trail — drafted and tracked.", "I turn an inquiry into a quote and chase the payment."]);
-  if (/content|video|post|deck|\bdoc\b|social|website|\bsite\b|reel|tiktok|instagram/.test(s)) return pick(["Posts, docs, decks, and video — generated on command, private to you.", "Need content? I'll draft the post, the doc, even the video concept."]);
+  if (/content|video|post|deck|\bdoc\b|social|website|\bsite\b|reel|tiktok|instagram|image|photo|ad|commercial/.test(s)) return pick(["Images, videos, posts, docs, and ads — generated through gated Media Lab workflows so credits stay protected.", "Yes, PhantomForce can make creative. Public demos stay capped; full image/video generation opens after signup and approval."]);
   if (/privat|secure|protect|data|risk|malware|phish|threat|hack|scam/.test(s)) return pick(["I watch the risks — scams, leaks, deadlines — and keep it locked inside your business.", "Protection's built in: I flag the scams and threats before they cost you."]);
   if (/help|stuck|overwhelm|too much|\bbusy\b|stress|no time|drowning/.test(s)) return pick(["That's exactly what I'm for. Tell me the one thing stealing your hours.", "Breathe. Hand me the part you dread and it's handled."]);
   return pick([
@@ -147,7 +147,7 @@ function initConversation() {
     "Your inbox, cleared — replies drafted and waiting on one tap.",
     "Your calendar runs itself: booked, reminded, reshuffled.",
     "Quotes sent, invoices chased, the money trail tracked.",
-    "Posts, decks, docs, even video — created on command.",
+    "Posts, decks, docs, images, and video — created through gated Media Lab generation.",
     "Scams, leaks, and threats flagged before they cost you.",
   ];
   // after a full lap, the coda: every chip lit at once, the ask made plainly
