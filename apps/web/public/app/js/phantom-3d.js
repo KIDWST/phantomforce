@@ -3,11 +3,11 @@ import * as THREE from "../vendor/three.module.min.js";
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
 const MOOD = {
-  idle: { bob: 0.08, breathe: 0.018, ring: 0.42, pulse: 0.2, spin: 0.12 },
-  listening: { bob: 0.055, breathe: 0.025, ring: 0.62, pulse: 0.34, spin: 0.16 },
-  thinking: { bob: 0.045, breathe: 0.012, ring: 0.78, pulse: 0.56, spin: 0.22 },
-  talking: { bob: 0.1, breathe: 0.034, ring: 0.88, pulse: 0.78, spin: 0.28 },
-  menace: { bob: 0.035, breathe: 0.012, ring: 0.76, pulse: 0.62, spin: 0.18 },
+  idle: { bob: 0.028, breathe: 0.006, ring: 0.32, pulse: 0.1, spin: 0.05 },
+  listening: { bob: 0.024, breathe: 0.008, ring: 0.42, pulse: 0.14, spin: 0.07 },
+  thinking: { bob: 0.018, breathe: 0.005, ring: 0.52, pulse: 0.18, spin: 0.1 },
+  talking: { bob: 0.026, breathe: 0.009, ring: 0.58, pulse: 0.2, spin: 0.1 },
+  menace: { bob: 0.018, breathe: 0.005, ring: 0.5, pulse: 0.18, spin: 0.07 },
 };
 
 const ACCENTS = {
@@ -34,8 +34,8 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
-  camera.position.set(0, 0.08, 5.4);
+  const camera = new THREE.PerspectiveCamera(27, 1, 0.1, 20);
+  camera.position.set(0, 0.08, 5.9);
 
   const root = new THREE.Group();
   root.position.y = -0.1;
@@ -219,32 +219,32 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     if (document.hidden) return;
     const t = now * 0.001;
     const m = MOOD[mood] || MOOD.idle;
-    smoothX += (pointerX - smoothX) * 0.08;
-    smoothY += (pointerY - smoothY) * 0.08;
-    const talk = mood === "talking" ? Math.abs(Math.sin(t * 11.5)) : 0;
-    const think = mood === "thinking" ? Math.abs(Math.sin(t * 4.8)) : 0;
-    const pulse = m.pulse + talk * 0.24 + think * 0.12;
+    smoothX += (pointerX - smoothX) * 0.045;
+    smoothY += (pointerY - smoothY) * 0.045;
+    const talk = mood === "talking" ? Math.abs(Math.sin(t * 8.2)) * 0.35 : 0;
+    const think = mood === "thinking" ? Math.abs(Math.sin(t * 3.6)) * 0.35 : 0;
+    const pulse = m.pulse + talk * 0.08 + think * 0.06;
 
-    root.position.y = -0.07 + Math.sin(t * 1.15) * m.bob + talk * 0.035;
-    root.rotation.y = smoothX * 0.16 + Math.sin(t * 0.42) * 0.026;
-    root.rotation.x = -smoothY * 0.034 + Math.sin(t * 0.52) * 0.008;
-    root.rotation.z = smoothX * -0.012 + Math.sin(t * 0.35) * 0.005;
-    const breathe = 1 + Math.sin(t * 1.6) * m.breathe + talk * 0.02;
+    root.position.y = -0.07 + Math.sin(t * 0.95) * m.bob + talk * 0.008;
+    root.rotation.y = smoothX * 0.09 + Math.sin(t * 0.38) * 0.012;
+    root.rotation.x = -smoothY * 0.022 + Math.sin(t * 0.48) * 0.004;
+    root.rotation.z = smoothX * -0.006 + Math.sin(t * 0.32) * 0.002;
+    const breathe = 1 + Math.sin(t * 1.2) * m.breathe + talk * 0.004;
     root.scale.set(breathe, breathe, 1);
 
-    bodyMat.opacity = 0.93 + pulse * 0.04;
-    auraGroup.position.x = -smoothX * 0.035;
-    auraGroup.rotation.z = smoothX * -0.08 + Math.sin(t * 0.38) * 0.012;
+    bodyMat.opacity = 0.92 + pulse * 0.035;
+    auraGroup.position.x = -smoothX * 0.018;
+    auraGroup.rotation.z = smoothX * -0.035 + Math.sin(t * 0.38) * 0.004;
     auraRings.forEach(({ ring, baseOpacity }, i) => {
       ring.rotation.z = t * (0.08 + i * 0.035);
-      ring.material.opacity = baseOpacity + pulse * (0.018 + i * 0.004);
+      ring.material.opacity = baseOpacity + pulse * (0.009 + i * 0.002);
     });
 
     ringGroup.rotation.z += (0.002 + m.spin * 0.006) * (reduceMotion ? 0.2 : 1);
-    ringGroup.scale.setScalar(1 + Math.sin(t * 1.25) * 0.025 + pulse * 0.04);
+    ringGroup.scale.setScalar(1 + Math.sin(t * 1.1) * 0.008 + pulse * 0.012);
     rings.forEach((ring, i) => {
       ring.rotation.z = -t * (0.16 + i * 0.06);
-      ring.material.opacity = (0.08 + m.ring * 0.16) * (1 - i * 0.13) + talk * 0.035;
+      ring.material.opacity = (0.07 + m.ring * 0.12) * (1 - i * 0.13) + talk * 0.01;
     });
 
     const attr = particleGeo.getAttribute("position");
@@ -256,7 +256,7 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     }
     attr.needsUpdate = true;
     particles.rotation.y = root.rotation.y * 0.5;
-    particleMat.opacity = 0.28 + pulse * 0.34;
+    particleMat.opacity = 0.22 + pulse * 0.18;
 
     renderer.render(scene, camera);
   }
