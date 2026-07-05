@@ -5472,6 +5472,10 @@ function PhantomDeck({
   const [answerMode, setAnswerMode] = useState(false);
   const [submittedPrompt, setSubmittedPrompt] = useState("");
   const [pointer, setPointer] = useState({ x: 0, y: 0 });
+  const [bootHologramVisible, setBootHologramVisible] = useState(() => {
+    if (typeof window === "undefined") return true;
+    return window.sessionStorage.getItem("pf.hologramBootSeen.v1") !== "1";
+  });
   const commandInputRef = useRef<HTMLInputElement | null>(null);
   const [proposalHistory, setProposalHistory] = useState<ChicagoShotsProposalHistoryRecord[]>([]);
   const [proposalCounts, setProposalCounts] =
@@ -5683,6 +5687,15 @@ function PhantomDeck({
     const timer = window.setInterval(() => setDeckClock(new Date()), 30000);
     return () => window.clearInterval(timer);
   }, []);
+
+  useEffect(() => {
+    if (!bootHologramVisible) return undefined;
+    const timer = window.setTimeout(() => {
+      window.sessionStorage.setItem("pf.hologramBootSeen.v1", "1");
+      setBootHologramVisible(false);
+    }, 2800);
+    return () => window.clearTimeout(timer);
+  }, [bootHologramVisible]);
 
   useEffect(() => {
     function handleKeyboardShortcut(event: KeyboardEvent) {
@@ -6514,7 +6527,7 @@ function PhantomDeck({
 
   return (
     <section
-      className={`phantom-deck v2 v3${activeWorkspace ? " has-workspace" : ""}${toolsOpen ? " tools-open" : ""}${glanceOpen ? " glance-open" : ""}`}
+      className={`phantom-deck v2 v3${activeWorkspace ? " has-workspace" : ""}${toolsOpen ? " tools-open" : ""}${glanceOpen ? " glance-open" : ""}${bootHologramVisible ? " boot-hologram-visible" : " boot-hologram-complete"}`}
       style={deckStyle}
       onMouseMove={handlePointerMove}
     >
@@ -6618,17 +6631,19 @@ function PhantomDeck({
               </div>
             </div>
 
-            <div className="phantom-holo-stage" aria-label="PhantomForce AI hologram">
-              <PhantomCompanion
-                mood={companionMood}
-                speech={assistantAnswerText}
-                thinking={commandFocused || deckLoading || phantomAiBusy}
-                oracle={Boolean(assistantAnswerText)}
-                answerMode={answerModeActive}
-                onSpeechClick={answerModeActive ? undefined : () => openWorkspace(companionMessage.workspace)}
-              />
-              <span className="holo-label">PHANTOMFORCE AI</span>
-            </div>
+            {bootHologramVisible ? (
+              <div className="phantom-holo-stage" aria-label="PhantomForce AI startup hologram">
+                <PhantomCompanion
+                  mood={companionMood}
+                  speech={assistantAnswerText}
+                  thinking={commandFocused || deckLoading || phantomAiBusy}
+                  oracle={Boolean(assistantAnswerText)}
+                  answerMode={answerModeActive}
+                  onSpeechClick={answerModeActive ? undefined : () => openWorkspace(companionMessage.workspace)}
+                />
+                <span className="holo-label">PHANTOMFORCE AI</span>
+              </div>
+            ) : null}
 
             <div className={`phantom-intel-stack${glanceOpen ? " summoned" : ""}`} aria-label="Phantom intelligence">
               {canManageAccess ? (

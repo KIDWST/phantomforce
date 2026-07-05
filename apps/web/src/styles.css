@@ -13396,6 +13396,28 @@ button.phantom-speech {
   display: none;
 }
 
+.phantom-deck.v3.boot-hologram-visible .phantom-holo-stage {
+  animation: phantomBootLogo 2.8s ease both;
+}
+
+@keyframes phantomBootLogo {
+  0% {
+    opacity: 0;
+    filter: blur(14px) saturate(0.65);
+    transform: scale(0.94);
+  }
+  16%, 78% {
+    opacity: 1;
+    filter: blur(0) saturate(1.08);
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(10px) saturate(0.72);
+    transform: scale(0.985);
+  }
+}
+
 .phantom-deck.v3 .phantom-command,
 .phantom-deck.v3 .phantom-command.focused,
 .phantom-deck.v3 .phantom-command button,
@@ -13662,4 +13684,30 @@ button.phantom-speech {
 .phantom-deck.v3 .phantom-deck-body,
 .phantom-deck.v3 .phantom-activity-ticker {
   max-width: 100%;
+}
+
+.phantom-deck.v3.boot-hologram-complete .phantom-command-core {
+  grid-template-columns: minmax(320px, 0.94fr) minmax(360px, 1.06fr);
+  grid-template-areas: "mission intel";
+  min-height: auto;
+  align-items: start;
+}
+
+.phantom-deck.v3.boot-hologram-complete .phantom-command-stage {
+  min-height: auto;
+}
+
+.phantom-deck.v3.boot-hologram-complete .mission-control-panel,
+.phantom-deck.v3.boot-hologram-complete .phantom-intel-stack {
+  align-self: start;
+}
+
+@media (max-width: 900px) {
+  .phantom-deck.v3.boot-hologram-complete .phantom-command-core {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "mission"
+      "intel";
+    padding-top: 0;
+  }
 }
