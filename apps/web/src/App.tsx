@@ -5618,6 +5618,14 @@ function PhantomDeck({
     },
   ].filter((capability) => canOpenPhantomDeckWorkspace(capability.workspace, canManageAccess));
 
+  function dismissBootHologram() {
+    if (!bootHologramVisible) return;
+    try {
+      window.sessionStorage.setItem("pf.hologramBootSeen.v1", "1");
+    } catch {}
+    setBootHologramVisible(false);
+  }
+
   useEffect(() => {
     if (!canManageAccess) {
       setDeckLoading(false);
@@ -5690,8 +5698,10 @@ function PhantomDeck({
 
   useEffect(() => {
     if (!bootHologramVisible) return undefined;
-    const timer = window.setTimeout(() => {
+    try {
       window.sessionStorage.setItem("pf.hologramBootSeen.v1", "1");
+    } catch {}
+    const timer = window.setTimeout(() => {
       setBootHologramVisible(false);
     }, 2800);
     return () => window.clearTimeout(timer);
@@ -6304,6 +6314,7 @@ function PhantomDeck({
   }
 
   function openWorkspace(workspace: PhantomDeckWorkspaceId) {
+    dismissBootHologram();
     if (!canOpenPhantomDeckWorkspace(workspace, canManageAccess)) {
       setActiveWorkspace("status");
       setToolsOpen(false);
@@ -6337,6 +6348,7 @@ function PhantomDeck({
   }
 
   function openToolOrbit() {
+    dismissBootHologram();
     setActiveWorkspace(null);
     setAnswerMode(false);
     setToolsOpen(true);
@@ -6356,6 +6368,7 @@ function PhantomDeck({
   }
 
   function toggleGlance() {
+    dismissBootHologram();
     setGlanceOpen((open) => {
       const next = !open;
       if (next) {
@@ -6435,6 +6448,7 @@ function PhantomDeck({
     const rawCommand = commandText.trim();
     if (!rawCommand || phantomAiBusy) return;
 
+    dismissBootHologram();
     setSubmittedPrompt(rawCommand);
     setAnswerMode(true);
     setActiveWorkspace(null);
@@ -6486,6 +6500,7 @@ function PhantomDeck({
         ? latestAssistant.content
         : companionMessage.text;
   const answerModeActive = answerMode || Boolean(phantomAiBusy && submittedPrompt);
+  const showBootHologram = bootHologramVisible && !answerModeActive && !submittedPrompt && !activeWorkspace;
   const workspaceOverlay =
     activeWorkspace && activeWorkspaceMeta ? (
       <ActiveWorkspace
@@ -6527,7 +6542,7 @@ function PhantomDeck({
 
   return (
     <section
-      className={`phantom-deck v2 v3${activeWorkspace ? " has-workspace" : ""}${toolsOpen ? " tools-open" : ""}${glanceOpen ? " glance-open" : ""}${bootHologramVisible ? " boot-hologram-visible" : " boot-hologram-complete"}`}
+      className={`phantom-deck v2 v3${activeWorkspace ? " has-workspace" : ""}${toolsOpen ? " tools-open" : ""}${glanceOpen ? " glance-open" : ""}${showBootHologram ? " boot-hologram-visible" : " boot-hologram-complete"}`}
       style={deckStyle}
       onMouseMove={handlePointerMove}
     >
@@ -6631,7 +6646,7 @@ function PhantomDeck({
               </div>
             </div>
 
-            {bootHologramVisible ? (
+            {showBootHologram ? (
               <div className="phantom-holo-stage" aria-label="PhantomForce AI startup hologram">
                 <PhantomCompanion
                   mood={companionMood}
