@@ -2,12 +2,13 @@
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
-  visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, isStaticPublicHost,
+  visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-10";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-11";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-11";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -131,7 +132,7 @@ const NAV = [
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "money" },
-  { id: "settings",   label: "Settings",     icon: "cog",   ws: "adminos", adminOnly: true },
+  { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 let activeNav = "chat";
 
@@ -452,7 +453,13 @@ function paletteSources(query) {
   const scored = items.map((it) => ({ it, s: fuzzy(q, (it.label + " " + (it.sub || "")).toLowerCase()) })).filter((x) => q === "" || x.s > 0);
   scored.sort((a, b) => b.s - a.s);
   const out = scored.map((x) => x.it);
-  if (q) out.unshift({ group: "Ask", label: `Ask Phantom: "${query.trim()}"`, icon: "chat", sub: "Run as a command", run: () => runCommand(query.trim()) });
+  // "Ask Phantom: <query>" is always available, but only jumps to the top when
+  // nothing else matches strongly — so typing a workspace name opens it directly.
+  if (q) {
+    const ask = { group: "Ask", label: `Ask Phantom: "${query.trim()}"`, icon: "chat", sub: "Run as a command", run: () => runCommand(query.trim()) };
+    const strong = scored[0] && scored[0].s >= 100;   // a direct substring hit
+    if (strong) out.push(ask); else out.unshift(ask);
+  }
   return out.slice(0, 40);
 }
 function renderPalette(query) {
@@ -697,21 +704,35 @@ function wireDeck() {
 }
 
 /* ============================ overlay engine ============================ */
+/* Custom, non-store workspaces (the Media Lab studio + Settings). These
+   override / extend WORKSPACE_DEFS without touching workspaces.js. */
+const mediaOpts = () => ({
+  esc,
+  isAdmin: isAdmin(),
+  notify: (who, text) => { pushActivity(who, text); store.save(); },
+  openSettings: () => openWorkspace("settings"),
+  renderBriefs: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
+});
+const CUSTOM = {
+  media: { title: "Media Lab", kicker: "AI studio", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
+  settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
+};
+
 let openId = null;
 function openWorkspace(id, pushHash = true) {
-  const def = WORKSPACE_DEFS[id];
+  const def = CUSTOM[id] || WORKSPACE_DEFS[id];
   if (!def) return;
   if (def.adminOnly && !isAdmin()) return;
   closeOverlay(false);
   openId = id;
   document.body.classList.add("overlay-open");
   overlayRoot.innerHTML = `
-    <div class="overlay" role="dialog" aria-modal="true" aria-label="${esc(def.title)}">
+    <div class="overlay ${def.wide ? "overlay-wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(def.title)}">
       <button class="overlay-backdrop" data-overlay-close aria-label="Back to console"></button>
       <section class="overlay-panel">
         <header class="overlay-head">
           <div>
-            <p class="overlay-kicker">${esc(def.kicker)}${isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
+            <p class="overlay-kicker">${esc(def.kicker)}${!def.custom && isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
             <h2>${esc(def.title)}</h2>
           </div>
           <button class="overlay-x" data-overlay-close aria-label="Close workspace">✕</button>
@@ -720,7 +741,10 @@ function openWorkspace(id, pushHash = true) {
       </section>
     </div>`;
   const body = $("[data-overlay-body]", overlayRoot);
-  const rerender = () => { def.render(body, rerender); if (id === "phantom") wirePhantomConsole(body); };
+  const rerender = () => {
+    if (def.custom) def.render(body);
+    else { def.render(body, rerender); if (id === "phantom") wirePhantomConsole(body); }
+  };
   rerender();
   overlayRoot.querySelectorAll("[data-overlay-close]").forEach((b) => b.addEventListener("click", () => closeOverlay(true)));
   if (pushHash && location.hash !== `#ws/${id}`) {
@@ -746,7 +770,7 @@ function syncNavToView() {
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });
 window.addEventListener("popstate", () => {
   const m = location.hash.match(/^#ws\/([a-z]+)/);
-  if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
+  if (m && (CUSTOM[m[1]] || WORKSPACE_DEFS[m[1]])) openWorkspace(m[1], false);
   else closeOverlay(false);
 });
 
@@ -846,7 +870,7 @@ function enterPhantom() {
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
-  if (view && view !== "command" && WORKSPACE_DEFS[view]) openWorkspace(view);
+  if (view && view !== "command" && (CUSTOM[view] || WORKSPACE_DEFS[view])) openWorkspace(view);
   const m = location.hash.match(/^#ws\/([a-z]+)/);
   if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
   // a data-driven spoken briefing once the reveal settles

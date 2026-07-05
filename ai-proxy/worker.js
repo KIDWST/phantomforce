@@ -21,6 +21,8 @@ const ANTHROPIC_VERSION = "2023-06-01";
 const ALLOWED_ORIGINS = [
   "https://phantomforce.online",
   "https://www.phantomforce.online",
+  "https://app.phantomforce.online",
+  "https://admin.phantomforce.online",
   "http://127.0.0.1:8099",
   "http://localhost:8099",
 ];
@@ -63,9 +65,72 @@ function cors(origin) {
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Allow-Headers": "Content-Type, x-admin-key, x-provider-key",
     "Vary": "Origin",
   };
+}
+
+/* ---- media generation (POST /generate) — pluggable provider routing ----
+   Add a provider: one MEDIA_PROVIDERS entry with its key env + a gen() that
+   returns [{type,url}]. The Media Lab picks it up once enabled in Settings. */
+async function genHiggsfield(req, key, env) {
+  const url = env.HIGGSFIELD_API_URL || "https://api.higgsfield.ai/v1/generate";
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: req.model, type: req.modality, prompt: req.prompt,
+      negative_prompt: req.negative || undefined, aspect_ratio: req.params.aspect,
+      num_outputs: req.params.count || 1, duration: req.modality === "video" ? req.params.duration : undefined,
+      image: req.ref || undefined, style: req.style && req.style !== "None" ? req.style : undefined,
+    }),
+  });
+  if (!r.ok) throw new Error(`higgsfield ${r.status}`);
+  const d = await r.json();
+  const items = d.assets || d.outputs || d.data || (d.url ? [d] : []);
+  return items.map((a) => ({ type: a.type || req.modality, url: a.url || a.video_url || a.image_url }));
+}
+async function genOpenAIImage(req, key) {
+  const sizeMap = { "1:1": "1024x1024", "3:2": "1536x1024", "16:9": "1536x1024", "4:5": "1024x1536", "9:16": "1024x1536" };
+  const r = await fetch("https://api.openai.com/v1/images/generations", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: req.model || "gpt-image-1", prompt: req.prompt, n: req.params.count || 1, size: sizeMap[req.params.aspect] || "1024x1024" }),
+  });
+  if (!r.ok) throw new Error(`openai ${r.status}`);
+  const d = await r.json();
+  return (d.data || []).map((a) => ({ type: "image", url: a.url || (a.b64_json ? `data:image/png;base64,${a.b64_json}` : "") })).filter((a) => a.url);
+}
+const MEDIA_PROVIDERS = {
+  higgsfield: { keyEnv: "HIGGSFIELD_API_KEY", gen: genHiggsfield },
+  openai: { keyEnv: "OPENAI_API_KEY", gen: genOpenAIImage },
+};
+const mediaConfigured = (env) => Object.fromEntries(Object.entries(MEDIA_PROVIDERS).map(([id, p]) => [id, !!env[p.keyEnv]]));
+
+async function handleGenerate(request, env, headers) {
+  if (env.PF_MEDIA_ADMIN_KEY) {
+    if (request.headers.get("x-admin-key") !== env.PF_MEDIA_ADMIN_KEY) return json({ error: "forbidden" }, 403, headers);
+  }
+  let payload;
+  try { payload = await request.json(); } catch { return json({ error: "bad_request" }, 400, headers); }
+  const prov = MEDIA_PROVIDERS[String(payload.provider || "").toLowerCase()];
+  if (!prov) return json({ error: "unknown_provider" }, 200, headers);
+  const key = env[prov.keyEnv] || request.headers.get("x-provider-key") || "";
+  if (!key) return json({ error: "unconfigured", provider: payload.provider }, 200, headers);
+  const req = {
+    modality: payload.modality === "video" ? "video" : "image", model: String(payload.model || ""),
+    prompt: String(payload.prompt || "").slice(0, 2000), negative: String(payload.negative || "").slice(0, 500),
+    style: String(payload.style || ""), ref: typeof payload.ref === "string" ? payload.ref : null,
+    params: { aspect: String((payload.params || {}).aspect || "1:1"), count: Math.min(4, Math.max(1, (payload.params || {}).count || 1)), duration: Math.min(12, Math.max(2, (payload.params || {}).duration || 6)) },
+  };
+  if (!req.prompt) return json({ error: "empty" }, 400, headers);
+  try {
+    const assets = await prov.gen(req, key, env);
+    if (!assets || !assets.length) return json({ error: "upstream" }, 200, headers);
+    return json({ assets, provider: payload.provider, model: req.model }, 200, headers);
+  } catch (e) {
+    return json({ error: "upstream", message: String((e && e.message) || "").slice(0, 120) }, 200, headers);
+  }
 }
 function json(obj, status, headers) {
   return new Response(JSON.stringify(obj), { status, headers: { ...headers, "Content-Type": "application/json" } });
@@ -169,10 +234,12 @@ export default {
       : provider === "openai" ? !!env.OPENAI_API_KEY
       : !!env.OPENROUTER_API_KEY;
     if (request.method === "OPTIONS") return new Response(null, { headers });
-    if (request.method === "GET" && new URL(request.url).pathname === "/health") {
-      return json({ ok: true, configured, provider, model }, 200, headers);
+    const pathname = new URL(request.url).pathname;
+    if (request.method === "GET" && pathname === "/health") {
+      return json({ ok: true, configured, provider, model, media: mediaConfigured(env) }, 200, headers);
     }
     if (request.method !== "POST") return json({ error: "method" }, 405, headers);
+    if (pathname === "/generate") return handleGenerate(request, env, headers);
     if (!configured) return json({ error: "unconfigured" }, 200, headers);
 
     const ip = request.headers.get("CF-Connecting-IP") || "anon";
