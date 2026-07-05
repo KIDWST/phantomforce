@@ -8,10 +8,10 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode, todaysPlan,
   PACKAGES, RETAINERS, SERVICE_TIERS, runWorkspaceSecurityScan, buildSecurityScanSnapshot,
   workspaceProfile, workspaceCrm, saveWorkspaceCrm,
-} from "./store.js?v=admin-phase2-nav-20260705-01";
+} from "./store.js?v=connector-signin-20260705-01";
 import {
   IMAGE_CROPS, IMAGE_FILTERS, downloadImage, editImageArtifact, imageStyle, makeImageArtifact,
-} from "./media-image.js?v=admin-phase2-nav-20260705-01";
+} from "./media-image.js?v=connector-signin-20260705-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -1156,6 +1156,7 @@ function renderAutomation(el, rerender) {
     ${renderAutomationConfig()}
     <h3 class="ws-subhead">Connectors</h3>
     <p class="ws-note">Connect a business once. Phantom can then draft, schedule, post, upload, or file work for that business based on its permissions.</p>
+    ${renderConnectorSigninPanel()}
     ${renderConnectorCards()}
     <h3 class="ws-subhead">Active work</h3>
     <div class="stack">
@@ -1165,6 +1166,7 @@ function renderAutomation(el, rerender) {
         <span class="admin-ws-stats">${esc(t.next || "Waiting for the next step.")}</span>
       </article>`).join("") || empty("No active automation work yet. Ask Phantom to create a follow-up, review request, scan, post, or booking.")}
     </div>`;
+  bindConnectorActions(el, rerender);
 }
 
 /* ============================= ANALYTICS ============================= */
@@ -1893,12 +1895,126 @@ function connectorChip(connector) {
   return chip(state === "ready" || state === "available" ? "ready" : state);
 }
 
+function connectorConnectionLabel(connector = {}) {
+  return statusLabel(connector.connectionState || "not-connected");
+}
+
+function connectorConnectionClass(connector = {}) {
+  return connectorStateClass(connector.connectionState || "not-connected");
+}
+
+function connectorConnectionNote(connector = {}) {
+  if (connector.lastConnectMessage) return connector.lastConnectMessage;
+  if (connector.connectionState === "connected") return "Signed in for this workspace.";
+  return connector.manualHint || "Use Fast Connect first, or sign in manually for this connector.";
+}
+
+function updateConnectorConnection(id, patch = {}) {
+  const connector = store.state.postingConnectors.find((item) => item.id === id);
+  if (!connector) return null;
+  Object.assign(connector, {
+    lastConnectAttempt: new Date().toISOString(),
+    ...patch,
+  });
+  return connector;
+}
+
+function fastConnectConnector(id) {
+  const connector = store.state.postingConnectors.find((item) => item.id === id);
+  if (!connector) return { ok: false, state: "missing" };
+  if (connector.fastConnect === "likely") {
+    updateConnectorConnection(id, {
+      connectionState: "connected",
+      connectionMethod: "fast-connect",
+      lastConnectMessage: "Fast Connect used the existing admin-ready connector state. Manual sign-in is still available if this account is wrong.",
+    });
+    return { ok: true, state: "connected" };
+  }
+  updateConnectorConnection(id, {
+    connectionState: "manual-needed",
+    connectionMethod: "fast-connect-failed",
+    lastConnectMessage: "Fast Connect could not finish this one. Use Manual Sign In for the right account.",
+  });
+  return { ok: false, state: "manual-needed" };
+}
+
+function connectorManualSignIn(id) {
+  const connector = updateConnectorConnection(id, {
+    connectionState: "manual-started",
+    connectionMethod: "manual",
+    lastConnectMessage: "Manual sign-in started. Finish in the provider window, then mark this connector connected.",
+  });
+  if (connector?.manualUrl) {
+    try {
+      window.open(connector.manualUrl, "_blank", "noopener,noreferrer");
+    } catch {}
+  }
+  return connector;
+}
+
+function renderConnectorSigninPanel() {
+  const connectors = store.state.postingConnectors || [];
+  const connected = connectors.filter((connector) => connector.connectionState === "connected").length;
+  const needsManual = connectors.filter((connector) => ["not-connected", "manual-needed", "manual-started"].includes(connector.connectionState || "not-connected")).length;
+  return `
+    <article class="connector-signin-panel">
+      <div>
+        <p class="ws-mini-kicker">Connector sign-in</p>
+        <h4>One quick try, manual backup.</h4>
+        <p>Fast Connect is best-effort. It may use existing browser sign-ins on this device, but some apps will still need manual sign-in.</p>
+      </div>
+      <div class="connector-signin-actions">
+        <span class="connector-auth-state">${connected}/${connectors.length} connected</span>
+        <button class="btn btn-primary" data-connector-act="fast-connect-all">⚡ Try Fast Connect</button>
+      </div>
+      ${needsManual ? `<p class="record-sub">If it misses anything, use Manual Sign In on that connector.</p>` : `<p class="record-sub">All connectors are marked connected for this workspace.</p>`}
+    </article>`;
+}
+
+function bindConnectorActions(root, rerender) {
+  root.querySelectorAll("[data-connector-act]").forEach((button) => {
+    button.addEventListener("click", () => {
+      const act = button.dataset.connectorAct;
+      const id = button.dataset.id;
+      if (act === "fast-connect-all") {
+        let connected = 0;
+        let manual = 0;
+        (store.state.postingConnectors || []).forEach((connector) => {
+          const result = fastConnectConnector(connector.id);
+          if (result.ok) connected += 1;
+          else manual += 1;
+        });
+        pushActivity("Connector Setup", `Fast Connect checked all connectors: ${connected} connected, ${manual} need manual sign-in.`, currentWs());
+      }
+      if (act === "fast-connect" && id) {
+        const result = fastConnectConnector(id);
+        const connector = store.state.postingConnectors.find((item) => item.id === id);
+        pushActivity("Connector Setup", `${connector?.name || "Connector"} ${result.ok ? "connected through Fast Connect" : "needs manual sign-in"}.`, currentWs());
+      }
+      if (act === "manual-connect" && id) {
+        const connector = connectorManualSignIn(id);
+        pushActivity("Connector Setup", `${connector?.name || "Connector"} manual sign-in opened.`, currentWs());
+      }
+      if (act === "mark-connected" && id) {
+        const connector = updateConnectorConnection(id, {
+          connectionState: "connected",
+          connectionMethod: "manual-confirmed",
+          lastConnectMessage: "Marked connected after manual sign-in.",
+        });
+        pushActivity("Connector Setup", `${connector?.name || "Connector"} marked connected.`, currentWs());
+      }
+      store.save();
+      rerender();
+    });
+  });
+}
+
 function renderConnectorCards() {
   const connectors = store.state.postingConnectors || [];
   return `
     <div class="connector-grid">
       ${connectors.map((connector) => `
-        <details class="record connector-card connector-${esc(connector.state)}">
+        <details class="record connector-card connector-${esc(connector.state)} ${esc(connectorConnectionClass(connector))}">
           <summary class="connector-summary">
             <span>
               <b>${esc(connector.name)}</b>
@@ -1909,6 +2025,13 @@ function renderConnectorCards() {
           <div class="connector-capabilities">
             ${(connector.capabilities || []).map((item) => `<span>${esc(item)}</span>`).join("")}
           </div>
+          <div class="connector-auth-row">
+            <span class="connector-auth-state">${esc(connectorConnectionLabel(connector))}</span>
+            <button class="btn btn-good" data-connector-act="fast-connect" data-id="${esc(connector.id)}">⚡ Try</button>
+            <button class="btn" data-connector-act="manual-connect" data-id="${esc(connector.id)}">Manual sign in</button>
+            ${connector.connectionState === "manual-started" || connector.connectionState === "manual-needed" ? `<button class="btn btn-primary" data-connector-act="mark-connected" data-id="${esc(connector.id)}">Mark connected</button>` : ""}
+          </div>
+          <p class="record-sub">${esc(connectorConnectionNote(connector))}</p>
           <p class="record-sub">${esc(connector.access)} · ${esc(connector.next)}</p>
           <div class="tool-meta"><span>Admin ${esc(statusLabel(connector.adminState || connector.state))}</span><span>Client ${esc(statusLabel(connector.clientState || "locked"))}</span></div>
         </details>`).join("")}
@@ -2019,6 +2142,7 @@ function renderAdmin(el, rerender) {
       `, { sub: `${activeAgents} systems ready` })}
       ${renderControlPanel("Connectors", readyConnectors ? "ready" : "configure", `
         <p class="record-notes">Connect once. Draft, schedule, publish, upload, file, and follow up per workspace.</p>
+        ${renderConnectorSigninPanel()}
         ${renderConnectorCards()}
         <p class="ws-note">Rule: create in Phantom -> approve -> send/post/upload.</p>
       `, { sub: "Gmail · Calendar · Drive · socials" })}
@@ -2103,6 +2227,7 @@ function renderAdmin(el, rerender) {
     },
     reset: () => { if (confirm("Reset local Phantom data to the seeded state?")) { store.reset(); rerender(); } },
   });
+  bindConnectorActions(el, rerender);
 }
 
 /* ============================ PHANTOM CONSOLE ============================ */

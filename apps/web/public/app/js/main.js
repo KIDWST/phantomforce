@@ -5,9 +5,9 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, isStaticPublicHost,
   isDemoMode, isEmployeeMode,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js";
-import { handleCommand, commandSuggestions } from "./command.js?v=admin-phase2-nav-20260705-01";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=admin-phase2-nav-20260705-01";
+} from "./store.js?v=connector-signin-20260705-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=connector-signin-20260705-01";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=connector-signin-20260705-01";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-admin-20260705-09";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -587,10 +587,9 @@ function ghostFlare(mood = "bright") {
   ghostPulse = 1;
   setGhostMood(mood, { emotion: mood === "listening" ? "calm" : mood, ms: 1200 });
 }
-function initGhost() {
+function initGhost({ showStartup = false } = {}) {
   const canvas = $("[data-ghost]");
-  if (!canvas || reduceMotion) { completeGhostBoot(); return; }
-  rememberGhostBoot();
+  if (!canvas) { completeGhostBoot(); return; }
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) { completeGhostBoot(); return; }
   const small = window.matchMedia("(max-width: 720px)").matches;
@@ -611,32 +610,31 @@ function initGhost() {
   }, { passive: true });
   const t0 = performance.now();
   let last = t0;
-  const bootRevealMs = reduceMotion ? 0 : 3200;
+  const bootRevealMs = showStartup && !reduceMotion ? 3200 : 0;
   const frame = (now) => {
-    if (ghostBootComplete) return;
     if (document.hidden) { requestAnimationFrame(frame); return; }
     const t = (now - t0) * 0.001;
     const dt = Math.min(0.05, (now - last) * 0.001); last = now;
-    if (now - t0 > bootRevealMs) {
-      ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
-      ctx2.clearRect(0, 0, w, h);
+    if (!ghostBootComplete && now - t0 > bootRevealMs) {
       completeGhostBoot();
-      return;
     }
     if (ghostMoodUntil && now > ghostMoodUntil) { ghostMood = "idle"; ghostMoodUntil = 0; ghostMoodStartedAt = now; }
     ghostPulse = Math.max(0, ghostPulse - 0.02);
     cpx += (px - cpx) * 0.08; cpy += (py - cpy) * 0.08;
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx2.clearRect(0, 0, w, h);
+    const startupOnly = showStartup && !ghostBootComplete;
     const mood =
+      startupOnly ? "idle" :
       ghostMood === "talking" || ghostMood === "thinking" || ghostMood === "listening" ? ghostMood :
       ghostEmotion === "alert" ? "menace" : "idle";
+    const emotion = startupOnly ? "happy" : ghostEmotion;
     character.draw(ctx2, {
       t, dt,
       cx: w / 2, cy: h * 0.54,
       scale: Math.min(w, h) * 0.30,
-      mood: "idle", emotion: "happy",
-      startupOnly: true,
+      mood, emotion,
+      startupOnly,
       moodAge: Math.max(0, (now - ghostMoodStartedAt) * 0.001),
       pulse: ghostPulse,
       px: cpx, py: cpy,
@@ -654,7 +652,7 @@ function enterPhantom() {
   const showGhostBoot = !hasSeenGhostBoot();
   ghostBootComplete = !showGhostBoot;
   phantom.classList.toggle("ghost-boot-complete", !showGhostBoot);
-  if (showGhostBoot && !ghostStarted) { ghostStarted = true; initGhost(); }
+  if (!ghostStarted) { ghostStarted = true; initGhost({ showStartup: showGhostBoot }); }
   startClock();
   activeNav = "dashboard";
   renderConsole();

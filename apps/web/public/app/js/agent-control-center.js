@@ -1,4 +1,4 @@
-import { ctx, isAdmin, session, store } from "./store.js";
+import { ctx, isAdmin, session, store } from "./store.js?v=connector-signin-20260705-01";
 
 const CONTROL_CENTER_URL = "http://127.0.0.1:5757/";
 const ADMIN_CHECK_MS = 650;
