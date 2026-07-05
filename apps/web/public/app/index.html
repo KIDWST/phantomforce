@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "admin-phase2-bootfix-20260705-01";
+      window.PHANTOM_BUILD = "admin-phase2-greetingfix-20260705-01";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="admin-phase2-bootfix-20260705-01" />
+    <meta name="phantom-build" content="admin-phase2-greetingfix-20260705-01" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -69,7 +69,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=admin-phase2-bootfix-20260705-01" />
+    <link rel="stylesheet" href="/app/phantom.css?v=admin-phase2-greetingfix-20260705-01" />
     <link rel="stylesheet" href="/app/agent-control-center.css?v=admin-agent-control-20260705-01" />
   </head>
   <body>
@@ -207,7 +207,7 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=admin-phase2-bootfix-20260705-01"></script>
+    <script type="module" src="/app/js/main.js?v=admin-phase2-greetingfix-20260705-01"></script>
     <script type="module" src="/app/js/agent-control-center.js?v=admin-agent-control-20260705-01"></script>
   </body>
 </html>

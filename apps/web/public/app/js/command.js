@@ -274,13 +274,23 @@ function createBooking(subject) {
 }
 
 /* ---------------- the router ---------------- */
+function isGreetingOnly(text = "") {
+  const s = text.trim().toLowerCase().replace(/\s+/g, " ");
+  const name = "(?:phantom|phantomforce|pf)";
+  const greeting = "(?:hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)";
+  return (
+    new RegExp(`^${greeting}(?:[,!?.]?\\s+${name})?[\\s.!?]*$`, "i").test(s) ||
+    new RegExp(`^${name}(?:[,!?.]?\\s+${greeting})?[\\s.!?]*$`, "i").test(s)
+  );
+}
+
 export function handleCommand(raw) {
   const text = (raw || "").trim();
   const s = text.toLowerCase();
   const subject = subjectOf(text);
   const admin = isAdmin();
 
-  if (/^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/.test(s)) {
+  if (isGreetingOnly(text)) {
     return {
       say: admin ? "Hey Jordan. What do you want handled?" : "Hey. What do you need?",
       cards: [],

@@ -5,7 +5,7 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
 } from "./store.js";
-import { handleCommand, commandSuggestions } from "./command.js";
+import { handleCommand, commandSuggestions } from "./command.js?v=admin-phase2-greetingfix-20260705-01";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-admin-20260705-09";
 
