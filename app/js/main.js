@@ -11,6 +11,7 @@ import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-1
 import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-17";
 import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-17";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-17";
+import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260705-17";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -976,6 +977,9 @@ function enterPhantom() {
   if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); startClock(); startPulse(); }
   activeNav = "dashboard";
   renderConsole();
+  mountAgentTicker($("[data-agent-ticker]"));
+  mountAgentConsole($("[data-agentops]"));
+  mountHeroTicker($("[data-hero-ticker]"));
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
