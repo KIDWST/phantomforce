@@ -97,9 +97,16 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-ghost {
-  width: 14px; height: 16px; border-radius: 7px 7px 0 0; background: var(--neon);
-  box-shadow: 0 0 14px rgba(65, 255, 161, 0.8);
-  clip-path: polygon(0 0, 100% 0, 100% 78%, 83% 100%, 66% 78%, 50% 100%, 33% 78%, 16% 100%, 0 78%);
+  width: 18px;
+  height: 20px;
+  flex: 0 0 auto;
+  display: inline-block;
+  background: linear-gradient(180deg, #66ffb6 0%, #2effce 52%, #19d9ff 100%);
+  -webkit-mask: url("../favicon.svg") center / contain no-repeat;
+  mask: url("../favicon.svg") center / contain no-repeat;
+  filter:
+    drop-shadow(0 0 7px rgba(65, 255, 161, 0.9))
+    drop-shadow(0 0 16px rgba(25, 217, 255, 0.38));
 }
 .brand-word { font: 500 13px "DM Mono", monospace; letter-spacing: 0.34em; }
 .brand-sub {
