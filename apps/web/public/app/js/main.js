@@ -7,8 +7,8 @@ import {
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-3d-character-20260705-01";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-3d-character-20260705-01";
+import { createPhantomCharacter } from "./character.js?v=phantom-3d-character-20260705-02";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-3d-character-20260705-02";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -232,7 +232,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-3d-character-20260705-01";
+const POSE_VERSION = "phantom-3d-character-20260705-02";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {
@@ -689,11 +689,15 @@ let phantomHasActed = false;
 
 function emotionForText(text = "") {
   const s = text.toLowerCase();
-  if (/\bwon\b|closed|delivered|booked|launched|published|5 stars|celebrat/.test(s)) return "excited";
-  if (/\blost\b|declined|went quiet|overdue|no leads|slipped|empty|ghosted/.test(s)) return "sad";
-  if (/security|scan|breach|risk|threat|password|malware|approval|waiting|blocked|paid/.test(s)) return "alert";
-  if (/money|pipeline|revenue|quote|proposal|ready|captured|drafted|live/.test(s)) return "bright";
-  if (/clear|current|nothing waiting|clean|welcome/.test(s)) return "happy";
+  if (/(broken|bug|terrible|worst|warped|wrong|failed|failure|error|fix|issue|problem|blocked|stuck|urgent|risk|danger)/.test(s)) return "alert";
+  if (/(security|scan|breach|threat|password|malware|privacy|private|protected|leak|hack|phish|fraud)/.test(s)) return "alert";
+  if (/(confused|confusing|not sure|don't understand|lost|messy|unclear|overwhelmed)/.test(s)) return "sheepish";
+  if (/(surprise|wow|holy|insane|wild|crazy)/.test(s)) return "surprised";
+  if (/\b(won|closed|delivered|booked|launched|published|5 stars|celebrat|love|awesome|great|perfect)\b/.test(s)) return "excited";
+  if (/\b(lost|declined|went quiet|overdue|no leads|slipped|empty|ghosted|sad|bad news)\b/.test(s)) return "sad";
+  if (/(money|pipeline|revenue|quote|proposal|sale|sales|lead|client|booking|ready|captured|drafted|live|profit)/.test(s)) return "bright";
+  if (/(video|image|creative|design|animate|3d|character|dashboard|ui|website|media|content)/.test(s)) return "happy";
+  if (/(clear|current|nothing waiting|clean|welcome|calm|normal)/.test(s)) return "content";
   return "calm";
 }
 function setGhostMood(mood, options = {}) {
@@ -716,8 +720,8 @@ function speak(text, cls = "", emotionOverride = null) {
   p.className = `say-line ${cls}`.trim();
   box.replaceChildren(p);
   const emotion = emotionOverride || emotionForText(text);
-  if (cls === "thinking") setGhostMood("thinking", { emotion: "bright" });
-  else if (cls === "user") setGhostMood("listening", { emotion: "calm", ms: 1600 });
+  if (cls === "thinking") setGhostMood("thinking", { emotion: emotion === "calm" ? "bright" : emotion });
+  else if (cls === "user") setGhostMood("listening", { emotion, ms: 1600 });
   else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
   if (cls || reduceMotion) {
     p.textContent = text;
@@ -746,15 +750,17 @@ function runCommand(raw) {
   phantomHasActed = true;
   const mode = MODES[activeMode] || MODES.ask;
   const text = mode.prefix && !/\b(draft|create|build|make|write|new)\b/i.test(raw) ? mode.prefix + raw : raw;
-  speak(raw, "user");
-  ghostFlare("listening");
+  const topicEmotion = emotionForText(text);
+  speak(raw, "user", topicEmotion);
+  ghostFlare("listening", topicEmotion);
   const respBox = $("[data-response]");
   respBox.innerHTML = "";
   setTimeout(() => {
-    speak("· · ·", "thinking");
+    speak("· · ·", "thinking", topicEmotion);
     setTimeout(() => {
       const r = handleCommand(text);
-      speak(r.say);
+      const responseEmotion = emotionForText(`${text} ${r.say || ""}`);
+      speak(r.say, "", responseEmotion);
       respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
       renderConsole();
       if (r.open) setTimeout(() => openWorkspace(r.open), reduceMotion ? 150 : 750);
@@ -910,9 +916,9 @@ function wirePhantomConsole(body) {
 
 /* ============================ ghost (2D character) ============================ */
 let ghostPulse = 0;
-function ghostFlare(mood = "bright") {
+function ghostFlare(mood = "bright", emotionOverride = null) {
   ghostPulse = 1;
-  setGhostMood(mood, { emotion: mood === "listening" ? "calm" : mood, ms: 1200 });
+  setGhostMood(mood, { emotion: emotionOverride || (mood === "listening" ? "calm" : mood), ms: 1200 });
 }
 function initPhantom3D() {
   const canvas = $("[data-phantom-3d]");
