@@ -32,6 +32,77 @@
     "clockworks/tiktok-scraper",
     "apify/facebook-pages-scraper"
   ],
+  "capabilityPacks": [
+    {
+      "id": "local-growth-miner",
+      "name": "Local Growth Miner",
+      "goal": "Create a reviewable local prospect table from public Maps, search, listings, and website proof.",
+      "actors": ["google-maps", "google-search", "website-crawler", "screenshot", "yelp"],
+      "outputs": ["qualified businesses", "website gaps", "ratings and review signals", "proof screenshots"]
+    },
+    {
+      "id": "reputation-radar",
+      "name": "Reputation Radar",
+      "goal": "Monitor public reviews, mentions, and SERPs for praise, objections, and risk.",
+      "actors": ["google-reviews", "google-search", "trustpilot", "news", "reddit"],
+      "outputs": ["review themes", "complaint clusters", "testimonial candidates", "mention links"]
+    },
+    {
+      "id": "social-trend-lab",
+      "name": "Social Trend Lab",
+      "goal": "Convert public social patterns into creative briefs, hooks, and content angles.",
+      "actors": ["tiktok", "instagram", "instagram-hashtags", "youtube", "reddit", "x-twitter"],
+      "outputs": ["hook patterns", "caption language", "creator shortlist", "content angles"]
+    },
+    {
+      "id": "competitor-offer-mirror",
+      "name": "Competitor Offer Mirror",
+      "goal": "Compare offers, ads, pricing, landing pages, and catalogs before quoting or campaigning.",
+      "actors": ["facebook-ads", "website-crawler", "shopify", "amazon-products", "etsy", "ebay", "screenshot"],
+      "outputs": ["offer matrix", "price ranges", "ad angles", "landing page proof"]
+    },
+    {
+      "id": "content-memory-builder",
+      "name": "Content Memory Builder",
+      "goal": "Turn approved public pages and documents into clean Phantom/Hermes context.",
+      "actors": ["website-crawler", "web-scraper", "cheerio-scraper", "pdf-extract", "screenshot"],
+      "outputs": ["clean text", "page summaries", "proof captures", "source map"]
+    },
+    {
+      "id": "hiring-signal-radar",
+      "name": "Hiring Signal Radar",
+      "goal": "Find companies showing demand for marketing, media, web, ops, or growth help.",
+      "actors": ["linkedin-jobs", "indeed-jobs", "linkedin-company", "builtwith", "google-search"],
+      "outputs": ["hiring companies", "pain signals", "stack clues", "service-fit notes"]
+    },
+    {
+      "id": "protect-surface-sweep",
+      "name": "Protect Surface Sweep",
+      "goal": "Passively check public surfaces for leaks, bad links, brand misuse, and risky exposure.",
+      "actors": ["google-search", "domain-intel", "screenshot", "news", "x-twitter", "reddit"],
+      "outputs": ["public exposure flags", "broken page proof", "mention log", "risk review cards"]
+    },
+    {
+      "id": "dataset-clean-room",
+      "name": "Dataset Clean Room",
+      "goal": "Clean, dedupe, summarize, and redact Actor output before Phantom displays or exports it.",
+      "actors": ["dataset-toolbox", "failed-runs-monitor"],
+      "outputs": ["clean datasets", "run health", "failure alerts", "review-ready summaries"]
+    },
+    {
+      "id": "retail-treasure-scan",
+      "name": "Retail Treasure Scan",
+      "goal": "Support retail/resale campaigns with pricing comps, inventory trends, and social angles.",
+      "actors": ["google-maps", "google-reviews", "etsy", "ebay", "facebook-ads", "instagram", "tiktok"],
+      "outputs": ["pricing comps", "review language", "ad/content angles", "local visibility notes"]
+    }
+  ],
+  "automationTemplates": [
+    "daily-protect-sweep",
+    "weekly-growth-map",
+    "campaign-trend-pull",
+    "post-run-clean-room"
+  ],
   "blockedWithoutApproval": [
     "external sends",
     "posts or uploads",
@@ -42,4 +113,3 @@
     "private data collection"
   ]
 }
-

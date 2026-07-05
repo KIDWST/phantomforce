@@ -4,13 +4,13 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-16";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-16";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-16";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-16";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-16";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-16";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-16";
+} from "./store.js?v=phantom-live-20260705-17";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-17";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-17";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-17";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-17";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-17";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-17";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -215,7 +215,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-16";
+const POSE_VERSION = "phantom-live-20260705-17";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {

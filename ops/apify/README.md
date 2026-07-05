@@ -15,7 +15,24 @@ Apify gives PhantomForce a marketplace of specialized Actors for public web rese
 
 - `app/js/apify-tools.js` - public Actor catalog and dashboard registry.
 - `ops/apify/phantomforce-apify-toolbox.json` - backend handoff map.
+- `ops/apify/task-templates.json` - owner-enabled automation templates, all off by default.
 - `ops/apify/apify-runner.mjs` - minimal server-side dry-run/live runner.
+
+## Capability Packs
+
+PhantomForce should sell and operate outcomes, not scraper names. The dashboard exposes these packs:
+
+- `local-growth-miner` - public local prospect discovery and website gap proof.
+- `reputation-radar` - reviews, mentions, SERPs, and testimonial/risk themes.
+- `social-trend-lab` - short-form hooks, captions, creator references, and content angles.
+- `competitor-offer-mirror` - offers, pricing, ads, pages, and product/catalog comps.
+- `content-memory-builder` - approved websites/docs into clean Phantom/Hermes memory.
+- `hiring-signal-radar` - companies showing demand through public job and stack signals.
+- `protect-surface-sweep` - passive public exposure and brand-risk review cards.
+- `dataset-clean-room` - dedupe, normalize, redact, and summarize Actor outputs.
+- `retail-treasure-scan` - retail/resale pricing comps, visibility, and campaign intelligence.
+
+Each pack is staged in the UI only. Execution still requires server token, budget cap, scoped inputs, owner approval, and output review.
 
 ## Dry Run
 
@@ -39,4 +56,3 @@ node ops/apify/apify-runner.mjs --execute --actor apify/google-search-scraper --
 5. Summarize and dedupe.
 6. Create Phantom review cards.
 7. Owner approves any outward action.
-
