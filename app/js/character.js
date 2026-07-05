@@ -32,7 +32,7 @@ export const ACCENTS = {
 };
 
 const FACE = {
-  idle:      { browY: 0.10, browA: 0.24, browSad: 0, browSplit: 0.00, lid: 0.85, eyeHappy: 0.0, curve: 0.34, open: 0.04, wide: 1.00, smirk: 0.35, tilt: 0.03, squash: 0.00, drop: 0.00 },
+  idle:      { browY: 0.10, browA: 0.24, browSad: 0, browSplit: 0.00, lid: 0.85, eyeHappy: 0.0, curve: 0.42, open: 0.04, wide: 1.00, smirk: 0.35, tilt: 0.03, squash: 0.00, drop: 0.00 },
   listening: { browY: 0.17, browA: -0.10, browSad: 0, browSplit: 0.00, lid: 1.00, eyeHappy: 0.0, curve: 0.12, open: 0.24, wide: 0.55, smirk: 0.10, tilt: -0.02, squash: 0.05, drop: 0.00 },
   thinking:  { browY: 0.12, browA: 0.30, browSad: 0, browSplit: 0.16, lid: 0.70, eyeHappy: 0.0, curve: 0.12, open: 0.04, wide: 0.60, smirk: 0.40, tilt: 0.06, squash: 0.00, drop: 0.02 },
   talking:   { browY: 0.13, browA: 0.12, browSad: 0, browSplit: 0.00, lid: 0.92, eyeHappy: 0.0, curve: 0.34, open: 0.30, wide: 1.00, smirk: 0.35, tilt: 0.00, squash: 0.05, drop: 0.00 },
@@ -87,11 +87,11 @@ const VOID_CX = 0, VOID_CY = 0.95, VOID_RX = 0.46, VOID_RY = 0.53;
 /* hero-art landmarks as FRACTIONS of the image, so any export size works.
    Measured on the reference painting; tune here if the art is re-rendered. */
 const ART = {
-  cx: 0.494,                 // horizontal center of the figure
-  groundY: 0.905,            // baked summoning-ring center (the "floor")
-  headTop: 0.037,            // top of the hood
-  face: { cx: 0.494, cy: 0.276, rx: 0.072, ry: 0.083, s: 0.130 },
-  flame: { x: 0.263, y: 0.333 },
+  cx: 0.496,                 // horizontal center of the figure (beam/ring axis)
+  groundY: 0.897,            // baked summoning-ring center (the "floor")
+  headTop: 0.041,            // top of the hood
+  face: { cx: 0.485, cy: 0.260, rx: 0.064, ry: 0.074, s: 0.121 },
+  flame: { x: 0.269, y: 0.331 },
   ring: { rx: 0.306, ry: 0.081 },
 };
 
@@ -117,8 +117,8 @@ function drawFaceFeatures(ctx2, s, F) {
 
   for (const side of [-1, 1]) {
     const shut = side === 1 ? Math.max(0, 1 - wink * 1.4) : 1;
-    const eh = 0.115 * s * lid * shut * (1 - eyeHappy * 0.9);
-    const ew = 0.18 * s;
+    const eh = 0.125 * s * lid * shut * (1 - eyeHappy * 0.9);
+    const ew = 0.21 * s;
     ctx2.save();
     ctx2.translate(side * 0.24 * s, -0.05 * s);
     ctx2.rotate(side * -0.14 + side * -E.browA * 0.16 + side * E.browSad * 0.14);
@@ -178,7 +178,7 @@ function drawFaceFeatures(ctx2, s, F) {
 
   const frown = Math.max(0, -E.curve);
   const grin = Math.max(0, E.curve);
-  const mw = 0.40 * E.wide * s;
+  const mw = 0.31 * E.wide * s;
   const cornL = E.smirk * 0.04 * s + frown * 0.13 * s - grin * 0.10 * s;
   const cornR = -E.smirk * 0.07 * s + frown * 0.13 * s - grin * 0.10 * s;
   ctx2.save();
