@@ -348,10 +348,13 @@ async function initEntity() {
   if (window.ResizeObserver && zone) new ResizeObserver(measureZone).observe(zone);
 
   // gestures: eyes follow the cursor; movement perks it up; a click provokes
-  // a flash of MENACE — then it settles back to the smirk
+  // a flash of MENACE — then it settles back to the smirk. When the cursor
+  // drifts CLOSE, he notices you and turns attentive.
   let px = 0, py = 0, cpx = 0, cpy = 0, happy = 0, menace = 0;
+  let pointerX = -9999, pointerY = -9999, attentive = false;
   window.addEventListener("pointermove", (e) => {
     px = e.clientX / innerWidth - 0.5; py = e.clientY / innerHeight - 0.5;
+    pointerX = e.clientX; pointerY = e.clientY;
     if (menace <= 0) happy = 1.2;
   }, { passive: true });
   canvas.addEventListener("pointerdown", () => { if (menace <= 0) { menace = 1.1; flare(); } });
@@ -380,10 +383,16 @@ async function initEntity() {
       ctx2.fillRect(sx * w, s.y * h, s.r, s.r);
     }
 
-    // mood: the conversation drives it; a click overrides with menace
+    // presence: hysteresis so he calmly notices the cursor entering his space
+    const pdist = Math.hypot(pointerX - gx, pointerY - (gy - gs * 1.4));
+    if (!attentive && pdist < gs * 2.0) attentive = true;
+    else if (attentive && pdist > gs * 2.7) attentive = false;
+
+    // mood: the conversation drives it; a click overrides with menace;
+    // a close visitor gets his full attention
     if (charState.until && performance.now() > charState.until) { charState.mood = "idle"; charState.emotion = "calm"; charState.until = 0; }
-    const mood = menace > 0 ? "menace" : charState.mood;
-    const emotion = menace > 0 ? "alert" : (happy > 0 && charState.mood === "idle" ? "bright" : charState.emotion);
+    const mood = menace > 0 ? "menace" : (attentive && charState.mood === "idle" ? "listening" : charState.mood);
+    const emotion = menace > 0 ? "alert" : (happy > 0 && charState.mood === "idle" && !attentive ? "bright" : charState.emotion);
 
     character.draw(ctx2, {
       t, dt,

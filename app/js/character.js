@@ -68,15 +68,21 @@ const ARMS = {
   menace:  { h: [0.80, 0.30], hand: "open", a: -0.35, hL: [-0.80, 0.30], handL: "open", aL: 3.5 },
 };
 
-const SHOW = [
-  { name: "idle", d: 1.8 },
-  { name: "cross", d: 2.5 },
-  { name: "wink", d: 1.0 },
-  { name: "wave", d: 2.6 },
-  { name: "laugh", d: 1.6 },
-  { name: "sway", d: 2.0 },
-];
-const SHOW_LEN = SHOW.reduce((s, g) => s + g.d, 0);
+/* the idle show is IMPROVISED: each cycle picks a fresh set of beats in a
+   fresh order with fresh timing, so he never plays like a looping video. */
+const SHOW_POOL = ["cross", "wink", "wave", "laugh", "sway", "ponder"];
+function buildShow() {
+  const picks = SHOW_POOL.slice().sort(() => Math.random() - 0.5).slice(0, 3 + (Math.random() * 2 | 0));
+  const seq = [{ name: "idle", d: 1.2 + Math.random() * 1.4 }];
+  for (const name of picks) {
+    seq.push({
+      name,
+      d: name === "wink" ? 1.0 : name === "laugh" ? 1.3 + Math.random() * 0.7 : 1.8 + Math.random() * 1.4,
+    });
+    seq.push({ name: "idle", d: 0.9 + Math.random() * 1.6 });
+  }
+  return seq;
+}
 
 function springStep(x, v, target, dt, K, D) {
   v += ((target - x) * K - D * v) * dt;
@@ -312,6 +318,8 @@ export function createPhantomCharacter({ small = false } = {}) {
   };
   let blinkT = 2.5, dartT = 2, dartX = 0, dartY = 0;
   let born = -1, wink = 0, ringBoost = 0, swayBias = 0, flameHold = 1;
+  let showSeq = [], showT = 0;
+  let impulseT = 5, browBump = 0, sighAmt = 0, sighT = 9, glitchNow = 0;
 
   /* ---- one tick of the acting engine, shared by both renderers ---- */
   const tick = (o) => {
@@ -326,9 +334,27 @@ export function createPhantomCharacter({ small = false } = {}) {
 
     let beat = "idle", gLocal = 0;
     if (settled && (mood === "idle" || mood === "happy")) {
-      let gt = (age - 2.2) % SHOW_LEN;
-      for (const g of SHOW) { if (gt < g.d) { beat = g.name; gLocal = gt / g.d; break; } gt -= g.d; }
+      showT += dt;
+      const total = showSeq.reduce((s, g) => s + g.d, 0);
+      if (!showSeq.length || showT >= total) { showSeq = buildShow(); showT = 0; }
+      let gt = showT;
+      for (const g of showSeq) { if (gt < g.d) { beat = g.name; gLocal = gt / g.d; break; } gt -= g.d; }
+    } else { showT = 0; showSeq = []; }
+
+    /* idle impulses: unscripted flickers of life every few seconds */
+    impulseT -= dt;
+    if (impulseT < 0) {
+      impulseT = 5 + Math.random() * 9;
+      const kind = Math.random();
+      if (kind < 0.3) { dartT = 0; dartX = (Math.random() - 0.5) * 2.2; dartY = (Math.random() - 0.5) * 1.2; }  // glance away
+      else if (kind < 0.55) browBump = 0.16;                                                                     // curious brow flick
+      else if (kind < 0.8) sighT = 0;                                                                            // a slow sigh
+      else glitchNow = 0.22;                                                                                     // hologram twitch
     }
+    browBump = Math.max(0, browBump - dt * 0.35);
+    sighT += dt;
+    sighAmt = sighT < 2.2 ? Math.sin((sighT / 2.2) * Math.PI) : 0;
+    glitchNow = Math.max(0, glitchNow - dt);
     let gesture = "conjure";
     if (!settled) gesture = "conjure";
     else if (mood === "idle" || mood === "happy") {
@@ -349,6 +375,7 @@ export function createPhantomCharacter({ small = false } = {}) {
           emotion === "excited" ? "laugh" :
           beat === "cross" ? "cross" :
           beat === "wave" ? "present" :
+          beat === "ponder" ? "chin" :
           beat === "laugh" ? "laugh" : "conjure";
       }
     }
@@ -358,11 +385,13 @@ export function createPhantomCharacter({ small = false } = {}) {
     if (beat === "cross" && gesture === "cross") { T.browA += 0.12; T.curve += 0.06; T.smirk = 0.55; }
     if (beat === "wave") { T.curve += 0.18; T.lid = Math.min(1, T.lid + 0.1); }
     if (beat === "wink") T.curve += 0.22;
+    if (beat === "ponder") { T.browSplit += 0.16; T.browA += 0.14; T.lid *= 0.85; T.curve = 0.18; }
     if (beat === "laugh" && (mood === "idle" || mood === "happy")) {
       Object.assign(T, FACE.happy);
       T.open = 0.25 + Math.abs(Math.sin(t * 8)) * 0.28;
       T.squash = 0.55;
     }
+    T.browY += browBump;
     for (const key in E) {
       const [nx, nv] = springStep(E[key], EV[key], T[key], dt, 140, 11);
       E[key] = nx; EV[key] = nv;
@@ -391,7 +420,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     const bounce = E.squash > 0 ? Math.sin(t * 3.6) * 0.045 * E.squash : 0;
     return {
       dt, age, reveal, settled, talkBeat, thinkBeat, beat, gesture, pose, poseName,
-      blink, lookX, lookY,
+      blink, lookX, lookY, sighAmt, glitchNow,
       bodySy: 1 + E.squash * 0.055 + bounce,
       bodySx: 1 - (E.squash * 0.055 + bounce) * 0.6,
       floatAmp: 1 + E.squash * (E.squash > 0 ? 0.9 : 0.55),
@@ -429,7 +458,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     ctx2.drawImage(p.art, -gx, -gy);
     /* glitch slices: a periodic tic, plus a burst while switching stances */
     const gCyc = t % 3.8;
-    if ((gCyc < 0.16 || poseBlend < 0.85) && S.settled) {
+    if ((gCyc < 0.16 || poseBlend < 0.85 || S.glitchNow > 0) && S.settled) {
       for (let i = 0; i < 3; i++) {
         const sy = p.h * (0.45 + 0.15 * i);
         const bh = p.h * 0.04;
@@ -458,9 +487,9 @@ export function createPhantomCharacter({ small = false } = {}) {
     const { t, cx, cy, scale, emotion, mood, pulse } = o;
     const accent = ACCENTS[emotion] || ACCENTS.calm;
     const A = (a) => `rgba(${accent[0]},${accent[1]},${accent[2]},${a})`;
-    const breath = 1 + Math.sin(t * 0.9) * 0.02 + pulse * 0.06 + S.talkBeat * 0.015;
+    const breath = 1 + Math.sin(t * 0.9) * 0.02 + pulse * 0.06 + S.talkBeat * 0.015 + S.sighAmt * 0.028;
     const floatY = (Math.sin(t * 1.1) * 0.05 * S.floatAmp + Math.sin(t * 3.2) * (mood === "talking" ? 0.025 : 0.008)) * scale * 0.5
-      + (1 - S.reveal) * scale * 0.2 + S.slump * scale * 0.45;
+      + (1 - S.reveal) * scale * 0.2 + S.slump * scale * 0.45 + S.sighAmt * scale * 0.03;
 
     let filter = "";
     if (emotion === "alert") filter = "hue-rotate(215deg) saturate(1.4) brightness(1.05)";
