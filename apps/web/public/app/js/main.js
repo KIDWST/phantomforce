@@ -3,6 +3,7 @@
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, isStaticPublicHost,
+  isDemoMode, isEmployeeMode,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js?v=admin-phase2-nav-20260705-01";
@@ -138,6 +139,16 @@ function renderStatusPills() {
     { label: "System Status", shortLabel: "System", value: attention ? "Attention needed" : "All Systems Operational", shortValue: attention ? "Check" : "Good", tone: attention ? "warn" : "ok", dot: true },
     { label: "Memory", shortLabel: "Memory", value: "Private & Local", shortValue: "Local", tone: "ok", lock: true },
   ];
+  if (isDemoMode()) {
+    pills.unshift({
+      label: "Demo Mode",
+      shortLabel: "Demo",
+      value: "View-only local showroom",
+      shortValue: "Locked",
+      tone: "warn",
+      lock: true,
+    });
+  }
   $("[data-status-pills]").innerHTML = pills.map((p) => `
     <div class="pill pill-${p.tone}">
       <span class="pill-k" data-short="${esc(p.shortLabel || p.label)}">${p.label}</span>
@@ -168,7 +179,13 @@ function renderUser() {
   const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   $("[data-user-avatar]").textContent = initials || "PF";
   $("[data-user-name]").textContent = name;
-  $("[data-user-role]").textContent = isAdmin() ? "Administrator" : "Client";
+  $("[data-user-role]").textContent = isAdmin()
+    ? "Administrator"
+    : isDemoMode()
+      ? "Demo - local only"
+      : isEmployeeMode()
+        ? "Employee"
+        : "Client";
   const btn = $("[data-user-btn]");
   btn.onclick = () => {
     if (confirm("Sign out of PhantomForce?")) {

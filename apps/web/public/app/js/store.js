@@ -509,6 +509,14 @@ export function resolveSession() {
     const s = { role: "client", name: "Test Client", ws: "test-client" };
     session.set(s); return s;
   }
+  if (key === "employee" || key === "staff" || key === "team") {
+    const s = { role: "client", name: "Employee", ws: "test-client", mode: "employee" };
+    session.set(s); return s;
+  }
+  if (key === "demo" || key === "showroom" || key === "prospect") {
+    const s = { role: "client", name: "Demo Visitor", ws: "phantomforce", mode: "demo", localOnly: true };
+    session.set(s); return s;
+  }
   const saved = session.get();
   if (saved?.role === "admin" && isStaticPublicHost()) {
     redirectToLiveAdmin();
@@ -561,6 +569,8 @@ export async function verifyLiveSession() {
 /* ---------------- selectors ---------------- */
 export const ctx = { session: null };
 export const isAdmin = () => ctx.session?.role === "admin";
+export const isDemoMode = () => ctx.session?.mode === "demo";
+export const isEmployeeMode = () => ctx.session?.mode === "employee";
 export const currentWs = () => ctx.session?.ws || "phantomforce";
 export const setWorkspace = (id) => { if (!isAdmin()) return; ctx.session.ws = id; session.set(ctx.session); store.save(); };
 export const SECURITY_SCAN_CADENCE_DAYS = 30;
@@ -570,7 +580,7 @@ export const PASSWORD_ROTATION_DAYS = 180;
    only that workspace's records. */
 export function visible(list) {
   const ws = currentWs();
-  if (isAdmin() && ws === "phantomforce") return list;
+  if ((isAdmin() || isDemoMode()) && ws === "phantomforce") return list;
   return list.filter((r) => r.ws === ws);
 }
 export const wsName = (id) => store.state.workspaces.find((w) => w.id === id)?.name || id;

@@ -236,6 +236,216 @@
   background: #020605;
 }
 
+.acc-mirror {
+  min-height: 360px;
+  max-height: min(62vh, 620px);
+  margin: 0 22px 22px;
+  overflow: auto;
+  scrollbar-width: thin;
+}
+
+.acc-mirror-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  gap: 12px;
+}
+
+.acc-mirror-hero,
+.acc-agent-panel {
+  min-width: 0;
+  border: 1px solid rgba(122, 255, 203, 0.16);
+  border-radius: 18px;
+  background:
+    linear-gradient(145deg, rgba(67, 255, 181, 0.09), rgba(255, 255, 255, 0.035)),
+    rgba(3, 12, 10, 0.72);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.045);
+}
+
+.acc-mirror-hero {
+  padding: 16px;
+}
+
+.acc-mirror-local {
+  background:
+    linear-gradient(145deg, rgba(80, 146, 255, 0.12), rgba(255, 255, 255, 0.035)),
+    rgba(5, 12, 16, 0.72);
+}
+
+.acc-mirror-hero span,
+.acc-panel-title span {
+  color: rgba(174, 229, 205, 0.68);
+  font: 700 10px/1.2 "DM Mono", monospace;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.acc-mirror-hero strong {
+  display: block;
+  margin: 7px 0 8px;
+  color: #f2fff8;
+  font-size: clamp(18px, 2vw, 26px);
+  line-height: 1.04;
+  letter-spacing: -0.03em;
+}
+
+.acc-mirror-hero p {
+  margin: 0;
+  color: rgba(223, 247, 237, 0.68);
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+
+.acc-proof-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 13px;
+}
+
+.acc-proof-row b,
+.acc-try-local {
+  display: inline-flex;
+  align-items: center;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid rgba(122, 255, 203, 0.2);
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.22);
+  color: #dffff2;
+  font: 800 11px "Space Grotesk", sans-serif;
+}
+
+.acc-try-local {
+  margin-top: 13px;
+  cursor: pointer;
+}
+
+.acc-try-local:hover {
+  border-color: rgba(122, 255, 203, 0.58);
+}
+
+.acc-agent-panel {
+  padding: 14px;
+}
+
+.acc-panel-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.acc-panel-title b {
+  color: #67ffc3;
+  font: 700 11px "DM Mono", monospace;
+  text-transform: uppercase;
+}
+
+.acc-agent-grid,
+.acc-tool-grid {
+  display: grid;
+  gap: 8px;
+}
+
+.acc-agent {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.acc-agent-avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border: 1px solid rgba(103, 255, 195, 0.34);
+  border-radius: 12px;
+  background: rgba(103, 255, 195, 0.09);
+  color: #eafff4;
+  font: 900 10px "DM Mono", monospace;
+  box-shadow: 0 0 22px rgba(103, 255, 195, 0.1);
+}
+
+.acc-agent-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.acc-agent-copy b,
+.acc-tool b {
+  overflow: hidden;
+  color: #ffffff;
+  font-size: 12px;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-agent-copy i,
+.acc-tool i {
+  overflow: hidden;
+  color: rgba(221, 248, 237, 0.68);
+  font-size: 11px;
+  font-style: normal;
+  line-height: 1.22;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.acc-agent-copy small,
+.acc-tool small {
+  overflow: hidden;
+  color: rgba(177, 223, 204, 0.48);
+  font: 600 8px/1.2 "DM Mono", monospace;
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.acc-agent em {
+  color: #67ffc3;
+  font: 800 8px "DM Mono", monospace;
+  font-style: normal;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.acc-tool {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 13px;
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.acc-tool span:last-child {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.acc-tool-dot {
+  width: 9px;
+  height: 9px;
+  margin-top: 3px;
+  border-radius: 50%;
+  background: #67ffc3;
+  box-shadow: 0 0 0 6px rgba(103, 255, 195, 0.08), 0 0 18px rgba(103, 255, 195, 0.42);
+}
+
 .acc-frame-wrap iframe {
   display: block;
   width: 100%;
@@ -307,5 +517,22 @@
 
   .acc-frame-wrap {
     margin: 0 16px 16px;
+  }
+
+  .acc-mirror {
+    margin: 0 16px 16px;
+    max-height: min(58vh, 560px);
+  }
+
+  .acc-mirror-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .acc-agent {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .acc-agent em {
+    grid-column: 2;
   }
 }
