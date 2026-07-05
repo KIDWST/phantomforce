@@ -7,7 +7,7 @@ import {
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-10";
+import { createPhantomCharacter } from "./character.js?v=phantom-mode-poses-20260705-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -212,11 +212,75 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
+const POSE_VERSION = "phantom-mode-poses-20260705-01";
+const MODE_POSES = {
+  ask: {
+    src: "/app/assets/poses/mode-ask.webp",
+    caption: "Listening",
+    alt: "Phantom listening",
+  },
+  write: {
+    src: "/app/assets/poses/mode-write.webp",
+    caption: "Drafting",
+    alt: "Phantom writing",
+  },
+  image: {
+    src: "/app/assets/poses/mode-image.webp",
+    caption: "Conjuring image",
+    alt: "Phantom creating an image",
+  },
+  video: {
+    src: "/app/assets/poses/mode-video.webp",
+    caption: "Directing video",
+    alt: "Phantom directing a video",
+  },
+  website: {
+    src: "/app/assets/poses/mode-website.webp",
+    caption: "Building pages",
+    alt: "Phantom building a website",
+  },
+  admin: {
+    src: "/app/assets/poses/mode-admin.webp",
+    caption: "Operator mode",
+    alt: "Phantom in admin control mode",
+  },
+};
+
+function poseUrl(src) {
+  return `${src}?v=${POSE_VERSION}`;
+}
+
+function syncPoseMood(mood = "idle", emotion = "calm") {
+  const stage = $("[data-mode-stage]");
+  if (!stage) return;
+  stage.dataset.mood = mood;
+  stage.dataset.emotion = emotion;
+}
+
+function renderModePose(id = activeMode) {
+  const pose = MODE_POSES[id] || MODE_POSES.ask;
+  const stage = $("[data-mode-stage]");
+  const img = $("[data-mode-pose]");
+  const caption = $("[data-mode-caption]");
+  if (!stage || !img) return;
+  phantom?.classList.add("has-mode-poses");
+  stage.dataset.pose = MODE_POSES[id] ? id : "ask";
+  stage.classList.remove("is-swapping");
+  void stage.offsetWidth;
+  stage.classList.add("is-swapping");
+  clearTimeout(renderModePose.swapTimer);
+  renderModePose.swapTimer = setTimeout(() => stage.classList.remove("is-swapping"), 560);
+  const nextSrc = poseUrl(pose.src);
+  if (img.getAttribute("src") !== nextSrc) img.setAttribute("src", nextSrc);
+  img.setAttribute("alt", pose.alt);
+  if (caption) caption.textContent = pose.caption;
+  syncPoseMood(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
+}
 
 function renderChips() {
   const wrap = $("[data-cmd-chips]");
   wrap.innerHTML = Object.entries(MODES).map(([id, m]) => `
-    <button class="cmd-chip ${activeMode === id ? "is-active" : ""}" data-mode="${id}">
+    <button class="cmd-chip ${activeMode === id ? "is-active" : ""}" data-mode="${id}" aria-pressed="${activeMode === id ? "true" : "false"}" title="${esc(m.label)} mode">
       ${svg(m.icon)}<span>${m.label}</span>
     </button>`).join("");
 }
@@ -224,9 +288,10 @@ function renderChips() {
 function setMode(id) {
   const m = MODES[id];
   if (!m) return;
-  if (m.open) { openWorkspace(m.open); return; }
   activeMode = id;
   renderChips();
+  renderModePose(id);
+  if (m.open) { openWorkspace(m.open); return; }
   const input = $("[data-command-input]");
   input.placeholder = m.placeholder;
   input.focus();
@@ -552,6 +617,7 @@ function renderConsole() {
   renderNotifs();
   renderHero();
   renderChips();
+  renderModePose(activeMode);
   renderInsights();
   renderStatCards();
   renderActivity();
@@ -585,6 +651,7 @@ function setGhostMood(mood, options = {}) {
   ghostMood = mood;
   ghostEmotion = options.emotion || ghostEmotion;
   ghostMoodUntil = options.ms ? now + options.ms : 0;
+  syncPoseMood(ghostMood, ghostEmotion);
 }
 function speechHoldMs(text = "") {
   const n = String(text || "").length;
