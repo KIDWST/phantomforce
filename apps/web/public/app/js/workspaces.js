@@ -5,7 +5,7 @@
 
 import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
-  moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
+  moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode, todaysPlan,
   PACKAGES, RETAINERS, SERVICE_TIERS, runWorkspaceSecurityScan, buildSecurityScanSnapshot,
   workspaceProfile, workspaceCrm, saveWorkspaceCrm,
 } from "./store.js?v=phantom-chicagoshots-crm-20260704-01";
@@ -1233,19 +1233,19 @@ function buildLivingMap() {
     {
       id: "phantom",
       label: "Phantom",
-      value: isAdmin() ? `${activeAgents} systems ready` : `${currentName} brain`,
+      value: isAdmin() ? "owner view" : `${currentName} brain`,
       status: "active",
       workspace: "phantom",
       x: 500,
       y: 280,
       icon: "⌁",
-      detail: "The command router. It turns one request into the right business move. Systems are Phantom capabilities, not people currently logged in.",
+      detail: "Phantom routes the next move and keeps the suite organized.",
       inside: [
         { label: "Mode", state: isAdmin() ? executionMode.get() : "workspace" },
         { label: "Workspace", state: currentName },
         { label: "Memory", state: isAdmin() ? "owner" : "tenant" },
       ],
-      safety: "Clients only see their own workspace. Admin sees all routes and controls.",
+      safety: "Admins see the full suite. Employees stay permission-scoped.",
     },
     {
       id: "leads",
@@ -1461,6 +1461,166 @@ function buildLivingMap() {
   };
 }
 
+function moveLabel(item) {
+  const text = String(item?.text || "").trim();
+  return text.length > 74 ? `${text.slice(0, 71)}...` : text;
+}
+
+function buildNextMove(selected, plan, pending, dueLeads, money, security, mediaReady, livePages, liveProposals) {
+  const firstApproval = pending[0];
+  const firstLead = dueLeads[0];
+  const firstProposal = liveProposals.find((p) => p.status === "sent-ready") || liveProposals[0];
+  const firstMedia = mediaReady[0];
+  const firstPage = livePages[0];
+  const securityNeedsEyes = security && security.posture && security.posture !== "clean";
+
+  if (firstApproval) {
+    return {
+      tone: "alert",
+      kicker: "Waiting on you",
+      title: firstApproval.title,
+      detail: "This is the blocker. Nothing sends, posts, pays, or publishes until you review it.",
+      workspace: "approvals",
+      action: "Review",
+    };
+  }
+  if (firstLead) {
+    return {
+      tone: "warm",
+      kicker: "Money path",
+      title: firstLead.company || firstLead.name,
+      detail: firstLead.next || "Follow up and decide whether this turns into a quote.",
+      workspace: "leads",
+      action: "Open lead",
+    };
+  }
+  if (firstProposal) {
+    return {
+      tone: "bright",
+      kicker: money.pipeline ? `${fmtMoney(money.pipeline)} open` : "Quote path",
+      title: firstProposal.client,
+      detail: `${statusLabel(firstProposal.status)}. ${firstProposal.timeline || "Timeline needs a pass."}`,
+      workspace: "proposals",
+      action: "Open quote",
+    };
+  }
+  if (securityNeedsEyes) {
+    return {
+      tone: "alert",
+      kicker: "Protect",
+      title: "Security posture needs attention",
+      detail: security.summary || security.notes || "Open Protect and review the latest scan posture.",
+      workspace: "protect",
+      action: "Check",
+    };
+  }
+  if (firstMedia) {
+    return {
+      tone: "bright",
+      kicker: "Creative",
+      title: firstMedia.title,
+      detail: "Media brief is ready for the next controlled step.",
+      workspace: "media",
+      action: "Open media",
+    };
+  }
+  if (firstPage) {
+    return {
+      tone: "bright",
+      kicker: "Build",
+      title: firstPage.title,
+      detail: `Site work is ${statusLabel(firstPage.status)}.`,
+      workspace: "sites",
+      action: "Open site",
+    };
+  }
+  if (plan.length) {
+    return {
+      tone: "calm",
+      kicker: "Today",
+      title: moveLabel(plan[0]),
+      detail: "This is the next visible item in today's plan.",
+      workspace: plan[0].open || selected.workspace,
+      action: "Open",
+    };
+  }
+  return {
+    tone: "calm",
+    kicker: "Ready",
+    title: selected.id === "phantom" ? "Ask for an outcome" : selected.label,
+    detail: selected.id === "phantom"
+      ? "No urgent local items are waiting. Ask Phantom for a quote, follow-up, site draft, media brief, or security check."
+      : selected.detail,
+    workspace: selected.workspace,
+    action: selected.id === "phantom" ? "Open workspace" : "Open",
+  };
+}
+
+function brainSignalPanelHtml(selected, connected) {
+  const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
+  const leads = visible(store.state.leads);
+  const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
+  const liveProposals = visible(store.state.proposals).filter((p) => ["draft", "sent-ready", "sent", "invoice-ready"].includes(p.status));
+  const mediaReady = visible(store.state.media).filter((m) => ["brief-ready", "generation-approved"].includes(m.status));
+  const livePages = visible(store.state.sites).filter((p) => ["draft", "publish-ready", "approved-to-publish"].includes(p.status));
+  const security = visible(store.state.security)[0];
+  const plan = todaysPlan();
+  const money = moneyView();
+  const next = buildNextMove(selected, plan, pending, dueLeads, money, security, mediaReady, livePages, liveProposals);
+  const proof = [
+    { label: "Review", value: pending.length ? `${pending.length} waiting` : "clear", open: "approvals", state: pending.length ? "alert" : "calm" },
+    { label: "Pipeline", value: money.pipeline ? fmtMoney(money.pipeline) : "empty", open: "money", state: money.pipeline ? "bright" : "calm" },
+    { label: "Today", value: plan.length ? `${plan.length} item${plan.length === 1 ? "" : "s"}` : "quiet", open: plan[0]?.open || selected.workspace, state: plan.length ? "bright" : "calm" },
+    { label: "Protect", value: security ? (security.posture === "clean" ? "clean" : "attention") : "not set", open: "protect", state: security?.posture && security.posture !== "clean" ? "alert" : "calm" },
+  ];
+  const routeItems = plan.length
+    ? plan.slice(0, 3).map((item) => ({ label: item.kind || "next", value: moveLabel(item), open: item.open || selected.workspace, state: item.kind === "approval" || item.kind === "security" ? "alert" : "bright" }))
+    : [
+        { label: "start", value: "Ask Phantom for a quote, page, media brief, follow-up, or check.", open: selected.workspace, state: "bright" },
+        { label: "protect", value: security ? `Security is ${security.posture || statusLabel(security.status)}` : "Security setup has not started.", open: "protect", state: security?.posture && security.posture !== "clean" ? "alert" : "calm" },
+        { label: "pipeline", value: money.pipeline ? `${fmtMoney(money.pipeline)} open pipeline` : "Pipeline is empty until a lead or quote exists.", open: "money", state: money.pipeline ? "bright" : "calm" },
+      ];
+  const context = selected.id === "phantom"
+    ? "Owner view. Employee access stays permission-scoped."
+    : selected.detail;
+
+  return `
+    <div class="brain-detail" aria-live="polite">
+      <article class="brain-next-card tone-${esc(next.tone)}">
+        <span>${esc(next.kicker)}</span>
+        <strong>${esc(next.title)}</strong>
+        <p>${esc(next.detail)}</p>
+        <button class="brain-detail-open" type="button" data-open-ws="${esc(next.workspace)}">${esc(next.action)}</button>
+      </article>
+      <div class="brain-proof-grid" aria-label="Real workspace signals">
+        ${proof.map((item) => `
+          <button type="button" class="brain-proof-card state-${esc(item.state)}" data-open-ws="${esc(item.open)}">
+            <span>${esc(item.label)}</span>
+            <strong>${esc(item.value)}</strong>
+          </button>
+        `).join("")}
+      </div>
+      <div class="brain-route-board" aria-label="Next visible work">
+        ${routeItems.map((item) => `
+          <button type="button" class="brain-route-card route-${esc(item.state)}" ${item.nodeId ? `data-map-node="${esc(item.nodeId)}"` : `data-open-ws="${esc(item.open)}"`}>
+            <span>${esc(item.label)}</span>
+            <strong>${esc(item.value)}</strong>
+          </button>
+        `).join("") || `
+          <button type="button" class="brain-route-card route-calm" data-open-ws="${esc(selected.workspace)}">
+            <span>selected</span>
+            <strong>${esc(selected.label)}: ${esc(selected.value)}</strong>
+          </button>
+        `}
+      </div>
+      <div class="brain-context-strip">
+        <span>${esc(selected.label)}</span>
+        <p>${esc(context)}</p>
+        <button class="brain-mini-open" type="button" data-open-ws="${esc(selected.workspace)}">Open</button>
+      </div>
+    </div>`;
+}
+
 export function livingMapHtml() {
   const { nodes, edges, notice } = buildLivingMap();
   if (!nodes.some((node) => node.id === selectedLivingNodeId)) selectedLivingNodeId = "phantom";
@@ -1511,20 +1671,7 @@ export function livingMapHtml() {
           </button>
         `).join("")}
       </div>
-      ${selected ? `
-        <div class="brain-detail" aria-live="polite">
-          <div class="brain-detail-head">
-            <span class="brain-status-chip status-${esc(selected.status)}">${esc(mapStatusLabels[selected.status] || selected.status)}</span>
-            <strong>${esc(selected.label)}</strong>
-            <em>${esc(selected.value)}</em>
-            <button class="brain-detail-open" type="button" data-open-ws="${esc(selected.workspace)}">Open workspace <span aria-hidden="true">→</span></button>
-          </div>
-          <p>${esc(selected.detail)}</p>
-          ${selected.inside?.length ? `<div class="brain-detail-inside">${selected.inside.map((item) => `<span><strong>${esc(item.label)}</strong><em>${esc(item.state)}</em></span>`).join("")}</div>` : ""}
-          ${connected.length ? `<div class="brain-detail-flows"><span>Flows</span>${connected.map((connection) => `<button type="button" data-map-node="${esc(connection.node.id)}">${connection.direction === "out" ? "→" : "←"} ${esc(connection.node.label)}<small>${esc(connection.state)}</small></button>`).join("")}</div>` : ""}
-          ${selected.safety ? `<p class="brain-detail-safety"><span aria-hidden="true">◇</span>${esc(selected.safety)}</p>` : ""}
-        </div>
-      ` : ""}
+      ${selected ? brainSignalPanelHtml(selected, connected) : ""}
     </section>`;
 }
 
