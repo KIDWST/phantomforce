@@ -14,6 +14,7 @@
     "test:connector-boundary": "tsx scripts/test-connector-boundary.ts",
     "test:deployment-model": "tsx scripts/test-deployment-model-status.ts",
     "test:security-scanner": "tsx scripts/test-security-scanner-route.ts",
+    "test:chicagoshots-crm": "tsx scripts/test-chicagoshots-nexprospex-crm.ts",
     "test:send-readiness-status": "tsx scripts/test-send-readiness-status.ts",
     "test:agent-workforce": "tsx scripts/test-agent-workforce-status.ts",
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",

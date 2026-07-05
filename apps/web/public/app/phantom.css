@@ -1606,6 +1606,23 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .stat b { font: 500 24px "DM Mono", monospace; color: var(--neon); text-shadow: 0 0 20px rgba(65, 255, 161, 0.35); }
 .stat i { font-style: normal; font-size: 11.5px; color: var(--dim); }
 
+.workspace-crm-panel {
+  display: grid;
+  gap: 14px;
+  margin: 0 0 18px;
+  padding: 18px;
+  border: 1px solid rgba(65, 255, 161, 0.28);
+  border-radius: 22px;
+  background:
+    radial-gradient(circle at 12% 0%, rgba(65, 255, 161, 0.14), transparent 34%),
+    linear-gradient(150deg, rgba(2, 15, 12, 0.92), rgba(3, 9, 10, 0.88));
+  box-shadow: 0 0 34px rgba(65, 255, 161, 0.08);
+}
+.workspace-crm-panel h3 { margin: 4px 0 5px; font-size: clamp(22px, 4vw, 34px); }
+.mini-table { display: grid; gap: 10px; }
+.mini-table .record-row { justify-content: space-between; align-items: flex-start; }
+.mini-table .record-row > div { min-width: 0; flex: 1 1 260px; }
+
 .shotlist { margin: 0 0 8px; font-size: 12.5px; color: #c4e6d2; }
 .shotlist summary { cursor: pointer; color: var(--neon); font: 500 11px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase; }
 .shotlist ol { margin: 8px 0 0; padding-left: 20px; line-height: 1.7; }

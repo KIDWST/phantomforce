@@ -40,6 +40,30 @@ export const RETAINERS = [
   { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full operating system running weekly: media, pipeline, protection." },
 ];
 
+export const SERVICE_TIERS = [
+  {
+    id: "basic",
+    name: "Basic",
+    summary: "Lead list, light research/import, follow-up drafts, and monthly protection proof.",
+    bestFor: "Small business that needs one clean growth lane.",
+    includes: ["CRM snapshot", "Follow-up drafts", "Basic content plan", "Monthly risk scan"],
+  },
+  {
+    id: "premiere",
+    name: "Premiere",
+    summary: "CRM, follow-ups, booking, content, reviews, website/store support, and reporting.",
+    bestFor: "Business that wants PhantomForce running the daily growth desk.",
+    includes: ["Pipeline", "Booking", "Review engine", "Content desk", "Site/store support"],
+  },
+  {
+    id: "elite",
+    name: "Elite",
+    summary: "Everything: CRM, media, automations, protection, sites/stores, analytics, and operator controls.",
+    bestFor: "Jordan/PhantomForce proving the highest package before selling it.",
+    includes: ["All systems", "Media Lab", "Connectors", "Automation cadence", "Admin control"],
+  },
+];
+
 export const POSTING_CONNECTORS = [
   {
     id: "gmail",
@@ -277,9 +301,9 @@ function toolActivitySeed() {
 /* ---------------- seed ---------------- */
 function seed() {
   const workspaces = [
-    { id: "phantomforce", name: "PhantomForce", kind: "HQ", tagline: "Owner workspace. Real work appears here only after you create or import it." },
-    { id: "chicagoshots", name: "ChicagoShots", kind: "Brand", tagline: "Media brand workspace. Starts clean until ChicagoShots work is added." },
-    { id: "test-client", name: "Test Client", kind: "Client", tagline: "Clean client sandbox. Client memory and records stay separate from Jordan's HQ." },
+    { id: "phantomforce", name: "PhantomForce", company: "PhantomForce", kind: "HQ", plan: "Elite", managedBy: "PhantomForce", businessRole: "manager", tagline: "Owner workspace. Manages every business profile without mixing their records." },
+    { id: "chicagoshots", name: "ChicagoShots", company: "ChicagoShots", kind: "Brand", plan: "Premiere", managedBy: "PhantomForce", businessRole: "managed-company", crmSource: "NexProspex", tagline: "Media brand workspace. NexProspex contacts, leads, follow-ups, and pipeline stay here." },
+    { id: "test-client", name: "Test Client", company: "Test Client", kind: "Client", plan: "Basic", managedBy: "PhantomForce", businessRole: "client-sandbox", tagline: "Clean client sandbox. Client memory and records stay separate from Jordan's HQ." },
   ];
 
   const leads = [];
@@ -312,6 +336,7 @@ function seed() {
   ];
 
   const activity = [];
+  const crm = {};
   const workspaceMemory = Object.fromEntries(workspaces.map((w) => [w.id, {
     tenantId: tenantIdForWorkspace(w.id),
     summary: "",
@@ -326,14 +351,18 @@ function seed() {
     reviewEngine: { state: "ready", cadence: "after delivery", mode: "request, collect, approve, publish-ready" },
   };
 
-  return { version: 5, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, tasks, agents, toolSpine: TOOL_SPINE, postingConnectors, automationConfig, activity, workspaceMemory };
+  return { version: 5, workspaces, serviceTiers: SERVICE_TIERS, leads, proposals, reviews, bookings, media, sites, products, security, approvals, tasks, agents, toolSpine: TOOL_SPINE, postingConnectors, automationConfig, activity, crm, workspaceMemory };
 }
 
 /* ---------------- store ---------------- */
 function normalizeData(data) {
   const seeded = seed();
   const d = data && typeof data === "object" ? data : seeded;
-  d.workspaces ||= seeded.workspaces;
+  d.workspaces = seeded.workspaces.map((workspace) => ({
+    ...(d.workspaces || []).find((saved) => saved.id === workspace.id),
+    ...workspace,
+  }));
+  d.serviceTiers = SERVICE_TIERS;
   d.leads ||= seeded.leads;
   d.proposals ||= seeded.proposals;
   d.reviews ||= seeded.reviews;
@@ -357,6 +386,7 @@ function normalizeData(data) {
     };
   });
   d.automationConfig = { ...seeded.automationConfig, ...(d.automationConfig || {}) };
+  d.crm ||= {};
   d.workspaceMemory ||= Object.fromEntries(d.workspaces.map((w) => [w.id, {
     tenantId: tenantIdForWorkspace(w.id),
     summary: "",
@@ -544,6 +574,17 @@ export function visible(list) {
   return list.filter((r) => r.ws === ws);
 }
 export const wsName = (id) => store.state.workspaces.find((w) => w.id === id)?.name || id;
+export const workspaceProfile = (id = currentWs()) => store.state.workspaces.find((w) => w.id === id) || store.state.workspaces[0];
+export const workspaceCrm = (id = currentWs()) => store.state.crm?.[id] || null;
+
+export function saveWorkspaceCrm(id, crm) {
+  store.state.crm ||= {};
+  store.state.crm[id] = {
+    ...crm,
+    syncedAt: new Date().toISOString(),
+  };
+  return store.state.crm[id];
+}
 
 function nextScanIso(from = new Date()) {
   return new Date(new Date(from).getTime() + SECURITY_SCAN_CADENCE_DAYS * DAY).toISOString();
@@ -560,6 +601,9 @@ function summarizeRecords(records, fields) {
 export function buildSecurityScanSnapshot(ws = currentWs()) {
   const allVisible = isAdmin() && ws === "phantomforce";
   const byWorkspace = (records = []) => allVisible ? records : records.filter((record) => record.ws === ws);
+  const crmRecords = allVisible
+    ? Object.values(store.state.crm || {})
+    : [workspaceCrm(ws)].filter(Boolean);
   const lines = [
     `Workspace: ${wsName(ws)}`,
     "Scan target: PhantomForce workspace content, public-facing copy, drafts, tasks, approvals, media notes, pages, products, and review text.",
@@ -573,6 +617,10 @@ export function buildSecurityScanSnapshot(ws = currentWs()) {
     ...summarizeRecords(byWorkspace(store.state.bookings), ["client", "type", "copy", "location"]),
     ...summarizeRecords(byWorkspace(store.state.tasks), ["title", "request", "lane", "next"]),
     ...summarizeRecords(byWorkspace(store.state.approvals), ["title", "detail", "type", "status"]),
+    ...crmRecords.flatMap((crm) => [
+      `${crm.business || crm.workspace_id || "CRM"} CRM: ${crm.summary?.contacts_total || 0} contacts, ${crm.summary?.organizations_total || 0} organizations, ${fmtMoney(crm.summary?.open_pipeline_value || 0)} open pipeline.`,
+      ...summarizeRecords((crm.contacts || []).slice(0, 25), ["name", "organization", "readiness", "follow_up"]),
+    ]),
   ];
   return lines.flatMap((line) => Array.isArray(line) ? line : [line]).join("\n").slice(0, 12000);
 }

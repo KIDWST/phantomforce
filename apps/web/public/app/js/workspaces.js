@@ -6,11 +6,12 @@
 import {
   store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode,
-  PACKAGES, RETAINERS, runWorkspaceSecurityScan, buildSecurityScanSnapshot,
-} from "./store.js?v=phantom-external-monitor-20260704-01";
+  PACKAGES, RETAINERS, SERVICE_TIERS, runWorkspaceSecurityScan, buildSecurityScanSnapshot,
+  workspaceProfile, workspaceCrm, saveWorkspaceCrm,
+} from "./store.js?v=phantom-chicagoshots-crm-20260704-01";
 import {
   IMAGE_CROPS, IMAGE_FILTERS, downloadImage, editImageArtifact, imageStyle, makeImageArtifact,
-} from "./media-image.js?v=phantom-external-monitor-20260704-01";
+} from "./media-image.js?v=phantom-chicagoshots-crm-20260704-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -183,6 +184,106 @@ function renderOwnerMemoryPayload(payload) {
     <p class="ws-note">Safety: admin-only, local files only, redacted, no uploads or sends.</p>`;
 }
 
+function canLoadChicagoShotsCrm() {
+  return currentWs() === "chicagoshots" || (isAdmin() && currentWs() === "phantomforce");
+}
+
+async function loadChicagoShotsNexProspexCrm(limit = 50) {
+  const response = await fetch(`/phantom-ai/ops/chicagoshots/nexprospex-crm?limit=${limit}`, {
+    headers: authHeaders(),
+  });
+  const payload = await response.json().catch(() => ({}));
+  if (!response.ok || !payload?.crm) {
+    throw new Error(payload?.error || "Could not load ChicagoShots CRM.");
+  }
+  return saveWorkspaceCrm("chicagoshots", payload.crm);
+}
+
+function importChicagoShotsCrmLeads(crm) {
+  if (!crm?.contacts?.length) return 0;
+  store.state.leads ||= [];
+  const existingIds = new Set(
+    store.state.leads
+      .filter((lead) => lead.ws === "chicagoshots")
+      .map((lead) => lead.sourceRecordId || lead.id),
+  );
+  let imported = 0;
+  for (const contact of crm.contacts) {
+    if (existingIds.has(contact.id)) continue;
+    const ready = /immediate|ready|follow|sequence|due/i.test(`${contact.readiness} ${contact.follow_up}`);
+    store.state.leads.push({
+      id: uid("lead"),
+      ws: "chicagoshots",
+      sourceRecordId: contact.id,
+      name: contact.name,
+      company: contact.organization,
+      source: "NexProspex CRM",
+      status: ready ? "follow-up" : "new",
+      value: contact.pipeline_value || 750,
+      next: contact.follow_up || contact.readiness || "Review next step",
+      due: new Date().toISOString(),
+      owner: "Lead Hunter",
+      notes: [
+        contact.role,
+        contact.sport,
+        [contact.city, contact.state].filter(Boolean).join(", "),
+        contact.priority_tier,
+        contact.readiness,
+      ].filter(Boolean).join(" · "),
+      proposalId: null,
+      contact,
+    });
+    existingIds.add(contact.id);
+    imported += 1;
+  }
+  return imported;
+}
+
+function renderChicagoShotsCrmPanel() {
+  if (!canLoadChicagoShotsCrm()) return "";
+  const crm = workspaceCrm("chicagoshots");
+  const summary = crm?.summary || {};
+  const contacts = crm?.contacts || [];
+  const source = crm?.source || {};
+  return `
+    <section class="workspace-crm-panel">
+      <div class="record-top">
+        <div>
+          <span class="eyebrow">ChicagoShots CRM</span>
+          <h3>NexProspex contacts and follow-ups</h3>
+          <p class="record-sub">ChicagoShots is its own business profile. PhantomForce manages it, but its leads stay separate.</p>
+        </div>
+        <div class="record-actions">
+          <button class="btn btn-primary" data-act="sync-nexprospex">Sync NexProspex</button>
+          ${crm ? `<button class="btn" data-act="import-nexprospex">Import to Follow-Up Desk</button>` : ""}
+        </div>
+      </div>
+      ${crm ? `
+        <div class="stat-row">
+          <div class="stat"><span>Contacts</span><b>${esc(summary.contacts_total || 0)}</b><i>${esc(summary.verified_contacts || 0)} verified</i></div>
+          <div class="stat"><span>Organizations</span><b>${esc(summary.organizations_total || 0)}</b><i>separate CRM source</i></div>
+          <div class="stat"><span>Ready now</span><b>${esc(summary.immediate_opportunities || 0)}</b><i>hot opportunities</i></div>
+          <div class="stat"><span>Pipeline</span><b>${fmtMoney(summary.open_pipeline_value || 0)}</b><i>${esc(summary.follow_ups_due_or_ready || 0)} follow-ups</i></div>
+        </div>
+        <div class="mini-table">
+          ${contacts.slice(0, 8).map((contact) => `
+            <article class="record record-row">
+              <div>
+                <h4>${esc(contact.name)}</h4>
+                <p class="record-sub">${esc(contact.organization)} · ${esc(contact.role)} · ${esc(contact.city)} ${esc(contact.state)}</p>
+                <p class="record-notes">${esc(contact.readiness)} · ${esc(contact.follow_up)}</p>
+              </div>
+              <b class="record-price">${fmtMoney(contact.pipeline_value || 0)}</b>
+            </article>
+          `).join("")}
+        </div>
+        <p class="ws-note">Source: ${esc(source.system || "NexProspex")} · ${esc(source.source_of_truth || "local CRM")} · synced ${esc(ago(crm.syncedAt))}. No send, scrape, upload, or source change ran.</p>
+      ` : `
+        <div class="ws-empty">NexProspex is ready to connect for ChicagoShots. Click Sync NexProspex to load contacts into this business profile.</div>
+      `}
+    </section>`;
+}
+
 /* =============================== LEADS =============================== */
 function renderLeads(el, rerender) {
   const leads = visible(store.state.leads);
@@ -194,6 +295,7 @@ function renderLeads(el, rerender) {
       <p class="ws-note">Every lead moves draft → approval → send-ready. Nothing goes out without you.</p>
       <button class="btn btn-primary" data-act="add">+ Capture lead</button>
     </div>
+    ${renderChicagoShotsCrmPanel()}
     <div class="lane-row">
       ${lanes.map(([k, label]) => {
         const items = leads.filter((l) => l.status === k);
@@ -218,6 +320,24 @@ function renderLeads(el, rerender) {
     </div>`;
   const find = (id) => store.state.leads.find((l) => l.id === id);
   bindActions(el, {
+    "sync-nexprospex": async () => {
+      try {
+        const crm = await loadChicagoShotsNexProspexCrm(50);
+        const imported = importChicagoShotsCrmLeads(crm);
+        pushActivity("Lead Hunter", `synced ${crm.summary?.contacts_total || 0} ChicagoShots contacts from NexProspex; ${imported} new follow-ups added.`, "chicagoshots");
+        store.save();
+        rerender();
+      } catch (error) {
+        alert(error?.message || "NexProspex CRM could not load.");
+      }
+    },
+    "import-nexprospex": () => {
+      const crm = workspaceCrm("chicagoshots");
+      const imported = importChicagoShotsCrmLeads(crm);
+      pushActivity("Lead Hunter", imported ? `added ${imported} NexProspex contacts to ChicagoShots Follow-Up Desk.` : "NexProspex contacts were already in the ChicagoShots Follow-Up Desk.", "chicagoshots");
+      store.save();
+      rerender();
+    },
     add: () => {
       const name = prompt("Lead name (person or business):");
       if (!name) return;
@@ -1469,6 +1589,7 @@ function renderControlPanel(title, status, body, options = {}) {
 /* ============================== PHANTOMOPS ============================== */
 function renderAdmin(el, rerender) {
   if (!isAdmin()) { el.innerHTML = empty("This area belongs to your PhantomForce operator."); return; }
+  const profile = workspaceProfile(currentWs());
   const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
   const activeTools = (store.state.toolSpine || []).filter((tool) => tool.mode === "active").length;
   const connectors = store.state.postingConnectors || [];
@@ -1493,7 +1614,7 @@ function renderAdmin(el, rerender) {
       <div class="stat"><span>Private systems</span><b>${activeTools}/${(store.state.toolSpine || []).length}</b><i>active</i></div>
       <div class="stat"><span>Connectors</span><b>${readyConnectors}/${connectors.length}</b><i>ready or configurable</i></div>
       <div class="stat"><span>Active work</span><b>${activeWork.length}</b><i>captured from chat</i></div>
-      <div class="stat"><span>Mode</span><b>${esc(executionMode.get())}</b><i>${esc(executionMode.description())}</i></div>
+      <div class="stat"><span>Profile</span><b>${esc(profile.plan || "Custom")}</b><i>${esc(profile.name)} · ${esc(profile.businessRole || "workspace")}</i></div>
     </div>
     <div class="config-stack">
       ${renderControlPanel("Create + Build + Operate", "active", `
@@ -1561,10 +1682,22 @@ function renderAdmin(el, rerender) {
             const appr = store.state.approvals.filter((a) => a.ws === w.id && a.status === "pending").length;
             const props = store.state.proposals.filter((p) => p.ws === w.id && ["draft", "sent-ready"].includes(p.status)).length;
             return `<article class="record record-row"><h4>${esc(w.name)}</h4><p class="record-sub">${esc(w.tagline)}</p>
-              <span class="admin-ws-stats">${leads} open leads · ${props} live proposals · ${appr} approvals</span></article>`;
+              <span class="admin-ws-stats">${esc(w.plan || "Custom")} · managed by ${esc(w.managedBy || "PhantomForce")} · ${leads} open leads · ${props} live proposals · ${appr} approvals</span></article>`;
           }).join("")}
         </div>
       `, { sub: "PhantomForce · ChicagoShots · Test Client" })}
+      ${renderControlPanel("Package ladder", "ready", `
+        <div class="config-mini-grid">
+          ${SERVICE_TIERS.map((tier) => `
+            <article class="record mini-config">
+              <div class="record-top"><h4>${esc(tier.name)}</h4>${chip(tier.id === "elite" ? "active" : "ready")}</div>
+              <p class="record-notes">${esc(tier.summary)}</p>
+              <p class="record-sub">${esc(tier.bestFor)}</p>
+              <div class="connector-capabilities">${tier.includes.map((item) => `<span>${esc(item)}</span>`).join("")}</div>
+            </article>
+          `).join("")}
+        </div>
+      `, { sub: "Basic · Premiere · Elite" })}
       ${renderControlPanel("Tool spine", "active", `
         <p class="record-notes">Admin-only systems behind Phantom. Expand only when you need detail.</p>
         ${renderToolSpineCards()}

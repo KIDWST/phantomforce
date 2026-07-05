@@ -126,6 +126,7 @@ import {
   readChicagoShotsProposalHistoryRecords,
   updateChicagoShotsProposalHistoryRecordStatus,
 } from "./phantom-ai/chicagoshots-proposal-history.js";
+import { getChicagoShotsNexProspexCrm } from "./phantom-ai/chicagoshots-nexprospex-crm.js";
 import { buildLiveSmokePreflightReport } from "./phantom-ai/live-smoke-preflight.js";
 import {
   getSecurityScannerStatus,
@@ -2216,6 +2217,56 @@ app.get("/phantom-ai/ops/chicagoshots/proposal-history", async (request, reply) 
   };
 });
 
+app.get("/phantom-ai/ops/chicagoshots/nexprospex-crm", async (request, reply) => {
+  const session = requireClientWorkspaceView(request, reply, "client-chicagoshots");
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { limit?: string } | undefined;
+  const requestedLimit = Number.parseInt(String(query?.limit ?? "25"), 10);
+  const limit = Number.isFinite(requestedLimit) ? Math.max(1, Math.min(75, requestedLimit)) : 25;
+
+  try {
+    const crm = await getChicagoShotsNexProspexCrm(limit);
+
+    return {
+      ok: true,
+      session,
+      crm,
+      safety: crm.safety,
+      workspace_scoped: true,
+      provider_called: false,
+      network_call_performed: false,
+      external_send: false,
+      n8n_executed: false,
+      approval_executed: false,
+      queue_written: false,
+      production_ledger_write: false,
+      source_data_mutated: false,
+      credentials_returned: false,
+    };
+  } catch (error) {
+    return reply.code(503).send({
+      ok: false,
+      session,
+      error: error instanceof Error ? error.message : "NexProspex CRM unavailable.",
+      source: "NexProspex CRM",
+      workspace_scoped: true,
+      provider_called: false,
+      network_call_performed: false,
+      external_send: false,
+      n8n_executed: false,
+      approval_executed: false,
+      queue_written: false,
+      production_ledger_write: false,
+      source_data_mutated: false,
+      credentials_returned: false,
+    });
+  }
+});
+
 app.patch("/phantom-ai/ops/chicagoshots/proposal-history/:id/status", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -2918,6 +2969,7 @@ app.get("/phantom-ai/ops/status", async (request, reply) => {
       chicagoshots_ops: {
         available: true,
         route: "POST /phantom-ai/ops/chicagoshots/lead-intake/preview",
+        crm_route: "GET /phantom-ai/ops/chicagoshots/nexprospex-crm",
         history_routes: [
           "POST /phantom-ai/ops/chicagoshots/proposal-history/save",
           "GET /phantom-ai/ops/chicagoshots/proposal-history",
@@ -2925,6 +2977,8 @@ app.get("/phantom-ai/ops/status", async (request, reply) => {
           "PATCH /phantom-ai/ops/chicagoshots/proposal-history/:id/status",
         ],
         workflow_preview_enabled: true,
+        nexprospex_crm_enabled: true,
+        nexprospex_crm_workspace_scoped: true,
         proposal_history_enabled: true,
         proposal_history_local_only: true,
         dry_run_only: true,
