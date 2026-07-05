@@ -4,9 +4,9 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js";
-import { handleCommand, commandSuggestions } from "./command.js";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
+} from "./store.js?v=phantom-live-20260705-13";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-13";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-13";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-13";
 import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-13";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-13";
@@ -116,7 +116,7 @@ function showGate() {
       if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
       ctx.session = kind === "admin"
         ? { role: "admin", name: "Jordan", ws: "phantomforce" }
-        : { role: "client", name: "Test Client", ws: "test-client" };
+        : { role: "employee", name: "Employee", ws: "phantomforce" };
       session.set(ctx.session);
       enterPhantom();
     };
@@ -125,8 +125,7 @@ function showGate() {
 
 /* ============================ sidebar nav ============================ */
 const NAV = [
-  { id: "chat",       label: "Chat",         icon: "chat",  view: "main" },
-  { id: "dashboard",  label: "Dashboard",    icon: "grid",  ws: "money" },
+  { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "sites" },
   { id: "brand",      label: "Brand Memory", icon: "brain", ws: "workforce" },
@@ -135,7 +134,7 @@ const NAV = [
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "money" },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
-let activeNav = "chat";
+let activeNav = "dashboard";
 
 function renderNav() {
   const nav = $("[data-nav]");
@@ -195,7 +194,7 @@ function renderUser() {
   const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   $("[data-user-avatar]").textContent = initials || "PF";
   $("[data-user-name]").textContent = name;
-  $("[data-user-role]").textContent = isAdmin() ? "Administrator" : "Client";
+  $("[data-user-role]").textContent = isAdmin() ? "Administrator" : "Employee";
   const btn = $("[data-user-btn]");
   btn.onclick = () => {
     if (confirm("Sign out of PhantomForce?")) {
@@ -324,11 +323,11 @@ function renderStatCards() {
   const files = media.length + sites.length + products.length + visible(store.state.reviews).length;
 
   const cards = [
-    { icon: "db",    title: "Brand Memory", value: files, sub: "Files indexed", foot: `Updated ${ago(store.state.activity[0]?.at || new Date().toISOString())}`, open: "workforce", trend: "+12%" },
-    { icon: "media", title: "Media Lab",    value: media.length, sub: "Briefs in lab", foot: `${delivered} delivered`, open: "media", trend: "+8%" },
-    { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "All clear", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear" },
-    { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: "Across all desks", open: "media", trend: "+12%" },
-    { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: "Running smoothly", open: "workforce", trend: "live" },
+    { icon: "db",    title: "Brand Memory", value: files, sub: files ? "Files indexed" : "No files yet", foot: files ? `Updated ${ago(store.state.activity[0]?.at || new Date().toISOString())}` : "Waiting for first upload", open: "workforce", trend: files ? "live" : "empty" },
+    { icon: "media", title: "Media Lab",    value: media.length, sub: "Briefs in lab", foot: media.length ? `${delivered} delivered` : "No briefs yet", open: "media", trend: media.length ? "ready" : "empty" },
+    { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "Queue clear", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear" },
+    { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: thisWeekCount() ? "Real activity only" : "No activity yet", open: "media", trend: thisWeekCount() ? "live" : "empty" },
+    { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: activeAgents ? "Real workers only" : "Not configured", open: "workforce", trend: activeAgents ? "live" : "empty" },
   ];
   $("[data-statcards]").innerHTML = cards.map((c) => `
     <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
@@ -375,6 +374,22 @@ function renderActivity() {
 /* ============================ today's plan (donut) ============================ */
 function renderPlan() {
   const plan = todaysPlan();
+  if (!plan.length) {
+    $("[data-plan]").innerHTML = `
+      <div class="section-head"><h2>Today's plan</h2></div>
+      <button class="plan-inner" data-open-ws="leads">
+        <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
+          <circle cx="36" cy="36" r="30" class="plan-track"/>
+          <text x="36" y="40" class="plan-pct">0</text>
+        </svg>
+        <span class="plan-copy">
+          <b>No real work loaded yet.</b>
+          <i>Add a lead, draft a proposal, or connect a tool.</i>
+        </span>
+        <span class="plan-arrow">${svg("arrow")}</span>
+      </button>`;
+    return;
+  }
   const m = moneyView();
   const money = m.wonValue + m.pipeline > 0 ? m.wonValue / (m.wonValue + m.pipeline) : 0.4;
   // an upbeat "on track" read: fewer open items + more won momentum = higher.
@@ -459,7 +474,7 @@ function renderInsights() {
   const items = attentionItems();
   if (!items.length) {
     box.innerHTML = `<div class="insights-head"><span class="insights-k">${greeting()} — you're clear</span></div>
-      <div class="insights-row"><div class="insight-card insight-clear"><span class="insight-ic">${svg("check")}</span><span class="insight-body"><b>Nothing needs you right now.</b><i>The desks are running the routine. Ask for something bold.</i></span></div></div>`;
+      <div class="insights-row"><div class="insight-card insight-clear"><span class="insight-ic">${svg("check")}</span><span class="insight-body"><b>No real tasks are waiting.</b><i>This account starts clean. Add work when you're ready.</i></span></div></div>`;
     return;
   }
   box.innerHTML = `<div class="insights-head"><span class="insights-k">${greeting()} — ${items.length} thing${items.length > 1 ? "s" : ""} need${items.length > 1 ? "" : "s"} you</span><button class="insights-all" data-open-ws="approvals">Review all</button></div>
@@ -587,8 +602,6 @@ function pushLive() {
     () => { const a = pick(agents); return a && { who: a.name, text: ["is scanning channels.", "is drafting the next move.", "synced with the desks.", "is watching for signal."][rnd(4)], icon: "auto" }; },
     () => { const l = pick(leads); return l && { who: "Lead Hunter", text: `re-scored ${l.name} — ${l.status}.`, icon: "users" }; },
     () => { const m = pick(media); return m && { who: "Media Factory", text: `advanced "${m.title}".`, icon: "film" }; },
-    () => ({ who: "Sentinel", text: "swept the perimeter — all quiet.", icon: "shield" }),
-    () => ({ who: "Revenue", text: "reconciled the pipeline.", icon: "chart" }),
   ];
   let ev = null;
   for (let k = 0; k < 6 && !ev; k++) ev = builders[rnd(builders.length)]();
@@ -611,7 +624,7 @@ function briefingText() {
   const bits = [`${greeting()}, ${name}`];
   if (m.pipeline) bits.push(`${fmtMoney(m.pipeline)} in open pipeline`);
   if (pend) bits.push(`${pend} approval${pend > 1 ? "s" : ""} waiting on you`);
-  if (!pend && !m.pipeline) bits.push("everything's quiet");
+  if (!pend && !m.pipeline) bits.push("no real work loaded yet");
   return bits.slice(0, 3).join(" · ") + ". What do you want handled first?";
 }
 
@@ -836,7 +849,7 @@ function closeOverlay(clearHash) {
   renderConsole();
 }
 function syncNavToView() {
-  if (!openId) { activeNav = "chat"; renderNav(); return; }
+  if (!openId) { activeNav = "dashboard"; renderNav(); return; }
   const hit = NAV.find((n) => n.ws === openId);
   if (hit) { activeNav = hit.id; renderNav(); }
 }
@@ -953,7 +966,7 @@ function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
   if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); startClock(); startPulse(); }
-  activeNav = "chat";
+  activeNav = "dashboard";
   renderConsole();
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
