@@ -594,7 +594,7 @@ function initGhost() {
       cx: w / 2, cy: h * 0.54,
       scale: Math.min(w, h) * 0.30,
       mood, emotion: ghostEmotion,
-      startupOnly: !phantomHasActed,
+      startupOnly: false,
       moodAge: Math.max(0, (now - ghostMoodStartedAt) * 0.001),
       pulse: ghostPulse,
       px: cpx, py: cpy,
