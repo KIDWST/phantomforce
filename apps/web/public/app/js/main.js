@@ -8,6 +8,7 @@ import {
 import { handleCommand, commandSuggestions } from "./command.js?v=phantom-chicagoshots-crm-20260704-01";
 import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-admin-media-dismiss-20260705-01";
 import { imageStyle } from "./media-image.js?v=phantom-chicagoshots-crm-20260704-01";
+import { createPhantomCharacter } from "./character.js?v=fable-phantom-20260705-01";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1137,11 +1138,81 @@ function ghostFlare(mood = "bright") {
   const knownMood = ["idle", "listening", "thinking", "talking", "happy", "harbor"].includes(mood) ? mood : "talking";
   setGhostMood(knownMood, { emotion: mood === "listening" ? "calm" : mood, ms: 1200 });
 }
+
+function initFablePhantomCharacter(canvas, ctx2) {
+  const small = window.matchMedia("(max-width: 720px)").matches;
+  const character = createPhantomCharacter({ small });
+  let w = 0;
+  let h = 0;
+  let dpr = 1;
+  let px = 0;
+  let py = 0;
+  let cpx = 0;
+  let cpy = 0;
+
+  const resize = () => {
+    const r = canvas.getBoundingClientRect();
+    dpr = Math.min(window.devicePixelRatio || 1, small ? 1.6 : 2);
+    w = Math.max(1, r.width);
+    h = Math.max(1, r.height);
+    canvas.width = Math.floor(w * dpr);
+    canvas.height = Math.floor(h * dpr);
+  };
+
+  resize();
+  window.addEventListener("resize", resize, { passive: true });
+  window.addEventListener("pointermove", (e) => {
+    px = e.clientX / innerWidth - 0.5;
+    py = e.clientY / innerHeight - 0.5;
+  }, { passive: true });
+
+  const t0 = performance.now();
+  let last = t0;
+  const frame = (now = performance.now()) => {
+    if (document.hidden) {
+      requestAnimationFrame(frame);
+      return;
+    }
+    const t = (now - t0) * 0.001;
+    const dt = Math.min(0.05, (now - last) * 0.001);
+    last = now;
+    if (ghostMoodUntil && now > ghostMoodUntil) {
+      ghostMood = "idle";
+      ghostMoodUntil = 0;
+    }
+    ghostPulse = Math.max(0, ghostPulse - 0.02);
+    cpx += (px - cpx) * 0.08;
+    cpy += (py - cpy) * 0.08;
+    ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx2.clearRect(0, 0, w, h);
+    const mood =
+      ghostMood === "talking" || ghostMood === "thinking" || ghostMood === "listening" ? ghostMood :
+      ghostEmotion === "alert" ? "menace" :
+      ghostEmotion === "happy" || ghostMood === "happy" ? "happy" : "idle";
+    character.draw(ctx2, {
+      t,
+      dt,
+      cx: w / 2,
+      cy: h * 0.52,
+      scale: Math.min(w, h) * 0.27,
+      mood,
+      emotion: ghostEmotion,
+      pulse: ghostPulse,
+      px: cpx,
+      py: cpy,
+    });
+    requestAnimationFrame(frame);
+  };
+  requestAnimationFrame(frame);
+}
+
 function initGhost() {
   const canvas = $("[data-ghost]");
-  if (!canvas) return;
+  if (!canvas || reduceMotion) return;
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
+  initFablePhantomCharacter(canvas, ctx2);
+  return;
   const small = window.matchMedia("(max-width: 720px)").matches;
   const N = small ? 700 : 1300;
   const GA = 2.399963229728653, NTEND = 7;
