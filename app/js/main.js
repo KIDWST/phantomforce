@@ -9,6 +9,7 @@ import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-2
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-13";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-13";
 import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-13";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-13";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-13";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -127,11 +128,11 @@ function showGate() {
 const NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
-  { id: "content",    label: "Content Hub",  icon: "doc",   ws: "sites" },
+  { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
   { id: "brand",      label: "Brand Memory", icon: "brain", ws: "workforce" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
-  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "money" },
+  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 let activeNav = "dashboard";
@@ -802,6 +803,8 @@ const mediaOpts = () => ({
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "AI studio", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
+  content: { title: "Content Hub", kicker: "Everything you've published", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
+  analytics: { title: "Analytics", kicker: "Live from Content Hub", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
 };
 
 let openId = null;
