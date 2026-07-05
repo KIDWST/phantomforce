@@ -1,0 +1,45 @@
+{
+  "name": "PhantomForce Apify Tool Vault",
+  "updated": "2026-07-05",
+  "mode": "approval-gated",
+  "tokenPolicy": "server-only APIFY_TOKEN; never browser/localStorage",
+  "defaultBudget": "$0 until configured",
+  "lanes": [
+    "growth",
+    "content",
+    "market",
+    "reputation",
+    "protect",
+    "data"
+  ],
+  "reviewPipeline": [
+    "actorSelected",
+    "inputReviewed",
+    "budgetApproved",
+    "runStarted",
+    "datasetPulled",
+    "reviewCardsCreated",
+    "ownerApprovedAction"
+  ],
+  "starterActors": [
+    "apify/google-search-scraper",
+    "compass/crawler-google-places",
+    "apify/website-content-crawler",
+    "apify/web-scraper",
+    "apify/cheerio-scraper",
+    "apify/puppeteer-scraper",
+    "apify/instagram-scraper",
+    "clockworks/tiktok-scraper",
+    "apify/facebook-pages-scraper"
+  ],
+  "blockedWithoutApproval": [
+    "external sends",
+    "posts or uploads",
+    "CRM mutations",
+    "lead outreach",
+    "payment or invoice actions",
+    "credentialed scraping",
+    "private data collection"
+  ]
+}
+

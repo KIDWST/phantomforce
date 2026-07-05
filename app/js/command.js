@@ -6,7 +6,8 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil,
-} from "./store.js?v=phantom-live-20260705-14";
+} from "./store.js?v=phantom-live-20260705-16";
+import { APIFY_ACTORS, APIFY_LANES } from "./apify-tools.js?v=phantom-live-20260705-16";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -180,6 +181,24 @@ export function handleCommand(raw) {
     return { say: "Media Lab is open — briefs, shot lists, and what's ready to produce.", cards: [], open: "media" };
   }
 
+  /* --- Apify / actor marketplace --- */
+  if (/(apify|actor|scrap|crawler|dataset|google maps|maps leads|serp|competitor research|public web|directory|review mining|social intel)/.test(s)) {
+    if (!admin) {
+      return { say: "Apify Tool Vault is owner-only right now. Ask your admin to grant that workspace if you need it.", cards: [], open: null };
+    }
+    const exact = APIFY_ACTORS.filter((actor) => actor.actor).length;
+    return {
+      say: `Apify Vault is mapped: ${APIFY_ACTORS.length} Actor candidates across ${APIFY_LANES.length} lanes. ${exact} have exact Actor IDs, and the rest are Store-search candidates. No runs happen until token, budget, inputs, and owner approval are set.`,
+      cards: [
+        card("Apify Vault", "Actor marketplace mapped",
+          "Use it for local leads, public web/RAG crawling, social intel, reputation watch, e-commerce research, proof capture, and data ops.",
+          [openAction("Open Apify Vault", "apify"), openAction("Open PhantomOps", "adminos")],
+          "Server-only token. Approval-gated runs."),
+      ],
+      open: "apify",
+    };
+  }
+
   /* --- store --- */
   if (/(store|shop|product|catalog|merch|sell|checkout)/.test(s)) {
     if (/(build|create|draft|make|new|add)/.test(s)) {
@@ -306,6 +325,6 @@ export function handleCommand(raw) {
 /* Suggestion chips under the command input. */
 export function commandSuggestions() {
   return isAdmin()
-    ? ["Catch me up", "What's my pipeline?", "Draft a proposal for a new client", "Create a video brief", "Run a security check", "What's waiting on me?"]
+    ? ["Catch me up", "What's my pipeline?", "Open Apify Vault", "Find Google Maps leads", "Create a video brief", "Run a security check"]
     : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Run a security check"];
 }
