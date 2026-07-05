@@ -4,10 +4,10 @@
    of widgets without changing the shell. */
 
 import {
-  store, uid, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
+  store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS,
-} from "./store.js";
+} from "./store.js?v=phantom-live-20260705-13";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -414,7 +414,7 @@ function renderProtect(el, rerender) {
           </ul>
           <div class="record-actions">
             ${isAdmin() ? `<button class="btn" data-act="remind" data-id="${s.id}">Prepare rotation reminder</button>` : ""}
-            <button class="btn btn-quiet" data-act="summary" data-id="${s.id}">Copy client-safe summary</button>
+            <button class="btn btn-quiet" data-act="summary" data-id="${s.id}">Copy safe summary</button>
           </div>
         </article>`).join("")}
     </div>`;
@@ -450,12 +450,12 @@ function renderMoney(el, rerender) {
         </article>`).join("") || empty("No open proposals — pipeline is either closed or waiting to be built.")}
     </div>
     <h3 class="ws-subhead">Next money actions</h3>
-    <ul class="record-list record-list-lg">
+    ${m.open.length || m.won.length || invoiceReady.length ? `<ul class="record-list record-list-lg">
       ${m.open.filter((p) => p.status === "sent-ready").map((p) => `<li>▸ ${esc(p.client)} is send-ready — get it in front of them and set the follow-up.</li>`).join("")}
       ${m.won.filter((p) => !p.retainer).map((p) => `<li>▸ ${esc(p.client)} closed without a retainer — pitch Keeper ($150/mo) at delivery.</li>`).join("")}
       ${invoiceReady.map((p) => `<li>▸ ${esc(p.client)} is invoice-ready — track payment manually until the connector exists.</li>`).join("")}
       <li>▸ Price-tier check: anything scoped over 20 hours should quote at Pro ($2,500), not Core.</li>
-    </ul>
+    </ul>` : empty("No money actions yet. Real proposals and invoices will appear here after you create them.")}
     <p class="ws-note">Quote → approval → invoice-ready → payment-tracked. Real invoices and payment requests stay off until a payment connector is configured.</p>`;
 }
 
@@ -472,12 +472,12 @@ function renderToolSpineCards({ compact = false } = {}) {
           </div>
           <p class="record-sub">${esc(tool.worker)} · internal: ${esc(tool.internal)}</p>
           <p class="record-next">▸ ${esc(tool.role)}</p>
-          <p class="record-notes"><b>Doing now:</b> ${esc(tool.activity)}</p>
+          <p class="record-notes"><b>Role:</b> ${esc(tool.role)}</p>
           <div class="tool-meta">
             <span>${esc(statusLabel(tool.mode))}</span>
             <span>${esc(tool.path)}</span>
           </div>
-        </article>`).join("")}
+        </article>`).join("") || empty("No security scans have been run yet. Connect a scanner or start a real check before Phantom reports posture.")}
     </div>`;
 }
 
@@ -491,13 +491,13 @@ function renderWorkforce(el, rerender) {
       <div class="stat-row">
         <div class="stat"><span>Workers on your account</span><b>${active}</b><i>active right now</i></div>
         <div class="stat"><span>Deliverables in progress</span><b>${inflight}</b><i>moving through the pipeline</i></div>
-        <div class="stat"><span>Confidence</span><b>●●●●○</b><i>on schedule</i></div>
+        <div class="stat"><span>Approvals waiting</span><b>${visible(store.state.approvals).filter((a) => a.status === "pending").length}</b><i>real queue only</i></div>
       </div>
       <h3 class="ws-subhead">What's happening</h3>
       <div class="stack">
         ${visible(store.state.activity).slice(0, 8).map((a) => `<article class="record record-row"><h4>${esc(a.who)}</h4><p class="record-sub">${esc(a.text)}</p><i class="record-time">${ago(a.at)}</i></article>`).join("") || empty("Quiet right now.")}
       </div>
-      <p class="ws-note">Next step: check Approvals for anything waiting on you.</p>`;
+      <p class="ws-note">New accounts start empty. Real activity appears here after your team creates work.</p>`;
     return;
   }
   el.innerHTML = `
@@ -515,10 +515,10 @@ function renderWorkforce(el, rerender) {
           <p class="record-notes"><b>Last output:</b> ${esc(a.last)}</p>
           ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
           <p class="agent-bundle">internal lane: ${esc(a.bundle)}</p>
-        </article>`).join("")}
+        </article>`).join("") || empty("No workers have produced real activity yet. Connect a tool or create the first task to populate this board.")}
     </div>
     <h3 class="ws-subhead">Tool spine powering the workers</h3>
-    <p class="ws-note">These are the internal programs behind the desks. Clients see outcomes, not tool names.</p>
+    <p class="ws-note">These are the internal programs behind the desks. Employees see only the outcomes they are allowed to access.</p>
     ${renderToolSpineCards({ compact: true })}`;
 }
 
@@ -539,7 +539,7 @@ function renderApprovals(el, rerender) {
             <button class="btn btn-quiet" data-act="decline" data-id="${a.id}">Decline</button>
           </div>
         </article>`).join("")}
-    </div>` : empty("Queue is clear. Everything else is moving on its own.")}
+    </div>` : empty("Queue is clear. Nothing is waiting for approval.")}
     ${done.length ? `<h3 class="ws-subhead">Recent decisions</h3><div class="stack">
       ${done.map((a) => `<article class="record record-row">${wsTag(a.ws)}<h4>${esc(a.title)}</h4>${chip(a.status)}</article>`).join("")}
     </div>` : ""}`;
@@ -558,12 +558,11 @@ function renderAdmin(el, rerender) {
     ["Model lanes A/B/C", "ready", "operator lanes standing by"],
     ["Automation lane", "standby", "workflow runner configured, not armed"],
     ["Media generation lane", "gated", "paid — every run needs approval"],
-    ["Private access gateway", "active", "admin + client hosts enforced upstream"],
+    ["Private access gateway", "active", "admin + employee hosts enforced upstream"],
   ];
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients.</p>
-      <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
+      <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to employees unless you grant access.</p>
     </div>
     <h3 class="ws-subhead">Active tool spine</h3>
     <p class="ws-note">Every tool is mapped to a worker lane. “Active” means visible and available to PhantomOps; external actions still require the right connector and approval.</p>
@@ -578,7 +577,7 @@ function renderAdmin(el, rerender) {
           <span class="admin-ws-stats">${leads} open leads · ${props} live proposals · ${appr} pending approvals</span></article>`;
       }).join("")}
     </div>
-    <h3 class="ws-subhead">Internal lanes (never shown to clients)</h3>
+    <h3 class="ws-subhead">Internal lanes (hidden from employees by default)</h3>
     <div class="card-grid">
       ${lanes.map(([name, state, note]) => `
         <article class="record"><div class="record-top"><h4>${esc(name)}</h4>${chip(state === "ready" || state === "active" ? "approved" : "pending")}</div>
@@ -588,18 +587,17 @@ function renderAdmin(el, rerender) {
     <div class="stack">
       <article class="record record-wide">
         ${kv("Admin host", "<code>admin.phantomforce.online</code> — full phantom, this view")}
-        ${kv("Client host", "<code>app.phantomforce.online</code> — portal view, workspace-scoped")}
+        ${kv("Employee host", "<code>app.phantomforce.online</code> — limited workspace view, permission-scoped")}
         ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
       </article>
     </div>
     <h3 class="ws-subhead">Diagnostics</h3>
     <div class="record-actions">
       <button class="btn btn-quiet" data-act="reset">Reset local Phantom data</button>
-      <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
+      <span class="hint-inline">Clears local records and returns to a brand-new empty account. Local only.</span>
     </div>`;
   bindActions(el, {
-    "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
-    reset: () => { if (confirm("Reset local Phantom data to the seeded state?")) { store.reset(); rerender(); } },
+    reset: () => { if (confirm("Reset local Phantom data to a blank account?")) { store.reset(); rerender(); } },
   });
 }
 

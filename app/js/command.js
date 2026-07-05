@@ -6,7 +6,7 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil,
-} from "./store.js";
+} from "./store.js?v=phantom-live-20260705-13";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -58,7 +58,7 @@ function createProposal(subject) {
 function createMediaBrief(subject) {
   const t = subject ? title(subject) : "New creative";
   const m = {
-    id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(),
+    id: uid("med"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(),
     title: `${t} — video brief`, type: "Reel (vertical, 30s)", status: "draft",
     angle: "Hook in 2 seconds, one idea, end on the offer.",
     shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"],
@@ -139,7 +139,7 @@ export function handleCommand(raw) {
       const p = createProposal(subject);
       return {
         say: `Proposal Forge opened a ${PACKAGES.find((x) => x.id === p.pkg).name} draft for ${p.client}. It's in the pipeline as a draft — shape the scope, then move it to send-ready.`,
-        cards: [card("Proposal draft", p.client, `${fmtMoney(p.price)} · ${p.timeline}. Scope seeded with the standard Core build — edit inside the workspace.`,
+        cards: [card("Proposal draft", p.client, `${fmtMoney(p.price)} · ${p.timeline}. Starter scope uses the standard Core build — edit inside the workspace.`,
           [openAction("Open in Proposal Forge", "proposals")], `Status: ${statusLabel(p.status)}`)],
         open: "proposals",
       };
@@ -250,7 +250,7 @@ export function handleCommand(raw) {
   if (/(approv|sign.?off|waiting on me|pending|queue)/.test(s)) {
     const pend = visible(store.state.approvals).filter((a) => a.status === "pending");
     return {
-      say: pend.length ? `${pend.length} decision${pend.length === 1 ? "" : "s"} waiting on you. Everything else is moving.` : "Approval queue is clear.",
+      say: pend.length ? `${pend.length} decision${pend.length === 1 ? "" : "s"} waiting on you. Other queues are unchanged.` : "Approval queue is clear.",
       cards: pend.slice(0, 3).map((a) => card("Needs your call", a.title, a.detail, [openAction("Review in Approvals", "approvals")], `Requested by ${a.requestedBy}`)),
       open: "approvals",
     };
@@ -271,7 +271,7 @@ export function handleCommand(raw) {
   if (/(today|plan|what('| i)s next|priorit|status|morning|catch me up|summary)/.test(s)) {
     const plan = todaysPlan();
     return {
-      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "Nothing urgent. The desks are working the routine.",
+      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "No real tasks are loaded yet. Start by adding a lead, drafting a proposal, or creating a brief.",
       cards: plan.slice(0, 3).map((p) => card("Today", p.text, "", [openAction("Open", p.open)])),
       open: null,
     };
@@ -282,7 +282,7 @@ export function handleCommand(raw) {
     return {
       say: "Ask in plain business language. I route it to the right desk and hand you something real — a draft, a plan, or the workspace it lives in.",
       cards: [card("Try one of these", "Commands that create things",
-        "“Draft a proposal for Sarah's gym” · “Create a video brief for the taco truck” · “Build a store for Okafor Fitness” · “Run a security check” · “What's my pipeline?”", [])],
+        "Draft a proposal · Create a video brief · Build a store · Run a security check · What's my pipeline?", [])],
       open: null,
     };
   }
@@ -306,6 +306,6 @@ export function handleCommand(raw) {
 /* Suggestion chips under the command input. */
 export function commandSuggestions() {
   return isAdmin()
-    ? ["Catch me up", "What's my pipeline?", "Draft a proposal for Brooks Plumbing", "Create a video brief for Halsted Coffee", "Run a security check", "What's waiting on me?"]
+    ? ["Catch me up", "What's my pipeline?", "Draft a proposal for a new client", "Create a video brief", "Run a security check", "What's waiting on me?"]
     : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Run a security check"];
 }
