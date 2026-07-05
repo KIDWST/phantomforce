@@ -68,9 +68,8 @@ const ARMS = {
   menace:  { h: [0.80, 0.30], hand: "open", a: -0.35, hL: [-0.80, 0.30], handL: "open", aL: 3.5 },
 };
 
-/* the idle show is IMPROVISED: each cycle picks a fresh set of beats in a
-   fresh order with fresh timing, so he never plays like a looping video. */
-const SHOW_POOL = ["cross", "wink", "wave", "laugh", "sway", "ponder"];
+/* idle improvises through micro-beats only. Full-body stances stay tied to real app state. */
+const SHOW_POOL = ["wink", "sway", "ponder"];
 function buildShow() {
   const picks = SHOW_POOL.slice().sort(() => Math.random() - 0.5).slice(0, 3 + (Math.random() * 2 | 0));
   const seq = [{ name: "idle", d: 1.2 + Math.random() * 1.4 }];
@@ -360,30 +359,20 @@ export function createPhantomCharacter({ small = false } = {}) {
     glitchNow = Math.max(0, glitchNow - dt);
     let gesture = "conjure";
     if (!settled) gesture = "conjure";
-    else if (mood === "idle" || mood === "happy") {
-      gesture = beat === "idle" || beat === "wink" || beat === "sway" ? "conjure" : beat === "laugh" ? "cheer" : beat;
-      if (emotion === "sad") gesture = "droop";
-      if (emotion === "excited") gesture = "cheer";
-    } else gesture = mood === "talking" ? "talk" : mood === "thinking" ? "chin" : mood === "menace" ? "menace" : "conjure";
+    else if (mood === "talking") gesture = "talk";
+    else if (mood === "thinking") gesture = "chin";
+    else if (mood === "menace") gesture = "menace";
+    else if (mood === "happy") gesture = "cheer";
+    else if (emotion === "sad") gesture = "droop";
 
-    /* which painted stance fits this moment */
+    /* full-body stances are state-driven only; idle life stays in face, glow, eyes, breath, and particles */
     let poseName = "conjure";
     if (settled) {
-      if (mood === "talking") {
-        const phrase = moodAge % 5.4;
-        poseName = moodAge < 0.45 || phrase < 3.65 ? "present" : "point";
-      }
+      if (mood === "talking") poseName = "present";
       else if (mood === "thinking") poseName = "chin";
       else if (mood === "listening") poseName = "point";
       else if (mood === "menace") poseName = "cross";
-      else if (mood === "idle" || mood === "happy") {
-        poseName =
-          emotion === "excited" ? "laugh" :
-          beat === "cross" ? "cross" :
-          beat === "wave" ? "present" :
-          beat === "ponder" ? "chin" :
-          beat === "laugh" ? "laugh" : "conjure";
-      }
+      else if (mood === "happy") poseName = "laugh";
     }
 
     const T = applyEmotion(FACE[mood] || FACE.idle, emotion, mood);
@@ -411,7 +400,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     flameHold += (((gesture === "conjure" || gesture === "chin") ? 1 : 0) - flameHold) * Math.min(1, dt * 5);
 
     const pose = ARMS[gesture] || ARMS.conjure;
-    const waveSwing = beat === "wave" ? Math.sin(t * 6.4) * 0.13 * Math.sin(Math.min(1, gLocal * 2) * Math.PI) : 0;
+    const waveSwing = gesture === "wave" ? Math.sin(t * 6.4) * 0.13 * Math.sin(Math.min(1, gLocal * 2) * Math.PI) : 0;
     const talkBob = gesture === "talk" ? Math.sin(actionT * 3.2) * 0.03 : 0;
     const stepJ = (j, k, target) => { const [nx, nv] = springStep(j[k], j["v" + k], target, dt, 80, 10); j[k] = nx; j["v" + k] = nv; };
     stepJ(arm.R, "hx", pose.h[0] + waveSwing); stepJ(arm.R, "hy", pose.h[1] + talkBob);
