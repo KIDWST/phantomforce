@@ -4,14 +4,10 @@
    of widgets without changing the shell. */
 
 import {
-  store, uid, session, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
-  moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode, todaysPlan,
-  PACKAGES, RETAINERS, SERVICE_TIERS, runWorkspaceSecurityScan, buildSecurityScanSnapshot,
-  workspaceProfile, workspaceCrm, saveWorkspaceCrm,
-} from "./store.js?v=connector-signin-20260705-01";
-import {
-  IMAGE_CROPS, IMAGE_FILTERS, downloadImage, editImageArtifact, imageStyle, makeImageArtifact,
-} from "./media-image.js?v=connector-signin-20260705-01";
+  store, uid, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
+  moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
+  PACKAGES, RETAINERS,
+} from "./store.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -19,161 +15,6 @@ const chip = (status) => `<span class="chip chip-${esc(status)}">${esc(statusLab
 const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
-const imageFilterButtons = (asset = {}) => Object.keys(IMAGE_FILTERS).map((name) => (
-  `<button class="mini-pill ${asset.filter === name ? "is-on" : ""}" data-act="image-filter" data-id="${asset.id || ""}" data-filter="${name}">${esc(name)}</button>`
-)).join("");
-const imageCropButtons = (asset = {}) => Object.keys(IMAGE_CROPS).map((name) => (
-  `<button class="mini-pill ${asset.crop === name ? "is-on" : ""}" data-act="image-crop" data-id="${asset.id || ""}" data-crop="${name}">${esc(name)}</button>`
-)).join("");
-const connectorStateClass = (state = "") => `connector-${String(state).replace(/[^a-z0-9]+/gi, "-").toLowerCase()}`;
-const plural = (count, label) => `${count} ${label}${Number(count) === 1 ? "" : "s"}`;
-
-function isFileDropMedia(m = {}) {
-  return m.source === "phantom-chat-file-intake" || /^Media intake:/i.test(m.title || "");
-}
-
-function mediaCountText(m = {}) {
-  const parts = [];
-  if (Number(m.imageCount) > 0) parts.push(plural(m.imageCount, "image"));
-  if (Number(m.videoCount) > 0) parts.push(plural(m.videoCount, "video"));
-  if (!parts.length && Number(m.fileCount) > 0) parts.push(plural(m.fileCount, "file"));
-  return parts.join(", ") || "Media";
-}
-
-function mediaCardTitle(m = {}) {
-  if (isFileDropMedia(m)) return `${mediaCountText(m)} ready`;
-  return m.title || "Media project";
-}
-
-function mediaMetaHtml(m = {}) {
-  const parts = [];
-  if (isFileDropMedia(m)) {
-    parts.push(`${mediaCountText(m)} saved here`);
-  } else {
-    if (m.type) parts.push(esc(m.type));
-    if (m.modality) parts.push(esc(m.modality));
-  }
-  parts.push(chip(m.status));
-  parts.push(esc(ago(m.updated || m.createdAt)));
-  return parts.filter(Boolean).join(" · ");
-}
-
-function mediaPlanText(m = {}) {
-  if (isFileDropMedia(m)) return "Saved here. Ready to crop, edit, analyze, or turn into a video plan.";
-  return m.angle || "Ready for the next edit.";
-}
-
-function mediaShotListHtml(m = {}) {
-  const shots = m.shots || [];
-  if (!shots.length) return "";
-  return `<details class="shotlist"><summary>${m.asset?.src ? "Edit plan" : "Shots"} (${shots.length})</summary>
-    <ol>${shots.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
-  </details>`;
-}
-
-function mediaCaptionHtml(m = {}) {
-  if (!m.caption) return "";
-  return `<p class="record-notes"><b>Post text:</b> ${esc(m.caption)}</p>`;
-}
-
-function imageToolchainFallbackHtml() {
-  const connectors = [
-    ["Prompt image draft", "active", "Visible image appears in chat and Media Lab."],
-    ["Crop + PNG export", "active", "1:1, 4:5, 9:16, 16:9 saved from the editor."],
-    ["Creative looks", "active", "Studio, punch, cinematic, neon, clean, mono."],
-    ["Variant maker", "active", "Duplicate and re-seed concepts locally."],
-    ["Pro edit tools", "check", "Check background removal, video tools, GIF, WebP, and upscaling helpers."],
-    ["Paid video tools", "gated", "Paid generation stays off until you approve it."],
-  ];
-  return `
-    <div class="image-tool-grid">
-      ${connectors.map(([label, state, role]) => `
-        <article class="image-tool ${connectorStateClass(state)}">
-          <span>${esc(state)}</span>
-          <b>${esc(label)}</b>
-          <p>${esc(role)}</p>
-        </article>
-      `).join("")}
-    </div>`;
-}
-
-function renderImageToolchainPayload(payload) {
-  const stack = payload?.image_toolchain;
-  if (!stack) return empty("Image stack status is unavailable.");
-  const connectors = stack.connectors || [];
-  const summary = stack.summary || {};
-  return `
-    <div class="image-tool-summary">
-      <div><span>Total</span><b>${esc(summary.connectors_total ?? summary.visible_connectors ?? connectors.length)}</b></div>
-      <div><span>Ready</span><b>${esc(summary.active_or_available ?? 0)}</b></div>
-      <div><span>Local tools</span><b>${esc(summary.local_cli_available ?? "hidden")}</b></div>
-      <div><span>Paid runs</span><b>${stack.safety_flags?.paid_job_called ? "ran" : "off"}</b></div>
-    </div>
-    <div class="image-tool-grid">
-      ${connectors.map((tool) => `
-        <article class="image-tool ${connectorStateClass(tool.state)}">
-          <span>${esc(tool.state)}</span>
-          <b>${esc(tool.label)}</b>
-          <p>${esc(tool.role)}</p>
-          ${tool.detected_path ? `<code>${esc(tool.detected_path)}</code>` : ""}
-          ${tool.capabilities?.length ? `<small>${tool.capabilities.map(esc).join(" · ")}</small>` : ""}
-        </article>
-      `).join("")}
-    </div>
-    <p class="ws-note">Status only. Nothing was sent, uploaded, paid for, or changed outside this app.</p>`;
-}
-
-function simpleContentAdvice(media = []) {
-  const videoCount = media.filter((m) => (m.modality || "").includes("video") || /video|reel|short/i.test(`${m.type} ${m.title}`)).length;
-  const imageCount = media.filter((m) => m.asset?.src || (m.modality || "").includes("image")).length;
-  const readyCount = media.filter((m) => ["brief-ready", "generation-approved", "asset-saved"].includes(m.status)).length;
-  if (!media.length) return "Start with one photo, video, or prompt. Phantom will turn it into a simple edit plan.";
-  if (readyCount) return "You have content ready. Post the strongest one, then reuse the same hook in the next version.";
-  if (videoCount > imageCount) return "Most work here is video. Watch the first 3 seconds, caption clarity, and whether the offer is obvious.";
-  if (imageCount) return "Most work here is image-based. Use clean crops, readable text, and one clear call-to-action.";
-  return "Keep each piece focused: hook, proof, offer, next step.";
-}
-
-function renderContentHub(media = []) {
-  const videos = media.filter((m) => (m.modality || "").includes("video") || /video|reel|short/i.test(`${m.type} ${m.title}`));
-  const images = media.filter((m) => m.asset?.src || (m.modality || "").includes("image"));
-  const ready = media.filter((m) => ["brief-ready", "generation-approved", "asset-saved"].includes(m.status));
-  const delivered = media.filter((m) => m.status === "delivered");
-  const latest = media.slice(0, 4);
-  return `
-    <section class="image-stack-panel">
-      <div class="record-top">
-        <div>
-          <p class="ws-mini-kicker">Content Hub</p>
-          <h4>Posted content, drafts, and performance</h4>
-        </div>
-        <button class="btn" data-open-ws="analytics">Open analytics</button>
-      </div>
-      <div class="stat-row">
-        <div class="stat"><span>Videos</span><b>${videos.length}</b><i>ready or drafted</i></div>
-        <div class="stat"><span>Images</span><b>${images.length}</b><i>assets and posts</i></div>
-        <div class="stat"><span>Ready</span><b>${ready.length}</b><i>can move next</i></div>
-        <div class="stat"><span>Delivered</span><b>${delivered.length}</b><i>finished work</i></div>
-      </div>
-      <div class="card-grid">
-        <article class="record">
-          <div class="record-top"><h4>What to improve</h4>${chip(media.length ? "ready" : "fresh")}</div>
-          <p class="record-notes">${esc(simpleContentAdvice(media))}</p>
-          <p class="record-sub">When social accounts are connected, this area becomes views, watch time, clicks, saves, comments, and trend notes.</p>
-        </article>
-        <article class="record">
-          <div class="record-top"><h4>Trend notes</h4>${chip("ready")}</div>
-          <p class="record-notes">Track hooks, formats, captions, thumbnails, and posting times that repeat across winning content.</p>
-          <p class="record-sub">Use this to make tomorrow's videos more like what already works.</p>
-        </article>
-      </div>
-      ${latest.length ? `<h3 class="ws-subhead">Recent content</h3><div class="stack">
-        ${latest.map((m) => `<article class="record record-row">
-          ${wsTag(m.ws)}<h4>${esc(mediaCardTitle(m))}</h4><p class="record-sub">${mediaMetaHtml(m)}</p>
-        </article>`).join("")}
-      </div>` : empty("No content yet. Drop a file or ask Phantom for a video, image, ad, or post.")}
-    </section>`;
-}
 
 function bindActions(root, handlers) {
   root.querySelectorAll("[data-act]").forEach((el) => {
@@ -191,151 +32,6 @@ async function copyText(el, text) {
   setTimeout(() => { el.textContent = prev; }, 1400);
 }
 
-function authHeaders() {
-  const token = session.token();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-function renderOwnerMemoryPayload(payload) {
-  const memory = payload?.owner_memory;
-  if (!memory) return `<div class="ws-empty">Owner memory status unavailable.</div>`;
-  const sources = memory.sources || {};
-  const sourceCards = Object.entries(sources).map(([key, source]) => `
-    <article class="record">
-      <div class="record-top"><h4>${esc(key.replaceAll("_", " "))}</h4>${chip(source.exists ? "approved" : "paused")}</div>
-      <p class="record-sub">${esc(source.purpose || "")}</p>
-      <p class="record-notes"><b>Path:</b> ${esc(source.path || "not configured")}</p>
-      <p class="record-notes"><b>Bytes:</b> ${esc(source.bytes ?? 0)}</p>
-    </article>`).join("");
-  const artifacts = (memory.artifacts || []).slice(0, 12).map((artifact) => `
-    <article class="record record-row">
-      <h4>${esc(artifact.path)}</h4>
-      <p class="record-sub">${esc(artifact.source)} · ${esc(artifact.bytes)} bytes</p>
-      ${artifact.match_snippet ? `<p class="record-notes">${esc(artifact.match_snippet)}</p>` : ""}
-    </article>`).join("");
-  const receipts = (memory.recent_hermes_records || []).slice(0, 6).map((record) => `
-    <article class="record record-row">
-      <h4>${esc(record.tenant_id)} · ${esc(record.task_type)}</h4>
-      <p class="record-sub">${esc(record.actor_user_id)} · ${esc(record.model_id)} · ${esc(record.estimated_tokens)} tokens</p>
-      <p class="record-notes">${esc(record.result_summary || record.user_request_summary || "")}</p>
-    </article>`).join("");
-
-  return `
-    <div class="stat-row">
-      <div class="stat"><span>Owner tenant</span><b>${esc(memory.access_model.owner_default_tenant_id)}</b><i>Jordan/admin default</i></div>
-      <div class="stat"><span>Raw operator internals</span><b>${memory.access_model.raw_operator_internal_memory_exposed ? "exposed" : "private"}</b><i>local artifacts only</i></div>
-      <div class="stat"><span>Artifacts</span><b>${(memory.artifacts || []).length}</b><i>${memory.query ? `query: ${esc(memory.query)}` : "latest indexed"}</i></div>
-      <div class="stat"><span>Clients</span><b>isolated</b><i>tenant-only memory</i></div>
-    </div>
-    <h4 class="ws-subhead">Sources</h4>
-    <div class="card-grid">${sourceCards}</div>
-    <h4 class="ws-subhead">Artifact matches</h4>
-    <div class="stack">${artifacts || empty("No local owner-memory artifacts matched this search.")}</div>
-    <h4 class="ws-subhead">Recent memory receipts</h4>
-    <div class="stack">${receipts || empty("No memory receipts found yet.")}</div>
-    <p class="ws-note">Safety: admin-only, local files only, redacted, no uploads or sends.</p>`;
-}
-
-function canLoadChicagoShotsCrm() {
-  return currentWs() === "chicagoshots" || (isAdmin() && currentWs() === "phantomforce");
-}
-
-async function loadChicagoShotsNexProspexCrm(limit = 50) {
-  const response = await fetch(`/phantom-ai/ops/chicagoshots/nexprospex-crm?limit=${limit}`, {
-    headers: authHeaders(),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.crm) {
-    throw new Error(payload?.error || "Could not load ChicagoShots CRM.");
-  }
-  return saveWorkspaceCrm("chicagoshots", payload.crm);
-}
-
-function importChicagoShotsCrmLeads(crm) {
-  if (!crm?.contacts?.length) return 0;
-  store.state.leads ||= [];
-  const existingIds = new Set(
-    store.state.leads
-      .filter((lead) => lead.ws === "chicagoshots")
-      .map((lead) => lead.sourceRecordId || lead.id),
-  );
-  let imported = 0;
-  for (const contact of crm.contacts) {
-    if (existingIds.has(contact.id)) continue;
-    const ready = /immediate|ready|follow|sequence|due/i.test(`${contact.readiness} ${contact.follow_up}`);
-    store.state.leads.push({
-      id: uid("lead"),
-      ws: "chicagoshots",
-      sourceRecordId: contact.id,
-      name: contact.name,
-      company: contact.organization,
-      source: "NexProspex CRM",
-      status: ready ? "follow-up" : "new",
-      value: contact.pipeline_value || 750,
-      next: contact.follow_up || contact.readiness || "Review next step",
-      due: new Date().toISOString(),
-      owner: "Lead Hunter",
-      notes: [
-        contact.role,
-        contact.sport,
-        [contact.city, contact.state].filter(Boolean).join(", "),
-        contact.priority_tier,
-        contact.readiness,
-      ].filter(Boolean).join(" · "),
-      proposalId: null,
-      contact,
-    });
-    existingIds.add(contact.id);
-    imported += 1;
-  }
-  return imported;
-}
-
-function renderChicagoShotsCrmPanel() {
-  if (!canLoadChicagoShotsCrm()) return "";
-  const crm = workspaceCrm("chicagoshots");
-  const summary = crm?.summary || {};
-  const contacts = crm?.contacts || [];
-  const source = crm?.source || {};
-  return `
-    <section class="workspace-crm-panel">
-      <div class="record-top">
-        <div>
-          <span class="eyebrow">ChicagoShots CRM</span>
-          <h3>NexProspex contacts and follow-ups</h3>
-          <p class="record-sub">ChicagoShots is its own business profile. PhantomForce manages it, but its leads stay separate.</p>
-        </div>
-        <div class="record-actions">
-          <button class="btn btn-primary" data-act="sync-nexprospex">Sync NexProspex</button>
-          ${crm ? `<button class="btn" data-act="import-nexprospex">Import to Follow-Up Desk</button>` : ""}
-        </div>
-      </div>
-      ${crm ? `
-        <div class="stat-row">
-          <div class="stat"><span>Contacts</span><b>${esc(summary.contacts_total || 0)}</b><i>${esc(summary.verified_contacts || 0)} verified</i></div>
-          <div class="stat"><span>Organizations</span><b>${esc(summary.organizations_total || 0)}</b><i>separate CRM source</i></div>
-          <div class="stat"><span>Ready now</span><b>${esc(summary.immediate_opportunities || 0)}</b><i>hot opportunities</i></div>
-          <div class="stat"><span>Pipeline</span><b>${fmtMoney(summary.open_pipeline_value || 0)}</b><i>${esc(summary.follow_ups_due_or_ready || 0)} follow-ups</i></div>
-        </div>
-        <div class="mini-table">
-          ${contacts.slice(0, 8).map((contact) => `
-            <article class="record record-row">
-              <div>
-                <h4>${esc(contact.name)}</h4>
-                <p class="record-sub">${esc(contact.organization)} · ${esc(contact.role)} · ${esc(contact.city)} ${esc(contact.state)}</p>
-                <p class="record-notes">${esc(contact.readiness)} · ${esc(contact.follow_up)}</p>
-              </div>
-              <b class="record-price">${fmtMoney(contact.pipeline_value || 0)}</b>
-            </article>
-          `).join("")}
-        </div>
-        <p class="ws-note">Source: ${esc(source.system || "NexProspex")} · ${esc(source.source_of_truth || "local CRM")} · synced ${esc(ago(crm.syncedAt))}. No send, scrape, upload, or source change ran.</p>
-      ` : `
-        <div class="ws-empty">NexProspex is ready to connect for ChicagoShots. Click Sync NexProspex to load contacts into this business profile.</div>
-      `}
-    </section>`;
-}
-
 /* =============================== LEADS =============================== */
 function renderLeads(el, rerender) {
   const leads = visible(store.state.leads);
@@ -347,7 +43,6 @@ function renderLeads(el, rerender) {
       <p class="ws-note">Every lead moves draft → approval → send-ready. Nothing goes out without you.</p>
       <button class="btn btn-primary" data-act="add">+ Capture lead</button>
     </div>
-    ${renderChicagoShotsCrmPanel()}
     <div class="lane-row">
       ${lanes.map(([k, label]) => {
         const items = leads.filter((l) => l.status === k);
@@ -372,24 +67,6 @@ function renderLeads(el, rerender) {
     </div>`;
   const find = (id) => store.state.leads.find((l) => l.id === id);
   bindActions(el, {
-    "sync-nexprospex": async () => {
-      try {
-        const crm = await loadChicagoShotsNexProspexCrm(50);
-        const imported = importChicagoShotsCrmLeads(crm);
-        pushActivity("Lead Hunter", `synced ${crm.summary?.contacts_total || 0} ChicagoShots contacts from NexProspex; ${imported} new follow-ups added.`, "chicagoshots");
-        store.save();
-        rerender();
-      } catch (error) {
-        alert(error?.message || "NexProspex CRM could not load.");
-      }
-    },
-    "import-nexprospex": () => {
-      const crm = workspaceCrm("chicagoshots");
-      const imported = importChicagoShotsCrmLeads(crm);
-      pushActivity("Lead Hunter", imported ? `added ${imported} NexProspex contacts to ChicagoShots Follow-Up Desk.` : "NexProspex contacts were already in the ChicagoShots Follow-Up Desk.", "chicagoshots");
-      store.save();
-      rerender();
-    },
     add: () => {
       const name = prompt("Lead name (person or business):");
       if (!name) return;
@@ -582,169 +259,43 @@ function renderMedia(el, rerender) {
   const media = visible(store.state.media);
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Make images, videos, ads, edits, and content plans here. Files from dashboard chat land here when you ask for an edit or full project.</p>
-      <button class="btn btn-primary" data-act="add">+ New creative</button>
+      <p class="ws-note">Controlled creative generation: brief → approval → generation → proof → delivery. Paid generation never runs without sign-off.</p>
+      <button class="btn btn-primary" data-act="add">+ Video brief</button>
     </div>
-    <section class="image-stack-panel">
-      <div class="record-top">
-        <div>
-          <p class="ws-mini-kicker">Media Lab tools</p>
-          <h4>Image tools</h4>
-        </div>
-        <button class="btn" data-act="load-image-toolchain">Check tools</button>
-      </div>
-      <p class="record-notes">Use this when you want to edit images directly. Most work can still start by asking Phantom.</p>
-      <div data-image-toolchain-result>${imageToolchainFallbackHtml()}</div>
-    </section>
-    ${renderContentHub(media)}
     <div class="card-grid">
       ${media.map((m) => `
-        <article class="record ${m.asset?.src ? "record-image" : ""}">
-          <div class="record-top record-top-actions">
-            <div>${wsTag(m.ws)}<h4>${esc(mediaCardTitle(m))}</h4></div>
-            <button class="record-dismiss" data-act="dismiss" data-id="${m.id}" type="button" aria-label="Remove this brief" title="Remove">×</button>
-          </div>
-          <p class="record-sub">${mediaMetaHtml(m)}</p>
-          ${m.asset?.src ? `
-            <figure class="media-image-stage ${m.asset.bgRemoved ? "is-bg-removed" : ""}" style="${imageStyle(m.asset)}">
-              <img src="${m.asset.src}" alt="${esc(m.title)}" loading="lazy">
-            </figure>
-            <div class="image-edit-strip">
-              <div><b>Crop</b>${imageCropButtons({ ...m.asset, id: m.id })}</div>
-              <div><b>Tweak</b>${imageFilterButtons({ ...m.asset, id: m.id })}</div>
-            </div>
-            <p class="record-notes"><b>Image tools:</b> crop, style, remove background, save variants.</p>
-          ` : ""}
-          <p class="record-notes"><b>Plan:</b> ${esc(mediaPlanText(m))}</p>
-          ${mediaShotListHtml(m)}
-          ${mediaCaptionHtml(m)}
+        <article class="record">
+          <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title)}</h4></div>
+          <p class="record-sub">${esc(m.type)} · ${chip(m.status)} · ${ago(m.updated)}</p>
+          <p class="record-notes"><b>Angle:</b> ${esc(m.angle)}</p>
+          <details class="shotlist"><summary>Shot list (${m.shots.length})</summary>
+            <ol>${m.shots.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+          </details>
+          <p class="record-notes"><b>Caption:</b> ${esc(m.caption)}</p>
           ${m.proof ? `<p class="record-proof">Proof: <code>${esc(m.proof)}</code></p>` : ""}
           <div class="record-actions">
-            <button class="btn" data-act="copy" data-id="${m.id}">Copy plan</button>
-            ${m.asset?.src ? `<button class="btn btn-good" data-act="save-image" data-id="${m.id}">Save image</button>
-              <button class="btn" data-act="bg-remove" data-id="${m.id}">${m.asset.bgRemoved ? "Restore BG" : "Remove BG"}</button>
-              <button class="btn" data-act="variant" data-id="${m.id}">Duplicate variant</button>
-              <button class="btn btn-quiet" data-act="download-image" data-id="${m.id}">Download</button>` : ""}
-            ${m.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${m.id}">Mark ready</button>` : ""}
-            ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Make ${esc(m.modality || "video")}</button>` : ""}
+            <button class="btn" data-act="copy" data-id="${m.id}">Copy brief</button>
+            ${m.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${m.id}">Mark brief ready</button>` : ""}
+            ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Request generation (approval)</button>` : ""}
             ${m.status === "generation-approved" ? `<button class="btn" data-act="delivered" data-id="${m.id}">Mark delivered</button>` : ""}
           </div>
-        </article>`).join("") || empty("Media Lab is quiet. Ask Phantom for an image, video, ad creative, or source analysis.")}
+        </article>`).join("") || empty("Media Lab is quiet. Ask Phantom AI for a video brief to get rolling.")}
     </div>`;
   const find = (id) => store.state.media.find((m) => m.id === id);
   bindActions(el, {
     add: () => {
       const t = prompt("What is this creative for? (client / campaign)");
       if (!t) return;
-      store.state.media.unshift({ id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(), title: `${t.trim()} — creative brief`, type: "Image/video creative", modality: "video", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook", "Visual proof", "Offer moment", "Platform crop", "Delivery version"], caption: `${t.trim()} — draft caption.`, proof: null, generationProvider: "Media Lab", updated: new Date().toISOString() });
+      store.state.media.unshift({ id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(), title: `${t.trim()} — video brief`, type: "Reel (vertical, 30s)", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"], caption: `${t.trim()} — draft caption.`, proof: null, updated: new Date().toISOString() });
       pushActivity("Media Factory", `drafted a brief: ${t.trim()}.`);
       store.save(); rerender();
     },
-    "load-image-toolchain": async (_id, btn) => {
-      const result = el.querySelector("[data-image-toolchain-result]");
-      if (!result) return;
-      const prev = btn.textContent;
-      btn.textContent = "Loading...";
-      result.innerHTML = empty("Checking local image stack...");
-      try {
-        const response = await fetch("/phantom-ai/media-lab/image-toolchain/status", { headers: authHeaders() });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok || !payload?.ok) {
-          result.innerHTML = empty(payload?.error || "Image stack requires signed-in backend access.");
-        } else {
-          result.innerHTML = renderImageToolchainPayload(payload);
-          pushActivity("Image Creator", "refreshed Media Lab image stack status.");
-          store.save();
-        }
-      } catch (error) {
-        result.innerHTML = empty(`Image stack could not load: ${error?.message || "request failed"}`);
-      } finally {
-        btn.textContent = prev;
-      }
-    },
-    copy: (id, btn) => {
-      const m = find(id);
-      const lines = [
-        mediaCardTitle(m),
-        m.type || mediaCountText(m),
-        "",
-        `Plan: ${mediaPlanText(m)}`,
-      ];
-      if ((m.shots || []).length) {
-        lines.push("", "Steps:", ...(m.shots || []).map((s, i) => `${i + 1}. ${s}`));
-      }
-      if (m.caption) lines.push("", `Post text: ${m.caption}`);
-      if (m.asset?.prompt) lines.push("", `Prompt: ${m.asset.prompt}`);
-      copyText(btn, lines.join("\n"));
-    },
-    dismiss: (id) => {
-      const index = store.state.media.findIndex((m) => m.id === id);
-      if (index < 0) return;
-      const [removed] = store.state.media.splice(index, 1);
-      store.state.approvals = (store.state.approvals || []).filter((a) => a.ref !== id || a.type !== "media-generation");
-      pushActivity("Media Lab", `removed ${mediaCardTitle(removed)}.`, removed?.ws);
-      store.save();
-      rerender();
-    },
-    "image-filter": (id, btn) => {
-      const m = find(id);
-      if (!m?.asset) return;
-      m.asset = editImageArtifact(m.asset, { filter: btn.dataset.filter, label: `filter:${btn.dataset.filter}` });
-      m.updated = new Date().toISOString();
-      pushActivity("Image Creator", `applied ${btn.dataset.filter} look to ${m.title}.`, m.ws);
-      store.save(); rerender();
-    },
-    "image-crop": (id, btn) => {
-      const m = find(id);
-      if (!m?.asset) return;
-      m.asset = editImageArtifact(m.asset, { crop: btn.dataset.crop, label: `crop:${btn.dataset.crop}` });
-      m.updated = new Date().toISOString();
-      pushActivity("Image Creator", `set ${btn.dataset.crop} crop for ${m.title}.`, m.ws);
-      store.save(); rerender();
-    },
-    "bg-remove": (id) => {
-      const m = find(id);
-      if (!m?.asset) return;
-      m.asset = editImageArtifact(m.asset, { bgRemoved: !m.asset.bgRemoved, label: m.asset.bgRemoved ? "restore-background" : "background-removal-preview" });
-      m.updated = new Date().toISOString();
-      pushActivity("Image Creator", `${m.asset.bgRemoved ? "previewed background removal" : "restored background"} for ${m.title}.`, m.ws);
-      store.save(); rerender();
-    },
-    "save-image": (id) => {
-      const m = find(id);
-      if (!m?.asset) return;
-      m.status = "asset-saved";
-      m.proof = `Saved in Media Lab · ${m.asset.crop || "1:1"} · ${m.asset.filter || "studio"} · ${m.asset.bgRemoved ? "bg pass" : "full bg"}`;
-      m.updated = new Date().toISOString();
-      pushActivity("Image Creator", `saved image asset: ${m.title}.`, m.ws);
-      store.save(); rerender();
-    },
-    variant: (id) => {
-      const m = find(id);
-      if (!m?.asset) return;
-      const prompt = `${m.asset.prompt || m.title} alternate premium variant`;
-      const variant = {
-        ...m,
-        id: uid("med"),
-        title: `${m.title.replace(/\s+variant\s+\d+$/i, "")} variant`,
-        status: "image-ready",
-        asset: editImageArtifact(makeImageArtifact(prompt, `${m.title} variant`, { crop: m.asset.crop, filter: m.asset.filter }), { label: "variant-generated" }),
-        proof: null,
-        updated: new Date().toISOString(),
-      };
-      store.state.media.unshift(variant);
-      pushActivity("Image Creator", `created image variant: ${variant.title}.`, variant.ws);
-      store.save(); rerender();
-    },
-    "download-image": (id) => {
-      const m = find(id);
-      if (m?.asset) downloadImage(m.asset, m.title);
-    },
-    ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `ready: ${mediaCardTitle(m)}.`, m.ws); store.save(); rerender(); },
+    copy: (id, btn) => { const m = find(id); copyText(btn, `${m.title}\n${m.type}\n\nAngle: ${m.angle}\n\nShots:\n${m.shots.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nCaption: ${m.caption}`); },
+    ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `brief ready: ${m.title}.`, m.ws); store.save(); rerender(); },
     "request-gen": (id) => {
       const m = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Make ${m.modality || "video"}: ${mediaCardTitle(m)}`, detail: "One paid run from this plan. Approval is required first.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
-      pushActivity("Media Factory", `requested ${m.modality || "video"} for ${mediaCardTitle(m)}.`, m.ws);
+      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One generation pass on this brief. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
+      pushActivity("Media Factory", `requested a generation pass on ${m.title}.`, m.ws);
       store.save(); rerender();
     },
     delivered: (id) => { const m = find(id); m.status = "delivered"; m.updated = new Date().toISOString(); pushActivity("Delivery Manager", `delivered ${m.title}.`, m.ws); store.save(); rerender(); },
@@ -804,7 +355,7 @@ function renderSites(el, rerender) {
     "add-page": () => {
       const t = prompt("Page for which client / purpose?");
       if (!t) return;
-      store.state.sites.unshift({ id: uid("site"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), title: `${t.trim()} — landing page`, kind: "Landing page", status: "draft", sections: ["Hero with one clear promise", "Proof / reviews section", "Offer + pricing", "Call-to-action receipt lane"], url: null, updated: new Date().toISOString() });
+      store.state.sites.unshift({ id: uid("site"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), title: `${t.trim()} — landing page`, kind: "Landing page", status: "draft", sections: ["Hero with one clear promise", "Proof / reviews section", "Offer + pricing", "Call-to-action (approval-gated)"], url: null, updated: new Date().toISOString() });
       pushActivity("Site Builder", `drafted a landing page for ${t.trim()}.`);
       store.save(); rerender();
     },
@@ -844,257 +395,30 @@ function renderSites(el, rerender) {
 }
 
 /* ============================== PROTECT ============================== */
-function scanDayText(iso) {
-  const days = daysUntil(iso);
-  if (!Number.isFinite(days)) return "not scheduled";
-  if (days <= 0) return "due now";
-  if (days === 1) return "tomorrow";
-  return `${days} days`;
-}
-
-function findingIcon(level = "") {
-  return level === "warn" || level === "high" || level === "critical" ? "!" : "✓";
-}
-
-function backendFindings(result = {}) {
-  const findings = result.findings || [];
-  return findings.slice(0, 6).map((finding) => ({
-    level: finding.severity === "critical" || finding.severity === "high" ? "warn" : "ok",
-    text: finding.title || finding.detail || "Scan finding",
-  }));
-}
-
-function updateScanWithBackend(sec, payload = {}) {
-  const result = payload.result;
-  if (!sec || !result) return sec;
-  const count = Number(result.summary?.total_findings || result.findings?.length || 0);
-  const findings = backendFindings(result);
-  sec.backendProof = {
-    scannerVersion: result.scanner_version,
-    scannedAt: result.scanned_at,
-    verdict: result.summary?.verdict,
-    findings: count,
-    localOnly: result.safety_flags?.local_only === true,
-    uploaded: result.safety_flags?.upload_performed === true,
-  };
-  if (findings.length) sec.findings = findings;
-  sec.posture = count ? "review" : "clean";
-  sec.status = sec.posture;
-  sec.summary = count ? `${count} item${count === 1 ? "" : "s"} need review.` : "Clean scan. Nothing risky found in workspace copy.";
-  sec.phishing = count ? "review needed" : "no obvious phishing language";
-  sec.breachCheck = "ready on password change; no plaintext password stored";
-  store.save();
-  return sec;
-}
-
-function monitoredDomains(ws = currentWs()) {
-  if (ws === "chicagoshots") return ["chicagoshots.online"];
-  if (ws === "test-client") return [];
-  return ["phantomforce.online", "admin.phantomforce.online", "app.phantomforce.online"];
-}
-
-function connectorById(connectors = [], id) {
-  return connectors.find((connector) => connector.id === id) || {};
-}
-
-function externalFindings(result = {}) {
-  return (result.findings || []).slice(0, 8).map((finding) => ({
-    level: finding.severity === "blocked" || finding.severity === "warn" ? "warn" : "ok",
-    text: finding.title || finding.detail || "Risk Radar finding",
-  }));
-}
-
-function updateScanWithExternalMonitor(sec, payload = {}) {
-  const result = payload.result;
-  if (!sec || !result) return sec;
-  const clamav = connectorById(result.connectors || [], "clamav");
-  const defender = connectorById(result.connectors || [], "windows_defender");
-  const hibp = connectorById(result.connectors || [], "hibp_account_breach");
-  const vt = connectorById(result.connectors || [], "virustotal");
-  const safeBrowsing = connectorById(result.connectors || [], "google_safe_browsing");
-  const domainsChecked = Number(result.summary?.domains_checked || 0);
-  const warnings = Number(result.summary?.warnings || 0);
-  const blocked = Number(result.summary?.blocked || 0);
-  const findings = externalFindings(result);
-  const connectorSummary = [
-    `ClamAV ${clamav.active ? "on" : "missing"}`,
-    `Defender ${defender.active ? "on" : "missing"}`,
-    `breach feed ${hibp.active ? "ready" : "needs key"}`,
-    `reputation feeds ${vt.active || safeBrowsing.active ? "ready" : "need keys"}`,
-  ].join(" · ");
-
-  sec.externalProof = {
-    monitorVersion: result.monitor_version,
-    scannedAt: result.scanned_at,
-    verdict: result.summary?.verdict || "review",
-    domainsChecked,
-    emailsChecked: Number(result.summary?.emails_checked || 0),
-    warnings,
-    blocked,
-    findings: Number(result.summary?.findings || 0),
-    antivirusEngine: result.antivirus?.engine || "none",
-    antivirusAvailable: result.antivirus?.available === true,
-    antivirusScanned: result.antivirus?.scanned === true,
-    antivirusClean: result.antivirus?.clean,
-    connectors: connectorSummary,
-    externalCallsAttempted: result.safety_flags?.external_calls_attempted === true,
-    uploaded: result.safety_flags?.upload_performed === true,
-    destructiveAction: result.safety_flags?.destructive_action === true,
-  };
-  if (findings.length) sec.findings = findings;
-  sec.posture = blocked || warnings ? "review" : "clean";
-  sec.status = sec.posture;
-  sec.summary = blocked
-    ? "Risk Radar blocked something. Review before using it."
-    : warnings
-      ? `${warnings} outside risk${warnings === 1 ? "" : "s"} need review.`
-      : "Clean scan. Website, email, and local file checks look good.";
-  sec.breachCheck = hibp.active ? "breach feed ready" : "breach feed needs API key";
-  store.save();
-  return sec;
-}
-
-async function refreshAutonomousScanStatus(sec) {
-  const response = await fetch("/phantom-ai/security/autonomous/status", { headers: authHeaders() });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.ok) throw new Error(payload?.error || "Status unavailable");
-  const status = payload.status || {};
-  if (sec && status.next_run_after) {
-    sec.nextScan = status.next_run_after;
-    sec.autonomousProof = {
-      status: payload.status?.status || status.status,
-      proofId: status.proof_id,
-      lastRunAt: status.last_run_at,
-      nextRunAfter: status.next_run_after,
-      runCount: status.run_count,
-      passwordProofId: status.password_health?.proof_id,
-      passwordCheckedAt: status.password_health?.checked_at,
-      rotationDays: status.password_health?.policy?.rotation_interval_days,
-      breachTiming: status.password_health?.policy?.breach_check_timing,
-    };
-  }
-  store.state.automationConfig ||= {};
-  store.state.automationConfig.monthlySecurityScans = {
-    ...(store.state.automationConfig.monthlySecurityScans || {}),
-    state: status.status || payload.status?.status || "active",
-    cadence: payload.cadence || status.cadence || "monthly",
-    lastRunAt: status.last_run_at || null,
-    nextRunAt: status.next_run_after || null,
-    lastProof: status.proof_id || null,
-    nextRunLabel: status.next_run_after ? scanDayText(status.next_run_after) : "monthly",
-  };
-  store.save();
-  return payload;
-}
-
-async function runBackendSecurityPreview(sec) {
-  const response = await fetch("/phantom-ai/security/scan/preview", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({
-      label: `${wsName(currentWs())} Risk Radar scan`,
-      mode: "website",
-      filename: "phantomforce-workspace-scan.txt",
-      content: buildSecurityScanSnapshot(currentWs()),
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.ok) throw new Error(payload?.error || "Scan unavailable");
-  return updateScanWithBackend(sec, payload);
-}
-
-async function runExternalSecurityMonitor(sec) {
-  const domains = monitoredDomains(currentWs());
-  const response = await fetch("/phantom-ai/security/external-monitor/run", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({
-      label: `${wsName(currentWs())} Risk Radar monitor`,
-      domains,
-      emails: [],
-      filename: "phantomforce-workspace-scan.txt",
-      content: buildSecurityScanSnapshot(currentWs()),
-      enable_external_calls: true,
-    }),
-  });
-  const payload = await response.json().catch(() => ({}));
-  if (!response.ok || !payload?.ok) throw new Error(payload?.error || "External monitor unavailable");
-  return updateScanWithExternalMonitor(sec, payload);
-}
-
 function renderProtect(el, rerender) {
   const secs = visible(store.state.security);
-  const cfg = store.state.automationConfig?.monthlySecurityScans || {};
   el.innerHTML = `
-    <div class="ws-toolbar">
-      <p class="ws-note">Scan your workspace for risky text, leak signs, malware clues, password reminders, and bad habits. Nothing uploads or sends.</p>
-      <button class="btn btn-primary" data-act="run-scan">Run scan now</button>
-      <button class="btn" data-act="refresh-status">Check monthly schedule</button>
-    </div>
-    <div class="stat-row">
-      <div class="stat"><span>Monthly scans</span><b>${esc(statusLabel(cfg.state || "ready"))}</b><i>${esc(cfg.nextRunAt ? `next in ${scanDayText(cfg.nextRunAt)}` : cfg.nextRunLabel || "ready")}</i></div>
-      <div class="stat"><span>Last proof</span><b>${esc(cfg.lastProof || "none yet")}</b><i>${cfg.lastRunAt ? esc(fmtDateTime(cfg.lastRunAt)) : "run first scan"}</i></div>
-      <div class="stat"><span>Password check</span><b>6 months</b><i>unique passwords per account</i></div>
-      <div class="stat"><span>Outside checks</span><b>${isAdmin() ? "admin" : "hidden"}</b><i>${isAdmin() ? "domain + antivirus" : "client-safe view"}</i></div>
-    </div>
-    ${secs.length ? `<div class="card-grid">
+    <div class="ws-toolbar"><p class="ws-note">Defensive posture only: monthly scan proofs, rotation reminders, breach checks on password change or reset. No secrets are stored or shown here.</p></div>
+    <div class="card-grid">
       ${secs.map((s) => `
         <article class="record">
-          <div class="record-top">${wsTag(s.ws)}<h4>${esc(wsName(s.ws))} ${s.posture === "clean" ? "looks clean" : "needs review"} ${chip(s.posture === "clean" ? "approved" : "pending")}</h4></div>
-          <p class="record-notes">${esc(s.summary || "Scan finished.")}</p>
-          ${kv("Last scan", `${s.lastScan ? fmtDateTime(s.lastScan) : "not run"} · proof <code>${esc(s.proofId || "none")}</code>`)}
-          ${kv("Next scan", `${s.nextScan ? fmtDate(s.nextScan) : "not scheduled"} · ${scanDayText(s.nextScan)}`)}
-          ${kv("Password check", `${s.rotationDue ? `next reminder ${fmtDate(s.rotationDue)}` : "baseline needed"} · every 6 months`)}
-          ${kv("Accounts tracked", `${esc(s.accounts || 1)}`)}
-          ${kv("Breach check", esc(s.breachCheck || "ready on password change; no plaintext password stored"))}
-          ${s.backendProof ? kv("Scan engine", `${esc(s.backendProof.localOnly ? "local" : "review")} · ${esc(s.backendProof.findings)} finding${Number(s.backendProof.findings) === 1 ? "" : "s"}`) : ""}
-          ${s.externalProof ? kv("Outside monitor", `${esc(s.externalProof.verdict)} · ${esc(s.externalProof.domainsChecked)} domain${Number(s.externalProof.domainsChecked) === 1 ? "" : "s"} · ${esc(s.externalProof.connectors)}`) : ""}
-          ${s.externalProof ? kv("Antivirus", `${esc(s.externalProof.antivirusEngine)} · ${s.externalProof.antivirusAvailable ? "found" : "missing"} · ${s.externalProof.antivirusScanned ? (s.externalProof.antivirusClean === false ? "flagged" : "clean") : "ready"}`) : ""}
+          <div class="record-top">${wsTag(s.ws)}<h4>${esc(wsName(s.ws))} posture ${chip(s.posture === "clean" ? "approved" : "pending")}</h4></div>
+          ${kv("Last scan", `${fmtDate(s.lastScan)} · proof <code>${esc(s.proofId)}</code>`)}
+          ${kv("Next scan", `${fmtDate(s.nextScan)} (in ${daysUntil(s.nextScan)} days — autonomous monthly cadence)`)}
+          ${kv("Accounts tracked", `${s.accounts}`)}
+          ${kv("Password rotation", `${daysUntil(s.rotationDue) <= 30 ? "⚠ " : ""}window closes ${fmtDate(s.rotationDue)} — rotate every 180 days, unique per account`)}
+          ${kv("Phishing risk", esc(s.phishing))}
+          ${kv("Breach check", esc(s.breachCheck))}
           <ul class="record-list">
-            ${(s.findings || []).map((f) => `<li class="finding-${esc(f.level)}">${findingIcon(f.level)} ${esc(f.text)}</li>`).join("")}
+            ${s.findings.map((f) => `<li class="finding-${f.level}">${f.level === "warn" ? "⚠" : "✓"} ${esc(f.text)}</li>`).join("")}
           </ul>
           <div class="record-actions">
             ${isAdmin() ? `<button class="btn" data-act="remind" data-id="${s.id}">Prepare rotation reminder</button>` : ""}
             <button class="btn btn-quiet" data-act="summary" data-id="${s.id}">Copy client-safe summary</button>
           </div>
         </article>`).join("")}
-    </div>` : empty("No scan proof yet. Press Run scan now to create the first proof for this workspace.")}`;
+    </div>`;
   bindActions(el, {
-    "run-scan": async (_id, btn) => {
-      const prev = btn.textContent;
-      btn.textContent = "Scanning...";
-      btn.disabled = true;
-      const sec = runWorkspaceSecurityScan({ source: "radar-manual" });
-      try {
-        await runBackendSecurityPreview(sec);
-        if (isAdmin()) await runExternalSecurityMonitor(sec);
-      } catch (error) {
-        sec.backendError = error?.message || "Backend scan unavailable";
-        store.save();
-      } finally {
-        btn.textContent = prev;
-        btn.disabled = false;
-        rerender();
-      }
-    },
-    "refresh-status": async (_id, btn) => {
-      const prev = btn.textContent;
-      btn.textContent = "Checking...";
-      btn.disabled = true;
-      let sec = visible(store.state.security)[0];
-      if (!sec) sec = runWorkspaceSecurityScan({ source: "status-check" });
-      try {
-        await refreshAutonomousScanStatus(sec);
-        pushActivity("Security Watch", `monthly scan schedule checked for ${wsName(currentWs())}.`, currentWs());
-      } catch (error) {
-        pushActivity("Security Watch", `monthly scan schedule could not load: ${error?.message || "request failed"}.`, currentWs());
-      } finally {
-        btn.textContent = prev;
-        btn.disabled = false;
-        store.save();
-        rerender();
-      }
-    },
     remind: (id) => {
       const s = store.state.security.find((x) => x.id === id);
       pushActivity("Security Watch", `prepared a password-rotation reminder for ${wsName(s.ws)} (due ${fmtDate(s.rotationDue)}).`, s.ws);
@@ -1102,7 +426,7 @@ function renderProtect(el, rerender) {
     },
     summary: (id, btn) => {
       const s = store.state.security.find((x) => x.id === id);
-      copyText(btn, `Risk Radar summary — ${wsName(s.ws)}\nStatus: ${s.posture === "clean" ? "clean" : "needs review"}.\nLast scan: ${fmtDateTime(s.lastScan)} (proof ${s.proofId}).\nNext scan: ${fmtDate(s.nextScan)}.\nPassword reminder: unique passwords, rotate every 6 months.\n${(s.findings || []).filter((f) => f.level === "warn").length || "No"} item(s) need attention.`);
+      copyText(btn, `Security summary — ${wsName(s.ws)}\nPosture: ${s.posture}. Last scan ${fmtDate(s.lastScan)} (proof ${s.proofId}); next scan ${fmtDate(s.nextScan)}. ${s.findings.filter((f) => f.level === "warn").length || "No"} item(s) need attention.`);
     },
   });
 }
@@ -1126,165 +450,13 @@ function renderMoney(el, rerender) {
         </article>`).join("") || empty("No open proposals — pipeline is either closed or waiting to be built.")}
     </div>
     <h3 class="ws-subhead">Next money actions</h3>
-    ${m.open.length || m.won.length || invoiceReady.length ? `<ul class="record-list record-list-lg">
+    <ul class="record-list record-list-lg">
       ${m.open.filter((p) => p.status === "sent-ready").map((p) => `<li>▸ ${esc(p.client)} is send-ready — get it in front of them and set the follow-up.</li>`).join("")}
       ${m.won.filter((p) => !p.retainer).map((p) => `<li>▸ ${esc(p.client)} closed without a retainer — pitch Keeper ($150/mo) at delivery.</li>`).join("")}
       ${invoiceReady.map((p) => `<li>▸ ${esc(p.client)} is invoice-ready — track payment manually until the connector exists.</li>`).join("")}
       <li>▸ Price-tier check: anything scoped over 20 hours should quote at Pro ($2,500), not Core.</li>
-    </ul>` : empty("No money actions yet. Quotes, wins, and invoices appear here after this workspace starts using Phantom.")}
+    </ul>
     <p class="ws-note">Quote → approval → invoice-ready → payment-tracked. Real invoices and payment requests stay off until a payment connector is configured.</p>`;
-}
-
-/* ============================= AUTOMATION ============================= */
-function renderAutomation(el, rerender) {
-  const connectors = store.state.postingConnectors || [];
-  const readyConnectors = connectors.filter((c) => c.adminState === "ready" || c.state === "available");
-  const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
-  const tasks = visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status));
-  el.innerHTML = `
-    <div class="ws-toolbar">
-      <p class="ws-note">Automation is where repeat work lives: follow-ups, review requests, scans, content drafts, booking reminders, and connector-ready publishing.</p>
-      <button class="btn" data-open-ws="approvals">Open approvals</button>
-    </div>
-    <div class="stat-row">
-      <div class="stat"><span>Connectors</span><b>${readyConnectors.length}/${connectors.length}</b><i>ready or configurable</i></div>
-      <div class="stat"><span>Work items</span><b>${tasks.length}</b><i>from Phantom chat</i></div>
-      <div class="stat"><span>Waiting</span><b>${pending.length}</b><i>needs approval</i></div>
-      <div class="stat"><span>Mode</span><b>${esc(executionMode.label().replace(" Mode", ""))}</b><i>${executionMode.get() === "auto" ? "acts faster" : "asks first"}</i></div>
-    </div>
-    <h3 class="ws-subhead">Repeat jobs</h3>
-    ${renderAutomationConfig()}
-    <h3 class="ws-subhead">Connectors</h3>
-    <p class="ws-note">Connect a business once. Phantom can then draft, schedule, post, upload, or file work for that business based on its permissions.</p>
-    ${renderConnectorSigninPanel()}
-    ${renderConnectorCards()}
-    <h3 class="ws-subhead">Active work</h3>
-    <div class="stack">
-      ${tasks.slice(0, 8).map((t) => `<article class="record record-row">
-        <h4>${esc(t.title)}</h4>
-        <p class="record-sub">${esc(t.lane || "Phantom")} · ${esc(t.status || "new")}</p>
-        <span class="admin-ws-stats">${esc(t.next || "Waiting for the next step.")}</span>
-      </article>`).join("") || empty("No active automation work yet. Ask Phantom to create a follow-up, review request, scan, post, or booking.")}
-    </div>`;
-  bindConnectorActions(el, rerender);
-}
-
-/* ============================= ANALYTICS ============================= */
-function renderAnalytics(el, rerender) {
-  const m = moneyView();
-  const leads = visible(store.state.leads);
-  const proposals = visible(store.state.proposals);
-  const media = visible(store.state.media);
-  const reviews = visible(store.state.reviews);
-  const bookings = visible(store.state.bookings);
-  const security = visible(store.state.security)[0];
-  const readyMedia = media.filter((item) => ["brief-ready", "generation-approved", "asset-saved"].includes(item.status));
-  const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
-  const won = proposals.filter((p) => p.status === "won");
-  el.innerHTML = `
-    <div class="ws-toolbar">
-      <p class="ws-note">Business performance in plain English: pipeline, follow-ups, content, reviews, bookings, and risk.</p>
-      <button class="btn" data-open-ws="money">Open money</button>
-    </div>
-    <div class="stat-row">
-      <div class="stat"><span>Open pipeline</span><b>${fmtMoney(m.pipeline)}</b><i>${m.open.length} quote${m.open.length === 1 ? "" : "s"}</i></div>
-      <div class="stat"><span>Won</span><b>${fmtMoney(m.wonValue)}</b><i>${won.length} closed</i></div>
-      <div class="stat"><span>Follow-ups due</span><b>${dueLeads.length}</b><i>${leads.length} contacts</i></div>
-      <div class="stat"><span>Content ready</span><b>${readyMedia.length}</b><i>${media.length} total</i></div>
-      <div class="stat"><span>Reviews</span><b>${reviews.length}</b><i>request pipeline</i></div>
-      <div class="stat"><span>Bookings</span><b>${bookings.length}</b><i>schedule lane</i></div>
-    </div>
-    <div class="card-grid">
-      <article class="record">
-        <div class="record-top"><h4>What matters next</h4>${chip(dueLeads.length || m.open.length || readyMedia.length ? "active" : "ready")}</div>
-        <ul class="record-list">
-          ${dueLeads.length ? `<li>Follow up with ${dueLeads.length} lead${dueLeads.length === 1 ? "" : "s"} today.</li>` : "<li>No urgent follow-ups right now.</li>"}
-          ${m.open.length ? `<li>${fmtMoney(m.pipeline)} is open. Push the highest-value quote first.</li>` : "<li>No open quotes yet.</li>"}
-          ${readyMedia.length ? `<li>${readyMedia.length} content item${readyMedia.length === 1 ? "" : "s"} can move toward posting or delivery.</li>` : "<li>No content is ready yet.</li>"}
-          ${security ? `<li>Risk radar: ${security.posture === "clean" ? "clean" : "needs attention"}.</li>` : "<li>No security scan is logged for this workspace yet.</li>"}
-        </ul>
-      </article>
-      <article class="record">
-        <div class="record-top"><h4>Content analysis</h4>${chip(media.length ? "ready" : "fresh")}</div>
-        <p class="record-notes">${esc(simpleContentAdvice(media))}</p>
-        <p class="record-sub">Once social accounts are connected, this becomes real platform performance instead of local content counts.</p>
-        <div class="record-actions"><button class="btn" data-open-ws="media">Open Media Lab</button></div>
-      </article>
-      <article class="record">
-        <div class="record-top"><h4>Revenue analysis</h4>${chip(m.pipeline || m.wonValue ? "active" : "ready")}</div>
-        <p class="record-notes">${m.pipeline ? `Your next best move is converting open quotes before building new offers.` : "The pipeline is empty. Start by adding leads or creating one quote."}</p>
-        <p class="record-sub">Retainers tracked: ${fmtMoney(m.retainerMonthly)}/mo.</p>
-        <div class="record-actions"><button class="btn" data-open-ws="proposals">Open quotes</button></div>
-      </article>
-    </div>
-    <h3 class="ws-subhead">Recent signals</h3>
-    <div class="stack">
-      ${visible(store.state.activity).slice(0, 8).map((a) => `<article class="record record-row"><h4>${esc(a.who)}</h4><p class="record-sub">${esc(a.text)}</p><i class="record-time">${ago(a.at)}</i></article>`).join("") || empty("No signals yet. Use Phantom and this will fill itself.")}
-    </div>`;
-}
-
-/* ============================== MEMORY ============================== */
-function renderMemory(el, rerender) {
-  const memory = store.state.workspaceMemory?.[currentWs()] || {};
-  const entries = memory.entries || [];
-  const files = visible(store.state.media).length + visible(store.state.sites).length + visible(store.state.products).length + visible(store.state.reviews).length;
-  el.innerHTML = `
-    <div class="ws-toolbar">
-      <p class="ws-note">Memory is what Phantom knows for this business: files, decisions, activity, and workspace-specific context.</p>
-      ${isAdmin() ? `<button class="btn" data-act="load-owner-memory">Load owner memory</button>` : ""}
-    </div>
-    <div class="stat-row">
-      <div class="stat"><span>Workspace</span><b>${esc(wsName(currentWs()))}</b><i>${esc(memory.tenantId || "tenant memory")}</i></div>
-      <div class="stat"><span>Files</span><b>${files}</b><i>inside this workspace</i></div>
-      <div class="stat"><span>Notes</span><b>${entries.length}</b><i>workspace memory</i></div>
-      <div class="stat"><span>Boundary</span><b>${currentWs() === "phantomforce" ? "owner" : "separate"}</b><i>clients stay isolated</i></div>
-    </div>
-    <div class="card-grid">
-      <article class="record">
-        <div class="record-top"><h4>What Phantom remembers</h4>${chip("ready")}</div>
-        <p class="record-notes">${esc(memory.summary || "No custom memory has been saved for this workspace yet.")}</p>
-        <p class="record-sub">Each business has its own memory. Jordan's admin account can switch workspaces without mixing client records.</p>
-      </article>
-      <article class="record">
-        <div class="record-top"><h4>Recent activity</h4>${chip("active")}</div>
-        <div class="stack">
-          ${visible(store.state.activity).slice(0, 5).map((a) => `<article class="record record-row"><h4>${esc(a.who)}</h4><p class="record-sub">${esc(a.text)}</p><i class="record-time">${ago(a.at)}</i></article>`).join("") || empty("No activity yet.")}
-        </div>
-      </article>
-    </div>
-    ${isAdmin() ? `
-      <h3 class="ws-subhead">Owner memory</h3>
-      <div class="record record-wide">
-        <p class="record-notes">Admin-only owner memory can search local receipts and process notes. It is separate from client memory.</p>
-        <div class="record-actions">
-          <input class="inline-input" data-owner-memory-query placeholder="Search owner memory..." aria-label="Search owner memory" />
-          <button class="btn btn-primary" data-act="load-owner-memory">Search</button>
-        </div>
-      </div>
-      <div data-owner-memory-result>${empty("Search owner memory when you need the full admin picture.")}</div>
-    ` : ""}`;
-  bindActions(el, {
-    "load-owner-memory": async () => {
-      const result = el.querySelector("[data-owner-memory-result]");
-      const query = el.querySelector("[data-owner-memory-query]")?.value?.trim() || "";
-      if (!result) return;
-      result.innerHTML = empty("Loading owner memory...");
-      try {
-        const params = new URLSearchParams();
-        if (query) params.set("q", query);
-        const url = `/phantom-ai/admin/owner-memory/status${params.toString() ? `?${params}` : ""}`;
-        const response = await fetch(url, { headers: authHeaders() });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          result.innerHTML = empty(payload?.error || "Owner memory requires admin backend access.");
-          return;
-        }
-        result.innerHTML = renderOwnerMemoryPayload(payload);
-      } catch (error) {
-        result.innerHTML = empty(`Owner memory could not load: ${error?.message || "request failed"}`);
-      }
-    },
-  });
 }
 
 /* ============================= TOOL SPINE ============================= */
@@ -1293,22 +465,19 @@ function renderToolSpineCards({ compact = false } = {}) {
   return `
     <div class="${compact ? "tool-spine-compact" : "tool-spine-grid"}">
       ${tools.map((tool) => `
-        <details class="record tool-card tool-mode-${esc(tool.mode)}">
-          <summary class="tool-summary">
-            <span>
-              <b><span class="agent-dot"></span>${esc(tool.name)}</b>
-              <i>${esc(tool.status)}</i>
-            </span>
+        <article class="record tool-card tool-mode-${esc(tool.mode)}">
+          <div class="record-top">
+            <h4><span class="agent-dot"></span>${esc(tool.name)}</h4>
             <span class="chip chip-${esc(tool.status)}">${esc(statusLabel(tool.status))}</span>
-          </summary>
-          <p class="record-sub">Role: ${esc(tool.worker)}</p>
+          </div>
+          <p class="record-sub">${esc(tool.worker)} · internal: ${esc(tool.internal)}</p>
           <p class="record-next">▸ ${esc(tool.role)}</p>
           <p class="record-notes"><b>Doing now:</b> ${esc(tool.activity)}</p>
           <div class="tool-meta">
             <span>${esc(statusLabel(tool.mode))}</span>
-            <span>${esc(statusLabel(tool.status))}</span>
+            <span>${esc(tool.path)}</span>
           </div>
-        </details>`).join("")}
+        </article>`).join("")}
     </div>`;
 }
 
@@ -1320,7 +489,7 @@ function renderWorkforce(el, rerender) {
     const inflight = visible(store.state.media).filter((x) => x.status !== "delivered").length + visible(store.state.sites).filter((x) => x.status === "draft").length;
     el.innerHTML = `
       <div class="stat-row">
-        <div class="stat"><span>Service systems available</span><b>${active}</b><i>Phantom modules, not employees or user accounts</i></div>
+        <div class="stat"><span>Workers on your account</span><b>${active}</b><i>active right now</i></div>
         <div class="stat"><span>Deliverables in progress</span><b>${inflight}</b><i>moving through the pipeline</i></div>
         <div class="stat"><span>Confidence</span><b>●●●●○</b><i>on schedule</i></div>
       </div>
@@ -1332,7 +501,7 @@ function renderWorkforce(el, rerender) {
     return;
   }
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Your Phantom systems. These are business capabilities, not employees or user accounts.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Your AI workforce, desk by desk. Statuses: active · idle · waiting · blocked · needs approval.</p></div>
     <div class="card-grid">
       ${agents.map((a) => `
         <article class="record agent-card agent-${esc(a.status)}">
@@ -1345,11 +514,11 @@ function renderWorkforce(el, rerender) {
           </div>
           <p class="record-notes"><b>Last output:</b> ${esc(a.last)}</p>
           ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
-          <p class="agent-bundle">${esc(a.bundle)}</p>
+          <p class="agent-bundle">internal lane: ${esc(a.bundle)}</p>
         </article>`).join("")}
     </div>
-    <h3 class="ws-subhead">Private systems</h3>
-    <p class="ws-note">Admin-only. Clients see outcomes, not internal programs.</p>
+    <h3 class="ws-subhead">Tool spine powering the workers</h3>
+    <p class="ws-note">These are the internal programs behind the desks. Clients see outcomes, not tool names.</p>
     ${renderToolSpineCards({ compact: true })}`;
 }
 
@@ -1358,7 +527,7 @@ function renderApprovals(el, rerender) {
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
   const done = visible(store.state.approvals).filter((a) => a.status !== "pending").slice(0, 6);
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, Drive files, publishing, paid generation, invoices, deploys. Drafting never waits on you.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, deploys. Drafting never waits on you.</p></div>
     ${pending.length ? `<div class="stack">
       ${pending.map((a) => `
         <article class="record record-wide approval-card">
@@ -1380,821 +549,48 @@ function renderApprovals(el, rerender) {
   });
 }
 
-/* ========================= LIVING COMMAND MAP ========================= */
-const MAP_W = 1000;
-const MAP_H = 560;
-let selectedLivingNodeId = "phantom";
-
-const mapStatusLabels = {
-  active: "Active",
-  ready: "Ready",
-  gated: "Controlled",
-  manual: "Manual",
-  planned: "Planned",
-  needs_review: "Needs review",
-  blocked: "Paused",
-};
-
-function edgePath(from, to, sag = 0) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  if (Math.abs(dx) < 48) {
-    return `M ${from.x} ${from.y} C ${from.x} ${from.y + dy * 0.4}, ${to.x} ${to.y - dy * 0.4}, ${to.x} ${to.y}`;
-  }
-  return `M ${from.x} ${from.y} C ${from.x + dx * 0.42} ${from.y + sag}, ${to.x - dx * 0.42} ${to.y + sag}, ${to.x} ${to.y}`;
-}
-
-function nodeStatus({ count = 0, waiting = false, gated = false, planned = false, blocked = false } = {}) {
-  if (blocked) return "blocked";
-  if (waiting) return "needs_review";
-  if (gated) return "gated";
-  if (count > 0) return "active";
-  if (planned) return "planned";
-  return "ready";
-}
-
-function buildLivingMap() {
-  const leads = visible(store.state.leads);
-  const openLeads = leads.filter((l) => !["won", "lost"].includes(l.status));
-  const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
-  const proposals = visible(store.state.proposals);
-  const liveProposals = proposals.filter((p) => ["draft", "sent-ready", "won", "invoice-ready"].includes(p.status));
-  const media = visible(store.state.media);
-  const mediaReady = media.filter((m) => ["brief-ready", "generation-approved"].includes(m.status));
-  const pages = visible(store.state.sites);
-  const livePages = pages.filter((p) => ["draft", "publish-ready", "approved-to-publish"].includes(p.status));
-  const reviews = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
-  const bookings = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
-  const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
-  const security = visible(store.state.security)[0];
-  const money = moneyView();
-  const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
-  const activeTools = (store.state.toolSpine || []).filter((tool) => tool.mode === "active").length;
-  const connectors = store.state.postingConnectors || [];
-  const readyConnectors = connectors.filter((c) => c.adminState === "ready" || c.state === "available").length;
-  const currentName = wsName(currentWs());
-
-  const nodes = [
-    {
-      id: "phantom",
-      label: "Phantom",
-      value: isAdmin() ? "owner view" : `${currentName} brain`,
-      status: "active",
-      workspace: "phantom",
-      x: 500,
-      y: 280,
-      icon: "⌁",
-      detail: "Phantom routes the next move and keeps the suite organized.",
-      inside: [
-        { label: "Mode", state: isAdmin() ? executionMode.get() : "workspace" },
-        { label: "Workspace", state: currentName },
-        { label: "Memory", state: isAdmin() ? "owner" : "tenant" },
-      ],
-      safety: "Admins see the full suite. Employees stay permission-scoped.",
-    },
-    {
-      id: "leads",
-      label: "Follow-Up Desk",
-      value: `${openLeads.length} open`,
-      status: nodeStatus({ count: openLeads.length, waiting: dueLeads.length > 0 }),
-      workspace: "leads",
-      x: 150,
-      y: 150,
-      icon: "◉",
-      detail: dueLeads.length ? `${dueLeads.length} lead follow-up is due now.` : "Captures leads, keeps the next follow-up clear, and feeds qualified work into quotes.",
-      inside: [
-        { label: "Open", state: openLeads.length },
-        { label: "Due", state: dueLeads.length },
-      ],
-    },
-    {
-      id: "proposals",
-      label: "Quote Forge",
-      value: `${liveProposals.length} live`,
-      status: nodeStatus({ count: liveProposals.length }),
-      workspace: "proposals",
-      x: 305,
-      y: 95,
-      icon: "◆",
-      detail: "Builds scoped offers from the real offer ladder and moves them toward send-ready status.",
-      inside: [
-        { label: "Pipeline", state: fmtMoney(money.pipeline) },
-        { label: "Retainers", state: fmtMoney(money.retainerMonthly) },
-      ],
-    },
-    {
-      id: "media",
-      label: "Media Lab",
-      value: `${mediaReady.length} ready`,
-      status: nodeStatus({ count: mediaReady.length, gated: true }),
-      workspace: "media",
-      x: 715,
-      y: 115,
-      icon: "▶",
-      detail: "Prepares video briefs, captions, shot lists, controlled generation, and content packages.",
-      inside: [
-        { label: "Briefs", state: media.length },
-        { label: "Ready", state: mediaReady.length },
-      ],
-      safety: "Paid generation and posting stay behind receipts and configured connectors.",
-    },
-    {
-      id: "sites",
-      label: "Site + Store",
-      value: `${livePages.length} builds`,
-      status: nodeStatus({ count: livePages.length }),
-      workspace: "sites",
-      x: 870,
-      y: 245,
-      icon: "▦",
-      detail: "Drafts pages, landing pages, product/service cards, store structure, and publish-ready site work.",
-      inside: [
-        { label: "Pages", state: pages.length },
-        { label: "Builds", state: livePages.length },
-      ],
-    },
-    {
-      id: "protect",
-      label: "Risk Radar",
-      value: security ? (security.posture === "clean" ? "clean" : "attention") : "ready",
-      status: nodeStatus({ count: security ? 1 : 0, waiting: security ? security.posture !== "clean" : false }),
-      workspace: "protect",
-      x: 845,
-      y: 420,
-      icon: "⬡",
-      detail: "Tracks malware posture, password rotation windows, exposure checks, and proof of monthly scans.",
-      inside: [
-        { label: "Scan", state: security ? statusLabel(security.status || security.posture) : "fresh" },
-        { label: "Cadence", state: "monthly" },
-      ],
-    },
-    {
-      id: "reviews",
-      label: "Review Desk",
-      value: `${reviews.length} in pipe`,
-      status: nodeStatus({ count: reviews.length }),
-      workspace: "reviews",
-      x: 650,
-      y: 475,
-      icon: "★",
-      detail: "Requests reviews after delivery, stages received testimonials, and queues publish approval.",
-      inside: [
-        { label: "Requests", state: reviews.length },
-        { label: "Publish", state: "approval" },
-      ],
-    },
-    {
-      id: "bookings",
-      label: "Bookings",
-      value: `${bookings.length} pending`,
-      status: nodeStatus({ count: bookings.length, gated: bookings.length > 0 }),
-      workspace: "bookings",
-      x: 360,
-      y: 475,
-      icon: "◷",
-      detail: "Creates appointment drafts, confirmations, reschedules, and booking copy before calendar writes.",
-      inside: [
-        { label: "Drafts", state: bookings.length },
-        { label: "Calendar", state: "controlled" },
-      ],
-    },
-    {
-      id: "money",
-      label: "Money",
-      value: fmtMoney(money.pipeline),
-      status: nodeStatus({ count: money.open.length }),
-      workspace: "money",
-      x: 145,
-      y: 390,
-      icon: "◈",
-      detail: "Shows open proposal value, wins, retainer path, and invoice-ready work without creating invoices automatically.",
-      inside: [
-        { label: "Won", state: fmtMoney(money.wonValue) },
-        { label: "Monthly", state: fmtMoney(money.retainerMonthly) },
-      ],
-    },
-    {
-      id: "approvals",
-      label: "Approvals",
-      value: `${pending.length} waiting`,
-      status: nodeStatus({ waiting: pending.length > 0 }),
-      workspace: "approvals",
-      x: 500,
-      y: 360,
-      icon: "✓",
-      detail: "Only outward-facing actions wait here: sends, bookings, publishing, paid generation, deploys, invoices, and deletes.",
-      inside: [
-        { label: "Waiting", state: pending.length },
-        { label: "Mode", state: executionMode.get() },
-      ],
-    },
-    {
-      id: "workforce",
-      label: "Workforce",
-      value: `${activeAgents} active`,
-      status: "active",
-      workspace: "workforce",
-      x: 500,
-      y: 150,
-      icon: "⬢",
-      detail: "The Phantom systems behind the app. You watch what each capability is doing instead of chatting with raw tools.",
-      inside: [
-        { label: "Systems", state: store.state.agents.length },
-        { label: "Tools", state: activeTools },
-      ],
-    },
-  ];
-
-  if (isAdmin()) {
-    nodes.push(
-      {
-        id: "connectors",
-        label: "Connectors",
-        value: `${readyConnectors}/${connectors.length} ready`,
-        status: nodeStatus({ count: readyConnectors, gated: readyConnectors < connectors.length }),
-        workspace: "adminos",
-        x: 500,
-        y: 525,
-        icon: "⌬",
-        detail: "Admin-only connector posture for Gmail, Calendar, Drive, YouTube, Instagram, Facebook, and TikTok.",
-        inside: [
-          { label: "Ready", state: readyConnectors },
-          { label: "Total", state: connectors.length },
-        ],
-        safety: "Clients never see raw connector controls.",
-      },
-    );
-  }
-
-  const liveState = (id) => {
-    const node = nodes.find((n) => n.id === id);
-    if (!node) return "planned";
-    if (node.status === "needs_review") return "gated";
-    if (node.status === "active") return "live";
-    if (node.status === "gated") return "gated";
-    return "ready";
-  };
-  const edges = [
-    ["phantom-workforce", "phantom", "workforce", "live", 0],
-    ["phantom-leads", "phantom", "leads", liveState("leads"), -18],
-    ["phantom-proposals", "phantom", "proposals", liveState("proposals"), -80],
-    ["phantom-media", "phantom", "media", liveState("media"), -75],
-    ["phantom-sites", "phantom", "sites", liveState("sites"), 10],
-    ["phantom-protect", "phantom", "protect", liveState("protect"), 42],
-    ["phantom-reviews", "phantom", "reviews", liveState("reviews"), 40],
-    ["phantom-bookings", "phantom", "bookings", liveState("bookings"), 38],
-    ["phantom-money", "phantom", "money", liveState("money"), 25],
-    ["phantom-approvals", "phantom", "approvals", pending.length ? "gated" : "ready", 0],
-    ["leads-proposals", "leads", "proposals", liveState("proposals"), 28],
-    ["proposals-money", "proposals", "money", liveState("money"), 85],
-    ["media-approvals", "media", "approvals", "gated", 40],
-    ["sites-approvals", "sites", "approvals", "ready", -30],
-    ["reviews-approvals", "reviews", "approvals", "ready", -20],
-    ["bookings-approvals", "bookings", "approvals", "gated", 20],
-    ["protect-approvals", "protect", "approvals", liveState("protect"), -15],
-  ];
-  if (isAdmin()) edges.push(["approvals-connectors", "approvals", "connectors", readyConnectors ? "ready" : "gated", 0]);
-
-  return {
-    nodes,
-    edges: edges
-      .map(([id, from, to, state, sag]) => ({ id, from, to, state, sag }))
-      .filter((edge) => nodes.some((n) => n.id === edge.from) && nodes.some((n) => n.id === edge.to)),
-    notice: pending.length
-      ? `${pending.length} outward-facing move${pending.length === 1 ? "" : "s"} need review before execution.`
-      : "Every business system is mapped. Click a node to open the workspace behind it.",
-  };
-}
-
-function moveLabel(item) {
-  const text = String(item?.text || "").trim();
-  return text.length > 74 ? `${text.slice(0, 71)}...` : text;
-}
-
-function buildNextMove(selected, plan, pending, dueLeads, money, security, mediaReady, livePages, liveProposals) {
-  const firstApproval = pending[0];
-  const firstLead = dueLeads[0];
-  const firstProposal = liveProposals.find((p) => p.status === "sent-ready") || liveProposals[0];
-  const firstMedia = mediaReady[0];
-  const firstPage = livePages[0];
-  const securityNeedsEyes = security && security.posture && security.posture !== "clean";
-
-  if (firstApproval) {
-    return {
-      tone: "alert",
-      kicker: "Waiting on you",
-      title: firstApproval.title,
-      detail: "This is the blocker. Nothing sends, posts, pays, or publishes until you review it.",
-      workspace: "approvals",
-      action: "Review",
-    };
-  }
-  if (firstLead) {
-    return {
-      tone: "warm",
-      kicker: "Money path",
-      title: firstLead.company || firstLead.name,
-      detail: firstLead.next || "Follow up and decide whether this turns into a quote.",
-      workspace: "leads",
-      action: "Open lead",
-    };
-  }
-  if (firstProposal) {
-    return {
-      tone: "bright",
-      kicker: money.pipeline ? `${fmtMoney(money.pipeline)} open` : "Quote path",
-      title: firstProposal.client,
-      detail: `${statusLabel(firstProposal.status)}. ${firstProposal.timeline || "Timeline needs a pass."}`,
-      workspace: "proposals",
-      action: "Open quote",
-    };
-  }
-  if (securityNeedsEyes) {
-    return {
-      tone: "alert",
-      kicker: "Protect",
-      title: "Security posture needs attention",
-      detail: security.summary || security.notes || "Open Protect and review the latest scan posture.",
-      workspace: "protect",
-      action: "Check",
-    };
-  }
-  if (firstMedia) {
-    return {
-      tone: "bright",
-      kicker: "Creative",
-      title: firstMedia.title,
-      detail: "Media brief is ready for the next controlled step.",
-      workspace: "media",
-      action: "Open media",
-    };
-  }
-  if (firstPage) {
-    return {
-      tone: "bright",
-      kicker: "Build",
-      title: firstPage.title,
-      detail: `Site work is ${statusLabel(firstPage.status)}.`,
-      workspace: "sites",
-      action: "Open site",
-    };
-  }
-  if (plan.length) {
-    return {
-      tone: "calm",
-      kicker: "Today",
-      title: moveLabel(plan[0]),
-      detail: "This is the next visible item in today's plan.",
-      workspace: plan[0].open || selected.workspace,
-      action: "Open",
-    };
-  }
-  return {
-    tone: "calm",
-    kicker: "Ready",
-    title: selected.id === "phantom" ? "Ask for an outcome" : selected.label,
-    detail: selected.id === "phantom"
-      ? "No urgent local items are waiting. Ask Phantom for a quote, follow-up, site draft, media brief, or security check."
-      : selected.detail,
-    workspace: selected.workspace,
-    action: selected.id === "phantom" ? "Open workspace" : "Open",
-  };
-}
-
-function brainSignalPanelHtml(selected, connected) {
-  const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
-  const leads = visible(store.state.leads);
-  const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
-  const liveProposals = visible(store.state.proposals).filter((p) => ["draft", "sent-ready", "sent", "invoice-ready"].includes(p.status));
-  const mediaReady = visible(store.state.media).filter((m) => ["brief-ready", "generation-approved"].includes(m.status));
-  const livePages = visible(store.state.sites).filter((p) => ["draft", "publish-ready", "approved-to-publish"].includes(p.status));
-  const security = visible(store.state.security)[0];
-  const plan = todaysPlan();
-  const money = moneyView();
-  const next = buildNextMove(selected, plan, pending, dueLeads, money, security, mediaReady, livePages, liveProposals);
-  const proof = [
-    { label: "Review", value: pending.length ? `${pending.length} waiting` : "clear", open: "approvals", state: pending.length ? "alert" : "calm" },
-    { label: "Pipeline", value: money.pipeline ? fmtMoney(money.pipeline) : "empty", open: "money", state: money.pipeline ? "bright" : "calm" },
-    { label: "Today", value: plan.length ? `${plan.length} item${plan.length === 1 ? "" : "s"}` : "quiet", open: plan[0]?.open || selected.workspace, state: plan.length ? "bright" : "calm" },
-    { label: "Protect", value: security ? (security.posture === "clean" ? "clean" : "attention") : "not set", open: "protect", state: security?.posture && security.posture !== "clean" ? "alert" : "calm" },
-  ];
-  const routeItems = plan.length
-    ? plan.slice(0, 3).map((item) => ({ label: item.kind || "next", value: moveLabel(item), open: item.open || selected.workspace, state: item.kind === "approval" || item.kind === "security" ? "alert" : "bright" }))
-    : [
-        { label: "start", value: "Ask Phantom for a quote, page, media brief, follow-up, or check.", open: selected.workspace, state: "bright" },
-        { label: "protect", value: security ? `Security is ${security.posture || statusLabel(security.status)}` : "Security setup has not started.", open: "protect", state: security?.posture && security.posture !== "clean" ? "alert" : "calm" },
-        { label: "pipeline", value: money.pipeline ? `${fmtMoney(money.pipeline)} open pipeline` : "Pipeline is empty until a lead or quote exists.", open: "money", state: money.pipeline ? "bright" : "calm" },
-      ];
-  const context = selected.id === "phantom"
-    ? "Owner view. Employee access stays permission-scoped."
-    : selected.detail;
-
-  return `
-    <div class="brain-detail" aria-live="polite">
-      <article class="brain-next-card tone-${esc(next.tone)}">
-        <span>${esc(next.kicker)}</span>
-        <strong>${esc(next.title)}</strong>
-        <p>${esc(next.detail)}</p>
-        <button class="brain-detail-open" type="button" data-open-ws="${esc(next.workspace)}">${esc(next.action)}</button>
-      </article>
-      <div class="brain-proof-grid" aria-label="Real workspace signals">
-        ${proof.map((item) => `
-          <button type="button" class="brain-proof-card state-${esc(item.state)}" data-open-ws="${esc(item.open)}">
-            <span>${esc(item.label)}</span>
-            <strong>${esc(item.value)}</strong>
-          </button>
-        `).join("")}
-      </div>
-      <div class="brain-route-board" aria-label="Next visible work">
-        ${routeItems.map((item) => `
-          <button type="button" class="brain-route-card route-${esc(item.state)}" ${item.nodeId ? `data-map-node="${esc(item.nodeId)}"` : `data-open-ws="${esc(item.open)}"`}>
-            <span>${esc(item.label)}</span>
-            <strong>${esc(item.value)}</strong>
-          </button>
-        `).join("") || `
-          <button type="button" class="brain-route-card route-calm" data-open-ws="${esc(selected.workspace)}">
-            <span>selected</span>
-            <strong>${esc(selected.label)}: ${esc(selected.value)}</strong>
-          </button>
-        `}
-      </div>
-      <div class="brain-context-strip">
-        <span>${esc(selected.label)}</span>
-        <p>${esc(context)}</p>
-        <button class="brain-mini-open" type="button" data-open-ws="${esc(selected.workspace)}">Open</button>
-      </div>
-    </div>`;
-}
-
-export function livingMapHtml() {
-  const { nodes, edges, notice } = buildLivingMap();
-  if (!nodes.some((node) => node.id === selectedLivingNodeId)) selectedLivingNodeId = "phantom";
-  const selected = nodes.find((node) => node.id === selectedLivingNodeId) || nodes[0];
-  const byId = new Map(nodes.map((node) => [node.id, node]));
-  const statuses = Object.keys(mapStatusLabels).filter((status) => nodes.some((node) => node.status === status));
-  const connected = selected
-    ? edges.flatMap((edge) => {
-        if (edge.from !== selected.id && edge.to !== selected.id) return [];
-        const other = byId.get(edge.from === selected.id ? edge.to : edge.from);
-        return other ? [{ node: other, direction: edge.from === selected.id ? "out" : "in", state: edge.state }] : [];
-      })
-    : [];
-
-  return `
-    <section class="phantom-nervous-system brain-map" aria-label="PhantomForce living system map">
-      <div class="nervous-head">
-        <div>
-          <span class="deck-label">Living command map</span>
-          <h2>One request routes the whole business.</h2>
-          <p>${esc(notice)}</p>
-        </div>
-        <div class="brain-legend" aria-label="Node status legend">
-          ${statuses.map((status) => `<span class="status-${esc(status)}"><i></i>${esc(mapStatusLabels[status])}</span>`).join("")}
-        </div>
-      </div>
-      <div class="brain-map-stage" role="group" aria-label="System nodes and flows">
-        <svg class="brain-edges" viewBox="0 0 ${MAP_W} ${MAP_H}" preserveAspectRatio="none" aria-hidden="true">
-          ${edges.map((edge) => {
-            const from = byId.get(edge.from);
-            const to = byId.get(edge.to);
-            if (!from || !to) return "";
-            const dim = selected && edge.from !== selected.id && edge.to !== selected.id ? " dimmed" : "";
-            const pathId = `living-edge-${edge.id}`;
-            return `<g class="brain-edge ${esc(edge.state)}${dim}">
-              <path id="${esc(pathId)}" d="${esc(edgePath(from, to, edge.sag || 0))}"></path>
-              ${edge.state === "live" ? `<circle class="brain-pulse" r="3.2"><animateMotion dur="5.2s" repeatCount="indefinite"><mpath href="#${esc(pathId)}"></mpath></animateMotion></circle><circle class="brain-pulse faint" r="2.1"><animateMotion dur="5.2s" begin="-2.6s" repeatCount="indefinite"><mpath href="#${esc(pathId)}"></mpath></animateMotion></circle>` : ""}
-            </g>`;
-          }).join("")}
-        </svg>
-        ${nodes.map((node) => `
-          <button class="brain-node status-${esc(node.status)}${node.id === "phantom" ? " hub" : ""}${selected?.id === node.id ? " selected" : ""}"
-            style="left:${(node.x / MAP_W) * 100}%;top:${(node.y / MAP_H) * 100}%"
-            type="button" data-map-node="${esc(node.id)}" title="${esc(node.detail)}">
-            <span class="brain-node-icon">${esc(node.icon)}</span>
-            <span class="brain-node-copy"><strong>${esc(node.label)}</strong><small>${esc(node.value)}</small></span>
-            <i class="brain-node-dot" aria-hidden="true"></i>
-          </button>
-        `).join("")}
-      </div>
-      ${selected ? brainSignalPanelHtml(selected, connected) : ""}
-    </section>`;
-}
-
-export function wireLivingMap(root, rerender) {
-  root.querySelectorAll("[data-map-node]").forEach((button) => {
-    button.addEventListener("click", (event) => {
-      event.stopPropagation();
-      selectedLivingNodeId = button.dataset.mapNode || "phantom";
-      rerender();
-    });
-  });
-}
-
-function connectorChip(connector) {
-  const state = connector.adminState || connector.state || "ready";
-  return chip(state === "ready" || state === "available" ? "ready" : state);
-}
-
-function connectorConnectionLabel(connector = {}) {
-  return statusLabel(connector.connectionState || "not-connected");
-}
-
-function connectorConnectionClass(connector = {}) {
-  return connectorStateClass(connector.connectionState || "not-connected");
-}
-
-function connectorConnectionNote(connector = {}) {
-  if (connector.lastConnectMessage) return connector.lastConnectMessage;
-  if (connector.connectionState === "connected") return "Signed in for this workspace.";
-  return connector.manualHint || "Use Fast Connect first, or sign in manually for this connector.";
-}
-
-function updateConnectorConnection(id, patch = {}) {
-  const connector = store.state.postingConnectors.find((item) => item.id === id);
-  if (!connector) return null;
-  Object.assign(connector, {
-    lastConnectAttempt: new Date().toISOString(),
-    ...patch,
-  });
-  return connector;
-}
-
-function fastConnectConnector(id) {
-  const connector = store.state.postingConnectors.find((item) => item.id === id);
-  if (!connector) return { ok: false, state: "missing" };
-  if (connector.fastConnect === "likely") {
-    updateConnectorConnection(id, {
-      connectionState: "connected",
-      connectionMethod: "fast-connect",
-      lastConnectMessage: "Fast Connect used the existing admin-ready connector state. Manual sign-in is still available if this account is wrong.",
-    });
-    return { ok: true, state: "connected" };
-  }
-  updateConnectorConnection(id, {
-    connectionState: "manual-needed",
-    connectionMethod: "fast-connect-failed",
-    lastConnectMessage: "Fast Connect could not finish this one. Use Manual Sign In for the right account.",
-  });
-  return { ok: false, state: "manual-needed" };
-}
-
-function connectorManualSignIn(id) {
-  const connector = updateConnectorConnection(id, {
-    connectionState: "manual-started",
-    connectionMethod: "manual",
-    lastConnectMessage: "Manual sign-in started. Finish in the provider window, then mark this connector connected.",
-  });
-  if (connector?.manualUrl) {
-    try {
-      window.open(connector.manualUrl, "_blank", "noopener,noreferrer");
-    } catch {}
-  }
-  return connector;
-}
-
-function renderConnectorSigninPanel() {
-  const connectors = store.state.postingConnectors || [];
-  const connected = connectors.filter((connector) => connector.connectionState === "connected").length;
-  const needsManual = connectors.filter((connector) => ["not-connected", "manual-needed", "manual-started"].includes(connector.connectionState || "not-connected")).length;
-  return `
-    <article class="connector-signin-panel">
-      <div>
-        <p class="ws-mini-kicker">Connector sign-in</p>
-        <h4>One quick try, manual backup.</h4>
-        <p>Fast Connect is best-effort. It may use existing browser sign-ins on this device, but some apps will still need manual sign-in.</p>
-      </div>
-      <div class="connector-signin-actions">
-        <span class="connector-auth-state">${connected}/${connectors.length} connected</span>
-        <button class="btn btn-primary" data-connector-act="fast-connect-all">⚡ Try Fast Connect</button>
-      </div>
-      ${needsManual ? `<p class="record-sub">If it misses anything, use Manual Sign In on that connector.</p>` : `<p class="record-sub">All connectors are marked connected for this workspace.</p>`}
-    </article>`;
-}
-
-function bindConnectorActions(root, rerender) {
-  root.querySelectorAll("[data-connector-act]").forEach((button) => {
-    button.addEventListener("click", () => {
-      const act = button.dataset.connectorAct;
-      const id = button.dataset.id;
-      if (act === "fast-connect-all") {
-        let connected = 0;
-        let manual = 0;
-        (store.state.postingConnectors || []).forEach((connector) => {
-          const result = fastConnectConnector(connector.id);
-          if (result.ok) connected += 1;
-          else manual += 1;
-        });
-        pushActivity("Connector Setup", `Fast Connect checked all connectors: ${connected} connected, ${manual} need manual sign-in.`, currentWs());
-      }
-      if (act === "fast-connect" && id) {
-        const result = fastConnectConnector(id);
-        const connector = store.state.postingConnectors.find((item) => item.id === id);
-        pushActivity("Connector Setup", `${connector?.name || "Connector"} ${result.ok ? "connected through Fast Connect" : "needs manual sign-in"}.`, currentWs());
-      }
-      if (act === "manual-connect" && id) {
-        const connector = connectorManualSignIn(id);
-        pushActivity("Connector Setup", `${connector?.name || "Connector"} manual sign-in opened.`, currentWs());
-      }
-      if (act === "mark-connected" && id) {
-        const connector = updateConnectorConnection(id, {
-          connectionState: "connected",
-          connectionMethod: "manual-confirmed",
-          lastConnectMessage: "Marked connected after manual sign-in.",
-        });
-        pushActivity("Connector Setup", `${connector?.name || "Connector"} marked connected.`, currentWs());
-      }
-      store.save();
-      rerender();
-    });
-  });
-}
-
-function renderConnectorCards() {
-  const connectors = store.state.postingConnectors || [];
-  return `
-    <div class="connector-grid">
-      ${connectors.map((connector) => `
-        <details class="record connector-card connector-${esc(connector.state)} ${esc(connectorConnectionClass(connector))}">
-          <summary class="connector-summary">
-            <span>
-              <b>${esc(connector.name)}</b>
-              <i>${esc(connector.cadence)}</i>
-            </span>
-            ${connectorChip(connector)}
-          </summary>
-          <div class="connector-capabilities">
-            ${(connector.capabilities || []).map((item) => `<span>${esc(item)}</span>`).join("")}
-          </div>
-          <div class="connector-auth-row">
-            <span class="connector-auth-state">${esc(connectorConnectionLabel(connector))}</span>
-            <button class="btn btn-good" data-connector-act="fast-connect" data-id="${esc(connector.id)}">⚡ Try</button>
-            <button class="btn" data-connector-act="manual-connect" data-id="${esc(connector.id)}">Manual sign in</button>
-            ${connector.connectionState === "manual-started" || connector.connectionState === "manual-needed" ? `<button class="btn btn-primary" data-connector-act="mark-connected" data-id="${esc(connector.id)}">Mark connected</button>` : ""}
-          </div>
-          <p class="record-sub">${esc(connectorConnectionNote(connector))}</p>
-          <p class="record-sub">${esc(connector.access)} · ${esc(connector.next)}</p>
-          <div class="tool-meta"><span>Admin ${esc(statusLabel(connector.adminState || connector.state))}</span><span>Client ${esc(statusLabel(connector.clientState || "locked"))}</span></div>
-        </details>`).join("")}
-    </div>`;
-}
-
-function renderAutomationConfig() {
-  const cfg = store.state.automationConfig || {};
-  const rows = [
-    ["Monthly security scans", cfg.monthlySecurityScans?.state || "ready", cfg.monthlySecurityScans?.cadence || "monthly", cfg.monthlySecurityScans?.nextRunLabel || "ready after workspace setup"],
-    ["Daily content engine", cfg.dailyContentEngine?.state || "ready", cfg.dailyContentEngine?.cadence || "daily", cfg.dailyContentEngine?.mode || "draft-pack first, publish after connector approval"],
-    ["Review engine", cfg.reviewEngine?.state || "ready", cfg.reviewEngine?.cadence || "after delivery", cfg.reviewEngine?.mode || "request, collect, approve, publish-ready"],
-  ];
-  return `
-    <div class="config-mini-grid">
-      ${rows.map(([name, state, cadence, detail]) => `
-        <article class="record mini-config">
-          <div class="record-top"><h4>${esc(name)}</h4>${chip(state === "ready" ? "ready" : state)}</div>
-          <p class="record-sub">${esc(cadence)}</p>
-          <p class="record-notes">${esc(detail)}</p>
-        </article>`).join("")}
-    </div>`;
-}
-
-function renderControlPanel(title, status, body, options = {}) {
-  const open = options.open === true;
-  return `
-    <details class="config-panel" ${open ? "open" : ""}>
-      <summary>
-        <span>
-          <b>${esc(title)}</b>
-          ${options.sub ? `<i>${esc(options.sub)}</i>` : ""}
-        </span>
-        ${chip(status)}
-      </summary>
-      <div class="config-body">${body}</div>
-    </details>`;
-}
-
 /* ============================== PHANTOMOPS ============================== */
 function renderAdmin(el, rerender) {
   if (!isAdmin()) { el.innerHTML = empty("This area belongs to your PhantomForce operator."); return; }
-  const profile = workspaceProfile(currentWs());
-  const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
-  const activeTools = (store.state.toolSpine || []).filter((tool) => tool.mode === "active").length;
-  const connectors = store.state.postingConnectors || [];
-  const readyConnectors = connectors.filter((c) => c.adminState === "ready" || c.state === "available").length;
-  const activeWork = visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status));
-  const operatorWork = activeWork.filter((t) => t.operatorMode || t.lane === "Phantom Operator");
-  const buildWork = activeWork.filter((t) => t.buildPlan || t.lane === "Builder");
-  const creativeWork = visible(store.state.media || []).filter((m) => ["image", "video", "analyze"].includes(m.modality || "video"));
+  const lanes = [
+    ["Workforce intelligence", "ready", "planning / spec / build lanes loaded"],
+    ["Memory & context", "ready", "backend context store reachable"],
+    ["Model lanes A/B/C", "ready", "operator lanes standing by"],
+    ["Automation lane", "standby", "workflow runner configured, not armed"],
+    ["Media generation lane", "gated", "paid — every run needs approval"],
+    ["Private access gateway", "active", "admin + client hosts enforced upstream"],
+  ];
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Admin Control. Configure Phantom memory, connectors, automations, access, publishing, and workspace boundaries.</p>
-      <div class="record-actions">
-        <span class="mode-readout">Mode: <b>${esc(executionMode.label())}</b></span>
-        <span class="hint-inline">${esc(executionMode.description())}</span>
-        <button class="btn ${executionMode.get() === "approval" ? "btn-primary" : ""}" data-act="set-mode-approval">Approval</button>
-        <button class="btn ${executionMode.get() === "auto" ? "btn-primary" : ""}" data-act="set-mode-auto">Auto</button>
-        <button class="btn btn-primary" data-act="pulse-tools">Pulse live bar</button>
-      </div>
+      <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients.</p>
+      <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
     </div>
-    <div class="stat-row">
-      <div class="stat"><span>Phantom systems</span><b>${activeAgents}/${store.state.agents.length}</b><i>business modules ready</i></div>
-      <div class="stat"><span>Private systems</span><b>${activeTools}/${(store.state.toolSpine || []).length}</b><i>active</i></div>
-      <div class="stat"><span>Connectors</span><b>${readyConnectors}/${connectors.length}</b><i>ready or configurable</i></div>
-      <div class="stat"><span>Active work</span><b>${activeWork.length}</b><i>captured from chat</i></div>
-      <div class="stat"><span>Profile</span><b>${esc(profile.plan || "Custom")}</b><i>${esc(profile.name)} · ${esc(profile.businessRole || "workspace")}</i></div>
+    <h3 class="ws-subhead">Active tool spine</h3>
+    <p class="ws-note">Every tool is mapped to a worker lane. “Active” means visible and available to PhantomOps; external actions still require the right connector and approval.</p>
+    ${renderToolSpineCards()}
+    <h3 class="ws-subhead">Workspace states</h3>
+    <div class="stack">
+      ${store.state.workspaces.map((w) => {
+        const leads = store.state.leads.filter((l) => l.ws === w.id && !["won", "lost"].includes(l.status)).length;
+        const appr = store.state.approvals.filter((a) => a.ws === w.id && a.status === "pending").length;
+        const props = store.state.proposals.filter((p) => p.ws === w.id && ["draft", "sent-ready"].includes(p.status)).length;
+        return `<article class="record record-row"><h4>${esc(w.name)}</h4><p class="record-sub">${esc(w.tagline)}</p>
+          <span class="admin-ws-stats">${leads} open leads · ${props} live proposals · ${appr} pending approvals</span></article>`;
+      }).join("")}
     </div>
-    <div class="config-stack">
-      ${renderControlPanel("Create + Build + Operate", "active", `
-        <p class="record-notes">One command can become a visual, video brief, page, store, dashboard, workflow, or admin work item.</p>
-        <div class="config-mini-grid">
-          <article class="record mini-config">
-            <div class="record-top"><h4>Images</h4>${chip("ready")}</div>
-            <p class="record-notes">Generate, crop, tweak, save.</p>
-          </article>
-          <article class="record mini-config">
-            <div class="record-top"><h4>Video</h4>${chip("ready")}</div>
-            <p class="record-notes">Brief, generate, cut, caption.</p>
-          </article>
-          <article class="record mini-config">
-            <div class="record-top"><h4>Builder</h4>${chip(buildWork.length ? "working" : "ready")}</div>
-            <p class="record-notes">Sites, stores, apps, dashboards.</p>
-          </article>
-          <article class="record mini-config">
-            <div class="record-top"><h4>Operator</h4>${chip(operatorWork.length ? "working" : "ready")}</div>
-            <p class="record-notes">Admin-only computer work.</p>
-          </article>
-        </div>
-      `, { sub: `${creativeWork.length} creative · ${buildWork.length} build · ${operatorWork.length} operator` })}
-      ${renderControlPanel("Active work", activeWork.length ? "active" : "ready", `
-        <p class="record-notes">Chat becomes work. Phantom picks the route.</p>
-        <div class="stack">
-          ${activeWork.slice(0, 10).map((t) => `<article class="record record-row">
-            <h4>${esc(t.title)}</h4>
-            <p class="record-sub">${esc(t.lane)} · ${esc(t.mode || "approval")}</p>
-            <span class="admin-ws-stats">${esc(t.next || "Started from Phantom chat.")}</span>
-          </article>`).join("") || empty("No active chat-captured work yet.")}
-        </div>
-      `, { sub: `${activeWork.length} work items` })}
-      ${renderControlPanel("System map", "active", `
-        <p class="record-notes">Leads, quotes, media, sites, reviews, bookings, protect, money, delivery, and cleanup.</p>
-        <div class="record-actions">
-          <button class="btn" data-open-ws="workforce">Open systems map</button>
-          <button class="btn" data-act="pulse-tools">Pulse system activity</button>
-        </div>
-      `, { sub: `${activeAgents} systems ready` })}
-      ${renderControlPanel("Connectors", readyConnectors ? "ready" : "configure", `
-        <p class="record-notes">Connect once. Draft, schedule, publish, upload, file, and follow up per workspace.</p>
-        ${renderConnectorSigninPanel()}
-        ${renderConnectorCards()}
-        <p class="ws-note">Rule: create in Phantom -> approve -> send/post/upload.</p>
-      `, { sub: "Gmail · Calendar · Drive · socials" })}
-      ${renderControlPanel("Automation cadence", "ready", `
-        <p class="record-notes">Monthly scans, daily content drafts, review requests, and follow-up loops.</p>
-        ${renderAutomationConfig()}
-      `, { sub: "monthly scans · daily content · review engine" })}
-      ${renderControlPanel("Memory and tenants", "ready", `
-        <article class="record record-wide">
-          <div class="record-top"><h4>Owner memory</h4>${chip("ready")}</div>
-          <p class="record-notes">Jordan keeps owner context. Client bots start clean and stay isolated.</p>
-          <div class="record-actions">
-            <input class="inline-input" data-owner-memory-query placeholder="Search owner memory..." aria-label="Search owner memory" />
-            <button class="btn btn-primary" data-act="load-owner-memory">Load owner memory</button>
-          </div>
-        </article>
-        <div data-owner-memory-result>${empty("Owner memory is ready. Load it when you need the full admin picture.")}</div>
-      `, { sub: "Jordan full context · clients isolated" })}
-      ${renderControlPanel("Workspace states", "ready", `
-        <div class="stack">
-          ${store.state.workspaces.map((w) => {
-            const leads = store.state.leads.filter((l) => l.ws === w.id && !["won", "lost"].includes(l.status)).length;
-            const appr = store.state.approvals.filter((a) => a.ws === w.id && a.status === "pending").length;
-            const props = store.state.proposals.filter((p) => p.ws === w.id && ["draft", "sent-ready"].includes(p.status)).length;
-            return `<article class="record record-row"><h4>${esc(w.name)}</h4><p class="record-sub">${esc(w.tagline)}</p>
-              <span class="admin-ws-stats">${esc(w.plan || "Custom")} · managed by ${esc(w.managedBy || "PhantomForce")} · ${leads} open leads · ${props} live proposals · ${appr} approvals</span></article>`;
-          }).join("")}
-        </div>
-      `, { sub: "PhantomForce · ChicagoShots · Test Client" })}
-      ${renderControlPanel("Package ladder", "ready", `
-        <div class="config-mini-grid">
-          ${SERVICE_TIERS.map((tier) => `
-            <article class="record mini-config">
-              <div class="record-top"><h4>${esc(tier.name)}</h4>${chip(tier.id === "elite" ? "active" : "ready")}</div>
-              <p class="record-notes">${esc(tier.summary)}</p>
-              <p class="record-sub">${esc(tier.bestFor)}</p>
-              <div class="connector-capabilities">${tier.includes.map((item) => `<span>${esc(item)}</span>`).join("")}</div>
-            </article>
-          `).join("")}
-        </div>
-      `, { sub: "Basic · Premiere · Elite" })}
-      ${renderControlPanel("Tool spine", "active", `
-        <p class="record-notes">Admin-only systems behind Phantom. Expand only when you need detail.</p>
-        ${renderToolSpineCards()}
-      `, { sub: `${activeTools} active` })}
-      ${renderControlPanel("Private access gateway", "active", `
-        <article class="record record-wide">
-          ${kv("Admin host", "<code>admin.phantomforce.online</code> — full Phantom control")}
-          ${kv("Client host", "<code>app.phantomforce.online</code> — workspace-scoped employee/client view")}
-          ${kv("Gateway", "private access gateway sits in front of both — auth is enforced upstream and in the app session")}
-        </article>
-      `, { sub: "admin/client boundary" })}
+    <h3 class="ws-subhead">Internal lanes (never shown to clients)</h3>
+    <div class="card-grid">
+      ${lanes.map(([name, state, note]) => `
+        <article class="record"><div class="record-top"><h4>${esc(name)}</h4>${chip(state === "ready" || state === "active" ? "approved" : "pending")}</div>
+        <p class="record-sub">${esc(note)}</p></article>`).join("")}
+    </div>
+    <h3 class="ws-subhead">Access</h3>
+    <div class="stack">
+      <article class="record record-wide">
+        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full phantom, this view")}
+        ${kv("Client host", "<code>app.phantomforce.online</code> — portal view, workspace-scoped")}
+        ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
+      </article>
     </div>
     <h3 class="ws-subhead">Diagnostics</h3>
     <div class="record-actions">
@@ -2202,32 +598,9 @@ function renderAdmin(el, rerender) {
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
-    "set-mode-auto": () => { executionMode.set("auto"); pushActivity("PhantomOps", "switched Phantom to Auto.", "phantomforce"); store.save(); rerender(); },
-    "set-mode-approval": () => { executionMode.set("approval"); pushActivity("PhantomOps", "switched Phantom to Approval.", "phantomforce"); store.save(); rerender(); },
     "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
-    "load-owner-memory": async () => {
-      const result = el.querySelector("[data-owner-memory-result]");
-      const query = el.querySelector("[data-owner-memory-query]")?.value?.trim() || "";
-      if (!result) return;
-      result.innerHTML = empty("Loading owner memory...");
-      try {
-        const params = new URLSearchParams();
-        if (query) params.set("q", query);
-        const url = `/phantom-ai/admin/owner-memory/status${params.toString() ? `?${params}` : ""}`;
-        const response = await fetch(url, { headers: authHeaders() });
-        const payload = await response.json().catch(() => ({}));
-        if (!response.ok) {
-          result.innerHTML = empty(payload?.error || "Owner memory requires admin backend access.");
-          return;
-        }
-        result.innerHTML = renderOwnerMemoryPayload(payload);
-      } catch (error) {
-        result.innerHTML = empty(`Owner memory could not load: ${error?.message || "request failed"}`);
-      }
-    },
     reset: () => { if (confirm("Reset local Phantom data to the seeded state?")) { store.reset(); rerender(); } },
   });
-  bindConnectorActions(el, rerender);
 }
 
 /* ============================ PHANTOM CONSOLE ============================ */
@@ -2238,27 +611,23 @@ function renderPhantom(el) {
       <div class="phantom-log" data-phantom-log></div>
       <form class="speakline" data-phantom-form>
         <span class="speak-caret">›</span>
-        <input type="text" data-phantom-input autocomplete="off" spellcheck="false" placeholder="Tell Phantom what needs handled..." aria-label="Tell Phantom what needs handled" />
-        <button class="speak-send" type="submit" aria-label="Send to Phantom">→</button>
+        <input type="text" data-phantom-input autocomplete="off" spellcheck="false" placeholder="What do you want PhantomForce to do?" aria-label="Command PhantomForce" />
       </form>
     </div>`;
 }
 
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
-  phantom: { title: "Phantom AI", kicker: "Business brain", render: renderPhantom },
-  leads: { title: "CRM / Client Database", kicker: "Leads, clients, follow-ups", render: renderLeads },
+  phantom: { title: "Phantom AI", kicker: "Command brain", render: renderPhantom },
+  leads: { title: "Leads & Follow-Up", kicker: "Pipeline desk", render: renderLeads },
   proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
-  reviews: { title: "Review Studio", kicker: "Reputation engine", render: renderReviews },
-  bookings: { title: "Bookings", kicker: "Schedule system", render: renderBookings },
-  media: { title: "Media Lab", kicker: "Editor + Content Hub", render: renderMedia },
+  reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
+  bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
+  media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
-  workforce: { title: "Systems Map", kicker: "Phantom modules", render: renderWorkforce },
-  automation: { title: "Automation", kicker: "Repeat work + connectors", render: renderAutomation },
-  analytics: { title: "Analytics", kicker: "What is working", render: renderAnalytics },
-  memory: { title: "Memory", kicker: "Workspace context", render: renderMemory },
+  workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
@@ -2279,17 +648,17 @@ export function missionWidgets() {
   const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "standby", "gated", "sandbox"].includes(tool.mode)).length;
 
   const w = [
-    { id: "leads", icon: "◉", title: "Follow-Up Desk", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
-    { id: "proposals", icon: "◆", title: "Quote Forge", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
+    { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
+    { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
     { id: "media", icon: "▶", title: "Media Lab", stat: `${briefs.length} ready`, sub: "briefs & generation", alert: false },
     { id: "sites", icon: "▦", title: "Site & Store Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
-    { id: "protect", icon: "⬡", title: "Risk Radar", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "fresh", sub: sec ? `leaks · malware · habits` : "no scan yet", alert: sec ? sec.posture !== "clean" : false },
+    { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
     { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Systems Map", stat: `${activeAgents} systems`, sub: isAdmin() ? `${activeTools} internal tools mapped` : "available modules", alert: false },
+    { id: "workforce", icon: "⬢", title: "Workforce", stat: `${activeAgents} agents`, sub: isAdmin() ? `${activeTools} tools mapped` : "on your account", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
-  if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · systems · access", alert: false });
+  if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
   return w;
 }
