@@ -14,13 +14,12 @@
    between opposite emotions — a shove into the opposite valence is bridged
    through a surprised → (coy | sheepish) "taken aback" beat before it lands.
 
-   Each pose's painted face is erased and a LIVE face is drawn in its exact
-   place (per-pose position, scale, tilt — the laugh pose hides the mouth
-   behind the painted hand, so only eyes and brows act). The live face runs
-   on underdamped springs with over-emoted human feeling: sad slump + tear,
-   delighted arc eyes, launched surprise brows, red menace that hue-shifts
-   the whole painting. It blinks, winks, talks, and follows the cursor.
-   Body: breath, float, sway, squash & stretch, materialize-from-the-ring.
+   The painted poses already contain the character's face. Do not draw a
+   second procedural face over them unless a future asset explicitly sets
+   face.live = true after preprocessing erases the baked face. Procedural
+   fallback mode still owns the fully live face: blinks, winks, talks, and
+   follows the cursor. Body: breath, float, sway, squash & stretch,
+   materialize-from-the-ring.
 
    Procedural mode: the hand-built particle phantom, used until artwork
    loads or if it fails. Shared by the landing page and the admin console. */
@@ -537,6 +536,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     s: FACE_T * scale,
     rot: p.face.rot || 0,
     mouth: p.face.mouth !== false,
+    live: p.face.live === true,
   });
 
   const drawPoseLayer = (ctx2, p, alpha, o, S, filter, t) => {
@@ -559,19 +559,22 @@ export function createPhantomCharacter({ small = false } = {}) {
       }
     }
     if (filter) { try { ctx2.filter = "none"; } catch { } }
-    /* erase the painted face so the live one can act in its place */
-    const fx = (p.face.cx - p.cx) * p.w, fy = p.face.cy * p.h + oy;
-    ctx2.globalAlpha = 1;
-    ctx2.globalCompositeOperation = "destination-out";
-    const er = ctx2.createRadialGradient(fx, fy, 0, fx, fy, p.face.rx * p.w * 1.2);
-    er.addColorStop(0, "rgba(0,0,0,1)");
-    er.addColorStop(0.72, "rgba(0,0,0,1)");
-    er.addColorStop(1, "rgba(0,0,0,0)");
-    ctx2.fillStyle = er;
-    ctx2.beginPath();
-    ctx2.ellipse(fx, fy, p.face.rx * p.w * 1.2, p.face.ry * p.h * 1.2, p.face.rot || 0, 0, TAU);
-    ctx2.fill();
-    ctx2.globalCompositeOperation = "source-over";
+    if (p.face.live === true) {
+      /* Only face-erased future assets should use this. Current paintings
+         keep their baked face so the Phantom never shows two expressions. */
+      const fx = (p.face.cx - p.cx) * p.w, fy = p.face.cy * p.h + oy;
+      ctx2.globalAlpha = 1;
+      ctx2.globalCompositeOperation = "destination-out";
+      const er = ctx2.createRadialGradient(fx, fy, 0, fx, fy, p.face.rx * p.w * 1.2);
+      er.addColorStop(0, "rgba(0,0,0,1)");
+      er.addColorStop(0.72, "rgba(0,0,0,1)");
+      er.addColorStop(1, "rgba(0,0,0,0)");
+      ctx2.fillStyle = er;
+      ctx2.beginPath();
+      ctx2.ellipse(fx, fy, p.face.rx * p.w * 1.2, p.face.ry * p.h * 1.2, p.face.rot || 0, 0, TAU);
+      ctx2.fill();
+      ctx2.globalCompositeOperation = "source-over";
+    }
     ctx2.restore();
   };
 
@@ -671,26 +674,30 @@ export function createPhantomCharacter({ small = false } = {}) {
       }
     }
 
-    /* the live face: constant size, constant height — only its small
-       horizontal offset follows the painting during a pose blend */
-    const fCur = poseFace(cur && cur.art ? cur : POSES.conjure, scale);
-    const fPrev = prev && prev.art && poseBlend < 1 ? poseFace(prev, scale) : fCur;
-    const bl = poseBlend < 1 ? poseBlend : 1;
-    const fx = fPrev.x + (fCur.x - fPrev.x) * bl;
-    const frot = fPrev.rot + (fCur.rot - fPrev.rot) * bl;
-    const fs = FACE_T * scale;
-    const mouthOn = bl > 0.5 ? fCur.mouth : fPrev.mouth;
-    ctx2.save();
-    ctx2.translate(fx, FACE_Y * scale - E.drop * fs * 0.45);
-    ctx2.rotate(frot + E.tilt + Math.sin(t * 0.8) * 0.012);
-    drawFaceFeatures(ctx2, fs, {
-      E, A, pulse,
-      lid: Math.max(0.08, E.lid * S.blink - S.thinkBeat * 0.05),
-      eyeHappy: Math.max(0, Math.min(1, E.eyeHappy)),
-      wink, lookX: S.lookX, lookY: S.lookY, t,
-      mouth: mouthOn,
-    });
-    ctx2.restore();
+    const curLiveFace = !!(cur && cur.face && cur.face.live === true);
+    const prevLiveFace = !!(prev && prev.face && prev.face.live === true && poseBlend < 1);
+    if (curLiveFace || prevLiveFace) {
+      /* Face-erased future assets can opt into the procedural face. Current
+         painted poses do not, which prevents the two-face bug. */
+      const fCur = poseFace(cur && cur.art ? cur : POSES.conjure, scale);
+      const fPrev = prev && prev.art && poseBlend < 1 ? poseFace(prev, scale) : fCur;
+      const bl = poseBlend < 1 ? poseBlend : 1;
+      const fx = fPrev.x + (fCur.x - fPrev.x) * bl;
+      const frot = fPrev.rot + (fCur.rot - fPrev.rot) * bl;
+      const fs = FACE_T * scale;
+      const mouthOn = bl > 0.5 ? fCur.mouth : fPrev.mouth;
+      ctx2.save();
+      ctx2.translate(fx, FACE_Y * scale - E.drop * fs * 0.45);
+      ctx2.rotate(frot + E.tilt + Math.sin(t * 0.8) * 0.012);
+      drawFaceFeatures(ctx2, fs, {
+        E, A, pulse,
+        lid: Math.max(0.08, E.lid * S.blink - S.thinkBeat * 0.05),
+        eyeHappy: Math.max(0, Math.min(1, E.eyeHappy)),
+        wink, lookX: S.lookX, lookY: S.lookY, t,
+        mouth: mouthOn,
+      });
+      ctx2.restore();
+    }
 
     ctx2.restore();
     ctx2.globalCompositeOperation = "source-over";
