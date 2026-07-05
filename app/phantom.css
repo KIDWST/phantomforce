@@ -897,11 +897,134 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .hero2 .hero-say { position: relative; z-index: 2; margin: 18px 0 0; max-width: 440px; min-height: 0; display: block; }
 .hero2 .hero-say .say-line { font-size: clamp(15px, 1.6vw, 18px); text-align: left; }
 .hero2 .response-cards { position: relative; z-index: 2; justify-content: flex-start; margin-top: 12px; max-width: 640px; }
-.hero2-stage { position: relative; min-height: 380px; display: grid; place-items: center; }
+.hero2-stage { position: relative; min-height: 380px; display: grid; place-items: center; perspective: 1100px; }
+.phantom-webgl {
+  position: absolute; inset: -5% -4% -3%; z-index: 5; width: 108%; height: 108%; min-height: 400px;
+  pointer-events: none; opacity: 0; filter: drop-shadow(0 0 38px rgba(65, 255, 161, 0.24));
+  transition: opacity 0.55s ease, filter 0.3s ease;
+}
+.phantom.has-3d-phantom .phantom-webgl { opacity: 1; }
+.phantom.has-3d-phantom .hero2-stage { transform-style: preserve-3d; }
 .hero2-stage .ghost-canvas {
   position: relative; top: auto; left: auto; transform: none;
   width: 100%; height: 100%; min-height: 380px; max-width: 560px; opacity: 0.98;
   filter: drop-shadow(0 0 30px rgba(65, 255, 161, 0.28));
+}
+.phantom.has-mode-poses .hero2-stage .ghost-canvas {
+  position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; min-height: 380px; max-width: 560px;
+  opacity: 0.16; pointer-events: none; mix-blend-mode: screen; transform: scale(0.92);
+  filter: blur(5px) brightness(1.25) contrast(1.12) drop-shadow(0 0 26px rgba(65, 255, 161, 0.2));
+}
+.phantom-mode-stage {
+  position: relative; z-index: 2; isolation: isolate; width: min(100%, 470px); aspect-ratio: 1;
+  display: grid; place-items: center; margin: 0; transform-style: preserve-3d;
+}
+.phantom-mode-stage::before,
+.phantom-mode-stage::after {
+  content: ""; position: absolute; inset: 10%; border-radius: 50%; pointer-events: none; z-index: -1;
+}
+.phantom-mode-stage::before {
+  background:
+    radial-gradient(circle at 50% 52%, rgba(65, 255, 161, 0.13), transparent 34%),
+    radial-gradient(circle at 50% 76%, rgba(35, 255, 190, 0.1), transparent 31%);
+  filter: blur(8px); opacity: 0.74; animation: phantomAura 7.4s ease-in-out infinite;
+}
+.phantom-mode-stage::after {
+  inset: 22% 9%; border: 1px solid rgba(65, 255, 161, 0.28); transform: rotateX(68deg);
+  box-shadow: 0 0 34px rgba(65, 255, 161, 0.12), inset 0 0 24px rgba(65, 255, 161, 0.05);
+  opacity: 0.54; animation: phantomOrbit 15s linear infinite;
+}
+.phantom-mode-pose {
+  position: relative; z-index: 1; width: min(80%, 390px); max-height: min(50vh, 420px);
+  object-fit: contain; transform-origin: 50% 76%; mix-blend-mode: screen; opacity: 0.92;
+  filter: saturate(1.08) contrast(1.12) brightness(1.05) drop-shadow(0 0 22px rgba(65, 255, 161, 0.28)) drop-shadow(0 26px 54px rgba(0, 0, 0, 0.46));
+  animation: phantomPoseFloat 5.6s ease-in-out infinite;
+  transition: filter 0.24s ease, opacity 0.2s ease, transform 0.24s ease;
+}
+.phantom.has-3d-phantom .phantom-mode-pose {
+  opacity: 0.12; transform: translateZ(-110px) scale(0.92);
+  filter: blur(1px) saturate(1.2) contrast(1.15) brightness(0.8) drop-shadow(0 0 28px rgba(65, 255, 161, 0.22));
+}
+.phantom-mode-caption {
+  position: absolute; left: 50%; bottom: 7%; z-index: 7; transform: translateX(-50%);
+  padding: 6px 10px; border: 1px solid rgba(65, 255, 161, 0.22); border-radius: 999px;
+  background: rgba(2, 12, 9, 0.46); color: rgba(201, 255, 223, 0.72);
+  font: 700 8.5px "DM Mono", monospace; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap;
+  box-shadow: 0 0 18px rgba(65, 255, 161, 0.09); backdrop-filter: blur(14px);
+}
+.phantom.has-3d-phantom .phantom-mode-caption { bottom: 5%; background: rgba(2, 12, 9, 0.36); }
+.phantom-mode-stage[data-pose="ask"] .phantom-mode-pose { animation-name: phantomPoseListen; }
+.phantom-mode-stage[data-pose="write"] .phantom-mode-pose { animation-name: phantomPoseWrite; }
+.phantom-mode-stage[data-pose="image"] .phantom-mode-pose { animation-name: phantomPosePresent; }
+.phantom-mode-stage[data-pose="video"] .phantom-mode-pose { animation-name: phantomPoseDirect; }
+.phantom-mode-stage[data-pose="website"] .phantom-mode-pose { animation-name: phantomPoseBuild; }
+.phantom-mode-stage[data-pose="admin"] .phantom-mode-pose { animation-name: phantomPoseCommand; }
+.phantom-mode-stage[data-mood="listening"] .phantom-mode-pose {
+  opacity: 0.96;
+  filter: saturate(1.14) contrast(1.16) brightness(1.1) drop-shadow(0 0 30px rgba(124, 255, 206, 0.34)) drop-shadow(0 24px 48px rgba(0, 0, 0, 0.42));
+}
+.phantom-mode-stage[data-mood="thinking"] .phantom-mode-pose { animation: phantomPoseThink 0.72s ease-in-out infinite; }
+.phantom-mode-stage[data-mood="talking"] .phantom-mode-pose { animation: phantomPoseTalk 0.9s cubic-bezier(0.34, 1.56, 0.64, 1) infinite; }
+.phantom-mode-stage[data-emotion="alert"] .phantom-mode-caption,
+.phantom-mode-stage[data-emotion="sad"] .phantom-mode-caption {
+  border-color: rgba(255, 209, 102, 0.46); color: #ffe8a3; box-shadow: 0 0 22px rgba(255, 209, 102, 0.18);
+}
+.phantom-mode-stage.is-swapping .phantom-mode-pose {
+  animation: phantomPoseSwap 0.46s cubic-bezier(0.22, 1, 0.36, 1), phantomPoseFloat 5.6s ease-in-out infinite 0.46s;
+}
+
+@keyframes phantomAura {
+  0%, 100% { opacity: 0.72; transform: scale(0.98); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+@keyframes phantomOrbit {
+  from { transform: rotateX(68deg) rotateZ(0deg); opacity: 0.58; }
+  to { transform: rotateX(68deg) rotateZ(360deg); opacity: 0.58; }
+}
+@keyframes phantomPoseSwap {
+  from { opacity: 0; transform: translateY(18px) scale(0.92) rotate(-2deg); filter: blur(6px) drop-shadow(0 0 0 rgba(65, 255, 161, 0)); }
+  to { opacity: 1; transform: translateY(0) scale(1) rotate(0deg); filter: blur(0) drop-shadow(0 0 20px rgba(65, 255, 161, 0.22)); }
+}
+@keyframes phantomPoseFloat {
+  0%, 100% { transform: translateY(0) rotate(-0.8deg) scale(1); }
+  50% { transform: translateY(-10px) rotate(0.8deg) scale(1.012); }
+}
+@keyframes phantomPoseListen {
+  0%, 100% { transform: translateY(0) rotate(-1.2deg) scale(1); }
+  42% { transform: translateY(-8px) rotate(1.4deg) scale(1.018); }
+  72% { transform: translateY(-2px) rotate(-0.4deg) scale(1.004); }
+}
+@keyframes phantomPoseWrite {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-0.6deg); }
+  32% { transform: translate3d(5px, -6px, 0) rotate(1deg); }
+  64% { transform: translate3d(-3px, -2px, 0) rotate(-1deg); }
+}
+@keyframes phantomPosePresent {
+  0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+  48% { transform: translateY(-12px) scale(1.025) rotate(1.5deg); }
+}
+@keyframes phantomPoseDirect {
+  0%, 100% { transform: translateX(0) translateY(0) rotate(-0.7deg); }
+  38% { transform: translateX(7px) translateY(-10px) rotate(1.6deg); }
+  68% { transform: translateX(-4px) translateY(-3px) rotate(-1deg); }
+}
+@keyframes phantomPoseBuild {
+  0%, 100% { transform: translateY(0) rotate(0deg) scale(1); }
+  34% { transform: translateY(-7px) rotate(-1.2deg) scale(1.01); }
+  68% { transform: translateY(-12px) rotate(1.1deg) scale(1.018); }
+}
+@keyframes phantomPoseCommand {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-6px) scale(1.01); }
+}
+@keyframes phantomPoseThink {
+  0%, 100% { transform: translateY(-1px) rotate(-1.5deg) scale(1.012); }
+  50% { transform: translateY(-11px) rotate(1.5deg) scale(1.035); }
+}
+@keyframes phantomPoseTalk {
+  0%, 100% { transform: translateY(0) scale(1) rotate(0deg); }
+  28% { transform: translateY(-8px) scale(1.018) rotate(1deg); }
+  56% { transform: translateY(-3px) scale(0.998) rotate(-0.7deg); }
 }
 
 /* ---------------- stat cards ---------------- */
@@ -986,6 +1109,9 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .hero2 { grid-template-columns: 1fr; }
   .hero2-stage { min-height: 300px; order: -1; }
   .hero2-stage .ghost-canvas { min-height: 300px; }
+  .phantom-webgl { min-height: 320px; inset: -7% -5% -5%; }
+  .phantom-mode-stage { width: min(100%, 380px); }
+  .phantom-mode-pose { max-height: 310px; }
 }
 @media (max-width: 720px) {
   .topbar2 { gap: 10px; padding: 10px 12px; }
@@ -995,10 +1121,23 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .activity-grid { grid-template-columns: 1fr; }
   .console-rail { grid-template-columns: 1fr; }
   .cmd-chips { max-width: none; }
+  .hero2 { min-height: 0; padding: 18px 14px 20px; gap: 14px; border-radius: 20px; }
+  .hero2-stage { min-height: 240px; }
+  .phantom-webgl { min-height: 270px; inset: -8% -8% -4%; }
+  .phantom-mode-stage { width: min(100%, 310px); }
+  .phantom-mode-pose { width: min(88%, 270px); max-height: 240px; opacity: 0.9; }
+  .phantom-mode-caption { bottom: 2%; padding: 5px 9px; font-size: 8px; letter-spacing: 0.16em; opacity: 0.82; }
+  .cmd-chip { min-height: 42px; justify-content: center; padding: 10px 8px; }
+  .cmd-chip span { font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .pill-v .dot { animation: none !important; }
   .plan-arc { transition: none; }
+  .phantom-webgl { display: none; }
+  .phantom-mode-stage::before,
+  .phantom-mode-stage::after,
+  .phantom-mode-pose,
+  .phantom-mode-stage.is-swapping .phantom-mode-pose { animation: none !important; }
 }
 
 /* ============================================================= */

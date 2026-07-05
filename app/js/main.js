@@ -7,8 +7,9 @@ import {
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-11";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-11";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-12";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-12";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-12";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -213,11 +214,80 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
+const POSE_VERSION = "phantom-live-20260705-12";
+let phantom3d = null;
+let phantomBootSettled = false;
+const MODE_POSES = {
+  ask: {
+    src: "/app/assets/poses/mode-dark-ask.webp",
+    caption: "Listening",
+    alt: "Phantom listening",
+  },
+  write: {
+    src: "/app/assets/poses/mode-dark-write.webp",
+    caption: "Drafting",
+    alt: "Phantom writing",
+  },
+  image: {
+    src: "/app/assets/poses/mode-dark-image.webp",
+    caption: "Conjuring",
+    alt: "Phantom creating an image",
+  },
+  video: {
+    src: "/app/assets/poses/mode-dark-video.webp",
+    caption: "Directing video",
+    alt: "Phantom directing a video",
+  },
+  website: {
+    src: "/app/assets/poses/mode-dark-website.webp",
+    caption: "Building pages",
+    alt: "Phantom building a website",
+  },
+  admin: {
+    src: "/app/assets/poses/mode-dark-admin.webp",
+    caption: "Control",
+    alt: "Phantom in admin control mode",
+  },
+};
+
+function poseUrl(src) {
+  return `${src}?v=${POSE_VERSION}`;
+}
+
+function syncPoseMood(mood = "idle", emotion = "calm") {
+  const stage = $("[data-mode-stage]");
+  if (stage) {
+    stage.dataset.mood = mood;
+    stage.dataset.emotion = emotion;
+  }
+  if (phantom3d) phantom3d.setMood(mood, emotion);
+}
+
+function renderModePose(id = activeMode) {
+  const pose = MODE_POSES[id] || MODE_POSES.ask;
+  const stage = $("[data-mode-stage]");
+  const img = $("[data-mode-pose]");
+  const caption = $("[data-mode-caption]");
+  if (!stage || !img) return;
+  phantom?.classList.add("has-mode-poses");
+  stage.dataset.pose = MODE_POSES[id] ? id : "ask";
+  stage.classList.remove("is-swapping");
+  void stage.offsetWidth;
+  stage.classList.add("is-swapping");
+  clearTimeout(renderModePose.swapTimer);
+  renderModePose.swapTimer = setTimeout(() => stage.classList.remove("is-swapping"), 560);
+  const nextSrc = poseUrl(pose.src);
+  if (img.getAttribute("src") !== nextSrc) img.setAttribute("src", nextSrc);
+  img.setAttribute("alt", pose.alt);
+  if (caption) caption.textContent = pose.caption;
+  if (phantom3d) phantom3d.setPose({ ...pose, id, src: nextSrc });
+  syncPoseMood(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
+}
 
 function renderChips() {
   const wrap = $("[data-cmd-chips]");
   wrap.innerHTML = Object.entries(MODES).map(([id, m]) => `
-    <button class="cmd-chip ${activeMode === id ? "is-active" : ""}" data-mode="${id}">
+    <button class="cmd-chip ${activeMode === id ? "is-active" : ""}" data-mode="${id}" aria-pressed="${activeMode === id ? "true" : "false"}" title="${esc(m.label)} mode">
       ${svg(m.icon)}<span>${m.label}</span>
     </button>`).join("");
 }
@@ -225,9 +295,10 @@ function renderChips() {
 function setMode(id) {
   const m = MODES[id];
   if (!m) return;
-  if (m.open) { openWorkspace(m.open); return; }
   activeMode = id;
   renderChips();
+  renderModePose(id);
+  if (m.open) { openWorkspace(m.open); return; }
   const input = $("[data-command-input]");
   input.placeholder = m.placeholder;
   input.focus();
@@ -559,6 +630,7 @@ function renderConsole() {
   renderNotifs();
   renderHero();
   renderChips();
+  renderModePose(activeMode);
   renderInsights();
   renderStatCards();
   renderActivity();
@@ -592,6 +664,7 @@ function setGhostMood(mood, options = {}) {
   ghostMood = mood;
   ghostEmotion = options.emotion || ghostEmotion;
   ghostMoodUntil = options.ms ? now + options.ms : 0;
+  syncPoseMood(ghostMood, ghostEmotion);
 }
 function speechHoldMs(text = "") {
   const n = String(text || "").length;
@@ -809,6 +882,21 @@ function ghostFlare(mood = "bright") {
   ghostPulse = 1;
   setGhostMood(mood, { emotion: mood === "listening" ? "calm" : mood, ms: 1200 });
 }
+function initPhantom3D() {
+  const canvas = $("[data-phantom-3d]");
+  if (!canvas || reduceMotion || phantom3d) return;
+  try {
+    phantom3d = createPhantomStage3D({ canvas, reduceMotion });
+    if (!phantom3d) return;
+    phantom?.classList.add("has-3d-phantom");
+    const pose = MODE_POSES[activeMode] || MODE_POSES.ask;
+    phantom3d.setPose({ ...pose, id: activeMode, src: poseUrl(pose.src) });
+    phantom3d.setMood(ghostMood || "idle", ghostEmotion || "calm");
+  } catch (error) {
+    console.warn("Phantom 3D stage unavailable", error);
+    phantom3d = null;
+  }
+}
 function initGhost() {
   const canvas = $("[data-ghost]");
   if (!canvas || reduceMotion) return;
@@ -849,7 +937,7 @@ function initGhost() {
       cx: w / 2, cy: h * 0.54,
       scale: Math.min(w, h) * 0.30,
       mood, emotion: ghostEmotion,
-      startupOnly: !phantomHasActed,
+      startupOnly: !phantomBootSettled && !phantomHasActed,
       moodAge: Math.max(0, (now - ghostMoodStartedAt) * 0.001),
       pulse: ghostPulse,
       px: cpx, py: cpy,
@@ -864,7 +952,7 @@ let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; initGhost(); startClock(); startPulse(); }
+  if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); startClock(); startPulse(); }
   activeNav = "chat";
   renderConsole();
   requestAnimationFrame(() => phantom.classList.add("booted"));
@@ -874,7 +962,11 @@ function enterPhantom() {
   const m = location.hash.match(/^#ws\/([a-z]+)/);
   if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
   // a data-driven spoken briefing once the reveal settles
-  setTimeout(() => { setGhostMood("idle", { emotion: "happy" }); if (!openId) speak(briefingText(), "", "bright"); }, 1400);
+  setTimeout(() => {
+    phantomBootSettled = true;
+    setGhostMood("idle", { emotion: "happy" });
+    if (!openId) speak(briefingText(), "", "bright");
+  }, 1400);
 }
 
 async function boot() {
