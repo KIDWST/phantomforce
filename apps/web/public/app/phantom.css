@@ -973,19 +973,26 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .hero2 .hero-say { position: relative; z-index: 2; margin: 18px 0 0; max-width: 440px; min-height: 0; display: block; }
 .hero2 .hero-say .say-line { font-size: clamp(15px, 1.6vw, 18px); text-align: left; }
 .hero2 .response-cards { position: relative; z-index: 2; justify-content: flex-start; margin-top: 12px; max-width: 640px; }
-.hero2-stage { position: relative; min-height: 380px; display: grid; place-items: center; }
+.hero2-stage { position: relative; min-height: 380px; display: grid; place-items: center; perspective: 1100px; }
+.phantom-webgl {
+  position: absolute; inset: -5% -4% -3%; z-index: 5; width: 108%; height: 108%; min-height: 400px;
+  pointer-events: none; opacity: 0; filter: drop-shadow(0 0 38px rgba(65, 255, 161, 0.24));
+  transition: opacity 0.55s ease, filter 0.3s ease;
+}
+.phantom.has-3d-phantom .phantom-webgl { opacity: 1; }
+.phantom.has-3d-phantom .hero2-stage { transform-style: preserve-3d; }
 .hero2-stage .ghost-canvas {
   position: relative; top: auto; left: auto; transform: none;
   width: 100%; height: 100%; min-height: 380px; max-width: 560px; opacity: 0.98;
   filter: drop-shadow(0 0 30px rgba(65, 255, 161, 0.28));
 }
 .phantom.has-mode-poses .hero2-stage .ghost-canvas {
-  position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; min-height: 380px; max-width: 560px;
-  opacity: 0.34; pointer-events: none; mix-blend-mode: screen;
-  filter: brightness(1.12) contrast(1.08) drop-shadow(0 0 28px rgba(65, 255, 161, 0.22));
+  position: absolute; inset: 0; z-index: 0; width: 100%; height: 100%; min-height: 380px; max-width: 560px;
+  opacity: 0.16; pointer-events: none; mix-blend-mode: screen; transform: scale(0.92);
+  filter: blur(5px) brightness(1.25) contrast(1.12) drop-shadow(0 0 26px rgba(65, 255, 161, 0.2));
 }
 .phantom-mode-stage {
-  position: relative; isolation: isolate; width: min(100%, 520px); aspect-ratio: 1;
+  position: relative; z-index: 2; isolation: isolate; width: min(100%, 470px); aspect-ratio: 1;
   display: grid; place-items: center; margin: 0; transform-style: preserve-3d;
 }
 .phantom-mode-stage::before,
@@ -1004,21 +1011,27 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   opacity: 0.54; animation: phantomOrbit 15s linear infinite;
 }
 .phantom-mode-pose {
-  position: relative; z-index: 1; width: min(86%, 450px); max-height: min(52vh, 460px);
+  position: relative; z-index: 1; width: min(80%, 390px); max-height: min(50vh, 420px);
   object-fit: contain; transform-origin: 50% 76%;
   mix-blend-mode: screen;
-  opacity: 0.88;
+  opacity: 0.92;
   filter: saturate(1.08) contrast(1.12) brightness(1.05) drop-shadow(0 0 22px rgba(65, 255, 161, 0.28)) drop-shadow(0 26px 54px rgba(0, 0, 0, 0.46));
   animation: phantomPoseFloat 5.6s ease-in-out infinite;
   transition: filter 0.24s ease, opacity 0.2s ease, transform 0.24s ease;
 }
+.phantom.has-3d-phantom .phantom-mode-pose {
+  opacity: 0.12;
+  transform: translateZ(-110px) scale(0.92);
+  filter: blur(1px) saturate(1.2) contrast(1.15) brightness(0.8) drop-shadow(0 0 28px rgba(65, 255, 161, 0.22));
+}
 .phantom-mode-caption {
-  position: absolute; left: 50%; bottom: 7%; z-index: 2; transform: translateX(-50%);
+  position: absolute; left: 50%; bottom: 7%; z-index: 7; transform: translateX(-50%);
   padding: 6px 10px; border: 1px solid rgba(65, 255, 161, 0.22); border-radius: 999px;
   background: rgba(2, 12, 9, 0.46); color: rgba(201, 255, 223, 0.72);
   font: 700 8.5px "DM Mono", monospace; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap;
   box-shadow: 0 0 18px rgba(65, 255, 161, 0.09); backdrop-filter: blur(14px);
 }
+.phantom.has-3d-phantom .phantom-mode-caption { bottom: 5%; background: rgba(2, 12, 9, 0.36); }
 .phantom-mode-stage[data-pose="ask"] .phantom-mode-pose { animation-name: phantomPoseListen; }
 .phantom-mode-stage[data-pose="write"] .phantom-mode-pose { animation-name: phantomPoseWrite; }
 .phantom-mode-stage[data-pose="image"] .phantom-mode-pose { animation-name: phantomPosePresent; }
@@ -1026,7 +1039,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .phantom-mode-stage[data-pose="website"] .phantom-mode-pose { animation-name: phantomPoseBuild; }
 .phantom-mode-stage[data-pose="admin"] .phantom-mode-pose { animation-name: phantomPoseCommand; }
 .phantom-mode-stage[data-mood="listening"] .phantom-mode-pose {
-  opacity: 0.94;
+  opacity: 0.96;
   filter: saturate(1.14) contrast(1.16) brightness(1.1) drop-shadow(0 0 30px rgba(124, 255, 206, 0.34)) drop-shadow(0 24px 48px rgba(0, 0, 0, 0.42));
 }
 .phantom-mode-stage[data-mood="thinking"] .phantom-mode-pose { animation: phantomPoseThink 0.72s ease-in-out infinite; }
@@ -1177,6 +1190,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .hero2 { grid-template-columns: 1fr; }
   .hero2-stage { min-height: 300px; order: -1; }
   .hero2-stage .ghost-canvas { min-height: 300px; }
+  .phantom-webgl { min-height: 320px; inset: -7% -5% -5%; }
   .phantom-mode-stage { width: min(100%, 380px); }
   .phantom-mode-pose { max-height: 310px; }
 }
@@ -1190,6 +1204,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .cmd-chips { max-width: none; }
   .hero2 { min-height: 0; padding: 18px 14px 20px; gap: 14px; border-radius: 20px; }
   .hero2-stage { min-height: 240px; }
+  .phantom-webgl { min-height: 270px; inset: -8% -8% -4%; }
   .phantom-mode-stage { width: min(100%, 310px); }
   .phantom-mode-pose { width: min(88%, 270px); max-height: 240px; opacity: 0.9; }
   .phantom-mode-caption { bottom: 2%; padding: 5px 9px; font-size: 8px; letter-spacing: 0.16em; opacity: 0.82; }
