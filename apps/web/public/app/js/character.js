@@ -21,11 +21,16 @@
    follows the cursor. Body: breath, float, sway, squash & stretch,
    materialize-from-the-ring.
 
+   3D hologram pass: pose art is still the source of truth, but the renderer
+   gives it physical volume with perspective yaw, a rear glow shell, a rotated
+   floor ring, and parallax response from pointer/phone motion.
+
    Procedural mode: the hand-built particle phantom, used until artwork
    loads or if it fails. Shared by the landing page and the admin console. */
 
 const GA = 2.399963229728653;
 const TAU = Math.PI * 2;
+const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 
 export const ACCENTS = {
   calm: [65, 255, 161],
@@ -539,11 +544,42 @@ export function createPhantomCharacter({ small = false } = {}) {
     live: p.face.live === true,
   });
 
-  const drawPoseLayer = (ctx2, p, alpha, o, S, filter, t) => {
+  const hologramDepth = (o, S) => {
+    const pointerYaw = clamp(o.px * 2.1, -1, 1);
+    const pointerPitch = clamp(o.py * 1.35, -1, 1);
+    const livingYaw = Math.sin(o.t * 0.36) * 0.14 + swayBias * 0.34 + S.talkBeat * Math.sin(o.t * 7.4) * 0.05;
+    const yaw = clamp(pointerYaw * (small ? 0.16 : 0.23) + livingYaw, -0.34, 0.34);
+    const pitch = clamp(pointerPitch * (small ? 0.035 : 0.055) + Math.sin(o.t * 0.52) * 0.018, -0.08, 0.08);
+    const side = Math.sin(yaw);
+    const turn = Math.cos(yaw);
+    return {
+      yaw,
+      pitch,
+      side,
+      turn,
+      xScale: 0.91 + turn * 0.09,
+      yScale: 1 + pitch * 0.1,
+      skewX: side * 0.135,
+      skewY: -pitch * 0.045,
+      xShift: side * o.scale * 0.12,
+      yShift: pitch * o.scale * 0.22,
+      backX: -side * o.scale * 0.22,
+      backY: o.scale * (0.035 + Math.abs(pitch) * 0.24),
+      rimX: side * o.scale * 0.82,
+      ringRot: side * 0.20,
+      ringY: 0.22 + Math.abs(side) * 0.05 + Math.abs(pitch) * 0.03,
+      alpha: 0.11 + Math.abs(side) * 0.15 + S.talkBeat * 0.04,
+    };
+  };
+
+  const drawPoseLayer = (ctx2, p, alpha, o, S, filter, t, depth = null) => {
     const k = poseK(p, o.scale);
     const gx = p.cx * p.w;
     const oy = FACE_Y * o.scale / k - p.face.cy * p.h;   // image y-offset placing the face on the contract line
     ctx2.save();
+    if (depth) {
+      ctx2.transform(depth.xScale, depth.skewY, depth.skewX, depth.yScale, depth.xShift, depth.yShift);
+    }
     ctx2.scale(k, k);
     ctx2.globalAlpha = alpha;
     if (filter) { try { ctx2.filter = filter; } catch { } }
@@ -592,9 +628,10 @@ export function createPhantomCharacter({ small = false } = {}) {
     else if (emotion === "sad") filter = "saturate(0.7) brightness(0.85)";
     else if (emotion === "excited" || emotion === "happy") filter = "saturate(1.15) brightness(1.1)";
 
+    const depth = hologramDepth(o, S);
     ctx2.save();
     ctx2.translate(cx + o.px * scale * 0.25, cy + scale * 1.72 + floatY);
-    ctx2.rotate(E.tilt * 0.5 + swayBias * 0.3 + Math.sin(t * 0.5) * 0.012);
+    ctx2.rotate(E.tilt * 0.5 + swayBias * 0.3 + depth.yaw * 0.08 + Math.sin(t * 0.5) * 0.012);
     ctx2.scale(S.bodySx * breath, S.bodySy * breath);
 
     /* materialize: one shared reveal window rising from the floor */
@@ -605,8 +642,16 @@ export function createPhantomCharacter({ small = false } = {}) {
     }
 
     const cur = POSES[curPose], prev = prevPose ? POSES[prevPose] : null;
-    if (prev && prev.art && poseBlend < 1) drawPoseLayer(ctx2, prev, 1 - poseBlend, o, S, filter, t);
-    if (cur && cur.art) drawPoseLayer(ctx2, cur, poseBlend < 1 ? poseBlend : 1, o, S, filter, t);
+    if (cur && cur.art) {
+      ctx2.save();
+      ctx2.globalCompositeOperation = "lighter";
+      ctx2.translate(depth.backX, depth.backY);
+      ctx2.scale(1 + Math.abs(depth.side) * 0.035, 0.985);
+      drawPoseLayer(ctx2, cur, depth.alpha * (poseBlend < 1 ? poseBlend : 1), o, S, "blur(12px) saturate(1.55) brightness(1.18)", t, depth);
+      ctx2.restore();
+    }
+    if (prev && prev.art && poseBlend < 1) drawPoseLayer(ctx2, prev, 1 - poseBlend, o, S, filter, t, depth);
+    if (cur && cur.art) drawPoseLayer(ctx2, cur, poseBlend < 1 ? poseBlend : 1, o, S, filter, t, depth);
 
     ctx2.globalCompositeOperation = "lighter";
 
@@ -618,7 +663,7 @@ export function createPhantomCharacter({ small = false } = {}) {
       ctx2.strokeStyle = A((0.30 - p2 * 0.24) * ringA);
       ctx2.lineWidth = Math.max(1, scale * (ring === 0 ? 0.012 : 0.007));
       ctx2.beginPath();
-      ctx2.ellipse(0, 0, scale * 1.05 * (0.42 + p2 * 0.62), scale * 0.24 * (0.42 + p2 * 0.62), 0, 0, TAU);
+      ctx2.ellipse(0, 0, scale * 1.05 * (0.42 + p2 * 0.62), scale * depth.ringY * (0.42 + p2 * 0.62), depth.ringRot, 0, TAU);
       ctx2.stroke();
     }
     const puddle = ctx2.createRadialGradient(0, 0, 0, 0, 0, scale * 0.85);
@@ -627,12 +672,13 @@ export function createPhantomCharacter({ small = false } = {}) {
     puddle.addColorStop(1, A(0));
     ctx2.fillStyle = puddle;
     ctx2.save();
-    ctx2.scale(1, 0.24);
+    ctx2.rotate(depth.ringRot);
+    ctx2.scale(1 + Math.abs(depth.side) * 0.08, depth.ringY);
     ctx2.beginPath(); ctx2.arc(0, 0, scale * 0.85, 0, TAU); ctx2.fill();
     ctx2.restore();
     /* beam rising from the ring into the robes */
     ctx2.save();
-    ctx2.scale(0.34, 1);
+    ctx2.transform(0.34, 0, depth.side * 0.08, 1, depth.side * scale * 0.04, 0);
     const beam = ctx2.createRadialGradient(0, -scale * 0.5, 0, 0, -scale * 0.5, scale * 1.0);
     beam.addColorStop(0, A(0.16 + ringBoost * 0.14 + pulse * 0.1));
     beam.addColorStop(1, A(0));
@@ -662,6 +708,25 @@ export function createPhantomCharacter({ small = false } = {}) {
     sg.addColorStop(1, A(0));
     ctx2.fillStyle = sg;
     ctx2.fillRect(-scale * 1.05, sy2 - scale * 0.1, scale * 2.1, scale * 0.2);
+
+    /* moving side rim: this sells the 3D turn even though the source pose is painted */
+    if (S.settled) {
+      const side = depth.side || 0.001;
+      const rim = Math.sign(side);
+      const rimAlpha = (0.08 + Math.abs(side) * 0.22 + pulse * 0.06) * (cur && cur.art ? 1 : 0.35);
+      ctx2.save();
+      ctx2.translate(depth.rimX, FACE_Y * scale * 0.48 + depth.yShift);
+      ctx2.rotate(depth.yaw * 0.55);
+      ctx2.strokeStyle = A(rimAlpha);
+      ctx2.lineWidth = Math.max(1, scale * 0.012);
+      ctx2.shadowColor = A(0.45);
+      ctx2.shadowBlur = 12 + pulse * 10;
+      ctx2.beginPath();
+      ctx2.moveTo(-rim * scale * 0.18, -scale * 0.82);
+      ctx2.bezierCurveTo(rim * scale * 0.17, -scale * 0.42, rim * scale * 0.18, scale * 0.28, -rim * scale * 0.04, scale * 0.78);
+      ctx2.stroke();
+      ctx2.restore();
+    }
 
     /* rising dust while materializing */
     if (!S.settled) {
