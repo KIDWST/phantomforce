@@ -129,7 +129,13 @@ function initConversation() {
     }
     if (cls === "user") setCharMood("listening", "calm", 1600);
     else if (cls === "thinking") setCharMood("thinking", "bright", 5000);
-    else setCharMood("talking", "calm", Math.max(1600, text.length * 42));
+    else {
+      const emo =
+        /couldn'?t|limit|try again|that'?s your free|sorry/i.test(text) ? "sad" :
+        /never sleeps|24\/7|worth every|handled|watch it (go|disappear)|stopped losing/i.test(text) ? "excited" :
+        "calm";
+      setCharMood("talking", emo, Math.max(1600, text.length * 42));
+    }
     if (cls !== "user") flare();
   };
   const showDownload = () => { if (downloadCta) downloadCta.hidden = false; };
@@ -306,7 +312,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=fable-phantom-20260705-01")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260705-1")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -342,10 +348,13 @@ async function initEntity() {
   if (window.ResizeObserver && zone) new ResizeObserver(measureZone).observe(zone);
 
   // gestures: eyes follow the cursor; movement perks it up; a click provokes
-  // a flash of MENACE — then it settles back to the smirk
+  // a flash of MENACE — then it settles back to the smirk. When the cursor
+  // drifts CLOSE, he notices you and turns attentive.
   let px = 0, py = 0, cpx = 0, cpy = 0, happy = 0, menace = 0;
+  let pointerX = -9999, pointerY = -9999, attentive = false;
   window.addEventListener("pointermove", (e) => {
     px = e.clientX / innerWidth - 0.5; py = e.clientY / innerHeight - 0.5;
+    pointerX = e.clientX; pointerY = e.clientY;
     if (menace <= 0) happy = 1.2;
   }, { passive: true });
   canvas.addEventListener("pointerdown", () => { if (menace <= 0) { menace = 1.1; flare(); } });
@@ -369,15 +378,21 @@ async function initEntity() {
     // drifting, twinkling stars
     for (const s of stars) {
       const a = 0.12 + 0.3 * Math.abs(Math.sin(t * 0.6 + s.tw));
-      ctx2.fillStyle = `rgba(30,240,255,${a})`;
+      ctx2.fillStyle = `rgba(80,230,170,${a})`;
       const sx = (s.x + t * 0.004) % 1;
       ctx2.fillRect(sx * w, s.y * h, s.r, s.r);
     }
 
-    // mood: the conversation drives it; a click overrides with menace
+    // presence: hysteresis so he calmly notices the cursor entering his space
+    const pdist = Math.hypot(pointerX - gx, pointerY - (gy - gs * 1.4));
+    if (!attentive && pdist < gs * 2.0) attentive = true;
+    else if (attentive && pdist > gs * 2.7) attentive = false;
+
+    // mood: the conversation drives it; a click overrides with menace;
+    // a close visitor gets his full attention
     if (charState.until && performance.now() > charState.until) { charState.mood = "idle"; charState.emotion = "calm"; charState.until = 0; }
-    const mood = menace > 0 ? "menace" : charState.mood;
-    const emotion = menace > 0 ? "alert" : (happy > 0 && charState.mood === "idle" ? "bright" : charState.emotion);
+    const mood = menace > 0 ? "menace" : (attentive && charState.mood === "idle" ? "listening" : charState.mood);
+    const emotion = menace > 0 ? "alert" : (happy > 0 && charState.mood === "idle" && !attentive ? "bright" : charState.emotion);
 
     character.draw(ctx2, {
       t, dt,
