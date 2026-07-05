@@ -7,7 +7,7 @@ import {
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-8";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-9";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -36,8 +36,32 @@ const I = {
   arrow: `<path d="M3 8h9M9 5l3 3-3 3"/>`,
   clock: `<circle cx="8" cy="8" r="5.2"/><path d="M8 5.2V8l2 1.4"/>`,
   db:    `<ellipse cx="8" cy="4.5" rx="4.5" ry="1.8"/><path d="M3.5 4.5v7c0 1 2 1.8 4.5 1.8s4.5-.8 4.5-1.8v-7"/>`,
+  search:`<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/>`,
+  bell:  `<path d="M8 2.5a3.5 3.5 0 0 0-3.5 3.5c0 3-1.2 4-1.2 4h9.4s-1.2-1-1.2-4A3.5 3.5 0 0 0 8 2.5zM6.6 12.5a1.4 1.4 0 0 0 2.8 0"/>`,
+  bolt:  `<path d="M8.5 2L4 9h3l-.5 5L11 7H8z"/>`,
+  target:`<circle cx="8" cy="8" r="5.4"/><circle cx="8" cy="8" r="2.4"/>`,
+  dollar:`<path d="M8 2.6v10.8M10.2 5.1c-.4-.9-1.2-1.3-2.2-1.3-1.3 0-2.3.7-2.3 1.9 0 2.6 4.8 1.3 4.8 4 0 1.3-1.1 2-2.5 2-1.2 0-2.1-.5-2.5-1.5"/>`,
+  users: `<circle cx="6" cy="6" r="2.1"/><path d="M2.6 13c0-2 1.5-3.3 3.4-3.3S9.4 11 9.4 13"/><path d="M10.5 4.2a2 2 0 0 1 0 3.9M11 9.9c1.6.2 2.8 1.4 2.8 3.1"/>`,
+  book:  `<path d="M3.5 3.5h6a1.5 1.5 0 0 1 1.5 1.5v8H5a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M11 5a1.5 1.5 0 0 1 1.5-1.5H13v8h-2"/>`,
+  calendar:`<rect x="2.8" y="3.5" width="10.4" height="9.5" rx="1.2"/><path d="M2.8 6h10.4M5.5 2.4v2M10.5 2.4v2"/>`,
 };
 const svg = (key, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[key] || ""}</svg>`;
+
+/* a tiny deterministic trend sparkline for a stat value (stable per value) */
+function sparkline(seed, up = true) {
+  const n = 12, pts = [];
+  let v = 0.5;
+  for (let i = 0; i < n; i++) {
+    const r = (Math.sin(seed * 12.9898 + i * 4.1414) * 43758.5453) % 1;
+    v = Math.max(0.08, Math.min(0.92, v + (Math.abs(r) - 0.5) * 0.34 + (up ? 0.02 : -0.02)));
+    pts.push(v);
+  }
+  const W = 100, H = 30;
+  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${((i / (n - 1)) * W).toFixed(1)} ${((1 - p) * H).toFixed(1)}`).join(" ");
+  const area = `${d} L${W} ${H} L0 ${H} Z`;
+  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
+    <path class="spark-area" d="${area}"/><path class="spark-line" d="${d}"/></svg>`;
+}
 
 /* ============================ access gate ============================ */
 function showGate() {
@@ -228,18 +252,22 @@ function renderStatCards() {
   const files = media.length + sites.length + products.length + visible(store.state.reviews).length;
 
   const cards = [
-    { icon: "db",    title: "Brand Memory", value: files, sub: "Files indexed", foot: `Updated ${ago(store.state.activity[0]?.at || new Date().toISOString())}`, open: "workforce" },
-    { icon: "media", title: "Media Lab",    value: media.length, sub: "Briefs in lab", foot: `${delivered} delivered`, open: "media" },
-    { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "All clear", open: "approvals", alert: pending > 0 },
-    { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: "Across all desks", open: "media" },
-    { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: "Running smoothly", open: "workforce" },
+    { icon: "db",    title: "Brand Memory", value: files, sub: "Files indexed", foot: `Updated ${ago(store.state.activity[0]?.at || new Date().toISOString())}`, open: "workforce", trend: "+12%" },
+    { icon: "media", title: "Media Lab",    value: media.length, sub: "Briefs in lab", foot: `${delivered} delivered`, open: "media", trend: "+8%" },
+    { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "All clear", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear" },
+    { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: "Across all desks", open: "media", trend: "+12%" },
+    { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: "Running smoothly", open: "workforce", trend: "live" },
   ];
   $("[data-statcards]").innerHTML = cards.map((c) => `
     <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
-      <span class="statcard-icon">${svg(c.icon)}</span>
+      <span class="statcard-top">
+        <span class="statcard-icon">${svg(c.icon)}</span>
+        <span class="statcard-trend ${c.alert ? "trend-alert" : ""}">${esc(c.trend)}</span>
+      </span>
       <span class="statcard-k">${esc(c.title)}</span>
       <b class="statcard-v">${c.value}</b>
       <span class="statcard-sub">${esc(c.sub)}</span>
+      ${sparkline(c.value + c.title.length, !c.alert)}
       <span class="statcard-foot">${esc(c.foot)}</span>
     </button>`).join("");
 }
@@ -256,15 +284,17 @@ const ACT_ICON = (text = "") => {
   return "spark";
 };
 function renderActivity() {
-  const items = visible(store.state.activity).slice(0, 4);
+  const base = visible(store.state.activity).map((a) => ({ who: a.who, text: a.text, at: a.at, icon: ACT_ICON(a.text), live: false }));
+  const items = [...liveFeed, ...base].slice(0, 4);
   const box = $("[data-activity]");
+  if (!box) return;
   if (!items.length) { box.innerHTML = `<p class="empty-line">Quiet — nothing has run yet.</p>`; return; }
   box.innerHTML = items.map((a) => `
-    <div class="act-card">
-      <span class="act-thumb">${svg(ACT_ICON(a.text))}</span>
+    <div class="act-card ${a.live ? "act-live" : ""}">
+      <span class="act-thumb">${svg(a.icon || ACT_ICON(a.text))}</span>
       <span class="act-body">
         <b>${esc(a.who)} ${esc(a.text)}</b>
-        <i>${ago(a.at)}</i>
+        <i>${a.live ? "just now" : ago(a.at)}</i>
       </span>
       <span class="act-dot" aria-hidden="true"></span>
     </div>`).join("");
@@ -334,6 +364,179 @@ function renderQuick() {
     </button>`).join("");
 }
 
+/* ============================ attention intelligence ============================ */
+function greeting() {
+  const h = new Date().getHours();
+  return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
+}
+function attentionItems() {
+  const items = [];
+  visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
+    .forEach((a) => items.push({ icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
+  visible(store.state.security).filter((s) => s.posture && s.posture !== "clean")
+    .forEach(() => items.push({ icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", open: "protect" }));
+  visible(store.state.leads).filter((l) => l.due && new Date(l.due).getTime() < Date.now() + 864e5 && l.status !== "won" && l.status !== "lost").slice(0, 2)
+    .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
+  visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
+    .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
+  return items;
+}
+function renderInsights() {
+  const box = $("[data-insights]");
+  if (!box) return;
+  const items = attentionItems();
+  if (!items.length) {
+    box.innerHTML = `<div class="insights-head"><span class="insights-k">${greeting()} — you're clear</span></div>
+      <div class="insights-row"><div class="insight-card insight-clear"><span class="insight-ic">${svg("check")}</span><span class="insight-body"><b>Nothing needs you right now.</b><i>The desks are running the routine. Ask for something bold.</i></span></div></div>`;
+    return;
+  }
+  box.innerHTML = `<div class="insights-head"><span class="insights-k">${greeting()} — ${items.length} thing${items.length > 1 ? "s" : ""} need${items.length > 1 ? "" : "s"} you</span><button class="insights-all" data-open-ws="approvals">Review all</button></div>
+    <div class="insights-row">${items.slice(0, 4).map((it) => `
+      <button class="insight-card insight-${it.tone}" data-open-ws="${it.open}">
+        <span class="insight-ic">${svg(it.icon)}</span>
+        <span class="insight-body"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span>
+      </button>`).join("")}</div>`;
+}
+
+/* ============================ notifications ============================ */
+let notifOpen = false;
+function renderNotifs() {
+  const items = attentionItems();
+  const btnIc = $("[data-notif-ic]"); if (btnIc) btnIc.innerHTML = svg("bell");
+  const dot = $("[data-notif-dot]");
+  if (dot) { dot.hidden = items.length === 0; dot.textContent = items.length > 9 ? "9+" : String(items.length); }
+  const menu = $("[data-notif-menu]");
+  if (!menu) return;
+  menu.hidden = !notifOpen;
+  if (!notifOpen) return;
+  menu.innerHTML = `<div class="notif-head">Notifications${items.length ? ` · ${items.length}` : ""}</div>` + (items.length
+    ? items.map((it) => `<button class="notif-item" data-open-ws="${it.open}"><span class="notif-item-ic notif-${it.tone}">${svg(it.icon)}</span><span class="notif-item-body"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span></button>`).join("")
+    : `<div class="notif-empty">You're all caught up.</div>`);
+}
+
+/* ============================ ⌘K command palette ============================ */
+const rnd = (n) => Math.floor(Math.random() * n);
+const pick = (a) => (a && a.length ? a[rnd(a.length)] : null);
+let cmdkOpen = false, cmdkIdx = 0, cmdkItems = [];
+function fuzzy(q, text) {
+  if (!q) return 1;
+  if (text.includes(q)) return 200 - text.indexOf(q);
+  let ti = 0, score = 0;
+  for (const ch of q) { const f = text.indexOf(ch, ti); if (f < 0) return 0; score += 1 / (1 + f - ti); ti = f + 1; }
+  return score;
+}
+function paletteSources(query) {
+  const q = query.trim().toLowerCase();
+  const items = [];
+  NAV.filter((n) => !n.adminOnly || isAdmin()).forEach((n) =>
+    items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}` : "Console home", run: () => goNav(n.id) }));
+  for (const id in WORKSPACE_DEFS) {
+    const def = WORKSPACE_DEFS[id];
+    if (def.adminOnly && !isAdmin()) continue;
+    if (NAV.some((n) => n.ws === id)) continue;
+    items.push({ group: "Go to", label: def.title, icon: "grid", sub: def.kicker, run: () => openWorkspace(id) });
+  }
+  QUICK.forEach((a) => items.push({ group: "Do", label: a.label, icon: a.icon, sub: a.run ? "Run command" : "Open", run: () => (a.run ? runCommand(a.run) : openWorkspace(a.open)) }));
+  commandSuggestions().forEach((s) => items.push({ group: "Ask", label: s, icon: "chat", sub: "Run", run: () => runCommand(s) }));
+  if (q.length >= 2) {
+    const add = (label, sub, open, icon) => items.push({ group: "Records", label, icon, sub, run: () => openWorkspace(open) });
+    visible(store.state.leads).filter((l) => (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q)).slice(0, 4)
+      .forEach((l) => add(l.name, `Lead · ${l.company || l.status}`, "leads", "users"));
+    visible(store.state.proposals).filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
+      .forEach((p) => add(p.client, `Proposal · ${fmtMoney(p.price)}`, "proposals", "dollar"));
+    visible(store.state.media).filter((m) => (m.title || "").toLowerCase().includes(q)).slice(0, 4)
+      .forEach((m) => add(m.title, "Media brief", "media", "film"));
+    visible(store.state.sites).filter((s) => (s.title || "").toLowerCase().includes(q)).slice(0, 4)
+      .forEach((s) => add(s.title, `${s.kind}`, "sites", "grid"));
+  }
+  const scored = items.map((it) => ({ it, s: fuzzy(q, (it.label + " " + (it.sub || "")).toLowerCase()) })).filter((x) => q === "" || x.s > 0);
+  scored.sort((a, b) => b.s - a.s);
+  const out = scored.map((x) => x.it);
+  if (q) out.unshift({ group: "Ask", label: `Ask Phantom: "${query.trim()}"`, icon: "chat", sub: "Run as a command", run: () => runCommand(query.trim()) });
+  return out.slice(0, 40);
+}
+function renderPalette(query) {
+  cmdkItems = paletteSources(query);
+  cmdkIdx = Math.min(cmdkIdx, Math.max(0, cmdkItems.length - 1));
+  const box = $("[data-cmdk-results]");
+  if (!cmdkItems.length) { box.innerHTML = `<div class="cmdk-empty">No matches. Press ↵ to ask Phantom.</div>`; return; }
+  let lastGroup = "";
+  box.innerHTML = cmdkItems.map((it, i) => {
+    const head = it.group !== lastGroup ? `<div class="cmdk-group">${esc(it.group)}</div>` : "";
+    lastGroup = it.group;
+    return `${head}<button class="cmdk-item ${i === cmdkIdx ? "is-sel" : ""}" data-cmdk-i="${i}">
+      <span class="cmdk-item-ic">${svg(it.icon)}</span>
+      <span class="cmdk-item-body"><b>${esc(it.label)}</b>${it.sub ? `<i>${esc(it.sub)}</i>` : ""}</span>
+      <span class="cmdk-item-enter">↵</span></button>`;
+  }).join("");
+  const sel = box.querySelector(".is-sel"); if (sel) sel.scrollIntoView({ block: "nearest" });
+}
+function renderPaletteSel() {
+  const box = $("[data-cmdk-results]");
+  box.querySelectorAll(".cmdk-item").forEach((el) => el.classList.toggle("is-sel", +el.dataset.cmdkI === cmdkIdx));
+  const sel = box.querySelector(".is-sel"); if (sel) sel.scrollIntoView({ block: "nearest" });
+}
+function openPalette() {
+  if (phantom.hidden) return;
+  cmdkOpen = true; cmdkIdx = 0;
+  const root = $("[data-cmdk]"); root.hidden = false;
+  requestAnimationFrame(() => root.classList.add("is-open"));
+  $("[data-cmdk-input-ic]").innerHTML = svg("search");
+  const input = $("[data-cmdk-input]"); input.value = ""; renderPalette("");
+  setTimeout(() => input.focus(), 20);
+}
+function closePalette() {
+  cmdkOpen = false;
+  const root = $("[data-cmdk]"); root.classList.remove("is-open");
+  setTimeout(() => { if (!cmdkOpen) root.hidden = true; }, 180);
+}
+function execPalette(i = cmdkIdx) {
+  const it = cmdkItems[i];
+  if (!it) return;
+  closePalette();
+  setTimeout(() => it.run(), 60);
+}
+
+/* ============================ live pulse ============================ */
+let liveFeed = [];
+let pulseTimer = 0;
+function pushLive() {
+  if (phantom.hidden || document.hidden) return;
+  const agents = store.state.agents || [];
+  const leads = visible(store.state.leads);
+  const media = visible(store.state.media);
+  const builders = [
+    () => { const a = pick(agents); return a && { who: a.name, text: ["is scanning channels.", "is drafting the next move.", "synced with the desks.", "is watching for signal."][rnd(4)], icon: "auto" }; },
+    () => { const l = pick(leads); return l && { who: "Lead Hunter", text: `re-scored ${l.name} — ${l.status}.`, icon: "users" }; },
+    () => { const m = pick(media); return m && { who: "Media Factory", text: `advanced "${m.title}".`, icon: "film" }; },
+    () => ({ who: "Sentinel", text: "swept the perimeter — all quiet.", icon: "shield" }),
+    () => ({ who: "Revenue", text: "reconciled the pipeline.", icon: "chart" }),
+  ];
+  let ev = null;
+  for (let k = 0; k < 6 && !ev; k++) ev = builders[rnd(builders.length)]();
+  if (!ev) return;
+  liveFeed.unshift({ ...ev, at: new Date().toISOString(), live: true });
+  liveFeed = liveFeed.slice(0, 6);
+  if (!cmdkOpen) renderActivity();
+}
+function startPulse() {
+  clearInterval(pulseTimer);
+  if (reduceMotion) return;
+  pulseTimer = setInterval(pushLive, 7000);
+}
+
+/* ============================ spoken briefing ============================ */
+function briefingText() {
+  const m = moneyView();
+  const pend = visible(store.state.approvals).filter((a) => a.status === "pending").length;
+  const name = (ctx.session?.name || "there").split(/\s+/)[0];
+  const bits = [`${greeting()}, ${name}`];
+  if (m.pipeline) bits.push(`${fmtMoney(m.pipeline)} in open pipeline`);
+  if (pend) bits.push(`${pend} approval${pend > 1 ? "s" : ""} waiting on you`);
+  if (!pend && !m.pipeline) bits.push("everything's quiet");
+  return bits.slice(0, 3).join(" · ") + ". What do you want handled first?";
+}
+
 /* ============================ console render ============================ */
 function renderPlanMeta() {
   const renew = new Date(Date.now() + 30 * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
@@ -346,13 +549,16 @@ function renderConsole() {
   renderStatusPills();
   renderPlanMeta();
   renderUser();
+  renderNotifs();
   renderHero();
   renderChips();
+  renderInsights();
   renderStatCards();
   renderActivity();
   renderPlan();
   renderQueue();
   renderQuick();
+  const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
 }
 
 /* ============================ command run ============================ */
@@ -384,14 +590,14 @@ function speechHoldMs(text = "") {
   const n = String(text || "").length;
   return Math.min(12000, Math.max(3200, n * 72));
 }
-function speak(text, cls = "") {
+function speak(text, cls = "", emotionOverride = null) {
   clearTimeout(typeTimer);
   const box = sayBox();
   box.hidden = false;
   const p = document.createElement("p");
   p.className = `say-line ${cls}`.trim();
   box.replaceChildren(p);
-  const emotion = emotionForText(text);
+  const emotion = emotionOverride || emotionForText(text);
   if (cls === "thinking") setGhostMood("thinking", { emotion: "bright" });
   else if (cls === "user") setGhostMood("listening", { emotion: "calm", ms: 1600 });
   else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
@@ -460,8 +666,33 @@ function wireDeck() {
       else if (q?.open) openWorkspace(q.open);
       return;
     }
+    if (e.target.closest("[data-cmdk-open]")) { openPalette(); return; }
+    if (e.target.closest("[data-cmdk-close]")) { closePalette(); return; }
+    const cItem = e.target.closest("[data-cmdk-i]");
+    if (cItem) { execPalette(+cItem.dataset.cmdkI); return; }
+    if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     const opener = e.target.closest("[data-open-ws]");
-    if (opener) openWorkspace(opener.dataset.openWs);
+    if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } openWorkspace(opener.dataset.openWs); return; }
+    // click outside notif menu closes it
+    if (notifOpen && !e.target.closest(".notif-wrap")) { notifOpen = false; renderNotifs(); }
+  });
+  // command palette input
+  const cin = $("[data-cmdk-input]");
+  if (cin) cin.addEventListener("input", () => { cmdkIdx = 0; renderPalette(cin.value); });
+  // global keyboard
+  document.addEventListener("keydown", (e) => {
+    if ((e.metaKey || e.ctrlKey) && (e.key === "k" || e.key === "K")) { e.preventDefault(); cmdkOpen ? closePalette() : openPalette(); return; }
+    if (cmdkOpen) {
+      if (e.key === "ArrowDown") { e.preventDefault(); cmdkIdx = Math.min(cmdkItems.length - 1, cmdkIdx + 1); renderPaletteSel(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); cmdkIdx = Math.max(0, cmdkIdx - 1); renderPaletteSel(); }
+      else if (e.key === "Enter") { e.preventDefault(); execPalette(); }
+      else if (e.key === "Escape") { e.preventDefault(); closePalette(); }
+      return;
+    }
+    if (phantom.hidden) return;
+    const typing = /^(input|textarea|select)$/i.test(e.target.tagName);
+    if (e.key === "/" && !typing) { e.preventDefault(); $("[data-command-input]")?.focus(); }
+    else if (e.key === "Escape" && notifOpen) { notifOpen = false; renderNotifs(); }
   });
 }
 
@@ -609,18 +840,17 @@ let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; initGhost(); startClock(); }
+  if (!ghostStarted) { ghostStarted = true; initGhost(); startClock(); startPulse(); }
   activeNav = "chat";
   renderConsole();
+  requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
   if (view && view !== "command" && WORKSPACE_DEFS[view]) openWorkspace(view);
   const m = location.hash.match(/^#ws\/([a-z]+)/);
   if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
-  // greet
-  setTimeout(() => {
-    setGhostMood("idle", { emotion: "happy" });
-  }, 300);
+  // a data-driven spoken briefing once the reveal settles
+  setTimeout(() => { setGhostMood("idle", { emotion: "happy" }); if (!openId) speak(briefingText(), "", "bright"); }, 1400);
 }
 
 async function boot() {
@@ -628,7 +858,8 @@ async function boot() {
   wireDeck();
   store.onChange(() => {
     if (!phantom.hidden) {
-      renderNav(); renderStatusPills(); renderStatCards(); renderActivity(); renderPlan(); renderQueue();
+      renderNav(); renderStatusPills(); renderNotifs(); renderInsights();
+      renderStatCards(); renderActivity(); renderPlan(); renderQueue();
     }
   });
   if (ctx.session) enterPhantom();
