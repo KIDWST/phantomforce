@@ -1135,6 +1135,156 @@ function renderMoney(el, rerender) {
     <p class="ws-note">Quote → approval → invoice-ready → payment-tracked. Real invoices and payment requests stay off until a payment connector is configured.</p>`;
 }
 
+/* ============================= AUTOMATION ============================= */
+function renderAutomation(el, rerender) {
+  const connectors = store.state.postingConnectors || [];
+  const readyConnectors = connectors.filter((c) => c.adminState === "ready" || c.state === "available");
+  const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
+  const tasks = visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status));
+  el.innerHTML = `
+    <div class="ws-toolbar">
+      <p class="ws-note">Automation is where repeat work lives: follow-ups, review requests, scans, content drafts, booking reminders, and connector-ready publishing.</p>
+      <button class="btn" data-open-ws="approvals">Open approvals</button>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><span>Connectors</span><b>${readyConnectors.length}/${connectors.length}</b><i>ready or configurable</i></div>
+      <div class="stat"><span>Work items</span><b>${tasks.length}</b><i>from Phantom chat</i></div>
+      <div class="stat"><span>Waiting</span><b>${pending.length}</b><i>needs approval</i></div>
+      <div class="stat"><span>Mode</span><b>${esc(executionMode.label().replace(" Mode", ""))}</b><i>${executionMode.get() === "auto" ? "acts faster" : "asks first"}</i></div>
+    </div>
+    <h3 class="ws-subhead">Repeat jobs</h3>
+    ${renderAutomationConfig()}
+    <h3 class="ws-subhead">Connectors</h3>
+    <p class="ws-note">Connect a business once. Phantom can then draft, schedule, post, upload, or file work for that business based on its permissions.</p>
+    ${renderConnectorCards()}
+    <h3 class="ws-subhead">Active work</h3>
+    <div class="stack">
+      ${tasks.slice(0, 8).map((t) => `<article class="record record-row">
+        <h4>${esc(t.title)}</h4>
+        <p class="record-sub">${esc(t.lane || "Phantom")} · ${esc(t.status || "new")}</p>
+        <span class="admin-ws-stats">${esc(t.next || "Waiting for the next step.")}</span>
+      </article>`).join("") || empty("No active automation work yet. Ask Phantom to create a follow-up, review request, scan, post, or booking.")}
+    </div>`;
+}
+
+/* ============================= ANALYTICS ============================= */
+function renderAnalytics(el, rerender) {
+  const m = moneyView();
+  const leads = visible(store.state.leads);
+  const proposals = visible(store.state.proposals);
+  const media = visible(store.state.media);
+  const reviews = visible(store.state.reviews);
+  const bookings = visible(store.state.bookings);
+  const security = visible(store.state.security)[0];
+  const readyMedia = media.filter((item) => ["brief-ready", "generation-approved", "asset-saved"].includes(item.status));
+  const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
+  const won = proposals.filter((p) => p.status === "won");
+  el.innerHTML = `
+    <div class="ws-toolbar">
+      <p class="ws-note">Business performance in plain English: pipeline, follow-ups, content, reviews, bookings, and risk.</p>
+      <button class="btn" data-open-ws="money">Open money</button>
+    </div>
+    <div class="stat-row">
+      <div class="stat"><span>Open pipeline</span><b>${fmtMoney(m.pipeline)}</b><i>${m.open.length} quote${m.open.length === 1 ? "" : "s"}</i></div>
+      <div class="stat"><span>Won</span><b>${fmtMoney(m.wonValue)}</b><i>${won.length} closed</i></div>
+      <div class="stat"><span>Follow-ups due</span><b>${dueLeads.length}</b><i>${leads.length} contacts</i></div>
+      <div class="stat"><span>Content ready</span><b>${readyMedia.length}</b><i>${media.length} total</i></div>
+      <div class="stat"><span>Reviews</span><b>${reviews.length}</b><i>request pipeline</i></div>
+      <div class="stat"><span>Bookings</span><b>${bookings.length}</b><i>schedule lane</i></div>
+    </div>
+    <div class="card-grid">
+      <article class="record">
+        <div class="record-top"><h4>What matters next</h4>${chip(dueLeads.length || m.open.length || readyMedia.length ? "active" : "ready")}</div>
+        <ul class="record-list">
+          ${dueLeads.length ? `<li>Follow up with ${dueLeads.length} lead${dueLeads.length === 1 ? "" : "s"} today.</li>` : "<li>No urgent follow-ups right now.</li>"}
+          ${m.open.length ? `<li>${fmtMoney(m.pipeline)} is open. Push the highest-value quote first.</li>` : "<li>No open quotes yet.</li>"}
+          ${readyMedia.length ? `<li>${readyMedia.length} content item${readyMedia.length === 1 ? "" : "s"} can move toward posting or delivery.</li>` : "<li>No content is ready yet.</li>"}
+          ${security ? `<li>Risk radar: ${security.posture === "clean" ? "clean" : "needs attention"}.</li>` : "<li>No security scan is logged for this workspace yet.</li>"}
+        </ul>
+      </article>
+      <article class="record">
+        <div class="record-top"><h4>Content analysis</h4>${chip(media.length ? "ready" : "fresh")}</div>
+        <p class="record-notes">${esc(simpleContentAdvice(media))}</p>
+        <p class="record-sub">Once social accounts are connected, this becomes real platform performance instead of local content counts.</p>
+        <div class="record-actions"><button class="btn" data-open-ws="media">Open Media Lab</button></div>
+      </article>
+      <article class="record">
+        <div class="record-top"><h4>Revenue analysis</h4>${chip(m.pipeline || m.wonValue ? "active" : "ready")}</div>
+        <p class="record-notes">${m.pipeline ? `Your next best move is converting open quotes before building new offers.` : "The pipeline is empty. Start by adding leads or creating one quote."}</p>
+        <p class="record-sub">Retainers tracked: ${fmtMoney(m.retainerMonthly)}/mo.</p>
+        <div class="record-actions"><button class="btn" data-open-ws="proposals">Open quotes</button></div>
+      </article>
+    </div>
+    <h3 class="ws-subhead">Recent signals</h3>
+    <div class="stack">
+      ${visible(store.state.activity).slice(0, 8).map((a) => `<article class="record record-row"><h4>${esc(a.who)}</h4><p class="record-sub">${esc(a.text)}</p><i class="record-time">${ago(a.at)}</i></article>`).join("") || empty("No signals yet. Use Phantom and this will fill itself.")}
+    </div>`;
+}
+
+/* ============================== MEMORY ============================== */
+function renderMemory(el, rerender) {
+  const memory = store.state.workspaceMemory?.[currentWs()] || {};
+  const entries = memory.entries || [];
+  const files = visible(store.state.media).length + visible(store.state.sites).length + visible(store.state.products).length + visible(store.state.reviews).length;
+  el.innerHTML = `
+    <div class="ws-toolbar">
+      <p class="ws-note">Memory is what Phantom knows for this business: files, decisions, activity, and workspace-specific context.</p>
+      ${isAdmin() ? `<button class="btn" data-act="load-owner-memory">Load owner memory</button>` : ""}
+    </div>
+    <div class="stat-row">
+      <div class="stat"><span>Workspace</span><b>${esc(wsName(currentWs()))}</b><i>${esc(memory.tenantId || "tenant memory")}</i></div>
+      <div class="stat"><span>Files</span><b>${files}</b><i>inside this workspace</i></div>
+      <div class="stat"><span>Notes</span><b>${entries.length}</b><i>workspace memory</i></div>
+      <div class="stat"><span>Boundary</span><b>${currentWs() === "phantomforce" ? "owner" : "separate"}</b><i>clients stay isolated</i></div>
+    </div>
+    <div class="card-grid">
+      <article class="record">
+        <div class="record-top"><h4>What Phantom remembers</h4>${chip("ready")}</div>
+        <p class="record-notes">${esc(memory.summary || "No custom memory has been saved for this workspace yet.")}</p>
+        <p class="record-sub">Each business has its own memory. Jordan's admin account can switch workspaces without mixing client records.</p>
+      </article>
+      <article class="record">
+        <div class="record-top"><h4>Recent activity</h4>${chip("active")}</div>
+        <div class="stack">
+          ${visible(store.state.activity).slice(0, 5).map((a) => `<article class="record record-row"><h4>${esc(a.who)}</h4><p class="record-sub">${esc(a.text)}</p><i class="record-time">${ago(a.at)}</i></article>`).join("") || empty("No activity yet.")}
+        </div>
+      </article>
+    </div>
+    ${isAdmin() ? `
+      <h3 class="ws-subhead">Owner memory</h3>
+      <div class="record record-wide">
+        <p class="record-notes">Admin-only owner memory can search local receipts and process notes. It is separate from client memory.</p>
+        <div class="record-actions">
+          <input class="inline-input" data-owner-memory-query placeholder="Search owner memory..." aria-label="Search owner memory" />
+          <button class="btn btn-primary" data-act="load-owner-memory">Search</button>
+        </div>
+      </div>
+      <div data-owner-memory-result>${empty("Search owner memory when you need the full admin picture.")}</div>
+    ` : ""}`;
+  bindActions(el, {
+    "load-owner-memory": async () => {
+      const result = el.querySelector("[data-owner-memory-result]");
+      const query = el.querySelector("[data-owner-memory-query]")?.value?.trim() || "";
+      if (!result) return;
+      result.innerHTML = empty("Loading owner memory...");
+      try {
+        const params = new URLSearchParams();
+        if (query) params.set("q", query);
+        const url = `/phantom-ai/admin/owner-memory/status${params.toString() ? `?${params}` : ""}`;
+        const response = await fetch(url, { headers: authHeaders() });
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          result.innerHTML = empty(payload?.error || "Owner memory requires admin backend access.");
+          return;
+        }
+        result.innerHTML = renderOwnerMemoryPayload(payload);
+      } catch (error) {
+        result.innerHTML = empty(`Owner memory could not load: ${error?.message || "request failed"}`);
+      }
+    },
+  });
+}
+
 /* ============================= TOOL SPINE ============================= */
 function renderToolSpineCards({ compact = false } = {}) {
   const tools = store.state.toolSpine || [];
@@ -1929,7 +2079,7 @@ function renderAdmin(el, rerender) {
     </div>`;
   bindActions(el, {
     "set-mode-auto": () => { executionMode.set("auto"); pushActivity("PhantomOps", "switched Phantom to Auto.", "phantomforce"); store.save(); rerender(); },
-    "set-mode-approval": () => { executionMode.set("approval"); pushActivity("PhantomOps", "switched Phantom to Review.", "phantomforce"); store.save(); rerender(); },
+    "set-mode-approval": () => { executionMode.set("approval"); pushActivity("PhantomOps", "switched Phantom to Approval.", "phantomforce"); store.save(); rerender(); },
     "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
     "load-owner-memory": async () => {
       const result = el.querySelector("[data-owner-memory-result]");
@@ -1972,18 +2122,18 @@ function renderPhantom(el) {
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
   phantom: { title: "Phantom AI", kicker: "Business brain", render: renderPhantom },
-  leads: { title: "Leads & Follow-Up", kicker: "Pipeline system", render: renderLeads },
+  leads: { title: "CRM / Client Database", kicker: "Leads, clients, follow-ups", render: renderLeads },
   proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
   reviews: { title: "Review Studio", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule system", render: renderBookings },
-  media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
+  media: { title: "Media Lab", kicker: "Editor + Content Hub", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
   workforce: { title: "Systems Map", kicker: "Phantom modules", render: renderWorkforce },
-  automation: { title: "Automation", kicker: "Worker loops", render: renderWorkforce },
-  analytics: { title: "Analytics", kicker: "Revenue signals", render: renderMoney },
-  memory: { title: "Memory", kicker: "Private context", render: renderWorkforce },
+  automation: { title: "Automation", kicker: "Repeat work + connectors", render: renderAutomation },
+  analytics: { title: "Analytics", kicker: "What is working", render: renderAnalytics },
+  memory: { title: "Memory", kicker: "Workspace context", render: renderMemory },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
