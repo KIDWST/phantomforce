@@ -8,7 +8,7 @@ import {
 import { handleCommand, commandSuggestions } from "./command.js?v=attachment-chat-questions-20260705-01";
 import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-admin-media-dismiss-20260705-01";
 import { imageStyle } from "./media-image.js?v=phantom-chicagoshots-crm-20260704-01";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-admin-20260705-05";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-admin-20260705-06";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -288,6 +288,7 @@ let ghostMood = "idle";
 let ghostEmotion = "calm";
 let ghostMoodUntil = 0;
 let ghostMoodStartedAt = performance.now();
+let phantomHasActed = false;
 let ghostBurstStart = 0;
 let ghostBurstUntil = 0;
 
@@ -305,6 +306,10 @@ function setGhostMood(mood, options = {}) {
   ghostMood = mood;
   ghostEmotion = options.emotion || ghostEmotion;
   ghostMoodUntil = options.ms ? now + options.ms : 0;
+}
+
+function markPhantomActed() {
+  phantomHasActed = true;
 }
 
 function speechHoldMs(text = "") {
@@ -483,6 +488,7 @@ function stageMediaAttachments(files) {
     setGhostMood("listening", { emotion: "calm", ms: 900 });
     return;
   }
+  markPhantomActed();
   pendingAttachments = [
     ...pendingAttachments,
     ...mediaPreviews(summary.accepted),
@@ -804,6 +810,7 @@ async function askPrivatePhantomBrain(text, localResult) {
 }
 
 function runCommand(text) {
+  markPhantomActed();
   speak(text, "user");
   ghostFlare("listening");
   const respBox = $("[data-response]");
@@ -1354,6 +1361,7 @@ function initFablePhantomCharacter(canvas, ctx2) {
       scale: Math.min(w, h) * 0.27,
       mood,
       emotion: ghostEmotion,
+      startupOnly: !phantomHasActed,
       moodAge: Math.max(0, (now - ghostMoodStartedAt) * 0.001),
       pulse: ghostPulse,
       px: cpx,
