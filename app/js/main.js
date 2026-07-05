@@ -8,7 +8,7 @@ import {
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
 import { renderFlowMap } from "./flowmap.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-1";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-2";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
