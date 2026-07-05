@@ -1,22 +1,23 @@
-/* PhantomForce — the Phantom.
+/* PhantomForce — the Phantom: a living being made from the hero paintings.
 
-   TWO RENDERERS, ONE SOUL.
+   POSE LIBRARY (app/assets/poses/*.webp): the character exists as six real
+   painted stances — conjure (flame + offered hand), arms crossed, hand on
+   chin, open-palm present, finger-up point, and a hand-over-mouth laugh.
+   The engine picks the stance that fits the moment (talking alternates
+   present/point, thinking goes to chin, menace crosses its arms, delight
+   laughs, the idle show tours them all) and CROSSFADES between poses under
+   a glitch burst, like a hologram re-rendering itself.
 
-   Sprite mode (preferred): loads the hero artwork from
-   app/assets/phantom-hero.png — the actual reference painting — converts its
-   black background to transparency, and puppets it: breathing, floating,
-   swaying, squash & stretch, glitch slices, a materialize-from-the-ring
-   reveal, flame flicker, ring pulses, scanline shimmer — and the baked face
-   is erased and replaced with a LIVE face drawn in the same spot, so the
-   real artwork blinks, emotes, winks, talks, and follows the cursor.
+   Each pose's painted face is erased and a LIVE face is drawn in its exact
+   place (per-pose position, scale, tilt — the laugh pose hides the mouth
+   behind the painted hand, so only eyes and brows act). The live face runs
+   on underdamped springs with over-emoted human feeling: sad slump + tear,
+   delighted arc eyes, launched surprise brows, red menace that hue-shifts
+   the whole painting. It blinks, winks, talks, and follows the cursor.
+   Body: breath, float, sway, squash & stretch, materialize-from-the-ring.
 
-   Procedural mode (fallback): the hand-built particle phantom, used until
-   the artwork file exists or if it fails to load. Same face, same feelings.
-
-   Both run on the same acting engine: underdamped springs (overshoot +
-   settle), over-emoted human emotions (sad slump + tear, delighted arc
-   eyes, launched surprise brows, red menace), and a looping idle show.
-   Shared by the public landing page and the admin console. */
+   Procedural mode: the hand-built particle phantom, used until artwork
+   loads or if it fails. Shared by the landing page and the admin console. */
 
 const GA = 2.399963229728653;
 const TAU = Math.PI * 2;
@@ -40,7 +41,7 @@ const FACE = {
   happy:     { browY: 0.20, browA: 0.00, browSad: 0, browSplit: 0.00, lid: 0.75, eyeHappy: 0.85, curve: 0.75, open: 0.18, wide: 1.10, smirk: 0.30, tilt: -0.03, squash: 0.30, drop: 0.00 },
   sad:       { browY: 0.06, browA: -0.05, browSad: 0.95, browSplit: 0.00, lid: 0.55, eyeHappy: 0.0, curve: -0.55, open: 0.05, wide: 0.70, smirk: 0.00, tilt: 0.08, squash: -0.85, drop: 0.16 },
   surprised: { browY: 0.32, browA: -0.25, browSad: 0, browSplit: 0.00, lid: 1.30, eyeHappy: 0.0, curve: 0.02, open: 0.60, wide: 0.45, smirk: 0.00, tilt: 0.00, squash: 0.35, drop: -0.06 },
-  excited:   { browY: 0.24, browA: -0.05, browSad: 0, browSplit: 0.00, lid: 1.05, eyeHappy: 0.4, curve: 0.70, open: 0.34, wide: 1.15, smirk: 0.15, tilt: -0.02, squash: 0.50, drop: 0.00 },
+  excited:   { browY: 0.24, browA: -0.05, browSad: 0, browSplit: 0.00, lid: 1.05, eyeHappy: 0.8, curve: 0.70, open: 0.34, wide: 1.15, smirk: 0.15, tilt: -0.02, squash: 0.50, drop: 0.00 },
 };
 
 function applyEmotion(T, emotion, mood) {
@@ -176,6 +177,7 @@ function drawFaceFeatures(ctx2, s, F) {
     ctx2.stroke();
   }
 
+  if (F.mouth === false) { ctx2.shadowBlur = 0; return; }   // painted hand covers the mouth
   const frown = Math.max(0, -E.curve);
   const grin = Math.max(0, E.curve);
   const mw = 0.31 * E.wide * s;
@@ -221,28 +223,41 @@ function drawFaceFeatures(ctx2, s, F) {
 }
 
 export function createPhantomCharacter({ small = false } = {}) {
-  /* ---- hero artwork: load + turn black background into transparency ---- */
-  let art = null, artW = 0, artH = 0;
-  try {
-    const img = new Image();
-    img.onload = () => {
-      try {
-        const c = document.createElement("canvas");
-        c.width = img.naturalWidth; c.height = img.naturalHeight;
-        const g = c.getContext("2d", { willReadFrequently: true });
-        g.drawImage(img, 0, 0);
-        const d = g.getImageData(0, 0, c.width, c.height);
-        const p = d.data;
-        for (let i = 0; i < p.length; i += 4) {
-          const lum = Math.max(p[i], p[i + 1], p[i + 2]);
-          p[i + 3] = lum < 8 ? 0 : Math.min(255, lum * 2.2);
-        }
-        g.putImageData(d, 0, 0);
-        art = c; artW = c.width; artH = c.height;
-      } catch { /* keep procedural */ }
-    };
-    img.src = new URL("../assets/phantom-hero.png", import.meta.url).href;
-  } catch { /* no module URL support -> procedural */ }
+  /* ---- the pose library: the artwork in six real stances.
+     Files are preprocessed offline (black -> true alpha, webp), so loading
+     is cheap. Landmarks are fractions of each image: figure axis (cx),
+     ring line (groundY), hood top (headTop), and the face map — where the
+     live face replaces the painted one. mouth:false = the painted hand
+     covers the mouth (laugh), so only eyes and brows are drawn. ---- */
+  const POSES = {
+    conjure: { file: "poses/conjure.webp", cx: 0.496, groundY: 0.897, headTop: 0.041,
+      face: { cx: 0.485, cy: 0.260, rx: 0.064, ry: 0.074, s: 0.121, rot: 0, mouth: true },
+      flame: { x: 0.269, y: 0.331 } },
+    cross: { file: "poses/cross.webp", cx: 0.527, groundY: 0.894, headTop: 0.053,
+      face: { cx: 0.487, cy: 0.253, rx: 0.070, ry: 0.058, s: 0.150, rot: -0.06, mouth: true } },
+    chin: { file: "poses/chin.webp", cx: 0.520, groundY: 0.882, headTop: 0.078,
+      face: { cx: 0.467, cy: 0.232, rx: 0.068, ry: 0.048, s: 0.148, rot: -0.05, mouth: true } },
+    present: { file: "poses/present.webp", cx: 0.488, groundY: 0.885, headTop: 0.059,
+      face: { cx: 0.500, cy: 0.205, rx: 0.082, ry: 0.055, s: 0.170, rot: -0.06, mouth: true } },
+    point: { file: "poses/point.webp", cx: 0.493, groundY: 0.919, headTop: 0.067,
+      face: { cx: 0.491, cy: 0.243, rx: 0.075, ry: 0.052, s: 0.168, rot: -0.05, mouth: true } },
+    laugh: { file: "poses/laugh.webp", cx: 0.485, groundY: 0.908, headTop: 0.060,
+      face: { cx: 0.418, cy: 0.215, rx: 0.078, ry: 0.038, s: 0.164, rot: -0.14, mouth: false } },
+  };
+  const loadPose = (name) => {
+    const p = POSES[name];
+    if (!p || p.art || p.loading) return;
+    p.loading = true;
+    try {
+      const img = new Image();
+      img.onload = () => { p.art = img; p.w = img.naturalWidth; p.h = img.naturalHeight; };
+      img.onerror = () => { p.failed = true; };
+      img.src = new URL("../assets/" + p.file, import.meta.url).href;
+    } catch { p.failed = true; }
+  };
+  loadPose("conjure");
+  try { setTimeout(() => { for (const n in POSES) loadPose(n); }, 1200); } catch { }
+  let curPose = "conjure", prevPose = null, poseBlend = 1;
 
   /* ---- procedural particle body (fallback) ---- */
   const N = small ? 900 : 1600;
@@ -322,6 +337,22 @@ export function createPhantomCharacter({ small = false } = {}) {
       if (emotion === "excited") gesture = "cheer";
     } else gesture = mood === "talking" ? "talk" : mood === "thinking" ? "chin" : mood === "menace" ? "menace" : "conjure";
 
+    /* which painted stance fits this moment */
+    let poseName = "conjure";
+    if (settled) {
+      if (mood === "talking") poseName = Math.floor(t / 3.5) % 2 ? "point" : "present";
+      else if (mood === "thinking") poseName = "chin";
+      else if (mood === "listening") poseName = "point";
+      else if (mood === "menace") poseName = "cross";
+      else if (mood === "idle" || mood === "happy") {
+        poseName =
+          emotion === "excited" ? "laugh" :
+          beat === "cross" ? "cross" :
+          beat === "wave" ? "present" :
+          beat === "laugh" ? "laugh" : "conjure";
+      }
+    }
+
     const T = applyEmotion(FACE[mood] || FACE.idle, emotion, mood);
     if (mood === "talking") T.open = 0.1 + talkBeat * 0.42;
     if (beat === "cross" && gesture === "cross") { T.browA += 0.12; T.curve += 0.06; T.smirk = 0.55; }
@@ -359,7 +390,7 @@ export function createPhantomCharacter({ small = false } = {}) {
 
     const bounce = E.squash > 0 ? Math.sin(t * 3.6) * 0.045 * E.squash : 0;
     return {
-      dt, age, reveal, settled, talkBeat, thinkBeat, beat, gesture, pose,
+      dt, age, reveal, settled, talkBeat, thinkBeat, beat, gesture, pose, poseName,
       blink, lookX, lookY,
       bodySy: 1 + E.squash * 0.055 + bounce,
       bodySx: 1 - (E.squash * 0.055 + bounce) * 0.6,
@@ -369,6 +400,60 @@ export function createPhantomCharacter({ small = false } = {}) {
   };
 
   /* ============================ SPRITE MODE ============================ */
+  /* ring-space: origin at the summoning ring's center, screen pixels. */
+  const poseK = (p, scale) => (scale * 3.55) / ((p.groundY - p.headTop) * p.h);
+  const poseFace = (p, scale) => {
+    const k = poseK(p, scale);
+    return {
+      x: (p.face.cx - p.cx) * p.w * k,
+      y: (p.face.cy - p.groundY) * p.h * k,
+      s: p.face.s * p.w * k,
+      rot: p.face.rot || 0,
+      mouth: p.face.mouth !== false,
+    };
+  };
+
+  const drawPoseLayer = (ctx2, p, alpha, o, S, filter, t) => {
+    const k = poseK(p, o.scale);
+    const gx = p.cx * p.w, gy = p.groundY * p.h;
+    ctx2.save();
+    ctx2.scale(k, k);
+    if (!S.settled) {
+      const span = (p.groundY - p.headTop) * p.h;
+      ctx2.beginPath();
+      ctx2.rect(-gx, -S.reveal * span * 1.06, p.w, S.reveal * span * 1.06 + 0.12 * p.h);
+      ctx2.clip();
+    }
+    ctx2.globalAlpha = alpha;
+    if (filter) { try { ctx2.filter = filter; } catch { } }
+    ctx2.drawImage(p.art, -gx, -gy);
+    /* glitch slices: a periodic tic, plus a burst while switching stances */
+    const gCyc = t % 3.8;
+    if ((gCyc < 0.16 || poseBlend < 0.85) && S.settled) {
+      for (let i = 0; i < 3; i++) {
+        const sy = p.h * (0.45 + 0.15 * i);
+        const bh = p.h * 0.04;
+        const off = Math.sin(t * 91 + i * 2) * p.w * (poseBlend < 0.85 ? 0.02 : 0.012);
+        ctx2.drawImage(p.art, 0, sy, p.w, bh, -gx + off, sy - gy, p.w, bh);
+      }
+    }
+    if (filter) { try { ctx2.filter = "none"; } catch { } }
+    /* erase the painted face so the live one can act in its place */
+    const fx = (p.face.cx - p.cx) * p.w, fy = (p.face.cy - p.groundY) * p.h;
+    ctx2.globalAlpha = 1;
+    ctx2.globalCompositeOperation = "destination-out";
+    const er = ctx2.createRadialGradient(fx, fy, 0, fx, fy, p.face.rx * p.w * 1.2);
+    er.addColorStop(0, "rgba(0,0,0,1)");
+    er.addColorStop(0.72, "rgba(0,0,0,1)");
+    er.addColorStop(1, "rgba(0,0,0,0)");
+    ctx2.fillStyle = er;
+    ctx2.beginPath();
+    ctx2.ellipse(fx, fy, p.face.rx * p.w * 1.2, p.face.ry * p.h * 1.2, p.face.rot || 0, 0, TAU);
+    ctx2.fill();
+    ctx2.globalCompositeOperation = "source-over";
+    ctx2.restore();
+  };
+
   const drawSprite = (ctx2, o, S) => {
     const { t, cx, cy, scale, emotion, mood, pulse } = o;
     const accent = ACCENTS[emotion] || ACCENTS.calm;
@@ -377,112 +462,86 @@ export function createPhantomCharacter({ small = false } = {}) {
     const floatY = (Math.sin(t * 1.1) * 0.05 * S.floatAmp + Math.sin(t * 3.2) * (mood === "talking" ? 0.025 : 0.008)) * scale * 0.5
       + (1 - S.reveal) * scale * 0.2 + S.slump * scale * 0.45;
 
-    const spanPx = (ART.groundY - ART.headTop) * artH;         // art pixels between hood top and ring
-    const k = (scale * 3.55) / spanPx;                          // world units ≈ prior character height
-    const gx = ART.cx * artW, gy = ART.groundY * artH;
-
-    ctx2.save();
-    ctx2.translate(cx + o.px * scale * 0.25, cy + scale * 1.72 + floatY);
-    ctx2.rotate(E.tilt * 0.5 + swayBias * 0.3 + Math.sin(t * 0.5) * 0.012);
-    ctx2.scale(k * S.bodySx * breath, k * S.bodySy * breath);
-
-    /* materialize: reveal rises from the ring */
-    if (!S.settled) {
-      ctx2.beginPath();
-      ctx2.rect(-gx, -S.reveal * spanPx * 1.06, artW, S.reveal * spanPx * 1.06 + 0.12 * artH);
-      ctx2.clip();
-    }
-
-    /* emotional color grade on the artwork itself */
     let filter = "";
     if (emotion === "alert") filter = "hue-rotate(215deg) saturate(1.4) brightness(1.05)";
     else if (emotion === "sad") filter = "saturate(0.7) brightness(0.85)";
     else if (emotion === "excited" || emotion === "happy") filter = "saturate(1.15) brightness(1.1)";
-    if (filter) { try { ctx2.filter = filter; } catch { } }
-    ctx2.drawImage(art, -gx, -gy);
 
-    /* glitch slices (below the face so the baked face never flashes back) */
-    const gCyc = t % 3.8;
-    if (gCyc < 0.16 && S.settled) {
-      for (let i = 0; i < 3; i++) {
-        const sy = artH * (0.42 + 0.16 * i);
-        const bh = artH * 0.045;
-        const off = Math.sin(t * 91 + i * 2) * artW * 0.012;
-        ctx2.drawImage(art, 0, sy, artW, bh, -gx + off, sy - gy, artW, bh);
-      }
-    }
-    if (filter) { try { ctx2.filter = "none"; } catch { } }
-
-    /* erase the baked face so the live one acts in its place */
-    const f = ART.face;
-    const fx = (f.cx - ART.cx) * artW, fy = (f.cy - ART.groundY) * artH;
     ctx2.save();
-    ctx2.globalCompositeOperation = "destination-out";
-    const er = ctx2.createRadialGradient(fx, fy, 0, fx, fy, f.rx * artW * 1.2);
-    er.addColorStop(0, "rgba(0,0,0,1)");
-    er.addColorStop(0.72, "rgba(0,0,0,1)");
-    er.addColorStop(1, "rgba(0,0,0,0)");
-    ctx2.fillStyle = er;
-    ctx2.beginPath();
-    ctx2.ellipse(fx, fy, f.rx * artW * 1.2, f.ry * artH * 1.2, 0, 0, TAU);
-    ctx2.fill();
-    ctx2.restore();
+    ctx2.translate(cx + o.px * scale * 0.25, cy + scale * 1.72 + floatY);
+    ctx2.rotate(E.tilt * 0.5 + swayBias * 0.3 + Math.sin(t * 0.5) * 0.012);
+    ctx2.scale(S.bodySx * breath, S.bodySy * breath);
+
+    const cur = POSES[curPose], prev = prevPose ? POSES[prevPose] : null;
+    if (prev && prev.art && poseBlend < 1) drawPoseLayer(ctx2, prev, 1 - poseBlend, o, S, filter, t);
+    if (cur && cur.art) drawPoseLayer(ctx2, cur, poseBlend < 1 ? poseBlend : 1, o, S, filter, t);
 
     ctx2.globalCompositeOperation = "lighter";
 
-    /* the live face, drawn in the artwork's own face position */
-    ctx2.save();
-    ctx2.translate(fx, fy - E.drop * f.ry * artH * 0.8);
-    ctx2.rotate(E.tilt + Math.sin(t * 0.8) * 0.012);
-    drawFaceFeatures(ctx2, f.s * artW, {
-      E, A, pulse,
-      lid: Math.max(0.08, E.lid * S.blink - S.thinkBeat * 0.05),
-      eyeHappy: Math.max(0, Math.min(1, E.eyeHappy)),
-      wink, lookX: S.lookX, lookY: S.lookY, t,
-    });
-    ctx2.restore();
-
-    /* flame flicker over the baked flame */
-    if (flameHold > 0.05) {
-      const flx = (ART.flame.x - ART.cx) * artW, fly = (ART.flame.y - ART.groundY) * artH;
-      const fr = artW * (0.03 + Math.sin(t * 6.4) * 0.006 + pulse * 0.012) * flameHold;
-      const g = ctx2.createRadialGradient(flx, fly, 0, flx, fly, fr * 3.2);
-      g.addColorStop(0, `rgba(235,255,246,${0.5 * flameHold})`);
-      g.addColorStop(0.4, A(0.3 * flameHold));
+    /* the conjured flame breathes on the hero stance */
+    if (curPose === "conjure" && poseBlend > 0.5 && flameHold > 0.05 && cur && cur.art) {
+      const k = poseK(cur, scale);
+      const flx = (cur.flame.x - cur.cx) * cur.w * k, fly = (cur.flame.y - cur.groundY) * cur.h * k;
+      const fr = scale * (0.11 + Math.sin(t * 6.4) * 0.02 + pulse * 0.04) * flameHold * poseBlend;
+      const g = ctx2.createRadialGradient(flx, fly, 0, flx, fly, fr * 3);
+      g.addColorStop(0, `rgba(235,255,246,${0.45 * flameHold * poseBlend})`);
+      g.addColorStop(0.4, A(0.28 * flameHold * poseBlend));
       g.addColorStop(1, A(0));
       ctx2.fillStyle = g;
-      ctx2.beginPath(); ctx2.arc(flx, fly, fr * 3.2, 0, TAU); ctx2.fill();
+      ctx2.beginPath(); ctx2.arc(flx, fly, fr * 3, 0, TAU); ctx2.fill();
     }
 
-    /* ring pulse over the baked ring */
+    /* ring pulses over the painted ring */
     for (let ring = 0; ring < 2; ring++) {
-      const p = (t * 0.35 + ring / 2) % 1;
-      ctx2.strokeStyle = A((0.16 - p * 0.12) * (1 + ringBoost * 1.4));
-      ctx2.lineWidth = artW * 0.002;
+      const p2 = (t * 0.35 + ring / 2) % 1;
+      ctx2.strokeStyle = A((0.16 - p2 * 0.12) * (1 + ringBoost * 1.4));
+      ctx2.lineWidth = Math.max(1, scale * 0.006);
       ctx2.beginPath();
-      ctx2.ellipse(0, 0, ART.ring.rx * artW * (0.5 + p * 0.55), ART.ring.ry * artH * (0.5 + p * 0.55), 0, 0, TAU);
+      ctx2.ellipse(0, 0, scale * 1.15 * (0.5 + p2 * 0.55), scale * 0.27 * (0.5 + p2 * 0.55), 0, 0, TAU);
       ctx2.stroke();
     }
 
-    /* scanline shimmer drifting up the hologram (kept inside the figure) */
-    const sy2 = -((t * 0.22) % 1) * spanPx;
-    const sg = ctx2.createLinearGradient(0, sy2 - artH * 0.03, 0, sy2 + artH * 0.03);
+    /* scanline shimmer drifting up the hologram */
+    const sy2 = -((t * 0.22) % 1) * scale * 3.55;
+    const sg = ctx2.createLinearGradient(0, sy2 - scale * 0.1, 0, sy2 + scale * 0.1);
     sg.addColorStop(0, A(0));
     sg.addColorStop(0.5, A(0.035));
     sg.addColorStop(1, A(0));
     ctx2.fillStyle = sg;
-    ctx2.fillRect(-artW * 0.28, sy2 - artH * 0.03, artW * 0.56, artH * 0.06);
+    ctx2.fillRect(-scale * 1.15, sy2 - scale * 0.1, scale * 2.3, scale * 0.2);
 
     /* rising dust while materializing */
     if (!S.settled) {
       for (let i = 0; i < 26; i++) {
-        const dx = Math.sin(i * 2.13) * artW * 0.3;
-        const p = (t * 1.5 + i * 0.37) % 1;
-        const dy = -p * S.reveal * spanPx;
-        ctx2.fillStyle = A((1 - S.reveal) * (0.7 - p * 0.4));
-        ctx2.fillRect(dx, dy, artW * 0.0015 + 1, artH * 0.004 + 2);
+        const dx = Math.sin(i * 2.13) * scale * 1.0;
+        const p2 = (t * 1.5 + i * 0.37) % 1;
+        const dy = -p2 * S.reveal * scale * 3.4;
+        ctx2.fillStyle = A((1 - S.reveal) * (0.7 - p2 * 0.4));
+        ctx2.fillRect(dx, dy, 2, 4);
       }
     }
+
+    /* the live face, riding the (blending) painted face position */
+    const fCur = poseFace(cur && cur.art ? cur : POSES.conjure, scale);
+    const fPrev = prev && prev.art && poseBlend < 1 ? poseFace(prev, scale) : fCur;
+    const bl = poseBlend < 1 ? poseBlend : 1;
+    const fx = fPrev.x + (fCur.x - fPrev.x) * bl;
+    const fy = fPrev.y + (fCur.y - fPrev.y) * bl;
+    const fs = fPrev.s + (fCur.s - fPrev.s) * bl;
+    const frot = fPrev.rot + (fCur.rot - fPrev.rot) * bl;
+    const mouthOn = bl > 0.5 ? fCur.mouth : fPrev.mouth;
+    ctx2.save();
+    ctx2.translate(fx, fy - E.drop * fs * 0.45);
+    ctx2.rotate(frot + E.tilt + Math.sin(t * 0.8) * 0.012);
+    drawFaceFeatures(ctx2, fs, {
+      E, A, pulse,
+      lid: Math.max(0.08, E.lid * S.blink - S.thinkBeat * 0.05),
+      eyeHappy: Math.max(0, Math.min(1, E.eyeHappy)),
+      wink, lookX: S.lookX, lookY: S.lookY, t,
+      mouth: mouthOn,
+    });
+    ctx2.restore();
+
     ctx2.restore();
     ctx2.globalCompositeOperation = "source-over";
   };
@@ -724,7 +783,14 @@ export function createPhantomCharacter({ small = false } = {}) {
 
   const draw = (ctx2, o) => {
     const S = tick(o);
-    if (art) drawSprite(ctx2, o, S);
+    let want = S.poseName;
+    if (!POSES[want] || !POSES[want].art) want = "conjure";
+    if (want !== curPose && poseBlend >= 1 && POSES[want].art) {
+      prevPose = curPose; curPose = want; poseBlend = 0;
+      ringBoost = Math.min(1.4, ringBoost + 0.6);
+    }
+    if (poseBlend < 1) poseBlend = Math.min(1, poseBlend + S.dt / 0.45);
+    if (POSES[curPose].art || POSES.conjure.art) drawSprite(ctx2, o, S);
     else drawProcedural(ctx2, o, S);
   };
 
