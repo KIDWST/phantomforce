@@ -7,7 +7,7 @@ import {
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-9";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-10";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
