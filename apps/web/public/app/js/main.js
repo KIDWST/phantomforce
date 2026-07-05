@@ -316,7 +316,7 @@ function setMode(id) {
   activeMode = id;
   renderChips();
   renderModePose(id);
-  if (m.open) { openWorkspace(m.open); return; }
+  if (m.open) { routeWorkspace(m.open); return; }
   const input = $("[data-command-input]");
   input.placeholder = m.placeholder;
   input.focus();
@@ -542,10 +542,10 @@ function paletteSources(query) {
     if (NAV.some((n) => n.ws === id)) continue;
     items.push({ group: "Go to", label: def.title, icon: "grid", sub: def.kicker, run: () => openWorkspace(id) });
   }
-  QUICK.forEach((a) => items.push({ group: "Do", label: a.label, icon: a.icon, sub: a.run ? "Run command" : "Open", run: () => (a.run ? runCommand(a.run) : openWorkspace(a.open)) }));
+  QUICK.forEach((a) => items.push({ group: "Do", label: a.label, icon: a.icon, sub: a.run ? "Run command" : "Open", run: () => (a.run ? runCommand(a.run) : routeWorkspace(a.open)) }));
   commandSuggestions().forEach((s) => items.push({ group: "Ask", label: s, icon: "chat", sub: "Run", run: () => runCommand(s) }));
   if (q.length >= 2) {
-    const add = (label, sub, open, icon) => items.push({ group: "Records", label, icon, sub, run: () => openWorkspace(open) });
+    const add = (label, sub, open, icon) => items.push({ group: "Records", label, icon, sub, run: () => routeWorkspace(open) });
     visible(store.state.leads).filter((l) => (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((l) => add(l.name, `Lead · ${l.company || l.status}`, "leads", "users"));
     visible(store.state.proposals).filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
@@ -723,6 +723,7 @@ function speechHoldMs(text = "") {
 function speak(text, cls = "", emotionOverride = null) {
   clearTimeout(typeTimer);
   const box = sayBox();
+  if (!box) return;
   box.hidden = false;
   const p = document.createElement("p");
   p.className = `say-line ${cls}`.trim();
@@ -761,13 +762,13 @@ function runCommand(raw) {
   speak(raw, "user");
   ghostFlare("listening");
   const respBox = $("[data-response]");
-  respBox.innerHTML = "";
+  if (respBox) respBox.innerHTML = "";
   setTimeout(() => {
     speak("· · ·", "thinking");
     setTimeout(() => {
       const r = handleCommand(text);
       speak(r.say);
-      respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
+      if (respBox) respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
       renderConsole();
       if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
     }, reduceMotion ? 120 : 620);
@@ -839,7 +840,7 @@ const mediaOpts = () => ({
   esc,
   isAdmin: isAdmin(),
   notify: (who, text) => { pushActivity(who, text); store.save(); },
-  openSettings: () => openWorkspace("settings"),
+  openSettings: () => routeWorkspace("settings"),
   renderBriefs: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
 const CUSTOM = {
@@ -848,12 +849,83 @@ const CUSTOM = {
 };
 
 let openId = null;
-function openWorkspace(id, pushHash = true) {
-  const def = CUSTOM[id] || WORKSPACE_DEFS[id];
+function workspaceDef(id) {
+  const key = workspaceId(id);
+  return CUSTOM[key] || WORKSPACE_DEFS[key] || null;
+}
+function navForWorkspace(id) {
+  const key = workspaceId(id);
+  return NAV.find((n) => n.id === activeNav && n.ws === key && (!n.adminOnly || isAdmin()))
+    || NAV.find((n) => n.ws === key && (!n.adminOnly || isAdmin()))
+    || null;
+}
+function clearOverlayOnly() {
+  openId = null;
+  overlayRoot.innerHTML = "";
+  document.body.classList.remove("overlay-open");
+}
+function renderDashboardPage(pushHash = true) {
+  activePageId = null;
+  activeNav = "dashboard";
+  clearOverlayOnly();
+  ensureDashboardShell();
+  renderConsole();
+  if (pushHash && location.hash) {
+    try { history.pushState(null, "", location.pathname + location.search); } catch {}
+  }
+}
+function renderWorkspacePage(id, pushHash = true) {
+  const key = workspaceId(id);
+  const def = workspaceDef(key);
   if (!def) return;
   if (def.adminOnly && !isAdmin()) return;
-  closeOverlay(false);
-  openId = id;
+  const root = $("[data-console]");
+  if (!root) return;
+  const navHit = navForWorkspace(key);
+  if (navHit) activeNav = navHit.id;
+  activePageId = key;
+  clearOverlayOnly();
+  root.className = `console console-workspace ${def.wide ? "console-workspace-wide" : ""}`.trim();
+  root.dataset.consoleView = "workspace";
+  root.dataset.pageWs = key;
+  root.innerHTML = `
+    <section class="workspace-page ${def.wide ? "workspace-page-wide" : ""}" data-workspace-page="${esc(key)}">
+      <header class="workspace-page-head">
+        <div>
+          <p class="workspace-page-kicker">${esc(def.kicker)}${!def.custom && isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
+          <h1>${esc(def.title)}</h1>
+        </div>
+      </header>
+      <div class="workspace-page-body" data-workspace-page-body></div>
+    </section>`;
+  renderNav();
+  renderStatusPills();
+  renderPlanMeta();
+  renderUser();
+  renderNotifs();
+  const body = $("[data-workspace-page-body]", root);
+  const rerender = () => {
+    if (def.custom) def.render(body);
+    else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
+  };
+  rerender();
+  if (pushHash && location.hash !== `#page/${key}`) {
+    try { history.pushState(null, "", `#page/${key}`); } catch {}
+  }
+}
+function routeWorkspace(id, pushHash = true) {
+  const key = workspaceId(id);
+  if (key === "dashboard") { renderDashboardPage(pushHash); return; }
+  if (navForWorkspace(key)) renderWorkspacePage(key, pushHash);
+  else openWorkspace(key, pushHash);
+}
+function openWorkspace(id, pushHash = true) {
+  const key = workspaceId(id);
+  const def = workspaceDef(key);
+  if (!def) return;
+  if (def.adminOnly && !isAdmin()) return;
+  clearOverlayOnly();
+  openId = key;
   document.body.classList.add("overlay-open");
   overlayRoot.innerHTML = `
     <div class="overlay ${def.wide ? "overlay-wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(def.title)}">
@@ -872,12 +944,12 @@ function openWorkspace(id, pushHash = true) {
   const body = $("[data-overlay-body]", overlayRoot);
   const rerender = () => {
     if (def.custom) def.render(body);
-    else { def.render(body, rerender); if (id === "phantom") wirePhantomConsole(body); }
+    else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
   };
   rerender();
   overlayRoot.querySelectorAll("[data-overlay-close]").forEach((b) => b.addEventListener("click", () => closeOverlay(true)));
-  if (pushHash && location.hash !== `#ws/${id}`) {
-    try { history.pushState(null, "", `#ws/${id}`); } catch {}
+  if (pushHash && location.hash !== `#ws/${key}`) {
+    try { history.pushState(null, "", `#ws/${key}`); } catch {}
   }
 }
 function closeOverlay(clearHash) {
@@ -886,21 +958,33 @@ function closeOverlay(clearHash) {
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
   if (clearHash && location.hash.startsWith("#ws/")) {
-    try { history.pushState(null, "", location.pathname + location.search); } catch {}
+    try { history.pushState(null, "", activePageId ? `#page/${activePageId}` : location.pathname + location.search); } catch {}
   }
   syncNavToView();
-  renderConsole();
+  if (activePageId) renderWorkspacePage(activePageId, false);
+  else renderConsole();
 }
 function syncNavToView() {
-  if (!openId) { activeNav = "dashboard"; renderNav(); return; }
+  if (!openId) {
+    if (activePageId) {
+      const hit = navForWorkspace(activePageId);
+      if (hit) activeNav = hit.id;
+    } else {
+      activeNav = "dashboard";
+    }
+    renderNav();
+    return;
+  }
   const hit = NAV.find((n) => n.ws === openId);
   if (hit) { activeNav = hit.id; renderNav(); }
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });
 window.addEventListener("popstate", () => {
-  const m = location.hash.match(/^#ws\/([a-z]+)/);
-  if (m && (CUSTOM[m[1]] || WORKSPACE_DEFS[m[1]])) openWorkspace(m[1], false);
-  else closeOverlay(false);
+  const page = location.hash.match(/^#page\/([a-z-]+)/);
+  const ws = location.hash.match(/^#ws\/([a-z-]+)/);
+  if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
+  else if (ws && workspaceDef(ws[1])) routeWorkspace(ws[1], false);
+  else renderDashboardPage(false);
 });
 
 /* ============================ phantom console (chat overlay) ============================ */
@@ -1014,14 +1098,16 @@ function enterPhantom() {
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
-  if (view && view !== "command" && (CUSTOM[view] || WORKSPACE_DEFS[view])) openWorkspace(view);
-  const m = location.hash.match(/^#ws\/([a-z]+)/);
-  if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
+  const page = location.hash.match(/^#page\/([a-z-]+)/);
+  const m = location.hash.match(/^#ws\/([a-z-]+)/);
+  if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
+  else if (m && workspaceDef(m[1])) routeWorkspace(m[1], false);
+  else if (view && view !== "command" && workspaceDef(view)) routeWorkspace(view, false);
   // a data-driven spoken briefing once the reveal settles
   setTimeout(() => {
     phantomBootSettled = true;
     setGhostMood("idle", { emotion: "happy" });
-    if (!openId) speak(briefingText(), "", "bright");
+    if (!openId && !activePageId) speak(briefingText(), "", "bright");
   }, 1400);
 }
 
@@ -1030,6 +1116,7 @@ async function boot() {
   wireDeck();
   store.onChange(() => {
     if (!phantom.hidden) {
+      if (activePageId) { renderConsole(); return; }
       renderNav(); renderStatusPills(); renderNotifs(); renderInsights();
       renderStatCards(); renderActivity(); renderPlan(); renderQueue();
     }
