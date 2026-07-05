@@ -8,6 +8,7 @@ import {
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
 import { renderFlowMap } from "./flowmap.js";
+import { createPhantomCharacter } from "./character.js";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -362,44 +363,14 @@ function ghostFlare(mood = "bright") {
   setGhostMood(mood, { emotion: mood === "listening" ? "calm" : mood, ms: 1200 });
 }
 function initGhost() {
-  /* The Sentinel Core — a serious cyber entity, same living-particle language:
-     holographic fibonacci-sphere shell, counter-rotating diamond heart, two
-     gyro rings, a vertical scan sweep, digital rain beneath, angular visor
-     eyes. Moods and emotions drive spin, beat, color, and expression. */
+  /* the Phantom character: canvas + mood plumbing live here; the character
+     itself (body, wisps, face acting) lives in character.js */
   const canvas = $("[data-ghost]");
   if (!canvas || reduceMotion) return;
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   const small = window.matchMedia("(max-width: 720px)").matches;
-  const GA = 2.399963229728653;
-  const CY = 0.5; /* core center height in unit space */
-
-  /* shell: hologram sphere */
-  const NS = small ? 620 : 1050;
-  const shell = [];
-  for (let k = 0; k < NS; k++) {
-    const y = 1 - (2 * k) / (NS - 1);
-    const r = Math.sqrt(Math.max(0, 1 - y * y));
-    const a = k * GA;
-    shell.push({ x: Math.cos(a) * r, y, z: Math.sin(a) * r });
-  }
-
-  /* heart: particles on an octahedron (diamond) surface */
-  const NC = small ? 130 : 210;
-  const OCT = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-  const FACES = [[0, 2, 4], [2, 1, 4], [1, 3, 4], [3, 0, 4], [2, 0, 5], [1, 2, 5], [3, 1, 5], [0, 3, 5]];
-  const core = [];
-  for (let k = 0; k < NC; k++) {
-    const [ai, bi, ci] = FACES[k % 8];
-    let u = ((k * 137) % 97) / 97, v = ((k * 71) % 89) / 89;
-    if (u + v > 1) { u = 1 - u; v = 1 - v; }
-    const w3 = 1 - u - v;
-    core.push({
-      x: OCT[ai][0] * u + OCT[bi][0] * v + OCT[ci][0] * w3,
-      y: OCT[ai][1] * u + OCT[bi][1] * v + OCT[ci][1] * w3,
-      z: OCT[ai][2] * u + OCT[bi][2] * v + OCT[ci][2] * w3,
-    });
-  }
+  const character = createPhantomCharacter({ small });
 
   let w = 0, h = 0, dpr = 1;
   const resize = () => {
@@ -410,220 +381,35 @@ function initGhost() {
   };
   resize();
   window.addEventListener("resize", resize, { passive: true });
-  let px = 0, cpx = 0;
-  window.addEventListener("pointermove", (e) => { px = e.clientX / innerWidth - 0.5; }, { passive: true });
+  let px = 0, py = 0, cpx = 0, cpy = 0;
+  window.addEventListener("pointermove", (e) => {
+    px = e.clientX / innerWidth - 0.5;
+    py = e.clientY / innerHeight - 0.5;
+  }, { passive: true });
+
   const t0 = performance.now();
-  const accents = {
-    calm: [65, 255, 161],
-    happy: [132, 255, 207],
-    bright: [30, 240, 255],
-    alert: [255, 92, 116],
-  };
+  let last = t0;
   const frame = (now) => {
     if (document.hidden) { requestAnimationFrame(frame); return; }
     const t = (now - t0) * 0.001;
-    if (ghostMoodUntil && now > ghostMoodUntil) {
-      ghostMood = "idle";
-      ghostMoodUntil = 0;
-    }
+    const dt = Math.min(0.05, (now - last) * 0.001); last = now;
+    if (ghostMoodUntil && now > ghostMoodUntil) { ghostMood = "idle"; ghostMoodUntil = 0; }
     ghostPulse = Math.max(0, ghostPulse - 0.02);
-    cpx += (px - cpx) * 0.05;
+    cpx += (px - cpx) * 0.08; cpy += (py - cpy) * 0.08;
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx2.clearRect(0, 0, w, h);
-    const cx = w / 2, cy = h * 0.56;
-    const scale = Math.min(w, h) * 0.30;
-    const spinRate = ghostMood === "thinking" ? 0.9 : ghostMood === "talking" ? 0.55 : 0.3;
-    const rot = t * spinRate + cpx * 0.9;
-    const cosR = Math.cos(rot), sinR = Math.sin(rot);
-    const rotC = -t * (spinRate * 2.4);
-    const cosC = Math.cos(rotC), sinC = Math.sin(rotC);
-    const talkBeat = ghostMood === "talking" ? Math.abs(Math.sin(t * 9.5)) : 0;
-    const thinkBeat = ghostMood === "thinking" ? Math.abs(Math.sin(t * 5.2)) : 0;
-    const breath = 1 + Math.sin(t * 0.9) * 0.022 + ghostPulse * 0.1 + talkBeat * 0.02;
-    const floatY = Math.sin(t * 1.1) * 4 + Math.sin(t * 3.2) * (ghostMood === "talking" ? 2.2 : 0.7);
-    const accent = accents[ghostEmotion] || accents.calm;
-    const accentCss = (alpha) => `rgba(${accent[0]},${accent[1]},${accent[2]},${alpha})`;
-    const worldY = (uy) => cy - uy * scale * breath + floatY;
-
-    /* scan sweep: a latitude line descending the shell */
-    const scanCycle = (t * 0.5) % 1.35;
-    const scanY = 1 - scanCycle * 1.7;
-
-    /* glitch: a horizontal slice shudders every few seconds */
-    const gCyc = t % 3.8;
-    const glitching = gCyc < 0.16;
-    const gBand = -0.1 + ((Math.floor(t / 3.8) * 0.61) % 1.1);
-    const glitchX = (uy) =>
-      glitching && uy > gBand && uy < gBand + 0.3
-        ? Math.sin(t * 93 + uy * 20) * 0.05 * scale
-        : 0;
-
-    ctx2.globalCompositeOperation = "lighter";
-
-    /* landing halo: expanding rings under the entity */
-    ctx2.save();
-    ctx2.translate(cx, cy + scale * 1.28 + floatY * 0.35);
-    ctx2.rotate(rot * 0.1);
-    for (let ring = 0; ring < 3; ring++) {
-      const p = (t * 0.38 + ring / 3) % 1;
-      ctx2.strokeStyle = accentCss((0.22 - p * 0.16) * (ghostMood === "thinking" ? 1.3 : 0.8));
-      ctx2.lineWidth = 1;
-      ctx2.beginPath();
-      ctx2.ellipse(0, 0, scale * (0.7 + p * 0.5), scale * (0.12 + p * 0.08), 0, 0, Math.PI * 2);
-      ctx2.stroke();
-    }
-    ctx2.restore();
-
-    /* digital rain: data columns falling from the core */
-    const rainSpeed = 1 + talkBeat * 0.6 + (ghostEmotion === "alert" ? 0.5 : 0);
-    for (let i = 0; i < 12; i++) {
-      const bx = (-0.85 + (i / 11) * 1.7 + Math.sin(i * 7.3) * 0.05) * scale;
-      const sp = (0.45 + ((i * 13) % 5) * 0.1) * rainSpeed;
-      const ph = (t * sp + i * 0.73) % 1;
-      const hy = -0.45 - ph * 1.0;
-      for (let j = 0; j < 3; j++) {
-        const a = (0.5 - j * 0.15) * (1 - ph * 0.55);
-        if (a <= 0.02) continue;
-        ctx2.fillStyle = accentCss(a);
-        ctx2.fillRect(cx + bx, worldY(hy + j * 0.09), 1.4, 4);
-      }
-    }
-
-    /* gyro rings: two tilted counter-spinning orbits */
-    const drawRing = (r, tiltX, tiltZ, phase, alpha) => {
-      const ct = Math.cos(tiltX), st = Math.sin(tiltX);
-      const cz = Math.cos(tiltZ), sz = Math.sin(tiltZ);
-      for (let k = 0; k < 84; k++) {
-        const a = (k / 84) * Math.PI * 2 + phase;
-        const x0 = Math.cos(a) * r, z0 = Math.sin(a) * r;
-        const y1 = -z0 * st, z1 = z0 * ct;
-        const x2 = x0 * cz - y1 * sz, y2 = x0 * sz + y1 * cz;
-        const depth = (z1 / r + 1) / 2;
-        ctx2.fillStyle = accentCss(alpha * (0.25 + depth * 0.75));
-        const szp = 0.7 + depth * 1.1;
-        ctx2.fillRect(cx + x2 * scale * breath + glitchX(CY + y2), worldY(CY + y2), szp, szp);
-      }
-    };
-    drawRing(1.32, 1.08, 0.16, t * 0.8, 0.5 + ghostPulse * 0.3);
-    drawRing(1.52, -0.62, -0.34, -t * 0.6, 0.34 + ghostPulse * 0.3);
-
-    /* hologram shell */
-    const greenMix = ghostEmotion === "alert" ? 0.55 : 1;
-    const mr = Math.round(65 * greenMix + accent[0] * (1 - greenMix));
-    const mg = Math.round(255 * greenMix + accent[1] * (1 - greenMix));
-    const mb = Math.round(161 * greenMix + accent[2] * (1 - greenMix));
-    for (const p of shell) {
-      const wob = Math.sin(p.x * 3 + t * 1.4) * Math.cos(p.y * 3 - t) * 0.03;
-      const rx = (p.x * cosR + p.z * sinR) * (1 + wob);
-      const rz = -p.x * sinR + p.z * cosR;
-      const uy = CY + p.y * (1 + wob);
-      const X = cx + rx * scale * breath + glitchX(uy);
-      const Y = worldY(uy);
-      const depth = (rz + 1) / 2;
-      const scanHit = Math.max(0, 1 - Math.abs(p.y - scanY) * 8);
-      const a = 0.12 + depth * 0.5 + ghostPulse * 0.3 + scanHit * 0.35;
-      ctx2.fillStyle = `rgba(${mr},${mg},${mb},${Math.min(0.95, a)})`;
-      const sz = 0.8 + depth * 1.2 + talkBeat * 0.3 + scanHit * 0.9;
-      ctx2.fillRect(X, Y, sz, sz);
-    }
-
-    /* scan line itself: a holo latitude ring */
-    if (scanY > -1 && scanY < 1) {
-      const rr = Math.sqrt(Math.max(0, 1 - scanY * scanY));
-      ctx2.strokeStyle = accentCss(0.5 * (1 - scanCycle * 0.5) + ghostPulse * 0.2);
-      ctx2.lineWidth = 1;
-      ctx2.beginPath();
-      ctx2.ellipse(cx, worldY(CY + scanY), rr * scale * breath, rr * scale * 0.24, 0, 0, Math.PI * 2);
-      ctx2.stroke();
-    }
-
-    /* diamond heart: bright counter-rotating core */
-    const heartR = 0.4 * (1 + thinkBeat * 0.12 + ghostPulse * 0.15);
-    for (const p of core) {
-      const rx = p.x * cosC + p.z * sinC;
-      const rz = -p.x * sinC + p.z * cosC;
-      const depth = (rz + 1) / 2;
-      const X = cx + rx * heartR * scale * breath;
-      const Y = worldY(CY + p.y * heartR);
-      ctx2.fillStyle = `rgba(${180 + accent[0] * 0.2},255,${210},${0.25 + depth * 0.6 + ghostPulse * 0.2})`;
-      const sz = 0.9 + depth * 1.3;
-      ctx2.fillRect(X, Y, sz, sz);
-    }
-    const heartGlow = ctx2.createRadialGradient(cx, worldY(CY), 0, cx, worldY(CY), scale * 0.36);
-    heartGlow.addColorStop(0, accentCss(0.26 + thinkBeat * 0.22 + ghostPulse * 0.3));
-    heartGlow.addColorStop(1, accentCss(0));
-    ctx2.fillStyle = heartGlow;
-    ctx2.beginPath();
-    ctx2.arc(cx, worldY(CY), scale * 0.36, 0, Math.PI * 2);
-    ctx2.fill();
-
-    /* the visor: one glowing scan bar; a bright glint patrols it */
-    const blink = (Math.sin(t * 0.9) > 0.995) ? 0.15 : 1;
-    const squint =
-      ghostMood === "thinking" ? 0.6 :
-      ghostEmotion === "alert" ? 0.65 :
-      1;
-    const visorY = worldY(CY + 0.4);
-    const vx = cx + (Math.sin(rot * 0.5) * 0.06 + cpx * 0.12) * scale;
-    const vw = scale * 0.42;
-    const vh = scale * 0.032 * blink * squint;
-    const vg = ctx2.createLinearGradient(vx - vw, 0, vx + vw, 0);
-    vg.addColorStop(0, accentCss(0));
-    vg.addColorStop(0.12, accentCss(0.42));
-    vg.addColorStop(0.88, accentCss(0.42));
-    vg.addColorStop(1, accentCss(0));
-    ctx2.fillStyle = vg;
-    ctx2.shadowColor = accentCss(0.8);
-    ctx2.shadowBlur = 10 + ghostPulse * 10;
-    ctx2.fillRect(vx - vw, visorY - vh, vw * 2, vh * 2);
-    const glintSpeed = ghostMood === "thinking" ? 3.4 : ghostMood === "talking" ? 2.2 : 1.4;
-    const gx = vx + Math.sin(t * glintSpeed) * vw * 0.62;
-    const gw = vw * 0.2;
-    const gg = ctx2.createLinearGradient(gx - gw, 0, gx + gw, 0);
-    gg.addColorStop(0, "rgba(240,255,250,0)");
-    gg.addColorStop(0.5, `rgba(240,255,250,${0.92 + ghostPulse * 0.08})`);
-    gg.addColorStop(1, "rgba(240,255,250,0)");
-    ctx2.fillStyle = gg;
-    ctx2.fillRect(gx - gw, visorY - vh * 1.4, gw * 2, vh * 2.8);
-    ctx2.shadowBlur = 0;
-
-    /* status mouth: waveform when talking, dots when thinking, glyph otherwise */
-    const faceY = worldY(CY + 0.05);
-    ctx2.strokeStyle = accentCss(0.72);
-    ctx2.lineWidth = Math.max(1, scale * 0.012);
-    ctx2.shadowColor = accentCss(0.8);
-    ctx2.shadowBlur = 9 + ghostPulse * 10;
-    ctx2.beginPath();
-    if (ghostMood === "talking") {
-      const width = scale * 0.44;
-      const amp = scale * (0.025 + talkBeat * 0.045);
-      for (let i = 0; i <= 18; i++) {
-        const x = cx - width / 2 + (width * i) / 18;
-        const y = faceY + Math.sin(i * 0.9 + t * 11) * amp;
-        if (i === 0) ctx2.moveTo(x, y);
-        else ctx2.lineTo(x, y);
-      }
-    } else if (ghostMood === "thinking") {
-      for (let i = 0; i < 3; i++) {
-        const x = cx + (i - 1) * scale * 0.13;
-        const y = faceY + Math.sin(t * 5 + i) * scale * 0.018;
-        ctx2.moveTo(x + scale * 0.025, y);
-        ctx2.arc(x, y, scale * (0.02 + thinkBeat * 0.006), 0, Math.PI * 2);
-      }
-    } else if (ghostEmotion === "alert") {
-      ctx2.moveTo(cx - scale * 0.22, faceY);
-      ctx2.lineTo(cx - scale * 0.08, faceY + scale * 0.035);
-      ctx2.lineTo(cx + scale * 0.08, faceY - scale * 0.035);
-      ctx2.lineTo(cx + scale * 0.22, faceY);
-    } else if (ghostEmotion === "happy" || ghostMood === "happy") {
-      ctx2.arc(cx, faceY - scale * 0.03, scale * 0.24, 0.2 * Math.PI, 0.8 * Math.PI);
-    } else {
-      ctx2.moveTo(cx - scale * 0.16, faceY);
-      ctx2.lineTo(cx + scale * 0.16, faceY);
-    }
-    ctx2.stroke();
-    ctx2.shadowBlur = 0;
-    ctx2.globalCompositeOperation = "source-over";
+    const mood =
+      ghostMood === "talking" || ghostMood === "thinking" || ghostMood === "listening" ? ghostMood :
+      ghostEmotion === "alert" ? "menace" :
+      ghostEmotion === "happy" || ghostMood === "happy" ? "happy" : "idle";
+    character.draw(ctx2, {
+      t, dt,
+      cx: w / 2, cy: h * 0.52,
+      scale: Math.min(w, h) * 0.27,
+      mood, emotion: ghostEmotion,
+      pulse: ghostPulse,
+      px: cpx, py: cpy,
+    });
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

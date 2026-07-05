@@ -5,6 +5,14 @@ const smallScreen = window.matchMedia("(max-width: 720px)").matches;
 const lerp = (a, b, t) => a + (b - a) * t;
 const pulse = { v: 0 };
 const flare = () => { pulse.v = 1; };
+let createPhantomCharacter;                     // loaded from ./app/js/character.js
+const TAU_STAR = Math.PI * 2;
+/* the character's conversational mood — speak() drives it, initEntity reads it */
+const charState = { mood: "idle", emotion: "calm", until: 0 };
+const setCharMood = (mood, emotion, ms) => {
+  charState.mood = mood; charState.emotion = emotion;
+  charState.until = ms ? performance.now() + ms : 0;
+};
 
 /* Live brain: the public ai-proxy (server-side key only; per-visitor daily cap
    + burst throttle enforced there; read-only — it can only talk). Localhost
@@ -119,6 +127,9 @@ function initConversation() {
       };
       tick();
     }
+    if (cls === "user") setCharMood("listening", "calm", 1600);
+    else if (cls === "thinking") setCharMood("thinking", "bright", 5000);
+    else setCharMood("talking", "calm", Math.max(1600, text.length * 42));
     if (cls !== "user") flare();
   };
   const showDownload = () => { if (downloadCta) downloadCta.hidden = false; };
@@ -287,248 +298,98 @@ function initConversation() {
   }, 650);
 }
 
-/* ---------------- the sentinel core (WebGL 3D entity) ---------------- */
+/* ---------------- the phantom (animated character, 2D canvas) ---------------- */
 async function initEntity() {
   if (reduceMotion) return;
   const canvas = document.querySelector("[data-void]");
   if (!canvas) return;
-  try { const p = document.createElement("canvas"); if (!(p.getContext("webgl2") || p.getContext("webgl"))) return; } catch { return; }
-  let THREE;
-  try { THREE = await import("https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js"); } catch { return; }
-  try {
-    const renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true, powerPreference: "high-performance" });
-    renderer.setClearColor(0x000000, 0);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, smallScreen ? 1.5 : 1.75));
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(55, 1, 0.1, 100);
-    camera.position.set(0, 0, 7);
+  const ctx2 = canvas.getContext("2d");
+  if (!ctx2) return;
+  let character;
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js")); character = createPhantomCharacter({ small: smallScreen }); }
+  catch { return; }
 
-    const entity = new THREE.Group(); scene.add(entity);   // the whole sentinel: tilts, floats, reacts
+  let w = 0, h = 0, dpr = 1;
+  const resize = () => {
+    dpr = Math.min(window.devicePixelRatio || 1, smallScreen ? 1.75 : 2);
+    w = innerWidth; h = innerHeight;
+    canvas.width = w * dpr; canvas.height = h * dpr;
+  };
+  resize();
+  window.addEventListener("resize", resize, { passive: true });
 
-    // ===== Sentinel Core: a holographic shell sphere of light. Serious,
-    //       watchful cyber-tech — same particle language, no cartoon ghost. =====
-    const GA = 2.399963229728653;
-    const SR = 1.12, CY = 0.35;                        // shell radius, core center height
-    const N = smallScreen ? 1800 : 3200;
-    const base = new Float32Array(N * 3), pos = new Float32Array(N * 3);
-    for (let k = 0; k < N; k++) {
-      const y = 1 - (2 * k) / (N - 1);
-      const r = Math.sqrt(Math.max(0, 1 - y * y));
-      const a = k * GA;
-      const x = Math.cos(a) * r * SR, z = Math.sin(a) * r * SR, yy = CY + y * SR;
-      base[k * 3] = x; base[k * 3 + 1] = yy; base[k * 3 + 2] = z;
-      pos[k * 3] = x; pos[k * 3 + 1] = yy; pos[k * 3 + 2] = z;
+  // starfield backdrop (was three.js; now plain 2D)
+  const stars = [];
+  for (let k = 0; k < 110; k++) {
+    stars.push({ x: ((k * 379) % 991) / 991, y: ((k * 613) % 997) / 997, tw: ((k * 131) % 89) / 89 * TAU_STAR, r: 0.6 + ((k * 47) % 31) / 31 });
+  }
+
+  // the phantom lives in the layout's reserved zone (.phantom-zone)
+  const zone = document.querySelector("[data-phantom-zone]");
+  const CHAR_H = 3.5;                                  // unit height, hood tip to tendrils
+  let tx = w / 2, ty = h * 0.3, ts = 90;
+  const measureZone = () => {
+    if (!zone) return;
+    const r = zone.getBoundingClientRect();
+    if (r.height < 60) return;
+    tx = r.left + r.width / 2;
+    ty = r.top + r.height * 0.52;
+    ts = Math.max(40, Math.min(150, (r.height * 0.95) / CHAR_H));
+  };
+  measureZone();
+  let gx = tx, gy = ty + 90, gs = ts * 0.85;           // wakes low + small, drifts into place
+  window.addEventListener("resize", measureZone, { passive: true });
+  if (window.ResizeObserver && zone) new ResizeObserver(measureZone).observe(zone);
+
+  // gestures: eyes follow the cursor; movement perks it up; a click provokes
+  // a flash of MENACE — then it settles back to the smirk
+  let px = 0, py = 0, cpx = 0, cpy = 0, happy = 0, menace = 0;
+  window.addEventListener("pointermove", (e) => {
+    px = e.clientX / innerWidth - 0.5; py = e.clientY / innerHeight - 0.5;
+    if (menace <= 0) happy = 1.2;
+  }, { passive: true });
+  canvas.addEventListener("pointerdown", () => { if (menace <= 0) { menace = 1.1; flare(); } });
+
+  const t0 = performance.now();
+  let last = t0, running = true;
+  document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
+  const frame = (now) => {
+    if (!running) return;
+    const t = ((now || performance.now()) - t0) * 0.001;
+    const dt = Math.min(0.05, (now - last) * 0.001); last = now;
+    pulse.v = Math.max(0, pulse.v - 0.02);
+    happy = Math.max(0, happy - dt * 1.1);
+    menace = Math.max(0, menace - dt);
+    cpx += (px - cpx) * 0.07; cpy += (py - cpy) * 0.07;
+    gx += (tx - gx) * 0.06; gy += (ty - gy) * 0.05; gs += (ts - gs) * 0.08;
+
+    ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx2.clearRect(0, 0, w, h);
+
+    // drifting, twinkling stars
+    for (const s of stars) {
+      const a = 0.12 + 0.3 * Math.abs(Math.sin(t * 0.6 + s.tw));
+      ctx2.fillStyle = `rgba(30,240,255,${a})`;
+      const sx = (s.x + t * 0.004) % 1;
+      ctx2.fillRect(sx * w, s.y * h, s.r, s.r);
     }
-    const geo = new THREE.BufferGeometry(); geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
-    const posAttr = geo.attributes.position;
-    const bodyMat = new THREE.PointsMaterial({ color: new THREE.Color(0x33ffa0), size: 0.022, sizeAttenuation: true, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
-    entity.add(new THREE.Points(geo, bodyMat));
-    const glowMat = new THREE.PointsMaterial({ color: new THREE.Color(0x0d7d50), size: 0.14, sizeAttenuation: true, transparent: true, opacity: 0.07, blending: THREE.AdditiveBlending, depthWrite: false });
-    entity.add(new THREE.Points(geo, glowMat));        // soft volume glow (shares the geometry)
 
-    // ===== diamond heart: bright particles on an octahedron, counter-rotating =====
-    const OCT = [[1, 0, 0], [-1, 0, 0], [0, 1, 0], [0, -1, 0], [0, 0, 1], [0, 0, -1]];
-    const FACES = [[0, 2, 4], [2, 1, 4], [1, 3, 4], [3, 0, 4], [2, 0, 5], [1, 2, 5], [3, 1, 5], [0, 3, 5]];
-    const NH = smallScreen ? 260 : 420, HR = 0.42;
-    const hp = new Float32Array(NH * 3);
-    for (let k = 0; k < NH; k++) {
-      const [ai, bi, ci] = FACES[k % 8];
-      let u = ((k * 137) % 97) / 97, v = ((k * 71) % 89) / 89;
-      if (u + v > 1) { u = 1 - u; v = 1 - v; }
-      const w3 = 1 - u - v;
-      hp[k * 3] = (OCT[ai][0] * u + OCT[bi][0] * v + OCT[ci][0] * w3) * HR;
-      hp[k * 3 + 1] = (OCT[ai][1] * u + OCT[bi][1] * v + OCT[ci][1] * w3) * HR;
-      hp[k * 3 + 2] = (OCT[ai][2] * u + OCT[bi][2] * v + OCT[ci][2] * w3) * HR;
-    }
-    const hgeo = new THREE.BufferGeometry(); hgeo.setAttribute("position", new THREE.BufferAttribute(hp, 3));
-    const heartMat = new THREE.PointsMaterial({ color: new THREE.Color(0xbfffe0), size: 0.026, sizeAttenuation: true, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
-    const heartGlowMat = new THREE.PointsMaterial({ color: new THREE.Color(0x2effa6), size: 0.11, sizeAttenuation: true, transparent: true, opacity: 0.12, blending: THREE.AdditiveBlending, depthWrite: false });
-    const heart = new THREE.Group(); heart.position.y = CY;
-    heart.add(new THREE.Points(hgeo, heartMat), new THREE.Points(hgeo, heartGlowMat));
-    entity.add(heart);
+    // mood: the conversation drives it; a click overrides with menace
+    if (charState.until && performance.now() > charState.until) { charState.mood = "idle"; charState.emotion = "calm"; charState.until = 0; }
+    const mood = menace > 0 ? "menace" : charState.mood;
+    const emotion = menace > 0 ? "alert" : (happy > 0 && charState.mood === "idle" ? "bright" : charState.emotion);
 
-    // ===== gyro rings: two tilted counter-spinning particle orbits =====
-    const makeRing = (radius, count, hex, opacity) => {
-      const rp = new Float32Array(count * 3);
-      for (let k = 0; k < count; k++) {
-        const a = (k / count) * Math.PI * 2;
-        rp[k * 3] = Math.cos(a) * radius; rp[k * 3 + 1] = 0; rp[k * 3 + 2] = Math.sin(a) * radius;
-      }
-      const rg = new THREE.BufferGeometry(); rg.setAttribute("position", new THREE.BufferAttribute(rp, 3));
-      return new THREE.Points(rg, new THREE.PointsMaterial({ color: new THREE.Color(hex), size: 0.03, sizeAttenuation: true, transparent: true, opacity, blending: THREE.AdditiveBlending, depthWrite: false }));
-    };
-    const ringSpin1 = new THREE.Group(); ringSpin1.add(makeRing(1.55, 200, 0x33ffa0, 0.6));
-    const ringTilt1 = new THREE.Group(); ringTilt1.rotation.set(1.05, 0, 0.15); ringTilt1.position.y = CY; ringTilt1.add(ringSpin1);
-    const ringSpin2 = new THREE.Group(); ringSpin2.add(makeRing(1.78, 220, 0x1ef0ff, 0.4));
-    const ringTilt2 = new THREE.Group(); ringTilt2.rotation.set(-0.55, 0, -0.3); ringTilt2.position.y = CY; ringTilt2.add(ringSpin2);
-    entity.add(ringTilt1, ringTilt2);
-
-    // ===== scan ring: a thin latitude line sweeping the shell top to bottom =====
-    const onTop = (m) => { m.transparent = true; m.depthTest = false; return m; };
-    const scanMat = onTop(new THREE.MeshBasicMaterial({ color: 0x9fffd4, opacity: 0.55, blending: THREE.AdditiveBlending }));
-    const scan = new THREE.Mesh(new THREE.TorusGeometry(SR, 0.01, 8, 96), scanMat);
-    scan.rotation.x = Math.PI / 2; scan.renderOrder = 9;
-    entity.add(scan);
-
-    // ===== the visor: one glowing scan bar — a bright glint patrols it =====
-    const visor = new THREE.Group(); visor.position.set(0, CY + 0.36, 1.0); visor.renderOrder = 10;
-    const visorBaseMat = onTop(new THREE.MeshBasicMaterial({ color: 0x2effa6, opacity: 0.42, blending: THREE.AdditiveBlending }));
-    visor.add(new THREE.Mesh(new THREE.PlaneGeometry(0.84, 0.062), visorBaseMat));
-    const glintMat = onTop(new THREE.MeshBasicMaterial({ color: 0xeafff6, opacity: 0.95, blending: THREE.AdditiveBlending }));
-    const glint = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.08), glintMat); glint.position.z = 0.01;
-    visor.add(glint);
-    entity.add(visor);
-
-    // ===== data rain: code streams falling beneath the core =====
-    const RN = smallScreen ? 240 : 400;
-    const rp = new Float32Array(RN * 3), rs = new Float32Array(RN);
-    for (let k = 0; k < RN; k++) {
-      const a = ((k * 61) % 113) / 113 * Math.PI * 2;
-      const rr = 0.15 + ((k * 43) % 89) / 89 * 0.75;
-      rp[k * 3] = Math.cos(a) * rr;
-      rp[k * 3 + 1] = -0.5 - ((k * 29) % 97) / 97 * 1.7;
-      rp[k * 3 + 2] = Math.sin(a) * rr * 0.7;
-      rs[k] = 0.55 + ((k * 17) % 31) / 31 * 0.9;
-    }
-    const rgeo = new THREE.BufferGeometry(); rgeo.setAttribute("position", new THREE.BufferAttribute(rp, 3));
-    const rainAttr = rgeo.attributes.position;
-    const rainMat = new THREE.PointsMaterial({ color: new THREE.Color(0x2bdd8c), size: 0.03, sizeAttenuation: true, transparent: true, opacity: 0.62, blending: THREE.AdditiveBlending, depthWrite: false });
-    entity.add(new THREE.Points(rgeo, rainMat));
-
-    // starfield backdrop
-    const SF = 700, sf = new Float32Array(SF * 3);
-    for (let k = 0; k < SF; k++) { sf[k * 3] = (Math.random() - 0.5) * 34; sf[k * 3 + 1] = (Math.random() - 0.5) * 22; sf[k * 3 + 2] = (Math.random() - 0.5) * 20 - 6; }
-    const sgeo = new THREE.BufferGeometry(); sgeo.setAttribute("position", new THREE.BufferAttribute(sf, 3));
-    scene.add(new THREE.Points(sgeo, new THREE.PointsMaterial({ color: 0x1ef0ff, size: 0.03, transparent: true, opacity: 0.4 })));
-
-    const resize = () => { const w = innerWidth, h = innerHeight; renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); };
-    resize(); window.addEventListener("resize", resize, { passive: true });
-
-    // the sentinel lives in the layout's reserved zone (.phantom-zone), above the
-    // dialogue — measured in pixels, mapped to world units at the entity's depth
-    const zone = document.querySelector("[data-phantom-zone]");
-    const GHOST_H = 4.0;                                 // world-unit height, top ring to rain tail
-    let targetY = 0.9, targetS = smallScreen ? 0.75 : 1;
-    const measureZone = () => {
-      if (!zone || !innerHeight) return;
-      const r = zone.getBoundingClientRect();
-      if (r.height < 60) return;
-      const wpp = (2 * Math.tan((camera.fov * Math.PI) / 360) * camera.position.z) / innerHeight;
-      targetY = (innerHeight / 2 - (r.top + r.height * 0.52)) * wpp;
-      targetS = Math.min(1.15, Math.max(0.45, (r.height * 0.95 * wpp) / GHOST_H));
-    };
-    measureZone();
-    let gy = targetY - 0.8, gs = targetS * 0.9;          // wakes low + small, drifts into place
-    window.addEventListener("resize", measureZone, { passive: true });
-    if (window.ResizeObserver && zone) new ResizeObserver(measureZone).observe(zone);
-
-    // --- gestures: track cursor + focus on move + OVERLOAD on click ---
-    let px = 0, py = 0, cpx = 0, cpy = 0;
-    let happy = 0, surge = 0, blink = 3;
-    const SURGE_T = 0.9;   // overload duration (seconds): red glitch lockdown, then reform
-    window.addEventListener("pointermove", (e) => {
-      px = e.clientX / innerWidth - 0.5; py = e.clientY / innerHeight - 0.5;
-      if (surge <= 0) happy = 1.1;
-    }, { passive: true });
-    canvas.addEventListener("pointerdown", () => { if (surge <= 0) { surge = SURGE_T; flare(); } });
-
-    const t0 = performance.now();
-    let running = true;
-    document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
-    const frame = (now) => {
-      if (!running) return;
-      const t = ((now || performance.now()) - t0) * 0.001, dt = 0.016;
-      pulse.v = Math.max(0, pulse.v - 0.02);
-      happy = Math.max(0, happy - dt * 1.1);
-      surge = Math.max(0, surge - dt);
-      const surging = surge > 0, surgeN = surge / SURGE_T;
-      const breath = 1 + Math.sin(t * 0.9) * 0.022 + pulse.v * 0.12;
-
-      // shell: continuous slow spin + living shimmer; scatters during overload
-      const spin = t * 0.32, cosR = Math.cos(spin), sinR = Math.sin(spin);
-      const pa = posAttr.array;
-      for (let k = 0; k < N; k++) {
-        const j = k * 3;
-        const bx = base[j], by = base[j + 1], bz = base[j + 2];
-        const rx = bx * cosR + bz * sinR;
-        const rz = -bx * sinR + bz * cosR;
-        const n = Math.sin(rx * 3 + t * 1.3) * Math.cos(by * 3 - t) * 0.04;
-        const jag = surging ? Math.sin(k * 3.1 + t * 57) * 0.14 * surgeN : 0;
-        const s = (1 + n + jag) * breath;
-        pa[j] = rx * s; pa[j + 1] = CY + (by - CY) * s; pa[j + 2] = rz * s;
-      }
-      posAttr.needsUpdate = true;
-      bodyMat.color.setHex(surging ? 0xff2020 : 0x33ffa0);   // red under overload
-      bodyMat.opacity = 0.55 + pulse.v * 0.2;
-      glowMat.color.setHex(surging ? 0xb00d0d : 0x0d7d50);
-      glowMat.opacity = 0.07 + pulse.v * 0.12;
-      rainMat.color.setHex(surging ? 0xff4040 : 0x2bdd8c);
-
-      // heart: counter-rotate and beat
-      heart.rotation.y = -t * 1.1;
-      heart.rotation.x = Math.sin(t * 0.7) * 0.15;
-      const hs = 1 + Math.sin(t * 2.2) * 0.05 + pulse.v * 0.22 + (surging ? 0.18 * surgeN : 0);
-      heart.scale.setScalar(hs);
-      heartMat.color.setHex(surging ? 0xffb0b0 : 0xbfffe0);
-      heartGlowMat.opacity = 0.12 + pulse.v * 0.18 + (surging ? 0.14 : 0);
-
-      // gyro rings: opposite spins, quickening with the pulse
-      ringSpin1.rotation.y = t * (0.7 + pulse.v * 0.6);
-      ringSpin2.rotation.y = -t * (0.5 + pulse.v * 0.6);
-
-      // scan ring sweeps the shell, top to bottom, then restarts
-      const cyc = (t * 0.42) % 1.3;
-      const sy = 1 - cyc * 1.65;
-      if (sy > -1 && sy < 1) {
-        const rr = Math.sqrt(Math.max(0.02, 1 - sy * sy));
-        scan.visible = true;
-        scan.position.y = CY + sy * SR;
-        scan.scale.set(rr, rr, 1);
-        scanMat.opacity = (0.5 * (1 - cyc * 0.4) + pulse.v * 0.2);
-        scanMat.color.setHex(surging ? 0xff6060 : 0x9fffd4);
-      } else scan.visible = false;
-
-      // data rain: streams fall, loop, and hurry when the entity is engaged
-      const ra = rainAttr.array;
-      const rv = dt * (1 + pulse.v * 1.2 + (surging ? 0.8 : 0));
-      for (let k = 0; k < RN; k++) {
-        let y = ra[k * 3 + 1] - rs[k] * rv;
-        if (y < -2.25) y = -0.5;
-        ra[k * 3 + 1] = y;
-      }
-      rainAttr.needsUpdate = true;
-
-      // settle into the reserved zone, float; judder under overload
-      gy = lerp(gy, targetY, 0.05); gs = lerp(gs, targetS, 0.08);
-      entity.scale.setScalar(gs);
-      entity.position.y = gy + Math.sin(t * 1.1) * 0.1 * gs;
-
-      // face the cursor with slow drift; shake hard while overloaded
-      cpx = lerp(cpx, px, 0.06); cpy = lerp(cpy, py, 0.06);
-      let rx2 = cpy * 0.3, ry2 = cpx * 0.55 + Math.sin(t * 0.15) * 0.05, rz2 = 0;
-      if (surging) { rz2 = Math.sin(t * 47) * 0.16 * surgeN; rx2 += Math.sin(t * 39) * 0.1 * surgeN; }
-      entity.rotation.set(rx2, ry2, rz2);
-
-      // visor: the glint patrols the bar, leans toward the cursor, flares on
-      // focus, and strobes under overload
-      const foc = happy > 0 ? 1 : 0;
-      const flicker = surging ? (Math.sin(t * 60) > -0.2 ? 1 : 0.15) : 1;
-      glint.position.x = Math.sin(t * (1.4 + pulse.v * 1.6)) * 0.3 + cpx * 0.18;
-      glint.position.y = -cpy * 0.03;
-      glintMat.opacity = (0.75 + foc * 0.25 + pulse.v * 0.3) * flicker;
-      glintMat.color.setHex(surging ? 0xffc9c9 : 0xeafff6);
-      visorBaseMat.opacity = (0.38 + foc * 0.16 + pulse.v * 0.2) * flicker;
-      visorBaseMat.color.setHex(surging ? 0xff5050 : 0x2effa6);
-
-      // blink: a fast shutter pass, kept from the phantom
-      blink -= dt; if (blink < -0.13) blink = 2.4 + Math.random() * 3.4;
-      visor.scale.y = (blink < 0 && !surging) ? 0.15 : 1;
-
-      renderer.render(scene, camera); requestAnimationFrame(frame);
-    };
+    character.draw(ctx2, {
+      t, dt,
+      cx: gx, cy: gy, scale: gs,
+      mood, emotion,
+      pulse: pulse.v + (menace > 0 ? 0.4 * (menace / 1.1) : 0),
+      px: cpx, py: cpy,
+    });
     requestAnimationFrame(frame);
-    canvas.classList.add("lit");
-  } catch {}
+  };
+  requestAnimationFrame(frame);
+  canvas.classList.add("lit");
 }
 
 /* ---------------- threat radar: risks a business faces ---------------- */
