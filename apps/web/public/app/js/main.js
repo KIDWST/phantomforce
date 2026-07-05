@@ -4,12 +4,12 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-15";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-15";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-15";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-15";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-15";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-15";
+} from "./store.js?v=phantom-live-20260705-16";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-16";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-16";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-16";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-16";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-16";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -19,6 +19,8 @@ const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const gate = $("[data-gate]");
 const phantom = $("[data-phantom]");
 const overlayRoot = $("[data-overlay-root]");
+const consoleRoot = $("[data-console]");
+const dashboardShellHtml = consoleRoot ? consoleRoot.innerHTML : "";
 
 /* ---- inline line-icons (stroke = currentColor) ---- */
 const I = {
@@ -129,12 +131,25 @@ const NAV = [
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "sites" },
   { id: "brand",      label: "Brand Memory", icon: "brain", ws: "workforce" },
+  { id: "apify",      label: "Apify Vault",  icon: "db",    ws: "apify", adminOnly: true },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "money" },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 let activeNav = "dashboard";
+let activePageId = null;
+
+const WORKSPACE_ALIASES = {
+  brand: "workforce",
+  content: "sites",
+  automation: "workforce",
+  analytics: "money",
+};
+
+function workspaceId(id) {
+  return WORKSPACE_ALIASES[id] || id;
+}
 
 function renderNav() {
   const nav = $("[data-nav]");
@@ -152,8 +167,8 @@ function goNav(id) {
   if (!item) return;
   activeNav = id;
   renderNav();
-  if (item.view === "main") { closeOverlay(true); }
-  else if (item.ws) { openWorkspace(item.ws); }
+  if (item.view === "main") renderDashboardPage(true);
+  else if (item.ws) renderWorkspacePage(item.ws, true);
 }
 
 /* ============================ topbar ============================ */
@@ -213,7 +228,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-15";
+const POSE_VERSION = "phantom-live-20260705-16";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {
@@ -639,7 +654,24 @@ function renderPlanMeta() {
   if (el) el.textContent = `Renewal: ${renew}`;
 }
 
+function ensureDashboardShell() {
+  const root = $("[data-console]");
+  if (!root) return null;
+  if (root.dataset.consoleView !== "dashboard") {
+    root.className = "console";
+    root.dataset.consoleView = "dashboard";
+    delete root.dataset.pageWs;
+    root.innerHTML = dashboardShellHtml;
+  }
+  return root;
+}
+
 function renderConsole() {
+  if (activePageId) {
+    renderWorkspacePage(activePageId, false);
+    return;
+  }
+  ensureDashboardShell();
   renderNav();
   renderStatusPills();
   renderPlanMeta();
@@ -654,6 +686,7 @@ function renderConsole() {
   renderPlan();
   renderQueue();
   renderQuick();
+  bindCommandForm();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
 }
 
@@ -736,14 +769,16 @@ function runCommand(raw) {
       speak(r.say);
       respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
       renderConsole();
-      if (r.open) setTimeout(() => openWorkspace(r.open), reduceMotion ? 150 : 750);
+      if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
     }, reduceMotion ? 120 : 620);
   }, reduceMotion ? 60 : 260);
 }
 
-function wireDeck() {
+function bindCommandForm() {
   const form = $("[data-command-form]");
   const input = $("[data-command-input]");
+  if (!form || !input || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const v = input.value.trim();
@@ -751,6 +786,10 @@ function wireDeck() {
     input.value = "";
     runCommand(v);
   });
+}
+
+function wireDeck() {
+  bindCommandForm();
   document.addEventListener("click", (e) => {
     const mode = e.target.closest("[data-mode]");
     if (mode) { setMode(mode.dataset.mode); return; }
@@ -760,7 +799,7 @@ function wireDeck() {
     if (quick) {
       const q = QUICK[+quick.dataset.quick];
       if (q?.run) runCommand(q.run);
-      else if (q?.open) openWorkspace(q.open);
+      else if (q?.open) routeWorkspace(q.open);
       return;
     }
     if (e.target.closest("[data-cmdk-open]")) { openPalette(); return; }
@@ -769,7 +808,7 @@ function wireDeck() {
     if (cItem) { execPalette(+cItem.dataset.cmdkI); return; }
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     const opener = e.target.closest("[data-open-ws]");
-    if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } openWorkspace(opener.dataset.openWs); return; }
+    if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
     // click outside notif menu closes it
     if (notifOpen && !e.target.closest(".notif-wrap")) { notifOpen = false; renderNotifs(); }
   });
