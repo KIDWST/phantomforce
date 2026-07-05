@@ -429,33 +429,35 @@ export function createPhantomCharacter({ small = false } = {}) {
   };
 
   /* ============================ SPRITE MODE ============================ */
-  /* ring-space: origin at the summoning ring's center, screen pixels. */
-  const poseK = (p, scale) => (scale * 3.55) / ((p.groundY - p.headTop) * p.h);
-  const poseFace = (p, scale) => {
-    const k = poseK(p, scale);
-    return {
-      x: (p.face.cx - p.cx) * p.w * k,
-      y: (p.face.cy - p.groundY) * p.h * k,
-      s: p.face.s * p.w * k,
-      rot: p.face.rot || 0,
-      mouth: p.face.mouth !== false,
-    };
-  };
+  /* CONSISTENCY CONTRACT — the paintings frame him at different zooms, so
+     everything is normalized to the character's anatomical constant:
+       · his FACE is always exactly FACE_T × scale wide,
+       · his face always sits at FACE_Y × scale above the floor,
+       · the floor (ring-space origin) and the drawn ring never move.
+     Each painting is scaled by its own k so its face hits that contract;
+     the baked floor rings were faded out in preprocessing, and ONE ring is
+     drawn by the engine — identical for every pose. Nothing changes size
+     or position between stances, ever, except the pose itself. */
+  const FACE_T = 0.56;                 // face width, as a fraction of `scale`
+  const FACE_Y = -2.05;                // face height above the floor, × scale
+  const poseK = (p, scale) => (scale * FACE_T) / (p.face.s * p.w);
+  const poseFace = (p, scale) => ({
+    x: (p.face.cx - p.cx) * p.w * poseK(p, scale),
+    y: FACE_Y * scale,
+    s: FACE_T * scale,
+    rot: p.face.rot || 0,
+    mouth: p.face.mouth !== false,
+  });
 
   const drawPoseLayer = (ctx2, p, alpha, o, S, filter, t) => {
     const k = poseK(p, o.scale);
-    const gx = p.cx * p.w, gy = p.groundY * p.h;
+    const gx = p.cx * p.w;
+    const oy = FACE_Y * o.scale / k - p.face.cy * p.h;   // image y-offset placing the face on the contract line
     ctx2.save();
     ctx2.scale(k, k);
-    if (!S.settled) {
-      const span = (p.groundY - p.headTop) * p.h;
-      ctx2.beginPath();
-      ctx2.rect(-gx, -S.reveal * span * 1.06, p.w, S.reveal * span * 1.06 + 0.12 * p.h);
-      ctx2.clip();
-    }
     ctx2.globalAlpha = alpha;
     if (filter) { try { ctx2.filter = filter; } catch { } }
-    ctx2.drawImage(p.art, -gx, -gy);
+    ctx2.drawImage(p.art, -gx, oy);
     /* glitch slices: a periodic tic, plus a burst while switching stances */
     const gCyc = t % 3.8;
     if ((gCyc < 0.16 || poseBlend < 0.85 || S.glitchNow > 0) && S.settled) {
@@ -463,12 +465,12 @@ export function createPhantomCharacter({ small = false } = {}) {
         const sy = p.h * (0.45 + 0.15 * i);
         const bh = p.h * 0.04;
         const off = Math.sin(t * 91 + i * 2) * p.w * (poseBlend < 0.85 ? 0.02 : 0.012);
-        ctx2.drawImage(p.art, 0, sy, p.w, bh, -gx + off, sy - gy, p.w, bh);
+        ctx2.drawImage(p.art, 0, sy, p.w, bh, -gx + off, sy + oy, p.w, bh);
       }
     }
     if (filter) { try { ctx2.filter = "none"; } catch { } }
     /* erase the painted face so the live one can act in its place */
-    const fx = (p.face.cx - p.cx) * p.w, fy = (p.face.cy - p.groundY) * p.h;
+    const fx = (p.face.cx - p.cx) * p.w, fy = p.face.cy * p.h + oy;
     ctx2.globalAlpha = 1;
     ctx2.globalCompositeOperation = "destination-out";
     const er = ctx2.createRadialGradient(fx, fy, 0, fx, fy, p.face.rx * p.w * 1.2);
@@ -501,16 +503,54 @@ export function createPhantomCharacter({ small = false } = {}) {
     ctx2.rotate(E.tilt * 0.5 + swayBias * 0.3 + Math.sin(t * 0.5) * 0.012);
     ctx2.scale(S.bodySx * breath, S.bodySy * breath);
 
+    /* materialize: one shared reveal window rising from the floor */
+    if (!S.settled) {
+      ctx2.beginPath();
+      ctx2.rect(-2.2 * scale, 0.3 * scale - S.reveal * 3.6 * scale, 4.4 * scale, S.reveal * 3.6 * scale + 0.2 * scale);
+      ctx2.clip();
+    }
+
     const cur = POSES[curPose], prev = prevPose ? POSES[prevPose] : null;
     if (prev && prev.art && poseBlend < 1) drawPoseLayer(ctx2, prev, 1 - poseBlend, o, S, filter, t);
     if (cur && cur.art) drawPoseLayer(ctx2, cur, poseBlend < 1 ? poseBlend : 1, o, S, filter, t);
 
     ctx2.globalCompositeOperation = "lighter";
 
+    /* THE ring: engine-drawn, identical for every pose (baked rings are
+       faded out of the assets), so the floor never shifts or resizes */
+    const ringA = 1 + ringBoost * 1.4;
+    for (let ring = 0; ring < 4; ring++) {
+      const p2 = (t * 0.32 + ring / 4) % 1;
+      ctx2.strokeStyle = A((0.30 - p2 * 0.24) * ringA);
+      ctx2.lineWidth = Math.max(1, scale * (ring === 0 ? 0.012 : 0.007));
+      ctx2.beginPath();
+      ctx2.ellipse(0, 0, scale * 1.05 * (0.42 + p2 * 0.62), scale * 0.24 * (0.42 + p2 * 0.62), 0, 0, TAU);
+      ctx2.stroke();
+    }
+    const puddle = ctx2.createRadialGradient(0, 0, 0, 0, 0, scale * 0.85);
+    puddle.addColorStop(0, A(0.30 + pulse * 0.15 + ringBoost * 0.15));
+    puddle.addColorStop(0.4, A(0.10));
+    puddle.addColorStop(1, A(0));
+    ctx2.fillStyle = puddle;
+    ctx2.save();
+    ctx2.scale(1, 0.24);
+    ctx2.beginPath(); ctx2.arc(0, 0, scale * 0.85, 0, TAU); ctx2.fill();
+    ctx2.restore();
+    /* beam rising from the ring into the robes */
+    ctx2.save();
+    ctx2.scale(0.34, 1);
+    const beam = ctx2.createRadialGradient(0, -scale * 0.5, 0, 0, -scale * 0.5, scale * 1.0);
+    beam.addColorStop(0, A(0.16 + ringBoost * 0.14 + pulse * 0.1));
+    beam.addColorStop(1, A(0));
+    ctx2.fillStyle = beam;
+    ctx2.beginPath(); ctx2.arc(0, -scale * 0.5, scale * 1.0, 0, TAU); ctx2.fill();
+    ctx2.restore();
+
     /* the conjured flame breathes on the hero stance */
     if (curPose === "conjure" && poseBlend > 0.5 && flameHold > 0.05 && cur && cur.art) {
       const k = poseK(cur, scale);
-      const flx = (cur.flame.x - cur.cx) * cur.w * k, fly = (cur.flame.y - cur.groundY) * cur.h * k;
+      const flx = (cur.flame.x - cur.cx) * cur.w * k;
+      const fly = FACE_Y * scale + (cur.flame.y - cur.face.cy) * cur.h * k;
       const fr = scale * (0.11 + Math.sin(t * 6.4) * 0.02 + pulse * 0.04) * flameHold * poseBlend;
       const g = ctx2.createRadialGradient(flx, fly, 0, flx, fly, fr * 3);
       g.addColorStop(0, `rgba(235,255,246,${0.45 * flameHold * poseBlend})`);
@@ -520,47 +560,37 @@ export function createPhantomCharacter({ small = false } = {}) {
       ctx2.beginPath(); ctx2.arc(flx, fly, fr * 3, 0, TAU); ctx2.fill();
     }
 
-    /* ring pulses over the painted ring */
-    for (let ring = 0; ring < 2; ring++) {
-      const p2 = (t * 0.35 + ring / 2) % 1;
-      ctx2.strokeStyle = A((0.16 - p2 * 0.12) * (1 + ringBoost * 1.4));
-      ctx2.lineWidth = Math.max(1, scale * 0.006);
-      ctx2.beginPath();
-      ctx2.ellipse(0, 0, scale * 1.15 * (0.5 + p2 * 0.55), scale * 0.27 * (0.5 + p2 * 0.55), 0, 0, TAU);
-      ctx2.stroke();
-    }
-
     /* scanline shimmer drifting up the hologram */
-    const sy2 = -((t * 0.22) % 1) * scale * 3.55;
+    const sy2 = -((t * 0.22) % 1) * scale * 3.3;
     const sg = ctx2.createLinearGradient(0, sy2 - scale * 0.1, 0, sy2 + scale * 0.1);
     sg.addColorStop(0, A(0));
     sg.addColorStop(0.5, A(0.035));
     sg.addColorStop(1, A(0));
     ctx2.fillStyle = sg;
-    ctx2.fillRect(-scale * 1.15, sy2 - scale * 0.1, scale * 2.3, scale * 0.2);
+    ctx2.fillRect(-scale * 1.05, sy2 - scale * 0.1, scale * 2.1, scale * 0.2);
 
     /* rising dust while materializing */
     if (!S.settled) {
       for (let i = 0; i < 26; i++) {
-        const dx = Math.sin(i * 2.13) * scale * 1.0;
+        const dx = Math.sin(i * 2.13) * scale * 0.95;
         const p2 = (t * 1.5 + i * 0.37) % 1;
-        const dy = -p2 * S.reveal * scale * 3.4;
+        const dy = -p2 * S.reveal * scale * 3.2;
         ctx2.fillStyle = A((1 - S.reveal) * (0.7 - p2 * 0.4));
         ctx2.fillRect(dx, dy, 2, 4);
       }
     }
 
-    /* the live face, riding the (blending) painted face position */
+    /* the live face: constant size, constant height — only its small
+       horizontal offset follows the painting during a pose blend */
     const fCur = poseFace(cur && cur.art ? cur : POSES.conjure, scale);
     const fPrev = prev && prev.art && poseBlend < 1 ? poseFace(prev, scale) : fCur;
     const bl = poseBlend < 1 ? poseBlend : 1;
     const fx = fPrev.x + (fCur.x - fPrev.x) * bl;
-    const fy = fPrev.y + (fCur.y - fPrev.y) * bl;
-    const fs = fPrev.s + (fCur.s - fPrev.s) * bl;
     const frot = fPrev.rot + (fCur.rot - fPrev.rot) * bl;
+    const fs = FACE_T * scale;
     const mouthOn = bl > 0.5 ? fCur.mouth : fPrev.mouth;
     ctx2.save();
-    ctx2.translate(fx, fy - E.drop * fs * 0.45);
+    ctx2.translate(fx, FACE_Y * scale - E.drop * fs * 0.45);
     ctx2.rotate(frot + E.tilt + Math.sin(t * 0.8) * 0.012);
     drawFaceFeatures(ctx2, fs, {
       E, A, pulse,
