@@ -8,7 +8,7 @@ import {
 import { handleCommand, commandSuggestions } from "./command.js?v=attachment-chat-questions-20260705-01";
 import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-admin-media-dismiss-20260705-01";
 import { imageStyle } from "./media-image.js?v=phantom-chicagoshots-crm-20260704-01";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-admin-20260705-03";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-admin-20260705-04";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -287,6 +287,7 @@ let speechFadeTimer = 0;
 let ghostMood = "idle";
 let ghostEmotion = "calm";
 let ghostMoodUntil = 0;
+let ghostMoodStartedAt = performance.now();
 let ghostBurstStart = 0;
 let ghostBurstUntil = 0;
 
@@ -299,9 +300,16 @@ function emotionForText(text = "") {
 }
 
 function setGhostMood(mood, options = {}) {
+  const now = performance.now();
+  if (ghostMood !== mood) ghostMoodStartedAt = now;
   ghostMood = mood;
   ghostEmotion = options.emotion || ghostEmotion;
-  ghostMoodUntil = options.ms ? performance.now() + options.ms : 0;
+  ghostMoodUntil = options.ms ? now + options.ms : 0;
+}
+
+function speechHoldMs(text = "") {
+  const n = String(text || "").length;
+  return Math.min(12000, Math.max(3200, n * 72));
 }
 
 function ghostAnswerBurst(text = "") {
@@ -309,7 +317,7 @@ function ghostAnswerBurst(text = "") {
   ghostPulse = 1;
   ghostBurstStart = performance.now();
   ghostBurstUntil = ghostBurstStart + 820;
-  setGhostMood("talking", { emotion: emotionForText(text), ms: 1400 });
+  setGhostMood("talking", { emotion: emotionForText(text), ms: speechHoldMs(text) });
 }
 
 function speak(text, cls = "") {
@@ -317,7 +325,7 @@ function speak(text, cls = "") {
   clearTimeout(speechFadeTimer);
   if (!cls || cls === "thinking") {
     phantom?.classList.add("is-speaking");
-    speechFadeTimer = setTimeout(() => phantom?.classList.remove("is-speaking"), Math.max(1300, text.length * 45));
+    speechFadeTimer = setTimeout(() => phantom?.classList.remove("is-speaking"), speechHoldMs(text));
   } else if (cls === "user") {
     phantom?.classList.remove("is-speaking");
   }
@@ -328,19 +336,18 @@ function speak(text, cls = "") {
   const emotion = emotionForText(text);
   if (cls === "thinking") setGhostMood("thinking", { emotion: "bright" });
   else if (cls === "user") setGhostMood("listening", { emotion: "calm", ms: 1600 });
-  else setGhostMood("talking", { emotion, ms: Math.max(1500, text.length * 36) });
+  else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
 
   if (cls || reduceMotion || compactScreen) {
     p.textContent = text;
-    if (!cls && !reduceMotion) setGhostMood("talking", { emotion, ms: Math.max(1100, text.length * 24) });
-    else if (!cls) setGhostMood("idle", { emotion, ms: 1800 });
+    if (!cls) setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
     return;
   }
   let i = 0;
   const tick = () => {
     p.textContent = text.slice(0, i);
     if (i++ < text.length) typeTimer = setTimeout(tick, 11 + Math.random() * 16);
-    else setGhostMood("idle", { emotion, ms: 1800 });
+    else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
   };
   tick();
 }
@@ -1328,6 +1335,7 @@ function initFablePhantomCharacter(canvas, ctx2) {
     if (ghostMoodUntil && now > ghostMoodUntil) {
       ghostMood = "idle";
       ghostMoodUntil = 0;
+      ghostMoodStartedAt = now;
     }
     ghostPulse = Math.max(0, ghostPulse - 0.02);
     cpx += (px - cpx) * 0.08;
@@ -1346,6 +1354,7 @@ function initFablePhantomCharacter(canvas, ctx2) {
       scale: Math.min(w, h) * 0.27,
       mood,
       emotion: ghostEmotion,
+      moodAge: Math.max(0, (now - ghostMoodStartedAt) * 0.001),
       pulse: ghostPulse,
       px: cpx,
       py: cpy,

@@ -326,11 +326,13 @@ export function createPhantomCharacter({ small = false } = {}) {
   const tick = (o) => {
     const { t, mood, emotion, px, py } = o;
     const dt = Math.min(0.05, Math.max(0.001, o.dt));
+    const moodAge = Number.isFinite(o.moodAge) ? Math.max(0, o.moodAge) : t;
+    const actionT = mood === "talking" ? moodAge : t;
     if (born < 0) born = t;
     const age = t - born;
     const reveal = Math.min(1, age / 2.2);
     const settled = reveal >= 1;
-    const talkBeat = mood === "talking" ? Math.abs(Math.sin(t * 9.5)) : 0;
+    const talkBeat = mood === "talking" ? Math.abs(Math.sin(actionT * 9.5)) : 0;
     const thinkBeat = mood === "thinking" ? Math.abs(Math.sin(t * 5.2)) : 0;
 
     let beat = "idle", gLocal = 0;
@@ -367,7 +369,10 @@ export function createPhantomCharacter({ small = false } = {}) {
     /* which painted stance fits this moment */
     let poseName = "conjure";
     if (settled) {
-      if (mood === "talking") poseName = Math.floor(t / 3.5) % 2 ? "point" : "present";
+      if (mood === "talking") {
+        const phrase = moodAge % 5.4;
+        poseName = moodAge < 0.45 || phrase < 3.65 ? "present" : "point";
+      }
       else if (mood === "thinking") poseName = "chin";
       else if (mood === "listening") poseName = "point";
       else if (mood === "menace") poseName = "cross";
@@ -407,7 +412,7 @@ export function createPhantomCharacter({ small = false } = {}) {
 
     const pose = ARMS[gesture] || ARMS.conjure;
     const waveSwing = beat === "wave" ? Math.sin(t * 6.4) * 0.13 * Math.sin(Math.min(1, gLocal * 2) * Math.PI) : 0;
-    const talkBob = gesture === "talk" ? Math.sin(t * 3.2) * 0.03 : 0;
+    const talkBob = gesture === "talk" ? Math.sin(actionT * 3.2) * 0.03 : 0;
     const stepJ = (j, k, target) => { const [nx, nv] = springStep(j[k], j["v" + k], target, dt, 80, 10); j[k] = nx; j["v" + k] = nv; };
     stepJ(arm.R, "hx", pose.h[0] + waveSwing); stepJ(arm.R, "hy", pose.h[1] + talkBob);
     stepJ(arm.L, "hx", pose.hL[0]); stepJ(arm.L, "hy", pose.hL[1] - talkBob);
