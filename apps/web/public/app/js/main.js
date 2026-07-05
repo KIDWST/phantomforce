@@ -7,9 +7,9 @@ import {
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-12";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-12";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-12";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-13";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-13";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-13";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -214,7 +214,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-12";
+const POSE_VERSION = "phantom-live-20260705-13";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {

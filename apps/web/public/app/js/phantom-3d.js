@@ -47,37 +47,43 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     depthWrite: false,
     side: THREE.DoubleSide,
   };
-  const shadowMat = new THREE.MeshBasicMaterial({
-    ...shared,
-    color: 0x41ffa1,
-    opacity: 0.18,
-    blending: THREE.AdditiveBlending,
-  });
-  const rimMat = new THREE.MeshBasicMaterial({
-    ...shared,
-    color: 0x9dffd0,
-    opacity: 0.26,
-    blending: THREE.AdditiveBlending,
-  });
   const bodyMat = new THREE.MeshBasicMaterial({
     ...shared,
     color: 0xffffff,
     opacity: 0.96,
   });
 
-  const shadow = new THREE.Mesh(planeGeo, shadowMat);
-  shadow.position.set(-0.02, 0.02, -0.2);
-  shadow.scale.set(1.12, 1.08, 1);
-  root.add(shadow);
+  const auraGroup = new THREE.Group();
+  auraGroup.position.set(0, -0.08, -0.22);
+  root.add(auraGroup);
+
+  const auraRings = [];
+  [
+    { inner: 1.02, outer: 1.04, y: 0.16, z: -0.24, sx: 0.96, sy: 1.2, opacity: 0.12 },
+    { inner: 1.23, outer: 1.245, y: 0.02, z: -0.3, sx: 1.02, sy: 1.34, opacity: 0.08 },
+    { inner: 1.44, outer: 1.455, y: -0.18, z: -0.36, sx: 1.08, sy: 1.46, opacity: 0.055 },
+  ].forEach((spec) => {
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0x41ffa1,
+      transparent: true,
+      opacity: spec.opacity,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+      depthTest: false,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(new THREE.RingGeometry(spec.inner, spec.outer, 128), mat);
+    ring.position.set(0, spec.y, spec.z);
+    ring.scale.set(spec.sx, spec.sy, 1);
+    ring.renderOrder = 1;
+    auraGroup.add(ring);
+    auraRings.push({ ring, baseOpacity: spec.opacity });
+  });
 
   const body = new THREE.Mesh(planeGeo, bodyMat);
   body.position.set(0, 0.04, 0.04);
+  body.renderOrder = 3;
   root.add(body);
-
-  const rim = new THREE.Mesh(planeGeo, rimMat);
-  rim.position.set(0.12, 0.06, 0.13);
-  rim.scale.set(1.02, 1.01, 1);
-  root.add(rim);
 
   const ringGroup = new THREE.Group();
   ringGroup.position.y = -1.55;
@@ -143,9 +149,8 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
 
   function applyAccent() {
     const color = resolveAccent();
-    shadowMat.color.setHex(color);
-    rimMat.color.setHex(color);
     particleMat.color.setHex(color);
+    for (const { ring } of auraRings) ring.material.color.setHex(color);
     for (const ring of rings) ring.material.color.setHex(color);
   }
 
@@ -155,9 +160,9 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     const aspect = img.width / img.height;
     const h = 3.72;
     const w = h * aspect;
-    body.scale.set(w / 2.7, 1, 1);
-    shadow.scale.set((w / 2.7) * 1.13, 1.07, 1);
-    rim.scale.set((w / 2.7) * 1.04, 1.01, 1);
+    const bodyScaleX = w / 2.7;
+    body.scale.set(bodyScaleX, 1, 1);
+    auraGroup.scale.set(Math.max(0.86, bodyScaleX * 0.92), 1, 1);
   }
 
   function getTexture(src) {
@@ -177,11 +182,7 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     activePose = pose;
     const texture = getTexture(pose.src);
     bodyMat.map = texture;
-    shadowMat.map = texture;
-    rimMat.map = texture;
     bodyMat.needsUpdate = true;
-    shadowMat.needsUpdate = true;
-    rimMat.needsUpdate = true;
     fitPoseTexture(texture);
   }
 
@@ -205,8 +206,11 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
   resize();
 
   window.addEventListener("pointermove", (event) => {
-    pointerX = clamp(event.clientX / window.innerWidth - 0.5, -0.5, 0.5);
-    pointerY = clamp(event.clientY / window.innerHeight - 0.5, -0.5, 0.5);
+    const box = canvas.getBoundingClientRect();
+    const centerX = box.left + box.width / 2;
+    const centerY = box.top + box.height / 2;
+    pointerX = clamp((event.clientX - centerX) / Math.max(1, box.width), -0.22, 0.22);
+    pointerY = clamp((event.clientY - centerY) / Math.max(1, box.height), -0.18, 0.18);
   }, { passive: true });
 
   function frame(now) {
@@ -222,18 +226,19 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     const pulse = m.pulse + talk * 0.24 + think * 0.12;
 
     root.position.y = -0.07 + Math.sin(t * 1.15) * m.bob + talk * 0.035;
-    root.rotation.y = smoothX * 0.62 + Math.sin(t * 0.42) * 0.12;
-    root.rotation.x = -smoothY * 0.12 + Math.sin(t * 0.52) * 0.02;
-    root.rotation.z = smoothX * -0.05 + Math.sin(t * 0.35) * 0.018;
+    root.rotation.y = smoothX * 0.16 + Math.sin(t * 0.42) * 0.026;
+    root.rotation.x = -smoothY * 0.034 + Math.sin(t * 0.52) * 0.008;
+    root.rotation.z = smoothX * -0.012 + Math.sin(t * 0.35) * 0.005;
     const breathe = 1 + Math.sin(t * 1.6) * m.breathe + talk * 0.02;
-    root.scale.set(breathe * (1 + Math.abs(smoothX) * 0.04), breathe, 1);
+    root.scale.set(breathe, breathe, 1);
 
-    bodyMat.opacity = 0.89 + pulse * 0.08;
-    shadowMat.opacity = 0.11 + pulse * 0.15;
-    rimMat.opacity = 0.15 + Math.abs(smoothX) * 0.36 + pulse * 0.1;
-    rim.position.x = 0.1 + smoothX * 0.34;
-    rim.position.z = 0.1 + Math.abs(smoothX) * 0.12;
-    shadow.position.x = -smoothX * 0.18;
+    bodyMat.opacity = 0.93 + pulse * 0.04;
+    auraGroup.position.x = -smoothX * 0.035;
+    auraGroup.rotation.z = smoothX * -0.08 + Math.sin(t * 0.38) * 0.012;
+    auraRings.forEach(({ ring, baseOpacity }, i) => {
+      ring.rotation.z = t * (0.08 + i * 0.035);
+      ring.material.opacity = baseOpacity + pulse * (0.018 + i * 0.004);
+    });
 
     ringGroup.rotation.z += (0.002 + m.spin * 0.006) * (reduceMotion ? 0.2 : 1);
     ringGroup.scale.setScalar(1 + Math.sin(t * 1.25) * 0.025 + pulse * 0.04);
@@ -250,7 +255,7 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
       attr.setXYZ(i, Math.cos(a) * seed.r, y, Math.sin(a) * seed.r * 0.38 - 0.28);
     }
     attr.needsUpdate = true;
-    particles.rotation.y = root.rotation.y * 0.28;
+    particles.rotation.y = root.rotation.y * 0.5;
     particleMat.opacity = 0.28 + pulse * 0.34;
 
     renderer.render(scene, camera);
@@ -268,6 +273,10 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     renderer.dispose();
     planeGeo.dispose();
     particleGeo.dispose();
+    auraRings.forEach(({ ring }) => {
+      ring.geometry.dispose();
+      ring.material.dispose();
+    });
     rings.forEach((ring) => ring.geometry.dispose());
   }
 

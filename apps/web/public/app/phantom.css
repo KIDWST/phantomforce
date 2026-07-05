@@ -915,6 +915,9 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   opacity: 0.16; pointer-events: none; mix-blend-mode: screen; transform: scale(0.92);
   filter: blur(5px) brightness(1.25) contrast(1.12) drop-shadow(0 0 26px rgba(65, 255, 161, 0.2));
 }
+.phantom.has-3d-phantom .hero2-stage .ghost-canvas {
+  opacity: 0 !important; filter: none; transform: none;
+}
 .phantom-mode-stage {
   position: relative; z-index: 2; isolation: isolate; width: min(100%, 470px); aspect-ratio: 1;
   display: grid; place-items: center; margin: 0; transform-style: preserve-3d;
@@ -942,8 +945,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   transition: filter 0.24s ease, opacity 0.2s ease, transform 0.24s ease;
 }
 .phantom.has-3d-phantom .phantom-mode-pose {
-  opacity: 0.12; transform: translateZ(-110px) scale(0.92);
-  filter: blur(1px) saturate(1.2) contrast(1.15) brightness(0.8) drop-shadow(0 0 28px rgba(65, 255, 161, 0.22));
+  opacity: 0 !important; visibility: hidden; animation: none !important; transform: none;
+  filter: none;
 }
 .phantom-mode-caption {
   position: absolute; left: 50%; bottom: 7%; z-index: 7; transform: translateX(-50%);
