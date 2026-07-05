@@ -4,13 +4,13 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-13";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-13";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-13";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-13";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-13";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-13";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-13";
+} from "./store.js?v=phantom-live-20260705-14";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-14";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-14";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-14";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-14";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-14";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-14";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -214,7 +214,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-13";
+const POSE_VERSION = "phantom-live-20260705-14";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {
@@ -265,22 +265,26 @@ function syncPoseMood(mood = "idle", emotion = "calm") {
 
 function renderModePose(id = activeMode) {
   const pose = MODE_POSES[id] || MODE_POSES.ask;
+  const poseId = MODE_POSES[id] ? id : "ask";
   const stage = $("[data-mode-stage]");
   const img = $("[data-mode-pose]");
   const caption = $("[data-mode-caption]");
   if (!stage || !img) return;
   phantom?.classList.add("has-mode-poses");
-  stage.dataset.pose = MODE_POSES[id] ? id : "ask";
-  stage.classList.remove("is-swapping");
-  void stage.offsetWidth;
-  stage.classList.add("is-swapping");
-  clearTimeout(renderModePose.swapTimer);
-  renderModePose.swapTimer = setTimeout(() => stage.classList.remove("is-swapping"), 560);
   const nextSrc = poseUrl(pose.src);
-  if (img.getAttribute("src") !== nextSrc) img.setAttribute("src", nextSrc);
+  const poseChanged = stage.dataset.pose !== poseId || img.getAttribute("src") !== nextSrc;
+  stage.dataset.pose = poseId;
+  if (poseChanged) {
+    stage.classList.remove("is-swapping");
+    void stage.offsetWidth;
+    stage.classList.add("is-swapping");
+    clearTimeout(renderModePose.swapTimer);
+    renderModePose.swapTimer = setTimeout(() => stage.classList.remove("is-swapping"), 420);
+    img.setAttribute("src", nextSrc);
+    if (phantom3d) phantom3d.setPose({ ...pose, id: poseId, src: nextSrc });
+  }
   img.setAttribute("alt", pose.alt);
   if (caption) caption.textContent = pose.caption;
-  if (phantom3d) phantom3d.setPose({ ...pose, id, src: nextSrc });
   syncPoseMood(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
 }
 
