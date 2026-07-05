@@ -11,10 +11,21 @@
   git remote add origin https://github.com/KIDWST/phantomforce.git
   git fetch origin && git log --oneline origin/main -1
   ```
-- **Never push straight to `main`.** Work on a branch → open a PR → squash-merge.
-  Deploy is automatic (GitHub Pages) on merge to `main`.
+- **Direct pushes to `main` are in use** (the owner asked for it; several agents now
+  push straight to `main`). Deploy is automatic (GitHub Pages) on any push to `main`.
+  Before you push: `git fetch origin main && git rebase origin/main` — main moves under
+  you often, so expect to rebase (conflicts land mostly in `app/js/main.js`). A PR is
+  still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
+- **Content Hub + Analytics** (`4742880`) — `app/js/contenthub.js`: aggregates every
+  social post/image/video. Self-contained (own localStorage lib, seeded/deterministic)
+  and exports an `analyze()` data API. Content Hub tabs split by **platform** and by
+  **content/engagement type** (Overview | Social platforms | Content types | Engagement
+  {Likes/Comments/Reactions/Shares&saves} | Scheduled), post-detail modal with metrics,
+  reactions, hashtags, sentiment-tagged comments. **Analytics** now fetches the exact
+  same `analyze()` output (reach chart, content-mix donut, per-platform bars, KPIs, top
+  posts). Wired in `main.js` as the `content` + `analytics` custom workspaces.
 - **Media Lab** (`060e69f`) — `app/js/medialab.js`: AI image/video generator + canvas
   editor + pluggable providers; backend `POST /generate` in `ai-proxy/` (Higgsfield,
   OpenAI; add your own = one `MEDIA_PROVIDERS` entry + one `DEFAULT_PROVIDERS` entry).
@@ -24,7 +35,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260705-11`**.
+- Current cache-bust build id: **`phantom-live-20260705-13`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,
