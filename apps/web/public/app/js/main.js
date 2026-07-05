@@ -2,13 +2,14 @@
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
-  visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, isStaticPublicHost,
-  ownerLogin, redirectToLiveAdmin, verifyLiveSession, uiPrefs, updateUiPreferences,
+  visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
+  ownerLogin, redirectToLiveAdmin, verifyLiveSession,
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-3d-character-20260705-02";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-3d-character-20260705-02";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-12";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-12";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-12";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -132,43 +133,24 @@ const NAV = [
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "money" },
-  { id: "settings",   label: "Settings",     icon: "cog",   ws: "adminos", adminOnly: true },
+  { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 let activeNav = "chat";
-const LOCKED_NAV = new Set(["chat", "settings"]);
-
-function navItems({ includeHidden = false } = {}) {
-  const prefs = uiPrefs();
-  const hidden = new Set(prefs.hiddenNav || []);
-  const byId = new Map(NAV.map((item) => [item.id, item]));
-  const ordered = (prefs.navOrder || []).map((id) => byId.get(id)).filter(Boolean);
-  for (const item of NAV) if (!ordered.some((x) => x.id === item.id)) ordered.push(item);
-  return ordered.filter((item) =>
-    (!item.adminOnly || isAdmin()) && (includeHidden || !hidden.has(item.id) || LOCKED_NAV.has(item.id))
-  );
-}
-
-function dashboardWidgetOn(id) {
-  return uiPrefs().dashboardWidgets?.[id] !== false;
-}
 
 function renderNav() {
   const nav = $("[data-nav]");
-  const prefs = uiPrefs();
-  const designer = isAdmin() && prefs.designerMode;
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  if (phantom) phantom.classList.toggle("designer-mode-on", designer);
-  nav.innerHTML = navItems().map((n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${designer ? "is-designable" : ""}" data-nav-id="${n.id}" title="${designer && !LOCKED_NAV.has(n.id) ? `Shift-click to hide ${esc(n.label)}` : esc(n.label)}">
+  nav.innerHTML = NAV.filter((n) => !n.adminOnly || isAdmin()).map((n) => `
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}">
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
-    </button>`).join("") + (designer ? `<div class="nav-designer-hint">Designer mode · Shift-click tabs to hide</div>` : "");
+    </button>`).join("");
 }
 
 function goNav(id) {
   const item = NAV.find((n) => n.id === id);
-  if (!item || (item.adminOnly && !isAdmin())) return;
+  if (!item) return;
   activeNav = id;
   renderNav();
   if (item.view === "main") { closeOverlay(true); }
@@ -232,7 +214,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-3d-character-20260705-02";
+const POSE_VERSION = "phantom-live-20260705-12";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {
@@ -333,10 +315,6 @@ function thisWeekCount() {
   return visible(store.state.activity).filter((a) => new Date(a.at).getTime() >= weekAgo).length;
 }
 function renderStatCards() {
-  const box = $("[data-statcards]");
-  if (!box) return;
-  box.hidden = !dashboardWidgetOn("statcards");
-  if (box.hidden) { box.innerHTML = ""; return; }
   const media = visible(store.state.media);
   const sites = visible(store.state.sites);
   const products = visible(store.state.products);
@@ -352,7 +330,7 @@ function renderStatCards() {
     { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: "Across all desks", open: "media", trend: "+12%" },
     { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: "Running smoothly", open: "workforce", trend: "live" },
   ];
-  box.innerHTML = cards.map((c) => `
+  $("[data-statcards]").innerHTML = cards.map((c) => `
     <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
       <span class="statcard-top">
         <span class="statcard-icon">${svg(c.icon)}</span>
@@ -382,9 +360,6 @@ function renderActivity() {
   const items = [...liveFeed, ...base].slice(0, 4);
   const box = $("[data-activity]");
   if (!box) return;
-  const section = box.closest(".activity2");
-  if (section) section.hidden = !dashboardWidgetOn("activity");
-  if (section?.hidden) { box.innerHTML = ""; return; }
   if (!items.length) { box.innerHTML = `<p class="empty-line">Quiet — nothing has run yet.</p>`; return; }
   box.innerHTML = items.map((a) => `
     <div class="act-card ${a.live ? "act-live" : ""}">
@@ -399,10 +374,6 @@ function renderActivity() {
 
 /* ============================ today's plan (donut) ============================ */
 function renderPlan() {
-  const box = $("[data-plan]");
-  if (!box) return;
-  box.hidden = !dashboardWidgetOn("plan");
-  if (box.hidden) { box.innerHTML = ""; return; }
   const plan = todaysPlan();
   const m = moneyView();
   const money = m.wonValue + m.pipeline > 0 ? m.wonValue / (m.wonValue + m.pipeline) : 0.4;
@@ -410,7 +381,7 @@ function renderPlan() {
   const pct = Math.max(55, Math.min(97, Math.round(88 - plan.length * 4 + money * 18)));
   const R = 30, C = 2 * Math.PI * R, off = C * (1 - pct / 100);
   const msg = pct >= 85 ? "You're ahead. Ride it." : pct >= 45 ? "You're on track." : "Let's clear the runway.";
-  box.innerHTML = `
+  $("[data-plan]").innerHTML = `
     <div class="section-head"><h2>Today's plan</h2></div>
     <button class="plan-inner" data-open-ws="approvals">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
@@ -436,14 +407,8 @@ const AGENT_STATE = {
 };
 function renderQueue() {
   const agents = store.state.agents || [];
-  const list = $("[data-queue]");
-  const count = $("[data-queue-count]");
-  if (!list) return;
-  const card = list.closest(".queue-card");
-  if (card) card.hidden = !dashboardWidgetOn("queue");
-  if (card?.hidden) { list.innerHTML = ""; if (count) count.textContent = "0"; return; }
-  if (count) count.textContent = agents.length;
-  list.innerHTML = agents.slice(0, 4).map((a) => {
+  $("[data-queue-count]").textContent = agents.length;
+  $("[data-queue]").innerHTML = agents.slice(0, 4).map((a) => {
     const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
     return `
     <button class="queue-item" data-open-ws="workforce">
@@ -463,12 +428,7 @@ const QUICK = [
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
 function renderQuick() {
-  const box = $("[data-quick]");
-  if (!box) return;
-  const card = box.closest(".quick-card");
-  if (card) card.hidden = !dashboardWidgetOn("quick");
-  if (card?.hidden) { box.innerHTML = ""; return; }
-  box.innerHTML = QUICK.map((q, i) => `
+  $("[data-quick]").innerHTML = QUICK.map((q, i) => `
     <button class="quick-item" data-quick="${i}">
       <span class="quick-ic">${svg(q.icon)}</span>
       <span>${esc(q.label)}</span>
@@ -496,8 +456,6 @@ function attentionItems() {
 function renderInsights() {
   const box = $("[data-insights]");
   if (!box) return;
-  box.hidden = !dashboardWidgetOn("insights");
-  if (box.hidden) { box.innerHTML = ""; return; }
   const items = attentionItems();
   if (!items.length) {
     box.innerHTML = `<div class="insights-head"><span class="insights-k">${greeting()} — you're clear</span></div>
@@ -542,10 +500,8 @@ function fuzzy(q, text) {
 function paletteSources(query) {
   const q = query.trim().toLowerCase();
   const items = [];
-  navItems({ includeHidden: true }).forEach((n) => {
-    const hidden = (uiPrefs().hiddenNav || []).includes(n.id);
-    items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}${hidden ? " (hidden tab)" : ""}` : "Console home", run: () => goNav(n.id) });
-  });
+  NAV.filter((n) => !n.adminOnly || isAdmin()).forEach((n) =>
+    items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}` : "Console home", run: () => goNav(n.id) }));
   for (const id in WORKSPACE_DEFS) {
     const def = WORKSPACE_DEFS[id];
     if (def.adminOnly && !isAdmin()) continue;
@@ -568,7 +524,13 @@ function paletteSources(query) {
   const scored = items.map((it) => ({ it, s: fuzzy(q, (it.label + " " + (it.sub || "")).toLowerCase()) })).filter((x) => q === "" || x.s > 0);
   scored.sort((a, b) => b.s - a.s);
   const out = scored.map((x) => x.it);
-  if (q) out.unshift({ group: "Ask", label: `Ask Phantom: "${query.trim()}"`, icon: "chat", sub: "Run as a command", run: () => runCommand(query.trim()) });
+  // "Ask Phantom: <query>" is always available, but only jumps to the top when
+  // nothing else matches strongly — so typing a workspace name opens it directly.
+  if (q) {
+    const ask = { group: "Ask", label: `Ask Phantom: "${query.trim()}"`, icon: "chat", sub: "Run as a command", run: () => runCommand(query.trim()) };
+    const strong = scored[0] && scored[0].s >= 100;   // a direct substring hit
+    if (strong) out.push(ask); else out.unshift(ask);
+  }
   return out.slice(0, 40);
 }
 function renderPalette(query) {
@@ -689,15 +651,11 @@ let phantomHasActed = false;
 
 function emotionForText(text = "") {
   const s = text.toLowerCase();
-  if (/(broken|bug|terrible|worst|warped|wrong|failed|failure|error|fix|issue|problem|blocked|stuck|urgent|risk|danger)/.test(s)) return "alert";
-  if (/(security|scan|breach|threat|password|malware|privacy|private|protected|leak|hack|phish|fraud)/.test(s)) return "alert";
-  if (/(confused|confusing|not sure|don't understand|lost|messy|unclear|overwhelmed)/.test(s)) return "sheepish";
-  if (/(surprise|wow|holy|insane|wild|crazy)/.test(s)) return "surprised";
-  if (/\b(won|closed|delivered|booked|launched|published|5 stars|celebrat|love|awesome|great|perfect)\b/.test(s)) return "excited";
-  if (/\b(lost|declined|went quiet|overdue|no leads|slipped|empty|ghosted|sad|bad news)\b/.test(s)) return "sad";
-  if (/(money|pipeline|revenue|quote|proposal|sale|sales|lead|client|booking|ready|captured|drafted|live|profit)/.test(s)) return "bright";
-  if (/(video|image|creative|design|animate|3d|character|dashboard|ui|website|media|content)/.test(s)) return "happy";
-  if (/(clear|current|nothing waiting|clean|welcome|calm|normal)/.test(s)) return "content";
+  if (/\bwon\b|closed|delivered|booked|launched|published|5 stars|celebrat/.test(s)) return "excited";
+  if (/\blost\b|declined|went quiet|overdue|no leads|slipped|empty|ghosted/.test(s)) return "sad";
+  if (/security|scan|breach|risk|threat|password|malware|approval|waiting|blocked|paid/.test(s)) return "alert";
+  if (/money|pipeline|revenue|quote|proposal|ready|captured|drafted|live/.test(s)) return "bright";
+  if (/clear|current|nothing waiting|clean|welcome/.test(s)) return "happy";
   return "calm";
 }
 function setGhostMood(mood, options = {}) {
@@ -720,8 +678,8 @@ function speak(text, cls = "", emotionOverride = null) {
   p.className = `say-line ${cls}`.trim();
   box.replaceChildren(p);
   const emotion = emotionOverride || emotionForText(text);
-  if (cls === "thinking") setGhostMood("thinking", { emotion: emotion === "calm" ? "bright" : emotion });
-  else if (cls === "user") setGhostMood("listening", { emotion, ms: 1600 });
+  if (cls === "thinking") setGhostMood("thinking", { emotion: "bright" });
+  else if (cls === "user") setGhostMood("listening", { emotion: "calm", ms: 1600 });
   else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
   if (cls || reduceMotion) {
     p.textContent = text;
@@ -750,17 +708,15 @@ function runCommand(raw) {
   phantomHasActed = true;
   const mode = MODES[activeMode] || MODES.ask;
   const text = mode.prefix && !/\b(draft|create|build|make|write|new)\b/i.test(raw) ? mode.prefix + raw : raw;
-  const topicEmotion = emotionForText(text);
-  speak(raw, "user", topicEmotion);
-  ghostFlare("listening", topicEmotion);
+  speak(raw, "user");
+  ghostFlare("listening");
   const respBox = $("[data-response]");
   respBox.innerHTML = "";
   setTimeout(() => {
-    speak("· · ·", "thinking", topicEmotion);
+    speak("· · ·", "thinking");
     setTimeout(() => {
       const r = handleCommand(text);
-      const responseEmotion = emotionForText(`${text} ${r.say || ""}`);
-      speak(r.say, "", responseEmotion);
+      speak(r.say);
       respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
       renderConsole();
       if (r.open) setTimeout(() => openWorkspace(r.open), reduceMotion ? 150 : 750);
@@ -782,18 +738,7 @@ function wireDeck() {
     const mode = e.target.closest("[data-mode]");
     if (mode) { setMode(mode.dataset.mode); return; }
     const navBtn = e.target.closest("[data-nav-id]");
-    if (navBtn) {
-      const id = navBtn.dataset.navId;
-      if (isAdmin() && uiPrefs().designerMode && e.shiftKey && !LOCKED_NAV.has(id)) {
-        const hiddenNav = [...new Set([...(uiPrefs().hiddenNav || []), id])];
-        updateUiPreferences({ hiddenNav });
-        if (activeNav === id) activeNav = "chat";
-        renderConsole();
-        return;
-      }
-      goNav(id);
-      return;
-    }
+    if (navBtn) { goNav(navBtn.dataset.navId); return; }
     const quick = e.target.closest("[data-quick]");
     if (quick) {
       const q = QUICK[+quick.dataset.quick];
@@ -832,21 +777,35 @@ function wireDeck() {
 }
 
 /* ============================ overlay engine ============================ */
+/* Custom, non-store workspaces (the Media Lab studio + Settings). These
+   override / extend WORKSPACE_DEFS without touching workspaces.js. */
+const mediaOpts = () => ({
+  esc,
+  isAdmin: isAdmin(),
+  notify: (who, text) => { pushActivity(who, text); store.save(); },
+  openSettings: () => openWorkspace("settings"),
+  renderBriefs: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
+});
+const CUSTOM = {
+  media: { title: "Media Lab", kicker: "AI studio", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
+  settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
+};
+
 let openId = null;
 function openWorkspace(id, pushHash = true) {
-  const def = WORKSPACE_DEFS[id];
+  const def = CUSTOM[id] || WORKSPACE_DEFS[id];
   if (!def) return;
   if (def.adminOnly && !isAdmin()) return;
   closeOverlay(false);
   openId = id;
   document.body.classList.add("overlay-open");
   overlayRoot.innerHTML = `
-    <div class="overlay" role="dialog" aria-modal="true" aria-label="${esc(def.title)}">
+    <div class="overlay ${def.wide ? "overlay-wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(def.title)}">
       <button class="overlay-backdrop" data-overlay-close aria-label="Back to console"></button>
       <section class="overlay-panel">
         <header class="overlay-head">
           <div>
-            <p class="overlay-kicker">${esc(def.kicker)}${isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
+            <p class="overlay-kicker">${esc(def.kicker)}${!def.custom && isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
             <h2>${esc(def.title)}</h2>
           </div>
           <button class="overlay-x" data-overlay-close aria-label="Close workspace">✕</button>
@@ -855,7 +814,10 @@ function openWorkspace(id, pushHash = true) {
       </section>
     </div>`;
   const body = $("[data-overlay-body]", overlayRoot);
-  const rerender = () => { def.render(body, rerender); if (id === "phantom") wirePhantomConsole(body); };
+  const rerender = () => {
+    if (def.custom) def.render(body);
+    else { def.render(body, rerender); if (id === "phantom") wirePhantomConsole(body); }
+  };
   rerender();
   overlayRoot.querySelectorAll("[data-overlay-close]").forEach((b) => b.addEventListener("click", () => closeOverlay(true)));
   if (pushHash && location.hash !== `#ws/${id}`) {
@@ -881,7 +843,7 @@ function syncNavToView() {
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });
 window.addEventListener("popstate", () => {
   const m = location.hash.match(/^#ws\/([a-z]+)/);
-  if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
+  if (m && (CUSTOM[m[1]] || WORKSPACE_DEFS[m[1]])) openWorkspace(m[1], false);
   else closeOverlay(false);
 });
 
@@ -916,9 +878,9 @@ function wirePhantomConsole(body) {
 
 /* ============================ ghost (2D character) ============================ */
 let ghostPulse = 0;
-function ghostFlare(mood = "bright", emotionOverride = null) {
+function ghostFlare(mood = "bright") {
   ghostPulse = 1;
-  setGhostMood(mood, { emotion: emotionOverride || (mood === "listening" ? "calm" : mood), ms: 1200 });
+  setGhostMood(mood, { emotion: mood === "listening" ? "calm" : mood, ms: 1200 });
 }
 function initPhantom3D() {
   const canvas = $("[data-phantom-3d]");
@@ -996,7 +958,7 @@ function enterPhantom() {
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
-  if (view && view !== "command" && WORKSPACE_DEFS[view]) openWorkspace(view);
+  if (view && view !== "command" && (CUSTOM[view] || WORKSPACE_DEFS[view])) openWorkspace(view);
   const m = location.hash.match(/^#ws\/([a-z]+)/);
   if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
   // a data-driven spoken briefing once the reveal settles

@@ -18,9 +18,6 @@ const ACCENTS = {
   alert: 0xff5c74,
   sad: 0x3ac89e,
   excited: 0x84ffcf,
-  surprised: 0x60ff8c,
-  sheepish: 0x78ffc8,
-  coy: 0x50ff96,
 };
 
 export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
@@ -37,8 +34,8 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
   renderer.outputColorSpace = THREE.SRGBColorSpace;
 
   const scene = new THREE.Scene();
-  const camera = new THREE.PerspectiveCamera(25, 1, 0.1, 20);
-  camera.position.set(0, 0.08, 5.85);
+  const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 20);
+  camera.position.set(0, 0.08, 5.4);
 
   const root = new THREE.Group();
   root.position.y = -0.1;
@@ -53,13 +50,13 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
   const shadowMat = new THREE.MeshBasicMaterial({
     ...shared,
     color: 0x41ffa1,
-    opacity: 0.045,
+    opacity: 0.18,
     blending: THREE.AdditiveBlending,
   });
   const rimMat = new THREE.MeshBasicMaterial({
     ...shared,
     color: 0x9dffd0,
-    opacity: 0.04,
+    opacity: 0.26,
     blending: THREE.AdditiveBlending,
   });
   const bodyMat = new THREE.MeshBasicMaterial({
@@ -69,8 +66,8 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
   });
 
   const shadow = new THREE.Mesh(planeGeo, shadowMat);
-  shadow.position.set(0, 0.035, -0.24);
-  shadow.scale.set(1.045, 1.035, 1);
+  shadow.position.set(-0.02, 0.02, -0.2);
+  shadow.scale.set(1.12, 1.08, 1);
   root.add(shadow);
 
   const body = new THREE.Mesh(planeGeo, bodyMat);
@@ -78,8 +75,8 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
   root.add(body);
 
   const rim = new THREE.Mesh(planeGeo, rimMat);
-  rim.position.set(0.025, 0.045, 0.1);
-  rim.scale.set(1.012, 1.006, 1);
+  rim.position.set(0.12, 0.06, 0.13);
+  rim.scale.set(1.02, 1.01, 1);
   root.add(rim);
 
   const ringGroup = new THREE.Group();
@@ -159,8 +156,8 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     const h = 3.72;
     const w = h * aspect;
     body.scale.set(w / 2.7, 1, 1);
-    shadow.scale.set((w / 2.7) * 1.045, 1.035, 1);
-    rim.scale.set((w / 2.7) * 1.012, 1.006, 1);
+    shadow.scale.set((w / 2.7) * 1.13, 1.07, 1);
+    rim.scale.set((w / 2.7) * 1.04, 1.01, 1);
   }
 
   function getTexture(src) {
@@ -225,18 +222,18 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     const pulse = m.pulse + talk * 0.24 + think * 0.12;
 
     root.position.y = -0.07 + Math.sin(t * 1.15) * m.bob + talk * 0.035;
-    root.rotation.y = smoothX * 0.22 + Math.sin(t * 0.42) * 0.035;
-    root.rotation.x = -smoothY * 0.045 + Math.sin(t * 0.52) * 0.01;
-    root.rotation.z = smoothX * -0.018 + Math.sin(t * 0.35) * 0.007;
+    root.rotation.y = smoothX * 0.62 + Math.sin(t * 0.42) * 0.12;
+    root.rotation.x = -smoothY * 0.12 + Math.sin(t * 0.52) * 0.02;
+    root.rotation.z = smoothX * -0.05 + Math.sin(t * 0.35) * 0.018;
     const breathe = 1 + Math.sin(t * 1.6) * m.breathe + talk * 0.02;
-    root.scale.set(breathe * (1 + Math.abs(smoothX) * 0.012), breathe, 1);
+    root.scale.set(breathe * (1 + Math.abs(smoothX) * 0.04), breathe, 1);
 
-    bodyMat.opacity = 0.92 + pulse * 0.055;
-    shadowMat.opacity = 0.028 + pulse * 0.045;
-    rimMat.opacity = 0.022 + Math.abs(smoothX) * 0.07 + pulse * 0.035;
-    rim.position.x = 0.025 + smoothX * 0.055;
-    rim.position.z = 0.1 + Math.abs(smoothX) * 0.035;
-    shadow.position.x = -smoothX * 0.038;
+    bodyMat.opacity = 0.89 + pulse * 0.08;
+    shadowMat.opacity = 0.11 + pulse * 0.15;
+    rimMat.opacity = 0.15 + Math.abs(smoothX) * 0.36 + pulse * 0.1;
+    rim.position.x = 0.1 + smoothX * 0.34;
+    rim.position.z = 0.1 + Math.abs(smoothX) * 0.12;
+    shadow.position.x = -smoothX * 0.18;
 
     ringGroup.rotation.z += (0.002 + m.spin * 0.006) * (reduceMotion ? 0.2 : 1);
     ringGroup.scale.setScalar(1 + Math.sin(t * 1.25) * 0.025 + pulse * 0.04);

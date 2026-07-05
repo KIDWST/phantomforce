@@ -6,7 +6,7 @@
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, pushToolPulse, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
-  PACKAGES, RETAINERS, UI_NAV_ITEMS, UI_DASHBOARD_WIDGETS, defaultUiPreferences, uiPrefs, updateUiPreferences,
+  PACKAGES, RETAINERS,
 } from "./store.js";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -550,41 +550,8 @@ function renderApprovals(el, rerender) {
 }
 
 /* ============================== PHANTOMOPS ============================== */
-function orderedUiNavItems() {
-  const prefs = uiPrefs();
-  const byId = new Map(UI_NAV_ITEMS.map((item) => [item.id, item]));
-  const ordered = (prefs.navOrder || []).map((id) => byId.get(id)).filter(Boolean);
-  for (const item of UI_NAV_ITEMS) if (!ordered.some((x) => x.id === item.id)) ordered.push(item);
-  return ordered.filter((item) => !item.adminOnly || isAdmin());
-}
-
-function moveUiNav(id, dir) {
-  const prefs = uiPrefs();
-  const order = [...prefs.navOrder];
-  const index = order.indexOf(id);
-  const nextIndex = index + dir;
-  if (index < 0 || nextIndex < 0 || nextIndex >= order.length) return;
-  [order[index], order[nextIndex]] = [order[nextIndex], order[index]];
-  updateUiPreferences({ navOrder: order });
-}
-
-function toggleUiNav(id) {
-  const item = UI_NAV_ITEMS.find((nav) => nav.id === id);
-  if (!item || item.locked) return;
-  const hidden = new Set(uiPrefs().hiddenNav || []);
-  if (hidden.has(id)) hidden.delete(id);
-  else hidden.add(id);
-  updateUiPreferences({ hiddenNav: [...hidden] });
-}
-
-function toggleUiWidget(id) {
-  const prefs = uiPrefs();
-  updateUiPreferences({ dashboardWidgets: { [id]: prefs.dashboardWidgets?.[id] === false } });
-}
-
 function renderAdmin(el, rerender) {
   if (!isAdmin()) { el.innerHTML = empty("This area belongs to your PhantomForce operator."); return; }
-  const prefs = uiPrefs();
   const lanes = [
     ["Workforce intelligence", "ready", "planning / spec / build lanes loaded"],
     ["Memory & context", "ready", "backend context store reachable"],
@@ -593,55 +560,7 @@ function renderAdmin(el, rerender) {
     ["Media generation lane", "gated", "paid — every run needs approval"],
     ["Private access gateway", "active", "admin + client hosts enforced upstream"],
   ];
-  const navRows = orderedUiNavItems().map((item, index, list) => {
-    const hidden = (prefs.hiddenNav || []).includes(item.id);
-    const locked = item.locked;
-    return `
-      <article class="ui-row ${hidden ? "is-muted" : ""}">
-        <span class="ui-row-main">
-          <b>${esc(item.label)}</b>
-          <i>${esc(item.description)}${locked ? " Core tab - always available." : hidden ? " Hidden from sidebar; still reachable from Settings/search." : ""}</i>
-        </span>
-        <span class="ui-row-actions">
-          <button class="mini-btn" data-act="nav-up" data-id="${item.id}" ${index === 0 ? "disabled" : ""}>Up</button>
-          <button class="mini-btn" data-act="nav-down" data-id="${item.id}" ${index === list.length - 1 ? "disabled" : ""}>Down</button>
-          <button class="mini-btn ${hidden ? "is-on" : ""}" data-act="toggle-nav" data-id="${item.id}" ${locked ? "disabled" : ""}>${hidden ? "Show" : locked ? "Locked" : "Hide"}</button>
-        </span>
-      </article>`;
-  }).join("");
-  const widgetRows = UI_DASHBOARD_WIDGETS.map((item) => {
-    const on = prefs.dashboardWidgets?.[item.id] !== false;
-    return `
-      <button class="ui-widget-toggle ${on ? "is-on" : ""}" data-act="toggle-widget" data-id="${item.id}">
-        <span><b>${esc(item.label)}</b><i>${esc(item.description)}</i></span>
-        <em>${on ? "Shown" : "Hidden"}</em>
-      </button>`;
-  }).join("");
   el.innerHTML = `
-    <div class="settings-hero">
-      <div>
-        <p class="ws-note">Make this dashboard feel like your own without breaking the core app. Hidden tabs stay recoverable, Settings stays locked on, and outbound actions still respect approvals.</p>
-        <h3>Customize PhantomForce</h3>
-      </div>
-      <button class="designer-switch ${prefs.designerMode ? "is-on" : ""}" data-act="toggle-designer">
-        <span>${prefs.designerMode ? "Designer Mode On" : "Designer Mode Off"}</span>
-        <i>${prefs.designerMode ? "Shift-click sidebar tabs to hide them." : "Turn on mouse-friendly layout editing."}</i>
-      </button>
-    </div>
-    <div class="ui-settings-grid">
-      <section class="ui-settings-panel">
-        <div class="ui-panel-head"><h4>Sidebar Tabs</h4><p>Move, hide, or restore the surfaces you care about. Chat and Settings are protected.</p></div>
-        <div class="ui-row-list">${navRows}</div>
-      </section>
-      <section class="ui-settings-panel">
-        <div class="ui-panel-head"><h4>Dashboard Blocks</h4><p>Keep the home screen visual and focused. Turn off sections that get in your way.</p></div>
-        <div class="ui-widget-grid">${widgetRows}</div>
-        <div class="record-actions settings-actions">
-          <button class="btn btn-quiet" data-act="reset-ui">Reset UI layout</button>
-          <span class="hint-inline">Safe reset only touches your local UI preferences.</span>
-        </div>
-      </section>
-    </div>
     <div class="ws-toolbar">
       <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to clients.</p>
       <button class="btn btn-primary" data-act="pulse-tools">Pulse all tool activity to LIVE bar</button>
@@ -679,12 +598,6 @@ function renderAdmin(el, rerender) {
       <span class="hint-inline">Rebuilds the seeded workspace records. Local only.</span>
     </div>`;
   bindActions(el, {
-    "toggle-designer": () => { updateUiPreferences({ designerMode: !uiPrefs().designerMode }); rerender(); },
-    "toggle-nav": (id) => { toggleUiNav(id); rerender(); },
-    "nav-up": (id) => { moveUiNav(id, -1); rerender(); },
-    "nav-down": (id) => { moveUiNav(id, 1); rerender(); },
-    "toggle-widget": (id) => { toggleUiWidget(id); rerender(); },
-    "reset-ui": () => { store.state.uiPreferences = defaultUiPreferences(); store.save(); rerender(); },
     "pulse-tools": () => { pushToolPulse(); store.save(); rerender(); },
     reset: () => { if (confirm("Reset local Phantom data to the seeded state?")) { store.reset(); rerender(); } },
   });
@@ -716,7 +629,7 @@ export const WORKSPACE_DEFS = {
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
   workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
-  adminos: { title: "Settings", kicker: "Customize PhantomForce", render: renderAdmin, adminOnly: true },
+  adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
 /* Mission-grid widgets: id → live stat line. Scales by adding entries. */
