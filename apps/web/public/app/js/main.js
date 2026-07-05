@@ -349,9 +349,6 @@ function cardHtml(c) {
   const actionHtml = (a) => {
     if (a.open) return `<button class="btn" data-open-ws="${esc(a.open)}">${esc(a.label)}</button>`;
     if (a.prompt) return `<button class="btn" data-card-prompt="${esc(a.prompt)}">${esc(a.label)}</button>`;
-    if (a.intakeAction && a.intakeId) {
-      return `<button class="btn" data-intake-action="${esc(a.intakeAction)}" data-intake-id="${esc(a.intakeId)}">${esc(a.label)}</button>`;
-    }
     return `<button class="btn" type="button" disabled>${esc(a.label)}</button>`;
   };
   return `
@@ -376,6 +373,7 @@ function responseCard(kicker, title, body, actions = [], meta = "", extra = {}) 
 }
 
 const MEDIA_INTAKE_LIMIT = 50;
+let pendingAttachments = [];
 
 function mediaKind(file) {
   const type = String(file?.type || "").toLowerCase();
@@ -411,22 +409,89 @@ function summarizeMediaFiles(files = []) {
 
 function mediaPreviews(accepted = []) {
   return accepted.slice(0, 9).map(({ file, kind }) => ({
+    id: uid("attach"),
     kind,
     name: file.name || kind,
+    size: file.size || 0,
+    type: file.type || "",
     src: URL.createObjectURL(file),
   }));
 }
 
-const mediaIntakeBatches = new Map();
+function renderAttachmentTray() {
+  const tray = $("[data-attachment-tray]");
+  const form = $("[data-command-form]");
+  if (!tray) return;
+  tray.hidden = !pendingAttachments.length;
+  form?.classList.toggle("has-attachments", !!pendingAttachments.length);
+  if (!pendingAttachments.length) {
+    tray.innerHTML = "";
+    return;
+  }
+  tray.innerHTML = pendingAttachments.map((item) => `
+    <figure class="chat-attachment" data-attachment-id="${esc(item.id)}" title="${esc(item.name)}">
+      <button class="attachment-remove" type="button" data-attachment-remove="${esc(item.id)}" aria-label="Remove ${esc(item.name)}">×</button>
+      ${item.kind === "video"
+        ? `<video src="${esc(item.src)}" muted playsinline preload="metadata"></video>`
+        : `<img src="${esc(item.src)}" alt="${esc(item.name)}" loading="lazy">`}
+      <figcaption>${esc(item.kind)}</figcaption>
+      <button class="attachment-edit" type="button" data-attachment-edit="${esc(item.id)}" aria-label="Edit ${esc(item.name)}">Edit</button>
+    </figure>
+  `).join("");
+}
 
-function mediaIntakeAsset(batch, mode = "basic-edit") {
-  const firstImage = (batch.preview || []).find((item) => item.kind === "image");
-  if (!firstImage) return null;
+function removeAttachment(id) {
+  const next = [];
+  pendingAttachments.forEach((item) => {
+    if (item.id === id) {
+      try { URL.revokeObjectURL(item.src); } catch {}
+    } else {
+      next.push(item);
+    }
+  });
+  pendingAttachments = next;
+  renderAttachmentTray();
+}
+
+function clearPendingAttachments(ids = null) {
+  const chosen = ids ? new Set(ids) : null;
+  pendingAttachments = pendingAttachments.filter((item) => {
+    const remove = !chosen || chosen.has(item.id);
+    if (remove) {
+      try { URL.revokeObjectURL(item.src); } catch {}
+      return false;
+    }
+    return true;
+  });
+  renderAttachmentTray();
+}
+
+function stageMediaAttachments(files) {
+  if (!isAdmin()) {
+    speak("File drop is available from the admin Phantom only.");
+    return;
+  }
+  const summary = summarizeMediaFiles(files);
+  if (!summary.accepted.length) {
+    setGhostMood("listening", { emotion: "calm", ms: 900 });
+    return;
+  }
+  pendingAttachments = [
+    ...pendingAttachments,
+    ...mediaPreviews(summary.accepted),
+  ].slice(-MEDIA_INTAKE_LIMIT);
+  renderAttachmentTray();
+  $("[data-command-input]")?.focus();
+  setGhostMood("listening", { emotion: "bright", ms: 1100 });
+}
+
+function attachmentAsset(item, mode = "basic-edit") {
+  if (!item || item.kind !== "image") return null;
   return {
     kind: "image",
-    src: firstImage.src,
-    originalSrc: firstImage.src,
-    prompt: `${firstImage.name || "Uploaded image"} local image edit`,
+    src: item.src,
+    originalSrc: item.src,
+    prompt: `${item.name || "Uploaded image"} local image edit`,
     style: "upload",
     crop: "1:1",
     filter: mode === "basic-edit" ? "clean" : "studio",
@@ -437,146 +502,74 @@ function mediaIntakeAsset(batch, mode = "basic-edit") {
   };
 }
 
-function promoteMediaIntake(batchId, mode = "media-lab") {
-  const batch = mediaIntakeBatches.get(batchId);
-  if (!batch) {
-    speak("I do not have that file staged anymore. Drop it again and I can work on it.");
-    return;
-  }
-  const imageMode = mode === "bg-remove" || mode === "basic-edit";
-  const asset = imageMode ? mediaIntakeAsset(batch, mode) : null;
-  const firstName = batch.fileNames?.[0] || "Uploaded file";
+function promoteAttachmentToMedia(item, mode = "basic-edit") {
+  if (!item) return;
+  const imageMode = item.kind === "image" && (mode === "bg-remove" || mode === "basic-edit");
+  const asset = imageMode ? attachmentAsset(item, mode) : null;
   const title = imageMode
-    ? `${firstName} — ${mode === "bg-remove" ? "background cleanup" : "quick edit"}`
-    : `${batch.title} — Media Lab project`;
-  const media = {
+    ? `${item.name} — ${mode === "bg-remove" ? "background cleanup" : "quick edit"}`
+    : `${item.name} — Media Lab project`;
+  store.state.media ||= [];
+  store.state.media.unshift({
     id: uid("med"),
-    ws: batch.ws,
+    ws: currentWs(),
     title,
     type: imageMode ? "Image edit" : "Uploaded media project",
-    modality: imageMode ? "image" : batch.videoCount ? "video" : "image",
+    modality: imageMode ? "image" : item.kind === "video" ? "video" : "image",
     status: imageMode ? "image-ready" : "brief-ready",
     angle: imageMode
-      ? (mode === "bg-remove" ? "Background removal pass staged. Check it, crop it, then save." : "Quick edit staged. Crop, clean up, style, then save.")
-      : "Media Lab project created from the uploaded files.",
+      ? (mode === "bg-remove" ? "Background cleanup staged." : "Quick edit staged.")
+      : "Media Lab project created from the attached file.",
     shots: imageMode
-      ? ["Check image", "Crop", "Remove background if needed", "Style", "Save final"]
-      : ["Pick strongest asset", "Plan edit", "Choose output", "Approve paid generation only if needed"],
+      ? ["Check image", "Crop", "Clean up", "Style", "Save final"]
+      : ["Pick the best moment", "Plan edit", "Choose output", "Approve paid generation only if needed"],
     caption: imageMode ? "Image ready for edits." : "Media brief ready.",
     proof: null,
     asset,
     source: "phantom-chat-explicit-media-lab",
-    fileCount: batch.fileCount,
-    imageCount: batch.imageCount,
-    videoCount: batch.videoCount,
-    files: batch.fileNames,
+    fileCount: 1,
+    imageCount: item.kind === "image" ? 1 : 0,
+    videoCount: item.kind === "video" ? 1 : 0,
+    sizeBytes: item.size || 0,
+    files: [item.name],
     updated: new Date().toISOString(),
-  };
-  store.state.media ||= [];
-  store.state.media.unshift(media);
-  pushActivity(imageMode ? "Image tools" : "Media Lab", `${imageMode ? "staged edit" : "created project"}: ${title}.`, batch.ws);
+  });
+  pushActivity(imageMode ? "Image tools" : "Media Lab", `${imageMode ? "staged edit" : "created project"}: ${title}.`, currentWs());
   store.save();
-  speak(imageMode
-    ? `${mode === "bg-remove" ? "Background cleanup" : "Quick edit"} is ready. Opening image tools.`
-    : "Media Lab project created. Opening it now.");
+  removeAttachment(item.id);
+  speak(imageMode ? "Opening image tools." : "Opening Media Lab.");
   renderDashboard();
   setTimeout(() => openWorkspace("media"), reduceMotion ? 80 : 240);
 }
 
+function promoteAttachmentsForCommand(text = "") {
+  if (!pendingAttachments.length) return false;
+  const s = String(text || "").toLowerCase();
+  if (!s.trim()) {
+    $("[data-command-input]")?.focus();
+    return;
+  }
+  const selected = [...pendingAttachments];
+  if (/remove\s+(the\s+)?background|background\s+remov|transparent|cut\s*out|png/i.test(s)) {
+    selected.filter((item) => item.kind === "image").forEach((item) => promoteAttachmentToMedia(item, "bg-remove"));
+    return true;
+  }
+  if (/\b(edit|crop|resize|clean|enhance|fix|touch\s*up|make it look)\b/i.test(s)) {
+    selected.filter((item) => item.kind === "image").forEach((item) => promoteAttachmentToMedia(item, "basic-edit"));
+    return true;
+  }
+  if (/\/media|media\s+lab|make\s+(a\s+)?video|turn.*video|reel|clip/i.test(s)) {
+    selected.forEach((item) => promoteAttachmentToMedia(item, "media-lab"));
+    return true;
+  }
+  const names = selected.map((item) => item.name).join(", ");
+  clearPendingAttachments(selected.map((item) => item.id));
+  runCommand(`${text}\n\nAttached local file(s): ${names}`);
+  return true;
+}
+
 function handleMediaIntake(files) {
-  if (!isAdmin()) {
-    speak("File drop is available from the admin Phantom only.");
-    return;
-  }
-  const summary = summarizeMediaFiles(files);
-  const respBox = $("[data-response]");
-  if (!summary.accepted.length) {
-    speak("I can take images or videos here. Drop photos, graphics, clips, reels, or source footage.");
-    if (respBox) {
-      respBox.innerHTML = [responseCard(
-        "Files",
-        "No usable media found",
-        `${summary.rejected.length || summary.all.length} file(s) skipped. Accepted: images and videos only.`,
-        [{ label: "Open Media Lab", open: "media" }],
-      )].map(cardHtml).join("");
-    }
-    return;
-  }
-
-  const ws = currentWs();
-  const batchId = uid("media-batch");
-  const fileNames = summary.accepted.map(({ file }) => file.name || "untitled");
-  const preview = mediaPreviews(summary.accepted);
-  const titleParts = [];
-  if (summary.imageCount) titleParts.push(`${summary.imageCount} image${summary.imageCount === 1 ? "" : "s"}`);
-  if (summary.videoCount) titleParts.push(`${summary.videoCount} video${summary.videoCount === 1 ? "" : "s"}`);
-  const title = `${titleParts.join(", ") || `${summary.accepted.length} file${summary.accepted.length === 1 ? "" : "s"}`} ready`;
-  const meta = `${summary.accepted.length} file${summary.accepted.length === 1 ? "" : "s"} · ${formatBytes(summary.size)} · ${summary.rejected.length ? `${summary.rejected.length} skipped · ` : ""}saved here`;
-
-  mediaIntakeBatches.set(batchId, {
-    id: batchId,
-    ws,
-    title,
-    fileCount: summary.accepted.length,
-    imageCount: summary.imageCount,
-    videoCount: summary.videoCount,
-    sizeBytes: summary.size,
-    fileNames: fileNames.slice(0, MEDIA_INTAKE_LIMIT),
-    preview,
-    createdAt: new Date().toISOString(),
-  });
-  store.state.intake ||= [];
-  store.state.intake.unshift({
-    id: batchId,
-    ws,
-    title,
-    status: "saved",
-    note: "File staged. Choose a quick edit or explicitly send it to Media Lab.",
-    source: "phantom-chat-file-intake",
-    fileCount: summary.accepted.length,
-    imageCount: summary.imageCount,
-    videoCount: summary.videoCount,
-    sizeBytes: summary.size,
-    files: fileNames.slice(0, MEDIA_INTAKE_LIMIT),
-    createdAt: new Date().toISOString(),
-    updated: new Date().toISOString(),
-  });
-  store.state.intake = store.state.intake.slice(0, 30);
-  pushActivity("File intake", `saved ${summary.accepted.length} local media file${summary.accepted.length === 1 ? "" : "s"}.`, ws);
-  store.save();
-
-  speak(`Got ${summary.accepted.length} file${summary.accepted.length === 1 ? "" : "s"}. Saved here. Pick a quick edit, or say /media lab when you want a full project.`);
-  if (respBox) {
-    const imageActions = summary.imageCount ? [
-      { label: "Remove background", intakeAction: "bg-remove", intakeId: batchId },
-      { label: "Basic edit", intakeAction: "basic-edit", intakeId: batchId },
-    ] : [];
-    respBox.innerHTML = [
-      responseCard(
-        "Files added",
-        title,
-        "Saved here. Quick edits are first. Media Lab only starts when you ask for it.",
-        [
-          ...imageActions,
-          { label: "Send to Media Lab", intakeAction: "media-lab", intakeId: batchId },
-        ],
-        meta,
-        { media: preview },
-      ),
-      responseCard(
-        "What Phantom saw",
-        "File list",
-        fileNames.slice(0, 6).join(" · ") + (fileNames.length > 6 ? ` · +${fileNames.length - 6} more` : ""),
-        [
-          { label: "Analyze file", prompt: "Analyze the uploaded file and tell me the best next edit." },
-          { label: "/media lab", prompt: "/media lab" },
-        ],
-        "Local only. No paid run.",
-      ),
-    ].map(cardHtml).join("");
-  }
-  setGhostMood("talking", { emotion: "bright", ms: 1800 });
-  renderDashboard();
+  stageMediaAttachments(files);
 }
 
 function wantsDetailedAnswer(text = "") {
@@ -948,6 +941,14 @@ function wireCommandDeck() {
   const fileButton = $("[data-file-intake-button]");
   const submitCommand = () => {
     const v = input.value.trim();
+    if (pendingAttachments.length && promoteAttachmentsForCommand(v)) {
+      input.value = "";
+      autosizeCommandInput(input);
+      form.classList.remove("is-expanded");
+      hideSlashMenu();
+      setChatControls(false);
+      return;
+    }
     if (!v) return;
     input.value = "";
     autosizeCommandInput(input);
@@ -1081,6 +1082,21 @@ function wireCommandDeck() {
     }
     const sug = e.target.closest("[data-suggest]");
     if (sug) { setHarbor(false); runCommand(sug.dataset.suggest); return; }
+    const attachmentRemove = e.target.closest("[data-attachment-remove]");
+    if (attachmentRemove) {
+      e.preventDefault();
+      e.stopPropagation();
+      removeAttachment(attachmentRemove.dataset.attachmentRemove);
+      return;
+    }
+    const attachmentEdit = e.target.closest("[data-attachment-edit]");
+    if (attachmentEdit) {
+      e.preventDefault();
+      e.stopPropagation();
+      const item = pendingAttachments.find((attachment) => attachment.id === attachmentEdit.dataset.attachmentEdit);
+      promoteAttachmentToMedia(item, item?.kind === "image" ? "basic-edit" : "media-lab");
+      return;
+    }
     const cardPrompt = e.target.closest("[data-card-prompt]");
     if (cardPrompt) {
       e.preventDefault();
@@ -1092,14 +1108,6 @@ function wireCommandDeck() {
       } else {
         runCommand(prompt);
       }
-      return;
-    }
-    const intakeAction = e.target.closest("[data-intake-action]");
-    if (intakeAction) {
-      e.preventDefault();
-      e.stopPropagation();
-      setHarbor(false);
-      promoteMediaIntake(intakeAction.dataset.intakeId, intakeAction.dataset.intakeAction);
       return;
     }
     const opener = e.target.closest("[data-open-ws]");
