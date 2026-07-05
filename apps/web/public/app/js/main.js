@@ -362,6 +362,21 @@ let ghostEmotion = "calm";
 let ghostMoodUntil = 0;
 let ghostMoodStartedAt = performance.now();
 let phantomHasActed = false;
+const GHOST_BOOT_KEY = "pf.publicGhostBootSeen.v1";
+let ghostBootComplete = false;
+
+function hasSeenGhostBoot() {
+  try { return sessionStorage.getItem(GHOST_BOOT_KEY) === "1"; } catch { return false; }
+}
+function rememberGhostBoot() {
+  try { sessionStorage.setItem(GHOST_BOOT_KEY, "1"); } catch {}
+}
+function completeGhostBoot() {
+  if (ghostBootComplete) return;
+  ghostBootComplete = true;
+  rememberGhostBoot();
+  phantom?.classList.add("ghost-boot-complete");
+}
 
 function emotionForText(text = "") {
   const s = text.toLowerCase();
@@ -418,6 +433,7 @@ function cardHtml(c) {
     </article>`;
 }
 function runCommand(raw) {
+  completeGhostBoot();
   phantomHasActed = true;
   const mode = MODES[activeMode] || MODES.ask;
   const text = mode.prefix && !/\b(draft|create|build|make|write|new)\b/i.test(raw) ? mode.prefix + raw : raw;
@@ -470,6 +486,7 @@ function openWorkspace(id, pushHash = true) {
   const def = WORKSPACE_DEFS[id];
   if (!def) return;
   if (def.adminOnly && !isAdmin()) return;
+  completeGhostBoot();
   closeOverlay(false);
   openId = id;
   document.body.classList.add("overlay-open");
@@ -555,9 +572,10 @@ function ghostFlare(mood = "bright") {
 }
 function initGhost() {
   const canvas = $("[data-ghost]");
-  if (!canvas || reduceMotion) return;
+  if (!canvas || reduceMotion) { completeGhostBoot(); return; }
+  rememberGhostBoot();
   const ctx2 = canvas.getContext("2d");
-  if (!ctx2) return;
+  if (!ctx2) { completeGhostBoot(); return; }
   const small = window.matchMedia("(max-width: 720px)").matches;
   const character = createPhantomCharacter({ small });
   let w = 0, h = 0, dpr = 1;
@@ -576,10 +594,18 @@ function initGhost() {
   }, { passive: true });
   const t0 = performance.now();
   let last = t0;
+  const bootRevealMs = reduceMotion ? 0 : 3200;
   const frame = (now) => {
+    if (ghostBootComplete) return;
     if (document.hidden) { requestAnimationFrame(frame); return; }
     const t = (now - t0) * 0.001;
     const dt = Math.min(0.05, (now - last) * 0.001); last = now;
+    if (now - t0 > bootRevealMs) {
+      ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx2.clearRect(0, 0, w, h);
+      completeGhostBoot();
+      return;
+    }
     if (ghostMoodUntil && now > ghostMoodUntil) { ghostMood = "idle"; ghostMoodUntil = 0; ghostMoodStartedAt = now; }
     ghostPulse = Math.max(0, ghostPulse - 0.02);
     cpx += (px - cpx) * 0.08; cpy += (py - cpy) * 0.08;
@@ -592,8 +618,8 @@ function initGhost() {
       t, dt,
       cx: w / 2, cy: h * 0.54,
       scale: Math.min(w, h) * 0.30,
-      mood, emotion: ghostEmotion,
-      startupOnly: false,
+      mood: "idle", emotion: "happy",
+      startupOnly: true,
       moodAge: Math.max(0, (now - ghostMoodStartedAt) * 0.001),
       pulse: ghostPulse,
       px: cpx, py: cpy,
@@ -608,7 +634,11 @@ let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; initGhost(); startClock(); }
+  const showGhostBoot = !hasSeenGhostBoot();
+  ghostBootComplete = !showGhostBoot;
+  phantom.classList.toggle("ghost-boot-complete", !showGhostBoot);
+  if (showGhostBoot && !ghostStarted) { ghostStarted = true; initGhost(); }
+  startClock();
   activeNav = "dashboard";
   renderConsole();
   const q = new URLSearchParams(location.search);
