@@ -67,3 +67,47 @@ pm2 save
 - Real client IP for the per-user limit comes from `X-Forwarded-For` (Pangolin sets it).
 - If the proxy is down, unreachable, or has no key, the site silently falls
   back to the built-in local responder — the page is never broken.
+
+## Media generation (Media Lab)  —  POST /generate
+
+The admin Media Lab (image + video generator/editor) routes through this same
+proxy. The browser sends `{provider, modality, model, prompt, params}`; the
+proxy maps the provider id to the real API and signs it with a key from the
+environment. Keys never touch the browser.
+
+Enable a provider by setting its key, then flip it on in **Settings → Media
+generation** in the app:
+
+```bash
+HIGGSFIELD_API_KEY=hf_...      # image + video
+OPENAI_API_KEY=sk-...          # gpt-image-1
+# optional: PF_MEDIA_ADMIN_KEY=...  -> require x-admin-key on /generate
+#           PF_MEDIA_ENABLED=0      -> disable generation entirely
+#           HIGGSFIELD_API_URL=...  -> override the Higgsfield endpoint
+```
+
+`GET /health` reports which media providers are configured under `media`.
+
+### Add your own provider (one entry + one function)
+
+In `server.mjs` / `worker.js`, add to `MEDIA_PROVIDERS`:
+
+```js
+myprovider: {
+  keyEnv: "MYPROVIDER_API_KEY",
+  modalities: ["image", "video"],
+  gen: async (req, key) => {
+    const r = await fetch("https://api.myprovider.com/generate", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ model: req.model, prompt: req.prompt, /* … */ }),
+    });
+    const d = await r.json();
+    return d.assets.map((a) => ({ type: a.type, url: a.url })); // [{type,url}]
+  },
+},
+```
+
+Then add the matching config entry in `app/js/medialab.js` `DEFAULT_PROVIDERS`
+(or just click **Add provider** in Settings). Until a real provider answers,
+the studio renders an on-brand preview so the UI is never broken.

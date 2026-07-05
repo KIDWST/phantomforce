@@ -63,7 +63,7 @@ const GLOBAL_DAILY_CAP = Number(process.env.PF_GLOBAL_DAILY_CAP || 1000);
 const MAX_TOKENS = Number(process.env.PF_MAX_TOKENS || 220);
 const MIN_GAP_MS = Number(process.env.PF_MIN_GAP_MS || 2500);
 const ALLOWED = (process.env.PF_ALLOWED_ORIGINS ||
-  "https://phantomforce.online,https://www.phantomforce.online,https://app.phantomforce.online,http://127.0.0.1:8099,http://localhost:8099"
+  "https://phantomforce.online,https://www.phantomforce.online,https://app.phantomforce.online,https://admin.phantomforce.online,http://127.0.0.1:8099,http://localhost:8099,http://127.0.0.1:8741,http://localhost:8741"
 ).split(",").map((s) => s.trim());
 
 // --- Demo signup → automated email (Resend) ---
@@ -191,6 +191,98 @@ async function askOpenRouter(message) {
   if (!upstream.ok) return "";
   const data = await upstream.json();
   return (((((data || {}).choices || [])[0] || {}).message || {}).content || "").trim();
+}
+
+/* ============================================================================
+   MEDIA GENERATION  —  POST /generate
+   Routes the admin Media Lab to real image/video providers. The browser never
+   holds a key: it sends {provider, modality, model, prompt, params}; this proxy
+   maps the provider id → the real API and signs it with a key from THIS env.
+
+   PLUGGABLE: to add a provider, add one entry to MEDIA_PROVIDERS with a key env
+   name and an async gen(req, key) that returns [{ type:"image"|"video", url }].
+   That's the whole integration. The frontend picks it up automatically once its
+   key is set and it's enabled in Settings.
+   ========================================================================== */
+const MEDIA_ENABLED = (process.env.PF_MEDIA_ENABLED || "1") !== "0";
+const MEDIA_ADMIN_KEY = process.env.PF_MEDIA_ADMIN_KEY || process.env.PF_ADMIN_KEY || "";
+
+async function genHiggsfield(req, key) {
+  // Higgsfield-style REST: POST a job, receive asset URLs. Endpoint/paths are
+  // env-overridable so an API tweak never needs a code change.
+  const url = process.env.HIGGSFIELD_API_URL || "https://api.higgsfield.ai/v1/generate";
+  const r = await fetch(url, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: req.model, type: req.modality, prompt: req.prompt,
+      negative_prompt: req.negative || undefined,
+      aspect_ratio: req.params.aspect, num_outputs: req.params.count || 1,
+      duration: req.modality === "video" ? req.params.duration : undefined,
+      image: req.ref || undefined, style: req.style && req.style !== "None" ? req.style : undefined,
+    }),
+  });
+  if (!r.ok) throw new Error(`higgsfield ${r.status}`);
+  const d = await r.json();
+  const items = d.assets || d.outputs || d.data || (d.url ? [d] : []);
+  return items.map((a) => ({ type: a.type || req.modality, url: a.url || a.video_url || a.image_url }));
+}
+
+async function genOpenAIImage(req, key) {
+  const sizeMap = { "1:1": "1024x1024", "3:2": "1536x1024", "16:9": "1536x1024", "4:5": "1024x1536", "9:16": "1024x1536" };
+  const r = await fetch(`${OPENAI_BASE}/v1/images/generations`, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${key}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ model: req.model || "gpt-image-1", prompt: req.prompt, n: req.params.count || 1, size: sizeMap[req.params.aspect] || "1024x1024" }),
+  });
+  if (!r.ok) throw new Error(`openai ${r.status}`);
+  const d = await r.json();
+  return (d.data || []).map((a) => ({ type: "image", url: a.url || (a.b64_json ? `data:image/png;base64,${a.b64_json}` : "") })).filter((a) => a.url);
+}
+
+const MEDIA_PROVIDERS = {
+  higgsfield: { keyEnv: "HIGGSFIELD_API_KEY", modalities: ["image", "video", "edit"], gen: genHiggsfield },
+  openai: { keyEnv: "OPENAI_API_KEY", modalities: ["image"], gen: genOpenAIImage },
+  // Add yours here, e.g.:
+  // runway: { keyEnv: "RUNWAY_API_KEY", modalities: ["video"], gen: genRunway },
+};
+const mediaConfigured = () => Object.fromEntries(Object.entries(MEDIA_PROVIDERS).map(([id, p]) => [id, !!process.env[p.keyEnv]]));
+
+function handleGenerate(req, res, send) {
+  if (!MEDIA_ENABLED) return send({ error: "media_disabled" }, 200);
+  // Optional guard so only the owner app can spend generation credits.
+  if (MEDIA_ADMIN_KEY) {
+    const provided = String(req.headers["x-admin-key"] || "");
+    if (provided.length !== MEDIA_ADMIN_KEY.length || !crypto.timingSafeEqual(Buffer.from(provided.padEnd(MEDIA_ADMIN_KEY.length)), Buffer.from(MEDIA_ADMIN_KEY))) {
+      return send({ error: "forbidden" }, 403);
+    }
+  }
+  let body = "";
+  req.on("data", (c) => { body += c; if (body.length > 6_000_000) req.destroy(); });
+  req.on("end", async () => {
+    let payload;
+    try { payload = JSON.parse(body) || {}; } catch { return send({ error: "bad_request" }, 400); }
+    const providerId = String(payload.provider || "").toLowerCase();
+    const prov = MEDIA_PROVIDERS[providerId];
+    if (!prov) return send({ error: "unknown_provider" }, 200);
+    const key = process.env[prov.keyEnv] || String(req.headers["x-provider-key"] || "");
+    if (!key) return send({ error: "unconfigured", provider: providerId }, 200);
+    const reqOut = {
+      modality: payload.modality === "video" ? "video" : "image",
+      model: String(payload.model || ""), prompt: String(payload.prompt || "").slice(0, 2000),
+      negative: String(payload.negative || "").slice(0, 500), style: String(payload.style || ""),
+      ref: typeof payload.ref === "string" ? payload.ref.slice(0, 5_000_000) : null,
+      params: { aspect: String((payload.params || {}).aspect || "1:1"), count: Math.min(4, Math.max(1, (payload.params || {}).count || 1)), quality: (payload.params || {}).quality || "standard", duration: Math.min(12, Math.max(2, (payload.params || {}).duration || 6)) },
+    };
+    if (!reqOut.prompt) return send({ error: "empty" }, 400);
+    try {
+      const assets = await prov.gen(reqOut, key);
+      if (!assets || !assets.length) return send({ error: "upstream" }, 200);
+      send({ assets, provider: providerId, model: reqOut.model });
+    } catch (e) {
+      send({ error: "upstream", message: String(e && e.message || "").slice(0, 120) }, 200);
+    }
+  });
 }
 
 /* ---------------- demo signup → automated email ---------------- */
@@ -353,7 +445,7 @@ function handleRequest(req, res) {
   const base = {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-admin-key",
+    "Access-Control-Allow-Headers": "Content-Type, x-admin-key, x-provider-key",
     "Vary": "Origin",
     "Connection": "close",
   };
@@ -365,8 +457,10 @@ function handleRequest(req, res) {
 
   if (req.method === "OPTIONS") { res.writeHead(204, { ...base, "Content-Length": 0 }); return res.end(); }
   const path = (req.url || "").split("?")[0];
-  if (req.method === "GET" && path === "/health") return send({ ok: true, configured: !!KEY, provider: PROVIDER, model: MODEL, perUserDaily: PER_USER_DAILY, demoEmail: !!RESEND_API_KEY });
+  if (req.method === "GET" && path === "/health") return send({ ok: true, configured: !!KEY, provider: PROVIDER, model: MODEL, perUserDaily: PER_USER_DAILY, demoEmail: !!RESEND_API_KEY, media: mediaConfigured() });
   if (req.method !== "POST") { res.writeHead(405, { ...base, "Content-Length": 0 }); return res.end(); }
+  // Media generation for the admin studio (routes to real providers, key stays server-side).
+  if (path === "/generate") return handleGenerate(req, res, send);
   // Demo signup lives outside the AI proxy: it works even without an AI key.
   if (path === "/register") return handleRegister(req, res, send);
   if (path === "/upgrade") return handleUpgrade(req, res, send);
