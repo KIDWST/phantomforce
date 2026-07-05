@@ -375,7 +375,7 @@ async function initEntity() {
     // drifting, twinkling stars
     for (const s of stars) {
       const a = 0.12 + 0.3 * Math.abs(Math.sin(t * 0.6 + s.tw));
-      ctx2.fillStyle = `rgba(30,240,255,${a})`;
+      ctx2.fillStyle = `rgba(80,230,170,${a})`;
       const sx = (s.x + t * 0.004) % 1;
       ctx2.fillRect(sx * w, s.y * h, s.r, s.r);
     }

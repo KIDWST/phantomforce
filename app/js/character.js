@@ -1,20 +1,19 @@
-/* PhantomForce — the Phantom: a feature-film-style animated mascot built on
-   classic animation principles.
+/* PhantomForce — the Phantom, built to match the reference art:
+   a hooded emerald hologram specter. The hood frames a DARK void of a face
+   where only the fierce slanted eyes and a clean crescent smile glow. Real
+   sleeves end in real hands with fingers — the right hand held up conjuring
+   a green flame orb, the left offered open to the viewer. An ornate diamond
+   amulet glows at the chest. The body is thousands of particles with a
+   bright hood rim, smoky interior, and a ragged dissolving hem, rising out
+   of a circuit summoning ring.
 
-   Squash & stretch: the whole body compresses and stretches with its bounce,
-   volume-preserving. Anticipation & follow-through: every face and arm
-   parameter is driven by an underdamped SPRING, so expressions overshoot and
-   settle like a hand-animated character, never snapping. Exaggeration: the
-   emotions are over-emoted on purpose — huge sad puppy brows and a glowing
-   tear, anime arc-eyes when it's delighted, brows launched sky-high when
-   surprised, a proper villain furrow for menace.
-
-   Body: hologram particles (bent hood tip, ragged tendril hem), wisp flames,
-   a diamond amulet, posed arms with friendly rounded hands, and a summoning
-   ring it materializes from. When the conversation is quiet it performs a
-   looping idle show: idle → crosses its arms → winks → waves → laughs →
-   sways like a displayed hologram. Real moods interrupt instantly; thinking
-   brings a hand to its chin. Shared by both PhantomForce sites. */
+   Under the skin: classic animation principles. Underdamped springs drive
+   every face and arm parameter (overshoot + settle), squash & stretch is
+   volume-preserving, and the emotions are over-emoted on purpose — puppy-
+   brow sadness with a falling tear, delighted arc eyes, launched brows and
+   an O gasp for surprise, a proper villain furrow for menace. When idle it
+   performs a looping show: conjure → cross arms → wink → wave → laugh →
+   hologram sway. Real moods interrupt instantly. Shared by both sites. */
 
 const GA = 2.399963229728653;
 const TAU = Math.PI * 2;
@@ -22,30 +21,25 @@ const TAU = Math.PI * 2;
 export const ACCENTS = {
   calm: [65, 255, 161],
   happy: [132, 255, 207],
-  bright: [30, 240, 255],
+  bright: [96, 255, 140],
   alert: [255, 92, 116],
   sad: [58, 200, 158],
   excited: [132, 255, 207],
-  surprised: [30, 240, 255],
+  surprised: [96, 255, 140],
 };
 
-/* face + posture targets. browA: inner-down furrow (villain V). browSad:
-   inner-up/outer-down puppy brows. eyeHappy: eyes become delighted arcs.
-   squash: body posture (+puffed/bouncy, -slumped). drop: head hangs. */
 const FACE = {
-  idle:      { browY: 0.10, browA: 0.20, browSad: 0, browSplit: 0.00, lid: 0.85, eyeHappy: 0.0, curve: 0.32, open: 0.05, wide: 0.95, smirk: 0.55, tilt: 0.035, squash: 0.00, drop: 0.00 },
+  idle:      { browY: 0.10, browA: 0.24, browSad: 0, browSplit: 0.00, lid: 0.85, eyeHappy: 0.0, curve: 0.34, open: 0.04, wide: 1.00, smirk: 0.35, tilt: 0.03, squash: 0.00, drop: 0.00 },
   listening: { browY: 0.17, browA: -0.10, browSad: 0, browSplit: 0.00, lid: 1.00, eyeHappy: 0.0, curve: 0.12, open: 0.24, wide: 0.55, smirk: 0.10, tilt: -0.02, squash: 0.05, drop: 0.00 },
   thinking:  { browY: 0.12, browA: 0.30, browSad: 0, browSplit: 0.16, lid: 0.70, eyeHappy: 0.0, curve: 0.12, open: 0.04, wide: 0.60, smirk: 0.40, tilt: 0.06, squash: 0.00, drop: 0.02 },
-  talking:   { browY: 0.13, browA: 0.12, browSad: 0, browSplit: 0.00, lid: 0.92, eyeHappy: 0.0, curve: 0.34, open: 0.30, wide: 1.00, smirk: 0.45, tilt: 0.00, squash: 0.05, drop: 0.00 },
-  menace:    { browY: 0.02, browA: 0.60, browSad: 0, browSplit: 0.00, lid: 0.55, eyeHappy: 0.0, curve: 0.50, open: 0.16, wide: 1.10, smirk: 0.75, tilt: 0.05, squash: 0.15, drop: 0.00 },
-  happy:     { browY: 0.20, browA: 0.00, browSad: 0, browSplit: 0.00, lid: 0.75, eyeHappy: 0.85, curve: 0.75, open: 0.18, wide: 1.10, smirk: 0.35, tilt: -0.03, squash: 0.30, drop: 0.00 },
+  talking:   { browY: 0.13, browA: 0.12, browSad: 0, browSplit: 0.00, lid: 0.92, eyeHappy: 0.0, curve: 0.34, open: 0.30, wide: 1.00, smirk: 0.35, tilt: 0.00, squash: 0.05, drop: 0.00 },
+  menace:    { browY: 0.02, browA: 0.60, browSad: 0, browSplit: 0.00, lid: 0.55, eyeHappy: 0.0, curve: 0.50, open: 0.16, wide: 1.10, smirk: 0.65, tilt: 0.05, squash: 0.15, drop: 0.00 },
+  happy:     { browY: 0.20, browA: 0.00, browSad: 0, browSplit: 0.00, lid: 0.75, eyeHappy: 0.85, curve: 0.75, open: 0.18, wide: 1.10, smirk: 0.30, tilt: -0.03, squash: 0.30, drop: 0.00 },
   sad:       { browY: 0.06, browA: -0.05, browSad: 0.95, browSplit: 0.00, lid: 0.55, eyeHappy: 0.0, curve: -0.55, open: 0.05, wide: 0.70, smirk: 0.00, tilt: 0.08, squash: -0.85, drop: 0.16 },
   surprised: { browY: 0.32, browA: -0.25, browSad: 0, browSplit: 0.00, lid: 1.30, eyeHappy: 0.0, curve: 0.02, open: 0.60, wide: 0.45, smirk: 0.00, tilt: 0.00, squash: 0.35, drop: -0.06 },
-  excited:   { browY: 0.24, browA: -0.05, browSad: 0, browSplit: 0.00, lid: 1.05, eyeHappy: 0.4, curve: 0.70, open: 0.34, wide: 1.15, smirk: 0.20, tilt: -0.02, squash: 0.50, drop: 0.00 },
+  excited:   { browY: 0.24, browA: -0.05, browSad: 0, browSplit: 0.00, lid: 1.05, eyeHappy: 0.4, curve: 0.70, open: 0.34, wide: 1.15, smirk: 0.15, tilt: -0.02, squash: 0.50, drop: 0.00 },
 };
 
-/* emotion coloring layered over a base mood (so it can talk sadly, think
-   excitedly…). Full-preset emotions take over when the mood is idle. */
 function applyEmotion(T, emotion, mood) {
   const o = { ...T };
   const idleish = mood === "idle" || mood === "happy";
@@ -59,22 +53,25 @@ function applyEmotion(T, emotion, mood) {
   return o;
 }
 
-/* arm poses, right side (sx=+1); left mirrors unless a pose overrides it.
-   shoulder fixed at (±0.60, 0.30); e=elbow, h=hand in unit space. */
+/* arm poses: wrist targets in unit space (right side; hL/aL override left).
+   hand: "open" (fingers fanned) or "curl" (relaxed cup). a = hand angle
+   offset from the arm's own direction, radians. The default pose is the
+   reference art: right hand raised conjuring the flame, left offered open. */
+/* a = absolute screen angle of the fingers (radians, 0=right, +down);
+   the right hand's default is palm-up conjuring, the left is offered open */
 const ARMS = {
-  neutral: { e: [0.80, -0.05], h: [0.66, -0.38] },
-  droop:   { e: [0.72, -0.18], h: [0.58, -0.54] },
-  cross:   { e: [0.84, 0.10], h: [-0.14, 0.16], eL: [-0.84, 0.02], hL: [0.16, 0.04] },
-  wave:    { e: [0.94, 0.42], h: [1.04, 0.90], eL: [-0.80, -0.05], hL: [-0.66, -0.38] },
-  cheer:   { e: [0.88, 0.30], h: [0.64, 0.74] },
-  talk:    { e: [0.82, 0.02], h: [0.70, -0.04] },
-  chin:    { e: [0.82, 0.06], h: [0.24, 0.52], eL: [-0.80, -0.05], hL: [-0.66, -0.38] },
-  menace:  { e: [0.88, 0.18], h: [0.76, 0.34] },
+  conjure: { h: [0.90, 0.52], hand: "cup", a: -1.57, hL: [-0.84, -0.14], handL: "open", aL: 2.1 },
+  cross:   { h: [-0.14, 0.14], hand: "curl", a: 2.8, hL: [0.16, 0.02], handL: "curl", aL: 0.35 },
+  wave:    { h: [1.02, 0.84], hand: "open", a: -1.45, hL: [-0.84, -0.14], handL: "open", aL: 2.1 },
+  cheer:   { h: [0.62, 0.70], hand: "open", a: -1.57, hL: [-0.62, 0.70], handL: "open", aL: -1.57 },
+  talk:    { h: [0.74, -0.02], hand: "open", a: -0.5, hL: [-0.74, -0.02], handL: "open", aL: 3.6 },
+  chin:    { h: [0.22, 0.50], hand: "curl", a: -2.2, hL: [-0.84, -0.14], handL: "open", aL: 2.1 },
+  droop:   { h: [0.58, -0.52], hand: "curl", a: 1.57, hL: [-0.58, -0.52], handL: "curl", aL: 1.57 },
+  menace:  { h: [0.80, 0.30], hand: "open", a: -0.35, hL: [-0.80, 0.30], handL: "open", aL: 3.5 },
 };
 
-/* the idle show — loops seamlessly until a real mood interrupts */
 const SHOW = [
-  { name: "idle", d: 1.5 },
+  { name: "idle", d: 1.8 },
   { name: "cross", d: 2.5 },
   { name: "wink", d: 1.0 },
   { name: "wave", d: 2.6 },
@@ -83,41 +80,70 @@ const SHOW = [
 ];
 const SHOW_LEN = SHOW.reduce((s, g) => s + g.d, 0);
 
-/* underdamped spring: the soul of the over-emote. values overshoot their
-   target and settle, like a hand-animated character. */
 function springStep(x, v, target, dt, K, D) {
   v += ((target - x) * K - D * v) * dt;
   return [x + v * dt, v];
 }
 
+/* face void: the dark opening of the hood (unit space) */
+const VOID_CX = 0, VOID_CY = 0.95, VOID_RX = 0.46, VOID_RY = 0.53;
+
 export function createPhantomCharacter({ small = false } = {}) {
-  /* ---- particle body: hood tip, dome head, cloak, ragged tendril hem ---- */
-  const N = small ? 750 : 1350;
+  /* ---- particle body straight from the reference silhouette ---- */
+  const N = small ? 900 : 1600;
   const pts = [];
-  for (let k = 0; k < N; k++) {
-    const v = k / (N - 1);
-    const ang = k * GA;
-    const tend = Math.pow(0.5 + 0.5 * Math.cos(ang * 7), 1.7);
-    const hemY = -0.6 - tend * 1.05;
-    let R, y;
-    if (v < 0.07) { const u = v / 0.07; R = 0.05 + u * 0.32; y = 1.5 + (1 - u) * 0.42; }
-    else if (v < 0.32) { const u = (v - 0.07) / 0.25; R = Math.sin((0.35 + 0.65 * u) * Math.PI / 2); y = 1.5 - u * 0.9; }
-    else if (v < 0.6) { const u = (v - 0.32) / 0.28; R = 1 - 0.05 * Math.sin(u * Math.PI); y = 0.6 - u; }
-    else { const u = (v - 0.6) / 0.4; R = 1 - 0.16 * u; y = -0.4 + u * (hemY + 0.4); }
-    const bend = 0.34 * Math.pow(Math.max(0, 1 - v / 0.2), 2);
-    const rr = R * (0.9 + 0.1 * (((k * 9301) % 233) / 233));
-    pts.push({ x: Math.cos(ang) * rr + bend, y, z: Math.sin(ang) * rr * 0.58 });
+  const hash = (k, m) => ((k * m) % 233) / 233;
+  const pushPt = (x, y, z, dim) => pts.push({ x, y, z, dim });
+  const NHOOD = (N * 0.30) | 0, NSH = (N * 0.16) | 0, NROBE = (N * 0.34) | 0, NIN = N - NHOOD - NSH - NROBE;
+  for (let k = 0; k < NHOOD; k++) {                     // hood: pointed peak → rim, opening pushed to a bright rim
+    const t = k / NHOOD, ang = k * GA;
+    let y = 1.78 - Math.pow(t, 0.9) * 1.25;
+    const R = (0.10 + Math.pow(t, 0.85) * 1.02) * (0.92 + 0.08 * hash(k, 9301));
+    let x = Math.cos(ang) * R;
+    const z = Math.sin(ang) * R * 0.6;
+    if (z > 0) {
+      const ex = x / VOID_RX, ey = (y - VOID_CY) / VOID_RY;
+      const d = ex * ex + ey * ey;
+      if (d < 1) { const f = 1 / Math.sqrt(d + 1e-4); x = ex * f * VOID_RX; y = VOID_CY + ey * f * VOID_RY; }
+    }
+    pushPt(x, y, z, 1);
   }
+  for (let k = 0; k < NSH; k++) {                       // shoulders / cape spread
+    const t = k / NSH, ang = k * GA;
+    const y = 0.53 - t * 0.63;
+    const R = (1.02 + Math.sin(t * Math.PI) * 0.12) * (0.9 + 0.1 * hash(k, 4241));
+    pushPt(Math.cos(ang) * R, y, Math.sin(ang) * R * 0.55, 1);
+  }
+  for (let k = 0; k < NROBE; k++) {                     // robe → ragged dissolving hem
+    const t = k / NROBE, ang = k * GA;
+    const tend = Math.pow(0.5 + 0.5 * Math.cos(ang * 7), 1.7);
+    const hemY = -0.55 - tend * 1.0;
+    const y = -0.1 + t * (hemY + 0.1);
+    const R = (1.12 - 0.22 * t) * (0.88 + 0.12 * hash(k, 6367));
+    pushPt(Math.cos(ang) * R, y, Math.sin(ang) * R * 0.55, 1);
+  }
+  for (let k = 0; k < NIN; k++) {                       // smoky interior fill (never inside the face void)
+    const u = hash(k, 127), w = hash(k, 331), ang = k * GA;
+    const y = -1.1 + u * 2.55;
+    const sil = y > 0.53 ? 0.10 + (1.78 - y) / 1.25 * 1.0 : y > -0.1 ? 1.05 : 1.1 - 0.2 * (-0.1 - y);
+    const R = Math.max(0.05, sil) * Math.sqrt(w) * 0.85;
+    const x = Math.cos(ang) * R, z = Math.sin(ang) * R * 0.6;
+    if (z > 0 && (x / VOID_RX) ** 2 + ((y - VOID_CY) / VOID_RY) ** 2 < 1.05) continue;
+    pushPt(x, y, z, 0.45);
+  }
+  /* sleeve fill points (u along sleeve, v across) */
+  const SLV = [];
+  for (let k = 0; k < 30; k++) SLV.push([hash(k, 197), hash(k, 89)]);
 
   /* ---- spring-animated state ---- */
   const E = { ...FACE.idle };
   const EV = {}; for (const k in E) EV[k] = 0;
   const arm = {
-    R: { ex: 0.80, ey: -0.05, hx: 0.66, hy: -0.38, vex: 0, vey: 0, vhx: 0, vhy: 0 },
-    L: { ex: -0.80, ey: -0.05, hx: -0.66, hy: -0.38, vex: 0, vey: 0, vhx: 0, vhy: 0 },
+    R: { hx: 0.90, hy: 0.52, vhx: 0, vhy: 0 },
+    L: { hx: -0.84, hy: -0.14, vhx: 0, vhy: 0 },
   };
   let blinkT = 2.5, dartT = 2, dartX = 0, dartY = 0;
-  let born = -1, wink = 0, ringBoost = 0, swayBias = 0;
+  let born = -1, wink = 0, ringBoost = 0, swayBias = 0, flameHold = 1;
 
   const draw = (ctx2, o) => {
     const { t, cx, cy, scale, mood, emotion, pulse, px, py } = o;
@@ -131,63 +157,56 @@ export function createPhantomCharacter({ small = false } = {}) {
     const talkBeat = mood === "talking" ? Math.abs(Math.sin(t * 9.5)) : 0;
     const thinkBeat = mood === "thinking" ? Math.abs(Math.sin(t * 5.2)) : 0;
 
-    /* ---- pick the moment's acting: mood > emotion > idle show ---- */
-    let gesture = "neutral", gLocal = 0;
-    if (!settled) gesture = "neutral";
+    /* ---- acting selection: mood > emotion > idle show ---- */
+    let gesture = "conjure", gLocal = 0;
+    if (!settled) gesture = "conjure";
     else if (mood === "idle" || mood === "happy") {
       let gt = (age - 2.2) % SHOW_LEN;
-      for (const g of SHOW) { if (gt < g.d) { gesture = g.name; gLocal = gt / g.d; break; } gt -= g.d; }
-      if (["sad", "surprised"].includes(emotion)) gesture = "emote";   // big feelings pause the show
-    } else gesture = mood === "talking" ? "talk" : mood === "thinking" ? "chin" : mood === "menace" ? "menace" : "neutral";
+      for (const g of SHOW) { if (gt < g.d) { gesture = g.name === "idle" || g.name === "wink" || g.name === "sway" ? "conjure" : g.name === "laugh" ? "cheer" : g.name, gLocal = gt / g.d; break; } gt -= g.d; }
+      var showBeat = "idle";
+      { let g2 = (age - 2.2) % SHOW_LEN; for (const g of SHOW) { if (g2 < g.d) { showBeat = g.name; break; } g2 -= g.d; } }
+      if (emotion === "sad") gesture = "droop";
+      if (emotion === "excited") gesture = "cheer";
+    } else gesture = mood === "talking" ? "talk" : mood === "thinking" ? "chin" : mood === "menace" ? "menace" : "conjure";
+    const beat = typeof showBeat === "string" ? showBeat : "idle";
 
     const T = applyEmotion(FACE[mood] || FACE.idle, emotion, mood);
     if (mood === "talking") T.open = 0.1 + talkBeat * 0.42;
-    if (gesture === "cross") { T.browA += 0.12; T.curve += 0.06; T.smirk = 0.7; }
-    if (gesture === "wave") { T.curve += 0.18; T.lid = Math.min(1, T.lid + 0.1); }
-    if (gesture === "wink") { T.curve += 0.22; }
-    if (gesture === "laugh") {
+    if (beat === "cross" && gesture === "cross") { T.browA += 0.12; T.curve += 0.06; T.smirk = 0.55; }
+    if (beat === "wave") { T.curve += 0.18; T.lid = Math.min(1, T.lid + 0.1); }
+    if (beat === "wink") T.curve += 0.22;
+    if (beat === "laugh" && (mood === "idle" || mood === "happy")) {
       Object.assign(T, FACE.happy);
-      T.open = 0.25 + Math.abs(Math.sin(t * 8)) * 0.28;               // laughing chatter
+      T.open = 0.25 + Math.abs(Math.sin(t * 8)) * 0.28;
       T.squash = 0.55;
     }
-
-    /* springs: overshoot + settle (K stiffness, D damping → underdamped) */
     for (const key in E) {
       const [nx, nv] = springStep(E[key], EV[key], T[key], dt, 140, 11);
       E[key] = nx; EV[key] = nv;
     }
 
-    /* wink + sway + ring boost */
-    const winkT = gesture === "wink" ? Math.sin(Math.min(1, Math.max(0, (gLocal - 0.15) / 0.7)) * Math.PI) : 0;
+    const winkT = beat === "wink" ? Math.sin(Math.min(1, Math.max(0, (gLocal - 0.15) / 0.7)) * Math.PI) : 0;
     wink += (winkT - wink) * Math.min(1, dt * 12);
-    const swayT = gesture === "sway" ? Math.sin(gLocal * TAU) * 0.4 : 0;
+    const swayT = beat === "sway" ? Math.sin(gLocal * TAU) * 0.4 : 0;
     swayBias += (swayT - swayBias) * Math.min(1, dt * 5);
-    ringBoost += (((gesture === "sway" || !settled) ? 1 : 0) - ringBoost) * Math.min(1, dt * 4);
+    ringBoost += (((beat === "sway" || !settled) ? 1 : 0) - ringBoost) * Math.min(1, dt * 4);
+    flameHold += (((gesture === "conjure" || gesture === "chin") ? 1 : 0) - flameHold) * Math.min(1, dt * 5);
 
-    /* arms: spring toward the pose of the moment */
-    const poseName =
-      gesture === "laugh" ? "cheer" :
-      gesture === "cross" || gesture === "wave" || gesture === "talk" || gesture === "chin" || gesture === "menace" ? gesture :
-      (emotion === "sad" ? "droop" : emotion === "excited" ? "cheer" : "neutral");
-    const pose = ARMS[poseName] || ARMS.neutral;
-    const poseL = { e: pose.eL || [-pose.e[0], pose.e[1]], h: pose.hL || [-pose.h[0], pose.h[1]] };
-    const waveSwing = gesture === "wave" ? Math.sin(t * 6.4) * 0.14 * Math.sin(Math.min(1, gLocal * 2) * Math.PI) : 0;
+    /* arms: springs toward the pose */
+    const pose = ARMS[gesture] || ARMS.conjure;
+    const waveSwing = beat === "wave" ? Math.sin(t * 6.4) * 0.13 * Math.sin(Math.min(1, gLocal * 2) * Math.PI) : 0;
     const talkBob = gesture === "talk" ? Math.sin(t * 3.2) * 0.03 : 0;
-    const AK = 80, AD = 10;
-    const stepJoint = (j, k, target) => { const [nx, nv] = springStep(j[k], j["v" + k], target, dt, AK, AD); j[k] = nx; j["v" + k] = nv; };
-    stepJoint(arm.R, "ex", pose.e[0]); stepJoint(arm.R, "ey", pose.e[1]);
-    stepJoint(arm.R, "hx", pose.h[0] + waveSwing); stepJoint(arm.R, "hy", pose.h[1] + talkBob);
-    stepJoint(arm.L, "ex", poseL.e[0]); stepJoint(arm.L, "ey", poseL.e[1]);
-    stepJoint(arm.L, "hx", poseL.h[0]); stepJoint(arm.L, "hy", poseL.h[1] - talkBob);
+    const stepJ = (j, k, target) => { const [nx, nv] = springStep(j[k], j["v" + k], target, dt, 80, 10); j[k] = nx; j["v" + k] = nv; };
+    stepJ(arm.R, "hx", pose.h[0] + waveSwing); stepJ(arm.R, "hy", pose.h[1] + talkBob);
+    stepJ(arm.L, "hx", pose.hL[0]); stepJ(arm.L, "hy", pose.hL[1] - talkBob);
 
-    /* blink + eye darts */
     blinkT -= dt; if (blinkT < -0.14) blinkT = 2.2 + ((t * 997) % 1) * 3.2;
     const blink = blinkT < 0.14 && blinkT > -0.14 ? Math.abs(blinkT / 0.14) : 1;
     dartT -= dt; if (dartT < 0) { dartT = 1.6 + ((t * 131) % 1) * 2.6; dartX = (((t * 379) % 1) - 0.5) * 1.4; dartY = (((t * 733) % 1) - 0.5) * 0.8; }
     const lookX = Math.abs(px) + Math.abs(py) > 0.02 ? px * 2 : dartX;
     const lookY = Math.abs(px) + Math.abs(py) > 0.02 ? py * 1.4 : dartY;
 
-    /* squash & stretch: volume-preserving; sadness slumps, joy bounces */
+    /* squash & stretch */
     const bounce = E.squash > 0 ? Math.sin(t * 3.6) * 0.045 * E.squash : 0;
     const bodySy = 1 + E.squash * 0.055 + bounce;
     const bodySx = 1 - (bodySy - 1) * 0.6;
@@ -201,9 +220,12 @@ export function createPhantomCharacter({ small = false } = {}) {
     const revealY = -1.75 + reveal * 3.8;
     const faceAlpha = Math.max(0, Math.min(1, (reveal - 0.82) / 0.18));
 
+    const rot = Math.sin(t * 0.4) * 0.3 + px * 0.6 + swayBias;
+    const cosR = Math.cos(rot), sinR = Math.sin(rot);
+
     ctx2.globalCompositeOperation = "lighter";
 
-    /* summoning ring; flares while forming or showing off */
+    /* summoning ring + soft beam */
     ctx2.save();
     ctx2.translate(cx, cy + scale * 1.72 + floatY * 3);
     const ringA = 1 + ringBoost * 1.6;
@@ -216,7 +238,6 @@ export function createPhantomCharacter({ small = false } = {}) {
       ctx2.stroke();
     }
     if (ringBoost > 0.05) {
-      /* soft light cone rising from the ring — no hard edges */
       ctx2.save();
       ctx2.scale(0.42, 1.35);
       const bg = ctx2.createRadialGradient(0, -scale * 0.55, 0, 0, -scale * 0.55, scale * 0.95);
@@ -228,7 +249,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     }
     ctx2.restore();
 
-    /* materializing: data dust rising from the ring into the body */
+    /* materializing data dust */
     if (!settled) {
       for (let i = 0; i < 30; i++) {
         const dx = Math.sin(i * 2.13) * 0.95;
@@ -239,27 +260,7 @@ export function createPhantomCharacter({ small = false } = {}) {
       }
     }
 
-    /* wisp flames: dimmer and lower when it's sad */
-    const wispMood = emotion === "sad" ? 0.45 : 1;
-    if (reveal > 0.6) for (const ph of [0, Math.PI]) {
-      const a = t * 0.8 * wispMood + ph;
-      const al = (Math.sin(a) > 0 ? 0.4 : 0.85) * faceAlpha * wispMood;
-      const wr = scale * (0.055 + Math.sin(t * 7 + ph) * 0.008);
-      for (let tail = 3; tail >= 0; tail--) {
-        const ta = a - tail * 0.13;
-        const txp = X(Math.cos(ta) * 1.18), typ = Y(0.35 - (1 - wispMood) * 0.3 + Math.sin(ta * 2) * 0.14);
-        const g = ctx2.createRadialGradient(txp, typ, 0, txp, typ, Math.max(0.5, wr * (1 - tail * 0.18)));
-        g.addColorStop(0, `rgba(235,255,246,${Math.max(0, (al - tail * 0.16)) * (0.8 + pulse * 0.2)})`);
-        g.addColorStop(0.5, A(Math.max(0, al - tail * 0.16) * 0.6));
-        g.addColorStop(1, A(0));
-        ctx2.fillStyle = g;
-        ctx2.beginPath(); ctx2.arc(txp, typ, Math.max(0.5, wr * (1 - tail * 0.18) * 2.2), 0, TAU); ctx2.fill();
-      }
-    }
-
-    /* body: hologram particles, tendrils flowing */
-    const rot = Math.sin(t * 0.4) * 0.35 + px * 0.7 + swayBias;
-    const cosR = Math.cos(rot), sinR = Math.sin(rot);
+    /* body particles */
     const greenMix = emotion === "alert" ? 0.5 : 1;
     const mr = Math.round(65 * greenMix + accent[0] * (1 - greenMix));
     const mg = Math.round(255 * greenMix + accent[1] * (1 - greenMix));
@@ -277,57 +278,131 @@ export function createPhantomCharacter({ small = false } = {}) {
       const rz = -p.x * sinR + p.z * cosR;
       const depth = (rz + 1) / 2;
       const edge = p.y > revealY - 0.25 && !settled ? 1.8 : 1;
-      const a = (0.22 + depth * 0.55 + pulse * 0.3) * edge;
+      const a = (0.20 + depth * 0.55 + pulse * 0.3) * edge * p.dim;
       ctx2.fillStyle = `rgba(${mr},${mg},${mb},${Math.min(0.95, a)})`;
-      const sz = 0.95 + depth * 1.35 + talkBeat * 0.3;
+      const sz = (0.9 + depth * 1.35 + talkBeat * 0.3) * (p.dim < 1 ? 0.85 : 1);
       ctx2.fillRect(X(rx + warp), Y(ny), sz, sz);
     }
 
-    /* arms + friendly rounded hands */
+    /* the dark of the hood: features glow out of a void, like the art */
+    ctx2.globalCompositeOperation = "source-over";
+    ctx2.save();
+    ctx2.translate(X(VOID_CX + 0.05 * sinR), Y(VOID_CY - E.drop * 0.5));
+    ctx2.rotate(E.tilt * 0.5);
+    const vg = ctx2.createRadialGradient(0, 0, 0, 0, 0, VOID_RX * scale * breath);
+    vg.addColorStop(0, "rgba(1,7,5,0.92)");
+    vg.addColorStop(0.75, "rgba(1,7,5,0.85)");
+    vg.addColorStop(1, "rgba(1,7,5,0)");
+    ctx2.fillStyle = vg;
+    ctx2.beginPath();
+    ctx2.ellipse(0, 0, VOID_RX * 0.97 * scale * breath * bodySx, VOID_RY * 0.97 * scale * breath * bodySy, 0, 0, TAU);
+    ctx2.fill();
+    ctx2.restore();
+    ctx2.globalCompositeOperation = "lighter";
+
+    /* sleeves + hands. sleeves are soft smoky strokes (round caps, no slabs);
+       hands are solid little gloves — filled palm + thick capsule fingers */
     if (faceAlpha > 0.05) {
-      const drawArm = (side, j) => {
-        const shX = side * 0.60 * cosR, shY = 0.30;
-        ctx2.strokeStyle = A(0.55 * faceAlpha);
+      const drawSleeveHand = (side, j, handStyle, handAngle) => {
+        const shx = side * 0.58 * cosR, shy = 0.34;
+        const wx = j.hx, wy = j.hy;
+        const dx = wx - shx, dy = wy - shy;
+        const len = Math.hypot(dx, dy) || 1;
+        const nx = -dy / len, nyv = dx / len;
+        const bow = side * 0.07 + Math.sin(t * 1.8 + side) * 0.02;
+        const mx2 = shx + dx * 0.5 + nx * bow, my2 = shy + dy * 0.5 + nyv * bow;
         ctx2.lineCap = "round";
-        ctx2.shadowColor = A(0.7);
-        ctx2.shadowBlur = 8 + pulse * 6;
-        ctx2.lineWidth = scale * 0.075;
+        ctx2.shadowColor = A(0.6);
+        ctx2.shadowBlur = 6;
+        ctx2.strokeStyle = A(0.12 * faceAlpha);
+        ctx2.lineWidth = scale * 0.17;
         ctx2.beginPath();
-        ctx2.moveTo(X(shX), Y(shY));
-        ctx2.quadraticCurveTo(X(j.ex), Y(j.ey), X((j.ex + j.hx) / 2), Y((j.ey + j.hy) / 2));
+        ctx2.moveTo(X(shx), Y(shy));
+        ctx2.quadraticCurveTo(X(mx2), Y(my2), X(wx), Y(wy));
         ctx2.stroke();
-        ctx2.lineWidth = scale * 0.058;
-        ctx2.beginPath();
-        ctx2.moveTo(X((j.ex + j.hx) / 2), Y((j.ey + j.hy) / 2));
-        ctx2.quadraticCurveTo(X(j.ex * 0.35 + j.hx * 0.65), Y(j.ey * 0.35 + j.hy * 0.65), X(j.hx), Y(j.hy));
+        ctx2.strokeStyle = A(0.2 * faceAlpha);
+        ctx2.lineWidth = scale * 0.10;
         ctx2.stroke();
-        const dirA = Math.atan2(-(j.hy - j.ey), j.hx - j.ex);
-        const hx = X(j.hx), hy = Y(j.hy);
-        const pr = scale * 0.062;
-        const pg = ctx2.createRadialGradient(hx, hy, 0, hx, hy, pr * 1.6);
-        pg.addColorStop(0, `rgba(235,255,246,${0.75 * faceAlpha})`);
-        pg.addColorStop(0.6, A(0.55 * faceAlpha));
-        pg.addColorStop(1, A(0));
-        ctx2.fillStyle = pg;
-        ctx2.beginPath(); ctx2.arc(hx, hy, pr * 1.5, 0, TAU); ctx2.fill();
-        for (const f of [-0.55, 0, 0.55]) {
-          const fa = dirA + f * 0.55;
-          ctx2.fillStyle = A(0.7 * faceAlpha);
-          ctx2.beginPath(); ctx2.arc(hx + Math.cos(fa) * pr * 1.5, hy + Math.sin(fa) * pr * 1.5, pr * 0.42, 0, TAU); ctx2.fill();
-        }
         ctx2.shadowBlur = 0;
+        /* hologram flecks along the sleeve */
+        for (const [u, v] of SLV) {
+          const w2 = 0.07 + u * 0.06;
+          const sx2 = shx + dx * u + nx * (bow * 2 * u * (1 - u) + (v - 0.5) * 2 * w2);
+          const sy2 = shy + dy * u + nyv * (bow * 2 * u * (1 - u) + (v - 0.5) * 2 * w2);
+          ctx2.fillStyle = A((0.3 + u * 0.4) * faceAlpha);
+          ctx2.fillRect(X(sx2), Y(sy2), 1.3, 1.3);
+        }
+        /* the glove: filled palm + 4 thick fingers + thumb */
+        const hs = scale * 0.05;
+        ctx2.save();
+        ctx2.translate(X(wx), Y(wy));
+        ctx2.rotate(handAngle);
+        ctx2.shadowColor = A(0.85);
+        ctx2.shadowBlur = 10 + pulse * 6;
+        const hg = ctx2.createRadialGradient(0, 0, 0, 0, 0, hs * 2.4);
+        hg.addColorStop(0, `rgba(220,255,240,${0.9 * faceAlpha})`);
+        hg.addColorStop(1, A(0.5 * faceAlpha));
+        ctx2.fillStyle = hg;
+        ctx2.strokeStyle = hg;
+        ctx2.beginPath(); ctx2.ellipse(0, 0, hs * 1.05, hs * 0.88, 0, 0, TAU); ctx2.fill();
+        ctx2.lineCap = "round";
+        ctx2.lineWidth = hs * 0.72;
+        const spread = handStyle === "open" ? 0.38 : 0.3;
+        const flen = handStyle === "open" ? hs * 1.7 : hs * 1.1;
+        const bend = handStyle === "open" ? 0.1 : 0.6;
+        for (let f = 0; f < 4; f++) {
+          const fa = (f - 1.5) * spread;
+          const bx = Math.cos(fa) * hs * 0.85, by = Math.sin(fa) * hs * 0.7;
+          ctx2.beginPath();
+          ctx2.moveTo(bx, by);
+          ctx2.quadraticCurveTo(
+            bx + Math.cos(fa) * flen * 0.55, by + Math.sin(fa) * flen * 0.55,
+            bx + Math.cos(fa + bend) * flen, by + Math.sin(fa + bend) * flen);
+          ctx2.stroke();
+        }
+        ctx2.beginPath();                                   // thumb
+        ctx2.moveTo(-hs * 0.2, hs * 0.7);
+        ctx2.lineTo(hs * (handStyle === "open" ? 0.75 : 0.5), hs * 1.15);
+        ctx2.stroke();
+        ctx2.shadowBlur = 0;
+        ctx2.restore();
       };
-      drawArm(1, arm.R);
-      drawArm(-1, arm.L);
+      drawSleeveHand(1, arm.R, pose.hand, pose.a);
+      drawSleeveHand(-1, arm.L, pose.handL, pose.aL);
+
+      /* the conjured flame orb, hovering over the raised hand */
+      if (flameHold > 0.05) {
+        const fx = X(arm.R.hx + 0.02), fy = Y(arm.R.hy + 0.30 + Math.sin(t * 2.3) * 0.03);
+        const fr = scale * (0.11 + Math.sin(t * 6.4) * 0.012 + pulse * 0.03) * flameHold;
+        for (let l = 3; l >= 0; l--) {
+          const lr = fr * (1 + l * 0.55);
+          const g = ctx2.createRadialGradient(fx, fy - l * fr * 0.35, 0, fx, fy - l * fr * 0.35, lr);
+          g.addColorStop(0, l === 0 ? `rgba(235,255,246,${0.9 * flameHold * faceAlpha})` : A(0.28 * flameHold * faceAlpha / l));
+          g.addColorStop(1, A(0));
+          ctx2.fillStyle = g;
+          ctx2.beginPath(); ctx2.arc(fx, fy - l * fr * 0.35, lr, 0, TAU); ctx2.fill();
+        }
+        /* flame licks — short, thick, flickering */
+        ctx2.strokeStyle = A(0.55 * flameHold * faceAlpha);
+        ctx2.lineWidth = 2;
+        ctx2.lineCap = "round";
+        for (let l = 0; l < 3; l++) {
+          const la = t * 3 + l * 2.1;
+          ctx2.beginPath();
+          ctx2.moveTo(fx + Math.sin(la) * fr * 0.4, fy - fr * 0.5);
+          ctx2.quadraticCurveTo(fx + Math.sin(la + 1) * fr * 0.6, fy - fr * 1.0, fx + Math.sin(la * 1.3) * fr * 0.3, fy - fr * (1.35 + Math.sin(la) * 0.2));
+          ctx2.stroke();
+        }
+      }
     }
 
-    /* amulet: diamond gem at the chest */
+    /* amulet: gem in an ornate frame, like the art */
     if (faceAlpha > 0.05) {
-      const ax = X(0.02 * cosR), ay = Y(0.16);
-      const ar = scale * (0.075 + Math.sin(t * 2.1) * 0.006 + pulse * 0.02);
+      const ax = X(0.02 * cosR), ay = Y(0.10);
+      const ar = scale * (0.07 + Math.sin(t * 2.1) * 0.005 + pulse * 0.02);
       ctx2.save();
       ctx2.translate(ax, ay);
-      ctx2.rotate(Math.sin(t * 0.9) * 0.08);
+      ctx2.rotate(Math.sin(t * 0.9) * 0.06);
       const ag = ctx2.createLinearGradient(0, -ar, 0, ar);
       ag.addColorStop(0, `rgba(235,255,246,${0.92 * faceAlpha})`);
       ag.addColorStop(1, A(0.65 * faceAlpha));
@@ -337,9 +412,16 @@ export function createPhantomCharacter({ small = false } = {}) {
       ctx2.beginPath();
       ctx2.moveTo(0, -ar); ctx2.lineTo(ar * 0.62, 0); ctx2.lineTo(0, ar); ctx2.lineTo(-ar * 0.62, 0);
       ctx2.closePath(); ctx2.fill();
-      ctx2.strokeStyle = A(0.5 * faceAlpha);
-      ctx2.lineWidth = 1;
-      ctx2.beginPath(); ctx2.arc(0, 0, ar * 1.6, 0, TAU); ctx2.stroke();
+      ctx2.strokeStyle = A(0.55 * faceAlpha);
+      ctx2.lineWidth = 1.1;
+      ctx2.beginPath(); ctx2.ellipse(0, 0, ar * 1.7, ar * 2.0, 0, 0, TAU); ctx2.stroke();
+      /* side curls of the frame — separate strokes, no connecting chord */
+      ctx2.beginPath();
+      ctx2.arc(-ar * 2.1, -ar * 0.4, ar * 0.7, Math.PI * 0.2, Math.PI * 1.3);
+      ctx2.stroke();
+      ctx2.beginPath();
+      ctx2.arc(ar * 2.1, -ar * 0.4, ar * 0.7, Math.PI * 1.7, Math.PI * 0.8, true);
+      ctx2.stroke();
       ctx2.shadowBlur = 0;
       ctx2.restore();
     }
@@ -358,44 +440,41 @@ export function createPhantomCharacter({ small = false } = {}) {
       ctx2.stroke();
     }
 
-    /* ================= the FACE — where the acting happens ================= */
+    /* ================= the FACE, glowing out of the void ================= */
     if (faceAlpha > 0.02) {
       ctx2.save();
       ctx2.globalAlpha = faceAlpha;
-      const faceCx = cx + (0.06 * cosR) * scale * breath;
-      ctx2.translate(faceCx, Y(0.9 - E.drop));
+      ctx2.translate(X(0.05 * sinR), Y(VOID_CY - E.drop));
       ctx2.rotate(E.tilt + Math.sin(t * 0.8) * 0.012 + swayBias * 0.25);
-
       const s = scale * breath;
       const lid = Math.max(0.08, E.lid * blink - thinkBeat * 0.05);
       const eyeHappy = Math.max(0, Math.min(1, E.eyeHappy));
 
-      /* eyebrows: the actors. furrow = villain, sad = puppy, up = surprise */
+      /* brows: sharp glowing slashes */
       ctx2.lineCap = "round";
       ctx2.shadowColor = A(0.9);
       ctx2.shadowBlur = 10 + pulse * 8;
       for (const side of [-1, 1]) {
         const raise = side === -1 ? E.browSplit : 0;
-        const byIn = -(0.30 + E.browY + raise) * s + E.browA * 0.22 * s - E.browSad * 0.10 * s;
-        const byOut = -(0.30 + E.browY + raise) * s - E.browA * 0.10 * s + E.browSad * 0.17 * s;
+        const byIn = -(0.21 + E.browY + raise) * s + E.browA * 0.18 * s - E.browSad * 0.09 * s;
+        const byOut = -(0.21 + E.browY + raise) * s - E.browA * 0.08 * s + E.browSad * 0.15 * s;
         ctx2.strokeStyle = A(0.95);
-        ctx2.lineWidth = s * 0.055;
+        ctx2.lineWidth = s * 0.045;
         ctx2.beginPath();
-        ctx2.moveTo(side * 0.10 * s, byIn);
-        ctx2.quadraticCurveTo(side * 0.28 * s, byIn - 0.06 * s * (1 - E.browA - E.browSad), side * 0.45 * s, byOut);
+        ctx2.moveTo(side * 0.075 * s, byIn);
+        ctx2.quadraticCurveTo(side * 0.21 * s, byIn - 0.045 * s * (1 - E.browA - E.browSad), side * 0.35 * s, byOut);
         ctx2.stroke();
       }
 
-      /* eyes: almond glow + darting pupil; melt into delighted arcs when
-         it's overjoyed; the right one shuts for the wink */
+      /* eyes: fierce slanted almonds glowing out of the dark */
       for (const side of [-1, 1]) {
         const shut = side === 1 ? Math.max(0, 1 - wink * 1.4) : 1;
-        const eh = 0.135 * s * lid * shut * (1 - eyeHappy * 0.9);
-        const ew = 0.205 * s;
+        const eh = 0.115 * s * lid * shut * (1 - eyeHappy * 0.9);
+        const ew = 0.18 * s;
         ctx2.save();
-        ctx2.translate(side * 0.30 * s, -0.10 * s);
-        ctx2.rotate(side * -0.10 + side * -E.browA * 0.18 + side * E.browSad * 0.14);
-        if (eyeHappy > 0.08) {                                     // joyful ∩ arcs
+        ctx2.translate(side * 0.24 * s, -0.05 * s);
+        ctx2.rotate(side * -0.14 + side * -E.browA * 0.16 + side * E.browSad * 0.14);
+        if (eyeHappy > 0.08) {
           ctx2.strokeStyle = A(0.95 * eyeHappy);
           ctx2.lineWidth = s * 0.05;
           ctx2.beginPath(); ctx2.arc(0, eh + s * 0.05, ew * 0.72, Math.PI * 1.12, Math.PI * 1.88); ctx2.stroke();
@@ -403,44 +482,44 @@ export function createPhantomCharacter({ small = false } = {}) {
         if (eh > 0.012 && eyeHappy < 0.9) {
           const eg = ctx2.createRadialGradient(0, 0, 0, 0, 0, ew);
           eg.addColorStop(0, `rgba(238,255,248,${(0.95 + pulse * 0.05) * (1 - eyeHappy)})`);
-          eg.addColorStop(0.55, A(0.85 * (1 - eyeHappy)));
-          eg.addColorStop(1, A(0.12 * (1 - eyeHappy)));
+          eg.addColorStop(0.55, A(0.9 * (1 - eyeHappy)));
+          eg.addColorStop(1, A(0.15 * (1 - eyeHappy)));
           ctx2.fillStyle = eg;
           ctx2.beginPath();
           ctx2.moveTo(-ew, 0);
-          ctx2.quadraticCurveTo(0, -eh * 1.6, ew, 0);
-          ctx2.quadraticCurveTo(0, eh * 1.25, -ew, 0);
+          ctx2.quadraticCurveTo(0, -eh * 1.8, ew, 0);
+          ctx2.quadraticCurveTo(0, eh * 1.15, -ew, 0);
           ctx2.fill();
-          const pxp = Math.max(-1, Math.min(1, lookX)) * ew * 0.42;
+          const pxp = Math.max(-1, Math.min(1, lookX)) * ew * 0.4;
           const pyp = Math.max(-1, Math.min(1, lookY)) * eh * 0.5 + E.browSad * eh * 0.3;
           ctx2.shadowBlur = 0;
-          ctx2.fillStyle = "rgba(2,12,9,0.92)";
-          ctx2.beginPath(); ctx2.ellipse(pxp, pyp, eh * 0.62, eh * 0.62 * 1.15, 0, 0, TAU); ctx2.fill();
+          ctx2.fillStyle = "rgba(2,12,9,0.9)";
+          ctx2.beginPath(); ctx2.ellipse(pxp, pyp, eh * 0.55, eh * 0.65, 0, 0, TAU); ctx2.fill();
           ctx2.fillStyle = "rgba(240,255,250,0.9)";
-          ctx2.beginPath(); ctx2.arc(pxp - eh * 0.2, pyp - eh * 0.24, Math.max(0.6, eh * 0.14), 0, TAU); ctx2.fill();
+          ctx2.beginPath(); ctx2.arc(pxp - eh * 0.18, pyp - eh * 0.22, Math.max(0.6, eh * 0.13), 0, TAU); ctx2.fill();
           ctx2.shadowColor = A(0.9);
           ctx2.shadowBlur = 10 + pulse * 8;
         } else if (eh <= 0.012 && eyeHappy < 0.08) {
-          ctx2.strokeStyle = A(0.9);                               // cheeky shut-eye arc
+          ctx2.strokeStyle = A(0.9);
           ctx2.lineWidth = s * 0.03;
           ctx2.beginPath(); ctx2.arc(0, 0, ew * 0.7, 0.15 * Math.PI, 0.85 * Math.PI); ctx2.stroke();
         }
         ctx2.restore();
       }
 
-      /* a glowing tear wells and falls when it's really sad */
+      /* sad tear */
       if (E.browSad > 0.55) {
         const tp = (t * 0.45) % 1;
-        const ty = 0.02 * s + tp * 0.26 * s;
+        const ty = 0.06 * s + tp * 0.24 * s;
         ctx2.fillStyle = `rgba(190,255,235,${(1 - tp) * 0.85 * (E.browSad - 0.55) * 2.2})`;
         ctx2.beginPath();
-        ctx2.ellipse(-0.30 * s, ty, s * 0.02, s * 0.03, 0, 0, TAU);
+        ctx2.ellipse(-0.27 * s, ty, s * 0.02, s * 0.03, 0, 0, TAU);
         ctx2.fill();
       }
 
       /* wink sparkle */
       if (wink > 0.5) {
-        const wx = 0.44 * s, wy = -0.22 * s, wl = s * 0.09 * (wink - 0.5) * 2;
+        const wx = 0.40 * s, wy = -0.16 * s, wl = s * 0.09 * (wink - 0.5) * 2;
         ctx2.strokeStyle = `rgba(240,255,250,${(wink - 0.5) * 2})`;
         ctx2.lineWidth = 1.5;
         ctx2.beginPath();
@@ -451,37 +530,48 @@ export function createPhantomCharacter({ small = false } = {}) {
         ctx2.stroke();
       }
 
-      /* mouth: full range — grin, frown, O of surprise, laugh, talk, fangs.
-         smile: corners up, belly down. frown: corners DOWN, arch UP. */
+      /* mouth: the clean crescent smile of the art, with full range.
+         smile: corners UP, belly DOWN. frown: corners DOWN, arch UP. */
       const frown = Math.max(0, -E.curve);
       const grin = Math.max(0, E.curve);
-      const mw = 0.46 * E.wide * s;
-      const cornL = E.smirk * 0.05 * s + frown * 0.13 * s;
-      const cornR = -E.smirk * 0.085 * s + frown * 0.13 * s;
-      const topC = -grin * 0.16 * s - E.open * 0.16 * s - frown * 0.11 * s;
-      const botC = E.open * 0.32 * s + grin * 0.03 * s - frown * 0.05 * s;
+      const mw = 0.40 * E.wide * s;
+      const cornL = E.smirk * 0.04 * s + frown * 0.13 * s - grin * 0.10 * s;
+      const cornR = -E.smirk * 0.07 * s + frown * 0.13 * s - grin * 0.10 * s;
       ctx2.save();
-      ctx2.translate(0.03 * s, 0.32 * s + E.browSad * 0.02 * s);
-      ctx2.beginPath();
-      ctx2.moveTo(-mw, cornL);
-      ctx2.quadraticCurveTo(0, topC, mw, cornR);
-      ctx2.quadraticCurveTo(0, botC + Math.max(0, E.curve) * 0.1 * s, -mw, cornL);
-      ctx2.closePath();
-      if (E.open > 0.06) { ctx2.fillStyle = "rgba(1,8,6,0.88)"; ctx2.fill(); }
-      ctx2.strokeStyle = A(0.92);
-      ctx2.lineWidth = Math.max(1.2, s * 0.032);
-      ctx2.stroke();
-      if (E.curve > 0.3 && E.open > 0.07) {
-        ctx2.fillStyle = "rgba(240,255,250,0.92)";
-        for (const fx of [-mw * 0.42, mw * 0.34]) {
-          const fy = topC * 0.5 + (cornR + cornL) * 0.25;
-          ctx2.beginPath();
-          ctx2.moveTo(fx - s * 0.024, fy);
-          ctx2.lineTo(fx + s * 0.024, fy);
-          ctx2.lineTo(fx, fy + s * 0.055);
-          ctx2.closePath();
-          ctx2.fill();
+      ctx2.translate(0.02 * s, 0.30 * s + E.browSad * 0.02 * s);
+      if (E.open > 0.06) {
+        const topC = -grin * 0.06 * s - E.open * 0.16 * s - frown * 0.11 * s;
+        const botC = E.open * 0.32 * s + grin * 0.14 * s - frown * 0.05 * s;
+        ctx2.beginPath();
+        ctx2.moveTo(-mw, cornL);
+        ctx2.quadraticCurveTo(0, topC, mw, cornR);
+        ctx2.quadraticCurveTo(0, botC, -mw, cornL);
+        ctx2.closePath();
+        ctx2.fillStyle = "rgba(1,8,6,0.88)";
+        ctx2.fill();
+        ctx2.strokeStyle = A(0.92);
+        ctx2.lineWidth = Math.max(1.2, s * 0.03);
+        ctx2.stroke();
+        if (E.curve > 0.3) {
+          ctx2.fillStyle = "rgba(240,255,250,0.92)";
+          for (const fx of [-mw * 0.42, mw * 0.34]) {
+            const fy = topC * 0.5;
+            ctx2.beginPath();
+            ctx2.moveTo(fx - s * 0.022, fy); ctx2.lineTo(fx + s * 0.022, fy); ctx2.lineTo(fx, fy + s * 0.05);
+            ctx2.closePath(); ctx2.fill();
+          }
         }
+      } else {
+        /* closed: one clean glowing crescent, belly below the corners */
+        const midC = grin * 0.16 * s - frown * 0.13 * s;
+        ctx2.strokeStyle = A(0.95);
+        ctx2.lineWidth = Math.max(1.4, s * 0.038);
+        ctx2.shadowColor = A(0.9);
+        ctx2.shadowBlur = 10 + pulse * 8;
+        ctx2.beginPath();
+        ctx2.moveTo(-mw, cornL);
+        ctx2.quadraticCurveTo(0, midC, mw, cornR);
+        ctx2.stroke();
       }
       ctx2.restore();
 
