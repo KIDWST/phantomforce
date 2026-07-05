@@ -4,12 +4,12 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-14";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-14";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-14";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-14";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-14";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-14";
+} from "./store.js?v=phantom-live-20260705-15";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-15";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-15";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-15";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-15";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-15";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -207,13 +207,13 @@ function renderUser() {
 const MODES = {
   ask:     { label: "Ask",     icon: "chat",  placeholder: "Ask PhantomForce anything…", prefix: "" },
   write:   { label: "Write",   icon: "doc",   placeholder: "Write a proposal, a caption, a follow-up…", prefix: "Draft " },
-  image:   { label: "Image",   icon: "spark", placeholder: "Describe an image to create…", prefix: "Create an image brief for " },
-  video:   { label: "Video",   icon: "film",  placeholder: "Describe a video to produce…", prefix: "Create a video brief for " },
+  image:   { label: "Image",   icon: "spark", placeholder: "Describe an image to create…", prefix: "Create an image request for " },
+  video:   { label: "Video",   icon: "film",  placeholder: "Describe a video to produce…", prefix: "Create a video request for " },
   website: { label: "Website", icon: "grid",  placeholder: "Describe a page or site to build…", prefix: "Build a website for " },
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-14";
+const POSE_VERSION = "phantom-live-20260705-15";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {
@@ -328,7 +328,7 @@ function renderStatCards() {
 
   const cards = [
     { icon: "db",    title: "Brand Memory", value: files, sub: files ? "Files indexed" : "No files yet", foot: files ? `Updated ${ago(store.state.activity[0]?.at || new Date().toISOString())}` : "Waiting for first upload", open: "workforce", trend: files ? "live" : "empty" },
-    { icon: "media", title: "Media Lab",    value: media.length, sub: "Briefs in lab", foot: media.length ? `${delivered} delivered` : "No briefs yet", open: "media", trend: media.length ? "ready" : "empty" },
+    { icon: "media", title: "Media Lab",    value: media.length, sub: "Video requests", foot: media.length ? `${delivered} delivered` : "No requests yet", open: "media", trend: media.length ? "ready" : "empty" },
     { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "Queue clear", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear" },
     { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: thisWeekCount() ? "Real activity only" : "No activity yet", open: "media", trend: thisWeekCount() ? "live" : "empty" },
     { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: activeAgents ? "Real workers only" : "Not configured", open: "workforce", trend: activeAgents ? "live" : "empty" },
@@ -440,8 +440,8 @@ function renderQueue() {
 
 /* ============================ quick actions ============================ */
 const QUICK = [
-  { label: "Create new content", icon: "spark",  run: "Draft a media brief for a new campaign" },
-  { label: "Start video campaign", icon: "film",  run: "Create a video brief for the launch" },
+  { label: "Create new content", icon: "spark",  run: "Create a media request for a new campaign" },
+  { label: "Start video campaign", icon: "film",  run: "Create a video request for the launch" },
   { label: "Run brand analysis", icon: "chart",   run: "What's my pipeline?" },
   { label: "Upload brand asset", icon: "upload",   open: "media" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
@@ -536,7 +536,7 @@ function paletteSources(query) {
     visible(store.state.proposals).filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((p) => add(p.client, `Proposal · ${fmtMoney(p.price)}`, "proposals", "dollar"));
     visible(store.state.media).filter((m) => (m.title || "").toLowerCase().includes(q)).slice(0, 4)
-      .forEach((m) => add(m.title, "Media brief", "media", "film"));
+      .forEach((m) => add(m.title, "Video request", "media", "film"));
     visible(store.state.sites).filter((s) => (s.title || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((s) => add(s.title, `${s.kind}`, "sites", "grid"));
   }
@@ -876,7 +876,7 @@ function wirePhantomConsole(body) {
         <p class="phantom-user">› ${esc(h.q)}</p>
         <p class="phantom-reply">${esc(h.say)}</p>
         ${(h.cards || []).map(cardHtml).join("")}
-      </div>`).join("") || `<p class="phantom-hello">This is the full command console. Everything you ask lands as real work — drafts, briefs, and pipelines, never just chat.</p>`;
+      </div>`).join("") || `<p class="phantom-hello">This is the full command console. Everything you ask lands as real work — drafts, requests, and pipelines, never just chat.</p>`;
     log.scrollTop = log.scrollHeight;
   };
   paint();

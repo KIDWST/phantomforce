@@ -122,7 +122,7 @@ function statusFromRecords() {
     workerItem(
       workers.media,
       readyMedia.length
-        ? `prepped ${plural(readyMedia.length, "media brief")} for the creative desk`
+        ? `prepped ${plural(readyMedia.length, "video request")} for the creative desk`
         : "checked creative inventory; no generation is running automatically",
       "Media work stays controlled and receipt-based.",
       readyMedia[0]?.title || "media desk",

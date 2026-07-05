@@ -213,7 +213,7 @@ let session = { assets: [], tab: "generate", edit: null };
 export function renderMediaStudio(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
-  const tabs = [["generate", "Generate"], ["edit", "Edit"], ["library", `Library${session.assets.length ? ` · ${session.assets.length}` : ""}`], ["briefs", "Briefs"]];
+  const tabs = [["generate", "Generate"], ["edit", "Edit"], ["library", `Library${session.assets.length ? ` · ${session.assets.length}` : ""}`], ["briefs", "Video Requests"]];
   el.innerHTML = `
     <div class="ml">
       <div class="ml-tabs">
@@ -227,7 +227,7 @@ export function renderMediaStudio(el, opts = {}) {
   if (session.tab === "generate") renderGenerate(body, cfg, opts, el);
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderLibrary(body, opts, el);
-  else if (session.tab === "briefs") (opts.renderBriefs ? opts.renderBriefs(body) : (body.innerHTML = `<p class="empty-line">Briefs unavailable.</p>`));
+  else if (session.tab === "briefs") (opts.renderBriefs ? opts.renderBriefs(body) : (body.innerHTML = `<p class="empty-line">Video requests unavailable.</p>`));
 }
 
 /* ---- Generate ---- */

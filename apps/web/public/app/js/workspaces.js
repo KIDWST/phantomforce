@@ -7,7 +7,7 @@ import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-live-20260705-14";
+} from "./store.js?v=phantom-live-20260705-15";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -259,42 +259,49 @@ function renderMedia(el, rerender) {
   const media = visible(store.state.media);
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Controlled creative generation: brief → approval → generation → proof → delivery. Paid generation never runs without sign-off.</p>
-      <button class="btn btn-primary" data-act="add">+ Video brief</button>
+      <p class="ws-note">Controlled creative work: request → approval → generation → proof → delivery. Paid generation never runs without sign-off.</p>
+      <button class="btn btn-primary" data-act="add">+ Video request</button>
     </div>
     <div class="card-grid">
       ${media.map((m) => `
         <article class="record">
+          <button class="record-x" data-act="remove" data-id="${m.id}" aria-label="Remove video request">×</button>
           <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title)}</h4></div>
           <p class="record-sub">${esc(m.type)} · ${chip(m.status)} · ${ago(m.updated)}</p>
           <p class="record-notes"><b>Angle:</b> ${esc(m.angle)}</p>
-          <details class="shotlist"><summary>Shot list (${m.shots.length})</summary>
+          <details class="shotlist"><summary>Video plan (${m.shots.length})</summary>
             <ol>${m.shots.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
           </details>
           <p class="record-notes"><b>Caption:</b> ${esc(m.caption)}</p>
           ${m.proof ? `<p class="record-proof">Proof: <code>${esc(m.proof)}</code></p>` : ""}
           <div class="record-actions">
-            <button class="btn" data-act="copy" data-id="${m.id}">Copy brief</button>
-            ${m.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${m.id}">Mark brief ready</button>` : ""}
+            <button class="btn" data-act="copy" data-id="${m.id}">Copy plan</button>
+            ${m.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${m.id}">Ready to produce</button>` : ""}
             ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Request generation (approval)</button>` : ""}
             ${m.status === "generation-approved" ? `<button class="btn" data-act="delivered" data-id="${m.id}">Mark delivered</button>` : ""}
           </div>
-        </article>`).join("") || empty("Media Lab is quiet. Ask Phantom AI for a video brief to get rolling.")}
+        </article>`).join("") || empty("Media Lab is quiet. Create a video request to get rolling.")}
     </div>`;
   const find = (id) => store.state.media.find((m) => m.id === id);
   bindActions(el, {
     add: () => {
       const t = prompt("What is this creative for? (client / campaign)");
       if (!t) return;
-      store.state.media.unshift({ id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(), title: `${t.trim()} — video brief`, type: "Reel (vertical, 30s)", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"], caption: `${t.trim()} — draft caption.`, proof: null, updated: new Date().toISOString() });
-      pushActivity("Media Factory", `drafted a brief: ${t.trim()}.`);
+      store.state.media.unshift({ id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(), title: `${t.trim()} — video request`, type: "Reel (vertical, 30s)", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"], caption: `${t.trim()} — draft caption.`, proof: null, updated: new Date().toISOString() });
+      pushActivity("Media Factory", `created a video request: ${t.trim()}.`);
       store.save(); rerender();
     },
     copy: (id, btn) => { const m = find(id); copyText(btn, `${m.title}\n${m.type}\n\nAngle: ${m.angle}\n\nShots:\n${m.shots.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nCaption: ${m.caption}`); },
-    ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `brief ready: ${m.title}.`, m.ws); store.save(); rerender(); },
+    ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `ready to produce: ${m.title}.`, m.ws); store.save(); rerender(); },
+    remove: (id) => {
+      const m = find(id);
+      store.state.media = store.state.media.filter((item) => item.id !== id);
+      if (m) pushActivity("Media Factory", `removed video request: ${m.title}.`, m.ws);
+      store.save(); rerender();
+    },
     "request-gen": (id) => {
       const m = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One generation pass on this brief. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
+      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One generation pass on this video request. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
       pushActivity("Media Factory", `requested a generation pass on ${m.title}.`, m.ws);
       store.save(); rerender();
     },
@@ -470,9 +477,9 @@ function renderToolSpineCards({ compact = false } = {}) {
             <h4><span class="agent-dot"></span>${esc(tool.name)}</h4>
             <span class="chip chip-${esc(tool.status)}">${esc(statusLabel(tool.status))}</span>
           </div>
-          <p class="record-sub">${esc(tool.worker)} · internal: ${esc(tool.internal)}</p>
-          <p class="record-next">▸ ${esc(tool.role)}</p>
-          <p class="record-notes"><b>Role:</b> ${esc(tool.role)}</p>
+          <p class="record-sub">${esc(tool.worker)} · ${esc(tool.internal)}</p>
+          <p class="record-next"><b>What it does:</b> ${esc(tool.role)}</p>
+          <p class="record-notes"><b>Owner control:</b> ${esc(tool.ownerControl || "Available from admin Phantom when connected.")}</p>
           <div class="tool-meta">
             <span>${esc(statusLabel(tool.mode))}</span>
             <span>${esc(tool.path)}</span>
@@ -501,7 +508,7 @@ function renderWorkforce(el, rerender) {
     return;
   }
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Your AI workforce, desk by desk. Statuses: active · idle · waiting · blocked · needs approval.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Owner control view. These are your Phantom desks and internal tools. Nothing here means Jordan is locked out: green means ready, amber means setup/configure, and paid or public actions stay owner-controlled.</p></div>
     <div class="card-grid">
       ${agents.map((a) => `
         <article class="record agent-card agent-${esc(a.status)}">
@@ -517,8 +524,8 @@ function renderWorkforce(el, rerender) {
           <p class="agent-bundle">internal lane: ${esc(a.bundle)}</p>
         </article>`).join("") || empty("No workers have produced real activity yet. Connect a tool or create the first task to populate this board.")}
     </div>
-    <h3 class="ws-subhead">Tool spine powering the workers</h3>
-    <p class="ws-note">These are the internal programs behind the desks. Employees see only the outcomes they are allowed to access.</p>
+    <h3 class="ws-subhead">Owner tool controls</h3>
+    <p class="ws-note">These are the programs behind Phantom. Client workspaces see simple outcomes; your admin view sees the controls, connectors, and setup state.</p>
     ${renderToolSpineCards({ compact: true })}`;
 }
 
@@ -556,16 +563,16 @@ function renderAdmin(el, rerender) {
     ["Workforce intelligence", "ready", "planning / spec / build lanes loaded"],
     ["Memory & context", "ready", "backend context store reachable"],
     ["Model lanes A/B/C", "ready", "operator lanes standing by"],
-    ["Automation lane", "standby", "workflow runner configured, not armed"],
-    ["Media generation lane", "gated", "paid — every run needs approval"],
+    ["Automation lane", "setup-ready", "workflow runner ready for owner setup"],
+    ["Media generation lane", "owner-controlled", "paid credits stay under owner control"],
     ["Private access gateway", "active", "admin + employee hosts enforced upstream"],
   ];
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Deep controls, diagnostics, and provider readiness. None of this surfaces to employees unless you grant access.</p>
+      <p class="ws-note">Owner controls, diagnostics, and connector readiness. Clients only see what you choose to expose.</p>
     </div>
-    <h3 class="ws-subhead">Active tool spine</h3>
-    <p class="ws-note">Every tool is mapped to a worker lane. “Active” means visible and available to PhantomOps; external actions still require the right connector and approval.</p>
+    <h3 class="ws-subhead">Active control layer</h3>
+    <p class="ws-note">Every tool is mapped to a Phantom desk. “Ready” means available to the owner; external sends, paid runs, and account changes still need the right connector and owner mode.</p>
     ${renderToolSpineCards()}
     <h3 class="ws-subhead">Workspace states</h3>
     <div class="stack">
@@ -577,10 +584,10 @@ function renderAdmin(el, rerender) {
           <span class="admin-ws-stats">${leads} open leads · ${props} live proposals · ${appr} pending approvals</span></article>`;
       }).join("")}
     </div>
-    <h3 class="ws-subhead">Internal lanes (hidden from employees by default)</h3>
+    <h3 class="ws-subhead">Owner-only lanes</h3>
     <div class="card-grid">
       ${lanes.map(([name, state, note]) => `
-        <article class="record"><div class="record-top"><h4>${esc(name)}</h4>${chip(state === "ready" || state === "active" ? "approved" : "pending")}</div>
+        <article class="record"><div class="record-top"><h4>${esc(name)}</h4>${chip(["ready", "active", "setup-ready", "owner-controlled"].includes(state) ? "approved" : "pending")}</div>
         <p class="record-sub">${esc(note)}</p></article>`).join("")}
     </div>
     <h3 class="ws-subhead">Access</h3>
@@ -637,7 +644,7 @@ export function missionWidgets() {
   const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
   const m = moneyView();
   const pend = visible(store.state.approvals).filter((a) => a.status === "pending");
-  const briefs = visible(store.state.media).filter((x) => ["brief-ready", "generation-approved"].includes(x.status));
+  const videoRequests = visible(store.state.media).filter((x) => ["brief-ready", "generation-approved"].includes(x.status));
   const pages = visible(store.state.sites);
   const sec = visible(store.state.security)[0];
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
@@ -648,7 +655,7 @@ export function missionWidgets() {
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
-    { id: "media", icon: "▶", title: "Media Lab", stat: `${briefs.length} ready`, sub: "briefs & generation", alert: false },
+    { id: "media", icon: "▶", title: "Media Lab", stat: `${videoRequests.length} ready`, sub: "video requests & generation", alert: false },
     { id: "sites", icon: "▦", title: "Site & Store Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },

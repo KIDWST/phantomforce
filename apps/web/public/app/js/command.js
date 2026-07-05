@@ -6,7 +6,7 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil,
-} from "./store.js?v=phantom-live-20260705-14";
+} from "./store.js?v=phantom-live-20260705-15";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -59,13 +59,13 @@ function createMediaBrief(subject) {
   const t = subject ? title(subject) : "New creative";
   const m = {
     id: uid("med"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(),
-    title: `${t} — video brief`, type: "Reel (vertical, 30s)", status: "draft",
+    title: `${t} — video request`, type: "Reel (vertical, 30s)", status: "draft",
     angle: "Hook in 2 seconds, one idea, end on the offer.",
     shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"],
     caption: `${t} — draft caption. Punch it up before approval.`, proof: null, updated: new Date().toISOString(),
   };
   store.state.media.unshift(m);
-  pushActivity("Media Factory", `drafted a brief: ${m.title}.`, m.ws);
+  pushActivity("Media Factory", `created a video request: ${m.title}.`, m.ws);
   store.save();
   return m;
 }
@@ -172,12 +172,12 @@ export function handleCommand(raw) {
     if (/(brief|plan|draft|create|make|new|idea)/.test(s) || subject) {
       const m = createMediaBrief(subject);
       return {
-        say: `Media Factory drafted "${m.title}" — angle, five-shot list, and a starter caption. Generation stays approval-gated.`,
-        cards: [card("Media brief", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
+        say: `Media Factory created "${m.title}" — angle, five-shot list, and a starter caption. Generation stays approval-gated.`,
+        cards: [card("Video request", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
         open: "media",
       };
     }
-    return { say: "Media Lab is open — briefs, shot lists, and what's ready to produce.", cards: [], open: "media" };
+    return { say: "Media Lab is open — video requests, shot lists, and what's ready to produce.", cards: [], open: "media" };
   }
 
   /* --- store --- */
@@ -271,7 +271,7 @@ export function handleCommand(raw) {
   if (/(today|plan|what('| i)s next|priorit|status|morning|catch me up|summary)/.test(s)) {
     const plan = todaysPlan();
     return {
-      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "No real tasks are loaded yet. Start by adding a lead, drafting a proposal, or creating a brief.",
+      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "No real tasks are loaded yet. Start by adding a lead, drafting a proposal, or creating a video request.",
       cards: plan.slice(0, 3).map((p) => card("Today", p.text, "", [openAction("Open", p.open)])),
       open: null,
     };
@@ -282,7 +282,7 @@ export function handleCommand(raw) {
     return {
       say: "Ask in plain business language. I route it to the right desk and hand you something real — a draft, a plan, or the workspace it lives in.",
       cards: [card("Try one of these", "Commands that create things",
-        "Draft a proposal · Create a video brief · Build a store · Run a security check · What's my pipeline?", [])],
+        "Draft a proposal · Create a video request · Build a store · Run a security check · What's my pipeline?", [])],
       open: null,
     };
   }
@@ -291,8 +291,8 @@ export function handleCommand(raw) {
   const plan = todaysPlan();
   return {
     say: subject
-      ? `Noted. I filed “${text}” and can turn it into a lead, a proposal, or a brief — say which, or open a workspace below.`
-      : "I can turn that into work — a lead, a proposal, a media brief, a page, a booking, or a security check. Say the outcome you want.",
+      ? `Noted. I filed “${text}” and can turn it into a lead, a proposal, or a video request — say which, or open a workspace below.`
+      : "I can turn that into work — a lead, a proposal, a video request, a page, a booking, or a security check. Say the outcome you want.",
     cards: [
       card("Quick routes", "Where this usually goes",
         "Handle a lead · Build a quote · Create a media plan · Build a page or store · Run a security check · Check pipeline",
@@ -306,6 +306,6 @@ export function handleCommand(raw) {
 /* Suggestion chips under the command input. */
 export function commandSuggestions() {
   return isAdmin()
-    ? ["Catch me up", "What's my pipeline?", "Draft a proposal for a new client", "Create a video brief", "Run a security check", "What's waiting on me?"]
+    ? ["Catch me up", "What's my pipeline?", "Draft a proposal for a new client", "Create a video request", "Run a security check", "What's waiting on me?"]
     : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Run a security check"];
 }

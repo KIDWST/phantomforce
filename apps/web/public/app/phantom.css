@@ -408,10 +408,10 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   font: 500 10px "DM Mono", monospace; letter-spacing: 0.07em; text-transform: uppercase; white-space: nowrap;
   border: 1px solid rgba(234, 255, 242, 0.18); color: #b9d2c2; background: rgba(255, 255, 255, 0.03);
 }
-.chip-won, .chip-approved, .chip-active, .chip-delivered, .chip-published-ready, .chip-confirmed, .chip-received, .chip-invoice-ready, .chip-generation-approved, .chip-approved-to-publish, .chip-online, .chip-indexed, .chip-ready, .chip-enforcing, .chip-routed, .chip-watching {
+.chip-won, .chip-approved, .chip-active, .chip-delivered, .chip-published-ready, .chip-confirmed, .chip-received, .chip-invoice-ready, .chip-generation-approved, .chip-approved-to-publish, .chip-online, .chip-indexed, .chip-ready, .chip-enforcing, .chip-routed, .chip-watching, .chip-available, .chip-planning, .chip-owner-controlled {
   border-color: rgba(65, 255, 161, 0.5); color: var(--neon); background: rgba(65, 255, 161, 0.08);
 }
-.chip-sent-ready, .chip-publish-ready, .chip-brief-ready, .chip-pending, .chip-waiting, .chip-needs-approval, .chip-standby, .chip-sent, .chip-scaffolded {
+.chip-sent-ready, .chip-publish-ready, .chip-brief-ready, .chip-pending, .chip-waiting, .chip-needs-approval, .chip-standby, .chip-sent, .chip-scaffolded, .chip-setup-ready {
   border-color: rgba(255, 209, 102, 0.5); color: var(--warn); background: rgba(255, 209, 102, 0.07);
 }
 .chip-lost, .chip-declined, .chip-blocked, .chip-not-wired, .chip-contained, .chip-sandbox, .chip-gated {
@@ -470,6 +470,15 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   transition: border-color 0.22s, box-shadow 0.25s;
 }
 .record:hover { border-color: rgba(65, 255, 161, 0.4); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35); }
+.record-x {
+  position: absolute; top: 10px; right: 10px; z-index: 2; width: 28px; height: 28px;
+  display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(234, 255, 242, 0.14);
+  background: rgba(2, 8, 10, 0.68); color: rgba(234, 255, 242, 0.68); cursor: pointer;
+  font-size: 17px; line-height: 1; transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.16s;
+}
+.record-x:hover {
+  border-color: rgba(255, 77, 99, 0.62); color: #ff97a4; background: rgba(255, 77, 99, 0.1); transform: scale(1.06);
+}
 .record-due { border-color: rgba(255, 209, 102, 0.45); }
 .record h4 { margin: 0 0 4px; font-size: 15px; line-height: 1.3; }
 .record-top { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
@@ -571,7 +580,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   transform: translateX(-120%);
   animation: toolSweep 7s ease-in-out infinite;
 }
-.tool-mode-active { box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.24), 0 0 22px rgba(65, 255, 161, 0.08); }
+.tool-mode-active, .tool-mode-available, .tool-mode-planning, .tool-mode-owner-controlled { box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.24), 0 0 22px rgba(65, 255, 161, 0.08); }
+.tool-mode-setup-ready { border-color: rgba(255, 209, 102, 0.34); }
 .tool-mode-standby { border-color: rgba(255, 209, 102, 0.34); }
 .tool-mode-gated { border-color: rgba(255, 77, 99, 0.32); }
 .tool-mode-sandbox { border-color: rgba(132, 255, 207, 0.24); opacity: 0.96; }
