@@ -8,10 +8,10 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel, executionMode, todaysPlan,
   PACKAGES, RETAINERS, SERVICE_TIERS, runWorkspaceSecurityScan, buildSecurityScanSnapshot,
   workspaceProfile, workspaceCrm, saveWorkspaceCrm,
-} from "./store.js?v=phantom-chicagoshots-crm-20260704-01";
+} from "./store.js?v=admin-phase2-nav-20260705-01";
 import {
   IMAGE_CROPS, IMAGE_FILTERS, downloadImage, editImageArtifact, imageStyle, makeImageArtifact,
-} from "./media-image.js?v=phantom-chicagoshots-crm-20260704-01";
+} from "./media-image.js?v=admin-phase2-nav-20260705-01";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -121,6 +121,58 @@ function renderImageToolchainPayload(payload) {
       `).join("")}
     </div>
     <p class="ws-note">Status only. Nothing was sent, uploaded, paid for, or changed outside this app.</p>`;
+}
+
+function simpleContentAdvice(media = []) {
+  const videoCount = media.filter((m) => (m.modality || "").includes("video") || /video|reel|short/i.test(`${m.type} ${m.title}`)).length;
+  const imageCount = media.filter((m) => m.asset?.src || (m.modality || "").includes("image")).length;
+  const readyCount = media.filter((m) => ["brief-ready", "generation-approved", "asset-saved"].includes(m.status)).length;
+  if (!media.length) return "Start with one photo, video, or prompt. Phantom will turn it into a simple edit plan.";
+  if (readyCount) return "You have content ready. Post the strongest one, then reuse the same hook in the next version.";
+  if (videoCount > imageCount) return "Most work here is video. Watch the first 3 seconds, caption clarity, and whether the offer is obvious.";
+  if (imageCount) return "Most work here is image-based. Use clean crops, readable text, and one clear call-to-action.";
+  return "Keep each piece focused: hook, proof, offer, next step.";
+}
+
+function renderContentHub(media = []) {
+  const videos = media.filter((m) => (m.modality || "").includes("video") || /video|reel|short/i.test(`${m.type} ${m.title}`));
+  const images = media.filter((m) => m.asset?.src || (m.modality || "").includes("image"));
+  const ready = media.filter((m) => ["brief-ready", "generation-approved", "asset-saved"].includes(m.status));
+  const delivered = media.filter((m) => m.status === "delivered");
+  const latest = media.slice(0, 4);
+  return `
+    <section class="image-stack-panel">
+      <div class="record-top">
+        <div>
+          <p class="ws-mini-kicker">Content Hub</p>
+          <h4>Posted content, drafts, and performance</h4>
+        </div>
+        <button class="btn" data-open-ws="analytics">Open analytics</button>
+      </div>
+      <div class="stat-row">
+        <div class="stat"><span>Videos</span><b>${videos.length}</b><i>ready or drafted</i></div>
+        <div class="stat"><span>Images</span><b>${images.length}</b><i>assets and posts</i></div>
+        <div class="stat"><span>Ready</span><b>${ready.length}</b><i>can move next</i></div>
+        <div class="stat"><span>Delivered</span><b>${delivered.length}</b><i>finished work</i></div>
+      </div>
+      <div class="card-grid">
+        <article class="record">
+          <div class="record-top"><h4>What to improve</h4>${chip(media.length ? "ready" : "fresh")}</div>
+          <p class="record-notes">${esc(simpleContentAdvice(media))}</p>
+          <p class="record-sub">When social accounts are connected, this area becomes views, watch time, clicks, saves, comments, and trend notes.</p>
+        </article>
+        <article class="record">
+          <div class="record-top"><h4>Trend notes</h4>${chip("ready")}</div>
+          <p class="record-notes">Track hooks, formats, captions, thumbnails, and posting times that repeat across winning content.</p>
+          <p class="record-sub">Use this to make tomorrow's videos more like what already works.</p>
+        </article>
+      </div>
+      ${latest.length ? `<h3 class="ws-subhead">Recent content</h3><div class="stack">
+        ${latest.map((m) => `<article class="record record-row">
+          ${wsTag(m.ws)}<h4>${esc(mediaCardTitle(m))}</h4><p class="record-sub">${mediaMetaHtml(m)}</p>
+        </article>`).join("")}
+      </div>` : empty("No content yet. Drop a file or ask Phantom for a video, image, ad, or post.")}
+    </section>`;
 }
 
 function bindActions(root, handlers) {
@@ -530,7 +582,7 @@ function renderMedia(el, rerender) {
   const media = visible(store.state.media);
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Make images, videos, ads, and edits here. Drop files or tell Phantom what you want.</p>
+      <p class="ws-note">Make images, videos, ads, edits, and content plans here. Files from dashboard chat land here when you ask for an edit or full project.</p>
       <button class="btn btn-primary" data-act="add">+ New creative</button>
     </div>
     <section class="image-stack-panel">
@@ -544,6 +596,7 @@ function renderMedia(el, rerender) {
       <p class="record-notes">Use this when you want to edit images directly. Most work can still start by asking Phantom.</p>
       <div data-image-toolchain-result>${imageToolchainFallbackHtml()}</div>
     </section>
+    ${renderContentHub(media)}
     <div class="card-grid">
       ${media.map((m) => `
         <article class="record ${m.asset?.src ? "record-image" : ""}">
@@ -1928,6 +1981,9 @@ export const WORKSPACE_DEFS = {
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
   workforce: { title: "Systems Map", kicker: "Phantom modules", render: renderWorkforce },
+  automation: { title: "Automation", kicker: "Worker loops", render: renderWorkforce },
+  analytics: { title: "Analytics", kicker: "Revenue signals", render: renderMoney },
+  memory: { title: "Memory", kicker: "Private context", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };

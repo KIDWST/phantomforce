@@ -5,8 +5,8 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
 } from "./store.js";
-import { handleCommand, commandSuggestions } from "./command.js?v=admin-phase2-greetingfix-20260705-01";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
+import { handleCommand, commandSuggestions } from "./command.js?v=admin-phase2-nav-20260705-01";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=admin-phase2-nav-20260705-01";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-admin-20260705-09";
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -99,17 +99,16 @@ function showGate() {
 
 /* ============================ sidebar nav ============================ */
 const NAV = [
-  { id: "chat",       label: "Chat",         icon: "chat",  view: "main" },
-  { id: "dashboard",  label: "Dashboard",    icon: "grid",  ws: "money" },
-  { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
-  { id: "content",    label: "Content Hub",  icon: "doc",   ws: "sites" },
-  { id: "brand",      label: "Brand Memory", icon: "brain", ws: "workforce" },
-  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
-  { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
-  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "money" },
-  { id: "settings",   label: "Settings",     icon: "cog",   ws: "adminos", adminOnly: true },
+  { id: "dashboard",  label: "Dashboard",       icon: "grid",  view: "main" },
+  { id: "media",      label: "Media Lab",       icon: "media", ws: "media" },
+  { id: "crm",        label: "CRM",             icon: "db",    ws: "leads" },
+  { id: "approvals",  label: "Approvals",       icon: "check", ws: "approvals", badge: true },
+  { id: "automation", label: "Automation",      icon: "auto",  ws: "automation" },
+  { id: "analytics",  label: "Analytics",       icon: "chart", ws: "analytics" },
+  { id: "memory",     label: "Memory",          icon: "brain", ws: "memory" },
+  { id: "settings",   label: "Settings",        icon: "cog",   ws: "adminos", adminOnly: true },
 ];
-let activeNav = "chat";
+let activeNav = "dashboard";
 
 function renderNav() {
   const nav = $("[data-nav]");
@@ -137,7 +136,7 @@ function renderStatusPills() {
   const pills = [
     { label: "Phantom Status", value: "Online", tone: "ok", dot: true },
     { label: "System Status", value: attention ? "Attention needed" : "All Systems Operational", tone: attention ? "warn" : "ok", dot: true },
-    { label: "Brand Memory", value: "Private & Local", tone: "ok", lock: true },
+    { label: "Memory", value: "Private & Local", tone: "ok", lock: true },
   ];
   $("[data-status-pills]").innerHTML = pills.map((p) => `
     <div class="pill pill-${p.tone}">
@@ -228,7 +227,7 @@ function renderStatCards() {
   const files = media.length + sites.length + products.length + visible(store.state.reviews).length;
 
   const cards = [
-    { icon: "db",    title: "Brand Memory", value: files, sub: "Files indexed", foot: `Updated ${ago(store.state.activity[0]?.at || new Date().toISOString())}`, open: "workforce" },
+    { icon: "db",    title: "Memory", value: files, sub: "Files indexed", foot: `Updated ${ago(store.state.activity[0]?.at || new Date().toISOString())}`, open: "memory" },
     { icon: "media", title: "Media Lab",    value: media.length, sub: "Briefs in lab", foot: `${delivered} delivered`, open: "media" },
     { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "All clear", open: "approvals", alert: pending > 0 },
     { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: "Across all desks", open: "media" },
@@ -508,7 +507,7 @@ function closeOverlay(clearHash) {
   renderConsole();
 }
 function syncNavToView() {
-  if (!openId) { activeNav = "chat"; renderNav(); return; }
+  if (!openId) { activeNav = "dashboard"; renderNav(); return; }
   const hit = NAV.find((n) => n.ws === openId);
   if (hit) { activeNav = hit.id; renderNav(); }
 }
@@ -610,11 +609,11 @@ function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
   if (!ghostStarted) { ghostStarted = true; initGhost(); startClock(); }
-  activeNav = "chat";
+  activeNav = "dashboard";
   renderConsole();
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
-  if (view && view !== "command" && WORKSPACE_DEFS[view]) openWorkspace(view);
+  if (view && !["command", "dashboard", "home"].includes(view) && WORKSPACE_DEFS[view]) openWorkspace(view);
   const m = location.hash.match(/^#ws\/([a-z]+)/);
   if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
   // greet
