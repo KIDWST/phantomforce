@@ -114,7 +114,7 @@ function renderNav() {
   const nav = $("[data-nav]");
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   nav.innerHTML = NAV.filter((n) => !n.adminOnly || isAdmin()).map((n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}">
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}" aria-label="${esc(n.label)}" title="${esc(n.label)}">
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
@@ -134,14 +134,14 @@ function goNav(id) {
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
   const pills = [
-    { label: "Phantom Status", value: "Online", tone: "ok", dot: true },
-    { label: "System Status", value: attention ? "Attention needed" : "All Systems Operational", tone: attention ? "warn" : "ok", dot: true },
-    { label: "Memory", value: "Private & Local", tone: "ok", lock: true },
+    { label: "Phantom Status", shortLabel: "Phantom", value: "Online", shortValue: "Online", tone: "ok", dot: true },
+    { label: "System Status", shortLabel: "System", value: attention ? "Attention needed" : "All Systems Operational", shortValue: attention ? "Check" : "Good", tone: attention ? "warn" : "ok", dot: true },
+    { label: "Memory", shortLabel: "Memory", value: "Private & Local", shortValue: "Local", tone: "ok", lock: true },
   ];
   $("[data-status-pills]").innerHTML = pills.map((p) => `
     <div class="pill pill-${p.tone}">
-      <span class="pill-k">${p.label}</span>
-      <span class="pill-v">${p.dot ? `<i class="dot"></i>` : ""}${p.lock ? `<i class="lock" aria-hidden="true">🔒</i>` : ""}${esc(p.value)}</span>
+      <span class="pill-k" data-short="${esc(p.shortLabel || p.label)}">${p.label}</span>
+      <span class="pill-v" data-short="${esc(p.shortValue || p.value)}">${p.dot ? `<i class="dot"></i>` : ""}${p.lock ? `<i class="lock" aria-hidden="true">🔒</i>` : ""}${esc(p.value)}</span>
     </div>`).join("")
     + (isAdmin() ? `
     <label class="ws-switch" title="Switch workspace">

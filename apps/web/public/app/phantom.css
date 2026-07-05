@@ -3363,6 +3363,385 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .console-rail { grid-template-columns: 1fr; }
   .cmd-chips { max-width: none; }
 }
+
+/* Mobile command shell: compact status, floating navigation, no desktop spillover. */
+@media (max-width: 900px) {
+  .app-main {
+    padding-bottom: calc(84px + env(safe-area-inset-bottom));
+  }
+
+  .sidebar {
+    position: fixed;
+    top: auto;
+    right: 10px;
+    bottom: calc(10px + env(safe-area-inset-bottom));
+    left: 10px;
+    z-index: 80;
+    width: auto;
+    height: 58px;
+    min-height: 0;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 8px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    border: 1px solid rgba(65, 255, 161, 0.18);
+    border-radius: 22px;
+    background:
+      linear-gradient(180deg, rgba(4, 16, 13, 0.92), rgba(2, 8, 8, 0.88)),
+      radial-gradient(circle at 18% 0%, rgba(65, 255, 161, 0.14), transparent 34%);
+    box-shadow: 0 18px 56px rgba(0, 0, 0, 0.46), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    scrollbar-width: none;
+  }
+
+  .sidebar::-webkit-scrollbar,
+  .side-nav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .side-brand {
+    width: 42px;
+    height: 42px;
+    justify-content: center;
+    padding: 0 8px 0 0;
+    border-right: 1px solid rgba(65, 255, 161, 0.14);
+  }
+
+  .side-brand .brand-ghost {
+    width: 25px;
+    height: 27px;
+  }
+
+  .side-nav {
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    gap: 5px;
+    justify-content: flex-start;
+    padding: 0;
+  }
+
+  .nav-item {
+    position: relative;
+    flex: 0 0 42px;
+    width: 42px;
+    height: 42px;
+    justify-content: center;
+    padding: 0;
+    border-radius: 15px;
+  }
+
+  .nav-item span {
+    display: none !important;
+  }
+
+  .nav-item .ic {
+    width: 18px;
+    height: 18px;
+  }
+
+  .nav-item.is-active {
+    box-shadow: 0 0 24px rgba(65, 255, 161, 0.28);
+  }
+
+  .nav-badge {
+    position: absolute;
+    inset: 4px 4px auto auto;
+    min-width: 15px;
+    padding: 0 4px;
+    font-size: 8px;
+    line-height: 15px;
+  }
+}
+
+@media (max-width: 720px) {
+  .topbar2 {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px 8px;
+    padding: 8px 10px;
+  }
+
+  .topbar-clock {
+    margin: 0;
+    min-width: 0;
+    justify-self: stretch;
+    text-align: left;
+    padding: 7px 9px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    background: rgba(6, 18, 13, 0.46);
+  }
+
+  .topbar-clock b {
+    font-size: 13px;
+    line-height: 1;
+  }
+
+  .topbar-clock i {
+    display: none;
+  }
+
+  .topbar-user {
+    max-width: 164px;
+    justify-self: end;
+    gap: 7px;
+    padding: 5px 8px 5px 5px;
+    border-radius: 14px;
+  }
+
+  .user-avatar {
+    width: 30px;
+    height: 30px;
+    border-radius: 9px;
+  }
+
+  .user-meta {
+    min-width: 0;
+  }
+
+  .user-meta b {
+    max-width: 102px;
+    overflow: hidden;
+    font-size: 12px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .user-meta i,
+  .user-caret {
+    display: none;
+  }
+
+  .status-pills {
+    grid-column: 1 / -1;
+    flex-basis: auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 1px;
+    scrollbar-width: none;
+  }
+
+  .status-pills::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pill {
+    flex: 0 0 auto;
+    min-width: 78px;
+    padding: 6px 8px;
+    border-radius: 12px;
+  }
+
+  .pill-k,
+  .pill-v {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .pill-k {
+    font-size: 0;
+  }
+
+  .pill-k::after {
+    content: attr(data-short);
+    font: 600 7px "DM Mono", monospace;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+  }
+
+  .pill-v {
+    gap: 5px;
+    font-size: 0;
+  }
+
+  .pill-v::after {
+    content: attr(data-short);
+    overflow: hidden;
+    font: 600 11px "Space Grotesk", sans-serif;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .pill-v .lock {
+    font-size: 10px;
+  }
+
+  .ws-switch {
+    flex: 0 0 126px;
+    min-width: 0;
+  }
+
+  .ws-switch select {
+    width: 100%;
+    min-height: 39px;
+    padding: 7px 26px 7px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    text-overflow: ellipsis;
+  }
+
+  .console {
+    gap: 12px;
+    padding: 10px;
+  }
+
+  .console-center {
+    gap: 12px;
+  }
+
+  .console-rail {
+    display: none;
+  }
+
+  .hero2 {
+    min-height: 0;
+    padding: 16px;
+    border-radius: 20px;
+  }
+
+  .hero2-title {
+    margin-bottom: 8px;
+    font-size: clamp(25px, 8.2vw, 34px);
+  }
+
+  .hero2-sub {
+    margin-bottom: 14px;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+
+  .cmd-chips {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 7px;
+    margin-bottom: 12px;
+  }
+
+  .cmd-chip {
+    min-height: 36px;
+    justify-content: center;
+    gap: 0;
+    padding: 8px;
+    border-radius: 12px;
+  }
+
+  .cmd-chip span {
+    display: none;
+  }
+
+  .cmd-chip .ic {
+    width: 17px;
+    height: 17px;
+  }
+
+  .cmd-input {
+    max-width: none;
+    padding-left: 13px;
+    border-radius: 15px;
+  }
+
+  .cmd-input input {
+    font-size: 14px;
+  }
+
+  .cmd-send {
+    width: 40px;
+    height: 40px;
+    border-radius: 12px;
+  }
+
+  .cmd-tools {
+    display: none;
+  }
+
+  .hero2-stage {
+    min-height: min(58vw, 260px);
+  }
+
+  .hero2-stage .ghost-canvas {
+    min-height: min(58vw, 260px);
+  }
+
+  .statcards {
+    gap: 9px;
+  }
+
+  .statcard {
+    min-height: 108px;
+    padding: 12px;
+    border-radius: 15px;
+  }
+
+  .statcard-icon {
+    width: 30px;
+    height: 30px;
+    margin-bottom: 5px;
+  }
+
+  .statcard-v {
+    font-size: 21px;
+  }
+
+  .statcard-sub,
+  .statcard-foot {
+    font-size: 10.5px;
+  }
+}
+
+@media (max-width: 430px) {
+  .sidebar {
+    height: 54px;
+    gap: 5px;
+    padding: 6px;
+  }
+
+  .side-brand {
+    width: 34px;
+    height: 40px;
+    padding-right: 5px;
+  }
+
+  .side-brand .brand-ghost {
+    width: 22px;
+    height: 24px;
+  }
+
+  .side-nav {
+    gap: 3px;
+  }
+
+  .nav-item {
+    flex-basis: 36px;
+    width: 36px;
+    height: 40px;
+    border-radius: 13px;
+  }
+
+  .nav-item .ic {
+    width: 16px;
+    height: 16px;
+  }
+
+  .topbar-user {
+    max-width: 140px;
+  }
+
+  .user-meta b {
+    max-width: 84px;
+  }
+
+  .pill {
+    min-width: 72px;
+  }
+
+  .ws-switch {
+    flex-basis: 112px;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .pill-v .dot { animation: none !important; }
   .plan-arc { transition: none; }

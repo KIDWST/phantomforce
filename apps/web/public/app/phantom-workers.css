@@ -256,25 +256,62 @@
   .phantom-workers-mount {
     position: relative;
     top: auto;
-    padding-top: 10px;
+    padding: 6px 10px 0;
+    background: linear-gradient(180deg, rgba(2, 6, 10, 0.72), rgba(2, 6, 10, 0));
   }
 
   .worker-board-head {
-    align-items: flex-start;
-    flex-direction: column;
+    align-items: center;
+    flex-direction: row;
+    padding: 6px 8px;
+  }
+
+  .worker-board-head b {
+    font-size: 11px;
   }
 
   .worker-board-head p {
-    text-align: left;
+    display: none;
+  }
+
+  .worker-live-dot {
+    width: 6px;
+    height: 6px;
   }
 
   .worker-marquee-track {
-    animation-duration: 78s;
+    gap: 6px;
+    padding: 5px 6px;
+    animation-duration: 58s;
   }
 
   .worker-tick {
-    min-width: 290px;
-    max-width: 315px;
+    min-width: 232px;
+    max-width: 258px;
+    gap: 7px;
+    padding: 6px 8px;
+    border-radius: 11px;
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .worker-avatar {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+
+  .worker-copy strong {
+    font-size: 10px;
+  }
+
+  .worker-copy em,
+  .worker-copy i {
+    display: none;
+  }
+
+  .worker-copy b {
+    font-size: 10.5px;
+    line-height: 1.15;
   }
 }
 
