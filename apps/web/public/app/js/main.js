@@ -3,11 +3,11 @@
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, isLiveAdminHost, isStaticPublicHost,
-  ownerLogin, redirectToLiveAdmin, verifyLiveSession,
+  ownerLogin, redirectToLiveAdmin, verifyLiveSession, uiPrefs, updateUiPreferences,
 } from "./store.js";
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-mode-poses-20260705-01";
+import { createPhantomCharacter } from "./character.js?v=phantom-ui-settings-mode-poses-20260705-02";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -134,21 +134,40 @@ const NAV = [
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "adminos", adminOnly: true },
 ];
 let activeNav = "chat";
+const LOCKED_NAV = new Set(["chat", "settings"]);
+
+function navItems({ includeHidden = false } = {}) {
+  const prefs = uiPrefs();
+  const hidden = new Set(prefs.hiddenNav || []);
+  const byId = new Map(NAV.map((item) => [item.id, item]));
+  const ordered = (prefs.navOrder || []).map((id) => byId.get(id)).filter(Boolean);
+  for (const item of NAV) if (!ordered.some((x) => x.id === item.id)) ordered.push(item);
+  return ordered.filter((item) =>
+    (!item.adminOnly || isAdmin()) && (includeHidden || !hidden.has(item.id) || LOCKED_NAV.has(item.id))
+  );
+}
+
+function dashboardWidgetOn(id) {
+  return uiPrefs().dashboardWidgets?.[id] !== false;
+}
 
 function renderNav() {
   const nav = $("[data-nav]");
+  const prefs = uiPrefs();
+  const designer = isAdmin() && prefs.designerMode;
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  nav.innerHTML = NAV.filter((n) => !n.adminOnly || isAdmin()).map((n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}">
+  if (phantom) phantom.classList.toggle("designer-mode-on", designer);
+  nav.innerHTML = navItems().map((n) => `
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${designer ? "is-designable" : ""}" data-nav-id="${n.id}" title="${designer && !LOCKED_NAV.has(n.id) ? `Shift-click to hide ${esc(n.label)}` : esc(n.label)}">
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
-    </button>`).join("");
+    </button>`).join("") + (designer ? `<div class="nav-designer-hint">Designer mode · Shift-click tabs to hide</div>` : "");
 }
 
 function goNav(id) {
   const item = NAV.find((n) => n.id === id);
-  if (!item) return;
+  if (!item || (item.adminOnly && !isAdmin())) return;
   activeNav = id;
   renderNav();
   if (item.view === "main") { closeOverlay(true); }
@@ -212,36 +231,36 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-mode-poses-20260705-01";
+const POSE_VERSION = "phantom-ui-settings-mode-poses-20260705-02";
 const MODE_POSES = {
   ask: {
-    src: "/app/assets/poses/mode-ask.webp",
+    src: "/app/assets/poses/mode-dark-ask.webp",
     caption: "Listening",
     alt: "Phantom listening",
   },
   write: {
-    src: "/app/assets/poses/mode-write.webp",
+    src: "/app/assets/poses/mode-dark-write.webp",
     caption: "Drafting",
     alt: "Phantom writing",
   },
   image: {
-    src: "/app/assets/poses/mode-image.webp",
-    caption: "Conjuring image",
+    src: "/app/assets/poses/mode-dark-image.webp",
+    caption: "Conjuring",
     alt: "Phantom creating an image",
   },
   video: {
-    src: "/app/assets/poses/mode-video.webp",
+    src: "/app/assets/poses/mode-dark-video.webp",
     caption: "Directing video",
     alt: "Phantom directing a video",
   },
   website: {
-    src: "/app/assets/poses/mode-website.webp",
+    src: "/app/assets/poses/mode-dark-website.webp",
     caption: "Building pages",
     alt: "Phantom building a website",
   },
   admin: {
-    src: "/app/assets/poses/mode-admin.webp",
-    caption: "Operator mode",
+    src: "/app/assets/poses/mode-dark-admin.webp",
+    caption: "Control",
     alt: "Phantom in admin control mode",
   },
 };
@@ -308,6 +327,10 @@ function thisWeekCount() {
   return visible(store.state.activity).filter((a) => new Date(a.at).getTime() >= weekAgo).length;
 }
 function renderStatCards() {
+  const box = $("[data-statcards]");
+  if (!box) return;
+  box.hidden = !dashboardWidgetOn("statcards");
+  if (box.hidden) { box.innerHTML = ""; return; }
   const media = visible(store.state.media);
   const sites = visible(store.state.sites);
   const products = visible(store.state.products);
@@ -323,7 +346,7 @@ function renderStatCards() {
     { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: "Across all desks", open: "media", trend: "+12%" },
     { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: "Running smoothly", open: "workforce", trend: "live" },
   ];
-  $("[data-statcards]").innerHTML = cards.map((c) => `
+  box.innerHTML = cards.map((c) => `
     <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
       <span class="statcard-top">
         <span class="statcard-icon">${svg(c.icon)}</span>
@@ -353,6 +376,9 @@ function renderActivity() {
   const items = [...liveFeed, ...base].slice(0, 4);
   const box = $("[data-activity]");
   if (!box) return;
+  const section = box.closest(".activity2");
+  if (section) section.hidden = !dashboardWidgetOn("activity");
+  if (section?.hidden) { box.innerHTML = ""; return; }
   if (!items.length) { box.innerHTML = `<p class="empty-line">Quiet — nothing has run yet.</p>`; return; }
   box.innerHTML = items.map((a) => `
     <div class="act-card ${a.live ? "act-live" : ""}">
@@ -367,6 +393,10 @@ function renderActivity() {
 
 /* ============================ today's plan (donut) ============================ */
 function renderPlan() {
+  const box = $("[data-plan]");
+  if (!box) return;
+  box.hidden = !dashboardWidgetOn("plan");
+  if (box.hidden) { box.innerHTML = ""; return; }
   const plan = todaysPlan();
   const m = moneyView();
   const money = m.wonValue + m.pipeline > 0 ? m.wonValue / (m.wonValue + m.pipeline) : 0.4;
@@ -374,7 +404,7 @@ function renderPlan() {
   const pct = Math.max(55, Math.min(97, Math.round(88 - plan.length * 4 + money * 18)));
   const R = 30, C = 2 * Math.PI * R, off = C * (1 - pct / 100);
   const msg = pct >= 85 ? "You're ahead. Ride it." : pct >= 45 ? "You're on track." : "Let's clear the runway.";
-  $("[data-plan]").innerHTML = `
+  box.innerHTML = `
     <div class="section-head"><h2>Today's plan</h2></div>
     <button class="plan-inner" data-open-ws="approvals">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
@@ -400,8 +430,14 @@ const AGENT_STATE = {
 };
 function renderQueue() {
   const agents = store.state.agents || [];
-  $("[data-queue-count]").textContent = agents.length;
-  $("[data-queue]").innerHTML = agents.slice(0, 4).map((a) => {
+  const list = $("[data-queue]");
+  const count = $("[data-queue-count]");
+  if (!list) return;
+  const card = list.closest(".queue-card");
+  if (card) card.hidden = !dashboardWidgetOn("queue");
+  if (card?.hidden) { list.innerHTML = ""; if (count) count.textContent = "0"; return; }
+  if (count) count.textContent = agents.length;
+  list.innerHTML = agents.slice(0, 4).map((a) => {
     const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
     return `
     <button class="queue-item" data-open-ws="workforce">
@@ -421,7 +457,12 @@ const QUICK = [
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
 function renderQuick() {
-  $("[data-quick]").innerHTML = QUICK.map((q, i) => `
+  const box = $("[data-quick]");
+  if (!box) return;
+  const card = box.closest(".quick-card");
+  if (card) card.hidden = !dashboardWidgetOn("quick");
+  if (card?.hidden) { box.innerHTML = ""; return; }
+  box.innerHTML = QUICK.map((q, i) => `
     <button class="quick-item" data-quick="${i}">
       <span class="quick-ic">${svg(q.icon)}</span>
       <span>${esc(q.label)}</span>
@@ -449,6 +490,8 @@ function attentionItems() {
 function renderInsights() {
   const box = $("[data-insights]");
   if (!box) return;
+  box.hidden = !dashboardWidgetOn("insights");
+  if (box.hidden) { box.innerHTML = ""; return; }
   const items = attentionItems();
   if (!items.length) {
     box.innerHTML = `<div class="insights-head"><span class="insights-k">${greeting()} — you're clear</span></div>
@@ -493,8 +536,10 @@ function fuzzy(q, text) {
 function paletteSources(query) {
   const q = query.trim().toLowerCase();
   const items = [];
-  NAV.filter((n) => !n.adminOnly || isAdmin()).forEach((n) =>
-    items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}` : "Console home", run: () => goNav(n.id) }));
+  navItems({ includeHidden: true }).forEach((n) => {
+    const hidden = (uiPrefs().hiddenNav || []).includes(n.id);
+    items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}${hidden ? " (hidden tab)" : ""}` : "Console home", run: () => goNav(n.id) });
+  });
   for (const id in WORKSPACE_DEFS) {
     const def = WORKSPACE_DEFS[id];
     if (def.adminOnly && !isAdmin()) continue;
@@ -725,7 +770,18 @@ function wireDeck() {
     const mode = e.target.closest("[data-mode]");
     if (mode) { setMode(mode.dataset.mode); return; }
     const navBtn = e.target.closest("[data-nav-id]");
-    if (navBtn) { goNav(navBtn.dataset.navId); return; }
+    if (navBtn) {
+      const id = navBtn.dataset.navId;
+      if (isAdmin() && uiPrefs().designerMode && e.shiftKey && !LOCKED_NAV.has(id)) {
+        const hiddenNav = [...new Set([...(uiPrefs().hiddenNav || []), id])];
+        updateUiPreferences({ hiddenNav });
+        if (activeNav === id) activeNav = "chat";
+        renderConsole();
+        return;
+      }
+      goNav(id);
+      return;
+    }
     const quick = e.target.closest("[data-quick]");
     if (quick) {
       const q = QUICK[+quick.dataset.quick];

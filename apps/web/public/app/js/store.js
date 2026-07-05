@@ -36,6 +36,72 @@ export const RETAINERS = [
   { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full workforce running weekly: media, pipeline, protection." },
 ];
 
+/* ---------------- UI customization ---------------- */
+export const UI_NAV_ITEMS = [
+  { id: "chat", label: "Chat", description: "Home command surface.", locked: true },
+  { id: "dashboard", label: "Dashboard", description: "Revenue, activity, and business pulse." },
+  { id: "media", label: "Media Lab", description: "Creative briefs and controlled media work." },
+  { id: "content", label: "Content Hub", description: "Sites, stores, pages, and content surfaces." },
+  { id: "brand", label: "Brand Memory", description: "Private memory, workforce, and brand context." },
+  { id: "approvals", label: "Approvals", description: "Human sign-off for outward-facing moves." },
+  { id: "automation", label: "Automation", description: "Workflow and worker lanes." },
+  { id: "analytics", label: "Analytics", description: "Money and performance view." },
+  { id: "settings", label: "Settings", description: "Customize PhantomForce safely.", locked: true, adminOnly: true },
+];
+
+export const UI_DASHBOARD_WIDGETS = [
+  { id: "insights", label: "Attention cards", description: "Top strip for the few things that need you." },
+  { id: "statcards", label: "Metric cards", description: "Compact business-at-a-glance cards." },
+  { id: "activity", label: "Live activity grid", description: "Recent phantom-worker movement." },
+  { id: "plan", label: "Today plan", description: "Progress dial and daily priority." },
+  { id: "queue", label: "Mission queue", description: "Worker desk status and next moves." },
+  { id: "quick", label: "Quick actions", description: "One-click starter actions." },
+];
+
+export const DEFAULT_UI_PREFS = {
+  navOrder: UI_NAV_ITEMS.map((item) => item.id),
+  hiddenNav: [],
+  designerMode: false,
+  dashboardWidgets: Object.fromEntries(UI_DASHBOARD_WIDGETS.map((item) => [item.id, true])),
+};
+
+export function defaultUiPreferences() {
+  return JSON.parse(JSON.stringify(DEFAULT_UI_PREFS));
+}
+
+export function normalizeUiPreferences(raw = {}) {
+  const prefs = raw && typeof raw === "object" ? raw : {};
+  const ids = UI_NAV_ITEMS.map((item) => item.id);
+  const validIds = new Set(ids);
+  const lockedIds = new Set(UI_NAV_ITEMS.filter((item) => item.locked).map((item) => item.id));
+  const navOrder = [];
+  for (const id of Array.isArray(prefs.navOrder) ? prefs.navOrder : []) {
+    if (validIds.has(id) && !navOrder.includes(id)) navOrder.push(id);
+  }
+  for (const id of ids) if (!navOrder.includes(id)) navOrder.push(id);
+
+  const hiddenNav = [];
+  for (const id of Array.isArray(prefs.hiddenNav) ? prefs.hiddenNav : []) {
+    if (validIds.has(id) && !lockedIds.has(id) && !hiddenNav.includes(id)) hiddenNav.push(id);
+  }
+
+  const incomingWidgets =
+    (prefs.dashboardWidgets && typeof prefs.dashboardWidgets === "object" && prefs.dashboardWidgets)
+    || (prefs.homeWidgets && typeof prefs.homeWidgets === "object" && prefs.homeWidgets)
+    || {};
+  const dashboardWidgets = Object.fromEntries(UI_DASHBOARD_WIDGETS.map((item) => [
+    item.id,
+    incomingWidgets[item.id] !== false,
+  ]));
+
+  return {
+    navOrder,
+    hiddenNav,
+    designerMode: prefs.designerMode === true,
+    dashboardWidgets,
+  };
+}
+
 /* ---------------- internal tool spine ---------------- */
 export const TOOL_SPINE = [
   {
@@ -267,7 +333,23 @@ function seed() {
     { id: uid("act"), ws: "chicagoshots", who: "Booking Coordinator", text: "confirmed the Halsted shoot for Monday 9am.", at: days(-0.6) },
   ];
 
-  return { version: 3, workspaces, leads, proposals, reviews, bookings, media, sites, products, security, approvals, agents, toolSpine: TOOL_SPINE, activity };
+  return {
+    version: 3,
+    uiPreferences: defaultUiPreferences(),
+    workspaces,
+    leads,
+    proposals,
+    reviews,
+    bookings,
+    media,
+    sites,
+    products,
+    security,
+    approvals,
+    agents,
+    toolSpine: TOOL_SPINE,
+    activity,
+  };
 }
 
 /* ---------------- store ---------------- */
@@ -287,6 +369,7 @@ function normalizeData(data) {
   d.agents ||= seeded.agents;
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...tool, ...(d.toolSpine || []).find((x) => x.id === tool.id) }));
   d.activity ||= [];
+  d.uiPreferences = normalizeUiPreferences(d.uiPreferences);
   const seenToolIds = new Set(d.activity.map((item) => item.toolId).filter(Boolean));
   for (const item of toolActivitySeed().reverse()) {
     if (!seenToolIds.has(item.toolId)) d.activity.unshift(item);
@@ -317,6 +400,26 @@ export const store = {
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
   reset() { try { localStorage.removeItem(DB_KEY); } catch {} this.state = seed(); this.save(); },
 };
+
+export function uiPrefs() {
+  store.state.uiPreferences = normalizeUiPreferences(store.state.uiPreferences);
+  return store.state.uiPreferences;
+}
+
+export function updateUiPreferences(patch = {}) {
+  const current = uiPrefs();
+  const next = typeof patch === "function" ? patch(current) : patch;
+  const merged = {
+    ...current,
+    ...next,
+    dashboardWidgets: next.dashboardWidgets
+      ? { ...current.dashboardWidgets, ...next.dashboardWidgets }
+      : current.dashboardWidgets,
+  };
+  store.state.uiPreferences = normalizeUiPreferences(merged);
+  store.save();
+  return store.state.uiPreferences;
+}
 
 /* ---------------- session ---------------- */
 export const session = {
