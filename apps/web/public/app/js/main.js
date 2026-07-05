@@ -8,7 +8,7 @@ import {
 import { handleCommand, commandSuggestions } from "./command.js?v=attachment-chat-questions-20260705-01";
 import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-admin-media-dismiss-20260705-01";
 import { imageStyle } from "./media-image.js?v=phantom-chicagoshots-crm-20260704-01";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-admin-20260705-06";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-admin-20260705-07";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;

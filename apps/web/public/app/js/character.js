@@ -1,10 +1,18 @@
 /* PhantomForce — the Phantom: a living being made from the hero paintings.
 
-   POSE LIBRARY (app/assets/poses/*.webp): the character exists as six real
+   POSE LIBRARY (app/assets/poses/*.webp): the character exists as eleven real
    painted stances — conjure (flame + offered hand), arms crossed, hand on
-   chin, open-palm present, finger-up point, and a hand-over-mouth laugh.
-   The engine picks the stance that fits real app state. Conjure is a startup
-   reveal only; after the first user action, idle uses the active standby pose.
+   chin, open-palm present, finger-up point, hand-over-mouth laugh, a warm
+   mug/welcome, a bashful sheepish, a coy hush, a scheming chin-stroke, and an
+   assertive finger-up. The engine picks the stance that fits real app state.
+   Conjure is a startup reveal only; after the first user action his standby
+   stance QUIETLY REFLECTS HOW HE FEELS (warm→welcome, thinking→scheme,
+   taken-aback→coy/sheepish) — it never randomly cycles.
+
+   FEELING has MOMENTUM: a mood governor (governMood) carries an emotional
+   state with inertia through a valence/arousal plane, so he doesn't snap
+   between opposite emotions — a shove into the opposite valence is bridged
+   through a surprised → (coy | sheepish) "taken aback" beat before it lands.
 
    Each pose's painted face is erased and a LIVE face is drawn in its exact
    place (per-pose position, scale, tilt — the laugh pose hides the mouth
@@ -22,12 +30,15 @@ const TAU = Math.PI * 2;
 
 export const ACCENTS = {
   calm: [65, 255, 161],
+  content: [96, 255, 180],
   happy: [132, 255, 207],
   bright: [96, 255, 140],
   alert: [255, 92, 116],
   sad: [58, 200, 158],
   excited: [132, 255, 207],
   surprised: [96, 255, 140],
+  sheepish: [120, 255, 200],
+  coy: [80, 255, 150],
 };
 
 const FACE = {
@@ -37,22 +48,81 @@ const FACE = {
   talking:   { browY: 0.13, browA: 0.12, browSad: 0, browSplit: 0.00, lid: 0.92, eyeHappy: 0.0, curve: 0.34, open: 0.30, wide: 1.00, smirk: 0.35, tilt: 0.00, squash: 0.05, drop: 0.00 },
   menace:    { browY: 0.02, browA: 0.60, browSad: 0, browSplit: 0.00, lid: 0.55, eyeHappy: 0.0, curve: 0.50, open: 0.16, wide: 1.10, smirk: 0.65, tilt: 0.05, squash: 0.15, drop: 0.00 },
   happy:     { browY: 0.20, browA: 0.00, browSad: 0, browSplit: 0.00, lid: 0.75, eyeHappy: 0.85, curve: 0.75, open: 0.18, wide: 1.10, smirk: 0.30, tilt: -0.03, squash: 0.30, drop: 0.00 },
+  content:   { browY: 0.16, browA: 0.06, browSad: 0, browSplit: 0.00, lid: 0.80, eyeHappy: 0.55, curve: 0.55, open: 0.09, wide: 1.05, smirk: 0.32, tilt: -0.02, squash: 0.14, drop: 0.00 },
   sad:       { browY: 0.06, browA: -0.05, browSad: 0.95, browSplit: 0.00, lid: 0.55, eyeHappy: 0.0, curve: -0.55, open: 0.05, wide: 0.70, smirk: 0.00, tilt: 0.08, squash: -0.85, drop: 0.16 },
   surprised: { browY: 0.32, browA: -0.25, browSad: 0, browSplit: 0.00, lid: 1.30, eyeHappy: 0.0, curve: 0.02, open: 0.60, wide: 0.45, smirk: 0.00, tilt: 0.00, squash: 0.35, drop: -0.06 },
   excited:   { browY: 0.24, browA: -0.05, browSad: 0, browSplit: 0.00, lid: 1.05, eyeHappy: 0.8, curve: 0.70, open: 0.34, wide: 1.15, smirk: 0.15, tilt: -0.02, squash: 0.50, drop: 0.00 },
+  sheepish:  { browY: 0.24, browA: -0.30, browSad: 0.40, browSplit: 0.10, lid: 0.72, eyeHappy: 0.30, curve: 0.30, open: 0.10, wide: 0.85, smirk: 0.45, tilt: 0.09, squash: 0.05, drop: 0.03 },
+  coy:       { browY: 0.12, browA: 0.35, browSad: 0, browSplit: 0.20, lid: 0.62, eyeHappy: 0.15, curve: 0.42, open: 0.05, wide: 0.80, smirk: 0.70, tilt: 0.05, squash: 0.05, drop: 0.00 },
+};
+
+/* Emotion prototypes in a valence/arousal plane. The mood governor lives in
+   this plane so feelings have MOMENTUM: he eases between them instead of
+   snapping, and a shove into the opposite valence is bridged through a
+   surprised → (coy | sheepish) "taken aback" beat before it lands. */
+const EMO = {
+  calm:      { v: 0.18, a: 0.20 },
+  content:   { v: 0.52, a: 0.32 },
+  bright:    { v: 0.38, a: 0.46 },
+  happy:     { v: 0.74, a: 0.56 },
+  excited:   { v: 0.90, a: 0.92 },
+  coy:       { v: 0.44, a: 0.55 },
+  sheepish:  { v: 0.06, a: 0.55 },
+  surprised: { v: 0.00, a: 0.95 },
+  sad:       { v: -0.74, a: 0.24 },
+  alert:     { v: -0.36, a: 0.86 },
 };
 
 function applyEmotion(T, emotion, mood) {
   const o = { ...T };
   const idleish = mood === "idle" || mood === "happy";
-  if (["sad", "surprised", "excited", "happy"].includes(emotion) && idleish) return { ...FACE[emotion] };
+  if (["sad", "surprised", "excited", "happy", "content", "sheepish", "coy"].includes(emotion) && idleish) return { ...FACE[emotion] };
   if (emotion === "happy") { o.curve += 0.2; o.lid *= 0.9; o.browY += 0.05; o.eyeHappy = Math.max(o.eyeHappy, 0.35); o.squash += 0.2; }
+  if (emotion === "content") { o.curve += 0.12; o.browY += 0.04; o.eyeHappy = Math.max(o.eyeHappy, 0.28); o.squash += 0.1; }
   if (emotion === "excited") { o.curve += 0.25; o.browY += 0.1; o.squash += 0.4; o.lid = Math.min(1.15, o.lid + 0.15); }
   if (emotion === "sad") { o.browSad = 0.9; o.curve -= 0.6; o.squash -= 0.7; o.drop += 0.12; o.lid *= 0.75; o.smirk = 0; }
   if (emotion === "surprised") { o.browY += 0.2; o.lid *= 1.25; o.open += 0.2; o.squash += 0.2; }
+  if (emotion === "sheepish") { o.browSad = Math.max(o.browSad, 0.35); o.browA -= 0.2; o.browSplit += 0.08; o.tilt += 0.05; o.smirk = Math.max(o.smirk, 0.4); o.curve = Math.max(o.curve, 0.2); }
+  if (emotion === "coy") { o.browSplit += 0.16; o.browA += 0.2; o.lid *= 0.8; o.smirk = Math.max(o.smirk, 0.6); o.curve = Math.max(o.curve, 0.35); }
   if (emotion === "bright") { o.browY += 0.05; o.lid = Math.min(1.1, o.lid + 0.15); o.curve += 0.08; }
   if (emotion === "alert") { o.browA += 0.4; o.lid *= 0.72; o.curve = Math.min(o.curve, -0.28); o.open += 0.1; o.smirk = 0.1; }
   return o;
+}
+
+/* the mood governor: one step of emotional inertia. `stim` is what the host
+   is feeling AT him this frame; the returned emotion is what he actually
+   FEELS, after momentum and the taken-aback bridge. A positive shove recovers
+   through a pleased "coy" beat; a negative or soft one through "sheepish". */
+function governMood(G, stim, dt) {
+  const tgt = EMO[stim] || EMO.calm;
+  const flip = Math.sign(tgt.v) !== Math.sign(G.cv) && Math.abs(tgt.v - G.cv) > 0.5 && Math.abs(G.cv) > 0.22;
+  const startle = (tgt.a - G.ca) > 0.5 && tgt.v <= G.cv + 0.05;
+  if (!G.bridge && (flip || startle) && G.dwell > 0.45) {
+    const into = tgt.v > 0.25 ? "coy" : (stim !== "alert" ? "sheepish" : null);
+    G.bridge = { stage: "surprised", tt: 0.40 + Math.random() * 0.22, into };
+  }
+  if (G.bridge) {
+    G.bridge.tt -= dt;
+    if (G.bridge.tt <= 0) {
+      if (G.bridge.stage === "surprised" && G.bridge.into) G.bridge = { stage: G.bridge.into, tt: 0.50 + Math.random() * 0.3, into: null };
+      else G.bridge = null;
+    }
+  }
+  const K = G.bridge ? 6.0 : 3.2, D = 2 * Math.sqrt(K) * 1.05;
+  G.cvv += ((tgt.v - G.cv) * K - D * G.cvv) * dt;
+  G.cv += G.cvv * dt;
+  G.ca += (tgt.a - G.ca) * Math.min(1, dt * (G.bridge ? 7 : 3.5));
+  if (G.bridge && G.bridge.stage === "surprised") G.ca = Math.max(G.ca, 0.9);
+  let expr;
+  if (G.bridge) expr = G.bridge.stage;                          // surprised | coy | sheepish
+  else if (stim === "alert" && G.cv < 0.02) expr = "alert";
+  else if (G.cv < -0.32) expr = "sad";
+  else if (G.cv < 0.22) expr = "calm";
+  else if (G.cv < 0.56) expr = "content";
+  else if (G.cv < 0.80) expr = "happy";
+  else expr = "excited";
+  if (expr !== G.expr) { G.expr = expr; G.dwell = 0; } else G.dwell += dt;
+  return expr;
 }
 
 const ARMS = {
@@ -246,6 +316,16 @@ export function createPhantomCharacter({ small = false } = {}) {
       face: { cx: 0.491, cy: 0.243, rx: 0.075, ry: 0.052, s: 0.168, rot: -0.05, mouth: true } },
     laugh: { file: "poses/laugh.webp", cx: 0.485, groundY: 0.908, headTop: 0.060,
       face: { cx: 0.418, cy: 0.215, rx: 0.078, ry: 0.038, s: 0.164, rot: -0.14, mouth: false } },
+    welcome: { file: "poses/welcome.webp", cx: 0.460, groundY: 0.905, headTop: 0.070,
+      face: { cx: 0.434, cy: 0.216, rx: 0.060, ry: 0.058, s: 0.123, rot: 0, mouth: true } },
+    sheepish: { file: "poses/sheepish.webp", cx: 0.500, groundY: 0.905, headTop: 0.062,
+      face: { cx: 0.498, cy: 0.232, rx: 0.058, ry: 0.055, s: 0.120, rot: 0.02, mouth: true } },
+    coy: { file: "poses/coy.webp", cx: 0.500, groundY: 0.905, headTop: 0.098,
+      face: { cx: 0.495, cy: 0.270, rx: 0.060, ry: 0.052, s: 0.123, rot: -0.03, mouth: true } },
+    scheme: { file: "poses/scheme.webp", cx: 0.490, groundY: 0.905, headTop: 0.066,
+      face: { cx: 0.474, cy: 0.236, rx: 0.060, ry: 0.050, s: 0.123, rot: -0.04, mouth: true } },
+    assert: { file: "poses/assert.webp", cx: 0.500, groundY: 0.905, headTop: 0.058,
+      face: { cx: 0.498, cy: 0.210, rx: 0.062, ry: 0.056, s: 0.127, rot: -0.03, mouth: true } },
   };
   const loadPose = (name) => {
     const p = POSES[name];
@@ -318,6 +398,7 @@ export function createPhantomCharacter({ small = false } = {}) {
   let born = -1, wink = 0, ringBoost = 0, swayBias = 0, flameHold = 1;
   let showSeq = [], showT = 0;
   let impulseT = 5, browBump = 0, sighAmt = 0, sighT = 9, glitchNow = 0;
+  const gov = { cv: 0.2, cvv: 0, ca: 0.25, expr: "calm", dwell: 1, bridge: null };
 
   /* ---- one tick of the acting engine, shared by both renderers ---- */
   const tick = (o) => {
@@ -330,6 +411,9 @@ export function createPhantomCharacter({ small = false } = {}) {
     const age = t - born;
     const reveal = Math.min(1, age / 2.2);
     const settled = reveal >= 1;
+    /* what he actually FEELS this frame — the host's emotion run through the
+       inertia governor, so it has momentum and bridges instead of snapping. */
+    const emo = settled ? governMood(gov, emotion, dt) : "calm";
     const talkBeat = mood === "talking" ? Math.abs(Math.sin(actionT * 9.5)) : 0;
     const thinkBeat = mood === "thinking" ? Math.abs(Math.sin(t * 5.2)) : 0;
 
@@ -362,19 +446,31 @@ export function createPhantomCharacter({ small = false } = {}) {
     else if (mood === "thinking") gesture = "chin";
     else if (mood === "menace") gesture = "menace";
     else if (mood === "happy") gesture = "cheer";
-    else if (emotion === "sad") gesture = "droop";
+    else if (emo === "sad") gesture = "droop";
 
-    /* full-body stances are state-driven only; idle life stays in face, glow, eyes, breath, and particles */
+    /* stances are state-driven, never randomly cycled — but his idle STANDBY
+       quietly reflects how he FEELS, and the taken-aback bridge (surprised →
+       coy | sheepish) borrows its matching stance so his body agrees with his
+       face. Idle life otherwise stays in face, glow, eyes, breath, particles. */
+    const bStage = gov.bridge && gov.bridge.stage;
+    const bridgePose = bStage === "coy" ? "coy"
+      : bStage === "sheepish" ? "sheepish"
+      : bStage === "surprised" ? (gov.bridge.into === "coy" ? "coy" : "sheepish") : null;
     let poseName = startupOnly ? "conjure" : "present";
     if (settled) {
-      if (mood === "talking") poseName = "present";
-      else if (mood === "thinking") poseName = "chin";
-      else if (mood === "listening") poseName = "point";
+      if (mood === "talking") poseName = (emo === "excited" || emo === "happy" || emo === "bright") ? "assert" : "present";
+      else if (mood === "thinking") poseName = "scheme";
       else if (mood === "menace") poseName = "cross";
+      else if (mood === "listening") poseName = (emo === "content" || emo === "happy") ? "welcome" : "point";
       else if (mood === "happy") poseName = "laugh";
+      else poseName =                                    // idle standby, mood-reflective
+        bridgePose ? bridgePose :
+        emo === "excited" ? "laugh" :
+        (emo === "content" || emo === "happy") ? "welcome" :
+        startupOnly ? "conjure" : "present";
     }
 
-    const T = applyEmotion(FACE[mood] || FACE.idle, emotion, mood);
+    const T = applyEmotion(FACE[mood] || FACE.idle, emo, mood);
     if (mood === "talking") T.open = 0.1 + talkBeat * 0.42;
     if (beat === "cross" && gesture === "cross") { T.browA += 0.12; T.curve += 0.06; T.smirk = 0.55; }
     if (beat === "wave") { T.curve += 0.18; T.lid = Math.min(1, T.lid + 0.1); }
@@ -413,7 +509,7 @@ export function createPhantomCharacter({ small = false } = {}) {
 
     const bounce = E.squash > 0 ? Math.sin(t * 3.6) * 0.045 * E.squash : 0;
     return {
-      dt, age, reveal, settled, talkBeat, thinkBeat, beat, gesture, pose, poseName,
+      dt, age, reveal, settled, talkBeat, thinkBeat, beat, gesture, pose, poseName, emo,
       blink, lookX, lookY, sighAmt, glitchNow,
       bodySy: 1 + E.squash * 0.055 + bounce,
       bodySx: 1 - (E.squash * 0.055 + bounce) * 0.6,
@@ -480,7 +576,8 @@ export function createPhantomCharacter({ small = false } = {}) {
   };
 
   const drawSprite = (ctx2, o, S) => {
-    const { t, cx, cy, scale, emotion, mood, pulse } = o;
+    const { t, cx, cy, scale, mood, pulse } = o;
+    const emotion = S.emo || o.emotion;      // his FELT emotion (governed), not the raw stimulus
     const accent = ACCENTS[emotion] || ACCENTS.calm;
     const A = (a) => `rgba(${accent[0]},${accent[1]},${accent[2]},${a})`;
     const breath = 1 + Math.sin(t * 0.9) * 0.02 + pulse * 0.06 + S.talkBeat * 0.015 + S.sighAmt * 0.028;
@@ -601,7 +698,8 @@ export function createPhantomCharacter({ small = false } = {}) {
 
   /* ========================== PROCEDURAL MODE ========================== */
   const drawProcedural = (ctx2, o, S) => {
-    const { t, cx, cy, scale, mood, emotion, pulse, px } = o;
+    const { t, cx, cy, scale, mood, pulse, px } = o;
+    const emotion = S.emo || o.emotion;      // felt emotion (governed)
     const accent = ACCENTS[emotion] || ACCENTS.calm;
     const A = (a) => `rgba(${accent[0]},${accent[1]},${accent[2]},${a})`;
     const { reveal, settled, talkBeat, gesture, pose } = S;
@@ -845,6 +943,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     if (poseBlend < 1) poseBlend = Math.min(1, poseBlend + S.dt / 0.45);
     if (POSES[curPose].art || POSES.conjure.art) drawSprite(ctx2, o, S);
     else drawProcedural(ctx2, o, S);
+    return { pose: curPose, want, emo: S.emo, bridge: gov.bridge && gov.bridge.stage, cv: gov.cv };
   };
 
   return { draw };
