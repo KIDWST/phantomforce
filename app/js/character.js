@@ -258,7 +258,8 @@ export function createPhantomCharacter({ small = false } = {}) {
       const img = new Image();
       img.onload = () => { p.art = img; p.w = img.naturalWidth; p.h = img.naturalHeight; };
       img.onerror = () => { p.failed = true; };
-      img.src = new URL("../assets/" + p.file, import.meta.url).href;
+      const v = import.meta.url.split("?")[1] || "";   // reuse this module's ?v= cache-buster
+      img.src = new URL("../assets/" + p.file, import.meta.url).href + (v ? "?" + v : "");
     } catch { p.failed = true; }
   };
   loadPose("conjure");
