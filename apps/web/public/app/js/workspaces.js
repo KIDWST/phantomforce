@@ -547,7 +547,10 @@ function renderMedia(el, rerender) {
     <div class="card-grid">
       ${media.map((m) => `
         <article class="record ${m.asset?.src ? "record-image" : ""}">
-          <div class="record-top">${wsTag(m.ws)}<h4>${esc(mediaCardTitle(m))}</h4></div>
+          <div class="record-top record-top-actions">
+            <div>${wsTag(m.ws)}<h4>${esc(mediaCardTitle(m))}</h4></div>
+            <button class="record-dismiss" data-act="dismiss" data-id="${m.id}" type="button" aria-label="Remove this brief" title="Remove">×</button>
+          </div>
           <p class="record-sub">${mediaMetaHtml(m)}</p>
           ${m.asset?.src ? `
             <figure class="media-image-stage ${m.asset.bgRemoved ? "is-bg-removed" : ""}" style="${imageStyle(m.asset)}">
@@ -620,6 +623,15 @@ function renderMedia(el, rerender) {
       if (m.caption) lines.push("", `Post text: ${m.caption}`);
       if (m.asset?.prompt) lines.push("", `Prompt: ${m.asset.prompt}`);
       copyText(btn, lines.join("\n"));
+    },
+    dismiss: (id) => {
+      const index = store.state.media.findIndex((m) => m.id === id);
+      if (index < 0) return;
+      const [removed] = store.state.media.splice(index, 1);
+      store.state.approvals = (store.state.approvals || []).filter((a) => a.ref !== id || a.type !== "media-generation");
+      pushActivity("Media Lab", `removed ${mediaCardTitle(removed)}.`, removed?.ws);
+      store.save();
+      rerender();
     },
     "image-filter": (id, btn) => {
       const m = find(id);
