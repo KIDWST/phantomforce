@@ -2,7 +2,7 @@
   position: sticky;
   top: 70px;
   z-index: 18;
-  padding: 0 clamp(14px, 2vw, 26px);
+  padding: 0 clamp(12px, 1.6vw, 22px);
   background: linear-gradient(180deg, rgba(2, 6, 10, 0.88), rgba(2, 6, 10, 0));
   backdrop-filter: blur(10px);
 }
@@ -13,16 +13,16 @@
 
 .phantom-workers {
   display: grid;
-  grid-template-columns: minmax(180px, 235px) minmax(0, 1fr);
+  grid-template-columns: minmax(160px, 205px) minmax(0, 1fr);
   align-items: stretch;
   overflow: hidden;
-  min-height: 76px;
+  min-height: 58px;
   border: 1px solid rgba(127, 255, 207, 0.18);
-  border-radius: 18px;
+  border-radius: 14px;
   background:
     linear-gradient(90deg, rgba(5, 19, 19, 0.94), rgba(9, 18, 25, 0.86)),
     radial-gradient(circle at 15% 50%, rgba(86, 255, 196, 0.14), transparent 36%);
-  box-shadow: 0 18px 55px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  box-shadow: 0 12px 38px rgba(0, 0, 0, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .worker-board-head {
@@ -30,9 +30,9 @@
   display: flex;
   flex-direction: column;
   justify-content: center;
-  gap: 5px;
+  gap: 3px;
   min-width: 0;
-  padding: 14px 16px;
+  padding: 9px 12px;
   border-right: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.045);
 }
@@ -54,7 +54,7 @@
 
 .worker-board-head b {
   color: #eafff4;
-  font-size: 14px;
+  font-size: 12px;
   line-height: 1;
   letter-spacing: -0.01em;
   white-space: nowrap;
@@ -63,18 +63,18 @@
 .worker-board-head p {
   margin: 0;
   color: rgba(206, 242, 226, 0.58);
-  font: 600 9px/1.35 "DM Mono", monospace;
-  letter-spacing: 0.12em;
+  font: 600 8px/1.25 "DM Mono", monospace;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
 }
 
 .worker-live-dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   flex: 0 0 auto;
   border-radius: 50%;
   background: #5fffc1;
-  box-shadow: 0 0 0 6px rgba(95, 255, 193, 0.1), 0 0 22px rgba(95, 255, 193, 0.8);
+  box-shadow: 0 0 0 5px rgba(95, 255, 193, 0.08), 0 0 18px rgba(95, 255, 193, 0.65);
   animation: workerPulse 1.6s ease-in-out infinite;
 }
 
@@ -89,9 +89,9 @@
   display: flex;
   width: max-content;
   min-width: 100%;
-  gap: 10px;
-  padding: 10px;
-  animation: workerMarquee 46s linear infinite;
+  gap: 8px;
+  padding: 7px 8px;
+  animation: workerMarquee 96s linear infinite;
 }
 
 .phantom-workers:hover .worker-marquee-track {
@@ -101,14 +101,14 @@
 .worker-tick {
   position: relative;
   display: grid;
-  grid-template-columns: auto minmax(230px, 330px) auto;
+  grid-template-columns: auto minmax(210px, 285px) auto;
   align-items: center;
-  gap: 10px;
-  min-width: 470px;
-  max-width: 570px;
-  padding: 10px 12px;
+  gap: 8px;
+  min-width: 390px;
+  max-width: 480px;
+  padding: 7px 10px;
   border: 1px solid rgba(255, 255, 255, 0.09);
-  border-radius: 15px;
+  border-radius: 12px;
   background: rgba(255, 255, 255, 0.055);
   color: #eafff4;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.055);
@@ -117,8 +117,8 @@
 .worker-tick::before {
   content: "";
   position: absolute;
-  inset: 9px auto 9px 0;
-  width: 3px;
+  inset: 8px auto 8px 0;
+  width: 2px;
   border-radius: 999px;
   background: var(--worker-accent, #66ffc8);
   box-shadow: 0 0 18px var(--worker-glow, rgba(102, 255, 200, 0.36));
@@ -127,14 +127,15 @@
 .worker-avatar {
   display: grid;
   place-items: center;
-  width: 36px;
-  height: 36px;
+  width: 28px;
+  height: 28px;
   border: 1px solid color-mix(in srgb, var(--worker-accent, #66ffc8) 56%, white 0%);
   border-radius: 50%;
   background: color-mix(in srgb, var(--worker-accent, #66ffc8) 16%, transparent);
   color: #effff7;
+  font-size: 12px;
   font-weight: 800;
-  box-shadow: 0 0 28px var(--worker-glow, rgba(102, 255, 200, 0.25));
+  box-shadow: 0 0 20px var(--worker-glow, rgba(102, 255, 200, 0.22));
 }
 
 .worker-copy {
@@ -148,13 +149,13 @@
   align-items: center;
   gap: 6px;
   color: #ffffff;
-  font-size: 12px;
+  font-size: 10.5px;
   line-height: 1;
 }
 
 .worker-copy em {
   color: rgba(213, 246, 232, 0.48);
-  font: 600 8px/1.1 "DM Mono", monospace;
+  font: 600 7px/1.05 "DM Mono", monospace;
   font-style: normal;
   letter-spacing: 0.12em;
   text-transform: uppercase;
@@ -163,8 +164,8 @@
 .worker-copy b {
   overflow: hidden;
   color: rgba(239, 255, 247, 0.94);
-  font-size: 13px;
-  line-height: 1.16;
+  font-size: 11.5px;
+  line-height: 1.12;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -172,7 +173,7 @@
 .worker-copy i {
   overflow: hidden;
   color: rgba(207, 241, 228, 0.62);
-  font-size: 11px;
+  font-size: 10px;
   font-style: normal;
   line-height: 1.16;
   text-overflow: ellipsis;
@@ -180,15 +181,15 @@
 }
 
 .worker-meta {
-  max-width: 132px;
+  max-width: 108px;
   overflow: hidden;
-  padding: 7px 8px;
+  padding: 5px 7px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
   background: rgba(0, 0, 0, 0.18);
   color: rgba(226, 252, 241, 0.68);
-  font: 600 9px/1 "DM Mono", monospace;
-  letter-spacing: 0.07em;
+  font: 600 7.5px/1 "DM Mono", monospace;
+  letter-spacing: 0.06em;
   text-overflow: ellipsis;
   text-transform: uppercase;
   white-space: nowrap;
@@ -228,7 +229,7 @@
     flex-direction: row;
     justify-content: space-between;
     gap: 12px;
-    padding: 10px 12px;
+    padding: 8px 10px;
     border-right: 0;
     border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   }
@@ -242,8 +243,8 @@
   }
 
   .worker-tick {
-    min-width: 390px;
-    grid-template-columns: auto minmax(190px, 1fr);
+    min-width: 330px;
+    grid-template-columns: auto minmax(170px, 1fr);
   }
 
   .worker-meta {
@@ -268,12 +269,12 @@
   }
 
   .worker-marquee-track {
-    animation-duration: 38s;
+    animation-duration: 78s;
   }
 
   .worker-tick {
-    min-width: 320px;
-    max-width: 340px;
+    min-width: 290px;
+    max-width: 315px;
   }
 }
 
