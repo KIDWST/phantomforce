@@ -3,10 +3,8 @@
    POSE LIBRARY (app/assets/poses/*.webp): the character exists as six real
    painted stances — conjure (flame + offered hand), arms crossed, hand on
    chin, open-palm present, finger-up point, and a hand-over-mouth laugh.
-   The engine picks the stance that fits the moment (talking alternates
-   present/point, thinking goes to chin, menace crosses its arms, delight
-   laughs, the idle show tours them all) and CROSSFADES between poses under
-   a glitch burst, like a hologram re-rendering itself.
+   The engine picks the stance that fits real app state. Conjure is a startup
+   reveal only; after the first user action, idle uses the active standby pose.
 
    Each pose's painted face is erased and a LIVE face is drawn in its exact
    place (per-pose position, scale, tilt — the laugh pose hides the mouth
@@ -326,6 +324,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     const { t, mood, emotion, px, py } = o;
     const dt = Math.min(0.05, Math.max(0.001, o.dt));
     const moodAge = Number.isFinite(o.moodAge) ? Math.max(0, o.moodAge) : t;
+    const startupOnly = o.startupOnly !== false;
     const actionT = mood === "talking" ? moodAge : t;
     if (born < 0) born = t;
     const age = t - born;
@@ -357,7 +356,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     sighT += dt;
     sighAmt = sighT < 2.2 ? Math.sin((sighT / 2.2) * Math.PI) : 0;
     glitchNow = Math.max(0, glitchNow - dt);
-    let gesture = "conjure";
+    let gesture = startupOnly ? "conjure" : "talk";
     if (!settled) gesture = "conjure";
     else if (mood === "talking") gesture = "talk";
     else if (mood === "thinking") gesture = "chin";
@@ -366,7 +365,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     else if (emotion === "sad") gesture = "droop";
 
     /* full-body stances are state-driven only; idle life stays in face, glow, eyes, breath, and particles */
-    let poseName = "conjure";
+    let poseName = startupOnly ? "conjure" : "present";
     if (settled) {
       if (mood === "talking") poseName = "present";
       else if (mood === "thinking") poseName = "chin";

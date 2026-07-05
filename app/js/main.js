@@ -8,7 +8,7 @@ import {
 import { handleCommand, commandSuggestions } from "./command.js";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js";
 import { renderFlowMap } from "./flowmap.js";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-5";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-6";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -188,6 +188,11 @@ let ghostMood = "idle";
 let ghostEmotion = "calm";
 let ghostMoodUntil = 0;
 let ghostMoodStartedAt = performance.now();
+let phantomHasActed = false;
+
+function markPhantomActed() {
+  phantomHasActed = true;
+}
 
 function emotionForText(text = "") {
   const s = text.toLowerCase();
@@ -248,6 +253,7 @@ function cardHtml(c) {
 }
 
 function runCommand(text) {
+  markPhantomActed();
   speak(text, "user");
   ghostFlare("listening");
   const respBox = $("[data-response]");
@@ -421,6 +427,7 @@ function initGhost() {
       cx: w / 2, cy: h * 0.52,
       scale: Math.min(w, h) * 0.27,
       mood, emotion: ghostEmotion,
+      startupOnly: !phantomHasActed,
       moodAge: Math.max(0, (now - ghostMoodStartedAt) * 0.001),
       pulse: ghostPulse,
       px: cpx, py: cpy,
