@@ -163,6 +163,16 @@ function mediaKindFromText(text = "") {
   return "video";
 }
 
+function isVisualQuestion(text = "") {
+  const s = text.trim().toLowerCase();
+  if (/\b(edit|crop|resize|clean|enhance|fix|remove|background|transparent|cut\s*out|generate|make\s+(a\s+)?video|turn.*video|reel|media\s+lab|\/media|save|download)\b/.test(s)) {
+    return false;
+  }
+  const asks = /\b(what|tell|describe|read|say|mean|see|look|explain|identify|understand)\b/.test(s) || /\?$/.test(s);
+  const visual = /\b(this|that|it|image|photo|picture|screenshot|file|attachment|uploaded|attached)\b/.test(s);
+  return asks && visual;
+}
+
 function createMediaBrief(subject, kind = "video") {
   const t = subject ? title(subject) : "New creative";
   const isImage = kind === "image";
@@ -428,6 +438,14 @@ export function handleCommand(raw) {
   }
 
   /* --- media / content / image / video --- */
+  if (isVisualQuestion(text)) {
+    return {
+      say: "I’ll answer that in chat. Media Lab only opens when you ask me to edit, generate, or send it there.",
+      cards: [],
+      open: null,
+    };
+  }
+
   if (/(image|photo|graphic|thumbnail|poster|flyer|visual|ad creative|design|video|reel|content|post|caption|shoot|media|creative|tiktok|short|youtube|instagram|facebook)/.test(s)) {
     if (/(brief|plan|draft|create|make|new|idea)/.test(s) || subject) {
       const kind = mediaKindFromText(text);

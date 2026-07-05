@@ -5,7 +5,7 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, daysUntil, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, tenantIdForWorkspace, executionMode, pushActivity,
 } from "./store.js?v=phantom-chicagoshots-crm-20260704-01";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-chicagoshots-crm-20260704-01";
+import { handleCommand, commandSuggestions } from "./command.js?v=attachment-chat-questions-20260705-01";
 import { WORKSPACE_DEFS, missionWidgets, esc, livingMapHtml, wireLivingMap } from "./workspaces.js?v=phantom-admin-media-dismiss-20260705-01";
 import { imageStyle } from "./media-image.js?v=phantom-chicagoshots-crm-20260704-01";
 import { createPhantomCharacter } from "./character.js?v=fable-phantom-20260705-01";
@@ -562,6 +562,10 @@ function promoteAttachmentsForCommand(text = "") {
     selected.forEach((item) => promoteAttachmentToMedia(item, "media-lab"));
     return true;
   }
+  if (isAttachmentQuestionIntent(s)) {
+    runCommand(text);
+    return true;
+  }
   const names = selected.map((item) => item.name).join(", ");
   clearPendingAttachments(selected.map((item) => item.id));
   runCommand(`${text}\n\nAttached local file(s): ${names}`);
@@ -601,8 +605,20 @@ function isTinyGreeting(text = "") {
   return /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/i.test(text.trim());
 }
 
+function isAttachmentQuestionIntent(text = "") {
+  const s = text.trim().toLowerCase();
+  if (!s) return false;
+  if (/\b(edit|crop|resize|clean|enhance|fix|remove|background|transparent|cut\s*out|generate|make\s+(a\s+)?video|turn.*video|reel|media\s+lab|\/media|save|download)\b/.test(s)) {
+    return false;
+  }
+  const asks = /\b(what|tell|describe|read|say|mean|see|look|explain|identify|understand|analy[sz]e)\b/.test(s) || /\?$/.test(s);
+  const pointsToAttachment = /\b(this|that|it|image|photo|picture|screenshot|file|attachment|uploaded|attached)\b/.test(s);
+  return asks && pointsToAttachment;
+}
+
 function isInstantWorkIntent(text = "") {
   const s = text.trim().toLowerCase();
+  if (isAttachmentQuestionIntent(s)) return false;
   return /\b(pipeline|revenue|money|unpaid|invoice|cash|proposal|quote|pricing|estimate|lead|prospect|crm|follow.?up|image|photo|graphic|thumbnail|video brief|media lab|content job|reel|shoot|build|code|app|dashboard|automation|workflow|operator mode|replace human|control (my )?(pc|computer)|site studio|website draft|landing page|store|checkout|security scan|protect|risk radar|breach|malware|phish|password|review queue|testimonial|booking|schedule|calendar|appointment|google\s+drive|gdrive|drive file|approval|sign.?off|waiting on me|needs my eyes|pending|workforce|agents?|workers|today|what'?s next|catch me up|status|summary|help|what can you do|what do you do)\b/.test(s);
 }
 
@@ -628,6 +644,7 @@ function shouldUsePrivateBrain(text = "", localResult = {}) {
 
 function inferTaskType(text) {
   const s = text.toLowerCase();
+  if (isAttachmentQuestionIntent(s)) return "attachment_question";
   if (/security|scan|breach|malware|phish|password|protect|hack|threat|leak|radar/.test(s)) return "security_review";
   if (/proposal|quote|pricing|estimate/.test(s)) return "proposal_work";
   if (/lead|prospect|follow/.test(s)) return "pipeline_follow_up";
@@ -661,6 +678,7 @@ function brainModuleData() {
   const tasks = visible(store.state.tasks || []);
   const security = visible(store.state.security || []);
   const agents = store.state.agents || [];
+  const attachments = pendingAttachments || [];
   const plan = todaysPlan();
   const money = moneyView();
 
@@ -689,6 +707,13 @@ function brainModuleData() {
       module: "Leads",
       summary: `${leads.length} visible lead${leads.length === 1 ? "" : "s"} in this workspace.`,
       items: leads.slice(0, 5).map((l) => moduleItem(l.company || l.name, l.status, l.next)),
+    },
+    {
+      module: "Attached files",
+      summary: attachments.length
+        ? `${attachments.length} file${attachments.length === 1 ? "" : "s"} currently attached in chat. Answer questions about them in chat. Do not open Media Lab unless the user asks to edit, generate, or send to Media Lab.`
+        : "No file is currently attached in chat.",
+      items: attachments.slice(0, 8).map((a) => moduleItem(a.name, a.kind, `${formatBytes(a.size || 0)} · local browser attachment`)),
     },
     {
       module: "Media and sites",
@@ -776,8 +801,15 @@ function runCommand(text) {
   ghostFlare("listening");
   const respBox = $("[data-response]");
   respBox.innerHTML = "";
-  const local = handleCommand(text);
-  const appendLocalSurface = isInstantWorkIntent(text);
+  const attachmentQuestion = isAttachmentQuestionIntent(text);
+  const local = attachmentQuestion
+    ? {
+        say: "I’ll answer in chat. I won’t open Media Lab unless you ask me to edit, generate, or send it there.",
+        cards: [],
+        open: null,
+      }
+    : handleCommand(text);
+  const appendLocalSurface = !attachmentQuestion && isInstantWorkIntent(text);
   if (!shouldUsePrivateBrain(text, local)) {
     setTimeout(() => {
       ghostAnswerBurst(local.say);
