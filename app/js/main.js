@@ -187,6 +187,7 @@ let typeTimer = 0;
 let ghostMood = "idle";
 let ghostEmotion = "calm";
 let ghostMoodUntil = 0;
+let ghostMoodStartedAt = performance.now();
 
 function emotionForText(text = "") {
   const s = text.toLowerCase();
@@ -199,9 +200,16 @@ function emotionForText(text = "") {
 }
 
 function setGhostMood(mood, options = {}) {
+  const now = performance.now();
+  if (ghostMood !== mood) ghostMoodStartedAt = now;
   ghostMood = mood;
   ghostEmotion = options.emotion || ghostEmotion;
-  ghostMoodUntil = options.ms ? performance.now() + options.ms : 0;
+  ghostMoodUntil = options.ms ? now + options.ms : 0;
+}
+
+function speechHoldMs(text = "") {
+  const n = String(text || "").length;
+  return Math.min(12000, Math.max(3200, n * 72));
 }
 
 function speak(text, cls = "") {
@@ -212,18 +220,18 @@ function speak(text, cls = "") {
   const emotion = emotionForText(text);
   if (cls === "thinking") setGhostMood("thinking", { emotion: "bright" });
   else if (cls === "user") setGhostMood("listening", { emotion: "calm", ms: 1600 });
-  else setGhostMood("talking", { emotion, ms: Math.max(1500, text.length * 36) });
+  else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
 
   if (cls || reduceMotion) {
     p.textContent = text;
-    if (!cls) setGhostMood(emotion, { emotion, ms: 1800 });
+    if (!cls) setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
     return;
   }
   let i = 0;
   const tick = () => {
     p.textContent = text.slice(0, i);
     if (i++ < text.length) typeTimer = setTimeout(tick, 11 + Math.random() * 16);
-    else setGhostMood(emotion, { emotion, ms: 1800 });
+    else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
   };
   tick();
 }
@@ -395,7 +403,11 @@ function initGhost() {
     if (document.hidden) { requestAnimationFrame(frame); return; }
     const t = (now - t0) * 0.001;
     const dt = Math.min(0.05, (now - last) * 0.001); last = now;
-    if (ghostMoodUntil && now > ghostMoodUntil) { ghostMood = "idle"; ghostMoodUntil = 0; }
+    if (ghostMoodUntil && now > ghostMoodUntil) {
+      ghostMood = "idle";
+      ghostMoodUntil = 0;
+      ghostMoodStartedAt = now;
+    }
     ghostPulse = Math.max(0, ghostPulse - 0.02);
     cpx += (px - cpx) * 0.08; cpy += (py - cpy) * 0.08;
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -409,6 +421,7 @@ function initGhost() {
       cx: w / 2, cy: h * 0.52,
       scale: Math.min(w, h) * 0.27,
       mood, emotion: ghostEmotion,
+      moodAge: Math.max(0, (now - ghostMoodStartedAt) * 0.001),
       pulse: ghostPulse,
       px: cpx, py: cpy,
     });
