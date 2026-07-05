@@ -911,6 +911,22 @@ function matchingSlashCommands(query = "") {
   ));
 }
 
+function keepActiveSlashCommandVisible() {
+  const menu = $("[data-slash-menu]");
+  const active = menu?.querySelector(".slash-item.is-active");
+  if (!menu || !active || menu.hidden) return;
+  requestAnimationFrame(() => {
+    const menuRect = menu.getBoundingClientRect();
+    const activeRect = active.getBoundingClientRect();
+    const pad = 14;
+    if (activeRect.top < menuRect.top + pad) {
+      menu.scrollTop -= (menuRect.top + pad) - activeRect.top;
+    } else if (activeRect.bottom > menuRect.bottom - pad) {
+      menu.scrollTop += activeRect.bottom - (menuRect.bottom - pad);
+    }
+  });
+}
+
 function renderSlashMenu(input) {
   const menu = $("[data-slash-menu]");
   if (!menu) return;
@@ -940,6 +956,7 @@ function renderSlashMenu(input) {
         </button>
       `).join("")}
     </div>`;
+  keepActiveSlashCommandVisible();
 }
 
 function hideSlashMenu() {
