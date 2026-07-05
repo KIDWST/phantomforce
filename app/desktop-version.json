@@ -1,7 +1,7 @@
 {
   "app": "PhantomForce Desktop",
   "version": "2026.07.05.1",
-  "windows_x64_url": "https://phantomforce.online/app/downloads/PhantomForce.exe",
+  "windows_x64_url": "https://phantomforce.online/app/downloads/PhantomForce.bin",
   "sha256": "19D51BD8E326A8292B453DECB87011FBADD19B404E50D42A440CD9DF32BA61C5",
   "release_notes": "Brave-first desktop shell, live app refresh on every launch, and silent shell self-update support."
 }
