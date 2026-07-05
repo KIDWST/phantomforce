@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260705-7";
+      window.PHANTOM_BUILD = "phantom-live-20260705-8";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -21,9 +21,9 @@
           .catch(() => {});
       }
     </script>
-    <title>PhantomForce — Phantom</title>
-    <meta name="description" content="PhantomForce Phantom — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260705-7" />
+    <title>PhantomForce — AI Operations Console</title>
+    <meta name="description" content="PhantomForce — your AI business operating system." />
+    <meta name="phantom-build" content="phantom-live-20260705-8" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -65,11 +65,11 @@
         display: none;
       }
     </style>
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=phantom-live-20260705-7" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=phantom-live-20260705-8" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260705-7" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260705-8" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -98,85 +98,114 @@
       </div>
     </div>
 
-    <!-- =========================== phantom =========================== -->
+    <!-- =========================== console shell =========================== -->
     <div class="phantom" data-phantom hidden>
-      <header class="topbar">
-        <div class="brand">
+      <!-- ---------- sidebar ---------- -->
+      <aside class="sidebar" aria-label="Primary">
+        <div class="side-brand">
           <span class="brand-ghost" aria-hidden="true"></span>
-          <span class="brand-word">PHANTOMFORCE</span>
-          <span class="brand-sub" data-role-sub>PHANTOM</span>
+          <span class="side-brand-text">
+            <b>PHANTOMFORCE</b>
+            <i>AI OPERATIONS CONSOLE</i>
+          </span>
         </div>
-        <div class="topbar-mid">
-          <label class="org-switch" data-org-wrap hidden>
-            <span>Workspace</span>
-            <select data-org-select aria-label="Switch workspace"></select>
-          </label>
+
+        <nav class="side-nav" data-nav aria-label="Sections"></nav>
+
+        <div class="side-plan">
+          <p class="side-plan-kicker">YOUR PLAN</p>
+          <p class="side-plan-name" data-plan-name>Pro Plan</p>
+          <p class="side-plan-renew" data-plan-renew>Renewal: —</p>
+          <button class="side-plan-btn" data-open-ws="settings">Manage Plan <span aria-hidden="true">→</span></button>
         </div>
-        <div class="topbar-right">
-          <span class="identity" data-identity></span>
-          <button class="btn btn-quiet btn-exit" data-signout>Switch</button>
-        </div>
-      </header>
+      </aside>
 
-      <div class="ticker" data-ticker aria-live="off">
-        <span class="ticker-tag">LIVE</span>
-        <span class="ticker-line" data-ticker-line></span>
-      </div>
-
-      <main class="deck">
-        <section class="command-hero">
-          <canvas class="ghost-canvas" data-ghost width="10" height="10" aria-hidden="true"></canvas>
-          <div class="hero-say" data-say aria-live="polite"><p class="say-line">What do you want PhantomForce to do?</p></div>
-          <form class="speakline speakline-hero" data-command-form>
-            <span class="speak-caret" aria-hidden="true">›</span>
-            <input type="text" data-command-input autocomplete="off" spellcheck="false"
-                   placeholder="ask for an outcome — a quote, a video, a page, a security check…"
-                   aria-label="What do you want PhantomForce to do?" />
-          </form>
-          <div class="suggests" data-suggests></div>
-          <div class="response-cards" data-response></div>
-        </section>
-
-        <section class="flowmap" aria-label="Phantom systems flow">
-          <div class="flow-head">
-            <div>
-              <p class="flow-kicker">Phantom systems · The flow</p>
-              <h2>Signal to delivery.</h2>
-            </div>
-            <span class="flow-live"><i aria-hidden="true"></i>Live</span>
+      <!-- ---------- main ---------- -->
+      <div class="app-main">
+        <header class="topbar2">
+          <div class="status-pills" data-status-pills></div>
+          <div class="topbar-clock">
+            <b data-clock-time>—</b>
+            <i data-clock-date>—</i>
           </div>
-          <div class="flow-stage" data-flowmap></div>
-        </section>
+          <button class="topbar-user" data-user-btn>
+            <span class="user-avatar" data-user-avatar>··</span>
+            <span class="user-meta">
+              <b data-user-name>—</b>
+              <i data-user-role>—</i>
+            </span>
+            <span class="user-caret" aria-hidden="true">▾</span>
+          </button>
+        </header>
 
-        <div class="deck-body">
-          <section class="mission" aria-label="Workspaces">
-            <h2 class="deck-label">Mission grid</h2>
-            <div class="mission-grid" data-mission></div>
-          </section>
+        <main class="console" data-console>
+          <!-- center column -->
+          <div class="console-center">
+            <section class="hero2">
+              <div class="hero2-copy">
+                <h1 class="hero2-title">Welcome back,<br /><span data-hero-name>Jordan.</span></h1>
+                <p class="hero2-sub">Tell me what you need<br />or pick a command below.</p>
 
-          <aside class="rail" aria-label="Intelligence rail">
-            <div class="rail-block" data-rail-plan>
-              <h3>Today's plan</h3><div class="rail-body"></div>
+                <div class="cmd-chips" data-cmd-chips></div>
+
+                <form class="cmd-input" data-command-form>
+                  <input type="text" data-command-input autocomplete="off" spellcheck="false"
+                         placeholder="Ask PhantomForce anything…" aria-label="Ask PhantomForce" />
+                  <button class="cmd-send" type="submit" aria-label="Send"><span aria-hidden="true">→</span></button>
+                </form>
+
+                <div class="cmd-tools">
+                  <button class="cmd-tool" data-open-ws="brand"><span aria-hidden="true">📎</span> Attach</button>
+                  <button class="cmd-tool" data-open-ws="phantom"><span aria-hidden="true">▤</span> Prompt Library</button>
+                </div>
+
+                <div class="hero-say" data-say aria-live="polite" hidden></div>
+                <div class="response-cards" data-response></div>
+              </div>
+
+              <div class="hero2-stage">
+                <canvas class="ghost-canvas" data-ghost width="10" height="10" aria-hidden="true"></canvas>
+              </div>
+            </section>
+
+            <section class="statcards" data-statcards aria-label="At a glance"></section>
+
+            <section class="activity2">
+              <div class="section-head">
+                <h2>Recent activity</h2>
+                <button class="section-link" data-open-ws="dashboard">View all activity <span aria-hidden="true">→</span></button>
+              </div>
+              <div class="activity-grid" data-activity></div>
+            </section>
+          </div>
+
+          <!-- right rail -->
+          <aside class="console-rail" aria-label="Status rail">
+            <div class="plan-card" data-plan></div>
+
+            <div class="queue-card">
+              <div class="section-head">
+                <h2>Mission queue</h2>
+                <span class="queue-count" data-queue-count>0</span>
+              </div>
+              <div class="queue-list" data-queue></div>
+              <button class="rail-foot-btn" data-open-ws="dashboard">View all missions <span aria-hidden="true">→</span></button>
             </div>
-            <div class="rail-block" data-rail-money>
-              <h3>Money</h3><div class="rail-body"></div>
-            </div>
-            <div class="rail-block" data-rail-approvals>
-              <h3>Waiting on you</h3><div class="rail-body"></div>
-            </div>
-            <div class="rail-block" data-rail-work>
-              <h3>Active work</h3><div class="rail-body"></div>
+
+            <div class="quick-card">
+              <div class="section-head"><h2>Quick actions</h2></div>
+              <div class="quick-list" data-quick></div>
             </div>
           </aside>
-        </div>
-      </main>
+        </main>
+      </div>
     </div>
 
     <div class="boot-fallback" data-boot-fallback>Loading PhantomForce</div>
 
-    <!-- workspace overlays mount here, above the blurred phantom -->
+    <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260705-7"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260705-8"></script>
   </body>
 </html>
