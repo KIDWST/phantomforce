@@ -1436,7 +1436,7 @@ function workerMeshTone(worker) {
 function workerMeshGroup(worker) {
   const text = `${worker.worker_id} ${worker.display_name} ${worker.role} ${worker.capabilities?.join(" ") || ""}`.toLowerCase();
   if (/n8n|automation|workflow/.test(text)) return "automation";
-  if (/ruflo|loop|squad|swarm|handoff/.test(text)) return "loop";
+  if (/loopus|ruflo|loop|squad|swarm|handoff/.test(text)) return "loop";
   if (/media|video|content/.test(text)) return "media";
   if (/code|repo|build|spec/.test(text)) return "build";
   if (/memory|vault|context/.test(text)) return "memory";

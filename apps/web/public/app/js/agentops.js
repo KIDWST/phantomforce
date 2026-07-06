@@ -49,7 +49,7 @@ function linePool(tool) {
 const pick = (a) => a[Math.floor((reduceMotion ? 0.5 : Math.random()) * a.length) % a.length];
 const WIRE_NAMES = {
   "n8n-worker": "Charles",
-  "ruflo-loop": "Loop Planner",
+  "ruflo-loop": "Loopus",
 };
 function wireWorkerName(tool) {
   return WIRE_NAMES[tool.id] || tool.worker;
@@ -57,7 +57,7 @@ function wireWorkerName(tool) {
 function wireText(text = "") {
   return String(text)
     .replace(/\bn8n\b/gi, "workflow lane")
-    .replace(/\bRuflo\b/g, "Loop Planner");
+    .replace(/\bRuflo\b/g, "Loopus");
 }
 const now2 = () => {
   const d = new Date();

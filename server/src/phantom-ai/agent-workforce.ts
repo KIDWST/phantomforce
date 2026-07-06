@@ -123,7 +123,7 @@ const subagentDefinitions = [
   { id: "spec", name: "Spec", parent: "Builder", specialty: "OpenSpec-style acceptance and implementation boundaries." },
   { id: "standard", name: "Standard", parent: "PhantomAI", specialty: "PhantomOps-style working standards and handoffs." },
   { id: "map", name: "Map", parent: "Builder", specialty: "Serena-style code navigation profile." },
-  { id: "swarm", name: "Swarm", parent: "Reviewer", specialty: "Ruflo-style squad planning vocabulary, quarantined." },
+  { id: "swarm", name: "Loopus", parent: "Reviewer", specialty: "Loopus-style squad planning vocabulary, quarantined." },
 ];
 
 const agentAssignments: Array<{
@@ -361,7 +361,7 @@ function buildProgramUse(toolStack: Array<{
     openspec: "Draft local proposal",
     "agent-os": "Read standards posture",
     serena: "Generate code map profile",
-    ruflo: "Check planning posture",
+    ruflo: "Check Loopus posture",
     "phantom-ai-online-fetch": "Run AgentLab preflight",
   };
   const currentUse: Record<string, string> = {
@@ -369,7 +369,7 @@ function buildProgramUse(toolStack: Array<{
     openspec: "Acceptance criteria and implementation-boundary thinking before code changes.",
     "agent-os": "Operating standards for handoffs, constraints, and worker behavior.",
     serena: "Future code navigation profile for worker context.",
-    ruflo: "Quarantined squad-planning vocabulary for future multi-agent work.",
+    ruflo: "Quarantined Loopus planning vocabulary for future multi-agent work.",
     "phantom-ai-online-fetch": "Planned allowlisted research lane behind Hermes controls.",
   };
   const owner: Record<string, string> = {
@@ -377,7 +377,7 @@ function buildProgramUse(toolStack: Array<{
     openspec: "Spec",
     "agent-os": "Standard",
     serena: "Map",
-    ruflo: "Swarm",
+    ruflo: "Loopus",
     "phantom-ai-online-fetch": "Scout",
   };
 
