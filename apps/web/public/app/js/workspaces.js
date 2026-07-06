@@ -4,7 +4,7 @@
    of widgets without changing the shell. */
 
 import {
-  store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
+  store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval, session, ctx,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
@@ -17,9 +17,19 @@ const chip = (status) => `<span class="chip chip-${esc(status)}">${esc(statusLab
 const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
-const memoryUi = { query: "", category: "all" };
+const memoryUi = {
+  query: "",
+  category: "all",
+  tab: "local",
+  learning: null,
+  learningNotice: "",
+  learningBusy: false,
+  learningLoaded: false,
+  exportPreview: null,
+};
 const workerUi = { filter: "all", notice: "", preview: null };
 const MEMORY_DAY = 86400000;
+const LEARNING_API = "/phantom-ai/hermes/learning-dataset";
 
 function bindActions(root, handlers) {
   root.querySelectorAll("[data-act]").forEach((el) => {
@@ -35,6 +45,70 @@ async function copyText(el, text) {
   const prev = el.textContent;
   el.textContent = "Copied ✓";
   setTimeout(() => { el.textContent = prev; }, 1400);
+}
+
+async function ensureAdminLearningToken() {
+  const existing = session.token?.();
+  if (existing) return existing;
+  if (!isAdmin()) return "";
+
+  try {
+    const response = await fetch("/auth/demo-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: "admin-jordan" }),
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.token || !payload?.session) return "";
+    const next = {
+      role: "admin",
+      name: payload.session.name || "Jordan",
+      label: payload.session.label || "PhantomForce Owner",
+      ws: currentWs(),
+      sessionId: payload.session.id || "admin-jordan",
+      canManageAccess: !!payload.session.canManageAccess,
+      token: payload.token,
+    };
+    ctx.session = { ...(ctx.session || {}), ...next };
+    session.set(ctx.session);
+    return payload.token;
+  } catch {
+    return "";
+  }
+}
+
+async function learningRequest(path, options = {}) {
+  const token = await ensureAdminLearningToken();
+  const headers = {
+    "Content-Type": "application/json",
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(options.headers || {}),
+  };
+  const response = await fetch(`${LEARNING_API}${path}`, { ...options, headers });
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) throw new Error(payload?.error || `Hermes learning request failed (${response.status})`);
+  return payload;
+}
+
+async function refreshLearningDataset(root, rerender) {
+  if (!isAdmin() || memoryUi.learningBusy) return;
+  memoryUi.learningBusy = true;
+  memoryUi.learningNotice = "Checking Hermes learning...";
+  rerender();
+  try {
+    const [status, history] = await Promise.all([
+      learningRequest("/status"),
+      learningRequest("/history?limit=20"),
+    ]);
+    memoryUi.learning = { status: status.status, examples: history.examples || [], dataset: history.dataset };
+    memoryUi.learningNotice = "Hermes learning is synced.";
+  } catch (error) {
+    memoryUi.learningNotice = error?.message || "Hermes learning is not reachable yet.";
+  } finally {
+    memoryUi.learningLoaded = true;
+    memoryUi.learningBusy = false;
+    rerender();
+  }
 }
 
 /* =============================== LEADS =============================== */
@@ -785,6 +859,131 @@ function categoryLabel(category) {
   return MEMORY_CATEGORY_LABELS[category] || title(category).replace(/-/g, " ");
 }
 
+function learningQualityTone(label) {
+  if (label === "approved" || label === "corrected") return "good";
+  if (label === "rejected") return "blocked";
+  if (label === "needs_review") return "pending";
+  return "stub";
+}
+
+function learningExampleText(example) {
+  return [
+    `Prompt: ${example.prompt_summary || ""}`,
+    `Answer: ${example.assistant_response_summary || ""}`,
+    example.ideal_response_summary ? `Ideal: ${example.ideal_response_summary}` : "",
+    example.correction_summary ? `Correction: ${example.correction_summary}` : "",
+  ].filter(Boolean).join("\n\n");
+}
+
+async function saveLearningReview(example, label, options = {}) {
+  return learningRequest("/save-example", {
+    method: "POST",
+    body: JSON.stringify({
+      tenant_id: example.tenant_id || "phantomforce-owner",
+      actor_user_id: example.actor_user_id || "admin-jordan",
+      task_id: example.task_id || example.example_id,
+      task_type: example.task_type || "reviewed_training_example",
+      interaction_type: "admin_learning_review",
+      source_tool: options.source_tool || "jordan",
+      source_record_id: example.example_id,
+      prompt_summary: example.prompt_summary || "",
+      assistant_response_summary: example.assistant_response_summary || "",
+      ideal_response_summary: options.ideal || example.ideal_response_summary || null,
+      correction_summary: options.correction || null,
+      quality_label: label,
+      rating: options.rating || (label === "rejected" ? 1 : 5),
+      tags: ["learning-review", label, example.source_tool || "phantom_ai"],
+      approved_for_finetune: label === "approved" || label === "corrected",
+    }),
+  });
+}
+
+function renderLearningReview(el, rerender) {
+  if (!isAdmin()) {
+    return `<article class="record"><h4>Owner-only</h4><p class="record-notes">Hermes training review is hidden from client and employee sessions.</p></article>`;
+  }
+
+  const data = memoryUi.learning;
+  const examples = data?.examples || [];
+  const approved = examples.filter((item) => item.approved_for_finetune).length;
+  const unreviewed = examples.filter((item) => item.quality_label === "unreviewed").length;
+  const rejected = examples.filter((item) => item.quality_label === "rejected").length;
+  const bytes = data?.status?.bytes ?? data?.dataset?.bytes ?? 0;
+  const storageNote = data?.status?.storage_note || data?.dataset?.storage_note || "Redacted summaries only. Media and full transcripts stay out.";
+  const exportText = memoryUi.exportPreview?.jsonl_preview || "";
+
+  setTimeout(() => {
+    if (!memoryUi.learningLoaded && !memoryUi.learningBusy) refreshLearningDataset(el, rerender);
+  }, 0);
+
+  return `
+    <section class="learning-shell">
+      <div class="learning-head">
+        <div>
+          <p class="overlay-kicker">HERMES LEARNING</p>
+          <h3>Training review desk</h3>
+          <p>Everything starts unreviewed. Jordan-approved or corrected examples are the only ones that become fine-tune material by default.</p>
+        </div>
+        <div class="learning-actions">
+          <button class="btn" data-learning-refresh type="button">${memoryUi.learningBusy ? "Checking..." : "Refresh"}</button>
+          <button class="btn btn-primary" data-learning-export type="button">Export approved</button>
+        </div>
+      </div>
+      <div class="status-strip learning-strip">
+        <span>Local only</span>
+        <span>Redacted</span>
+        <span>No provider call</span>
+        <span>No send</span>
+        <span>No queue write</span>
+      </div>
+      ${memoryUi.learningNotice ? `<p class="learning-notice">${esc(memoryUi.learningNotice)}</p>` : ""}
+      <div class="stat-row learning-stats">
+        <div class="stat"><span>Examples</span><b>${examples.length}</b><i>latest loaded</i></div>
+        <div class="stat"><span>Approved</span><b>${approved}</b><i>export-ready</i></div>
+        <div class="stat"><span>Unreviewed</span><b>${unreviewed}</b><i>needs judgment</i></div>
+        <div class="stat"><span>Storage</span><b>${bytes ? `${Math.max(1, Math.round(bytes / 1024))} KB` : "0 KB"}</b><i>JSONL summaries</i></div>
+      </div>
+      <form class="learning-manual" data-learning-manual>
+        <label>
+          <span>Prompt / situation</span>
+          <textarea data-learning-prompt rows="3" placeholder="Paste the user request or summarize the moment..."></textarea>
+        </label>
+        <label>
+          <span>Ideal Phantom answer</span>
+          <textarea data-learning-answer rows="3" placeholder="Paste the answer Hermes should learn from..."></textarea>
+        </label>
+        <button class="btn btn-primary" type="submit">Save approved example</button>
+      </form>
+      ${exportText ? `
+        <article class="record learning-export">
+          <div class="record-top"><h4>Approved export preview</h4><span class="chip chip-good">${memoryUi.exportPreview.exported_examples || 0} examples</span></div>
+          <textarea readonly rows="6">${esc(exportText)}</textarea>
+          <div class="record-actions"><button class="btn" data-learning-copy-export type="button">Copy JSONL</button></div>
+        </article>` : ""}
+      <div class="learning-grid">
+        ${examples.map((example) => `
+          <article class="record learning-card">
+            <div class="record-top">
+              <h4>${esc(example.task_type || "Learning example")}</h4>
+              <span class="chip chip-${learningQualityTone(example.quality_label)}">${esc(example.quality_label || "unreviewed")}</span>
+            </div>
+            <p class="record-sub">${esc(example.source_tool || "phantom_ai")} · ${esc(example.tenant_id || "tenant")} · ${ago(example.created_at)}</p>
+            <p class="record-next"><b>Prompt</b> ${esc(example.prompt_summary || "")}</p>
+            <p class="record-notes"><b>Answer</b> ${esc(example.assistant_response_summary || "")}</p>
+            ${example.ideal_response_summary ? `<p class="record-notes"><b>Ideal</b> ${esc(example.ideal_response_summary)}</p>` : ""}
+            <div class="memory-tags">${(example.tags || []).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>
+            <div class="record-actions">
+              <button class="btn btn-good" data-learning-approve="${esc(example.example_id)}" type="button">Approve</button>
+              <button class="btn" data-learning-correct="${esc(example.example_id)}" type="button">Correct</button>
+              <button class="btn btn-quiet" data-learning-copy="${esc(example.example_id)}" type="button">Copy</button>
+              <button class="btn btn-quiet" data-learning-reject="${esc(example.example_id)}" type="button">Reject</button>
+            </div>
+          </article>`).join("") || `<article class="record"><h4>No examples loaded yet</h4><p class="record-notes">${esc(storageNote)}</p></article>`}
+      </div>
+      <p class="ws-note">${esc(storageNote)} Rejected examples are kept out of default export.</p>
+    </section>`;
+}
+
 function renderMemory(el, rerender) {
   const all = visible(store.state.memory || []);
   const stats = memoryStats(all);
@@ -818,6 +1017,11 @@ function renderMemory(el, rerender) {
           <span>saved</span>
         </div>
       </section>
+      <div class="memory-tabs" role="tablist" aria-label="Memory views">
+        <button class="memory-tab ${memoryUi.tab === "local" ? "is-active" : ""}" data-memory-tab="local" type="button">Saved Memory</button>
+        ${isAdmin() ? `<button class="memory-tab ${memoryUi.tab === "learning" ? "is-active" : ""}" data-memory-tab="learning" type="button">Hermes Training</button>` : ""}
+      </div>
+      ${memoryUi.tab === "learning" && isAdmin() ? renderLearningReview(el, rerender) : `
       <div class="stat-row memory-stats">
         <div class="stat"><span>Categories</span><b>${stats.categories}</b><i>auto-organized</i></div>
         <div class="stat"><span>Remembered</span><b>${stats.remembered}</b><i>kept past 30 days</i></div>
@@ -883,7 +1087,92 @@ function renderMemory(el, rerender) {
           </article>
         </aside>
       </div>
+      `}
     </div>`;
+
+  el.querySelectorAll("[data-memory-tab]").forEach((btn) => btn.addEventListener("click", () => {
+    memoryUi.tab = btn.dataset.memoryTab || "local";
+    renderMemory(el, rerender);
+  }));
+
+  if (memoryUi.tab === "learning" && isAdmin()) {
+    el.querySelector("[data-learning-refresh]")?.addEventListener("click", () => refreshLearningDataset(el, rerender));
+    el.querySelector("[data-learning-export]")?.addEventListener("click", async () => {
+      try {
+        memoryUi.learningNotice = "Preparing approved export preview...";
+        rerender();
+        const payload = await learningRequest("/export-preview", {
+          method: "POST",
+          body: JSON.stringify({ limit: 100 }),
+        });
+        memoryUi.exportPreview = payload.export_preview;
+        memoryUi.learningNotice = `Export preview ready: ${payload.export_preview.exported_examples} approved example${payload.export_preview.exported_examples === 1 ? "" : "s"}.`;
+      } catch (error) {
+        memoryUi.learningNotice = error?.message || "Export preview failed.";
+      }
+      rerender();
+    });
+    el.querySelector("[data-learning-copy-export]")?.addEventListener("click", (event) => copyText(event.currentTarget, memoryUi.exportPreview?.jsonl_preview || ""));
+    el.querySelector("[data-learning-manual]")?.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const prompt = el.querySelector("[data-learning-prompt]")?.value || "";
+      const answer = el.querySelector("[data-learning-answer]")?.value || "";
+      if (!prompt.trim() || !answer.trim()) return;
+      try {
+        await learningRequest("/save-example", {
+          method: "POST",
+          body: JSON.stringify({
+            prompt_summary: prompt,
+            assistant_response_summary: answer,
+            ideal_response_summary: answer,
+            source_tool: "jordan",
+            task_type: "manual_operator_training",
+            quality_label: "approved",
+            rating: 5,
+            tags: ["manual", "approved", "operator-style"],
+            approved_for_finetune: true,
+          }),
+        });
+        memoryUi.learningNotice = "Approved example saved.";
+        memoryUi.learning = null;
+        await refreshLearningDataset(el, rerender);
+      } catch (error) {
+        memoryUi.learningNotice = error?.message || "Could not save example.";
+        rerender();
+      }
+    });
+    el.querySelectorAll("[data-learning-copy]").forEach((btn) => btn.addEventListener("click", () => {
+      const example = (memoryUi.learning?.examples || []).find((item) => item.example_id === btn.dataset.learningCopy);
+      if (example) copyText(btn, learningExampleText(example));
+    }));
+    el.querySelectorAll("[data-learning-approve]").forEach((btn) => btn.addEventListener("click", async () => {
+      const example = (memoryUi.learning?.examples || []).find((item) => item.example_id === btn.dataset.learningApprove);
+      if (!example) return;
+      await saveLearningReview(example, "approved");
+      memoryUi.learningNotice = "Approved copy saved for training export.";
+      memoryUi.learning = null;
+      await refreshLearningDataset(el, rerender);
+    }));
+    el.querySelectorAll("[data-learning-correct]").forEach((btn) => btn.addEventListener("click", async () => {
+      const example = (memoryUi.learning?.examples || []).find((item) => item.example_id === btn.dataset.learningCorrect);
+      if (!example) return;
+      const ideal = prompt("What should Hermes have said instead?", example.ideal_response_summary || example.assistant_response_summary || "");
+      if (!ideal?.trim()) return;
+      await saveLearningReview(example, "corrected", { ideal, correction: ideal });
+      memoryUi.learningNotice = "Corrected example saved for training export.";
+      memoryUi.learning = null;
+      await refreshLearningDataset(el, rerender);
+    }));
+    el.querySelectorAll("[data-learning-reject]").forEach((btn) => btn.addEventListener("click", async () => {
+      const example = (memoryUi.learning?.examples || []).find((item) => item.example_id === btn.dataset.learningReject);
+      if (!example) return;
+      await saveLearningReview(example, "rejected", { rating: 1, correction: "Do not train from this answer." });
+      memoryUi.learningNotice = "Rejection note saved. Default export will still ignore unapproved originals.";
+      memoryUi.learning = null;
+      await refreshLearningDataset(el, rerender);
+    }));
+    return;
+  }
 
   const search = el.querySelector("[data-memory-search]");
   if (search) search.addEventListener("input", () => {
