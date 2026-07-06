@@ -5112,7 +5112,7 @@ function App() {
           pending={stats.pending}
           subscription={subscription}
         />
-        {subscription && subscription.canView && !subscription.canWrite ? (
+        {activeSession.role !== "admin" && subscription && subscription.canView && !subscription.canWrite ? (
           <div className="plan-banner" role="status">
             <span className="plan-banner-tag">Free plan</span>
             <span className="plan-banner-msg">
@@ -5445,8 +5445,15 @@ function Topbar({
   subscription: SubscriptionStatus | null;
 }) {
   const [planManagerOpen, setPlanManagerOpen] = useState(false);
-  const systemState = accountSystemState(subscription);
-  const planLabel = subscriptionPlanLabel(subscription);
+  const showPlanControls = activeSession.role !== "admin";
+  const systemState = showPlanControls
+    ? accountSystemState(subscription)
+    : {
+        className: "online",
+        label: "Owner mode",
+        detail: "Full admin access enabled.",
+      };
+  const planLabel = showPlanControls ? subscriptionPlanLabel(subscription) : "Owner";
 
   return (
     <header className="topbar">
@@ -5465,7 +5472,7 @@ function Topbar({
           <Bell size={18} />
           {pending > 0 ? <b>{pending}</b> : null}
         </button>
-        <section className="profile-plan-card" aria-label="Account profile and plan">
+        <section className="profile-plan-card" aria-label={showPlanControls ? "Account profile and plan" : "Owner profile"}>
           <div className="profile-avatar-wrap">
             <div className="profile-avatar" aria-hidden="true">
               {accountInitials(activeSession.label)}
@@ -5479,18 +5486,20 @@ function Topbar({
           </div>
           <div className="profile-plan-meta">
             <span>{planLabel}</span>
-            <small>Renewal: {ACCOUNT_RENEWAL_LABEL}</small>
+            <small>{showPlanControls ? `Renewal: ${ACCOUNT_RENEWAL_LABEL}` : "Premium command access"}</small>
           </div>
-          <button
-            className="profile-manage-button"
-            type="button"
-            onClick={() => setPlanManagerOpen(true)}
-          >
-            Manage Plan <ArrowRight size={15} />
-          </button>
+          {showPlanControls ? (
+            <button
+              className="profile-manage-button"
+              type="button"
+              onClick={() => setPlanManagerOpen(true)}
+            >
+              Manage Plan <ArrowRight size={15} />
+            </button>
+          ) : null}
         </section>
       </div>
-      {planManagerOpen ? (
+      {showPlanControls && planManagerOpen ? (
         <PlanManagerDialog
           activeSession={activeSession}
           subscription={subscription}
