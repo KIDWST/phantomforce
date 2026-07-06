@@ -625,6 +625,7 @@ function renderContentLibrary(body, data, esc, root, opts) {
   const selected = selectedLibraryItems(data, assets);
   const selectedAssets = selected.filter((item) => item.kind === "asset").length;
   const selectedPosts = selected.filter((item) => item.kind === "post").length;
+  const allItemsCount = allLibraryItems(data, assets).length;
   body.innerHTML = `
     <section class="ch-card ch-created-media">
       <div class="ch-card-h ch-library-head">
@@ -644,7 +645,8 @@ function renderContentLibrary(body, data, esc, root, opts) {
         </div>
         <div class="ch-action-row">
           <button class="ch-tool ${chState.selectMode ? "is-on" : ""}" data-ch-select-mode type="button">${chState.selectMode ? "Done selecting" : "Select"}</button>
-          <button class="ch-tool" data-ch-select-all type="button">Select shown</button>
+          <button class="ch-tool" data-ch-select-everything type="button" ${allItemsCount ? "" : "disabled"}>Select all</button>
+          <button class="ch-tool" data-ch-select-all type="button" ${shownAssets.length || shownPosts.length ? "" : "disabled"}>Select visible</button>
           <button class="ch-tool" data-ch-clear-selected type="button" ${chSelection.size ? "" : "disabled"}>Clear</button>
           <button class="ch-tool" data-ch-download-selected type="button" ${chSelection.size ? "" : "disabled"}>Download selected</button>
           <button class="ch-tool" data-ch-download-all type="button" ${shownAssets.length || shownPosts.length ? "" : "disabled"}>Download all</button>
@@ -701,12 +703,19 @@ function visibleLibraryItems(shownAssets, shownPosts) {
     ...shownPosts.map((post) => ({ kind: "post", id: post.id, post, title: post.caption, type: post.type, hasDownload: false })),
   ];
 }
+function allLibraryItems(data, assets) {
+  return [
+    ...assets.map((asset) => ({ kind: "asset", id: asset.id, asset, title: asset.title, type: asset.type, hasDownload: !!asset.url })),
+    ...data.posts.filter((post) => !isRemoved(`post:${post.id}`)).map((post) => ({ kind: "post", id: post.id, post, title: post.caption, type: post.type, hasDownload: false })),
+  ];
+}
 function toggleLibrarySelection(key) {
   if (chSelection.has(key)) chSelection.delete(key);
   else chSelection.add(key);
 }
 function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts) {
   const shownItems = visibleLibraryItems(shownAssets, shownPosts);
+  const allItems = allLibraryItems(data, assets);
   const rerender = () => renderContentHub(root, opts);
   body.querySelectorAll("[data-ch-select-item]").forEach((card) => card.addEventListener("click", (event) => {
     if (event.target.closest("button, a, input, select, textarea")) return;
@@ -733,6 +742,12 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   body.querySelector("[data-ch-select-all]")?.addEventListener("click", () => {
     shownItems.forEach((item) => chSelection.add(selectionKey(item.kind, item.id)));
     chState.selectMode = true;
+    rerender();
+  });
+  body.querySelector("[data-ch-select-everything]")?.addEventListener("click", () => {
+    allItems.forEach((item) => chSelection.add(selectionKey(item.kind, item.id)));
+    chState.selectMode = true;
+    opts.notify?.("Content Hub", `Selected all ${allItems.length} local content item${allItems.length === 1 ? "" : "s"}.`);
     rerender();
   });
   body.querySelector("[data-ch-clear-selected]")?.addEventListener("click", () => {
