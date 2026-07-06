@@ -6841,6 +6841,8 @@ function PhantomDeck({
             <div className="mission-control-panel">
               <div className="mission-control-head">
                 <span className="eyebrow">AI Command Center</span>
+                <span className="mobile-home-title">Welcome back, Jordan.</span>
+                <span className="mobile-home-subtitle">Command your business from here.</span>
                 <strong>Phantom Sense</strong>
                 <p>What's the mission, Commander?</p>
               </div>
@@ -7060,6 +7062,8 @@ function PhantomDeck({
             openWorkspace={openWorkspace}
           />
         </div>
+      </div>
+      {typeof document !== "undefined" ? createPortal(
         <nav className="mobile-admin-bottom-nav" aria-label="Mobile admin navigation">
           {mobileBottomNav.map((item) => {
             const active = item.workspace ? activeWorkspace === item.workspace : !activeWorkspace;
@@ -7083,8 +7087,9 @@ function PhantomDeck({
               </button>
             );
           })}
-        </nav>
-      </div>
+        </nav>,
+        document.body,
+      ) : null}
       {workspaceOverlay && typeof document !== "undefined" ? createPortal(
         <div className="workspace-focus-overlay" role="dialog" aria-modal="true" aria-label={`${activeWorkspaceMeta?.label ?? "Workspace"} workspace`}>
           <button
@@ -10203,6 +10208,36 @@ function AgentControlCenter({
       data_source: "Fallback UI status",
     },
     {
+      id: "n8n",
+      name: "n8n",
+      role: "Workflow worker",
+      state: phantomAiOpsStatus.n8n.n8n_running ? "active" : phantomAiOpsStatus.n8n.n8n_scaffolded ? "standby" : "checking",
+      tool_binding: "n8n_local_workflow_layer",
+      focus: "Holds workflow drafts and local automation readiness behind approval gates.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "n8n read-only status",
+    },
+    {
+      id: "ruflo",
+      name: "Ruflo",
+      role: "Agent loop planner",
+      state: "standby",
+      tool_binding: "ruflo_planning_lane",
+      focus: "Plans repeatable agent loops, handoffs, and review gates before any run exists.",
+      tasks_last_1h: 0,
+      tasks_last_24h: 0,
+      tasks_last_7d: 0,
+      tokens_last_24h: 0,
+      estimated_cost_usd_last_24h: 0,
+      last_run_at: null,
+      data_source: "Fallback UI status",
+    },
+    {
       id: "gatekeeper",
       name: "Gatekeeper",
       role: "Private access guard",
@@ -10299,6 +10334,8 @@ function AgentControlCenter({
       "phantom-ai": <Bot size={20} />,
       hermes: <Clock3 size={20} />,
       builder: <Sparkles size={20} />,
+      n8n: <Zap size={20} />,
+      ruflo: <Bot size={20} />,
       strategist: <Sparkles size={20} />,
       reviewer: <MessageSquare size={20} />,
       gatekeeper: <KeyRound size={20} />,

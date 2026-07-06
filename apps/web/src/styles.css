@@ -13521,7 +13521,9 @@ button.phantom-speech {
 .mobile-status-strip,
 .mobile-admin-action-grid,
 .mobile-phantom-ambient,
-.mobile-admin-bottom-nav {
+.mobile-admin-bottom-nav,
+.mobile-home-title,
+.mobile-home-subtitle {
   display: none;
 }
 
@@ -14049,6 +14051,7 @@ button.phantom-speech {
   .phantom-deck.v3 {
     min-height: 100dvh;
     overflow-x: hidden;
+    transform: none !important;
     background:
       radial-gradient(circle at 75% 8%, rgba(56, 255, 139, 0.16), transparent 26%),
       linear-gradient(180deg, rgba(5, 24, 16, 0.6), rgba(0, 0, 0, 0.97) 48%),
@@ -14234,13 +14237,26 @@ button.phantom-speech {
     font-size: 0.62rem;
   }
 
-  .phantom-deck.v3 .mission-control-head strong {
-    font-size: clamp(1.4rem, 7vw, 1.9rem);
+  .phantom-deck.v3 .mission-control-head > strong,
+  .phantom-deck.v3 .mission-control-head > p {
+    display: none;
   }
 
-  .phantom-deck.v3 .mission-control-head p {
+  .phantom-deck.v3 .mobile-home-title {
+    display: block;
+    color: #f4fff8;
+    font-size: clamp(1.4rem, 7vw, 1.9rem);
+    font-weight: 900;
+    line-height: 1.04;
+  }
+
+  .phantom-deck.v3 .mobile-home-subtitle {
+    display: block;
     max-width: 21rem;
+    color: var(--pf-neon-soft);
     font-size: 0.82rem;
+    font-weight: 700;
+    line-height: 1.28;
   }
 
   .phantom-deck.v3 .phantom-command-dock {
@@ -14444,7 +14460,7 @@ button.phantom-speech {
     margin-top: 10px;
   }
 
-  .phantom-deck.v3 .mobile-admin-bottom-nav {
+  .mobile-admin-bottom-nav {
     position: fixed;
     left: max(10px, env(safe-area-inset-left));
     right: max(10px, env(safe-area-inset-right));
@@ -14463,7 +14479,7 @@ button.phantom-speech {
     backdrop-filter: blur(20px);
   }
 
-  .phantom-deck.v3 .mobile-admin-bottom-nav button {
+  .mobile-admin-bottom-nav button {
     min-width: 0;
     min-height: 48px;
     display: grid;
@@ -14477,12 +14493,12 @@ button.phantom-speech {
     font-weight: 850;
   }
 
-  .phantom-deck.v3 .mobile-admin-bottom-nav button.active {
+  .mobile-admin-bottom-nav button.active {
     color: #001f12;
     background: linear-gradient(180deg, #5fff9c, #20df73);
   }
 
-  .phantom-deck.v3 .mobile-admin-bottom-nav span {
+  .mobile-admin-bottom-nav span {
     max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
