@@ -1716,3 +1716,130 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .phantom.booted .console-center > section,
   .phantom.booted .console-rail > * { animation: none !important; }
 }
+
+/* ============================================================================ */
+/* ===============  PREMIUM REFINEMENT LAYER  (v-18 → elevate)  ============== */
+/* A cohesive pass that trades "neon-green-everything" for a graphite + emerald  */
+/* system: cool surfaces, hairline borders, real layered-glass depth, restrained */
+/* accent, tighter type. Appended last so it composes over the base cascade.     */
+/* ============================================================================ */
+
+:root {
+  /* cooler, deeper base + graphite glass (was green-tinted) */
+  --bg: #05080d;
+  --glass: rgba(17, 23, 31, 0.66);
+  --glass-2: rgba(12, 17, 24, 0.5);
+  /* hairline neutral borders — emerald is now an accent, not an outline */
+  --line: rgba(150, 176, 190, 0.11);
+  --line-strong: rgba(120, 220, 180, 0.24);
+  --ink: #eef5f2;
+  --dim: #8ba0a6;
+  --dim-2: #5f757b;
+  /* premium material tokens */
+  --card-grad: linear-gradient(180deg, rgba(28, 36, 46, 0.55), rgba(12, 17, 24, 0.62));
+  --edge-hi: inset 0 1px 0 rgba(255, 255, 255, 0.055);
+  --depth-1: 0 1px 2px rgba(0, 0, 0, 0.32), 0 10px 26px -12px rgba(0, 0, 0, 0.6);
+  --depth-2: 0 2px 5px rgba(0, 0, 0, 0.4), 0 20px 46px -18px rgba(0, 0, 0, 0.7);
+  --accent-soft: rgba(65, 255, 161, 0.10);
+}
+
+/* calmer, focal backdrop — less "matrix everywhere", more a single light source */
+.bg-glow {
+  background:
+    radial-gradient(42% 32% at 50% 4%, rgba(65, 255, 161, 0.07), transparent 62%),
+    radial-gradient(40% 40% at 92% 96%, rgba(30, 200, 255, 0.035), transparent 60%);
+}
+.bg-grid { opacity: 0.55; }
+
+/* ---- shell chrome ---- */
+.sidebar {
+  background: linear-gradient(180deg, rgba(15, 20, 27, 0.82), rgba(7, 11, 16, 0.7));
+  border-right: 1px solid var(--line);
+}
+.side-brand-text b { letter-spacing: 0.14em; font-weight: 600; }
+.topbar2 {
+  background: linear-gradient(180deg, rgba(11, 15, 21, 0.78), rgba(7, 11, 16, 0.42));
+  border-bottom: 1px solid var(--line);
+}
+
+/* nav: restrained active state — elevated graphite + emerald edge, not a green fill */
+.phantom .nav-item { border-radius: 11px; letter-spacing: 0.005em; }
+.phantom .nav-item:hover { background: rgba(255, 255, 255, 0.035); color: var(--ink); }
+.phantom .nav-item.is-active {
+  position: relative;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.055), rgba(255, 255, 255, 0.012));
+  color: #f2fffa; font-weight: 600;
+  box-shadow: var(--edge-hi), 0 2px 10px rgba(0, 0, 0, 0.34);
+}
+.phantom .nav-item.is-active::after {
+  content: ""; position: absolute; left: -14px; top: 9px; bottom: 9px; width: 3px; border-radius: 0 3px 3px 0;
+  background: linear-gradient(180deg, var(--neon), #16d9c9); box-shadow: 0 0 12px rgba(65, 255, 161, 0.55);
+}
+.phantom .nav-item.is-active .ic { color: var(--neon); }
+.phantom .nav-item.is-active .nav-badge { background: var(--warn); color: #1a1400; }
+
+/* status pills + topbar controls: neutral glass, tabular data */
+.pill { background: var(--glass); border: 1px solid var(--line); box-shadow: var(--edge-hi); }
+.pill-v { font-variant-numeric: tabular-nums; }
+.topbar-user, .cmdk-open, .ws-switch select { background: var(--glass); border: 1px solid var(--line); box-shadow: var(--edge-hi); }
+.topbar-clock b { letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+
+/* ---- hero: cooler surface, single soft light, tighter title ---- */
+.hero2 {
+  border: 1px solid var(--line);
+  background:
+    radial-gradient(70% 80% at 82% 30%, rgba(65, 255, 161, 0.06), transparent 58%),
+    linear-gradient(165deg, rgba(20, 27, 35, 0.72), rgba(8, 12, 17, 0.8));
+  box-shadow: var(--edge-hi), var(--depth-2);
+}
+.hero2-title { letter-spacing: -0.028em; font-weight: 600; }
+.hero2-title span[data-hero-name] { background: linear-gradient(180deg, #b9ffe0, var(--neon)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+.hero2-sub { color: #9db3b6; }
+
+/* command deck refinement */
+.cmd-chip { background: var(--glass); border: 1px solid var(--line); box-shadow: var(--edge-hi); border-radius: 11px; }
+.cmd-chip:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.04); }
+.cmd-input { border: 1px solid var(--line-strong); background: rgba(0, 0, 0, 0.28); box-shadow: var(--edge-hi); }
+
+/* ---- generic card material: statcards, activity, rail, insights ---- */
+.statcard, .act-card, .plan-card, .queue-card, .quick-card, .insight-card {
+  background: var(--card-grad);
+  border: 1px solid var(--line);
+  box-shadow: var(--edge-hi), var(--depth-1);
+}
+.statcard { border-radius: 16px; }
+.statcard:hover, .act-card:hover { border-color: var(--line-strong); box-shadow: var(--edge-hi), var(--depth-2); }
+.statcard-icon, .act-thumb, .queue-ic { background: rgba(65, 255, 161, 0.08); box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.12); }
+.statcard-k, .section-head h2, .side-plan-kicker, .statcard-trend {
+  color: #9fb2b6; letter-spacing: 0.14em;
+}
+.statcard-v { font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.statcard-trend { color: var(--dim-2); }
+
+/* rail cards: rounder, deeper */
+.plan-card, .queue-card, .quick-card { border-radius: 18px; }
+.queue-item, .quick-item { background: rgba(255, 255, 255, 0.018); border: 1px solid var(--line); border-radius: 11px; }
+.queue-item:hover, .quick-item:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.045); }
+
+/* section headings: refined caps */
+.section-head h2 { font-weight: 600; }
+.side-plan { background: var(--card-grad); border: 1px solid var(--line); box-shadow: var(--edge-hi); border-radius: 16px; }
+.side-plan-name { color: #cfeee0; font-weight: 600; }
+
+/* the emerald accents that SHOULD stay bright: CTAs, active chip, send, live dots */
+.cmd-send, .cmd-chip.is-active, .side-plan-btn:hover {
+  box-shadow: 0 6px 18px -4px rgba(65, 255, 161, 0.4), var(--edge-hi);
+}
+.cmd-chip.is-active { background: linear-gradient(135deg, var(--neon), #12cf97); }
+
+/* agent-ops + content-hub cards inherit the new material for consistency */
+.agentops, .aops-log-wrap, .aops-t { box-shadow: var(--edge-hi), var(--depth-1); }
+.aops-agent { background: rgba(255, 255, 255, 0.016); }
+.aops-agent:hover { background: rgba(255, 255, 255, 0.04); }
+
+/* smoother, more expensive easing on interactive lifts */
+.statcard, .act-card, .cmd-chip, .queue-item, .quick-item, .nav-item, .insight-card, .aops-agent {
+  transition: transform 0.22s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.22s ease, background 0.22s ease, box-shadow 0.28s ease, color 0.2s ease;
+}
+
+/* keep the refinement out of the way for reduced-motion + small screens (no new motion added) */
