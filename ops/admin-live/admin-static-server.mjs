@@ -15,6 +15,7 @@ function argValue(name, fallback) {
 const repoRoot = path.resolve(argValue("--root", process.env.PF_ADMIN_REPO_ROOT || path.join(__dirname, "..", "..")));
 const port = Number(argValue("--port", process.env.PF_ADMIN_PORT || "5177"));
 const host = argValue("--host", process.env.PF_ADMIN_HOST || "127.0.0.1");
+const apiOrigin = argValue("--api", process.env.PF_ADMIN_API_ORIGIN || "http://127.0.0.1:5190").replace(/\/$/, "");
 
 const mime = new Map([
   [".css", "text/css; charset=utf-8"],
@@ -60,9 +61,50 @@ async function fileExists(filePath) {
   }
 }
 
+function shouldProxy(urlPath) {
+  return urlPath === "/session"
+    || urlPath === "/sessions"
+    || urlPath.startsWith("/auth/")
+    || urlPath.startsWith("/phantom-ai/");
+}
+
+async function readRequestBody(req) {
+  const chunks = [];
+  for await (const chunk of req) chunks.push(Buffer.from(chunk));
+  return chunks.length ? Buffer.concat(chunks) : undefined;
+}
+
+async function proxyToApi(req, res) {
+  const target = `${apiOrigin}${req.url || "/"}`;
+  const headers = { ...req.headers };
+  delete headers.host;
+  delete headers["content-length"];
+
+  try {
+    const body = req.method === "GET" || req.method === "HEAD" ? undefined : await readRequestBody(req);
+    const upstream = await fetch(target, { method: req.method, headers, body });
+    const responseHeaders = Object.fromEntries(upstream.headers);
+    responseHeaders["cache-control"] = "no-store";
+    res.writeHead(upstream.status, responseHeaders);
+    if (req.method === "HEAD") {
+      res.end();
+      return;
+    }
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    res.end(buffer);
+  } catch (error) {
+    send(res, 502, JSON.stringify({ ok: false, error: "Admin API unavailable." }), "application/json; charset=utf-8");
+  }
+}
+
 createServer(async (req, res) => {
   if (req.url === "/health") {
     send(res, 200, JSON.stringify({ ok: true, service: "phantomforce-admin-static", root: repoRoot }), "application/json; charset=utf-8");
+    return;
+  }
+
+  if (shouldProxy((req.url || "/").split("?")[0])) {
+    await proxyToApi(req, res);
     return;
   }
 
