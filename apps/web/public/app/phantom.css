@@ -2383,6 +2383,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-section h3 { margin: 0 0 6px; font-size: 16px; }
 .set-note { margin: 0 0 16px; font-size: 12.5px; line-height: 1.55; color: var(--dim); max-width: 720px; }
 .set-sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.set-sec-head .set-note { margin: 4px 0 0; }
 .set-add { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(65,255,161,0.06); color: var(--neon); cursor: pointer; font: 600 12px "Space Grotesk"; }
 .set-add:hover { background: rgba(65,255,161,0.14); }
 .set-add .ic { width: 14px; height: 14px; }
@@ -2432,6 +2433,45 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   color: rgba(234,255,242,0.68); cursor: pointer; font-size: 16px; line-height: 1;
 }
 .set-card-x:hover { border-color: rgba(255,77,99,0.62); color: #ff97a4; background: rgba(255,77,99,0.1); }
+.set-safe-pill {
+  flex: 0 0 auto; padding: 6px 10px; border: 1px solid rgba(65,255,161,0.28); border-radius: 999px;
+  color: var(--neon); background: rgba(65,255,161,0.08); font: 700 10px "DM Mono", monospace;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.set-social-section { background: linear-gradient(160deg, rgba(65,255,161,0.075), rgba(4,12,9,0.58)); }
+.set-social-notice {
+  margin-bottom: 14px; border: 1px solid rgba(65,255,161,0.28); border-radius: 13px; padding: 11px 12px;
+  color: #d9ffe9; background: rgba(65,255,161,0.08); font-size: 12.5px; line-height: 1.45;
+}
+.set-social-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 12px; }
+.set-social-card {
+  position: relative; display: flex; flex-direction: column; gap: 10px; min-width: 0;
+  border: 1px solid var(--line); border-radius: 15px; padding: 14px; background: rgba(4,12,9,0.56);
+  transition: border-color 0.18s, box-shadow 0.18s, background 0.18s;
+}
+.set-social-card.is-linked { border-color: rgba(65,255,161,0.38); box-shadow: inset 0 0 0 1px rgba(65,255,161,0.08); }
+.set-social-card.is-saved { border-color: rgba(255,209,102,0.28); }
+.set-social-top { display: flex; align-items: center; gap: 10px; padding-right: 28px; }
+.set-social-dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 0 12px currentColor; }
+.set-social-top > span:nth-child(2) { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.set-social-top b { color: #f0fff7; font-size: 14px; }
+.set-social-top i {
+  color: var(--dim); font: 700 8.5px "DM Mono", monospace; font-style: normal;
+  letter-spacing: 0.1em; text-transform: uppercase;
+}
+.set-social-open {
+  align-self: flex-start; cursor: pointer; border: 1px solid var(--line); border-radius: 10px; padding: 7px 10px;
+  color: #cfeeda; background: rgba(0,0,0,0.18); font: 700 10px "DM Mono", monospace;
+  letter-spacing: 0.08em; text-transform: uppercase;
+}
+.set-social-open:hover { border-color: rgba(65,255,161,0.4); color: var(--neon); background: rgba(65,255,161,0.07); }
+.set-social-assist {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 14px;
+  border: 1px dashed rgba(65,255,161,0.24); border-radius: 15px; padding: 14px;
+  background: rgba(0,0,0,0.18);
+}
+.set-social-assist b { color: #f0fff7; font-size: 14px; }
+.set-social-assist p { margin: 4px 0 0; color: var(--dim); font-size: 12.5px; line-height: 1.5; max-width: 780px; }
 
 /* ---------------- account / plan manager ---------------- */
 .account-plan { display: flex; flex-direction: column; gap: 18px; }
@@ -2577,6 +2617,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ml-board-cell[data-ratio="16:9"] { width: 50px; }
   .ml-board-cell[data-ratio="3:2"] { width: 44px; }
   .ml-board-cell[data-ratio="9:16"] { width: 26px; }
+  .set-sec-head, .set-social-assist { flex-direction: column; align-items: stretch; }
+  .set-safe-pill { align-self: flex-start; }
   /* keep the roll button reachable above the fixed bottom nav */
   .ml-builder .ml-generate { position: sticky; bottom: calc(86px + env(safe-area-inset-bottom, 0px)); z-index: 3; box-shadow: 0 8px 24px rgba(65,255,161,0.24), 0 -10px 24px rgba(2,8,6,0.7); }
 }

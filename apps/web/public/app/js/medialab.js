@@ -12,9 +12,10 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-16";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-17";
 
 const CFG_KEY = "pf.medialab.v1";
+const SOCIAL_KEY = "pf.social.accounts.v1";
 const TAU = Math.PI * 2;
 
 /* ---------------- provider registry (pluggable defaults) ---------------- */
@@ -128,6 +129,40 @@ const LANE_LABELS = {
   "flux-kontext": "Context retouch",
 };
 const laneLabel = (m) => LANE_LABELS[m] || String(m || "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const SOCIAL_LOGIN_URLS = {
+  instagram: "https://www.instagram.com/accounts/login/",
+  tiktok: "https://www.tiktok.com/login",
+  youtube: "https://accounts.google.com/",
+  facebook: "https://www.facebook.com/login",
+  x: "https://x.com/i/flow/login",
+  linkedin: "https://www.linkedin.com/login",
+  pinterest: "https://www.pinterest.com/login/",
+};
+let socialNotice = "";
+
+function defaultSocialAccounts() {
+  return PLATFORMS.map((p) => ({ id: p.id, name: p.name, color: p.color, handle: "", url: "", enabled: false, connectMode: "manual" }));
+}
+function loadSocialAccounts() {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(SOCIAL_KEY) || "[]"); } catch {}
+  const rows = Array.isArray(saved) ? saved : [];
+  return defaultSocialAccounts().map((base) => ({ ...base, ...(rows.find((row) => row && row.id === base.id) || {}) }));
+}
+function saveSocialAccounts(accounts) {
+  try { localStorage.setItem(SOCIAL_KEY, JSON.stringify(accounts)); } catch {}
+}
+function socialStatus(account) {
+  if (account.enabled && (account.handle || account.url)) return "linked";
+  if (account.handle || account.url) return "saved";
+  return "empty";
+}
+function socialStatusLabel(account) {
+  const st = socialStatus(account);
+  if (st === "linked") return "connected";
+  if (st === "saved") return "saved";
+  return "not linked";
+}
 
 /* ---------------- config ---------------- */
 export function loadCfg() {
@@ -832,6 +867,8 @@ function downloadAsset(a) {
 export function renderMediaSettings(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
+  const socialAccounts = loadSocialAccounts();
+  const linkedCount = socialAccounts.filter((account) => socialStatus(account) !== "empty").length;
   const routeRow = (modality, label) => {
     const provs = providersFor(cfg, modality === "enhance" ? "enhance" : modality);
     return `<label class="set-route"><span>${label}</span>
@@ -853,6 +890,27 @@ export function renderMediaSettings(el, opts = {}) {
           <em>Where /generate and /chat are served. Leave blank to auto-detect.</em></label>
       </div>
 
+      <div class="set-section set-social-section">
+        <div class="set-sec-head">
+          <div>
+            <h3>Social accounts</h3>
+            <p class="set-note">Link profile pages and handles so Content Hub knows where client content belongs. This is local/manual setup; nothing posts, sends, or reads private sessions here.</p>
+          </div>
+          <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} linked</span>
+        </div>
+        ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
+        <div class="set-social-grid">
+          ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
+        </div>
+        <div class="set-social-assist">
+          <div>
+            <b>Smart browser connect</b>
+            <p>Codex can help open each platform login page and check visible login status after the owner signs in. It will not read, export, or store cookies, session tokens, passwords, or private messages.</p>
+          </div>
+          <button class="set-add" data-social-smart type="button">${svgIc("spark")} Prepare safe browser check</button>
+        </div>
+      </div>
+
       <div class="set-section">
         <div class="set-sec-head"><h3>Providers</h3><button class="set-add" data-set-addprov>${svgIc("bolt")} Add provider</button></div>
         <div class="set-providers" data-set-providers>
@@ -865,6 +923,34 @@ export function renderMediaSettings(el, opts = {}) {
   el.querySelectorAll("[data-route]").forEach((s) => s.onchange = () => { cfg.routing[s.dataset.route] = s.value; saveCfg(cfg); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
   const base = el.querySelector("[data-set-base]"); base.onchange = () => { cfg.endpointBase = base.value.trim(); saveCfg(cfg); };
+
+  // social account linking stays local and never reads browser cookies/tokens
+  el.querySelectorAll("[data-social-card]").forEach((card) => {
+    const id = card.dataset.socialCard;
+    const account = socialAccounts.find((row) => row.id === id);
+    if (!account) return;
+    const saveAndRender = () => { saveSocialAccounts(socialAccounts); renderMediaSettings(el, opts); };
+    const enabled = card.querySelector("[data-social-enabled]");
+    if (enabled) enabled.onchange = () => { account.enabled = enabled.checked; saveAndRender(); };
+    const handle = card.querySelector("[data-social-handle]");
+    if (handle) handle.onchange = () => { account.handle = handle.value.trim(); saveAndRender(); };
+    const url = card.querySelector("[data-social-url]");
+    if (url) url.onchange = () => { account.url = url.value.trim(); saveAndRender(); };
+    const clear = card.querySelector("[data-social-clear]");
+    if (clear) clear.onclick = () => {
+      account.handle = ""; account.url = ""; account.enabled = false; account.connectMode = "manual";
+      socialNotice = `${account.name} link cleared locally. No remote account was changed.`;
+      saveAndRender();
+    };
+    const open = card.querySelector("[data-social-open]");
+    if (open) open.onclick = () => window.open(SOCIAL_LOGIN_URLS[id] || account.url || "about:blank", "_blank", "noopener,noreferrer");
+  });
+  const smart = el.querySelector("[data-social-smart]");
+  if (smart) smart.onclick = () => {
+    socialNotice = "Safe browser connect prepared: open the platform, sign in yourself, then save the public profile URL or handle. Cookie/token scanning is blocked by design.";
+    opts.notify?.("Settings", "Prepared safe social account connect. No cookies, tokens, sends, or external writes were touched.");
+    renderMediaSettings(el, opts);
+  };
 
   // provider cards
   el.querySelectorAll("[data-prov-card]").forEach((card) => {
@@ -889,6 +975,21 @@ export function renderMediaSettings(el, opts = {}) {
     cfg.providers.push({ id, name: name.trim(), tagline: "Custom provider", brand: "#41ffa1", keyEnv: `${id.toUpperCase().replace(/-/g, "_")}_API_KEY`, enabled: true, modalities, models, custom: true, endpoint: "", localKey: "", defaultModel: {} });
     saveCfg(cfg); renderMediaSettings(el, opts);
   };
+}
+
+function socialCard(account, esc) {
+  const status = socialStatus(account);
+  return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
+    <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
+    <div class="set-social-top">
+      <span class="set-social-dot" style="background:${account.color}"></span>
+      <span><b>${esc(account.name)}</b><i>${esc(socialStatusLabel(account))}</i></span>
+      <label class="set-switch"><input type="checkbox" data-social-enabled ${account.enabled ? "checked" : ""}/><span></span></label>
+    </div>
+    <label class="set-mini"><span>Handle</span><input data-social-handle placeholder="@client" value="${esc(account.handle || "")}"/></label>
+    <label class="set-mini"><span>Profile URL</span><input data-social-url placeholder="https://" value="${esc(account.url || "")}"/></label>
+    <button class="set-social-open" data-social-open type="button">Open login / profile</button>
+  </article>`;
 }
 
 function providerCard(p, esc) {

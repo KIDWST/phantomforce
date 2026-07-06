@@ -323,7 +323,7 @@ function svgIc(k) {
 /* =========================================================================
    CONTENT HUB
    ========================================================================= */
-const chState = { tab: "ideas", platform: "all", ctype: "all", eng: "likes" };
+const chState = { tab: "library", platform: "all", ctype: "all", eng: "likes" };
 
 export function renderContentHub(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
@@ -332,16 +332,16 @@ export function renderContentHub(el, opts = {}) {
   const mediaStats = contentAssetStats(mediaAssets);
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
-  const tabs = [["ideas", "New ideas"], ["drafts", "Draft queue"], ["calendar", "Calendar"], ["production", "Production"], ["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`]];
+  const tabs = [["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`], ["ideas", "New ideas"], ["drafts", "Draft queue"], ["calendar", "Calendar"], ["production", "Production"]];
   el.innerHTML = `
     <div class="ch">
       <section class="ch-creator-head">
         <div>
           <p class="ch-eyebrow">Creator workspace</p>
-          <h3>Plan the next useful thing to publish.</h3>
-          <p>Content Hub is for ideas, drafts, creative direction, autopilot-ready posts, and scheduled content. Analytics handles performance and business trends.</p>
+          <h3>Your content library, all in one place.</h3>
+          <p>Generated media, saved assets, posts, drafts, and scheduled content start here first. Planning tools are still one tab away.</p>
         </div>
-        <button class="btn btn-primary" data-ch-action="new-idea">Capture idea</button>
+        <button class="btn btn-primary" data-open-ws="media">Create media</button>
       </section>
       <div class="ch-tabs">
         ${tabs.map(([id, l]) => `<button class="ch-tab ${chState.tab === id ? "is-active" : ""}" data-ch-tab="${id}">${l}</button>`).join("")}
@@ -350,11 +350,6 @@ export function renderContentHub(el, opts = {}) {
       <div class="ch-body" data-ch-body></div>
     </div>`;
   el.querySelectorAll("[data-ch-tab]").forEach((b) => b.onclick = () => { chState.tab = b.dataset.chTab; renderContentHub(el, opts); });
-  el.querySelector("[data-ch-action='new-idea']")?.addEventListener("click", () => {
-    opts.notify?.("Content Hub", "New content idea capture prepared locally. Safe steps can run on autopilot; risky sends still stop for review.");
-    chState.tab = "ideas";
-    renderContentHub(el, opts);
-  });
   const body = el.querySelector("[data-ch-body]");
   const t = chState.tab;
   if (t === "ideas") renderCreatorIdeas(body, data, esc, el, opts);
