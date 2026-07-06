@@ -4,13 +4,13 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-17";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-17";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-17";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-17";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-17";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-17";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-17";
+} from "./store.js?v=phantom-live-20260705-18";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-18";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-18";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-18";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-18";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-18";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-18";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -216,6 +216,146 @@ function renderUser() {
   };
 }
 
+/* ============================ account + plan ============================ */
+const ACCOUNT_PLAN = {
+  name: "Pro Plan",
+  price: "$2,500/mo",
+  renewalOffsetDays: 30,
+  paymentState: "Manual billing ready",
+  workspaceLimit: "Owner workspace",
+};
+const ACCOUNT_TIERS = [
+  {
+    id: "starter",
+    name: "Starter",
+    price: "$750/mo",
+    badge: "Launch",
+    copy: "Core cockpit, local approvals, and one active business workspace.",
+    features: ["Command Center", "Leads and tasks", "Manual proposal workflow"],
+  },
+  {
+    id: "pro",
+    name: "Pro Plan",
+    price: "$2,500/mo",
+    badge: "Current",
+    current: true,
+    copy: "Managed Phantom AI operations, content workflow, Media Lab, and owner controls.",
+    features: ["Phantom AI cockpit", "Content and Media Lab", "Approval-safe ops"],
+  },
+  {
+    id: "scale",
+    name: "Scale",
+    price: "Custom",
+    badge: "Operator",
+    copy: "Expanded workspaces, deeper automations, and managed launch support.",
+    features: ["Multi-workspace ops", "Automation planning", "Launch support"],
+  },
+];
+let accountNotice = "";
+
+function accountOwnerName() {
+  return ctx.session?.name || (isAdmin() ? "Jordan" : "Owner");
+}
+function accountInitials(name) {
+  const initials = String(name || "PhantomForce").split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+  return initials || "PF";
+}
+function accountRenewalLabel() {
+  return new Date(Date.now() + ACCOUNT_PLAN.renewalOffsetDays * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+}
+function accountStatusMeta() {
+  const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
+  return attention
+    ? { label: "Attention needed", tone: "error", detail: "One or more systems need owner review before everything is clean." }
+    : { label: "Systems online", tone: "online", detail: "PhantomForce systems are online and protected for this workspace." };
+}
+function renderAccountPlan(body) {
+  const owner = accountOwnerName();
+  const status = accountStatusMeta();
+  const renewal = accountRenewalLabel();
+  body.innerHTML = `
+    <div class="account-plan">
+      ${accountNotice ? `<div class="account-notice">${esc(accountNotice)}</div>` : ""}
+      <section class="account-hero">
+        <div class="account-avatar" aria-label="Profile picture">${esc(accountInitials(owner))}</div>
+        <div class="account-hero-main">
+          <p class="account-kicker">Account profile</p>
+          <h3>${esc(owner)}</h3>
+          <p class="account-status account-status-${status.tone}"><span aria-hidden="true"></span>${esc(status.label)}</p>
+        </div>
+        <div class="account-plan-chip">
+          <span>${esc(ACCOUNT_PLAN.name)}</span>
+          <b>${esc(ACCOUNT_PLAN.price)}</b>
+        </div>
+      </section>
+      <section class="account-grid">
+        <article class="account-card account-current">
+          <p class="account-card-k">Current plan</p>
+          <h4>${esc(ACCOUNT_PLAN.name)}</h4>
+          <p>${esc(status.detail)}</p>
+          <div class="account-facts">
+            <span><b>Renewal</b>${esc(renewal)}</span>
+            <span><b>Billing</b>${esc(ACCOUNT_PLAN.paymentState)}</span>
+            <span><b>Access</b>${esc(ACCOUNT_PLAN.workspaceLimit)}</span>
+          </div>
+        </article>
+        <article class="account-card account-payment">
+          <p class="account-card-k">Payment options</p>
+          <h4>Billing controls</h4>
+          <p>No live payment connector is wired in this shell. These buttons prepare owner actions only.</p>
+          <div class="account-actions">
+            <button class="btn btn-primary" data-account-action="payment">Update payment method</button>
+            <button class="btn" data-account-action="invoice">Request invoice</button>
+          </div>
+        </article>
+      </section>
+      <section class="account-section">
+        <div class="set-sec-head">
+          <div>
+            <p class="account-card-k">Plan tiers</p>
+            <h3>Choose the operating level</h3>
+          </div>
+        </div>
+        <div class="account-tiers">
+          ${ACCOUNT_TIERS.map((tier) => `
+            <article class="account-tier ${tier.current ? "is-current" : ""}">
+              <span class="account-tier-badge">${esc(tier.badge)}</span>
+              <h4>${esc(tier.name)}</h4>
+              <b>${esc(tier.price)}</b>
+              <p>${esc(tier.copy)}</p>
+              <ul>${tier.features.map((feature) => `<li>${esc(feature)}</li>`).join("")}</ul>
+              <button class="btn ${tier.current ? "btn-good" : "btn-primary"}" data-account-action="${tier.current ? "current" : `plan-${tier.id}`}">
+                ${tier.current ? "Current plan" : `Request ${esc(tier.name)}`}
+              </button>
+            </article>`).join("")}
+        </div>
+      </section>
+      <section class="account-section account-cancel">
+        <div>
+          <p class="account-card-k">Cancellation</p>
+          <h3>Plan changes stay owner-controlled</h3>
+          <p>Cancellation is not automated here. PhantomForce can prepare a cancellation request, keep access through renewal, and wait for manual confirmation.</p>
+        </div>
+        <button class="btn btn-quiet" data-account-action="cancel">Prepare cancellation request</button>
+      </section>
+    </div>`;
+  body.querySelectorAll("[data-account-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = btn.dataset.accountAction || "plan";
+      const label = {
+        payment: "Payment-method update",
+        invoice: "Manual invoice request",
+        current: "Current plan review",
+        cancel: "Cancellation request",
+      }[action] || `${btn.textContent.trim()} request`;
+      accountNotice = `${label} prepared for owner review. No billing, cancellation, payment, or access change was executed.`;
+      pushActivity("Account", accountNotice);
+      store.save();
+      renderAccountPlan(body);
+    });
+  });
+}
+
 /* ============================ hero + command deck ============================ */
 const MODES = {
   ask:     { label: "Ask",     icon: "chat",  placeholder: "Ask PhantomForce anything…", prefix: "" },
@@ -226,7 +366,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-17";
+const POSE_VERSION = "phantom-live-20260705-18";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {
@@ -647,8 +787,21 @@ function briefingText() {
 
 /* ============================ console render ============================ */
 function renderPlanMeta() {
-  const renew = new Date(Date.now() + 30 * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+  const renew = accountRenewalLabel();
+  const owner = accountOwnerName();
+  const status = accountStatusMeta();
+  const nameEl = $("[data-profile-name]");
+  const avatarEl = $("[data-profile-avatar]");
+  const statusEl = $("[data-account-status]");
+  const planEl = $("[data-plan-name]");
   const el = $("[data-plan-renew]");
+  if (nameEl) nameEl.textContent = owner;
+  if (avatarEl) avatarEl.textContent = accountInitials(owner);
+  if (statusEl) {
+    statusEl.className = `side-profile-status is-${status.tone}`;
+    statusEl.innerHTML = `<span class="side-profile-dot" aria-hidden="true"></span>${esc(status.label)}`;
+  }
+  if (planEl) planEl.textContent = ACCOUNT_PLAN.name;
   if (el) el.textContent = `Renewal: ${renew}`;
 }
 
@@ -821,6 +974,7 @@ const CUSTOM = {
   media: { title: "Media Lab", kicker: "AI studio", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Live from Content Hub", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
+  account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
 };
 
