@@ -20,8 +20,6 @@ const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
 const gate = $("[data-gate]");
 const phantom = $("[data-phantom]");
 const overlayRoot = $("[data-overlay-root]");
-const consoleRoot = $("[data-console]");
-const dashboardShellHtml = consoleRoot ? consoleRoot.innerHTML : "";
 
 /* ---- inline line-icons (stroke = currentColor) ---- */
 const I = {
@@ -132,7 +130,6 @@ const NAV = [
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
   { id: "brand",      label: "Brand Memory", icon: "brain", ws: "workforce" },
-  { id: "apify",      label: "Apify Vault",  icon: "db",    ws: "apify", adminOnly: true },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
@@ -168,8 +165,8 @@ function goNav(id) {
   if (!item) return;
   activeNav = id;
   renderNav();
-  if (item.view === "main") renderDashboardPage(true);
-  else if (item.ws) renderWorkspacePage(item.ws, true);
+  if (item.view === "main") { closeOverlay(true); }
+  else if (item.ws) { openWorkspace(item.ws); }
 }
 
 /* ============================ topbar ============================ */
@@ -655,24 +652,7 @@ function renderPlanMeta() {
   if (el) el.textContent = `Renewal: ${renew}`;
 }
 
-function ensureDashboardShell() {
-  const root = $("[data-console]");
-  if (!root) return null;
-  if (root.dataset.consoleView !== "dashboard") {
-    root.className = "console";
-    root.dataset.consoleView = "dashboard";
-    delete root.dataset.pageWs;
-    root.innerHTML = dashboardShellHtml;
-  }
-  return root;
-}
-
 function renderConsole() {
-  if (activePageId) {
-    renderWorkspacePage(activePageId, false);
-    return;
-  }
-  ensureDashboardShell();
   renderNav();
   renderStatusPills();
   renderPlanMeta();
@@ -687,7 +667,6 @@ function renderConsole() {
   renderPlan();
   renderQueue();
   renderQuick();
-  bindCommandForm();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
 }
 
@@ -771,16 +750,14 @@ function runCommand(raw) {
       speak(r.say);
       if (respBox) respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
       renderConsole();
-      if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
+      if (r.open) setTimeout(() => openWorkspace(r.open), reduceMotion ? 150 : 750);
     }, reduceMotion ? 120 : 620);
   }, reduceMotion ? 60 : 260);
 }
 
-function bindCommandForm() {
+function wireDeck() {
   const form = $("[data-command-form]");
   const input = $("[data-command-input]");
-  if (!form || !input || form.dataset.bound === "true") return;
-  form.dataset.bound = "true";
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const v = input.value.trim();
@@ -788,10 +765,6 @@ function bindCommandForm() {
     input.value = "";
     runCommand(v);
   });
-}
-
-function wireDeck() {
-  bindCommandForm();
   document.addEventListener("click", (e) => {
     const mode = e.target.closest("[data-mode]");
     if (mode) { setMode(mode.dataset.mode); return; }
@@ -801,7 +774,7 @@ function wireDeck() {
     if (quick) {
       const q = QUICK[+quick.dataset.quick];
       if (q?.run) runCommand(q.run);
-      else if (q?.open) routeWorkspace(q.open);
+      else if (q?.open) openWorkspace(q.open);
       return;
     }
     if (e.target.closest("[data-cmdk-open]")) { openPalette(); return; }
@@ -810,7 +783,7 @@ function wireDeck() {
     if (cItem) { execPalette(+cItem.dataset.cmdkI); return; }
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     const opener = e.target.closest("[data-open-ws]");
-    if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
+    if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } openWorkspace(opener.dataset.openWs); return; }
     // click outside notif menu closes it
     if (notifOpen && !e.target.closest(".notif-wrap")) { notifOpen = false; renderNotifs(); }
   });

@@ -7,11 +7,7 @@ import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-live-20260705-16";
-import {
-  APIFY_ACTORS, APIFY_LANES, APIFY_MCP_STACK,
-  apifyActorHref, apifyActorsByCategory, apifyActorsByLane,
-} from "./apify-tools.js?v=phantom-live-20260705-16";
+} from "./store.js?v=phantom-live-20260705-15";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -471,89 +467,6 @@ function renderMoney(el, rerender) {
 }
 
 /* ============================= TOOL SPINE ============================= */
-function renderApify(el, rerender) {
-  if (!isAdmin()) { el.innerHTML = empty("Apify Tool Vault is owner-only until a workspace permission grants access."); return; }
-  const state = store.state.apify || {};
-  const selected = new Set(state.selectedActorIds || []);
-  const byLane = apifyActorsByLane();
-  const byCategory = apifyActorsByCategory();
-  const mapped = APIFY_ACTORS.length;
-  const exact = APIFY_ACTORS.filter((actor) => actor.actor).length;
-  el.innerHTML = `
-    <div class="apify-hero">
-      <div>
-        <p class="overlay-kicker">Apify Store + Actors</p>
-        <h3>Tool Vault mapped. Execution stays server-side.</h3>
-        <p>Phantom can use Apify for lead discovery, competitor monitoring, public web/RAG crawling, social intel, reputation watch, e-commerce research, and data cleanup. New accounts start with a catalog only: no Actor runs, no datasets, no spend, and no outreach until you approve inputs.</p>
-      </div>
-      <div class="apify-status">
-        ${kv("Catalog", `${mapped} Actor candidates`)}
-        ${kv("Exact Actor IDs", `${exact} ready / ${mapped - exact} store-search candidates`)}
-        ${kv("Token", state.tokenConfigured ? "Configured server-side" : "Not configured here")}
-        ${kv("Mode", esc(state.mode || "approval-gated"))}
-      </div>
-    </div>
-    <div class="apify-lanes">
-      ${byLane.map((lane) => `
-        <article class="apify-lane">
-          <span>${lane.actors.length}</span>
-          <h4>${esc(lane.name)}</h4>
-          <p>${esc(lane.focus)}</p>
-        </article>`).join("")}
-    </div>
-    <h3 class="ws-subhead">Actor shortlist</h3>
-    <p class="ws-note">Selecting an Actor marks it for setup planning only. Runs still require APIFY_TOKEN on the server, input review, budget approval, and output review.</p>
-    <div class="apify-category-grid">
-      ${Object.entries(byCategory).map(([category, actors]) => `
-        <section class="apify-category">
-          <div class="apify-cat-head"><h4>${esc(category)}</h4><span>${actors.length}</span></div>
-          ${actors.map((actor) => `
-            <article class="apify-actor ${selected.has(actor.id) ? "is-selected" : ""}">
-              <div class="record-top">
-                <h5>${esc(actor.name)}</h5>
-                <span class="chip chip-${actor.actor ? "approved" : "pending"}">${actor.actor ? "actor id" : "store search"}</span>
-              </div>
-              <p>${esc(actor.use)}</p>
-              <div class="apify-fields">
-                <span><b>Input</b>${esc(actor.input)}</span>
-                <span><b>Output</b>${esc(actor.output)}</span>
-              </div>
-              <p class="record-notes"><b>Safety:</b> ${esc(actor.safety)}</p>
-              <div class="record-actions">
-                <a class="btn btn-quiet" href="${esc(apifyActorHref(actor))}" target="_blank" rel="noopener">Open Store</a>
-                <button class="btn ${selected.has(actor.id) ? "btn-good" : ""}" data-act="toggle-actor" data-id="${esc(actor.id)}">${selected.has(actor.id) ? "Selected" : "Mark for setup"}</button>
-              </div>
-            </article>`).join("")}
-        </section>`).join("")}
-    </div>
-    <h3 class="ws-subhead">MCP / API wiring path</h3>
-    <div class="apify-stack">
-      ${APIFY_MCP_STACK.map((item, i) => `
-        <article class="record">
-          <div class="record-top"><h4>${i + 1}. ${esc(item.name)}</h4>${chip(i < 2 ? "ready" : "pending")}</div>
-          <p class="record-sub">${esc(item.use)}</p>
-        </article>`).join("")}
-    </div>
-    <h3 class="ws-subhead">Runner contract</h3>
-    <div class="stack">
-      <article class="record record-wide">
-        ${kv("Server env", "<code>APIFY_TOKEN</code> only. Never in browser/localStorage.")}
-        ${kv("Dry run", "<code>node ops/apify/apify-runner.mjs --dry-run --actor apify/google-search-scraper --input input.json</code>")}
-        ${kv("Execute", "<code>--execute</code> requires owner approval and budget guard.")}
-        ${kv("Review gate", "Dataset output becomes Phantom review cards before CRM/sends/posts/export.")}
-      </article>
-    </div>`;
-  bindActions(el, {
-    "toggle-actor": (id) => {
-      const next = new Set(store.state.apify?.selectedActorIds || []);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      store.state.apify = { ...(store.state.apify || {}), selectedActorIds: Array.from(next) };
-      pushActivity("Actor Broker", `${next.has(id) ? "marked" : "unmarked"} ${APIFY_ACTORS.find((a) => a.id === id)?.name || id} for Apify setup review.`);
-      store.save(); rerender();
-    },
-  });
-}
-
 function renderToolSpineCards({ compact = false } = {}) {
   const tools = store.state.toolSpine || [];
   return `
@@ -721,7 +634,6 @@ export const WORKSPACE_DEFS = {
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
   workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
-  apify: { title: "Apify Tool Vault", kicker: "Actor marketplace", render: renderApify, adminOnly: true },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
@@ -738,8 +650,7 @@ export function missionWidgets() {
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
   const bks = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
   const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
-  const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "standby", "gated", "sandbox", "setup-ready", "planning", "available", "owner-controlled"].includes(tool.mode)).length;
-  const selectedApify = store.state.apify?.selectedActorIds?.length || 0;
+  const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "standby", "gated", "sandbox"].includes(tool.mode)).length;
 
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
@@ -753,7 +664,6 @@ export function missionWidgets() {
     { id: "workforce", icon: "⬢", title: "Workforce", stat: `${activeAgents} agents`, sub: isAdmin() ? `${activeTools} tools mapped` : "on your account", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
-  if (isAdmin()) w.push({ id: "apify", icon: "◌", title: "Apify Vault", stat: `${APIFY_ACTORS.length} actors`, sub: selectedApify ? `${selectedApify} marked for setup` : "catalog ready", alert: false });
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
   return w;
 }
