@@ -14,7 +14,7 @@ const indexHtml = readProjectFile("apps/web/public/app/index.html");
 const mainJs = readProjectFile("apps/web/public/app/js/main.js");
 const css = readProjectFile("apps/web/public/app/phantom.css");
 
-const buildId = "phantom-live-20260706-28";
+const buildId = "phantom-live-20260706-29";
 
 assert(
   indexHtml.includes('<section class="flowmap is-map-open" data-map-section'),

@@ -4,17 +4,17 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-28";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-28";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-28";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-28";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-28";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-28";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-28";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-28";
-import { mountAgentTicker, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-28";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-28";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-28";
+} from "./store.js?v=phantom-live-20260706-29";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-29";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-29";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-29";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-29";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-29";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-29";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-29";
+import { mountAgentTicker, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-29";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-29";
+import { mountCompanion, setCompanionState, getChatSettings } from "./companion.js?v=phantom-live-20260706-29";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -511,7 +511,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-28";
+const POSE_VERSION = "phantom-live-20260706-29";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1132,7 +1132,7 @@ function renderConsole() {
   bindCommandForm();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
   mountAgentTicker($("[data-agent-ticker]"));
-  mountCompanion($("[data-chatbox] .chatbox-head"), { onMode: applyCompanionMode });
+  mountCompanion($("[data-chatbox] .chatbox-head"), { onSettings: applyChatSettings });
   renderChatLog();
 }
 
@@ -1164,12 +1164,11 @@ function renderChatLog() {
   });
   log.scrollTop = log.scrollHeight;
 }
-function applyCompanionMode(mode) {
+function applyChatSettings(settings = getChatSettings()) {
   const input = $("[data-command-input]");
   if (!input) return;
-  input.placeholder = mode === "build"
-    ? "Describe what you want built - I'll turn it into a plan and drafts..."
-    : "Ask PhantomForce anything...";
+  const detail = settings.detail === "full" ? "with context" : settings.detail === "sales" ? "sales-ready" : "direct";
+  input.placeholder = `Chat with PhantomForce - ${detail}, ${settings.speed}...`;
 }
 
 const CHAT_STARTERS = [
@@ -1178,14 +1177,13 @@ const CHAT_STARTERS = [
   { label: "Plan a campaign", run: "Draft a media brief for a new campaign" },
   { label: "Make an intake form", run: "Build a client intake form page" },
   { label: "Review my business", run: "What's my pipeline?" },
-  { label: "Start Build Mode", build: true },
 ];
 
 function starterHtml() {
   return `<div class="chat-start" data-chat-start>
-    <p class="chat-start-t">Build with Phantom.</p>
-    <p class="chat-start-s">Tell me what you want to create. I'll turn it into a plan, draft, and approval-ready next step.</p>
-    <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn ${st.build ? "is-build" : ""}" data-starter="${i}">${esc(st.label)}</button>`).join("")}</div>
+    <p class="chat-start-t">Chat with Phantom.</p>
+    <p class="chat-start-s">Ask for what you need. Phantom can plan, draft, organize, and prepare approval-ready next steps from one chat.</p>
+    <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn" data-starter="${i}">${esc(st.label)}</button>`).join("")}</div>
   </div>`;
 }
 
@@ -1194,12 +1192,6 @@ function bindStarters(log) {
     button.onclick = () => {
       const starter = CHAT_STARTERS[Number(button.dataset.starter)];
       if (!starter) return;
-      if (starter.build) {
-        setCompanionMode("build");
-        const input = $("[data-command-input]");
-        input?.focus();
-        return;
-      }
       runCommand(starter.run);
     };
   });
@@ -1298,7 +1290,9 @@ function speak(text, cls = "", emotionOverride = null) {
   const tick = () => {
     entry.text = text.slice(0, i);
     paintLast();
-    if (i++ < text.length) typeTimer = setTimeout(tick, 11 + Math.random() * 16);
+    const speed = getChatSettings().speed;
+    const delay = speed === "fast" ? 6 + Math.random() * 8 : speed === "careful" ? 18 + Math.random() * 20 : 11 + Math.random() * 16;
+    if (i++ < text.length) typeTimer = setTimeout(tick, delay);
     else {
       setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
       setCompanionState(emotion === "alert" ? "warning" : emotion === "happy" || emotion === "excited" ? "success" : "speaking");
@@ -1397,7 +1391,7 @@ function bindCommandForm() {
     setCommandFocusState(false);
     if (!input.value.trim()) {
       setGhostMood("idle", { emotion: "happy", ms: 1200 });
-      setCompanionState(companionMode() === "build" ? "building" : "idle");
+      setCompanionState("idle");
     }
   });
   form.addEventListener("submit", (e) => {

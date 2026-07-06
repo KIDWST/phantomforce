@@ -4202,14 +4202,43 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .pc-dot-err { background: var(--risk); box-shadow: 0 0 8px rgba(255, 77, 99, 0.6); animation: none; }
 .pc-label { font: 600 9px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
 .pc-caption { margin: 0; font-size: 12px; color: #9fc4b1; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.pc-mode {
-  flex: 0 0 auto; padding: 6px 14px; border-radius: 999px; cursor: pointer;
-  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); color: var(--dim);
-  font: 600 10.5px "DM Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase;
-  transition: border-color 0.2s, background 0.2s, color 0.2s;
+.pc-chat-pill {
+  flex: 0 0 auto; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid rgba(65, 255, 161, 0.35); background: rgba(65, 255, 161, 0.08); color: var(--neon);
+  font: 700 10px "DM Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase;
 }
-.pc-mode:hover { border-color: var(--line-strong); color: var(--ink); }
-.pc-mode.is-build { border-color: rgba(65, 255, 161, 0.55); background: rgba(65, 255, 161, 0.1); color: var(--neon); box-shadow: 0 0 16px rgba(65, 255, 161, 0.15); }
+.pc-settings-wrap { position: relative; flex: 0 0 auto; }
+.pc-settings-btn {
+  width: 34px; height: 34px; display: grid; place-items: center; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); color: #cfeeda;
+  font-size: 15px; line-height: 1; transition: border-color 0.2s, background 0.2s, color 0.2s, transform 0.16s;
+}
+.pc-settings-btn:hover,
+.pc-settings-btn:focus-visible,
+.pc-settings-btn[aria-expanded="true"] {
+  border-color: rgba(65, 255, 161, 0.55); background: rgba(65, 255, 161, 0.1); color: var(--neon);
+  outline: none; transform: translateY(-1px);
+}
+.pc-settings-panel {
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 30; width: min(300px, 78vw);
+  display: grid; gap: 10px; padding: 12px; border: 1px solid rgba(65, 255, 161, 0.24); border-radius: 16px;
+  background: rgba(4, 12, 9, 0.98); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.42), 0 0 34px rgba(65, 255, 161, 0.12);
+}
+.pc-settings-panel[hidden] { display: none; }
+.pc-setting-field { display: grid; gap: 6px; }
+.pc-setting-field span {
+  font: 700 9px "DM Mono", monospace; letter-spacing: 0.18em; text-transform: uppercase; color: var(--neon);
+}
+.pc-setting-field select {
+  width: 100%; border: 1px solid var(--line); border-radius: 10px; background: rgba(0, 0, 0, 0.28);
+  color: var(--ink); padding: 9px 10px; outline: none; font: 600 12.5px "Space Grotesk", sans-serif;
+}
+.pc-settings-panel p { margin: 0; color: var(--dim); font-size: 11.5px; line-height: 1.4; }
+.pc-settings-summary {
+  flex: 0 1 150px; min-width: 0; color: var(--dim-2);
+  font: 600 9px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
 .chat-start { padding: 6px 4px 10px; animation: msgIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .chat-start-t { margin: 0 0 3px; font: 600 16px "Space Grotesk", sans-serif; letter-spacing: 0; color: var(--ink); }
 .chat-start-s { margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--dim); max-width: 460px; }
@@ -4221,7 +4250,6 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   transition: border-color 0.2s, background 0.2s, transform 0.16s;
 }
 .chat-start-btn:hover { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.06); transform: translateY(-1px); }
-.chat-start-btn.is-build { border-color: rgba(65, 255, 161, 0.4); color: var(--neon); background: rgba(65, 255, 161, 0.06); }
 .chatbox-trust {
   margin: 0; padding: 0 15px 11px; display: flex; align-items: center; gap: 7px;
   font: 400 10.5px "DM Mono", monospace; letter-spacing: 0.02em; color: var(--dim-2);
@@ -4233,7 +4261,9 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .msg-body { max-width: 88%; }
   .pc { gap: 9px; }
   .pc-caption { display: none; }
-  .pc-mode { padding: 5px 10px; }
+  .pc-settings-summary { display: none; }
+  .pc-chat-pill { padding: 5px 9px; }
+  .pc-settings-btn { width: 32px; height: 32px; }
   .chat-start-grid { gap: 6px; }
   .chat-start-btn { flex: 1 1 45%; text-align: center; padding: 9px 8px; }
   .chatbox-trust { font-size: 9.5px; }
