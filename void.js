@@ -312,7 +312,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260705-10")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260705-21")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -494,6 +494,37 @@ function initRiskRadar() {
   tick();
 }
 
-function boot() { initConversation(); initEntity(); initRiskRadar(); }
+/* ---------------- ops feed: the night shift, reporting in ---------------- */
+/* One quiet line above the creed — the phantom's desks working while you watch.
+   Staged like the rest of the page's demo theater (the risk radar sets the
+   precedent); each line names a real desk the product ships. */
+function initOpsFeed() {
+  const el = document.querySelector("[data-ops]");
+  if (!el) return;
+  const FEED = [
+    ["Lead Hunter", "captured a new inquiry and drafted the reply"],
+    ["Booking Desk", "confirmed Saturday 3pm — reminder queued"],
+    ["Proposal Forge", "prepared quote #114 — waiting on your approval"],
+    ["Review Engine", "requested 2 reviews from happy clients"],
+    ["Media Factory", "rendered a 30s vertical cut for approval"],
+    ["Threat Watch", "blocked a phishing attempt on the inbox"],
+    ["Money Desk", "flagged an overdue invoice for follow-up"],
+    ["Night Shift", "cleared the inbox while you slept"],
+    ["Memory Keeper", "filed today's decisions — nothing forgotten"],
+  ];
+  let i = Math.floor(Math.random() * FEED.length);
+  const paint = () => {
+    const [who, what] = FEED[i % FEED.length];
+    i += 1;
+    el.innerHTML = `<i></i><b>${who}</b><span>${what}</span>`;
+    el.classList.remove("swap");
+    void el.offsetWidth;
+    el.classList.add("swap");
+  };
+  paint();
+  if (!reduceMotion) window.setInterval(() => { if (!document.hidden) paint(); }, 4400);
+}
+
+function boot() { initConversation(); initEntity(); initRiskRadar(); initOpsFeed(); }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
 else boot();
