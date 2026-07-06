@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260706-13";
+} from "./store.js?v=phantom-live-20260706-27";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -939,181 +939,258 @@ function renderToolSpineCards({ compact = false } = {}) {
 }
 
 /* ============================= WORKFORCE ============================= */
-const WORKER_SUBAGENTS = [
+// Seeded local roster until a real workforce API lands. This is capability
+// visibility only: no external calls, sends, posts, uploads, or executions.
+const WORKFORCE_EMPLOYEES = [
   {
-    parent: "code-intelligence",
-    name: "Repo Scout",
-    role: "Previews repo health checks and outdated dependency findings.",
-    status: "needs-approval",
-    task: "Waiting for owner approval before any repo pull or scan.",
-    capabilities: ["repo preview", "dependency review", "malware-check plan"],
-    risk: "high",
+    id: "maya-brooks",
+    name: "Maya Brooks",
+    title: "Client Success Operator",
+    department: "Client Success",
+    status: "available",
+    focus: "Keeps customer notes clean, catches follow-up gaps, and prepares owner-ready check-ins.",
+    skills: ["client care", "handoffs", "retention", "notes"],
+    completed: 42,
+    productivity: 94,
+    workload: 38,
+    response: "1.6m",
+    lastActivity: "Ready now",
+    employeeVisible: true,
   },
   {
-    parent: "media-engine",
-    name: "Content Brief Runner",
-    role: "Turns campaign ideas into draft briefs and asset checklists.",
-    status: "idle",
-    task: "Ready to draft content tasks without publishing anything.",
-    capabilities: ["briefs", "asset lists", "content queue"],
-    risk: "low",
+    id: "leo-grant",
+    name: "Leo Grant",
+    title: "Lead Research Specialist",
+    department: "Sales",
+    status: "working",
+    focus: "Researches prospects, enriches lead context, and drafts next-best outreach angles.",
+    skills: ["lead research", "prospect notes", "follow-up prep", "pipeline"],
+    completed: 57,
+    productivity: 91,
+    workload: 64,
+    response: "2.1m",
+    lastActivity: "2m ago",
+    employeeVisible: true,
   },
   {
-    parent: "automation-desk",
-    name: "Follow-Up Drafter",
-    role: "Prepares manual follow-up messages and next-step reminders.",
-    status: "ready",
-    task: "Ready to draft next-safe-actions for leads. No sends enabled.",
-    capabilities: ["follow-up drafts", "approval routing", "lead notes"],
-    risk: "medium",
+    id: "nina-cross",
+    name: "Nina Cross",
+    title: "Content Producer",
+    department: "Content",
+    status: "working",
+    focus: "Turns ideas into captions, content briefs, shot lists, and approval-ready drafts.",
+    skills: ["captions", "briefs", "campaigns", "content queue"],
+    completed: 36,
+    productivity: 89,
+    workload: 58,
+    response: "2.4m",
+    lastActivity: "5m ago",
+    employeeVisible: true,
   },
   {
-    parent: "operating-standards",
-    name: "Stale Tool Sweeper",
-    role: "Finds outdated tools and proposes retirement plans.",
-    status: "blocked",
-    task: "Blocked from removing anything until approval execution exists.",
-    capabilities: ["tool inventory", "retirement preview", "risk notes"],
-    risk: "high",
+    id: "marcus-vale",
+    name: "Marcus Vale",
+    title: "Website Technician",
+    department: "Websites",
+    status: "reviewing",
+    focus: "Prepares page changes, checks launch readiness, and flags anything that needs approval.",
+    skills: ["site edits", "forms", "launch checks", "copy"],
+    completed: 31,
+    productivity: 87,
+    workload: 52,
+    response: "3.0m",
+    lastActivity: "8m ago",
+    employeeVisible: false,
+  },
+  {
+    id: "ava-monroe",
+    name: "Ava Monroe",
+    title: "Scheduling Coordinator",
+    department: "Operations",
+    status: "available",
+    focus: "Organizes booking drafts, reminders, and handoff timing without touching calendars directly.",
+    skills: ["scheduling", "reminders", "handoffs", "ops"],
+    completed: 28,
+    productivity: 93,
+    workload: 34,
+    response: "1.9m",
+    lastActivity: "Ready now",
+    employeeVisible: true,
+  },
+  {
+    id: "eli-rhodes",
+    name: "Eli Rhodes",
+    title: "Finance Assistant",
+    department: "Finance",
+    status: "available",
+    focus: "Watches quote ranges, invoice readiness, unpaid items, and revenue follow-up opportunities.",
+    skills: ["pipeline", "quotes", "invoice prep", "retainers"],
+    completed: 24,
+    productivity: 86,
+    workload: 29,
+    response: "3.2m",
+    lastActivity: "Ready now",
+    employeeVisible: false,
+  },
+  {
+    id: "sofia-lane",
+    name: "Sofia Lane",
+    title: "Social Media Manager",
+    department: "Content",
+    status: "reviewing",
+    focus: "Packages social drafts, post ideas, and campaign calendars for owner approval.",
+    skills: ["social drafts", "platform fit", "calendar prep", "reviews"],
+    completed: 39,
+    productivity: 90,
+    workload: 47,
+    response: "2.7m",
+    lastActivity: "11m ago",
+    employeeVisible: true,
+  },
+  {
+    id: "theo-knight",
+    name: "Theo Knight",
+    title: "Security & Access Monitor",
+    department: "Security",
+    status: "available",
+    focus: "Reviews access posture, risky routes, exposed-key warnings, and safety checklists.",
+    skills: ["access checks", "risk notes", "route review", "security"],
+    completed: 33,
+    productivity: 92,
+    workload: 41,
+    response: "2.5m",
+    lastActivity: "Ready now",
+    employeeVisible: false,
+  },
+  {
+    id: "iris-cole",
+    name: "Iris Cole",
+    title: "Proposal Writer",
+    department: "Sales",
+    status: "available",
+    focus: "Drafts quote language, scope notes, and proposal packets that still need owner approval.",
+    skills: ["proposal drafts", "offer framing", "scope", "pricing notes"],
+    completed: 45,
+    productivity: 95,
+    workload: 44,
+    response: "1.8m",
+    lastActivity: "Ready now",
+    employeeVisible: true,
+  },
+  {
+    id: "roman-hayes",
+    name: "Roman Hayes",
+    title: "Operations Supervisor",
+    department: "Operations",
+    status: "working",
+    focus: "Keeps departments coordinated and turns one Phantom request into the right internal route.",
+    skills: ["routing", "quality checks", "ops map", "priorities"],
+    completed: 61,
+    productivity: 96,
+    workload: 66,
+    response: "1.4m",
+    lastActivity: "1m ago",
+    employeeVisible: false,
+  },
+  {
+    id: "clara-min",
+    name: "Clara Min",
+    title: "Workflow Coordinator",
+    department: "Operations",
+    status: "reviewing",
+    focus: "Plans repeatable workflows and safe handoffs, then parks execution behind approval gates.",
+    skills: ["workflow drafts", "handoffs", "repeat tasks", "approval gates"],
+    completed: 30,
+    productivity: 88,
+    workload: 46,
+    response: "2.9m",
+    lastActivity: "13m ago",
+    employeeVisible: false,
+  },
+  {
+    id: "owen-price",
+    name: "Owen Price",
+    title: "Media Systems Operator",
+    department: "Content",
+    status: "available",
+    focus: "Prepares image and video generation plans, credit estimates, and asset-library organization.",
+    skills: ["media lab", "credit checks", "asset library", "render prep"],
+    completed: 27,
+    productivity: 84,
+    workload: 32,
+    response: "3.5m",
+    lastActivity: "Ready now",
+    employeeVisible: true,
   },
 ];
+
+const WORKFORCE_FILTERS = ["All", "Operations", "Sales", "Content", "Websites", "Finance", "Security", "Client Success"];
 
 function workerInitials(name = "") {
   return String(name).split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "PF";
 }
 
-function workerStatusFromTool(tool) {
-  if (["setup-ready", "standby"].includes(tool.mode)) return "idle";
-  if (tool.mode === "owner-controlled") return "needs-approval";
-  if (tool.mode === "blocked" || tool.status === "blocked") return "blocked";
-  return "ready";
-}
-
 function workerStatusLabel(status) {
   return ({
-    ready: "Ready",
-    working: "Drafting",
-    idle: "Idle",
-    blocked: "Blocked",
-    "needs-approval": "Needs approval",
-    human: "Human",
+    available: "Available",
+    working: "Working",
+    reviewing: "Reviewing",
+    "waiting-approval": "Waiting approval",
+    offline: "Offline",
   })[status] || title(status);
 }
 
-function workerRiskLabel(risk) {
-  return ({ low: "Low risk", medium: "Needs sign-off", high: "High risk" })[risk] || title(risk);
-}
-
-function workerTypeLabel(type) {
-  return ({ bot: "Bot worker", human: "Human", agent: "Agent", subagent: "Subagent", system: "System" })[type] || title(type);
-}
-
 function buildWorkerRoster() {
-  const tools = store.state.toolSpine || [];
   const activity = store.state.activity || [];
-  const owner = {
-    worker_id: "human-owner-operator",
-    display_name: "Jordan",
-    worker_type: "human",
-    role: "Owner operator and final approval layer.",
-    parent_agent_id: null,
-    avatar: { initials: "JO", tone: "human" },
-    status: "human",
-    current_task: "Final decisions, approvals, and client-facing control.",
-    capabilities: ["owner approval", "client judgment", "final control"],
-    tools_available: ["PhantomForce cockpit"],
-    risk_level: "low",
-    last_active_at: "Approval layer",
-    has_activity: true,
-    approvals_required: 0,
-    can_delegate: true,
-    can_create_subagents: false,
-    execution_enabled: false,
-    preview_only: false,
-    capacity_used: 0,
-    capacity_total: 1,
-    client_visible: true,
-  };
-  const bots = tools.map((tool) => {
-    const status = workerStatusFromTool(tool);
-    const highRisk = /code|gateway|brain|standards|process|private|model/i.test(`${tool.id} ${tool.internal} ${tool.role}`);
+  const pendingApprovals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
+  return WORKFORCE_EMPLOYEES.map((employee) => {
     const recent = activity.find((entry) =>
-      String(entry.who || "").toLowerCase() === String(tool.worker || "").toLowerCase()
-      || String(entry.text || "").toLowerCase().includes(String(tool.worker || "").toLowerCase()));
+      String(entry.who || "").toLowerCase().includes(employee.name.toLowerCase())
+      || String(entry.text || "").toLowerCase().includes(employee.department.toLowerCase()));
+    const waitingOnApproval = pendingApprovals > 0 && ["iris-cole", "sofia-lane", "marcus-vale"].includes(employee.id);
     return {
-      worker_id: `bot-${tool.id}`,
-      display_name: tool.worker || tool.name,
-      worker_type: "bot",
-      role: tool.role,
-      parent_agent_id: null,
-      avatar: { initials: workerInitials(tool.worker || tool.name), tone: status === "needs-approval" ? "approval" : status },
-      status,
-      current_task: tool.activity || tool.ownerControl || "Ready for owner-directed work.",
-      capabilities: [tool.name, tool.internal, statusLabel(tool.mode)].filter(Boolean).slice(0, 4),
-      tools_available: [tool.path || "Private backend", tool.name].filter(Boolean),
-      risk_level: highRisk || status === "needs-approval" ? "medium" : "low",
-      last_active_at: recent ? ago(recent.at) : "No runs yet",
+      ...employee,
+      worker_id: employee.id,
+      display_name: employee.name,
+      role: employee.title,
+      current_task: employee.focus,
+      capabilities: employee.skills,
+      status: waitingOnApproval ? "waiting-approval" : employee.status,
+      avatar: { initials: workerInitials(employee.name), tone: waitingOnApproval ? "waiting-approval" : employee.status },
+      last_active_at: recent ? ago(recent.at) : employee.lastActivity,
       has_activity: !!recent,
-      approvals_required: status === "needs-approval" || tool.mode === "setup-ready" ? 1 : 0,
-      can_delegate: status !== "blocked",
-      can_create_subagents: false,
-      execution_enabled: false,
-      preview_only: true,
-      capacity_used: 0,
-      capacity_total: 3,
-      client_visible: tool.visibleToClients === true,
+      approvals_required: waitingOnApproval ? pendingApprovals : 0,
+      client_visible: employee.employeeVisible !== false,
     };
   });
-  const subagents = WORKER_SUBAGENTS.map((sub) => ({
-    worker_id: `subagent-${sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
-    display_name: sub.name,
-    worker_type: "subagent",
-    role: sub.role,
-    parent_agent_id: `bot-${sub.parent}`,
-    avatar: { initials: workerInitials(sub.name), tone: sub.status },
-    status: sub.status,
-    current_task: sub.task,
-    capabilities: sub.capabilities,
-    tools_available: ["Preview lane only"],
-    risk_level: sub.risk,
-    last_active_at: "No runs yet",
-    has_activity: false,
-    approvals_required: sub.status === "needs-approval" || sub.status === "blocked" ? 1 : 0,
-    can_delegate: false,
-    can_create_subagents: false,
-    execution_enabled: false,
-    preview_only: true,
-    capacity_used: 0,
-    capacity_total: 1,
-    client_visible: false,
-  }));
-  return [owner, ...bots, ...subagents];
 }
 
 function workerMatchesFilter(worker) {
   if (workerUi.filter === "all") return true;
-  if (workerUi.filter === "bots") return worker.worker_type !== "human";
-  if (workerUi.filter === "humans") return worker.worker_type === "human";
-  if (workerUi.filter === "subagents") return worker.worker_type === "subagent";
-  if (workerUi.filter === "attention") return worker.status === "blocked" || worker.status === "needs-approval";
-  return worker.status === workerUi.filter;
+  if (workerUi.filter === "approval") return worker.status === "waiting-approval";
+  return worker.department.toLowerCase().replace(/\s+/g, "-") === workerUi.filter;
 }
 
 function workerSortScore(worker) {
-  if (worker.worker_type === "human") return 0;
-  return ({ "needs-approval": 1, blocked: 2, ready: 3, working: 3, idle: 4 })[worker.status] || 5;
+  return ({ "waiting-approval": 0, working: 1, reviewing: 2, available: 3, offline: 4 })[worker.status] || 5;
 }
 
 function workerPreviewTitle(kind, workerName) {
-  if (kind === "subagent") return `Specialist handoff — ${workerName}`;
-  if (kind === "retire") return `Retirement proposal — ${workerName}`;
-  return `Delegation preview — ${workerName}`;
+  if (kind === "safety") return `Approval rules - ${workerName}`;
+  return `Work route - ${workerName}`;
 }
 
-function workerPreviewSteps(kind) {
-  if (kind === "subagent") return ["Show which specialist Phantom would assign.", "Confirm allowed tools, limits, and tenant scope.", "Hold for owner approval before any new helper lane exists."];
-  if (kind === "retire") return ["List what the worker owns today.", "Show replacement or pause impact.", "Hold for owner approval before anything is retired."];
-  return ["Define the outcome.", "Confirm allowed tools and limits.", "Send to approvals only after a real execution lane exists."];
+function workerPreviewSteps(worker, kind) {
+  if (kind === "safety") return [
+    `${worker.display_name} can prepare, draft, research, organize, and recommend.`,
+    "External moves like email, posting, uploads, deploys, payments, or client-visible changes still return to approval.",
+    "Phantom shows the owner what changed before anything leaves the workspace.",
+  ];
+  return [
+    "You tell Phantom AI the outcome you want.",
+    `Phantom routes the right part of the work to ${worker.display_name} in ${worker.department}.`,
+    "The employee prepares the work and brings important decisions back to the owner.",
+  ];
 }
 
 function renderWorkerPreview(worker, kind = "delegate") {
@@ -1125,53 +1202,49 @@ function renderWorkerPreview(worker, kind = "delegate") {
         <h4>${esc(workerPreviewTitle(kind, name))}</h4>
       </div>
       <ol>
-        ${workerPreviewSteps(kind).map((step) => `<li>${esc(step)}</li>`).join("")}
+        ${workerPreviewSteps(worker, kind).map((step) => `<li>${esc(step)}</li>`).join("")}
       </ol>
-      <p class="worker-preview-safe">Preview only — nothing was created, queued, executed, sent, scanned, pulled, retired, or deployed.</p>
+      <p class="worker-preview-safe">Visibility only - nothing was sent, posted, uploaded, charged, deployed, or exposed.</p>
       <div class="worker-actions">
         <button class="btn" data-act="worker-preview-close">Close</button>
-        <button class="btn btn-quiet" disabled title="Execution lane not built yet">Send to Approvals</button>
+        <button class="btn btn-quiet" disabled title="Approval-gated by design">Approval first</button>
       </div>
     </section>`;
 }
 
 function workerMeshTone(worker) {
-  if (worker.worker_type === "human") return "human";
-  if (worker.status === "blocked") return "blocked";
-  if (worker.status === "needs-approval") return "approval";
-  if (worker.status === "idle") return "idle";
+  if (worker.status === "waiting-approval") return "approval";
+  if (worker.status === "offline") return "blocked";
+  if (worker.status === "reviewing") return "idle";
   if (worker.has_activity) return "live";
   return "ready";
 }
 
 function workerMeshGroup(worker) {
-  const text = `${worker.worker_id} ${worker.display_name} ${worker.role} ${worker.capabilities?.join(" ") || ""}`.toLowerCase();
-  if (/n8n|automation|workflow/.test(text)) return "automation";
-  if (/ruflo|loop|squad|swarm|handoff/.test(text)) return "loop";
-  if (/media|video|content/.test(text)) return "media";
-  if (/code|repo|build|spec/.test(text)) return "build";
-  if (/memory|vault|context/.test(text)) return "memory";
-  if (/gateway|access|security|sentinel|scanner/.test(text)) return "protect";
-  if (/model|brain|phantom/.test(text)) return "brain";
+  const dept = String(worker.department || "").toLowerCase();
+  if (/content/.test(dept)) return "media";
+  if (/websites/.test(dept)) return "build";
+  if (/security/.test(dept)) return "protect";
+  if (/finance/.test(dept)) return "memory";
+  if (/sales/.test(dept)) return "brain";
   return "ops";
 }
 
 function renderWorkerMesh(workers) {
-  const topWorkers = workers.filter((worker) => worker.worker_type !== "subagent");
-  const rings = topWorkers.map((worker, index) => {
+  const rings = workers.map((worker, index) => {
     const tone = workerMeshTone(worker);
     const group = workerMeshGroup(worker);
     const style = `--node-index:${index}; --node-delay:${(index % 7) * 0.28}s`;
     return `
-      <button class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)}" style="${style}" data-act="worker-filter" data-filter="${esc(worker.worker_type === "human" ? "humans" : worker.status)}" title="${esc(worker.display_name)}">
+      <button class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)}" style="${style}" data-act="worker-filter" data-filter="${esc(worker.department.toLowerCase().replace(/\s+/g, "-"))}" title="${esc(worker.display_name)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
-        <i>${esc(worker.status === "human" ? "approval" : worker.status)}</i>
+        <i>${esc(worker.department)}</i>
       </button>`;
   }).join("");
-  const connected = topWorkers.filter((worker) => worker.status !== "blocked").length;
-  const gated = topWorkers.filter((worker) => worker.status === "needs-approval" || worker.status === "idle").length;
-  const blocked = topWorkers.filter((worker) => worker.status === "blocked").length;
+  const online = workers.filter((worker) => worker.status !== "offline").length;
+  const departments = new Set(workers.map((worker) => worker.department)).size;
+  const approvals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   return `
     <section class="worker-mesh" aria-label="Worker operations mesh">
       <div class="worker-mesh-stage">
@@ -1191,21 +1264,21 @@ function renderWorkerMesh(workers) {
         </div>
       </div>
       <div class="worker-mesh-readout">
-        <span><b>${connected}</b> wired lanes</span>
-        <span><b>${gated}</b> gated/setup</span>
-        <span><b>${blocked}</b> blocked</span>
+        <span><b>${online}</b> online employees</span>
+        <span><b>${departments}</b> departments</span>
+        <span><b>${approvals}</b> approvals waiting</span>
       </div>
     </section>`;
 }
 
-function renderWorkerCard(worker, subagents = [], options = {}) {
-  const showActions = options.actions !== false && worker.worker_type !== "human";
-  const capPct = Math.max(0, Math.min(100, Math.round((worker.capacity_used / Math.max(1, worker.capacity_total)) * 100)));
+function renderWorkerCard(worker, _unused = [], options = {}) {
+  const showActions = options.actions !== false;
+  const capPct = Math.max(0, Math.min(100, Math.round(worker.workload || 0)));
   const previewOpen = workerUi.preview?.workerId === worker.worker_id;
   const previewExpanded = (kind) => previewOpen && workerUi.preview?.kind === kind;
   const meshTone = workerMeshTone(worker);
   return `
-    <article class="worker-card worker-${esc(worker.status)} worker-type-${esc(worker.worker_type)}" role="listitem">
+    <article class="worker-card worker-${esc(worker.status)}" role="listitem">
       <div class="worker-card-visual worker-card-visual-${esc(meshTone)}" aria-hidden="true">
         <span></span><span></span><span></span><span></span>
       </div>
@@ -1213,113 +1286,113 @@ function renderWorkerCard(worker, subagents = [], options = {}) {
         <span class="wf-avatar wf-avatar-${esc(worker.avatar?.tone || worker.status)}">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <div class="worker-id">
           <b>${esc(worker.display_name)}</b>
-          <i>${esc(workerTypeLabel(worker.worker_type))} · ${esc(worker.role)}</i>
+          <i>${esc(worker.role)}</i>
         </div>
         <span class="worker-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
       </div>
+      <div class="worker-dept">${esc(worker.department)}</div>
       <p class="worker-task">${esc(worker.current_task)}</p>
       <div class="worker-capacity">
-        <span><b>${worker.capacity_used}/${worker.capacity_total}</b> capacity slots in use — nothing active</span>
+        <span><b>${capPct}%</b> workload - ${esc(worker.response)} avg response</span>
         <i style="--worker-cap:${capPct}%"></i>
+      </div>
+      <div class="worker-productivity">
+        <span><b>${worker.productivity}</b> productivity</span>
+        <span><b>${worker.completed}</b> completed tasks</span>
+        <span>${esc(worker.last_active_at)}</span>
       </div>
       <div class="worker-tags">
         ${worker.capabilities.slice(0, 4).map((tag) => `<span>${esc(tag)}</span>`).join("")}
       </div>
-      ${subagents.length ? `
-        <div class="worker-subagents">
-          <small>Subagents</small>
-          ${subagents.map((sub) => `<span class="worker-subchip worker-subchip-${esc(sub.status)}">${esc(sub.display_name)}</span>`).join("")}
-        </div>` : ""}
       <div class="worker-facts">
-        <span>${esc(workerRiskLabel(worker.risk_level))}</span>
-        <span>${worker.approvals_required ? "Waiting on your approval" : "Nothing waiting on you"}</span>
-        <span>${worker.execution_enabled ? "Execution on" : "Preview only — can't act alone"}</span>
-        <span>${esc(worker.last_active_at)}</span>
+        <span>${worker.approvals_required ? "Waiting on approval" : "Approval-safe"}</span>
+        <span>Prepares work only</span>
+        <span>No outside action alone</span>
       </div>
-      ${worker.worker_type === "human" ? `<p class="worker-human-note">You're the approval layer. Everything routes through you.</p>` : ""}
       ${showActions ? `
         <div class="worker-actions">
-          <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="delegate" aria-expanded="${previewExpanded("delegate") ? "true" : "false"}">Preview a delegation</button>
-          <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="subagent" aria-expanded="${previewExpanded("subagent") ? "true" : "false"}">Preview handoff</button>
-          <button class="btn btn-quiet" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="retire" aria-expanded="${previewExpanded("retire") ? "true" : "false"}">Plan retirement</button>
+          <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="route" aria-expanded="${previewExpanded("route") ? "true" : "false"}">View routing</button>
+          <button class="btn btn-quiet" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="safety" aria-expanded="${previewExpanded("safety") ? "true" : "false"}">Approval rules</button>
         </div>` : ""}
       ${previewOpen ? renderWorkerPreview(worker, workerUi.preview.kind) : ""}
     </article>`;
 }
 
-function renderWorkforce(el, rerender) {
-  const workers = buildWorkerRoster();
-  const clientWorkers = workers.filter((worker) => worker.client_visible || worker.worker_type === "human");
-  if (!isAdmin()) {
-    const active = clientWorkers.filter((worker) => worker.status === "ready" || worker.worker_type === "human").length;
-    const inflight = visible(store.state.media).filter((x) => x.status !== "delivered").length + visible(store.state.sites).filter((x) => x.status === "draft").length;
-    el.innerHTML = `
-      <div class="stat-row">
-        <div class="stat"><span>Active support</span><b>${active}</b><i>ready or active</i></div>
-        <div class="stat"><span>Deliverables in progress</span><b>${inflight}</b><i>moving through the pipeline</i></div>
-        <div class="stat"><span>Approvals waiting</span><b>${visible(store.state.approvals).filter((a) => a.status === "pending").length}</b><i>real queue only</i></div>
-      </div>
-      <h3 class="ws-subhead">What Phantom is handling</h3>
-      <div class="worker-grid worker-grid-client" role="list">
-        ${clientWorkers.map((worker) => renderWorkerCard({ ...worker, capabilities: worker.capabilities.slice(0, 3) }, [], { actions: false })).join("")}
-      </div>
-      <p class="ws-note">Phantom prepares the work. Anything that touches the outside world waits for approval first.</p>`;
-    return;
-  }
-  const visibleWorkers = workers.filter(workerMatchesFilter).sort((a, b) => workerSortScore(a) - workerSortScore(b));
-  const subByParent = workers.reduce((acc, worker) => {
-    if (worker.parent_agent_id) (acc[worker.parent_agent_id] ||= []).push(worker);
-    return acc;
-  }, {});
-  const botCount = workers.filter((worker) => worker.worker_type !== "human").length;
-  const humanCount = workers.filter((worker) => worker.worker_type === "human").length;
-  const readyCount = workers.filter((worker) => worker.status === "ready" || worker.worker_type === "human").length;
-  const attentionCount = workers.filter((worker) => worker.status === "blocked" || worker.status === "needs-approval").length;
-  const filters = [
-    ["all", "All"],
-    ["bots", "Bots"],
-    ["humans", "Humans"],
-    ["subagents", "Subagents"],
-    ["ready", "Ready"],
-    ["idle", "Idle"],
-    ["attention", "Waiting on you"],
+function renderWorkforceFlow() {
+  const steps = [
+    ["Ask Phantom", "You ask for an outcome, not a worker assignment."],
+    ["Route Work", "Phantom chooses the right department and employee behind the scenes."],
+    ["Prepare Draft", "The employee researches, organizes, writes, checks, or packages the work."],
+    ["Approve Action", "Anything external comes back to the owner before it sends, posts, uploads, charges, or deploys."],
   ];
+  return `
+    <section class="worker-flow-card">
+      <div>
+        <p class="worker-kicker">How work moves</p>
+        <h4>Phantom routes the work. You approve the moves.</h4>
+      </div>
+      <div class="worker-flow-steps">
+        ${steps.map(([titleText, body]) => `<article><b>${esc(titleText)}</b><span>${esc(body)}</span></article>`).join("")}
+      </div>
+    </section>`;
+}
+
+function renderWorkforce(el, rerender) {
+  const allWorkers = buildWorkerRoster();
+  const workers = isAdmin() ? allWorkers : allWorkers.filter((worker) => worker.client_visible);
+  const validFilters = ["all", "approval", ...WORKFORCE_FILTERS.slice(1).map((dept) => dept.toLowerCase().replace(/\s+/g, "-"))];
+  if (!validFilters.includes(workerUi.filter)) workerUi.filter = "all";
+  const visibleWorkers = workers.filter(workerMatchesFilter).sort((a, b) => workerSortScore(a) - workerSortScore(b));
+  const pendingApprovals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
+  const realPrepared = [
+    ...visible(store.state.leads),
+    ...visible(store.state.proposals).filter((x) => x.status === "draft"),
+    ...visible(store.state.media).filter((x) => x.status !== "delivered"),
+    ...visible(store.state.sites).filter((x) => x.status === "draft" || x.status === "publish-ready"),
+    ...visible(store.state.bookings).filter((x) => x.status !== "confirmed"),
+  ].length;
+  const onlineCount = workers.filter((worker) => worker.status !== "offline").length;
+  const departmentCount = new Set(workers.map((worker) => worker.department)).size;
+  const avgProductivity = Math.round(workers.reduce((sum, worker) => sum + worker.productivity, 0) / Math.max(1, workers.length));
+  const filters = [["all", "All"], ...WORKFORCE_FILTERS.slice(1).map((dept) => [dept.toLowerCase().replace(/\s+/g, "-"), dept]), ["approval", "Approval"]];
   el.innerHTML = `
     <section class="workers-hero">
       <div>
-        <p class="worker-kicker">Workers</p>
-        <h3>Your team, at a glance</h3>
-        <p>Every worker here is real, scoped, and waits for your go-ahead. Nothing runs, sends, scans, pulls, retires, or spends without approval.</p>
+        <p class="worker-kicker">Workforce online</p>
+        <h3>PhantomForce Employees</h3>
+        <p>Your PhantomForce workforce is always organizing, researching, drafting, reviewing, and preparing work behind the scenes. Tell Phantom AI what you need; Phantom routes it to the right employee.</p>
       </div>
       <div class="worker-scale">
-        <span><b>${workers.length}</b> on the roster</span>
+        <span><b>${onlineCount}</b> active workers</span>
+        <span><b>${departmentCount}</b> departments online</span>
       </div>
     </section>
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
     ${renderWorkerMesh(workers)}
     <div class="worker-metrics">
-      <div><span>Total workers</span><b>${workers.length}</b></div>
-      <div><span>Bot workers</span><b>${botCount}</b></div>
-      <div><span>Humans</span><b>${humanCount}</b></div>
-      <div><span>Ready</span><b>${readyCount}</b></div>
-      <div><span>Waiting on you</span><b>${attentionCount}</b></div>
+      <div><span>Active Employees</span><b>${onlineCount}</b></div>
+      <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
+      <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
+      <div><span>Productivity</span><b>${avgProductivity}%</b></div>
+      <div><span>Departments Online</span><b>${departmentCount}</b></div>
     </div>
+    ${renderWorkforceFlow()}
     <div class="worker-filter-row">
       ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
     </div>
     <div class="worker-grid" role="list">
-      ${visibleWorkers.map((worker) => renderWorkerCard(worker, subByParent[worker.worker_id] || [])).join("") || empty("No workers match this filter.")}
+      ${visibleWorkers.map((worker) => renderWorkerCard(worker, [], { actions: isAdmin() })).join("") || empty("No employees match this filter.")}
     </div>
     <section class="worker-enterprise">
       <div class="worker-safety-list">
-        <span>Subagent creation: preview-only</span>
-        <span>Repo pulls and malware scans: approval-gated</span>
-        <span>Deletes, deploys, sends, billing: blocked here</span>
+        <span>Employees prepare work; Phantom AI assigns the lane automatically.</span>
+        <span>Owner approval is required for sends, posts, uploads, payments, invoices, and deploys.</span>
+        <span>Internal tool names stay behind the curtain until a customer-facing feature is ready.</span>
       </div>
       <div>
-        <p class="worker-kicker">Future scale</p>
-        <h4>Phantom assigns capacity as the business grows.</h4>
-        <p>We set the base operating model. Phantom routes work to the right internal lane as needed, while clients see clear outcomes instead of worker setup screens.</p>
+        <p class="worker-kicker">Approval-first operating model</p>
+        <h4>The team can prepare almost anything. Only the owner can release it.</h4>
+        <p>This page is visibility and trust: it shows who is preparing the work, what department owns it, and where approval gates protect the business.</p>
       </div>
     </section>`;
   bindActions(el, {
@@ -1446,7 +1519,7 @@ export const WORKSPACE_DEFS = {
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
   memory: { title: "Memory", kicker: "Local context database", render: renderMemory },
-  workforce: { title: "Workers", kicker: "Agents, humans, and subagents", render: renderWorkforce },
+  workforce: { title: "Employees", kicker: "Workforce online", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
@@ -1463,7 +1536,6 @@ export function missionWidgets() {
   const sec = visible(store.state.security)[0];
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
   const bks = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
-  const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
   const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "standby", "gated", "sandbox", "setup-ready", "planning", "available", "owner-controlled"].includes(tool.mode)).length;
 
   const w = [
@@ -1475,7 +1547,7 @@ export function missionWidgets() {
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
     { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Workers", stat: `${activeTools || activeAgents} active`, sub: isAdmin() ? "bots · humans · subagents" : "on your account", alert: false },
+    { id: "workforce", icon: "⬢", title: "Employees", stat: `${WORKFORCE_EMPLOYEES.length} online`, sub: isAdmin() ? `${activeTools} internal lanes` : "your support team", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
