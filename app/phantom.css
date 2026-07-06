@@ -3860,3 +3860,73 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 @media (prefers-reduced-motion: reduce) {
   .buddy-say.pop { animation: none !important; }
 }
+
+/* ============================================================= */
+/* ========  PHANTOM PRESENCE — the companion in the chat  ===== */
+/* ============================================================= */
+.pc { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; }
+.pc-avatar {
+  flex: 0 0 auto; display: block; border-radius: 50%; cursor: pointer;
+  background: radial-gradient(circle at 50% 40%, rgba(65, 255, 161, 0.12), rgba(0, 0, 0, 0.25) 70%);
+  box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.28), 0 0 14px rgba(65, 255, 161, 0.18);
+  transition: box-shadow 0.3s ease;
+}
+.pc[data-state="thinking"] .pc-avatar,
+.pc[data-state="building"] .pc-avatar { animation: pcThink 1.6s ease-in-out infinite; }
+.pc[data-state="speaking"] .pc-avatar,
+.pc[data-state="success"] .pc-avatar { box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.45), 0 0 22px rgba(65, 255, 161, 0.4); }
+.pc[data-state="warning"] .pc-avatar { box-shadow: inset 0 0 0 1px rgba(255, 209, 102, 0.5), 0 0 20px rgba(255, 209, 102, 0.3); }
+.pc[data-state="error"] .pc-avatar,
+.pc[data-state="paused"] .pc-avatar { box-shadow: inset 0 0 0 1px rgba(255, 77, 99, 0.5), 0 0 20px rgba(255, 77, 99, 0.28); }
+@keyframes pcThink { 50% { box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.5), 0 0 26px rgba(65, 255, 161, 0.42); } }
+.pc-meta { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.pc-title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pc-title b { font: 600 13.5px "Space Grotesk", sans-serif; letter-spacing: 0.01em; color: var(--ink); }
+.pc-dot { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
+.pc-dot-ok   { background: var(--neon); box-shadow: 0 0 8px var(--neon); animation: livePulse 2.6s ease-in-out infinite; }
+.pc-dot-warn { background: var(--warn); box-shadow: 0 0 8px rgba(255, 209, 102, 0.6); animation: none; }
+.pc-dot-err  { background: var(--risk); box-shadow: 0 0 8px rgba(255, 77, 99, 0.6); animation: none; }
+.pc-label { font: 600 9px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); white-space: nowrap; }
+.pc-caption { margin: 0; font-size: 12px; color: #9fc4b1; line-height: 1.35; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pc-mode {
+  flex: 0 0 auto; padding: 6px 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); color: var(--dim);
+  font: 600 10.5px "DM Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase;
+  transition: border-color 0.2s, background 0.2s, color 0.2s;
+}
+.pc-mode:hover { border-color: var(--line-strong); color: var(--ink); }
+.pc-mode.is-build { border-color: rgba(65, 255, 161, 0.55); background: rgba(65, 255, 161, 0.1); color: var(--neon); box-shadow: 0 0 16px rgba(65, 255, 161, 0.15); }
+
+/* ---- empty-state: Phantom invites the first move ---- */
+.chat-start { padding: 6px 4px 10px; animation: msgIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.chat-start-t { margin: 0 0 3px; font: 600 16px "Space Grotesk", sans-serif; letter-spacing: -0.015em; color: var(--ink); }
+.chat-start-s { margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--dim); max-width: 460px; }
+.chat-start-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+.chat-start-btn {
+  padding: 9px 14px; border-radius: 11px; cursor: pointer; text-align: left;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.025); color: #cfeeda;
+  font: 500 12.5px "Space Grotesk", sans-serif;
+  transition: border-color 0.2s, background 0.2s, transform 0.16s;
+}
+.chat-start-btn:hover { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.06); transform: translateY(-1px); }
+.chat-start-btn.is-build { border-color: rgba(65, 255, 161, 0.4); color: var(--neon); background: rgba(65, 255, 161, 0.06); }
+
+/* ---- trust line: approval-first, stated quietly ---- */
+.chatbox-trust {
+  margin: 0; padding: 0 15px 11px; display: flex; align-items: center; gap: 7px;
+  font: 400 10.5px "DM Mono", monospace; letter-spacing: 0.02em; color: var(--dim-2);
+}
+.chatbox-trust span { color: rgba(65, 255, 161, 0.55); font-size: 12px; }
+
+/* ---- responsive: companion compresses, never covers ---- */
+@media (max-width: 720px) {
+  .pc { gap: 9px; }
+  .pc-caption { display: none; }
+  .pc-mode { padding: 5px 10px; }
+  .chat-start-grid { gap: 6px; }
+  .chat-start-btn { flex: 1 1 45%; text-align: center; padding: 9px 8px; }
+  .chatbox-trust { font-size: 9.5px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pc-dot-ok, .pc[data-state="thinking"] .pc-avatar, .pc[data-state="building"] .pc-avatar, .chat-start { animation: none !important; }
+}

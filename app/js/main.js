@@ -4,16 +4,16 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-16";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-16";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-16";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-16";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-16";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-16";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-16";
-import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260706-16";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-16";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260706-16";
+} from "./store.js?v=phantom-live-20260706-17";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-17";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-17";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-17";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-17";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-17";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-17";
+import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260706-17";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-17";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-17";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -464,7 +464,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-16";
+const POSE_VERSION = "phantom-live-20260706-17";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1062,7 +1062,7 @@ function renderConsole() {
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
   mountAgentTicker($("[data-agent-ticker]"));
   mountAgentConsole($("[data-agentops]"));
-  mountHeroTicker($("[data-hero-ticker]"));
+  mountCompanion($("[data-chatbox] .chatbox-head"), { onMode: applyCompanionMode });
   renderChatLog();
 }
 
@@ -1080,14 +1080,54 @@ function msgHtml(m, i) {
 function renderChatLog() {
   const log = chatLogEl();
   if (!log) return;
-  log.innerHTML = chatHistory.map(msgHtml).join("");
+  log.innerHTML = chatHistory.map(msgHtml).join("") + (chatHistory.length <= 1 ? starterHtml() : "");
   log.querySelectorAll(".msg").forEach((el, i) => { const t = el.querySelector(".msg-text"); if (t) t.textContent = chatHistory[i]?.text || ""; });
+  bindStarters(log);
   bindCardRemovers(log, (entryIndex, cardIndex) => {
     const entry = chatHistory[entryIndex];
     if (entry?.cards) { entry.cards.splice(cardIndex, 1); renderChatLog(); }
   });
   log.scrollTop = log.scrollHeight;
 }
+/* Build mode: an honest planning entry — reshapes the composer and presence.
+   No fake execution: commands still flow through the same approval-gated operator. */
+function applyCompanionMode(mode) {
+  const input = $("[data-command-input]");
+  if (input) input.placeholder = mode === "build"
+    ? "Describe what you want built — I'll turn it into a plan and drafts…"
+    : "Ask PhantomForce anything…";
+}
+
+/* empty-state starters: Phantom invites the first move */
+const CHAT_STARTERS = [
+  { label: "Build a landing page", run: "Build a landing page for my business" },
+  { label: "Create a proposal",    run: "Draft a proposal for a new client" },
+  { label: "Plan a campaign",      run: "Draft a media brief for a new campaign" },
+  { label: "Make an intake form",  run: "Build a client intake form page" },
+  { label: "Review my business",   run: "What's my pipeline?" },
+  { label: "Start Build Mode",     build: true },
+];
+function starterHtml() {
+  return `<div class="chat-start" data-chat-start>
+    <p class="chat-start-t">Build with Phantom.</p>
+    <p class="chat-start-s">Tell me what you want to create. I'll turn it into a plan, draft, and approval-ready next step.</p>
+    <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn ${st.build ? "is-build" : ""}" data-starter="${i}">${esc(st.label)}</button>`).join("")}</div>
+  </div>`;
+}
+function bindStarters(log) {
+  log.querySelectorAll("[data-starter]").forEach((b) => b.onclick = () => {
+    const st = CHAT_STARTERS[+b.dataset.starter];
+    if (!st) return;
+    if (st.build) {
+      setCompanionMode("build");
+      const input = $("[data-command-input]");
+      if (input) { input.focus(); }
+      return;
+    }
+    runCommand(st.run);
+  });
+}
+
 function chatTypingOn() {
   const log = chatLogEl();
   if (!log || log.querySelector(".msg-typing")) return;
@@ -1135,20 +1175,20 @@ function speak(text, cls = "", emotionOverride = null) {
   const emotion = emotionOverride || emotionForText(text);
   if (cls === "thinking") {
     setGhostMood("thinking", { emotion: "bright" });
-    buddyReact("thinking", 2400);
+    setCompanionState("thinking");
     chatTypingOn();
     return;
   }
   if (cls === "user") {
     setGhostMood("listening", { emotion: "calm", ms: 1600 });
-    buddyReact("listening", 1600);
+    setCompanionState("listening");
     chatHistory.push({ who: "user", text });
     if (chatHistory.length > 40) chatHistory.shift();
     renderChatLog();
     return;
   }
   setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
-  buddyReact(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talking", Math.min(3200, speechHoldMs(text)));
+  setCompanionState(emotion === "alert" ? "warning" : emotion === "happy" || emotion === "excited" ? "success" : "speaking");
   chatTypingOff();
   chatHistory.push({ who: "phantom", text: "" });
   if (chatHistory.length > 40) chatHistory.shift();
@@ -1258,6 +1298,15 @@ function runCommand(raw) {
 function bindCommandForm() {
   const form = $("[data-command-form]");
   const input = $("[data-command-input]");
+  if (input && !input.dataset.pcListen) {
+    input.dataset.pcListen = "1";
+    let lt = 0;
+    input.addEventListener("input", () => {
+      if (!input.value.trim()) return;
+      clearTimeout(lt);
+      lt = setTimeout(() => setCompanionState("listening"), 140);
+    });
+  }
   if (!form || !input || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
   form.addEventListener("pointerdown", () => {
@@ -1761,7 +1810,7 @@ let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; mountBuddy(); startClock(); startPulse(); }
+  if (!ghostStarted) { ghostStarted = true; startClock(); startPulse(); }
   activeNav = "dashboard";
   renderConsole();
   requestAnimationFrame(() => phantom.classList.add("booted"));
