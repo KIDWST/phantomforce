@@ -1221,6 +1221,10 @@ function phantomDismissalStorageKey(scope: string, bucket: string) {
   return `pf.dismissed.${storageSafeSlug(scope)}.${storageSafeSlug(bucket)}.v1`;
 }
 
+function selectedOrgStorageKey(sessionId: string) {
+  return `pf.selected-org.${storageSafeSlug(sessionId)}.v1`;
+}
+
 function simulationItemDismissId(sectionTitle: string, item: SimulationItem) {
   return `${sectionTitle}::${item.title}::${item.status ?? "item"}`;
 }
@@ -3771,7 +3775,9 @@ function App() {
   const [aiProvider, setAiProvider] = useState<AiProviderChoice>("codex");
   const [phantomAiBusy, setPhantomAiBusy] = useState(false);
   const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
-  const [selectedOrg, setSelectedOrg] = useState(OWNER_ORG_NAME);
+  const [selectedOrg, setSelectedOrg] = useState(
+    () => safeLocalStorageGet(selectedOrgStorageKey("owner-admin")) || OWNER_ORG_NAME,
+  );
   const adminHostOnly = useMemo(() => isAdminPublicHost(), []);
   const availableSessions = useMemo(
     () => (adminHostOnly ? initialSessions.filter((session) => session.canManageAccess) : initialSessions),
@@ -3839,6 +3845,17 @@ function App() {
   }, [taskDismissalStorageKey]);
 
   useEffect(() => {
+    if (!organizationOptions.includes(selectedOrg)) {
+      setSelectedOrg(organizationOptions[0] ?? OWNER_ORG_NAME);
+      return;
+    }
+
+    if (signedIn) {
+      safeLocalStorageSet(selectedOrgStorageKey(activeSession.id), selectedOrg);
+    }
+  }, [activeSession.id, organizationOptions, selectedOrg, signedIn]);
+
+  useEffect(() => {
     if (!canManageAccess && ADMIN_ONLY_ROUTES.has(route)) {
       setRoute("command");
     }
@@ -3865,12 +3882,15 @@ function App() {
     const allowedRoute = session.canManageAccess || !ADMIN_ONLY_ROUTES.has(preferredRoute)
       ? preferredRoute
       : "command";
+    const storedOrg = safeLocalStorageGet(selectedOrgStorageKey(session.id));
+    const sessionOrg = session.clientId
+      ? (clientAccess.find((client) => client.id === session.clientId)?.business ?? session.label)
+      : storedOrg && organizationOptions.includes(storedOrg)
+        ? storedOrg
+        : OWNER_ORG_NAME;
+
     setActiveSessionId(session.id);
-    setSelectedOrg(
-      session.clientId
-        ? (clientAccess.find((client) => client.id === session.clientId)?.business ?? session.label)
-        : OWNER_ORG_NAME,
-    );
+    setSelectedOrg(sessionOrg);
     setSessionToken("");
 
     try {

@@ -5119,7 +5119,7 @@ select option:disabled {
 
 .simulation-list article {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   gap: 10px;
   align-items: start;
   padding: 11px;
@@ -5142,6 +5142,29 @@ select option:disabled {
   color: #d8f8ff;
   background: rgba(40, 196, 216, 0.13);
   border: 1px solid rgba(40, 196, 216, 0.24);
+}
+
+.simulation-dismiss {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  color: rgba(255, 220, 224, 0.88);
+  background: rgba(255, 92, 115, 0.08);
+  border: 1px solid rgba(255, 92, 115, 0.28);
+  border-radius: 999px;
+  cursor: pointer;
+  transition:
+    border-color 160ms ease,
+    box-shadow 160ms ease,
+    transform 160ms ease;
+}
+
+.simulation-dismiss:hover {
+  color: #ffffff;
+  border-color: rgba(255, 92, 115, 0.58);
+  box-shadow: 0 0 18px rgba(255, 92, 115, 0.16);
+  transform: translateY(-1px);
 }
 
 .phantomcut-card {
@@ -5999,6 +6022,19 @@ select option:disabled {
   .simulation-list article,
   .status-line {
     grid-template-columns: 1fr;
+  }
+
+  .simulation-list article {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  .simulation-list article .simulation-status {
+    grid-column: 1;
+  }
+
+  .simulation-dismiss {
+    grid-column: 2;
+    grid-row: 1;
   }
 
   .status-line {
