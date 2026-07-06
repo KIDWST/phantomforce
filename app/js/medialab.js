@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-15";
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-16";
 
 const CFG_KEY = "pf.medialab.v1";
 const TAU = Math.PI * 2;

@@ -4,15 +4,16 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-15";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-15";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-15";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-15";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-15";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-15";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-15";
-import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260706-15";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-15";
+} from "./store.js?v=phantom-live-20260706-16";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-16";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-16";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-16";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-16";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-16";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-16";
+import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260706-16";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-16";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260706-16";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -463,7 +464,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-15";
+const POSE_VERSION = "phantom-live-20260706-16";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1134,20 +1135,20 @@ function speak(text, cls = "", emotionOverride = null) {
   const emotion = emotionOverride || emotionForText(text);
   if (cls === "thinking") {
     setGhostMood("thinking", { emotion: "bright" });
-    renderEmotePose("think", 900);
+    buddyReact("thinking", 2400);
     chatTypingOn();
     return;
   }
   if (cls === "user") {
     setGhostMood("listening", { emotion: "calm", ms: 1600 });
-    renderEmotePose("listen", 1100);
+    buddyReact("listening", 1600);
     chatHistory.push({ who: "user", text });
     if (chatHistory.length > 40) chatHistory.shift();
     renderChatLog();
     return;
   }
   setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
-  renderEmotePose(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talk", Math.min(2200, speechHoldMs(text)));
+  buddyReact(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talking", Math.min(3200, speechHoldMs(text)));
   chatTypingOff();
   chatHistory.push({ who: "phantom", text: "" });
   if (chatHistory.length > 40) chatHistory.shift();
@@ -1760,7 +1761,7 @@ let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); initHeroParallax(); startClock(); startPulse(); }
+  if (!ghostStarted) { ghostStarted = true; mountBuddy(); startClock(); startPulse(); }
   activeNav = "dashboard";
   renderConsole();
   requestAnimationFrame(() => phantom.classList.add("booted"));
