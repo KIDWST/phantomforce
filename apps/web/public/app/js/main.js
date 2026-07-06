@@ -1132,7 +1132,6 @@ function renderConsole() {
   bindCommandForm();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
   mountAgentTicker($("[data-agent-ticker]"));
-  mountAgentConsole($("[data-agentops]"));
   mountCompanion($("[data-chatbox] .chatbox-head"), { onMode: applyCompanionMode });
   renderChatLog();
 }
@@ -1571,7 +1570,15 @@ function renderDeveloperPage(body) {
             </button>`).join("")}
         </div>
       </section>
+
+      <section class="developer-card developer-agentops-card">
+        <p class="developer-kicker">Internal operations</p>
+        <h4>Agent operations</h4>
+        <p class="developer-note">Worker spine diagnostics live here so the main dashboard stays focused on business actions.</p>
+        <section class="agentops developer-agentops" data-developer-agentops aria-label="Developer agent operations"></section>
+      </section>
     </div>`;
+  mountAgentConsole(body.querySelector("[data-developer-agentops]"));
 }
 
 const CUSTOM = {
