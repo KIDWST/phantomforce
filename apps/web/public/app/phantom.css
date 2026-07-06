@@ -286,7 +286,10 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   border: 1px solid rgba(255, 151, 164, 0.34); font-size: 17px; line-height: 1;
 }
 .flowmap.is-map-open .flow-map-close { display: inline-flex; }
-.flowmap.is-map-open .flow-map-open { border-color: rgba(65, 255, 161, 0.52); background: rgba(65, 255, 161, 0.12); }
+.flowmap.is-map-open .flow-map-open { display: none; }
+.flowmap.is-map-closed .flow-map-open { display: inline-flex; }
+.flowmap.is-map-closed .flow-map-close,
+.flowmap.is-map-closed .flow-stage { display: none; }
 .open-map-symbol {
   width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 50%;
   border: 1px solid rgba(65, 255, 161, 0.28); background: rgba(65, 255, 161, 0.08);
