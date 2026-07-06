@@ -139,30 +139,13 @@ const SOCIAL_LOGIN_URLS = {
   linkedin: "https://www.linkedin.com/login",
   pinterest: "https://www.pinterest.com/login/",
 };
-const SOCIAL_PROFILE_EXAMPLES = {
-  instagram: "https://www.instagram.com/yourbrand/",
-  tiktok: "https://www.tiktok.com/@yourbrand",
-  youtube: "https://www.youtube.com/@yourbrand",
-  facebook: "https://www.facebook.com/yourbrand",
-  x: "https://x.com/yourbrand",
-  linkedin: "https://www.linkedin.com/in/yourbrand/",
-  pinterest: "https://www.pinterest.com/yourbrand/",
-};
-const SOCIAL_PROFILE_HOSTS = {
-  instagram: ["instagram.com"],
-  tiktok: ["tiktok.com"],
-  youtube: ["youtube.com", "youtu.be"],
-  facebook: ["facebook.com"],
-  x: ["x.com", "twitter.com"],
-  linkedin: ["linkedin.com"],
-  pinterest: ["pinterest.com"],
-};
 let socialNotice = "";
 const HERMES_EXTENSION_PROTOCOL = "phantomforce.hermes.extension.v1";
 const HERMES_EXTENSION_KEY = "pf.hermes.extension.connect.v1";
 let mediaSettingsMount = null;
 let mediaSettingsOpts = {};
 let hermesExtensionListenerReady = false;
+let socialBridgePollTimer = 0;
 
 function defaultSocialAccounts() {
   return PLATFORMS.map((p) => ({
@@ -221,70 +204,6 @@ function socialProfileTarget(account) {
 function socialLoginTarget(account) {
   return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
 }
-function socialProfileExample(account) {
-  return SOCIAL_PROFILE_EXAMPLES[account.id] || `@${String(account.name || "profile").toLowerCase().replace(/[^a-z0-9]+/g, "")}`;
-}
-function isExpectedSocialHost(account, url = "") {
-  if (!url) return true;
-  try {
-    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
-    const allowed = SOCIAL_PROFILE_HOSTS[account.id] || [];
-    return !allowed.length || allowed.some((name) => host === name || host.endsWith(`.${name}`));
-  } catch {
-    return false;
-  }
-}
-function parseSocialProfileIdentity(account, value = "") {
-  const raw = String(value || "").trim();
-  if (!raw) return { ok: false, reason: "empty" };
-  const looksLikeUrl = /^https?:\/\//i.test(raw) || /^[a-z0-9.-]+\.[a-z]{2,}\//i.test(raw);
-  const url = looksLikeUrl ? normalizeSocialUrl(raw) : "";
-  if (url && !isExpectedSocialHost(account, url)) {
-    return { ok: false, reason: `That does not look like a ${account.name} profile link.` };
-  }
-  const handle = cleanSocialHandle(raw);
-  if (!handle && !url) return { ok: false, reason: "missing profile" };
-  return {
-    ok: true,
-    handle,
-    url: url || socialProfileFromHandle(account.id, handle),
-  };
-}
-function finishSocialAccountLink(account) {
-  const sample = socialProfileExample(account);
-  const response = prompt(
-    `Finish linking ${account.name}\n\nPaste the public profile URL or @handle after the official sign-in page opens.\n\nExample: ${sample}\n\nPhantomForce stores only this public profile identity here.`,
-    account.url || (account.handle ? `@${account.handle}` : ""),
-  );
-  if (response == null || !String(response).trim()) return false;
-  const identity = parseSocialProfileIdentity(account, response);
-  if (!identity.ok) {
-    alert(identity.reason || `That does not look like a ${account.name} profile.`);
-    return false;
-  }
-  account.handle = identity.handle || account.handle || "";
-  account.url = identity.url || socialProfileFromHandle(account.id, account.handle);
-  account.loginIdentity = account.handle || account.url;
-  account.enabled = true;
-  account.connectMode = "public-profile-link";
-  account.lastConnectAt = new Date().toISOString();
-  account.hermesProof = {
-    platform: account.id,
-    handle: account.handle,
-    url: account.url,
-    displayName: account.handle ? `@${account.handle}` : account.name,
-    source: "public-profile-confirmation",
-    connectedAt: account.lastConnectAt,
-    safety: {
-      cookiesRead: false,
-      passwordsRead: false,
-      tokensRead: false,
-      privateMessagesRead: false,
-      browserHistoryRead: false,
-    },
-  };
-  return true;
-}
 function socialStatus(account) {
   if (account.hermesProof || account.enabled) return "linked";
   if (account.lastConnectAt || account.loginIdentity) return "pending";
@@ -305,7 +224,7 @@ function socialPostingState(account) {
 function socialActionLabel(account) {
   const st = socialStatus(account);
   if (st === "linked") return `Reconnect with ${account.name}`;
-  if (st === "pending") return `Finish ${account.name} link`;
+  if (st === "pending") return `Linking ${account.name}`;
   return `Sign in with ${account.name}`;
 }
 function clampHermesText(value = "", limit = 180) {
@@ -367,11 +286,23 @@ function sanitizeHermesProfilePacket(payload = {}) {
 function rerenderMediaSettings() {
   if (mediaSettingsMount) renderMediaSettings(mediaSettingsMount, mediaSettingsOpts);
 }
+function socialAccountName(platform = "") {
+  return PLATFORMS.find((p) => p.id === platform)?.name || "the platform";
+}
 function applyHermesProfilePacket(payload = {}) {
   const packet = sanitizeHermesProfilePacket(payload);
+  const pendingPlatform = String(loadHermesExtensionState().pendingPlatform || "").toLowerCase().trim();
   if (!packet.ok) {
-    socialNotice = "Sign-in did not find a supported public social profile yet. Open the platform profile once, then sign in again.";
+    socialNotice = pendingPlatform
+      ? `${socialAccountName(pendingPlatform)} sign-in is open. PhantomForce will link it automatically when the browser bridge sees the signed-in public profile.`
+      : "Sign-in did not find a supported public social profile yet. Open the platform sign-in once, then return here.";
     saveHermesExtensionState({ detected: true, lastSeenAt: new Date().toISOString(), lastResult: "unsupported" });
+    rerenderMediaSettings();
+    return;
+  }
+  if (pendingPlatform && packet.platform !== pendingPlatform) {
+    socialNotice = `${socialAccountName(pendingPlatform)} is still waiting. Ignored a saved ${socialAccountName(packet.platform)} profile so the wrong account does not get linked.`;
+    saveHermesExtensionState({ detected: true, lastSeenAt: new Date().toISOString(), lastResult: "platform_mismatch" });
     rerenderMediaSettings();
     return;
   }
@@ -389,6 +320,7 @@ function applyHermesProfilePacket(payload = {}) {
     detected: true,
     lastSeenAt: new Date().toISOString(),
     lastLinkedPlatform: packet.platform,
+    pendingPlatform: "",
     lastResult: "linked",
   });
   socialNotice = `${account.name} signed in from the visible browser profile. Stored only public handle/profile fields; no cookies, passwords, tokens, or private messages were read.`;
@@ -426,10 +358,12 @@ function requestHermesExtensionPing() {
     forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
   }, window.location.origin);
 }
-function requestHermesExtensionProfileLink(targetPlatform = "") {
+function requestHermesExtensionProfileLink(targetPlatform = "", options = {}) {
   if (typeof window === "undefined") return;
-  socialNotice = "Sign-in requested. If the browser bridge is active, it will link the visible signed-in profile using public fields only.";
-  saveHermesExtensionState({ lastLinkRequestedAt: new Date().toISOString() });
+  if (!options.quiet) {
+    socialNotice = `${socialAccountName(targetPlatform)} sign-in requested. PhantomForce will link it from the browser bridge using public profile fields only.`;
+  }
+  saveHermesExtensionState({ pendingPlatform: targetPlatform || "", lastLinkRequestedAt: new Date().toISOString() });
   window.postMessage({
     protocol: HERMES_EXTENSION_PROTOCOL,
     type: "PF_HERMES_LINK_CURRENT_TAB_REQUEST",
@@ -439,7 +373,22 @@ function requestHermesExtensionProfileLink(targetPlatform = "") {
     allowedFields: ["platform", "handle", "url", "displayName", "pageTitle"],
     forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
   }, window.location.origin);
-  rerenderMediaSettings();
+  if (!options.quiet) rerenderMediaSettings();
+}
+function startSocialBridgePolling(targetPlatform = "") {
+  if (typeof window === "undefined" || !targetPlatform) return;
+  if (socialBridgePollTimer) clearInterval(socialBridgePollTimer);
+  let attempts = 0;
+  const tick = () => {
+    attempts += 1;
+    requestHermesExtensionProfileLink(targetPlatform, { quiet: true });
+    if (attempts >= 24 && socialBridgePollTimer) {
+      clearInterval(socialBridgePollTimer);
+      socialBridgePollTimer = 0;
+    }
+  };
+  setTimeout(tick, 900);
+  socialBridgePollTimer = setInterval(tick, 2500);
 }
 
 /* ---------------- config ---------------- */
@@ -1233,16 +1182,12 @@ export function renderMediaSettings(el, opts = {}) {
     };
     const open = card.querySelector("[data-social-open]");
     if (open) open.onclick = () => {
-      const wasPending = socialStatus(account) === "pending";
       requestHermesExtensionProfileLink(account.id);
-      if (!wasPending) window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
-      account.connectMode = "platform-oauth";
+      window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
+      account.connectMode = "browser-bridge";
       account.lastConnectAt = new Date().toISOString();
-      if (finishSocialAccountLink(account)) {
-        socialNotice = `${account.name} linked to ${account.handle ? `@${account.handle}` : account.url}. PhantomForce stored only public profile fields; no passwords, cookies, tokens, or private messages were read.`;
-      } else {
-        socialNotice = `${account.name} sign-in opened on the official platform page. Return here and click "Finish ${account.name} link" with the public profile URL or @handle to connect it.`;
-      }
+      socialNotice = `${account.name} sign-in opened. PhantomForce will link it automatically when the browser bridge sees the signed-in public profile.`;
+      startSocialBridgePolling(account.id);
       saveAndRender();
     };
   });
@@ -1278,7 +1223,7 @@ function socialCard(account, esc) {
   const lastConnect = status === "linked"
     ? (profile ? `Linked profile: ${profile}` : "Linked locally")
     : status === "pending"
-      ? "Opened sign-in. Finish with public profile URL."
+      ? "Waiting for browser bridge confirmation."
       : "Password is never stored here";
   const hermesProof = account.hermesProof
     ? `<div class="set-social-hermes-proof">${svgIc("spark")} Linked profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
