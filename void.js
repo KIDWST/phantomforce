@@ -8,7 +8,8 @@ const flare = () => { pulse.v = 1; };
 let createPhantomCharacter;                     // loaded from ./app/js/character.js
 const TAU_STAR = Math.PI * 2;
 /* the character's conversational mood — speak() drives it, initEntity reads it */
-const charState = { mood: "idle", emotion: "calm", until: 0 };
+const REST_EMOTION = "content";
+const charState = { mood: "idle", emotion: REST_EMOTION, until: 0 };
 const setCharMood = (mood, emotion, ms) => {
   charState.mood = mood; charState.emotion = emotion;
   charState.until = ms ? performance.now() + ms : 0;
@@ -312,7 +313,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260705-21")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260706-30")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -390,14 +391,17 @@ async function initEntity() {
 
     // mood: the conversation drives it; a click overrides with menace;
     // a close visitor gets his full attention
-    if (charState.until && performance.now() > charState.until) { charState.mood = "idle"; charState.emotion = "calm"; charState.until = 0; }
+    if (charState.until && performance.now() > charState.until) { charState.mood = "idle"; charState.emotion = REST_EMOTION; charState.until = 0; }
+    const booting = t < 2.65;
+    const restingEmotion = !booting && charState.mood === "idle" ? REST_EMOTION : charState.emotion;
     const mood = menace > 0 ? "menace" : (attentive && charState.mood === "idle" ? "listening" : charState.mood);
-    const emotion = menace > 0 ? "alert" : (happy > 0 && charState.mood === "idle" && !attentive ? "bright" : charState.emotion);
+    const emotion = menace > 0 ? "alert" : (happy > 0 && charState.mood === "idle" && !attentive ? REST_EMOTION : restingEmotion);
 
     character.draw(ctx2, {
       t, dt,
       cx: gx, cy: gy, scale: gs,
       mood, emotion,
+      startupOnly: booting,
       pulse: pulse.v + (menace > 0 ? 0.4 * (menace / 1.1) : 0),
       px: cpx, py: cpy,
     });
@@ -504,7 +508,6 @@ function initOpsFeed() {
   const FEED = [
     ["Lead Hunter", "captured a new inquiry and drafted the reply"],
     ["Booking Desk", "confirmed Saturday 3pm — reminder queued"],
-    ["Proposal Forge", "prepared quote #114 — waiting on your approval"],
     ["Review Engine", "requested 2 reviews from happy clients"],
     ["Media Factory", "rendered a 30s vertical cut for approval"],
     ["Threat Watch", "blocked a phishing attempt on the inbox"],

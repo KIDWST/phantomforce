@@ -344,6 +344,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     } catch { p.failed = true; }
   };
   loadPose("conjure");
+  loadPose("welcome");
   try { setTimeout(() => { for (const n in POSES) loadPose(n); }, 1200); } catch { }
   let curPose = "conjure", prevPose = null, poseBlend = 1;
 
