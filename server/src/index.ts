@@ -112,6 +112,16 @@ import {
   recordHermesInteractionMemoryFromRun,
   readHermesInteractionMemoryStoreRecords,
 } from "./phantom-ai/hermes-interaction-memory-store.js";
+import {
+  buildHermesLearningDatasetExample,
+  buildHermesTrainingExportPreview,
+  getHermesLearningDatasetStatus,
+  normalizeHermesLearningDatasetLimit,
+  persistHermesLearningDatasetExample,
+  readHermesLearningDatasetExamples,
+  recordHermesLearningExampleFromLedgerRecord,
+  recordHermesLearningExampleFromRun,
+} from "./phantom-ai/hermes-learning-dataset.js";
 import { buildHermesMemoryContextPreview } from "./phantom-ai/hermes-memory-context.js";
 import { buildOwnerCodexMemoryStatus } from "./phantom-ai/owner-codex-memory.js";
 import { buildToolLanePreview } from "./phantom-ai/tool-lane.js";
@@ -2049,6 +2059,209 @@ app.get("/phantom-ai/hermes/interaction-memory/history", async (request, reply) 
   };
 });
 
+app.get("/phantom-ai/hermes/learning-dataset/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const status = await getHermesLearningDatasetStatus();
+
+  return {
+    ok: true,
+    session,
+    status,
+    provider_request_body_created: false,
+    provider_called: false,
+    network_call_performed: false,
+    queue_written: false,
+    approval_executed: false,
+    production_ledger_written: false,
+    external_action_executed: false,
+    live_call_allowed: false,
+    execution_disabled: true,
+  };
+});
+
+app.get("/phantom-ai/hermes/learning-dataset/history", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as {
+    limit?: string;
+    tenant_id?: string;
+    actor_user_id?: string;
+    task_type?: string;
+    quality_label?: string;
+  } | undefined;
+  const limit = normalizeHermesLearningDatasetLimit(query?.limit);
+  const status = await getHermesLearningDatasetStatus();
+  const history = await readHermesLearningDatasetExamples({
+    limit,
+    tenantId: query?.tenant_id,
+    actorUserId: query?.actor_user_id,
+    taskType: query?.task_type,
+    qualityLabel:
+      query?.quality_label === "approved" ||
+      query?.quality_label === "corrected" ||
+      query?.quality_label === "needs_review" ||
+      query?.quality_label === "rejected" ||
+      query?.quality_label === "unreviewed"
+        ? query.quality_label
+        : null,
+  });
+
+  return {
+    ok: true,
+    session,
+    dataset: {
+      path: status.dataset_path,
+      exists: status.exists,
+      bytes: status.bytes,
+      returned_count: history.examples.length,
+      malformed_lines: history.malformed_lines,
+      limit: history.limit,
+      local_dev_only: status.local_dev_only,
+      production_write_allowed: status.production_write_allowed,
+      storage_note: status.storage_note,
+    },
+    examples: history.examples,
+    provider_request_body_created: false,
+    provider_called: false,
+    network_call_performed: false,
+    queue_written: false,
+    approval_executed: false,
+    production_ledger_written: false,
+    external_action_executed: false,
+    live_call_allowed: false,
+    execution_disabled: true,
+  };
+});
+
+app.post("/phantom-ai/hermes/learning-dataset/save-example", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    actor_user_id?: unknown;
+    task_id?: unknown;
+    task_type?: unknown;
+    interaction_type?: unknown;
+    source_tool?: unknown;
+    source_run_id?: unknown;
+    source_record_id?: unknown;
+    prompt_summary?: unknown;
+    assistant_response_summary?: unknown;
+    ideal_response_summary?: unknown;
+    correction_summary?: unknown;
+    quality_label?: unknown;
+    rating?: unknown;
+    tags?: unknown;
+    approved_for_finetune?: unknown;
+  };
+  const memoryScope = resolveMemoryScopeFromBody(body, session);
+
+  if (typeof body.prompt_summary !== "string" || typeof body.assistant_response_summary !== "string") {
+    return reply.code(400).send({
+      ok: false,
+      error: "prompt_summary and assistant_response_summary are required.",
+    });
+  }
+
+  const example = buildHermesLearningDatasetExample({
+    tenant_id: memoryScope.tenant_id,
+    actor_user_id: memoryScope.actor_user_id,
+    task_id: typeof body.task_id === "string" ? body.task_id : null,
+    task_type: typeof body.task_type === "string" ? body.task_type : "manual_training_example",
+    interaction_type: typeof body.interaction_type === "string" ? body.interaction_type : "manual_reviewed_response",
+    source_tool:
+      body.source_tool === "codex" ||
+      body.source_tool === "claude" ||
+      body.source_tool === "jordan" ||
+      body.source_tool === "import"
+        ? body.source_tool
+        : "phantom_ai",
+    source_run_id: typeof body.source_run_id === "string" ? body.source_run_id : null,
+    source_record_id: typeof body.source_record_id === "string" ? body.source_record_id : null,
+    prompt_summary: body.prompt_summary,
+    assistant_response_summary: body.assistant_response_summary,
+    ideal_response_summary: typeof body.ideal_response_summary === "string" ? body.ideal_response_summary : null,
+    correction_summary: typeof body.correction_summary === "string" ? body.correction_summary : null,
+    quality_label:
+      body.quality_label === "approved" ||
+      body.quality_label === "corrected" ||
+      body.quality_label === "needs_review" ||
+      body.quality_label === "rejected" ||
+      body.quality_label === "unreviewed"
+        ? body.quality_label
+        : "unreviewed",
+    rating: typeof body.rating === "number" || typeof body.rating === "string" ? Number(body.rating) : null,
+    tags: Array.isArray(body.tags) ? body.tags.map((tag) => String(tag)) : [],
+    approved_for_finetune: body.approved_for_finetune === true,
+  });
+  const persistence = await persistHermesLearningDatasetExample(example);
+
+  return {
+    ok: true,
+    session,
+    memory_scope: buildMemoryScopeProof(memoryScope),
+    persistence,
+    provider_request_body_created: false,
+    provider_called: false,
+    network_call_performed: false,
+    queue_written: false,
+    approval_executed: false,
+    production_ledger_written: false,
+    external_action_executed: false,
+    live_call_allowed: false,
+    execution_disabled: true,
+  };
+});
+
+app.post("/phantom-ai/hermes/learning-dataset/export-preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const body = (request.body ?? {}) as {
+    tenant_id?: unknown;
+    limit?: unknown;
+    include_unreviewed?: unknown;
+  };
+  const memoryScope = resolveMemoryScopeFromBody(body, session);
+  const export_preview = await buildHermesTrainingExportPreview({
+    tenantId: memoryScope.tenant_id,
+    limit: typeof body.limit === "string" || typeof body.limit === "number" ? body.limit : undefined,
+    includeUnreviewed: body.include_unreviewed === true,
+  });
+
+  return {
+    ok: true,
+    session,
+    memory_scope: buildMemoryScopeProof(memoryScope),
+    export_preview,
+    provider_request_body_created: false,
+    provider_called: false,
+    network_call_performed: false,
+    queue_written: false,
+    approval_executed: false,
+    production_ledger_written: false,
+    external_action_executed: false,
+    live_call_allowed: false,
+    execution_disabled: true,
+  };
+});
+
 app.post("/phantom-ai/ops/chicagoshots/lead-intake/preview", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
 
@@ -3508,6 +3721,11 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     };
 
     await appendHermesLedgerRecord(ledgerRecord);
+    const learningDataset = await recordHermesLearningExampleFromLedgerRecord(ledgerRecord, {
+      assistantResponseSummary: resultOutput || ledgerRecord.result_summary,
+      sourceProviderCalled: providerCalled,
+      sourceNetworkCallPerformed: networkCallPerformed,
+    });
 
     return {
       ok: true,
@@ -3570,6 +3788,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         redaction: memoryContext.redaction,
       },
       ledger_record: redactHermesLedgerRecord(ledgerRecord),
+      learning_dataset: learningDataset,
       provider_request_body_created: requestBodyPrepared,
       live_provider_called: providerCalled,
       network_call_performed: networkCallPerformed,
@@ -3650,6 +3869,11 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     };
 
     await appendHermesLedgerRecord(ledgerRecord);
+    const learningDataset = await recordHermesLearningExampleFromLedgerRecord(ledgerRecord, {
+      assistantResponseSummary: openrouter.output_text || ledgerRecord.result_summary,
+      sourceProviderCalled: openrouter.provider_called,
+      sourceNetworkCallPerformed: openrouter.network_call_performed,
+    });
 
     if (!openrouter.provider_called || !openrouter.output_text.trim()) {
       if (providerChoice === "openrouter_glm") {
@@ -3669,6 +3893,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             provider_called: openrouter.provider_called,
             network_call_performed: openrouter.network_call_performed,
           },
+          learning_dataset: learningDataset,
           memory_context: {
             scope: memoryContext.scope,
             recalled_memory_count: memoryContext.memory.recalled_count,
@@ -3706,6 +3931,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       },
       memory_scope: buildMemoryScopeProof(normalized),
       ledger_record: redactHermesLedgerRecord(ledgerRecord),
+      learning_dataset: learningDataset,
       provider_request_body_created: openrouter.request_body_prepared,
       live_provider_called: openrouter.provider_called,
       network_call_performed: openrouter.network_call_performed,
@@ -3719,6 +3945,9 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const result = await runModelRouterFoundation(normalized);
   const interactionMemory = await recordHermesInteractionMemoryFromRun(result);
   const protectedResponse = buildPhantomAiWorkspaceReply(normalized.user_request, normalized.business_name);
+  const learningDataset = await recordHermesLearningExampleFromRun(result, {
+    assistantResponseSummary: protectedResponse,
+  });
 
   return {
     ok: true,
@@ -3732,6 +3961,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     decision: result.decision,
     ledger_record: redactHermesLedgerRecord(result.ledger_record),
     interaction_memory: interactionMemory,
+    learning_dataset: learningDataset,
     memory_scope: buildMemoryScopeProof(normalized),
     provider_request_body_created: false,
     live_provider_called: false,
@@ -3762,6 +3992,7 @@ app.post("/phantom-ai/mock-route", async (request, reply) => {
   };
   const result = await runModelRouterFoundation(buildModelRouterRequestFromBody(body, session, "mock"));
   const interaction_memory = await recordHermesInteractionMemoryFromRun(result);
+  const learning_dataset = await recordHermesLearningExampleFromRun(result);
 
   return {
     ok: true,
@@ -3779,6 +4010,7 @@ app.post("/phantom-ai/mock-route", async (request, reply) => {
     provider_readiness: result.provider_invocation.readiness_result,
     provider_invocation: result.provider_invocation,
     interaction_memory,
+    learning_dataset,
   };
 });
 
