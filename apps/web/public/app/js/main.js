@@ -4,14 +4,14 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-19";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-19";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-19";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-19";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-19";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-19";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-19";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-19";
+} from "./store.js?v=phantom-live-20260706-20";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-20";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-20";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-20";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-20";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-20";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-20";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-20";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -477,7 +477,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-19";
+const POSE_VERSION = "phantom-live-20260706-20";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

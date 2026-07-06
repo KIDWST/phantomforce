@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-19";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-20";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -139,6 +139,50 @@ const SOCIAL_LOGIN_URLS = {
   linkedin: "https://www.linkedin.com/login",
   pinterest: "https://www.pinterest.com/login/",
 };
+const SOCIAL_CONNECTORS = {
+  instagram: {
+    lane: "Meta OAuth",
+    capability: "Profile + publish API after Meta review",
+    posting: "Draft-only until business/API approval",
+    scopes: ["Profile identity", "Publishing permission", "Page/account selection"],
+  },
+  tiktok: {
+    lane: "TikTok OAuth",
+    capability: "Creator/business account authorization",
+    posting: "Draft-only until TikTok app approval",
+    scopes: ["Profile identity", "Video upload permission", "Publish permission"],
+  },
+  youtube: {
+    lane: "Google OAuth",
+    capability: "Channel connection with scoped YouTube access",
+    posting: "API upload after Google verification",
+    scopes: ["Channel identity", "Video upload permission", "Manage own videos"],
+  },
+  facebook: {
+    lane: "Meta OAuth",
+    capability: "Page connection with owner-approved posting",
+    posting: "API publish after Page permission",
+    scopes: ["Profile identity", "Page selection", "Publishing permission"],
+  },
+  x: {
+    lane: "X OAuth",
+    capability: "Account authorization for post drafts/publish",
+    posting: "Draft-only until paid API/app approval",
+    scopes: ["Profile identity", "Post write permission", "Offline refresh if approved"],
+  },
+  linkedin: {
+    lane: "LinkedIn OAuth",
+    capability: "Member/company authorization",
+    posting: "API publish after LinkedIn app approval",
+    scopes: ["Profile identity", "Organization selection", "Posting permission"],
+  },
+  pinterest: {
+    lane: "Pinterest OAuth",
+    capability: "Board/account authorization",
+    posting: "API pin creation after app approval",
+    scopes: ["Profile identity", "Board selection", "Pin write permission"],
+  },
+};
 let socialNotice = "";
 
 function defaultSocialAccounts() {
@@ -151,6 +195,7 @@ function defaultSocialAccounts() {
     loginIdentity: "",
     enabled: false,
     connectMode: "manual",
+    officialConnectState: "not_configured",
     lastConnectAt: "",
   }));
 }
@@ -197,6 +242,14 @@ function socialProfileTarget(account) {
 function socialLoginTarget(account) {
   return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
 }
+function socialConnector(account) {
+  return SOCIAL_CONNECTORS[account.id] || {
+    lane: "Official OAuth",
+    capability: "Scoped platform authorization",
+    posting: "Draft-only until approved",
+    scopes: ["Profile identity", "Approved posting permission"],
+  };
+}
 function socialStatus(account) {
   if (account.enabled && (account.handle || account.url)) return "linked";
   if (account.handle || account.url || account.loginIdentity) return "saved";
@@ -207,6 +260,12 @@ function socialStatusLabel(account) {
   if (st === "linked") return "connected";
   if (st === "saved") return "saved";
   return "not linked";
+}
+function socialPostingState(account) {
+  if (account.officialConnectState === "oauth_connected") return "posting gated";
+  if (account.officialConnectState === "oauth_planned") return "oauth planned";
+  if (socialStatus(account) !== "empty") return "profile linked";
+  return "draft-only";
 }
 
 /* ---------------- config ---------------- */
@@ -964,6 +1023,20 @@ export function renderMediaSettings(el, opts = {}) {
           <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} linked</span>
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
+        <div class="set-connect-model" aria-label="Connected account safety model">
+          <article>
+            <b>${svgIc("bolt")} Browser-assisted</b>
+            <span>Opens official login pages. Browser autofill/session may help there; PhantomForce receives no cookies or passwords.</span>
+          </article>
+          <article>
+            <b>${svgIc("lock")} Official OAuth/API</b>
+            <span>Future production connection uses scoped, revocable platform permissions and approval-gated posting.</span>
+          </article>
+          <article>
+            <b>${svgIc("spark")} Draft-first safety</b>
+            <span>Until each platform OAuth app is approved, PhantomForce prepares drafts and handoffs only.</span>
+          </article>
+        </div>
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>
@@ -1018,6 +1091,13 @@ export function renderMediaSettings(el, opts = {}) {
       const target = socialProfileTarget(account) || socialLoginTarget(account);
       window.open(target, "_blank", "noopener,noreferrer");
     };
+    const oauth = card.querySelector("[data-social-oauth]");
+    if (oauth) oauth.onclick = () => {
+      account.officialConnectState = "oauth_planned";
+      account.connectMode = "official-oauth-planned";
+      socialNotice = `${account.name} official OAuth lane prepared. Production posting stays draft-only until the platform app, scopes, redirect URI, token encryption, and owner approval gate are configured.`;
+      saveAndRender();
+    };
     const auto = card.querySelector("[data-social-auto]");
     if (auto) auto.onclick = () => {
       window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
@@ -1061,6 +1141,7 @@ export function renderMediaSettings(el, opts = {}) {
 
 function socialCard(account, esc) {
   const status = socialStatus(account);
+  const connector = socialConnector(account);
   const targetLabel = socialProfileTarget(account) ? "Open profile" : "Open login";
   const lastConnect = account.lastConnectAt ? `Last sign-in assist ${new Date(account.lastConnectAt).toLocaleDateString()}` : "Password is never stored here";
   return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
@@ -1071,11 +1152,22 @@ function socialCard(account, esc) {
       <button class="set-social-lightning" data-social-auto aria-label="Lightning sign-in assist for ${esc(account.name)}" title="Lightning sign-in assist" type="button">${svgIc("bolt")}</button>
       <label class="set-switch"><input type="checkbox" data-social-enabled ${account.enabled ? "checked" : ""}/><span></span></label>
     </div>
+    <div class="set-social-connect-state">
+      <span>${esc(connector.lane)}</span>
+      <b>${esc(socialPostingState(account))}</b>
+    </div>
     <label class="set-mini"><span>Login email / username</span><input data-social-login autocomplete="username" placeholder="email or username" value="${esc(account.loginIdentity || "")}"/></label>
     <label class="set-mini"><span>Handle</span><input data-social-handle placeholder="@client" value="${esc(account.handle || "")}"/></label>
     <label class="set-mini"><span>Profile URL</span><input data-social-url placeholder="https://" value="${esc(account.url || "")}"/></label>
+    <details class="set-social-oauth">
+      <summary>Official connect plan</summary>
+      <p>${esc(connector.capability)}</p>
+      <div>${connector.scopes.map((scope) => `<span>${esc(scope)}</span>`).join("")}</div>
+      <em>${esc(connector.posting)}</em>
+    </details>
     <div class="set-social-actions">
       <button class="set-social-open" data-social-open type="button">${esc(targetLabel)}</button>
+      <button class="set-social-open" data-social-oauth type="button">Prepare OAuth</button>
       <span>${esc(lastConnect)}</span>
     </div>
   </article>`;
