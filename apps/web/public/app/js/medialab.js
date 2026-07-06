@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-32";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-34";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -139,6 +139,24 @@ const SOCIAL_LOGIN_URLS = {
   linkedin: "https://www.linkedin.com/login",
   pinterest: "https://www.pinterest.com/login/",
 };
+const SOCIAL_PROFILE_EXAMPLES = {
+  instagram: "https://www.instagram.com/yourbrand/",
+  tiktok: "https://www.tiktok.com/@yourbrand",
+  youtube: "https://www.youtube.com/@yourbrand",
+  facebook: "https://www.facebook.com/yourbrand",
+  x: "https://x.com/yourbrand",
+  linkedin: "https://www.linkedin.com/in/yourbrand/",
+  pinterest: "https://www.pinterest.com/yourbrand/",
+};
+const SOCIAL_PROFILE_HOSTS = {
+  instagram: ["instagram.com"],
+  tiktok: ["tiktok.com"],
+  youtube: ["youtube.com", "youtu.be"],
+  facebook: ["facebook.com"],
+  x: ["x.com", "twitter.com"],
+  linkedin: ["linkedin.com"],
+  pinterest: ["pinterest.com"],
+};
 let socialNotice = "";
 const HERMES_EXTENSION_PROTOCOL = "phantomforce.hermes.extension.v1";
 const HERMES_EXTENSION_KEY = "pf.hermes.extension.connect.v1";
@@ -203,22 +221,92 @@ function socialProfileTarget(account) {
 function socialLoginTarget(account) {
   return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
 }
+function socialProfileExample(account) {
+  return SOCIAL_PROFILE_EXAMPLES[account.id] || `@${String(account.name || "profile").toLowerCase().replace(/[^a-z0-9]+/g, "")}`;
+}
+function isExpectedSocialHost(account, url = "") {
+  if (!url) return true;
+  try {
+    const host = new URL(url).hostname.toLowerCase().replace(/^www\./, "");
+    const allowed = SOCIAL_PROFILE_HOSTS[account.id] || [];
+    return !allowed.length || allowed.some((name) => host === name || host.endsWith(`.${name}`));
+  } catch {
+    return false;
+  }
+}
+function parseSocialProfileIdentity(account, value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return { ok: false, reason: "empty" };
+  const looksLikeUrl = /^https?:\/\//i.test(raw) || /^[a-z0-9.-]+\.[a-z]{2,}\//i.test(raw);
+  const url = looksLikeUrl ? normalizeSocialUrl(raw) : "";
+  if (url && !isExpectedSocialHost(account, url)) {
+    return { ok: false, reason: `That does not look like a ${account.name} profile link.` };
+  }
+  const handle = cleanSocialHandle(raw);
+  if (!handle && !url) return { ok: false, reason: "missing profile" };
+  return {
+    ok: true,
+    handle,
+    url: url || socialProfileFromHandle(account.id, handle),
+  };
+}
+function finishSocialAccountLink(account) {
+  const sample = socialProfileExample(account);
+  const response = prompt(
+    `Finish linking ${account.name}\n\nPaste the public profile URL or @handle after the official sign-in page opens.\n\nExample: ${sample}\n\nPhantomForce stores only this public profile identity here.`,
+    account.url || (account.handle ? `@${account.handle}` : ""),
+  );
+  if (response == null || !String(response).trim()) return false;
+  const identity = parseSocialProfileIdentity(account, response);
+  if (!identity.ok) {
+    alert(identity.reason || `That does not look like a ${account.name} profile.`);
+    return false;
+  }
+  account.handle = identity.handle || account.handle || "";
+  account.url = identity.url || socialProfileFromHandle(account.id, account.handle);
+  account.loginIdentity = account.handle || account.url;
+  account.enabled = true;
+  account.connectMode = "public-profile-link";
+  account.lastConnectAt = new Date().toISOString();
+  account.hermesProof = {
+    platform: account.id,
+    handle: account.handle,
+    url: account.url,
+    displayName: account.handle ? `@${account.handle}` : account.name,
+    source: "public-profile-confirmation",
+    connectedAt: account.lastConnectAt,
+    safety: {
+      cookiesRead: false,
+      passwordsRead: false,
+      tokensRead: false,
+      privateMessagesRead: false,
+      browserHistoryRead: false,
+    },
+  };
+  return true;
+}
 function socialStatus(account) {
   if (account.hermesProof || account.enabled) return "linked";
-  if (account.lastConnectAt || account.loginIdentity) return "saved";
+  if (account.lastConnectAt || account.loginIdentity) return "pending";
   return "empty";
 }
 function socialStatusLabel(account) {
   const st = socialStatus(account);
   if (st === "linked") return "connected";
-  if (st === "saved") return "login opened";
+  if (st === "pending") return "finish link";
   return "not linked";
 }
 function socialPostingState(account) {
   const st = socialStatus(account);
   if (st === "linked") return "connected";
-  if (st === "saved") return "sign-in opened";
+  if (st === "pending") return "waiting";
   return "ready";
+}
+function socialActionLabel(account) {
+  const st = socialStatus(account);
+  if (st === "linked") return `Reconnect with ${account.name}`;
+  if (st === "pending") return `Finish ${account.name} link`;
+  return `Sign in with ${account.name}`;
 }
 function clampHermesText(value = "", limit = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -1081,7 +1169,7 @@ export function renderMediaSettings(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   const socialAccounts = loadSocialAccounts();
-  const linkedCount = socialAccounts.filter((account) => socialStatus(account) !== "empty").length;
+  const linkedCount = socialAccounts.filter((account) => socialStatus(account) === "linked").length;
   const routeRow = (modality, label) => {
     const provs = providersFor(cfg, modality === "enhance" ? "enhance" : modality);
     return `<label class="set-route"><span>${label}</span>
@@ -1145,11 +1233,16 @@ export function renderMediaSettings(el, opts = {}) {
     };
     const open = card.querySelector("[data-social-open]");
     if (open) open.onclick = () => {
+      const wasPending = socialStatus(account) === "pending";
       requestHermesExtensionProfileLink(account.id);
-      window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
+      if (!wasPending) window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
       account.connectMode = "platform-oauth";
       account.lastConnectAt = new Date().toISOString();
-      socialNotice = `${account.name} sign-in opened on the official platform page. OAuth connection happens there; PhantomForce did not read or store the password.`;
+      if (finishSocialAccountLink(account)) {
+        socialNotice = `${account.name} linked to ${account.handle ? `@${account.handle}` : account.url}. PhantomForce stored only public profile fields; no passwords, cookies, tokens, or private messages were read.`;
+      } else {
+        socialNotice = `${account.name} sign-in opened on the official platform page. Return here and click "Finish ${account.name} link" with the public profile URL or @handle to connect it.`;
+      }
       saveAndRender();
     };
   });
@@ -1181,9 +1274,14 @@ export function renderMediaSettings(el, opts = {}) {
 
 function socialCard(account, esc) {
   const status = socialStatus(account);
-  const lastConnect = account.lastConnectAt ? `Last sign-in assist ${new Date(account.lastConnectAt).toLocaleDateString()}` : "Password is never stored here";
+  const profile = socialProfileTarget(account);
+  const lastConnect = status === "linked"
+    ? (profile ? `Linked profile: ${profile}` : "Linked locally")
+    : status === "pending"
+      ? "Opened sign-in. Finish with public profile URL."
+      : "Password is never stored here";
   const hermesProof = account.hermesProof
-    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Signed-in profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
+    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Linked profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
     : "";
   return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
     <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
@@ -1197,7 +1295,7 @@ function socialCard(account, esc) {
     </div>
     ${hermesProof}
     <div class="set-social-actions set-social-primary-actions">
-      <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">Sign in with ${esc(account.name)}</button>
+      <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>
       <span>${esc(lastConnect)}</span>
     </div>
   </article>`;

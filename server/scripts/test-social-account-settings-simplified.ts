@@ -10,7 +10,7 @@ function readProjectFile(relativePath: string) {
   return readFileSync(new URL(`../../${relativePath}`, import.meta.url), "utf8");
 }
 
-const buildId = "phantom-live-20260706-32";
+const buildId = "phantom-live-20260706-34";
 const indexHtml = readProjectFile("apps/web/public/app/index.html");
 const mainJs = readProjectFile("apps/web/public/app/js/main.js");
 const mediaLab = readProjectFile("apps/web/public/app/js/medialab.js");
@@ -22,6 +22,11 @@ assert(mediaLab.includes(`./contenthub.js?v=${buildId}`), "Media Lab should load
 
 const requiredTokens = [
   "Sign in with",
+  "Finish ${account.name} link",
+  "finishSocialAccountLink(account)",
+  "parseSocialProfileIdentity",
+  "public-profile-confirmation",
+  "Linked profile:",
   "set-social-signin",
   "data-social-open",
   "preferredPlatform",
@@ -67,7 +72,8 @@ console.log(
     {
       ok: true,
       buildId,
-      socialActions: ["Sign in with platform"],
+      socialActions: ["Sign in with platform", "Finish platform link", "Reconnect with platform"],
+      storesOnlyPublicProfileIdentity: true,
       removedConfusingControls: true,
       noManualLoginFields: true,
       noOauthPlanUi: true,
