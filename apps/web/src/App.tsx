@@ -2082,9 +2082,17 @@ type AppSession = {
   canManageAccess: boolean;
 };
 
+type SubscriptionStatus = {
+  plan: string;
+  canView: boolean;
+  canWrite: boolean;
+  reason: string;
+};
+
 const AUTHORIZATION_HEADER = "Authorization";
 const OWNER_ORG_NAME = "PhantomForce";
 const DEFAULT_CLIENT_WORKSPACE_ID = "client-chicagoshots";
+const ACCOUNT_RENEWAL_LABEL = "August 4, 2026";
 const CORE_ORGANIZATION_CLIENT_IDS = new Set(["client-chicagoshots", "client-sports-demo"]);
 const ADMIN_ONLY_ROUTES = new Set<Route>(["agents", "site", "access", "connections"]);
 // The essentials pinned in the mobile bottom bar; everything else goes under "More".
@@ -3691,9 +3699,7 @@ function App() {
   const [clientAccess, setClientAccess] = useState(initialClientAccess.map(normalizeClientAccessRecord));
   const [guardedWorkspace, setGuardedWorkspace] = useState<GuardedWorkspace | null>(null);
   const [workspaceModuleView, setWorkspaceModuleView] = useState<WorkspaceModuleView | null>(null);
-  const [subscription, setSubscription] = useState<
-    { plan: string; canView: boolean; canWrite: boolean; reason: string } | null
-  >(null);
+  const [subscription, setSubscription] = useState<SubscriptionStatus | null>(null);
   const [mobileMoreOpen, setMobileMoreOpen] = useState(false);
   const [pangolinPlan, setPangolinPlan] = useState<PangolinRoutePlan[]>([]);
   const [pangolinStatus, setPangolinStatus] = useState<PangolinReadOnlyStatus | null>(null);
@@ -5100,7 +5106,12 @@ function App() {
 
       <main className={`workspace${route === "command" ? " workspace-command" : ""}`}>
           <>
-        <Topbar activeSession={activeSession} selectedOrg={selectedOrg} pending={stats.pending} />
+        <Topbar
+          activeSession={activeSession}
+          selectedOrg={selectedOrg}
+          pending={stats.pending}
+          subscription={subscription}
+        />
         {subscription && subscription.canView && !subscription.canWrite ? (
           <div className="plan-banner" role="status">
             <span className="plan-banner-tag">Free plan</span>
@@ -5379,15 +5390,64 @@ function LoginScreen({
   );
 }
 
+function accountInitials(label: string) {
+  const words = label.trim().split(/\s+/).filter(Boolean);
+  const initials = words.slice(0, 2).map((word) => word.charAt(0).toUpperCase()).join("");
+  return initials || "PF";
+}
+
+function subscriptionPlanLabel(subscription: SubscriptionStatus | null) {
+  if (!subscription) return "Plan loading";
+  return subscription.canWrite || subscription.plan === "pro" ? "Pro Plan" : "Free Plan";
+}
+
+function accountSystemState(subscription: SubscriptionStatus | null) {
+  if (!subscription) {
+    return {
+      className: "error",
+      label: "Status checking",
+      detail: "Subscription gate has not reported yet.",
+    };
+  }
+
+  if (!subscription.canView) {
+    return {
+      className: "error",
+      label: "Systems error",
+      detail: subscription.reason || "Access is blocked by the subscription gate.",
+    };
+  }
+
+  if (!subscription.canWrite) {
+    return {
+      className: "paused",
+      label: "Systems paused",
+      detail: subscription.reason || "View-only plan. Changes and approvals are paused.",
+    };
+  }
+
+  return {
+    className: "online",
+    label: "Systems online",
+    detail: subscription.reason || "Full workspace actions are available.",
+  };
+}
+
 function Topbar({
   activeSession,
   selectedOrg,
   pending,
+  subscription,
 }: {
   activeSession: AppSession;
   selectedOrg: string;
   pending: number;
+  subscription: SubscriptionStatus | null;
 }) {
+  const [planManagerOpen, setPlanManagerOpen] = useState(false);
+  const systemState = accountSystemState(subscription);
+  const planLabel = subscriptionPlanLabel(subscription);
+
   return (
     <header className="topbar">
       <div>
@@ -5405,11 +5465,163 @@ function Topbar({
           <Bell size={18} />
           {pending > 0 ? <b>{pending}</b> : null}
         </button>
-        <button type="button" title="Settings">
-          <Settings size={18} />
-        </button>
+        <section className="profile-plan-card" aria-label="Account profile and plan">
+          <div className="profile-avatar-wrap">
+            <div className="profile-avatar" aria-hidden="true">
+              {accountInitials(activeSession.label)}
+            </div>
+            <span className={`profile-status-dot ${systemState.className}`} aria-label={systemState.label} />
+          </div>
+          <div className="profile-plan-copy">
+            <span>{activeSession.label}</span>
+            <strong>{systemState.label}</strong>
+            <small>{systemState.detail}</small>
+          </div>
+          <div className="profile-plan-meta">
+            <span>{planLabel}</span>
+            <small>Renewal: {ACCOUNT_RENEWAL_LABEL}</small>
+          </div>
+          <button
+            className="profile-manage-button"
+            type="button"
+            onClick={() => setPlanManagerOpen(true)}
+          >
+            Manage Plan <ArrowRight size={15} />
+          </button>
+        </section>
       </div>
+      {planManagerOpen ? (
+        <PlanManagerDialog
+          activeSession={activeSession}
+          subscription={subscription}
+          onClose={() => setPlanManagerOpen(false)}
+        />
+      ) : null}
     </header>
+  );
+}
+
+function PlanManagerDialog({
+  activeSession,
+  subscription,
+  onClose,
+}: {
+  activeSession: AppSession;
+  subscription: SubscriptionStatus | null;
+  onClose: () => void;
+}) {
+  const planLabel = subscriptionPlanLabel(subscription);
+  const systemState = accountSystemState(subscription);
+  const tiers = [
+    {
+      id: "free",
+      name: "Free View",
+      price: "$0",
+      detail: "View-only access for reviewing dashboards, proposals, and status.",
+      features: ["View workspace", "Review drafts", "No approvals or changes"],
+      current: planLabel === "Free Plan",
+    },
+    {
+      id: "pro",
+      name: "Pro Plan",
+      price: "Active subscription",
+      detail: "Full workspace actions, approvals, Phantom AI operator flows, and managed access.",
+      features: ["Create and update records", "Use approval gates", "Manage client workflow"],
+      current: planLabel === "Pro Plan",
+    },
+    {
+      id: "managed",
+      name: "Managed Growth",
+      price: "Custom",
+      detail: "Done-with-you setup, content/media workflow, access support, and launch operations.",
+      features: ["Priority setup", "Workflow tuning", "Launch support"],
+      current: false,
+    },
+  ];
+
+  return (
+    <div className="plan-manager-overlay" role="presentation">
+      <section className="plan-manager-dialog" role="dialog" aria-modal="true" aria-label="Manage PhantomForce plan">
+        <div className="plan-manager-head">
+          <div>
+            <span className="eyebrow">Account profile</span>
+            <h2>Manage plan</h2>
+          </div>
+          <button className="ghost-small" type="button" onClick={onClose} aria-label="Close manage plan">
+            <X size={16} />
+            Close
+          </button>
+        </div>
+        <div className="plan-profile-summary">
+          <div className="profile-avatar large" aria-hidden="true">
+            {accountInitials(activeSession.label)}
+          </div>
+          <div>
+            <strong>{activeSession.label}</strong>
+            <span>{activeSession.role === "admin" ? "Owner/admin profile" : "Workspace member profile"}</span>
+            <small>{systemState.label} · {planLabel} · Renewal: {ACCOUNT_RENEWAL_LABEL}</small>
+          </div>
+          <span className={`plan-health-pill ${systemState.className}`}>
+            <span className={`profile-status-dot ${systemState.className}`} />
+            {systemState.label}
+          </span>
+        </div>
+        <div className="plan-tier-grid" aria-label="Plan tiers">
+          {tiers.map((tier) => (
+            <article className={`plan-tier-card${tier.current ? " current" : ""}`} key={tier.id}>
+              <div>
+                <span>{tier.current ? "Current plan" : "Option"}</span>
+                <h3>{tier.name}</h3>
+              </div>
+              <strong>{tier.price}</strong>
+              <p>{tier.detail}</p>
+              <ul>
+                {tier.features.map((feature) => (
+                  <li key={feature}>
+                    <Check size={14} />
+                    {feature}
+                  </li>
+                ))}
+              </ul>
+            </article>
+          ))}
+        </div>
+        <div className="plan-management-grid" aria-label="Payment and cancellation options">
+          <article>
+            <span className="eyebrow">Payment options</span>
+            <h3>Billing method</h3>
+            <p>
+              Live payment portal is not wired here yet. Payment changes should route through PhantomForce billing until
+              the production billing provider is connected.
+            </p>
+            <div className="plan-action-row">
+              <a className="primary-small" href="mailto:hello@phantomforce.online?subject=Update%20my%20PhantomForce%20payment%20method">
+                Request payment update
+              </a>
+              <button className="ghost-small" type="button" disabled title="Live billing portal is not implemented yet.">
+                Card portal pending
+              </button>
+            </div>
+          </article>
+          <article>
+            <span className="eyebrow">Plan changes</span>
+            <h3>Upgrade, downgrade, or cancel</h3>
+            <p>
+              These options start a manual request. No cancellation, charge, refund, or access change executes from this
+              dialog.
+            </p>
+            <div className="plan-action-row">
+              <a className="primary-small" href="mailto:hello@phantomforce.online?subject=Upgrade%20my%20PhantomForce%20plan">
+                Upgrade plan
+              </a>
+              <a className="ghost-small danger" href="mailto:hello@phantomforce.online?subject=Cancel%20my%20PhantomForce%20plan">
+                Request cancellation
+              </a>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
   );
 }
 
