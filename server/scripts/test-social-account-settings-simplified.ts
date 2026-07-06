@@ -10,7 +10,7 @@ function readProjectFile(relativePath: string) {
   return readFileSync(new URL(`../../${relativePath}`, import.meta.url), "utf8");
 }
 
-const buildId = "phantom-live-20260706-34";
+const buildId = "phantom-live-20260706-35";
 const indexHtml = readProjectFile("apps/web/public/app/index.html");
 const mainJs = readProjectFile("apps/web/public/app/js/main.js");
 const mediaLab = readProjectFile("apps/web/public/app/js/medialab.js");
@@ -22,10 +22,10 @@ assert(mediaLab.includes(`./contenthub.js?v=${buildId}`), "Media Lab should load
 
 const requiredTokens = [
   "Sign in with",
-  "Finish ${account.name} link",
-  "finishSocialAccountLink(account)",
-  "parseSocialProfileIdentity",
-  "public-profile-confirmation",
+  "Linking ${account.name}",
+  "startSocialBridgePolling(account.id)",
+  "connectMode = \"browser-bridge\"",
+  "pendingPlatform",
   "Linked profile:",
   "set-social-signin",
   "data-social-open",
@@ -47,6 +47,10 @@ const forbiddenTokens = [
   "Auto-connect",
   "Open Login",
   "Saved profile",
+  "Finish ${account.name} link",
+  "finishSocialAccountLink",
+  "parseSocialProfileIdentity",
+  "public-profile-confirmation",
   "data-social-auto",
   "data-social-oauth",
   "data-social-enabled",
@@ -72,10 +76,11 @@ console.log(
     {
       ok: true,
       buildId,
-      socialActions: ["Sign in with platform", "Finish platform link", "Reconnect with platform"],
-      storesOnlyPublicProfileIdentity: true,
+      socialActions: ["Sign in with platform", "Linking platform", "Reconnect with platform"],
+      browserBridgeLinking: true,
       removedConfusingControls: true,
       noManualLoginFields: true,
+      noManualProfilePrompt: true,
       noOauthPlanUi: true,
       noCookieTokenPasswordAccess: true,
     },
