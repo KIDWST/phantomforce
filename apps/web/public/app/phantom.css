@@ -262,7 +262,9 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .flow-head { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
 .flow-kicker { margin: 0 0 4px; font: 500 10.5px "DM Mono", monospace; letter-spacing: 0.26em; text-transform: uppercase; color: var(--dim); }
 .flow-head h2 { margin: 0; font-size: clamp(19px, 2.5vw, 26px); letter-spacing: -0.02em; }
-.flow-map-open {
+.flow-map-actions { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+.flow-map-open,
+.flow-map-close {
   display: inline-flex; align-items: center; gap: 8px; flex: 0 0 auto; min-height: 38px;
   padding: 8px 13px; border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
   background: rgba(65, 255, 161, 0.06); color: #dfffee;
@@ -270,10 +272,21 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   transition: border-color 0.18s, background 0.18s, transform 0.16s, box-shadow 0.18s;
 }
 .flow-map-open:hover,
-.flow-map-open:focus-visible {
+.flow-map-open:focus-visible,
+.flow-map-close:hover,
+.flow-map-close:focus-visible {
   border-color: rgba(65, 255, 161, 0.58); background: rgba(65, 255, 161, 0.12);
   box-shadow: 0 0 26px rgba(65, 255, 161, 0.16); transform: translateY(-1px); outline: none;
 }
+.flow-map-close {
+  display: none; color: #ffced5; border-color: rgba(255, 92, 115, 0.24); background: rgba(255, 92, 115, 0.07);
+}
+.flow-map-close span:first-child {
+  width: 20px; height: 20px; display: grid; place-items: center; border-radius: 50%;
+  border: 1px solid rgba(255, 151, 164, 0.34); font-size: 17px; line-height: 1;
+}
+.flowmap.is-map-open .flow-map-close { display: inline-flex; }
+.flowmap.is-map-open .flow-map-open { border-color: rgba(65, 255, 161, 0.52); background: rgba(65, 255, 161, 0.12); }
 .open-map-symbol {
   width: 22px; height: 22px; display: inline-grid; place-items: center; border-radius: 50%;
   border: 1px solid rgba(65, 255, 161, 0.28); background: rgba(65, 255, 161, 0.08);
@@ -1135,6 +1148,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .flowmap { margin-top: 18px; }
   .flow-head { align-items: center; }
   .flow-head h2 { font-size: 19px; }
+  .flow-map-actions { width: 100%; justify-content: flex-start; flex-wrap: wrap; }
   .flow-stage { border-radius: 18px; }
   .flow-stage::before { background-size: 30px 30px; }
   .deck-body { display: block; width: 100%; margin-top: 16px; }

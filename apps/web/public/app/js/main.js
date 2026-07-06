@@ -4,14 +4,14 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-21";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-21";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-21";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-21";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-21";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-21";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-21";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-21";
+} from "./store.js?v=phantom-live-20260706-22";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-22";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-22";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-22";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-22";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-22";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-22";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-22";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -266,7 +266,12 @@ function openOperationsMap() {
   if (activePageId) renderDashboardPage(true);
   const section = $("[data-map-section]");
   if (!section) return;
+  if (section.classList.contains("is-map-open")) {
+    closeOperationsMap();
+    return;
+  }
   section.classList.add("is-map-open");
+  updateOperationsMapControls();
   renderFlowMap();
   section.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
   const stage = $("[data-flowmap]", section);
@@ -276,6 +281,26 @@ function openOperationsMap() {
   }, reduceMotion ? 0 : 260);
   setGhostMood("listening", { emotion: "bright", ms: 1200 });
   stageReact("nav", 620);
+}
+function closeOperationsMap() {
+  const section = $("[data-map-section]");
+  if (!section) return;
+  section.classList.remove("is-map-open");
+  updateOperationsMapControls();
+  const opener = $("[data-map-open]", section) || $("[data-map-open]");
+  if (opener) {
+    try { opener.focus({ preventScroll: true }); }
+    catch { opener.focus(); }
+  }
+}
+function updateOperationsMapControls() {
+  const section = $("[data-map-section]");
+  const isOpen = Boolean(section?.classList.contains("is-map-open"));
+  $$("[data-map-open]").forEach((button) => {
+    button.setAttribute("aria-expanded", String(isOpen));
+    button.setAttribute("aria-label", isOpen ? "Close operations map" : "Open operations map");
+  });
+  $$("[data-map-open-label]").forEach((label) => { label.textContent = isOpen ? "Close map" : "Open map"; });
 }
 
 /* ============================ topbar ============================ */
@@ -477,7 +502,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-21";
+const POSE_VERSION = "phantom-live-20260706-22";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1299,6 +1324,7 @@ function wireDeck() {
     if (cItem) { execPalette(+cItem.dataset.cmdkI); return; }
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     if (e.target.closest("[data-map-open]")) { openOperationsMap(); return; }
+    if (e.target.closest("[data-map-close]")) { closeOperationsMap(); return; }
     const opener = e.target.closest("[data-open-ws]");
     if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
     if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
@@ -1321,6 +1347,7 @@ function wireDeck() {
     if (phantom.hidden) return;
     const typing = /^(input|textarea|select)$/i.test(e.target.tagName);
     if (e.key === "/" && !typing) { e.preventDefault(); focusCommandInput(); }
+    else if (e.key === "Escape" && $("[data-map-section]")?.classList.contains("is-map-open")) { closeOperationsMap(); }
     else if (e.key === "Escape" && mobileNavOpen) { setMobileNav(false); }
     else if (e.key === "Escape" && notifOpen) { notifOpen = false; renderNotifs(); }
   });
