@@ -4,14 +4,14 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-17";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-17";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-17";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-17";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-17";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-17";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-17";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-17";
+} from "./store.js?v=phantom-live-20260706-18";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-18";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-18";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-18";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-18";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-18";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-18";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-18";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -477,7 +477,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-17";
+const POSE_VERSION = "phantom-live-20260706-18";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -723,12 +723,13 @@ function renderHeroWorkAlert() {
     at: new Date().toISOString(),
   };
   alert.innerHTML = `
-    <span class="hero-work-alert-ping" aria-hidden="true"></span>
-    <span class="hero-work-alert-body">
+    <span class="forcewire-alert-label">Forcewire</span>
+    <span class="forcewire-alert-ping" aria-hidden="true"></span>
+    <span class="forcewire-alert-body">
       <b>${esc(latest.who || "PhantomForce")}</b>
       <em>${esc(latest.text || "prepared the next owner-safe move.")}</em>
     </span>
-    <span class="hero-work-alert-time">${latest.live ? "now" : latest.at ? ago(latest.at) : "ready"}</span>`;
+    <span class="forcewire-alert-time">${latest.live ? "now" : latest.at ? ago(latest.at) : "ready"}</span>`;
 }
 
 /* ============================ stat cards ============================ */
