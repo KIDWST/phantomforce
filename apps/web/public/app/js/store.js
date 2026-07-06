@@ -218,6 +218,7 @@ function normalizeData(data) {
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...((d.toolSpine || []).find((x) => x.id === tool.id) || {}), ...tool }));
   d.apify = { ...APIFY_DEFAULT_STATE, ...(d.apify && typeof d.apify === "object" ? d.apify : {}) };
   d.apify.selectedActorIds = Array.isArray(d.apify.selectedActorIds) ? d.apify.selectedActorIds : [];
+  d.apify.selectedRecipeIds = Array.isArray(d.apify.selectedRecipeIds) ? d.apify.selectedRecipeIds : [];
   d.activity = Array.isArray(d.activity) ? d.activity : [];
   d.activity = d.activity.slice(0, 80);
   d.version = 4;
@@ -458,5 +459,6 @@ export const STATUS_LABEL = {
   "active": "Active", "standby": "Standby", "sandbox": "Sandbox", "gated": "Gated",
   "setup-ready": "Setup ready", "available": "Available", "planning": "Planning", "owner-controlled": "Owner-controlled",
   "cataloged": "Cataloged", "server-only": "Server-only", "approval-gated": "Approval-gated",
+  "not-scheduled": "Not scheduled",
 };
 export const statusLabel = (s) => STATUS_LABEL[s] || s;

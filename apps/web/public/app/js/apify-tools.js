@@ -8,6 +8,7 @@ export const APIFY_DEFAULT_STATE = {
   mode: "approval-gated",
   budgetGuard: "$0 live spend until APIFY_TOKEN is configured server-side",
   selectedActorIds: [],
+  selectedRecipeIds: [],
   lastCatalogReview: "2026-07-05",
 };
 
@@ -407,6 +408,170 @@ export const APIFY_ACTORS = [
   },
 ];
 
+export const APIFY_CAPABILITY_PACKS = [
+  {
+    id: "local-growth-miner",
+    name: "Local Growth Miner",
+    lane: "growth",
+    status: "setup-ready",
+    summary: "Turns a city, niche, and offer into a reviewable prospect table.",
+    trigger: "city + industry + offer angle",
+    actors: ["google-maps", "google-search", "website-crawler", "screenshot", "yelp"],
+    surfaces: ["Leads", "Proposal Forge", "Site Studio"],
+    output: ["qualified public businesses", "website gaps", "ratings/review signals", "proof screenshots"],
+    cadence: "manual or weekly after approval",
+    safety: "No outreach. Phantom only drafts review cards and next actions.",
+  },
+  {
+    id: "reputation-radar",
+    name: "Reputation Radar",
+    lane: "reputation",
+    status: "setup-ready",
+    summary: "Watches public reviews, search results, and mentions for reputation risks or praise.",
+    trigger: "brand/domain/place URL + keywords",
+    actors: ["google-reviews", "google-search", "trustpilot", "news", "reddit"],
+    surfaces: ["Protect", "Review", "Content Hub"],
+    output: ["review themes", "complaint clusters", "testimonial candidates", "public mention links"],
+    cadence: "manual, weekly, or launch-week watch",
+    safety: "Analysis only. No replies, reports, or takedown actions without approval.",
+  },
+  {
+    id: "social-trend-lab",
+    name: "Social Trend Lab",
+    lane: "content",
+    status: "setup-ready",
+    summary: "Pulls public social patterns so Phantom can brief better reels, hooks, and posts.",
+    trigger: "niche + local market + platforms",
+    actors: ["tiktok", "instagram", "instagram-hashtags", "youtube", "reddit", "x-twitter"],
+    surfaces: ["Media Lab", "Content Hub", "Brand Memory"],
+    output: ["hook patterns", "caption language", "creator shortlist", "content angles"],
+    cadence: "manual before content sprint",
+    safety: "Research only. No reposting, comments, DMs, or engagement automation.",
+  },
+  {
+    id: "competitor-offer-mirror",
+    name: "Competitor Offer Mirror",
+    lane: "market",
+    status: "setup-ready",
+    summary: "Builds a compare sheet for pricing, offers, ads, landing pages, and product catalogs.",
+    trigger: "competitor domains + product/service category",
+    actors: ["facebook-ads", "website-crawler", "shopify", "amazon-products", "etsy", "ebay", "screenshot"],
+    surfaces: ["Money", "Site Studio", "Media Lab"],
+    output: ["offer matrix", "price ranges", "ad angles", "landing page proof"],
+    cadence: "manual before quote or campaign",
+    safety: "Benchmarking only. Do not copy protected assets or brand names.",
+  },
+  {
+    id: "content-memory-builder",
+    name: "Content Memory Builder",
+    lane: "data",
+    status: "setup-ready",
+    summary: "Converts approved public pages and documents into clean business memory.",
+    trigger: "owned URLs, allowed public URLs, or document URLs",
+    actors: ["website-crawler", "web-scraper", "cheerio-scraper", "pdf-extract", "screenshot"],
+    surfaces: ["Brand Memory", "Hermes", "Proposal Forge"],
+    output: ["clean text", "page summaries", "proof captures", "source map"],
+    cadence: "manual during onboarding",
+    safety: "No private portals or unauthorized documents.",
+  },
+  {
+    id: "hiring-signal-radar",
+    name: "Hiring Signal Radar",
+    lane: "growth",
+    status: "setup-ready",
+    summary: "Finds companies showing demand for marketing, media, web, ops, or growth help.",
+    trigger: "role keywords + location + company type",
+    actors: ["linkedin-jobs", "indeed-jobs", "linkedin-company", "builtwith", "google-search"],
+    surfaces: ["Leads", "Money", "Proposal Forge"],
+    output: ["hiring companies", "pain signals", "stack clues", "service-fit notes"],
+    cadence: "manual or monthly after approval",
+    safety: "Research only. No connection requests, scraping behind login, or outreach.",
+  },
+  {
+    id: "protect-surface-sweep",
+    name: "Protect Surface Sweep",
+    lane: "protect",
+    status: "setup-ready",
+    summary: "Passively checks public surfaces for leaks, bad links, brand misuse, or risky exposure.",
+    trigger: "domain + brand names + owner-approved keywords",
+    actors: ["google-search", "domain-intel", "screenshot", "news", "x-twitter", "reddit"],
+    surfaces: ["Protect", "Review", "Harbor"],
+    output: ["public exposure flags", "broken page proof", "mention log", "risk review cards"],
+    cadence: "manual or daily after budget approval",
+    safety: "Passive public checks only. No vulnerability probing or credential use.",
+  },
+  {
+    id: "dataset-clean-room",
+    name: "Dataset Clean Room",
+    lane: "data",
+    status: "setup-ready",
+    summary: "Dedupes, normalizes, and summarizes Actor outputs before Phantom shows them.",
+    trigger: "dataset IDs + allowed transform rules",
+    actors: ["dataset-toolbox", "failed-runs-monitor"],
+    surfaces: ["Review", "Analytics", "Admin"],
+    output: ["clean datasets", "run health", "failure alerts", "review-ready summaries"],
+    cadence: "after each approved run",
+    safety: "Rejects secrets and sensitive fields before any export or display.",
+  },
+  {
+    id: "retail-treasure-scan",
+    name: "Retail Treasure Scan",
+    lane: "market",
+    status: "setup-ready",
+    summary: "Retail/resale pack for pricing, inventory trends, content ideas, and local visibility.",
+    trigger: "store category + product terms + local market",
+    actors: ["google-maps", "google-reviews", "etsy", "ebay", "facebook-ads", "instagram", "tiktok"],
+    surfaces: ["Money", "Media Lab", "Site Studio"],
+    output: ["pricing comps", "review language", "ad/content angles", "local visibility notes"],
+    cadence: "manual before sale campaign",
+    safety: "Public market research only. No marketplace account actions.",
+  },
+];
+
+export const APIFY_OUTPUT_SURFACES = [
+  { name: "Phantom Speech", use: "Short owner-facing summaries: what changed, what matters, what to review." },
+  { name: "Review Queue", use: "Every Actor output lands as review cards before CRM, send, post, export, or publish." },
+  { name: "Proposal Forge", use: "Use public proof, market gaps, and competitor patterns to sharpen quotes." },
+  { name: "Media Lab", use: "Turn trend pulls into briefs, hooks, captions, and video plans." },
+  { name: "Protect", use: "Surface exposure, reputation, and public-risk findings without active probing." },
+  { name: "Brand Memory", use: "Approved crawl output becomes clean context for Phantom and Hermes." },
+];
+
+export const APIFY_AUTOMATION_TEMPLATES = [
+  {
+    id: "daily-protect-sweep",
+    name: "Daily Protect Sweep",
+    pack: "protect-surface-sweep",
+    cadence: "daily, owner-enabled only",
+    status: "not-scheduled",
+    guard: "passive public checks, budget cap, review-only output",
+  },
+  {
+    id: "weekly-growth-map",
+    name: "Weekly Growth Map",
+    pack: "local-growth-miner",
+    cadence: "weekly, owner-enabled only",
+    status: "not-scheduled",
+    guard: "no outreach, max records cap, dedupe against reviewed leads",
+  },
+  {
+    id: "campaign-trend-pull",
+    name: "Campaign Trend Pull",
+    pack: "social-trend-lab",
+    cadence: "per campaign",
+    status: "not-scheduled",
+    guard: "research only, no reposting or engagement",
+  },
+  {
+    id: "post-run-clean-room",
+    name: "Post-run Clean Room",
+    pack: "dataset-clean-room",
+    cadence: "after approved Actor runs",
+    status: "not-scheduled",
+    guard: "redact secrets and sensitive fields before display/export",
+  },
+];
+
 export const APIFY_TOOL_SPINE = [
   {
     id: "apify-vault",
@@ -415,8 +580,8 @@ export const APIFY_TOOL_SPINE = [
     worker: "Harbor Master",
     mode: "setup-ready",
     status: "cataloged",
-    role: `${APIFY_ACTORS.length} Actor candidates mapped for research, crawling, lead intel, content intel, reputation, and data ops.`,
-    activity: "mapped Apify Actor lanes; live runs wait for server token, budget guard, and owner approval.",
+    role: `${APIFY_ACTORS.length} Actor candidates and ${APIFY_CAPABILITY_PACKS.length} capability packs mapped for research, crawling, lead intel, content intel, reputation, and data ops.`,
+    activity: "mapped Apify capability packs; live runs wait for server token, budget guard, and owner approval.",
     path: "ops/apify + app/js/apify-tools.js",
     visibleToClients: false,
     ownerControl: "Owners can choose an Actor, review inputs, approve spend, then inspect outputs before any action.",
@@ -452,6 +617,10 @@ export const APIFY_TOOL_SPINE = [
 export function apifyActorHref(actor) {
   if (actor.actor) return `https://apify.com/${actor.actor}`;
   return `https://apify.com/store?search=${encodeURIComponent(actor.storeQuery || actor.name)}`;
+}
+
+export function apifyPackActors(pack) {
+  return pack.actors.map((id) => APIFY_ACTORS.find((actor) => actor.id === id)).filter(Boolean);
 }
 
 export function apifyActorsByLane() {

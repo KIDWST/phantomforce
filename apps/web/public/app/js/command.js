@@ -7,7 +7,7 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil,
 } from "./store.js?v=phantom-live-20260705-18";
-import { APIFY_ACTORS, APIFY_LANES } from "./apify-tools.js?v=phantom-live-20260705-18";
+import { APIFY_ACTORS, APIFY_LANES, APIFY_CAPABILITY_PACKS } from "./apify-tools.js?v=phantom-live-20260705-18";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -24,6 +24,21 @@ function card(kicker, name, body, actions = [], meta = "") {
   return { kicker, title: name, body, actions, meta };
 }
 const openAction = (label, ws) => ({ label, open: ws });
+function matchApifyPack(s) {
+  const rules = [
+    ["local-growth-miner", /(local growth|maps leads|google maps|local lead|near me|directory|prospect)/],
+    ["reputation-radar", /(reputation radar|review mining|reviews?|mentions?|sentiment|trustpilot|serp)/],
+    ["social-trend-lab", /(trend lab|social intel|tiktok|instagram|youtube|creator|caption|hook)/],
+    ["competitor-offer-mirror", /(competitor|offer mirror|pricing comp|facebook ads|market mirror|shopify|amazon|etsy|ebay)/],
+    ["content-memory-builder", /(memory builder|rag|crawl|website content|pdf|brand memory|source map)/],
+    ["hiring-signal-radar", /(hiring signal|jobs?|linkedin|indeed|companies hiring)/],
+    ["protect-surface-sweep", /(protect sweep|risk radar|public exposure|leak|breach|phish|brand misuse)/],
+    ["dataset-clean-room", /(dataset|clean room|dedupe|failed runs|exports?)/],
+    ["retail-treasure-scan", /(retail|resale|treasure|inventory trend|marketplace comp)/],
+  ];
+  const hit = rules.find(([, pattern]) => pattern.test(s));
+  return hit ? APIFY_CAPABILITY_PACKS.find((pack) => pack.id === hit[0]) : null;
+}
 
 /* ---------------- artifact builders ---------------- */
 function createLead(subject) {
@@ -182,11 +197,32 @@ export function handleCommand(raw) {
   }
 
   /* --- Apify / actor marketplace --- */
-  if (/(apify|actor|scrap|crawler|dataset|google maps|maps leads|serp|competitor research|public web|directory|review mining|social intel)/.test(s)) {
+  if (/(apify|actor|scrap|crawler|dataset|google maps|maps leads|serp|competitor research|public web|directory|review mining|social intel|trend lab|offer mirror|hiring signal|protect sweep|risk radar|retail scan)/.test(s)) {
     if (!admin) {
       return { say: "Apify Tool Vault is owner-only right now. Ask your admin to grant that workspace if you need it.", cards: [], open: null };
     }
     const exact = APIFY_ACTORS.filter((actor) => actor.actor).length;
+    const pack = matchApifyPack(s);
+    const shouldStage = pack && /(stage|set ?up|prepare|configure|mark|use|enable)/.test(s);
+    if (shouldStage) {
+      const next = new Set(store.state.apify?.selectedRecipeIds || []);
+      next.add(pack.id);
+      store.state.apify = { ...(store.state.apify || {}), selectedRecipeIds: Array.from(next) };
+      pushActivity("Harbor Master", `staged ${pack.name} as an Apify capability pack.`, currentWs());
+      store.save();
+    }
+    if (pack) {
+      return {
+        say: `${pack.name} is ${shouldStage ? "staged" : "ready to stage"}. It uses ${pack.actors.length} Apify Actors, sends outputs to ${pack.surfaces.join(", ")}, and stays review-only until token, budget, inputs, and approval are set.`,
+        cards: [
+          card("Apify pack", pack.name,
+            `${pack.summary} Output: ${pack.output.slice(0, 3).join(", ")}. Safety: ${pack.safety}`,
+            [openAction("Open Apify Vault", "apify"), openAction("Open Review", "approvals")],
+            `${pack.status} - ${pack.cadence}`),
+        ],
+        open: "apify",
+      };
+    }
     return {
       say: `Apify Vault is mapped: ${APIFY_ACTORS.length} Actor candidates across ${APIFY_LANES.length} lanes. ${exact} have exact Actor IDs, and the rest are Store-search candidates. No runs happen until token, budget, inputs, and owner approval are set.`,
       cards: [
@@ -325,6 +361,6 @@ export function handleCommand(raw) {
 /* Suggestion chips under the command input. */
 export function commandSuggestions() {
   return isAdmin()
-    ? ["Catch me up", "What's my pipeline?", "Open Apify Vault", "Find Google Maps leads", "Create a video request", "Run a security check"]
+    ? ["Catch me up", "Stage Protect Sweep", "Reputation Radar", "Local Growth Miner", "Social Trend Lab", "Create a video request"]
     : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Run a security check"];
 }
