@@ -10,7 +10,7 @@ function readProjectFile(relativePath: string) {
   return readFileSync(new URL(`../../${relativePath}`, import.meta.url), "utf8");
 }
 
-const buildId = "phantom-live-20260706-30";
+const buildId = "phantom-live-20260706-31";
 const indexHtml = readProjectFile("apps/web/public/app/index.html");
 const mainJs = readProjectFile("apps/web/public/app/js/main.js");
 const agentOps = readProjectFile("apps/web/public/app/js/agentops.js");

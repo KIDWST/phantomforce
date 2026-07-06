@@ -2545,6 +2545,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-connect-model {
   display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px;
 }
+.set-connect-model.set-connect-model-simple { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .set-connect-model article {
   min-width: 0; border: 1px solid rgba(65,255,161,0.16); border-radius: 14px; padding: 12px;
   background: rgba(2,10,8,0.34);
@@ -2596,7 +2597,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   letter-spacing: 0.1em; text-transform: uppercase;
 }
 .set-social-lightning {
-  flex: 0 0 30px; width: 30px; height: 30px; display: grid; place-items: center; cursor: pointer;
+  flex: 0 0 auto; min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; cursor: pointer;
   border: 1px solid rgba(65,255,161,0.28); border-radius: 50%;
   color: var(--neon); background: rgba(65,255,161,0.08);
   box-shadow: 0 0 18px rgba(65,255,161,0.12);
@@ -2649,10 +2650,24 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .set-social-open:hover { border-color: rgba(65,255,161,0.4); color: var(--neon); background: rgba(65,255,161,0.07); }
 .set-social-actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.set-social-primary-actions { margin-top: 2px; }
+.set-social-action {
+  flex: 1 1 132px; min-height: 36px; border-radius: 12px; padding: 8px 11px;
+  font: 800 10px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.set-social-action.set-social-lightning { border-radius: 12px; }
 .set-social-actions span {
   flex: 1 1 100%; min-width: 0; color: rgba(185,232,205,0.72); font-size: 11px; line-height: 1.25;
   text-align: right;
 }
+.set-social-link-details {
+  border: 1px solid rgba(65,255,161,0.12); border-radius: 12px; padding: 8px 10px;
+  background: rgba(0,0,0,0.12);
+}
+.set-social-link-details summary {
+  cursor: pointer; color: #cfeeda; font: 800 10px "DM Mono", monospace; letter-spacing: 0.09em; text-transform: uppercase;
+}
+.set-social-link-details label { margin-top: 9px; }
 .set-social-assist {
   display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 14px;
   border: 1px dashed rgba(65,255,161,0.24); border-radius: 15px; padding: 14px;
