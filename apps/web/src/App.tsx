@@ -10693,8 +10693,8 @@ function AgentControlCenter({
       <section className="agent-section agent-manager-section">
         <div className="section-head">
           <div>
-            <span className="eyebrow">Manage the workforce</span>
-            <h3>Assign work by sending each agent to the correct phantom surface.</h3>
+            <span className="eyebrow">Workforce routing</span>
+            <h3>Phantom assigns the right internal lane for each outcome.</h3>
           </div>
           <TruthBadge state="real" label="Functional routes" />
         </div>
@@ -10859,7 +10859,7 @@ function AgentControlCenter({
           <h4>{clientSummary.label} is all employees need.</h4>
           <p>
             Admins see workers, tools, tokens, and spend. Employee workspaces simplify this into the assigned lanes:
-            Sales, Media, Support, Bookings, and Delivery.
+            Sales, Media, Support, Bookings, and Delivery. Clients do not design workers; Phantom routes work behind the scenes.
           </p>
         </article>
         <article className="operator-result-card">

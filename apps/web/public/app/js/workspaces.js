@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260706-10";
+} from "./store.js?v=phantom-live-20260706-11";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1052,21 +1052,19 @@ function workerSortScore(worker) {
 }
 
 function workerPreviewTitle(kind, workerName) {
-  if (kind === "subagent") return `Helper draft — ${workerName}`;
+  if (kind === "subagent") return `Specialist handoff — ${workerName}`;
   if (kind === "retire") return `Retirement proposal — ${workerName}`;
-  if (kind === "create") return "New worker design";
   return `Delegation preview — ${workerName}`;
 }
 
 function workerPreviewSteps(kind) {
-  if (kind === "subagent") return ["Name the helper and the narrow job.", "Confirm allowed tools, limits, and tenant scope.", "Hold for owner approval before the helper exists."];
+  if (kind === "subagent") return ["Show which specialist Phantom would assign.", "Confirm allowed tools, limits, and tenant scope.", "Hold for owner approval before any new helper lane exists."];
   if (kind === "retire") return ["List what the worker owns today.", "Show replacement or pause impact.", "Hold for owner approval before anything is retired."];
-  if (kind === "create") return ["Define the business outcome.", "Choose capabilities, risk level, and approval rules.", "Hold as a design until the execution lane exists."];
   return ["Define the outcome.", "Confirm allowed tools and limits.", "Send to approvals only after a real execution lane exists."];
 }
 
 function renderWorkerPreview(worker, kind = "delegate") {
-  const name = worker?.display_name || "new worker";
+  const name = worker?.display_name || "worker";
   return `
     <section class="worker-preview-panel">
       <div>
@@ -1189,7 +1187,7 @@ function renderWorkerCard(worker, subagents = [], options = {}) {
       ${showActions ? `
         <div class="worker-actions">
           <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="delegate" aria-expanded="${previewExpanded("delegate") ? "true" : "false"}">Preview a delegation</button>
-          <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="subagent" aria-expanded="${previewExpanded("subagent") ? "true" : "false"}">Draft a helper</button>
+          <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="subagent" aria-expanded="${previewExpanded("subagent") ? "true" : "false"}">Preview handoff</button>
           <button class="btn btn-quiet" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="retire" aria-expanded="${previewExpanded("retire") ? "true" : "false"}">Plan retirement</button>
         </div>` : ""}
       ${previewOpen ? renderWorkerPreview(worker, workerUi.preview.kind) : ""}
@@ -1204,15 +1202,15 @@ function renderWorkforce(el, rerender) {
     const inflight = visible(store.state.media).filter((x) => x.status !== "delivered").length + visible(store.state.sites).filter((x) => x.status === "draft").length;
     el.innerHTML = `
       <div class="stat-row">
-        <div class="stat"><span>Workers on your account</span><b>${active}</b><i>ready or active</i></div>
+        <div class="stat"><span>Active support</span><b>${active}</b><i>ready or active</i></div>
         <div class="stat"><span>Deliverables in progress</span><b>${inflight}</b><i>moving through the pipeline</i></div>
         <div class="stat"><span>Approvals waiting</span><b>${visible(store.state.approvals).filter((a) => a.status === "pending").length}</b><i>real queue only</i></div>
       </div>
-      <h3 class="ws-subhead">Your visible workers</h3>
+      <h3 class="ws-subhead">What Phantom is handling</h3>
       <div class="worker-grid worker-grid-client" role="list">
         ${clientWorkers.map((worker) => renderWorkerCard({ ...worker, capabilities: worker.capabilities.slice(0, 3) }, [], { actions: false })).join("")}
       </div>
-      <p class="ws-note">Your workers draft and prepare. Anything that touches the outside world waits for approval first.</p>`;
+      <p class="ws-note">Phantom prepares the work. Anything that touches the outside world waits for approval first.</p>`;
     return;
   }
   const visibleWorkers = workers.filter(workerMatchesFilter).sort((a, b) => workerSortScore(a) - workerSortScore(b));
@@ -1255,9 +1253,7 @@ function renderWorkforce(el, rerender) {
     </div>
     <div class="worker-filter-row">
       ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
-      <button class="worker-filter worker-filter-propose" data-act="worker-preview" data-preview="create">Design a new worker</button>
     </div>
-    ${workerUi.preview?.kind === "create" ? renderWorkerPreview(null, "create") : ""}
     <div class="worker-grid" role="list">
       ${visibleWorkers.map((worker) => renderWorkerCard(worker, subByParent[worker.worker_id] || [])).join("") || empty("No workers match this filter.")}
     </div>
@@ -1269,8 +1265,8 @@ function renderWorkforce(el, rerender) {
       </div>
       <div>
         <p class="worker-kicker">Future scale</p>
-        <h4>Built to grow. Gated on purpose.</h4>
-        <p>Add workers as the business grows — from a handful to a full fleet. Every new worker inherits the same rule: preview first, approve before anything real happens.</p>
+        <h4>Phantom assigns capacity as the business grows.</h4>
+        <p>We set the base operating model. Phantom routes work to the right internal lane as needed, while clients see clear outcomes instead of worker setup screens.</p>
       </div>
     </section>`;
   bindActions(el, {

@@ -4,13 +4,13 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-10";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-10";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-10";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-10";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-10";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-10";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-10";
+} from "./store.js?v=phantom-live-20260706-11";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-11";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-11";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-11";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-11";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-11";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-11";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
