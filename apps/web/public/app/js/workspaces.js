@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260706-07";
+} from "./store.js?v=phantom-live-20260706-08";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -18,7 +18,7 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all" };
-const workerUi = { filter: "all", notice: "" };
+const workerUi = { filter: "all", notice: "", preview: null };
 const MEMORY_DAY = 86400000;
 
 function bindActions(root, handlers) {
@@ -909,8 +909,8 @@ const WORKER_SUBAGENTS = [
     parent: "automation-desk",
     name: "Follow-Up Drafter",
     role: "Prepares manual follow-up messages and next-step reminders.",
-    status: "working",
-    task: "Drafting next-safe-actions for leads. No sends enabled.",
+    status: "ready",
+    task: "Ready to draft next-safe-actions for leads. No sends enabled.",
     capabilities: ["follow-up drafts", "approval routing", "lead notes"],
     risk: "medium",
   },
@@ -931,24 +931,24 @@ function workerInitials(name = "") {
 
 function workerStatusFromTool(tool) {
   if (["setup-ready", "standby"].includes(tool.mode)) return "idle";
-  if (["planning", "available"].includes(tool.mode)) return "working";
   if (tool.mode === "owner-controlled") return "needs-approval";
   if (tool.mode === "blocked" || tool.status === "blocked") return "blocked";
-  return "working";
+  return "ready";
 }
 
 function workerStatusLabel(status) {
   return ({
-    working: "Working",
+    ready: "Ready",
+    working: "Drafting",
     idle: "Idle",
     blocked: "Blocked",
-    "needs-approval": "Approval",
+    "needs-approval": "Needs approval",
     human: "Human",
   })[status] || title(status);
 }
 
 function workerRiskLabel(risk) {
-  return ({ low: "Low risk", medium: "Approval risk", high: "High risk" })[risk] || title(risk);
+  return ({ low: "Low risk", medium: "Needs sign-off", high: "High risk" })[risk] || title(risk);
 }
 
 function workerTypeLabel(type) {
@@ -957,6 +957,7 @@ function workerTypeLabel(type) {
 
 function buildWorkerRoster() {
   const tools = store.state.toolSpine || [];
+  const activity = store.state.activity || [];
   const owner = {
     worker_id: "human-owner-operator",
     display_name: "Jordan",
@@ -969,19 +970,23 @@ function buildWorkerRoster() {
     capabilities: ["owner approval", "client judgment", "final control"],
     tools_available: ["PhantomForce cockpit"],
     risk_level: "low",
-    last_active_at: "now",
+    last_active_at: "Approval layer",
+    has_activity: true,
     approvals_required: 0,
     can_delegate: true,
     can_create_subagents: false,
     execution_enabled: false,
     preview_only: false,
-    capacity_used: 1,
+    capacity_used: 0,
     capacity_total: 1,
     client_visible: true,
   };
-  const bots = tools.map((tool, index) => {
+  const bots = tools.map((tool) => {
     const status = workerStatusFromTool(tool);
     const highRisk = /code|gateway|brain|standards|process|private|model/i.test(`${tool.id} ${tool.internal} ${tool.role}`);
+    const recent = activity.find((entry) =>
+      String(entry.who || "").toLowerCase() === String(tool.worker || "").toLowerCase()
+      || String(entry.text || "").toLowerCase().includes(String(tool.worker || "").toLowerCase()));
     return {
       worker_id: `bot-${tool.id}`,
       display_name: tool.worker || tool.name,
@@ -994,18 +999,19 @@ function buildWorkerRoster() {
       capabilities: [tool.name, tool.internal, statusLabel(tool.mode)].filter(Boolean).slice(0, 4),
       tools_available: [tool.path || "Private backend", tool.name].filter(Boolean),
       risk_level: highRisk || status === "needs-approval" ? "medium" : "low",
-      last_active_at: ago(new Date(Date.now() - (index + 2) * 36 * 60000).toISOString()),
+      last_active_at: recent ? ago(recent.at) : "No runs yet",
+      has_activity: !!recent,
       approvals_required: status === "needs-approval" || tool.mode === "setup-ready" ? 1 : 0,
       can_delegate: status !== "blocked",
       can_create_subagents: false,
       execution_enabled: false,
       preview_only: true,
-      capacity_used: status === "working" ? 1 + (index % 2) : 0,
+      capacity_used: 0,
       capacity_total: 3,
-      client_visible: !/brain|code|standards|gateway|process|model/i.test(`${tool.id} ${tool.internal}`),
+      client_visible: tool.visibleToClients === true,
     };
   });
-  const subagents = WORKER_SUBAGENTS.map((sub, index) => ({
+  const subagents = WORKER_SUBAGENTS.map((sub) => ({
     worker_id: `subagent-${sub.name.toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
     display_name: sub.name,
     worker_type: "subagent",
@@ -1017,13 +1023,14 @@ function buildWorkerRoster() {
     capabilities: sub.capabilities,
     tools_available: ["Preview lane only"],
     risk_level: sub.risk,
-    last_active_at: ago(new Date(Date.now() - (index + 1) * 58 * 60000).toISOString()),
+    last_active_at: "No runs yet",
+    has_activity: false,
     approvals_required: sub.status === "needs-approval" || sub.status === "blocked" ? 1 : 0,
     can_delegate: false,
     can_create_subagents: false,
     execution_enabled: false,
     preview_only: true,
-    capacity_used: sub.status === "working" ? 1 : 0,
+    capacity_used: 0,
     capacity_total: 1,
     client_visible: false,
   }));
@@ -1039,10 +1046,118 @@ function workerMatchesFilter(worker) {
   return worker.status === workerUi.filter;
 }
 
-function renderWorkerCard(worker, subagents = []) {
-  const capPct = Math.max(0, Math.min(100, Math.round((worker.capacity_used / Math.max(1, worker.capacity_total)) * 100)));
+function workerSortScore(worker) {
+  if (worker.worker_type === "human") return 0;
+  return ({ "needs-approval": 1, blocked: 2, ready: 3, working: 3, idle: 4 })[worker.status] || 5;
+}
+
+function workerPreviewTitle(kind, workerName) {
+  if (kind === "subagent") return `Helper draft — ${workerName}`;
+  if (kind === "retire") return `Retirement proposal — ${workerName}`;
+  if (kind === "create") return "New worker design";
+  return `Delegation preview — ${workerName}`;
+}
+
+function workerPreviewSteps(kind) {
+  if (kind === "subagent") return ["Name the helper and the narrow job.", "Confirm allowed tools, limits, and tenant scope.", "Hold for owner approval before the helper exists."];
+  if (kind === "retire") return ["List what the worker owns today.", "Show replacement or pause impact.", "Hold for owner approval before anything is retired."];
+  if (kind === "create") return ["Define the business outcome.", "Choose capabilities, risk level, and approval rules.", "Hold as a design until the execution lane exists."];
+  return ["Define the outcome.", "Confirm allowed tools and limits.", "Send to approvals only after a real execution lane exists."];
+}
+
+function renderWorkerPreview(worker, kind = "delegate") {
+  const name = worker?.display_name || "new worker";
   return `
-    <article class="worker-card worker-${esc(worker.status)} worker-type-${esc(worker.worker_type)}">
+    <section class="worker-preview-panel">
+      <div>
+        <p class="worker-kicker">Preview only</p>
+        <h4>${esc(workerPreviewTitle(kind, name))}</h4>
+      </div>
+      <ol>
+        ${workerPreviewSteps(kind).map((step) => `<li>${esc(step)}</li>`).join("")}
+      </ol>
+      <p class="worker-preview-safe">Preview only — nothing was created, queued, executed, sent, scanned, pulled, retired, or deployed.</p>
+      <div class="worker-actions">
+        <button class="btn" data-act="worker-preview-close">Close</button>
+        <button class="btn btn-quiet" disabled title="Execution lane not built yet">Send to Approvals</button>
+      </div>
+    </section>`;
+}
+
+function workerMeshTone(worker) {
+  if (worker.worker_type === "human") return "human";
+  if (worker.status === "blocked") return "blocked";
+  if (worker.status === "needs-approval") return "approval";
+  if (worker.status === "idle") return "idle";
+  if (worker.has_activity) return "live";
+  return "ready";
+}
+
+function workerMeshGroup(worker) {
+  const text = `${worker.worker_id} ${worker.display_name} ${worker.role} ${worker.capabilities?.join(" ") || ""}`.toLowerCase();
+  if (/n8n|automation|workflow/.test(text)) return "automation";
+  if (/ruflo|loop|squad|swarm|handoff/.test(text)) return "loop";
+  if (/media|video|content/.test(text)) return "media";
+  if (/code|repo|build|spec/.test(text)) return "build";
+  if (/memory|vault|context/.test(text)) return "memory";
+  if (/gateway|access|security|sentinel|scanner/.test(text)) return "protect";
+  if (/model|brain|phantom/.test(text)) return "brain";
+  return "ops";
+}
+
+function renderWorkerMesh(workers) {
+  const topWorkers = workers.filter((worker) => worker.worker_type !== "subagent");
+  const rings = topWorkers.map((worker, index) => {
+    const tone = workerMeshTone(worker);
+    const group = workerMeshGroup(worker);
+    const style = `--node-index:${index}; --node-delay:${(index % 7) * 0.28}s`;
+    return `
+      <button class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)}" style="${style}" data-act="worker-filter" data-filter="${esc(worker.worker_type === "human" ? "humans" : worker.status)}" title="${esc(worker.display_name)}">
+        <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
+        <span class="worker-node-label">${esc(worker.display_name)}</span>
+        <i>${esc(worker.status === "human" ? "approval" : worker.status)}</i>
+      </button>`;
+  }).join("");
+  const connected = topWorkers.filter((worker) => worker.status !== "blocked").length;
+  const gated = topWorkers.filter((worker) => worker.status === "needs-approval" || worker.status === "idle").length;
+  const blocked = topWorkers.filter((worker) => worker.status === "blocked").length;
+  return `
+    <section class="worker-mesh" aria-label="Worker operations mesh">
+      <div class="worker-mesh-stage">
+        <div class="worker-mesh-rings" aria-hidden="true">
+          <span></span><span></span><span></span>
+        </div>
+        <div class="worker-core">
+          <span>PF</span>
+          <b>Phantom</b>
+          <i>router</i>
+        </div>
+        <div class="worker-links" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <div class="worker-node-field">
+          ${rings}
+        </div>
+      </div>
+      <div class="worker-mesh-readout">
+        <span><b>${connected}</b> wired lanes</span>
+        <span><b>${gated}</b> gated/setup</span>
+        <span><b>${blocked}</b> blocked</span>
+      </div>
+    </section>`;
+}
+
+function renderWorkerCard(worker, subagents = [], options = {}) {
+  const showActions = options.actions !== false && worker.worker_type !== "human";
+  const capPct = Math.max(0, Math.min(100, Math.round((worker.capacity_used / Math.max(1, worker.capacity_total)) * 100)));
+  const previewOpen = workerUi.preview?.workerId === worker.worker_id;
+  const previewExpanded = (kind) => previewOpen && workerUi.preview?.kind === kind;
+  const meshTone = workerMeshTone(worker);
+  return `
+    <article class="worker-card worker-${esc(worker.status)} worker-type-${esc(worker.worker_type)}" role="listitem">
+      <div class="worker-card-visual worker-card-visual-${esc(meshTone)}" aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </div>
       <div class="worker-card-top">
         <span class="wf-avatar wf-avatar-${esc(worker.avatar?.tone || worker.status)}">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <div class="worker-id">
@@ -1053,7 +1168,7 @@ function renderWorkerCard(worker, subagents = []) {
       </div>
       <p class="worker-task">${esc(worker.current_task)}</p>
       <div class="worker-capacity">
-        <span><b>${worker.capacity_used}/${worker.capacity_total}</b> capacity</span>
+        <span><b>${worker.capacity_used}/${worker.capacity_total}</b> capacity slots in use — nothing active</span>
         <i style="--worker-cap:${capPct}%"></i>
       </div>
       <div class="worker-tags">
@@ -1066,15 +1181,18 @@ function renderWorkerCard(worker, subagents = []) {
         </div>` : ""}
       <div class="worker-facts">
         <span>${esc(workerRiskLabel(worker.risk_level))}</span>
-        <span>${worker.approvals_required ? `${worker.approvals_required} approval` : "No approval waiting"}</span>
-        <span>${worker.execution_enabled ? "Execution on" : "Execution disabled"}</span>
+        <span>${worker.approvals_required ? "Waiting on your approval" : "Nothing waiting on you"}</span>
+        <span>${worker.execution_enabled ? "Execution on" : "Preview only — can't act alone"}</span>
         <span>${esc(worker.last_active_at)}</span>
       </div>
-      <div class="worker-actions">
-        <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="delegate">Preview delegation</button>
-        <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="subagent">Draft subagent</button>
-        <button class="btn btn-quiet" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="retire">Propose retire</button>
-      </div>
+      ${worker.worker_type === "human" ? `<p class="worker-human-note">You're the approval layer. Everything routes through you.</p>` : ""}
+      ${showActions ? `
+        <div class="worker-actions">
+          <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="delegate" aria-expanded="${previewExpanded("delegate") ? "true" : "false"}">Preview a delegation</button>
+          <button class="btn" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="subagent" aria-expanded="${previewExpanded("subagent") ? "true" : "false"}">Draft a helper</button>
+          <button class="btn btn-quiet" data-act="worker-preview" data-id="${esc(worker.worker_id)}" data-preview="retire" aria-expanded="${previewExpanded("retire") ? "true" : "false"}">Plan retirement</button>
+        </div>` : ""}
+      ${previewOpen ? renderWorkerPreview(worker, workerUi.preview.kind) : ""}
     </article>`;
 }
 
@@ -1082,7 +1200,7 @@ function renderWorkforce(el, rerender) {
   const workers = buildWorkerRoster();
   const clientWorkers = workers.filter((worker) => worker.client_visible || worker.worker_type === "human");
   if (!isAdmin()) {
-    const active = clientWorkers.filter((worker) => worker.status === "working" || worker.status === "human").length;
+    const active = clientWorkers.filter((worker) => worker.status === "ready" || worker.worker_type === "human").length;
     const inflight = visible(store.state.media).filter((x) => x.status !== "delivered").length + visible(store.state.sites).filter((x) => x.status === "draft").length;
     el.innerHTML = `
       <div class="stat-row">
@@ -1091,76 +1209,78 @@ function renderWorkforce(el, rerender) {
         <div class="stat"><span>Approvals waiting</span><b>${visible(store.state.approvals).filter((a) => a.status === "pending").length}</b><i>real queue only</i></div>
       </div>
       <h3 class="ws-subhead">Your visible workers</h3>
-      <div class="worker-grid worker-grid-client">
-        ${clientWorkers.map((worker) => renderWorkerCard({ ...worker, capabilities: worker.capabilities.slice(0, 3) }, [])).join("")}
+      <div class="worker-grid worker-grid-client" role="list">
+        ${clientWorkers.map((worker) => renderWorkerCard({ ...worker, capabilities: worker.capabilities.slice(0, 3) }, [], { actions: false })).join("")}
       </div>
-      <p class="ws-note">External actions, sends, paid runs, deletes, and production changes still require approval. No raw provider or internal tool details are shown here.</p>`;
+      <p class="ws-note">Your workers draft and prepare. Anything that touches the outside world waits for approval first.</p>`;
     return;
   }
-  const visibleWorkers = workers.filter(workerMatchesFilter);
+  const visibleWorkers = workers.filter(workerMatchesFilter).sort((a, b) => workerSortScore(a) - workerSortScore(b));
   const subByParent = workers.reduce((acc, worker) => {
     if (worker.parent_agent_id) (acc[worker.parent_agent_id] ||= []).push(worker);
     return acc;
   }, {});
   const botCount = workers.filter((worker) => worker.worker_type !== "human").length;
   const humanCount = workers.filter((worker) => worker.worker_type === "human").length;
-  const workingCount = workers.filter((worker) => worker.status === "working" || worker.status === "human").length;
+  const readyCount = workers.filter((worker) => worker.status === "ready" || worker.worker_type === "human").length;
   const attentionCount = workers.filter((worker) => worker.status === "blocked" || worker.status === "needs-approval").length;
   const filters = [
     ["all", "All"],
     ["bots", "Bots"],
     ["humans", "Humans"],
     ["subagents", "Subagents"],
-    ["working", "Working"],
+    ["ready", "Ready"],
     ["idle", "Idle"],
-    ["attention", "Needs review"],
+    ["attention", "Waiting on you"],
   ];
   el.innerHTML = `
     <section class="workers-hero">
       <div>
         <p class="worker-kicker">Workers</p>
-        <h3>Your AI workforce cockpit</h3>
-        <p>Bot workers, humans, agents, and preview-only subagents in one roster. Delegation, repo scans, malware checks, worker creation, and retirement are designed here, but they do not execute from this MVP.</p>
+        <h3>Your team, at a glance</h3>
+        <p>Every worker here is real, scoped, and waits for your go-ahead. Nothing runs, sends, scans, pulls, retires, or spends without approval.</p>
       </div>
       <div class="worker-scale">
-        <span><b>${workers.length}</b> current roster</span>
-        <span><b>100</b> small-business capacity</span>
-        <span><b>1000+</b> enterprise design target</span>
+        <span><b>${workers.length}</b> on the roster</span>
       </div>
     </section>
-    ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)}</div>` : ""}
+    ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
+    ${renderWorkerMesh(workers)}
     <div class="worker-metrics">
       <div><span>Total workers</span><b>${workers.length}</b></div>
       <div><span>Bot workers</span><b>${botCount}</b></div>
       <div><span>Humans</span><b>${humanCount}</b></div>
-      <div><span>Working</span><b>${workingCount}</b></div>
-      <div><span>Needs review</span><b>${attentionCount}</b></div>
+      <div><span>Ready</span><b>${readyCount}</b></div>
+      <div><span>Waiting on you</span><b>${attentionCount}</b></div>
     </div>
     <div class="worker-filter-row">
-      ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}">${esc(label)}</button>`).join("")}
-      <button class="worker-filter worker-filter-propose" data-act="worker-preview" data-preview="create">Preview new worker</button>
+      ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
+      <button class="worker-filter worker-filter-propose" data-act="worker-preview" data-preview="create">Design a new worker</button>
     </div>
-    <div class="worker-grid">
+    ${workerUi.preview?.kind === "create" ? renderWorkerPreview(null, "create") : ""}
+    <div class="worker-grid" role="list">
       ${visibleWorkers.map((worker) => renderWorkerCard(worker, subByParent[worker.worker_id] || [])).join("") || empty("No workers match this filter.")}
     </div>
     <section class="worker-enterprise">
-      <div>
-        <p class="worker-kicker">Future scale</p>
-        <h4>Fleet view ready, execution still gated</h4>
-        <p>Small businesses may run 10-100 workers. Larger customers can scale to hundreds of specialized workers once real telemetry, approvals, and tenant controls are live.</p>
-      </div>
       <div class="worker-safety-list">
         <span>Subagent creation: preview-only</span>
         <span>Repo pulls and malware scans: approval-gated</span>
         <span>Deletes, deploys, sends, billing: blocked here</span>
       </div>
+      <div>
+        <p class="worker-kicker">Future scale</p>
+        <h4>Built to grow. Gated on purpose.</h4>
+        <p>Add workers as the business grows — from a handful to a full fleet. Every new worker inherits the same rule: preview first, approve before anything real happens.</p>
+      </div>
     </section>`;
   bindActions(el, {
     "worker-filter": (_id, button) => { workerUi.filter = button.dataset.filter || "all"; rerender(); },
+    "worker-notice-close": () => { workerUi.notice = ""; rerender(); },
+    "worker-preview-close": () => { workerUi.preview = null; rerender(); },
     "worker-preview": (id, button) => {
       const action = button.dataset.preview || "action";
-      const target = workers.find((worker) => worker.worker_id === id)?.display_name || "new worker";
-      workerUi.notice = `Preview only: ${action.replace(/-/g, " ")} for ${target} was drafted visually. No worker was created, retired, delegated, executed, queued, or sent.`;
+      workerUi.preview = { workerId: id || null, kind: action };
+      workerUi.notice = "";
       rerender();
     },
   });

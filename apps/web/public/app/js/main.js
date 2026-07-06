@@ -4,13 +4,13 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-07";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-07";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-07";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-07";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-07";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-07";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-07";
+} from "./store.js?v=phantom-live-20260706-08";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-08";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-08";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-08";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-08";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-08";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-08";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -106,22 +106,6 @@ const I = {
   calendar:`<rect x="2.8" y="3.5" width="10.4" height="9.5" rx="1.2"/><path d="M2.8 6h10.4M5.5 2.4v2M10.5 2.4v2"/>`,
 };
 const svg = (key, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[key] || ""}</svg>`;
-
-/* a tiny deterministic trend sparkline for a stat value (stable per value) */
-function sparkline(seed, up = true) {
-  const n = 12, pts = [];
-  let v = 0.5;
-  for (let i = 0; i < n; i++) {
-    const r = (Math.sin(seed * 12.9898 + i * 4.1414) * 43758.5453) % 1;
-    v = Math.max(0.08, Math.min(0.92, v + (Math.abs(r) - 0.5) * 0.34 + (up ? 0.02 : -0.02)));
-    pts.push(v);
-  }
-  const W = 100, H = 30;
-  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${((i / (n - 1)) * W).toFixed(1)} ${((1 - p) * H).toFixed(1)}`).join(" ");
-  const area = `${d} L${W} ${H} L0 ${H} Z`;
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-    <path class="spark-area" d="${area}"/><path class="spark-line" d="${d}"/></svg>`;
-}
 
 /* ============================ access gate ============================ */
 function showGate() {
@@ -476,7 +460,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-07";
+const POSE_VERSION = "phantom-live-20260706-08";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -637,23 +621,18 @@ function renderHero() {
 }
 
 /* ============================ stat cards ============================ */
-function thisWeekCount() {
-  const weekAgo = Date.now() - 7 * 864e5;
-  return visible(store.state.activity).filter((a) => new Date(a.at).getTime() >= weekAgo).length;
-}
 function renderStatCards() {
   const media = visible(store.state.media);
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "owner-controlled", "available", "planning"].includes(tool.mode)).length;
   const workerTotal = Math.max(1, (store.state.toolSpine || []).length + 1);
   const mem = memoryStats();
 
   const cards = [
-    { icon: "brain", title: "Phantom AI", value: "ON", sub: "Ready", foot: "Tap to talk", open: "phantom", trend: "online", sparkSeed: 8 },
-    { icon: "users", title: "Workers", value: activeTools, sub: `${workerTotal} rostered`, foot: "Preview roster", open: "workforce", trend: "active", sparkSeed: activeTools + 12 },
-    { icon: "check", title: "Approvals", value: pending ? pending : "OK", sub: pending ? "Review" : "Clear", foot: pending ? "Needs owner call" : "All systems go", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear", sparkSeed: pending + 4 },
-    { icon: "db", title: "Memory", value: mem.total ? "ON" : "OK", sub: mem.total ? `${mem.total} notes` : "Ready", foot: mem.remembered ? `${mem.remembered} pinned` : "Private context", open: "memory", trend: mem.total ? "live" : "ready", sparkSeed: mem.total + 7 },
-    { icon: "media", title: "Media", value: media.length ? media.length : "OK", sub: media.length ? "Requests" : "Ready", foot: media.length ? "In pipeline" : "No blockers", open: "media", trend: media.length ? "run" : "ready", sparkSeed: media.length + thisWeekCount() + 9 },
+    { icon: "brain", title: "Phantom AI", value: "ON", sub: "Protected", foot: "Tap to talk", open: "phantom", trend: "on" },
+    { icon: "users", title: "Workers", value: workerTotal, sub: "0 active now", foot: "Open roster", open: "workforce", trend: "ready" },
+    { icon: "check", title: "Approvals", value: pending ? pending : "OK", sub: pending ? "Review" : "Clear", foot: pending ? "Needs owner call" : "All systems go", open: "approvals", alert: pending > 0, trend: pending ? "needs you" : "ready" },
+    { icon: "db", title: "Memory", value: mem.total ? "ON" : "OK", sub: mem.total ? `${mem.total} notes` : "Ready", foot: mem.remembered ? `${mem.remembered} pinned` : "Private context", open: "memory", trend: "ready" },
+    { icon: "media", title: "Media", value: media.length ? media.length : "OK", sub: media.length ? "Requests" : "Ready", foot: media.length ? "In pipeline" : "No blockers", open: "media", trend: "ready" },
   ];
   $("[data-statcards]").innerHTML = cards.map((c) => `
     <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
@@ -664,7 +643,6 @@ function renderStatCards() {
       <span class="statcard-k">${esc(c.title)}</span>
       <b class="statcard-v">${c.value}</b>
       <span class="statcard-sub">${esc(c.sub)}</span>
-      ${sparkline(c.sparkSeed ?? (Number(c.value) || c.title.length), !c.alert)}
       <span class="statcard-foot">${esc(c.foot)}</span>
     </button>`).join("");
 }
@@ -716,19 +694,13 @@ function renderPlan() {
       </button>`;
     return;
   }
-  const m = moneyView();
-  const money = m.wonValue + m.pipeline > 0 ? m.wonValue / (m.wonValue + m.pipeline) : 0.4;
-  // an upbeat "on track" read: fewer open items + more won momentum = higher.
-  const pct = Math.max(55, Math.min(97, Math.round(88 - plan.length * 4 + money * 18)));
-  const R = 30, C = 2 * Math.PI * R, off = C * (1 - pct / 100);
-  const msg = pct >= 85 ? "You're ahead. Ride it." : pct >= 45 ? "You're on track." : "Let's clear the runway.";
+  const msg = plan.length === 1 ? "One real thing needs you." : "A few real things need you.";
   $("[data-plan]").innerHTML = `
     <div class="section-head"><h2>Today's plan</h2></div>
     <button class="plan-inner" data-open-ws="approvals">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
-        <circle cx="36" cy="36" r="${R}" class="plan-track"/>
-        <circle cx="36" cy="36" r="${R}" class="plan-arc" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/>
-        <text x="36" y="40" class="plan-pct">${pct}%</text>
+        <circle cx="36" cy="36" r="30" class="plan-track"/>
+        <text x="36" y="40" class="plan-pct">${plan.length}</text>
       </svg>
       <span class="plan-copy">
         <b>${msg}</b>
@@ -740,7 +712,7 @@ function renderPlan() {
 
 /* ============================ mission queue ============================ */
 const AGENT_STATE = {
-  active: { label: "RUNNING", cls: "run" },
+  active: { label: "READY", cls: "run" },
   waiting: { label: "WAITING", cls: "wait" },
   "needs-approval": { label: "APPROVE", cls: "wait" },
   blocked: { label: "BLOCKED", cls: "block" },
