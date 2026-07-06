@@ -19,7 +19,7 @@ const css = readProjectFile("apps/web/public/app/phantom.css");
 
 assert(indexHtml.includes(`window.PHANTOM_BUILD = "${buildId}"`), "Index should expose the current build id.");
 assert(indexHtml.includes(`/app/js/main.js?v=${buildId}`), "Index should load the current main bundle.");
-assert(indexHtml.includes('data-agent-ticker aria-label="PhantomWire recent worker activity"'), "Top broadcast should be labeled PhantomWire.");
+assert(indexHtml.includes('data-agent-ticker aria-label="PhantomWire"'), "Top broadcast should be labeled PhantomWire.");
 assert(!indexHtml.includes("data-agentops"), "Dashboard markup should not mount the full worker console.");
 
 assert(mainJs.includes(`import { mountAgentTicker } from "./agentops.js?v=${buildId}"`), "Main should import only the compact PhantomWire ticker.");
@@ -27,7 +27,7 @@ assert(!mainJs.includes("mountAgentConsole("), "Main should not mount the full w
 assert(mainJs.includes("Worker controls live in the Workers tab."), "Developer page should point worker controls to Workers.");
 
 assert(agentOps.includes("<b>PhantomWire</b>"), "Agent activity module should brand the ticker as PhantomWire.");
-assert(agentOps.includes("recent worker activity"), "PhantomWire should describe recent worker activity.");
+assert(!agentOps.includes("recent worker activity"), "PhantomWire should not add subtitle copy after the name.");
 assert(agentOps.includes('"n8n-worker": "Charles"'), "PhantomWire should alias backend worker names for the top broadcast.");
 assert(agentOps.includes(".replace(/\\bn8n\\b/gi, \"workflow lane\")"), "PhantomWire should hide raw backend tool names from the broadcast copy.");
 assert(agentOps.includes("<h2>Workers</h2>"), "Fallback console should be titled Workers, not PhantomWire.");

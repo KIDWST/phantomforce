@@ -83,9 +83,8 @@ export function mountAgentTicker(el) {
   el.innerHTML = `<div class="atk-label" data-phantomwire>
       <span class="atk-live"><i></i>LIVE</span>
       <b>PhantomWire</b>
-      <small>recent worker activity</small>
     </div>
-    <div class="atk-view" aria-label="Recent PhantomForce worker activity"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-sep">•</span>${items}</div></div>`;
+    <div class="atk-view" aria-label="PhantomWire"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-sep">•</span>${items}</div></div>`;
 }
 
 /* ======================================================================
