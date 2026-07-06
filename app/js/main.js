@@ -4,17 +4,17 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-31";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-31";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-31";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-31";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-31";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-31";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-31";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-31";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-31";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-31";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-31";
+} from "./store.js?v=phantom-live-20260706-32";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-32";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-32";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-32";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-32";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-32";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-32";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-32";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-32";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-32";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-32";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -86,6 +86,7 @@ const I = {
   chat:  `<path d="M3 5h10v7H8l-3 2v-2H3z"/>`,
   grid:  `<path d="M3 3h4v4H3zM9 3h4v4H9zM3 9h4v4H3zM9 9h4v4H9z"/>`,
   media: `<rect x="2.5" y="4" width="11" height="8" rx="1.5"/><path d="M7 6.5l3 1.5-3 1.5z"/>`,
+  site:  `<rect x="2.8" y="3.2" width="10.4" height="9.6" rx="1.4"/><path d="M2.8 5.8h10.4M5.2 8.4h2.4M5.2 10.5h5.6"/>`,
   doc:   `<path d="M4 2.5h5l3 3V13.5H4z"/><path d="M9 2.5v3h3"/>`,
   brain: `<path d="M8 3.5c-2 0-3 1-3 2.4 0 .4-.6.6-.6 1.4 0 .7.5 1 .5 1 0 1 .8 2 2 2M8 3.5c2 0 3 1 3 2.4 0 .4.6.6.6 1.4 0 .7-.5 1-.5 1 0 1-.8 2-2 2M8 3.5v7.8"/>`,
   check: `<circle cx="8" cy="8" r="5.2"/><path d="M6 8l1.5 1.5L10.5 6.5"/>`,
@@ -173,6 +174,7 @@ function showGate() {
 const NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
+  { id: "sites",      label: "Site Creator", icon: "site",  ws: "sites" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
   { id: "brand",      label: "Brand Memory", icon: "db",    ws: "brand" },
@@ -187,6 +189,7 @@ const MOBILE_NAV = [
   { id: "dashboard", label: "Home",      icon: "grid",  route: "nav", target: "dashboard" },
   { id: "content",   label: "Content",   icon: "doc",   route: "nav", target: "content" },
   { id: "media",     label: "Video",     icon: "media", route: "nav", target: "media" },
+  { id: "sites",     label: "Site",      icon: "site",  route: "nav", target: "sites" },
   { id: "workers",   label: "Workers",   icon: "users", route: "nav", target: "workers" },
   { id: "analytics", label: "Analytics", icon: "chart", route: "nav", target: "analytics" },
 ];
@@ -507,7 +510,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-31";
+const POSE_VERSION = "phantom-live-20260706-32";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1474,6 +1477,7 @@ const mediaOpts = () => ({
   notify: (who, text) => { pushActivity(who, text); store.save(); },
   openSettings: () => routeWorkspace("settings"),
   openWorkspace: (id) => routeWorkspace(id),
+  focusCommand: () => { renderDashboardPage(true); focusCommandInput(80); },
   renderBriefs: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
 

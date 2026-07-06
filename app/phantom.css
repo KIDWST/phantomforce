@@ -3674,7 +3674,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     z-index: 95;
     display: grid;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 4px;
     min-height: 64px;
     padding: 7px;
@@ -3695,10 +3695,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     border-radius: 16px;
     background: transparent;
     color: rgba(214, 239, 226, 0.64);
-    font: 700 10px "Space Grotesk", sans-serif;
+    font: 700 9.5px "Space Grotesk", sans-serif;
     cursor: pointer;
   }
-  .mobile-bottom-item .ic { width: 17px; height: 17px; }
+  .mobile-bottom-item .ic { width: 16px; height: 16px; }
   .mobile-bottom-item span {
     overflow: hidden;
     max-width: 100%;
@@ -3715,7 +3715,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 
 @media (max-width: 390px) {
   .mobile-bottom-nav { left: 8px; right: 8px; padding: 6px; }
-  .mobile-bottom-item { min-height: 46px; font-size: 9px; }
+  .mobile-bottom-item { min-height: 46px; font-size: 8.5px; }
 }
 
 /* Final phone chrome: one clean top bar, one fixed taskbar. */
@@ -3735,7 +3735,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     bottom: calc(8px + env(safe-area-inset-bottom, 0px));
     z-index: 95;
     display: grid !important;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
+    grid-template-columns: repeat(6, minmax(0, 1fr));
     gap: 4px;
     min-height: 64px;
     padding: 7px;
@@ -3809,7 +3809,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     border-radius: 16px;
     background: transparent;
     color: rgba(214, 239, 226, 0.64);
-    font: 700 10px "Space Grotesk", sans-serif;
+    font: 700 9.5px "Space Grotesk", sans-serif;
   }
   .mobile-bottom-item.is-active {
     background: linear-gradient(135deg, rgba(65, 255, 161, 0.22), rgba(23, 217, 153, 0.1));
@@ -4107,7 +4107,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .au { display: flex; flex-direction: column; gap: 16px; }
 .au-card { min-height: 360px; }
 .au-summary {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
   margin: 0 0 14px;
 }
 .au-summary span {
@@ -4117,12 +4117,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .au-summary b { color: var(--ink); font: 600 23px/1 "Space Grotesk", sans-serif; font-variant-numeric: tabular-nums; }
 .au-summary i { color: var(--dim); font: 700 9px "DM Mono", monospace; font-style: normal; letter-spacing: 0.12em; text-transform: uppercase; }
-.au-add { margin-bottom: 14px; }
 .au-list { display: flex; flex-direction: column; gap: 7px; }
 .au-item { display: flex; align-items: center; gap: 11px; padding: 10px 13px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.016); }
 .au-item-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
 .au-item-main b { font-size: 13.5px; font-weight: 600; }
 .au-item-main i { font-size: 11.5px; font-style: normal; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-item-main em { font: 500 10px "DM Mono", monospace; font-style: normal; color: var(--dim-2); letter-spacing: 0.03em; }
+.au-actions { display: inline-flex; align-items: center; justify-content: flex-end; gap: 7px; flex-wrap: wrap; }
+.au-actions .btn { padding: 7px 10px; min-height: 32px; border-radius: 10px; font-size: 11.5px; }
 .au-empty {
   display: flex; flex-direction: column; gap: 6px; min-height: 150px; justify-content: center;
   padding: 22px; border: 1px dashed rgba(65, 255, 161, 0.22); border-radius: 16px;
@@ -4130,11 +4132,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .au-empty b { color: var(--ink); font-size: 16px; }
 .au-empty span { color: var(--dim); font-size: 13px; line-height: 1.5; max-width: 520px; }
+.au-empty .btn { width: fit-content; margin-top: 8px; }
 
 @media (max-width: 900px) {
   .bm-grid { grid-template-columns: 1fr; }
   .bm-add { flex-wrap: wrap; }
-  .au-summary { grid-template-columns: 1fr; }
+  .au-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .au-item { align-items: flex-start; flex-wrap: wrap; }
+  .au-actions { width: 100%; justify-content: flex-start; padding-left: 28px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .overlay-x:hover { transform: none; }

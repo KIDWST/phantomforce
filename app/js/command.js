@@ -6,7 +6,7 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
-} from "./store.js?v=phantom-live-20260706-31";
+} from "./store.js?v=phantom-live-20260706-32";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -112,6 +112,29 @@ function createBooking(subject) {
   pushActivity("Booking Coordinator", `drafted an appointment with ${client}.`, b.ws);
   store.save();
   return b;
+}
+
+function createAutomation(subject, raw) {
+  const clean = (subject || raw || "New automation")
+    .replace(/\b(create|make|build|draft|set up|setup|add|an?|the|automation|workflow|for|to)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const name = clean ? title(clean).slice(0, 72) : "New automation";
+  const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  const a = {
+    id: uid("agt"), ws, kind: "automation", source: "Phantom dashboard",
+    name, mission: raw, status: "idle",
+    createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+  };
+  store.state.agents.unshift(a);
+  store.state.approvals.unshift({
+    id: uid("app"), ws, type: "automation",
+    title: `Enable automation: ${name}`, detail: raw,
+    ref: a.id, status: "pending", requestedBy: "Phantom AI", at: new Date().toISOString(),
+  });
+  pushActivity("Automation", `drafted automation "${name}" — waiting on approval.`, ws);
+  store.save();
+  return a;
 }
 
 /* ---------------- the router ---------------- */
@@ -268,6 +291,29 @@ export function handleCommand(raw) {
         [openAction("Open Memory", "memory")],
         mem.remembered ? `${mem.remembered} remembered` : "Private and local")],
       open: "memory",
+    };
+  }
+
+  /* --- automations created from Phantom chat --- */
+  if (/(automation|automate|workflow|autopilot|recurring|every\s+(day|week|month|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|remind me|auto[- ]?follow|auto[- ]?post)/.test(s)) {
+    if (/(create|make|build|draft|set ?up|setup|add|automate|every|when|remind)/.test(s)) {
+      const a = createAutomation(subject, text);
+      return {
+        say: `I drafted "${a.name}" as an automation. It will wait for approval before anything runs.`,
+        cards: [card("Automation draft", a.name, a.mission, [
+          openAction("View Automation", "automation"),
+          openAction("Review approval", "approvals"),
+        ], "Approval required")],
+        open: "automation",
+      };
+    }
+    const autos = visible(store.state.agents || []);
+    return {
+      say: autos.length
+        ? `${autos.length} automation${autos.length === 1 ? "" : "s"} exist on this workspace. Opening Automation.`
+        : "No automations have been created yet. Tell me what should repeat and I'll draft it for approval.",
+      cards: autos.slice(0, 3).map((a) => card("Automation", a.name, a.mission || "No mission saved.", [openAction("Open Automation", "automation")], `Status: ${statusLabel(a.status || "idle")}`)),
+      open: "automation",
     };
   }
 
