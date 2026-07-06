@@ -1,11 +1,11 @@
-/* PhantomForce — Agent Operations layer.
-   A live, honest picture of the internal worker spine: a scrolling report
-   ticker, a tail-style operations log, a worker roster with status LEDs, and
-   session telemetry. Everything here is driven by the real TOOL_SPINE workers
+/* PhantomForce — Worker activity layer.
+   PhantomWire is the small recent-work broadcast at the top of the product.
+   The worker roster/status console belongs in the Workers tab. Everything here is
+   driven by the real TOOL_SPINE workers
    (store.js) — no fabricated business records. Self-contained: owns its own
    timers, guards against double-mount, and respects reduced-motion. */
 
-import { TOOL_SPINE } from "./store.js?v=phantom-live-20260706-26";
+import { TOOL_SPINE } from "./store.js?v=phantom-live-20260706-30";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -47,6 +47,18 @@ function linePool(tool) {
 }
 
 const pick = (a) => a[Math.floor((reduceMotion ? 0.5 : Math.random()) * a.length) % a.length];
+const WIRE_NAMES = {
+  "n8n-worker": "Charles",
+  "ruflo-loop": "Loop Planner",
+};
+function wireWorkerName(tool) {
+  return WIRE_NAMES[tool.id] || tool.worker;
+}
+function wireText(text = "") {
+  return String(text)
+    .replace(/\bn8n\b/gi, "workflow lane")
+    .replace(/\bRuflo\b/g, "Loop Planner");
+}
 const now2 = () => {
   const d = new Date();
   const p = (n) => String(n).padStart(2, "0");
@@ -54,7 +66,7 @@ const now2 = () => {
 };
 
 /* ======================================================================
-   SCROLLING REPORT TICKER  (thin band under the topbar)
+   PHANTOMWIRE  (compact recent-work broadcast under the topbar)
    ====================================================================== */
 export function mountAgentTicker(el) {
   if (!el || el.dataset.mounted) return;
@@ -63,18 +75,21 @@ export function mountAgentTicker(el) {
     const m = modeMeta(t.mode);
     return `<span class="atk-item">
       <i class="atk-led atk-${m.tone}"></i>
-      <b>${esc(t.worker)}</b>
-      <em>${esc(t.internal)}</em>
-      <span class="atk-txt">${esc(t.activity)}</span>
+      <b class="atk-worker">${esc(wireWorkerName(t))}</b>
+      <span class="atk-txt">${esc(wireText(pick(linePool(t))))}</span>
     </span>`;
-  }).join(`<span class="atk-sep">/</span>`);
+  }).join(`<span class="atk-sep">•</span>`);
   // duplicated track for a seamless marquee loop
-  el.innerHTML = `<div class="atk-label">AGENT&nbsp;OPS</div>
-    <div class="atk-view"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-sep">/</span>${items}</div></div>`;
+  el.innerHTML = `<div class="atk-label" data-phantomwire>
+      <span class="atk-live"><i></i>LIVE</span>
+      <b>PhantomWire</b>
+      <small>recent worker activity</small>
+    </div>
+    <div class="atk-view" aria-label="Recent PhantomForce worker activity"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-sep">•</span>${items}</div></div>`;
 }
 
 /* ======================================================================
-   AGENT OPERATIONS CONSOLE  (roster + telemetry + live tail log)
+   WORKERS CONSOLE  (roster + telemetry + live tail log)
    ====================================================================== */
 let logTimer = 0;
 let uptimeTimer = 0;
@@ -128,8 +143,8 @@ export function mountAgentConsole(el) {
     <div class="aops-head">
       <div class="aops-title">
         <span class="aops-live"><i></i>LIVE</span>
-        <h2>Agent operations</h2>
-        <span class="aops-sub">Real workers on the PhantomForce spine</span>
+        <h2>Workers</h2>
+        <span class="aops-sub">Roster, status, and safe diagnostics</span>
       </div>
       <span class="aops-scan" aria-hidden="true"></span>
     </div>

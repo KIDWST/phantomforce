@@ -3825,24 +3825,41 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 
 /* ============================================================= */
-/* =====================  AGENT OPERATIONS  =================== */
+/* =====================  WORKER ACTIVITY  ==================== */
 /* ============================================================= */
 
-/* ---- scrolling report ticker (band under the topbar) ---- */
+/* ---- PhantomWire: compact recent-work broadcast under the topbar ---- */
 .agent-ticker {
-  display: flex; align-items: stretch; gap: 0; overflow: hidden;
-  border-bottom: 1px solid var(--line);
+  display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 10px; overflow: hidden;
+  min-height: 42px; margin: 8px clamp(12px, 2vw, 28px) 0; padding: 5px 8px 5px 6px;
+  border: 1px solid rgba(65, 255, 161, 0.18); border-radius: 999px;
   background:
+    radial-gradient(circle at 10% 50%, rgba(65,255,161,0.16), transparent 36%),
     repeating-linear-gradient(90deg, transparent 0 2px, rgba(0,0,0,0.16) 2px 4px),
     linear-gradient(180deg, rgba(3,12,9,0.92), rgba(2,8,10,0.82));
   -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
-  position: sticky; top: 0; z-index: 19;
+  position: sticky; top: 8px; z-index: 19;
+  box-shadow: 0 18px 50px rgba(0,0,0,0.22), inset 0 0 24px rgba(65,255,161,0.04);
 }
 .atk-label {
-  flex: 0 0 auto; display: flex; align-items: center; gap: 6px; padding: 0 14px;
-  font: 700 9px "DM Mono", monospace; letter-spacing: 0.24em; color: #04160d;
-  background: linear-gradient(120deg, var(--neon), #16d9c9);
-  clip-path: polygon(0 0, 100% 0, calc(100% - 10px) 100%, 0 100%);
+  flex: 0 0 auto; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 5px 8px 5px 4px;
+  color: var(--ink); white-space: nowrap;
+}
+.atk-label b {
+  font: 800 12px "Space Grotesk", sans-serif; letter-spacing: -0.01em;
+}
+.atk-label small {
+  color: var(--dim); font: 600 9px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.atk-live {
+  display: inline-flex; align-items: center; gap: 6px; padding: 5px 9px;
+  border: 1px solid rgba(65,255,161,0.22); border-radius: 999px;
+  background: rgba(65,255,161,0.08);
+  color: var(--neon); font: 800 9px "DM Mono", monospace; letter-spacing: 0.14em;
+}
+.atk-live i {
+  width: 7px; height: 7px; border-radius: 50%; background: var(--neon);
+  box-shadow: 0 0 10px var(--neon); animation: livePulse 2.2s ease-in-out infinite;
 }
 .atk-view { position: relative; flex: 1 1 auto; min-width: 0; overflow: hidden; }
 .atk-view::before, .atk-view::after {
@@ -3852,13 +3869,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .atk-view::after { right: 0; background: linear-gradient(270deg, rgba(2,8,10,0.95), transparent); }
 .atk-track {
   display: inline-flex; align-items: center; gap: 0; white-space: nowrap; padding: 8px 0;
-  will-change: transform; animation: atkScroll 64s linear infinite;
+  will-change: transform; animation: atkScroll 108s linear infinite;
 }
 .atk-track.is-static { animation: none; }
 .agent-ticker:hover .atk-track { animation-play-state: paused; }
 .atk-item { display: inline-flex; align-items: center; gap: 8px; padding: 0 6px; font-size: 12px; }
-.atk-item b { font-weight: 600; color: var(--ink); }
+.atk-item b { font-weight: 700; color: var(--ink); }
 .atk-item em { font: 500 10px "DM Mono", monospace; font-style: normal; color: var(--neon-2); letter-spacing: 0.02em; }
+.atk-worker { max-width: 170px; overflow: hidden; text-overflow: ellipsis; }
 .atk-txt { color: var(--dim); }
 .atk-sep { color: rgba(65,255,161,0.28); padding: 0 12px; font-weight: 700; }
 .atk-led { width: 7px; height: 7px; border-radius: 50%; flex: 0 0 auto; }
@@ -3968,14 +3986,26 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .aops-tele { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 720px) {
-  .agent-ticker { display: none; }
+  .agent-ticker {
+    display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px;
+    min-height: 36px; margin: 6px 10px 0; padding: 4px 6px 4px 4px; top: 6px;
+  }
+  .atk-label { gap: 6px; padding: 3px 4px 3px 2px; }
+  .atk-label b { font-size: 11px; }
+  .atk-label small { display: none; }
+  .atk-live { padding: 4px 7px; font-size: 8px; letter-spacing: 0.1em; }
+  .atk-track { padding: 6px 0; animation-duration: 96s; }
+  .atk-item { font-size: 10.5px; gap: 6px; padding: 0 4px; }
+  .atk-worker { max-width: 118px; }
+  .atk-txt { max-width: 260px; overflow: hidden; text-overflow: ellipsis; }
+  .atk-view::before, .atk-view::after { width: 24px; }
   .aops-tele { grid-template-columns: repeat(2, 1fr); }
   .aops-scan { display: none; }
   .hero2-ticker { margin: -4px 0 16px; font-size: 12px; }
 }
 @media (prefers-reduced-motion: reduce) {
   .atk-track { animation: none !important; transform: none; }
-  .aops-scan, .aops-on::after, .aops-live i, .hero2-cursor { animation: none !important; }
+  .aops-scan, .aops-on::after, .aops-live i, .atk-live i, .hero2-cursor { animation: none !important; }
   .aops-log-line.is-fresh { animation: none !important; }
   .phantom.booted .console-center > section,
   .phantom.booted .console-rail > * { animation: none !important; }

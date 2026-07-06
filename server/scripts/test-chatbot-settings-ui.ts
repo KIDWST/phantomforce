@@ -15,7 +15,7 @@ const mainJs = readProjectFile("apps/web/public/app/js/main.js");
 const css = readProjectFile("apps/web/public/app/phantom.css");
 const indexHtml = readProjectFile("apps/web/public/app/index.html");
 
-const buildId = "phantom-live-20260706-29";
+const buildId = "phantom-live-20260706-30";
 
 assert(indexHtml.includes(`window.PHANTOM_BUILD = "${buildId}"`), "Index should expose the new build id.");
 assert(indexHtml.includes(`/app/js/main.js?v=${buildId}`), "Index should load the bumped main bundle.");

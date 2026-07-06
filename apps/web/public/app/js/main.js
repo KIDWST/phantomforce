@@ -4,17 +4,17 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-29";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-29";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-29";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-29";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-29";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-29";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-29";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-29";
-import { mountAgentTicker, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-29";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-29";
-import { mountCompanion, setCompanionState, getChatSettings } from "./companion.js?v=phantom-live-20260706-29";
+} from "./store.js?v=phantom-live-20260706-30";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-30";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-30";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-30";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-30";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-30";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-30";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-30";
+import { mountAgentTicker } from "./agentops.js?v=phantom-live-20260706-30";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-30";
+import { mountCompanion, setCompanionState, getChatSettings } from "./companion.js?v=phantom-live-20260706-30";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -511,7 +511,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-29";
+const POSE_VERSION = "phantom-live-20260706-30";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -757,7 +757,7 @@ function renderHeroWorkAlert() {
     at: new Date().toISOString(),
   };
   alert.innerHTML = `
-    <span class="forcewire-alert-label">Forcewire</span>
+    <span class="forcewire-alert-label">PhantomWire</span>
     <span class="forcewire-alert-ping" aria-hidden="true"></span>
     <span class="forcewire-alert-body">
       <b>${esc(latest.who || "PhantomForce")}</b>
@@ -1566,13 +1566,17 @@ function renderDeveloperPage(body) {
       </section>
 
       <section class="developer-card developer-agentops-card">
-        <p class="developer-kicker">Internal operations</p>
-        <h4>Agent operations</h4>
-        <p class="developer-note">Worker spine diagnostics live here so the main dashboard stays focused on business actions.</p>
-        <section class="agentops developer-agentops" data-developer-agentops aria-label="Developer agent operations"></section>
+        <p class="developer-kicker">Workers</p>
+        <h4>Worker controls live in the Workers tab.</h4>
+        <p class="developer-note">PhantomWire is only the animated recent-work broadcast. Full worker status, filters, and delegation previews belong in Workers.</p>
+        <div class="developer-shortcuts">
+          <button class="developer-shortcut" data-open-ws="workforce">
+            <b>Open Workers</b>
+            <span>Roster, statuses, subagents, and safe delegation previews.</span>
+          </button>
+        </div>
       </section>
     </div>`;
-  mountAgentConsole(body.querySelector("[data-developer-agentops]"));
 }
 
 const CUSTOM = {
