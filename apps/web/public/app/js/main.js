@@ -157,7 +157,7 @@ function showGate() {
       const kind = btn.dataset.enter;
       if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
       ctx.session = kind === "admin"
-        ? { role: "admin", name: "Jordan", ws: "phantomforce" }
+        ? { role: "admin", name: "Jordan", label: "PhantomForce Owner", ws: "phantomforce", sessionId: "local-admin", canManageAccess: true }
         : { role: "employee", name: "Employee", ws: "phantomforce" };
       session.set(ctx.session);
       enterPhantom();
@@ -460,40 +460,86 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-10";
+const POSE_VERSION = "phantom-live-20260706-11";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
+let emotePoseTimer = 0;
+let transientPoseKey = "";
 const MODE_POSES = {
   ask: {
-    src: "/app/assets/poses/mode-dark-ask.webp",
+    src: "/app/assets/poses/chin.webp",
     caption: "Listening",
     alt: "Phantom listening",
   },
   write: {
-    src: "/app/assets/poses/mode-dark-write.webp",
+    src: "/app/assets/poses/point.webp",
     caption: "Drafting",
     alt: "Phantom writing",
   },
   image: {
-    src: "/app/assets/poses/mode-dark-image.webp",
+    src: "/app/assets/poses/conjure.webp",
     caption: "Conjuring",
     alt: "Phantom creating an image",
   },
   video: {
-    src: "/app/assets/poses/mode-dark-video.webp",
+    src: "/app/assets/poses/present.webp",
     caption: "Directing video",
     alt: "Phantom directing a video",
   },
   website: {
-    src: "/app/assets/poses/mode-dark-website.webp",
+    src: "/app/assets/poses/scheme.webp",
     caption: "Building pages",
     alt: "Phantom building a website",
   },
   admin: {
-    src: "/app/assets/poses/mode-dark-admin.webp",
+    src: "/app/assets/poses/assert.webp",
     caption: "Control",
     alt: "Phantom in admin control mode",
+  },
+};
+const EMOTE_POSES = {
+  listen: {
+    src: "/app/assets/poses/chin.webp",
+    caption: "Listening",
+    alt: "Phantom leaning in to listen",
+    pose: "listen",
+  },
+  think: {
+    src: "/app/assets/poses/scheme.webp",
+    caption: "Thinking",
+    alt: "Phantom thinking through the request",
+    pose: "think",
+  },
+  typing: {
+    src: "/app/assets/poses/point.webp",
+    caption: "Reading",
+    alt: "Phantom tracking your typed request",
+    pose: "typing",
+  },
+  talk: {
+    src: "/app/assets/poses/coy.webp",
+    caption: "Answering",
+    alt: "Phantom answering",
+    pose: "talk",
+  },
+  answer: {
+    src: "/app/assets/poses/assert.webp",
+    caption: "Got it",
+    alt: "Phantom found the answer",
+    pose: "answer",
+  },
+  alert: {
+    src: "/app/assets/poses/cross.webp",
+    caption: "Heads up",
+    alt: "Phantom warning about something important",
+    pose: "alert",
+  },
+  happy: {
+    src: "/app/assets/poses/welcome.webp",
+    caption: "Ready",
+    alt: "Phantom ready to help",
+    pose: "happy",
   },
 };
 const MODE_REACTIONS = {
@@ -524,6 +570,7 @@ function inferModeFromText(text = "") {
 }
 
 function stageCaptionText(mood = ghostMood, emotion = ghostEmotion) {
+  if (transientPoseKey && EMOTE_POSES[transientPoseKey]?.caption) return EMOTE_POSES[transientPoseKey].caption;
   const mode = reactionForMode(activeMode);
   if (mood === "thinking") {
     if (activeMode === "write") return "Drafting";
@@ -535,6 +582,43 @@ function stageCaptionText(mood = ghostMood, emotion = ghostEmotion) {
   if (mood === "talking") return emotion === "alert" ? "Heads up" : "Answering";
   if (mood === "listening") return "Listening";
   return mode.caption;
+}
+
+function applyStagePose(pose, poseId, cssPose = poseId) {
+  const stage = $("[data-mode-stage]");
+  const img = $("[data-mode-pose]");
+  if (!stage || !img || !pose) return;
+  phantom?.classList.add("has-mode-poses");
+  const nextSrc = poseUrl(pose.src);
+  const assetChanged = stage.dataset.poseAsset !== poseId || img.getAttribute("src") !== nextSrc;
+  stage.dataset.pose = cssPose;
+  stage.dataset.poseAsset = poseId;
+  if (assetChanged) {
+    stage.classList.remove("is-swapping");
+    void stage.offsetWidth;
+    stage.classList.add("is-swapping");
+    clearTimeout(renderModePose.swapTimer);
+    renderModePose.swapTimer = setTimeout(() => stage.classList.remove("is-swapping"), 420);
+    img.setAttribute("src", nextSrc);
+    if (phantom3d) phantom3d.setPose({ ...pose, id: poseId, src: nextSrc });
+  }
+  img.setAttribute("alt", pose.alt || "PhantomForce AI character");
+  const caption = $("[data-mode-caption]");
+  if (caption) caption.textContent = stageCaptionText(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
+}
+
+function renderEmotePose(key, ms = 900) {
+  const pose = EMOTE_POSES[key];
+  if (!pose) return;
+  transientPoseKey = key;
+  applyStagePose(pose, `${activeMode}-${key}`, pose.pose || key);
+  clearTimeout(emotePoseTimer);
+  emotePoseTimer = setTimeout(() => {
+    if (transientPoseKey === key) {
+      transientPoseKey = "";
+      renderModePose(activeMode);
+    }
+  }, Math.max(300, ms));
 }
 
 function stageReact(kind = "pulse", ms = 700) {
@@ -549,6 +633,14 @@ function stageReact(kind = "pulse", ms = 700) {
     stage.classList.remove("is-reacting");
     if (stage.dataset.reaction === kind) delete stage.dataset.reaction;
   }, ms);
+  const emote = {
+    listen: "listen",
+    think: "think",
+    typing: "typing",
+    answer: "answer",
+    nav: "happy",
+  }[kind] || (MODE_POSES[kind] ? "" : "");
+  if (emote) renderEmotePose(emote, ms + 220);
   if (phantom3d?.burst) phantom3d.burst(kind, ms);
 }
 
@@ -570,25 +662,7 @@ function syncPoseMood(mood = "idle", emotion = "calm") {
 function renderModePose(id = activeMode) {
   const pose = MODE_POSES[id] || MODE_POSES.ask;
   const poseId = MODE_POSES[id] ? id : "ask";
-  const stage = $("[data-mode-stage]");
-  const img = $("[data-mode-pose]");
-  const caption = $("[data-mode-caption]");
-  if (!stage || !img) return;
-  phantom?.classList.add("has-mode-poses");
-  const nextSrc = poseUrl(pose.src);
-  const poseChanged = stage.dataset.pose !== poseId || img.getAttribute("src") !== nextSrc;
-  stage.dataset.pose = poseId;
-  if (poseChanged) {
-    stage.classList.remove("is-swapping");
-    void stage.offsetWidth;
-    stage.classList.add("is-swapping");
-    clearTimeout(renderModePose.swapTimer);
-    renderModePose.swapTimer = setTimeout(() => stage.classList.remove("is-swapping"), 420);
-    img.setAttribute("src", nextSrc);
-    if (phantom3d) phantom3d.setPose({ ...pose, id: poseId, src: nextSrc });
-  }
-  img.setAttribute("alt", pose.alt);
-  if (caption) caption.textContent = stageCaptionText(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
+  if (!transientPoseKey) applyStagePose(pose, poseId, poseId);
   syncPoseMood(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
 }
 
@@ -1023,9 +1097,16 @@ function speak(text, cls = "", emotionOverride = null) {
   p.className = `say-line ${cls}`.trim();
   box.replaceChildren(p);
   const emotion = emotionOverride || emotionForText(text);
-  if (cls === "thinking") setGhostMood("thinking", { emotion: "bright" });
-  else if (cls === "user") setGhostMood("listening", { emotion: "calm", ms: 1600 });
-  else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+  if (cls === "thinking") {
+    setGhostMood("thinking", { emotion: "bright" });
+    renderEmotePose("think", 900);
+  } else if (cls === "user") {
+    setGhostMood("listening", { emotion: "calm", ms: 1600 });
+    renderEmotePose("listen", 1100);
+  } else {
+    setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+    renderEmotePose(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talk", Math.min(2200, speechHoldMs(text)));
+  }
   if (cls || reduceMotion) {
     p.textContent = text;
     if (!cls) setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
@@ -1069,11 +1150,11 @@ function runCommand(raw) {
     stageReact("think", 780);
     setTimeout(() => {
       const r = handleCommand(text);
-      stageReact("answer", 980);
       speak(r.say);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
       if (respBox) respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
       renderConsole();
+      stageReact("answer", 1100);
       if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
     }, reduceMotion ? 120 : 620);
   }, reduceMotion ? 60 : 260);
@@ -1517,7 +1598,13 @@ function initGhost() {
     if (document.hidden) { requestAnimationFrame(frame); return; }
     const t = (now - t0) * 0.001;
     const dt = Math.min(0.05, (now - last) * 0.001); last = now;
-    if (ghostMoodUntil && now > ghostMoodUntil) { ghostMood = "idle"; ghostMoodUntil = 0; ghostMoodStartedAt = now; }
+    if (ghostMoodUntil && now > ghostMoodUntil) {
+      ghostMood = "idle";
+      ghostMoodUntil = 0;
+      ghostMoodStartedAt = now;
+      syncPoseMood(ghostMood, ghostEmotion);
+      if (!transientPoseKey) renderModePose(activeMode);
+    }
     ghostPulse = Math.max(0, ghostPulse - 0.02);
     cpx += (px - cpx) * 0.08; cpy += (py - cpy) * 0.08;
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);

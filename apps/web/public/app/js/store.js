@@ -443,7 +443,14 @@ export function resolveSession() {
       redirectToLiveAdmin();
       return null;
     }
-    const s = { role: "admin", name: "Jordan", ws: "phantomforce", sessionId: "local-admin" };
+    const s = {
+      role: "admin",
+      name: "Jordan",
+      label: "PhantomForce Owner",
+      ws: "phantomforce",
+      sessionId: "local-admin",
+      canManageAccess: true,
+    };
     session.set(s); return s;
   }
   if (key === "employee" || key === "team" || key === "client") {

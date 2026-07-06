@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-10";
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-11";
 
 const CFG_KEY = "pf.medialab.v1";
 const TAU = Math.PI * 2;
@@ -57,8 +57,50 @@ export const DEFAULT_PROVIDERS = [
 
 const STYLES = ["None", "Cinematic", "Product", "Portrait", "Neon", "Editorial", "3D render", "Analog film"];
 const IMG_ASPECTS = [["1:1", 1], ["4:5", 0.8], ["3:2", 1.5], ["16:9", 1.777], ["9:16", 0.5625]];
-const VID_ASPECTS = [["16:9", 1.777], ["9:16", 0.5625], ["1:1", 1]];
-const DURATIONS = [4, 6, 8, 10];
+const VID_ASPECTS = [["16:9", 1.777], ["9:16", 0.5625], ["4:5", 0.8], ["1:1", 1]];
+const DURATIONS = [4, 6, 8, 10, 15, 30];
+const MEDIA_PRESETS = [
+  {
+    id: "reels-tiktok", label: "Reels / TikTok", use: "Social vertical", modality: "video", aspect: "9:16", duration: 8, style: "Cinematic",
+    prompt: "Fast vertical social clip with a strong first-second hook, premium motion, bold subject, quick cuts, and a clear end card",
+  },
+  {
+    id: "story-ad", label: "Story Ad", use: "Paid social", modality: "video", aspect: "9:16", duration: 6, style: "Product",
+    prompt: "Vertical story ad with a simple product reveal, clear benefit moment, clean background, and room for headline text",
+  },
+  {
+    id: "feed-video", label: "Feed Video", use: "Instagram / LinkedIn", modality: "video", aspect: "4:5", duration: 10, style: "Editorial",
+    prompt: "Polished feed video with a premium business visual, readable center framing, and a smooth call-to-action finish",
+  },
+  {
+    id: "youtube-trailer", label: "YouTube Trailer", use: "Wide trailer", modality: "video", aspect: "16:9", duration: 30, style: "Cinematic",
+    prompt: "Cinematic wide trailer with establishing shot, product reveal, proof moments, and a confident final title card",
+  },
+  {
+    id: "teaser", label: "15s Teaser", use: "Launch clip", modality: "video", aspect: "16:9", duration: 15, style: "Neon",
+    prompt: "Short launch teaser with dramatic lighting, one memorable visual idea, controlled camera movement, and punchy ending",
+  },
+  {
+    id: "square-post", label: "Square Post", use: "Social image", modality: "image", aspect: "1:1", count: 2, style: "Editorial",
+    prompt: "Clean square social post image with one strong subject, balanced negative space, premium lighting, and no tiny text",
+  },
+  {
+    id: "feed-portrait", label: "Feed Portrait", use: "IG / Meta image", modality: "image", aspect: "4:5", count: 2, style: "Portrait",
+    prompt: "Vertical feed portrait image with confident subject, soft directional light, premium texture, and scroll-stopping composition",
+  },
+  {
+    id: "youtube-thumb", label: "Thumbnail", use: "YouTube cover", modality: "image", aspect: "16:9", count: 2, style: "Neon",
+    prompt: "Bold wide YouTube thumbnail composition with a clear focal subject, high contrast lighting, and space for a short headline",
+  },
+  {
+    id: "web-hero", label: "Website Hero", use: "Site / app header", modality: "image", aspect: "16:9", count: 2, style: "3D render",
+    prompt: "Premium website hero image with cinematic depth, clean product space, dark polished background, and room for UI copy",
+  },
+  {
+    id: "product-shot", label: "Product Shot", use: "Offer image", modality: "image", aspect: "4:5", count: 2, style: "Product",
+    prompt: "High-end product shot with controlled studio lighting, crisp edges, subtle reflection, and premium commercial finish",
+  },
+];
 
 /* Customer-safe display names for render lanes; option values stay untouched
    so requests keep sending the real model ids. */
@@ -223,7 +265,7 @@ function previewAsset(req, i) {
   // watermark
   g.fillStyle = "rgba(180,255,220,0.5)"; g.font = "600 11px 'DM Mono', monospace";
   g.fillText("PHANTOM · PREVIEW", 14, H - 14);
-  return { type: req.modality, url: c.toDataURL("image/webp", 0.85), meta: { preview: true, prompt: req.prompt, style: req.style } };
+  return { type: req.modality, url: c.toDataURL("image/webp", 0.85), meta: { preview: true, prompt: req.prompt, style: req.style, preset: req.preset || "Custom" } };
 }
 
 /* =========================================================================
@@ -259,7 +301,26 @@ export function renderMediaStudio(el, opts = {}) {
 }
 
 /* ---- Generate ---- */
-const genState = { modality: "image", provider: "higgsfield", model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, busy: false, showNeg: false };
+const genState = { modality: "image", provider: "higgsfield", model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, busy: false, showNeg: false, preset: "custom" };
+
+function activePreset() {
+  return MEDIA_PRESETS.find((p) => p.id === genState.preset) || null;
+}
+function presetSpec(p) {
+  return `${p.modality === "video" ? "Video" : "Image"} · ${p.aspect}${p.modality === "video" ? ` · ${p.duration}s` : ` · ${p.count || 1} take${(p.count || 1) > 1 ? "s" : ""}`}`;
+}
+function applyPreset(p) {
+  genState.preset = p.id;
+  genState.modality = p.modality;
+  genState.aspect = p.aspect;
+  genState.style = p.style || genState.style;
+  if (p.modality === "video") genState.duration = p.duration || genState.duration;
+  else genState.count = p.count || genState.count;
+  if (!genState.prompt.trim()) genState.prompt = p.prompt || "";
+}
+function markCustomPreset() {
+  genState.preset = "custom";
+}
 
 function renderGenerate(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
@@ -279,6 +340,16 @@ function renderGenerate(body, cfg, opts, root) {
           <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
           <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
         </div>
+
+        <label class="ml-field ml-field-presets"><span>Presets</span>
+          <div class="ml-presets" data-ml-presets>
+            ${MEDIA_PRESETS.map((p) => `<button class="ml-preset ${genState.preset === p.id ? "is-on" : ""}" data-v="${p.id}" title="${esc(p.prompt)}">
+              <b>${esc(p.label)}</b>
+              <span>${esc(presetSpec(p))}</span>
+              <i>${esc(p.use)}</i>
+            </button>`).join("")}
+          </div>
+        </label>
 
         <label class="ml-field"><span>Engine</span>
           <div class="ml-provs" data-ml-provs>
@@ -347,7 +418,9 @@ function renderGenerate(body, cfg, opts, root) {
 }
 
 function briefChips(esc) {
+  const preset = activePreset();
   const chips = [
+    preset ? preset.label : "Custom",
     genState.modality === "video" ? "Video" : "Image",
     genState.model ? laneLabel(genState.model) : null,
     genState.style !== "None" ? genState.style : null,
@@ -372,6 +445,7 @@ function railHtml(cfg, esc) {
         <section class="ml-rail-card">
           <h4>Render mode</h4>
           <div class="ml-rail-rows">
+            <span><b>Preset</b><i>${esc(activePreset()?.label || "Custom")}</i></span>
             <span><b>Mode</b><i>${genState.modality === "video" ? "Video" : "Image"}</i></span>
             ${genState.model ? `<span><b>Lane</b><i>${esc(laneLabel(genState.model))}</i></span>` : ""}
             <span><b>Look</b><i>${esc(genState.style)}</i></span>
@@ -474,12 +548,17 @@ function tileHtml(a, esc) {
 
 function wireGenerate(body, cfg, opts, root, esc) {
   const seg = (sel, fn) => body.querySelectorAll(`${sel} button`).forEach((b) => b.onclick = () => { fn(b.dataset.v); renderGenerate(body, cfg, opts, root); });
-  seg("[data-ml-modality]", (v) => { genState.modality = v; });
+  body.querySelectorAll("[data-ml-presets] button").forEach((b) => b.onclick = () => {
+    const preset = MEDIA_PRESETS.find((p) => p.id === b.dataset.v);
+    if (preset) applyPreset(preset);
+    renderGenerate(body, cfg, opts, root);
+  });
+  seg("[data-ml-modality]", (v) => { genState.modality = v; markCustomPreset(); });
   seg("[data-ml-provs]", (v) => { genState.provider = v; });
-  seg("[data-ml-aspect]", (v) => { genState.aspect = v; });
-  if (body.querySelector("[data-ml-count]")) seg("[data-ml-count]", (v) => { genState.count = +v; });
-  if (body.querySelector("[data-ml-dur]")) seg("[data-ml-dur]", (v) => { genState.duration = +v; });
-  seg("[data-ml-style]", (v) => { genState.style = v; });
+  seg("[data-ml-aspect]", (v) => { genState.aspect = v; markCustomPreset(); });
+  if (body.querySelector("[data-ml-count]")) seg("[data-ml-count]", (v) => { genState.count = +v; markCustomPreset(); });
+  if (body.querySelector("[data-ml-dur]")) seg("[data-ml-dur]", (v) => { genState.duration = +v; markCustomPreset(); });
+  seg("[data-ml-style]", (v) => { genState.style = v; markCustomPreset(); });
   const modelSel = body.querySelector("[data-ml-model]");
   if (modelSel) modelSel.onchange = () => { genState.model = modelSel.value; };
   const pr = body.querySelector("[data-ml-prompt]"); if (pr) pr.oninput = () => { genState.prompt = pr.value; };
@@ -523,6 +602,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
     const req = {
       modality: genState.modality, provider: genState.provider, model: genState.model,
       prompt: genState.prompt, negative: genState.negative, style: genState.style,
+      preset: activePreset()?.label || "Custom",
       ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
     };
     const out = await generate(cfg, req);
@@ -538,6 +618,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
         style: genState.style,
         aspect: genState.aspect,
         duration: genState.duration,
+        preset: activePreset()?.label || "Custom",
         live: out.live,
       });
     });

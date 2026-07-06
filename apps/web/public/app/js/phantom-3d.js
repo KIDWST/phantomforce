@@ -257,10 +257,10 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
       ring.material.opacity = baseOpacity + pulse * (0.009 + i * 0.002);
     });
 
-    ringGroup.rotation.z += (0.002 + m.spin * 0.006 + answerBurst * 0.052) * (reduceMotion ? 0.2 : 1);
-    ringGroup.scale.setScalar(1 + Math.sin(t * 1.1) * 0.008 + pulse * 0.018 + answerBurst * 0.08);
+    ringGroup.rotation.z += (0.00035 + m.spin * 0.0012 + answerBurst * 0.072 + inputBurst * 0.006) * (reduceMotion ? 0.2 : 1);
+    ringGroup.scale.setScalar(1 + Math.sin(t * 1.1) * 0.008 + pulse * 0.018 + answerBurst * 0.12);
     rings.forEach((ring, i) => {
-      ring.rotation.z = -t * (0.16 + i * 0.06);
+      ring.rotation.z = -t * (0.05 + i * 0.024) - answerBurst * (0.35 + i * 0.12);
       ring.material.opacity = (0.07 + m.ring * 0.12) * (1 - i * 0.13) + talk * 0.01;
     });
 
