@@ -1,10 +1,10 @@
 /* PhantomForce — Brand Memory + Automation workspaces.
    Two real pages that were previously mislabeled nav aliases of Workforce.
    Self-contained: owns its own localStorage state (brand facts, asset vault,
-   memory notes) and renders Automation honestly from the live store (agents +
-   tool spine). No fabricated records — drafts and notes are real, local data. */
+   memory notes) and renders Automation honestly from user-created automation
+   records only. No internal lanes or fabricated records are shown. */
 
-import { store, visible, pushActivity, uid, ago, TOOL_SPINE } from "./store.js?v=phantom-live-20260706-29";
+import { store, visible, pushActivity, uid, ago, currentWs } from "./store.js?v=phantom-live-20260706-31";
 
 const BRAND_KEY = "pf.brand.v1";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -139,7 +139,7 @@ export function renderBrandMemory(el, opts = {}) {
 }
 
 /* ======================================================================
-   AUTOMATION — approved workflows only; honest view of agents + lanes
+   AUTOMATION — user-created workflows only
    ====================================================================== */
 const AGENT_STATE = {
   active: { label: "RUNNING", cls: "on" },
@@ -153,17 +153,24 @@ export function renderAutomation(el, opts = {}) {
   const notify = opts.notify || (() => {});
   const paint = () => renderAutomation(el, opts);
   const agents = visible(store.state.agents || []);
-  const lanes = (store.state.toolSpine || TOOL_SPINE).filter((t) => ["automation-desk", "build-planner", "squad-planner", "brain-router", "operating-standards"].includes(t.id) || t.mode !== "active");
+  const count = agents.length;
+  const pending = agents.filter((a) => a.status === "idle" || a.status === "needs-approval").length;
+  const running = agents.filter((a) => a.status === "active").length;
 
   el.innerHTML = `
     <div class="au">
-      <div class="bm-note au-note"><i></i>Nothing runs without your approval. Drafts stay drafts until you approve them in Approvals.</div>
+      <div class="bm-note au-note"><i></i>Only automations you create appear here. Drafts wait for approval before anything runs.</div>
 
-      <section class="bm-card">
-        <div class="bm-card-h"><h3>Your automations</h3><span class="bm-hint">${agents.length} configured</span></div>
-        <form class="bm-add" data-au-add>
-          <input name="name" placeholder="Name the automation — e.g. Friday reel reminder" required />
-          <input name="mission" placeholder="What should it do?" required />
+      <section class="bm-card au-card">
+        <div class="bm-card-h"><h3>Your automations</h3><span class="bm-hint">${count} made</span></div>
+        <div class="au-summary" aria-label="Automation summary">
+          <span><b>${count}</b><i>Total</i></span>
+          <span><b>${pending}</b><i>Draft / review</i></span>
+          <span><b>${running}</b><i>Running</i></span>
+        </div>
+        <form class="bm-add au-add" data-au-add>
+          <input name="name" placeholder="Name it — e.g. Friday reel reminder" required />
+          <input name="mission" placeholder="What should this automation do?" required />
           <button class="btn" type="submit">Draft automation</button>
         </form>
         <div class="au-list">
@@ -173,20 +180,9 @@ export function renderAutomation(el, opts = {}) {
               <span class="aops-led aops-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}"><i></i></span>
               <span class="au-item-main"><b>${esc(a.name)}</b><i>${esc(a.mission || a.role || "")}</i></span>
               <span class="aops-agent-mode aops-m-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}">${st.label}</span>
+              <button class="bm-x" data-au-del="${a.id}" aria-label="Remove automation">✕</button>
             </div>`;
-          }).join("") : `<p class="bm-empty">No automations yet. Draft one above — it lands here as a draft, then goes through Approvals before anything runs.</p>`}
-        </div>
-      </section>
-
-      <section class="bm-card">
-        <div class="bm-card-h"><h3>Automation lanes</h3><span class="bm-hint">infrastructure standing by</span></div>
-        <div class="au-lanes">
-          ${lanes.map((t) => `
-            <div class="au-lane">
-              <div class="au-lane-top"><b>${esc(t.name)}</b><span class="aops-agent-mode aops-m-${t.mode === "active" ? "on" : t.mode === "standby" ? "idle" : t.mode === "gated" ? "gate" : "hold"}">${esc(String(t.mode).toUpperCase())}</span></div>
-              <p class="au-lane-role">${esc(t.role)}</p>
-              <p class="au-lane-act"><i></i>${esc(t.activity)}</p>
-            </div>`).join("")}
+          }).join("") : `<div class="au-empty"><b>No automations made yet.</b><span>Draft one above. It will appear here first, then wait for approval before anything runs.</span></div>`}
         </div>
       </section>
     </div>`;
@@ -198,15 +194,27 @@ export function renderAutomation(el, opts = {}) {
     const mission = String(f.get("mission") || "").trim();
     if (!name || !mission) return;
     const agentId = uid("agt");
-    store.state.agents.unshift({ id: agentId, ws: "phantomforce", name, mission, status: "idle" });
+    const ws = currentWs();
+    store.state.agents.unshift({ id: agentId, ws, name, mission, status: "idle" });
     store.state.approvals.unshift({
-      id: uid("app"), ws: "phantomforce", type: "automation",
+      id: uid("app"), ws, type: "automation",
       title: `Enable automation: ${name}`, detail: mission,
-      ref: agentId, status: "pending", requestedBy: "Automation Desk", at: new Date().toISOString(),
+      ref: agentId, status: "pending", requestedBy: "Automation", at: new Date().toISOString(),
     });
-    pushActivity("Automation Desk", `drafted automation "${name}" — waiting on approval.`);
+    pushActivity("Automation", `drafted automation "${name}" — waiting on approval.`, ws);
     store.save();
-    notify("Automation Desk", `drafted "${name}".`);
+    notify("Automation", `drafted automation "${name}".`);
     paint();
   };
+  el.querySelectorAll("[data-au-del]").forEach((btn) => {
+    btn.onclick = () => {
+      const id = btn.dataset.auDel;
+      const removed = (store.state.agents || []).find((a) => a.id === id);
+      store.state.agents = (store.state.agents || []).filter((a) => a.id !== id);
+      store.state.approvals = (store.state.approvals || []).filter((a) => a.ref !== id);
+      if (removed) pushActivity("Automation", `removed automation "${removed.name}".`, removed.ws);
+      store.save();
+      paint();
+    };
+  });
 }

@@ -4,17 +4,17 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-29";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-29";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-29";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-29";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-29";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-29";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-29";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-29";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-29";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-29";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-29";
+} from "./store.js?v=phantom-live-20260706-31";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-31";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-31";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-31";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-31";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-31";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-31";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-31";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-31";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-31";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-31";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -507,7 +507,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-29";
+const POSE_VERSION = "phantom-live-20260706-31";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1571,7 +1571,7 @@ const CUSTOM = {
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
   brand: { title: "Brand Memory", kicker: "Private & local brand brain", custom: true, wide: true, render: (body) => renderBrandMemory(body, mediaOpts()) },
-  automation: { title: "Automation", kicker: "Approved workflows only", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
+  automation: { title: "Automation", kicker: "User-created workflows", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
 };
 
 let openId = null;
