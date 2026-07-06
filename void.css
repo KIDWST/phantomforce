@@ -361,10 +361,13 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 
 /* ---------- evolution pass: living stage + ops feed ---------- */
 
-/* the night shift reports in — one quiet line above the creed */
+/* the night shift reports in as a floating activity notice, not a CTA caption */
 .ops-line {
-  margin: clamp(10px, 2vh, 18px) 0 0; margin-top: auto;
-  display: inline-flex; align-items: baseline; gap: 8px; max-width: min(92vw, 560px);
+  position: fixed; top: calc(env(safe-area-inset-top) + clamp(76px, 10vh, 112px)); right: clamp(18px, 4vw, 54px); z-index: 4;
+  margin: 0; display: inline-flex; align-items: baseline; gap: 8px; max-width: min(42vw, 430px);
+  padding: 9px 12px; border: 1px solid rgba(77, 255, 171, 0.14); border-radius: 999px;
+  background: rgba(3, 12, 10, 0.48); -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.22), 0 0 22px rgba(77, 255, 171, 0.08);
   font: 400 10.5px "DM Mono", monospace; letter-spacing: 0.04em; color: #7ea795;
   pointer-events: none; min-height: 16px;
 }
@@ -376,7 +379,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .ops-line span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ops-line.swap { animation: opsSwap 0.55s cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes opsSwap { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
-.creed { margin-top: clamp(10px, 1.8vh, 18px); }
+.creed { margin-top: clamp(20px, 3.4vh, 34px); }
 
 /* holographic ground ring: the entity stands ON something now */
 .phantom-zone { position: relative; }
@@ -409,7 +412,13 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .powers button.on { animation: chipLight 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
 @keyframes chipLight { from { transform: translateY(2px) scale(0.97); } to { transform: none; } }
 
-@media (max-width: 640px) { .ops-line span { max-width: 52vw; } }
+@media (max-width: 760px) {
+  .ops-line {
+    top: calc(env(safe-area-inset-top) + 70px); right: auto; left: 50%; bottom: auto;
+    transform: translateX(-50%); max-width: min(92vw, 430px);
+  }
+  .ops-line span { max-width: 52vw; }
+}
 @media (max-height: 640px) { .ops-line { display: none; } }
 @media (prefers-reduced-motion: reduce) {
   .ops-line i, .ops-line.swap, .phantom-zone::before, .phantom-zone::after, .wordmark, .powers button.on { animation: none !important; }
