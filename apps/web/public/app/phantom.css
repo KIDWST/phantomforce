@@ -2807,6 +2807,58 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .hero2-sub { color: #9db3b6; }
 
+@media (min-width: 901px) {
+  .hero2 {
+    grid-template-columns: minmax(480px, 1fr) minmax(280px, 420px);
+    align-items: start;
+    gap: clamp(20px, 2.4vw, 36px);
+    min-height: 0;
+    padding: clamp(28px, 3vw, 42px);
+  }
+  .hero2-copy {
+    max-width: 720px;
+  }
+  .cmd-chips {
+    max-width: 560px;
+  }
+  .cmd-input {
+    max-width: 600px;
+  }
+  .hero2 .hero-say,
+  .hero2 .response-cards {
+    max-width: 620px;
+  }
+  .hero2-stage {
+    width: min(100%, 420px);
+    min-height: 320px;
+    max-height: 360px;
+    justify-self: center;
+    align-self: center;
+    overflow: hidden;
+  }
+  .phantom-webgl {
+    inset: -4% -2%;
+    width: 104%;
+    height: 104%;
+    min-height: 340px;
+  }
+  .hero2-stage .ghost-canvas,
+  .phantom.has-mode-poses .hero2-stage .ghost-canvas {
+    min-height: 320px;
+    max-width: 420px;
+  }
+  .phantom-mode-stage {
+    width: min(100%, 350px);
+  }
+  .phantom-mode-pose {
+    width: min(78%, 300px);
+    max-height: 310px;
+  }
+  .phantom-mode-caption {
+    bottom: 2%;
+  }
+}
+
 .cmd-chip {
   background: var(--glass);
   border: 1px solid var(--line);
