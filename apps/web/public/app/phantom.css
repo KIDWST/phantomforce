@@ -2809,53 +2809,75 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 
 @media (min-width: 901px) {
   .hero2 {
-    grid-template-columns: minmax(480px, 1fr) minmax(280px, 420px);
-    align-items: start;
-    gap: clamp(20px, 2.4vw, 36px);
+    display: block;
+    width: min(100%, 1040px);
     min-height: 0;
     padding: clamp(28px, 3vw, 42px);
+    padding-right: clamp(300px, 31vw, 360px);
   }
   .hero2-copy {
-    max-width: 720px;
+    max-width: 640px;
   }
   .cmd-chips {
-    max-width: 560px;
+    max-width: 540px;
   }
   .cmd-input {
-    max-width: 600px;
+    max-width: 580px;
   }
   .hero2 .hero-say,
   .hero2 .response-cards {
-    max-width: 620px;
+    max-width: 580px;
   }
   .hero2-stage {
-    width: min(100%, 420px);
-    min-height: 320px;
-    max-height: 360px;
-    justify-self: center;
-    align-self: center;
+    position: absolute;
+    top: 50%;
+    right: clamp(24px, 3vw, 42px);
+    width: clamp(240px, 23vw, 300px);
+    height: clamp(240px, 23vw, 300px);
+    min-height: 0;
+    max-height: none;
+    transform: translateY(-50%);
     overflow: hidden;
   }
   .phantom-webgl {
-    inset: -4% -2%;
-    width: 104%;
-    height: 104%;
-    min-height: 340px;
+    inset: -8%;
+    width: 116%;
+    height: 116%;
+    min-height: 0;
   }
   .hero2-stage .ghost-canvas,
   .phantom.has-mode-poses .hero2-stage .ghost-canvas {
-    min-height: 320px;
-    max-width: 420px;
+    min-height: 0;
+    height: 100%;
+    max-width: 100%;
   }
   .phantom-mode-stage {
-    width: min(100%, 350px);
+    width: min(100%, 292px);
   }
   .phantom-mode-pose {
-    width: min(78%, 300px);
-    max-height: 310px;
+    width: min(80%, 250px);
+    max-height: 250px;
   }
   .phantom-mode-caption {
-    bottom: 2%;
+    bottom: 0;
+  }
+}
+
+@media (min-width: 1400px) {
+  .hero2 {
+    width: min(100%, 1120px);
+    padding-right: 380px;
+  }
+  .hero2-stage {
+    width: 320px;
+    height: 320px;
+  }
+  .phantom-mode-stage {
+    width: 312px;
+  }
+  .phantom-mode-pose {
+    width: 265px;
+    max-height: 270px;
   }
 }
 
