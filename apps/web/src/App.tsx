@@ -7415,7 +7415,7 @@ function PhantomActivityTicker({ items }: { items: string[] }) {
 
   return (
     <section className="phantom-live-ticker" aria-label="Live PhantomForce activity">
-      <span>FORCEWIRE</span>
+      <span>PHANTOMWIRE</span>
       <div>
         <p>
           {[...ticker, ...ticker].map((item, index) => (
@@ -10636,7 +10636,7 @@ function AgentControlCenter({
           aria-label="Minimize live worker updates"
         />
         <label htmlFor="forcewire-min" className="agent-ticker-label">
-          <span>FORCEWIRE</span>
+          <span>PHANTOMWIRE</span>
           <strong>Live worker updates</strong>
         </label>
         <div className="agent-ticker-track">
