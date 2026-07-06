@@ -6,14 +6,15 @@ clear, mobile-safe, and honest about approval gates.
 
 ## Files
 
-- `apps/web/public/app/js/companion.js` mounts the portrait and owns the state machine.
-- `apps/web/public/app/js/main.js` drives companion states from chat, typing, and Build mode.
-- `apps/web/public/app/phantom.css` styles the portrait, status labels, starter actions, and trust line.
+- `app/js/companion.js` mounts the portrait and owns the state machine.
+- `app/js/main.js` drives companion states from chat, typing, and Build mode.
+- `app/phantom.css` styles the portrait, status labels, starter actions, and trust line.
 
 ## States
 
 | State | Dot | Meaning |
 | --- | --- | --- |
+| `online` | green | Systems are reachable and ready. |
 | `idle` | green | Systems online and ready. |
 | `listening` | green | User is focused or typing. |
 | `thinking` | green | Phantom is preparing the local response. |
@@ -38,6 +39,6 @@ Every colored dot has a text label. The companion must never rely on color alone
 ## Future Pose Assets
 
 The current portrait uses the real `character.js` engine. Painted poses under
-`apps/web/public/app/assets/poses` can be added later by extending state entries
+`app/assets/poses` can be added later by extending state entries
 with explicit, existing asset filenames. Never reference placeholder assets that
 do not exist.

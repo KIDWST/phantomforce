@@ -10,6 +10,7 @@
   "scripts": {
     "build": "npm run build --workspaces --if-present",
     "dev:server": "npm run dev --workspace @phantomforce/server",
+    "test:intent": "node scripts/test-phantom-intent-router.mjs",
     "typecheck": "npm run build --workspace @phantomforce/contracts && npm run typecheck --workspace @phantomforce/server",
     "prisma:generate": "npm run prisma:generate --workspace @phantomforce/server"
   },

@@ -315,9 +315,11 @@ function seed() {
     ],
     leads: [],
     proposals: [],
+    tasks: [],
     reviews: [],
     bookings: [],
     media: [],
+    looperPlans: [],
     sites: [],
     products: [],
     security: [],
@@ -336,9 +338,11 @@ function normalizeData(data) {
   d.workspaces = Array.isArray(d.workspaces) && d.workspaces.length ? d.workspaces : seeded.workspaces;
   d.leads = Array.isArray(d.leads) ? d.leads : [];
   d.proposals = Array.isArray(d.proposals) ? d.proposals : [];
+  d.tasks = Array.isArray(d.tasks) ? d.tasks : [];
   d.reviews = Array.isArray(d.reviews) ? d.reviews : [];
   d.bookings = Array.isArray(d.bookings) ? d.bookings : [];
   d.media = Array.isArray(d.media) ? d.media : [];
+  d.looperPlans = Array.isArray(d.looperPlans) ? d.looperPlans : [];
   d.sites = Array.isArray(d.sites) ? d.sites : [];
   d.products = Array.isArray(d.products) ? d.products : [];
   d.security = Array.isArray(d.security) ? d.security : [];
@@ -670,6 +674,8 @@ export function todaysPlan() {
     .forEach((l) => items.push({ icon: "▸", text: `${l.next} — ${l.name}`, kind: "lead", open: "leads" }));
   visible(store.state.proposals).filter((p) => p.status === "sent-ready")
     .forEach((p) => items.push({ icon: "▸", text: `Proposal send-ready: ${p.client}`, kind: "proposal", open: "proposals" }));
+  visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status || "new"))
+    .forEach((t) => items.push({ icon: "▸", text: `Task ready: ${t.title}`, kind: "task", open: "workforce" }));
   visible(store.state.media).filter((m) => m.status === "brief-ready")
     .forEach((m) => items.push({ icon: "▸", text: `Video request ready: ${m.title}`, kind: "media", open: "media" }));
   visible(store.state.security).forEach((s) => {

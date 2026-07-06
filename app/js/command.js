@@ -7,6 +7,7 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
 } from "./store.js?v=phantom-live-20260707-36";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-36";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -114,6 +115,25 @@ function createBooking(subject) {
   return b;
 }
 
+function createTaskDraft(draft) {
+  const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  const t = {
+    id: uid("task"), ws,
+    title: draft?.title || "New task",
+    detail: draft?.detail || draft?.title || "Created from Phantom chat.",
+    status: "new",
+    priority: /high priority|urgent|asap/i.test(draft?.detail || "") ? "high" : "normal",
+    source: "Phantom AI command",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  store.state.tasks = Array.isArray(store.state.tasks) ? store.state.tasks : [];
+  store.state.tasks.unshift(t);
+  pushActivity("Task Router", `created task "${t.title}".`, ws);
+  store.save();
+  return t;
+}
+
 function createAutomation(subject, raw) {
   const clean = (subject || raw || "New automation")
     .replace(/\b(create|make|build|draft|set up|setup|add|an?|the|automation|workflow|for|to)\b/gi, " ")
@@ -137,12 +157,132 @@ function createAutomation(subject, raw) {
   return a;
 }
 
+function looperPlan(draft) {
+  const steps = [
+    "Clarify the goal and audience.",
+    "Draft the structure, copy, and required inputs.",
+    "Review risk: publish/send/deploy/payment stays blocked.",
+    "Prepare the approval packet.",
+  ];
+  return {
+    title: draft?.output ? title(draft.output) : "Build Plan",
+    goal: draft?.goal || "New build request",
+    steps,
+  };
+}
+
+function createLooperBuildPacket(plan, draft) {
+  const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  const packet = {
+    id: uid("loop"),
+    ws,
+    title: plan.title || "Build Plan",
+    goal: plan.goal,
+    output: draft?.output || "build plan",
+    status: "draft",
+    risk: "approval-gated",
+    steps: plan.steps,
+    safeguards: [
+      "No publish, deploy, send, charge, account connection, or production write.",
+      "Owner reviews the packet before any outside-world action.",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  store.state.looperPlans = Array.isArray(store.state.looperPlans) ? store.state.looperPlans : [];
+  store.state.looperPlans.unshift(packet);
+  pushActivity("Looper", `drafted build packet "${packet.title}".`, ws);
+  store.save();
+  return packet;
+}
+
+function intentResponse(intent, text) {
+  if (intent.primaryIntent === "question") {
+    return {
+      say: "Good question. I’ll answer first instead of creating work. If you want this turned into a task or Looper run, say that directly.",
+      cards: [card("No task created", "Answer mode", "Questions stay conversational until you ask me to create, track, assign, schedule, or build something.", [])],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "brainstorm") {
+    return {
+      say: "That sounds like a direction, not a task yet. I can brainstorm it, turn it into a plan, or create a task if you tell me which path you want.",
+      cards: [card("Idea captured safely", "No task created", "Say 'make this a task', 'make me a plan', or 'start Looper' when you want it converted.", [])],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "feedback") {
+    return {
+      say: "Heard. I’m treating that as feedback, not a task. If you want it tracked, say 'create a task to fix this' and I’ll put it on the list.",
+      cards: [card("Feedback", "No task created", text, [])],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "plan") {
+    return {
+      say: "I’ll keep this as a plan, not a task list. Here’s the clean path: define the outcome, choose the owner, break it into approval-safe steps, then decide what should become tasks.",
+      cards: [card("Plan mode", "Draft plan only", "No tasks were created. Ask 'create tasks from this plan' when you want records added.", [])],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "task_candidate") {
+    return {
+      say: "That sounds task-worthy, but I won’t create it from wording alone. Say 'create a task for this' if you want it tracked.",
+      cards: [card("Task candidate", intent.taskDraft?.title || "Possible task", "Needs explicit confirmation before it becomes a task.", [])],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "automation_candidate") {
+    return {
+      say: "That sounds like an automation idea. I won’t create it until you explicitly ask me to set it up.",
+      cards: [card("Automation candidate", intent.automationDraft?.title || "Possible automation", "Say 'create this automation' when you want it drafted for approval.", [openAction("Open Automation", "automation")])],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "create_task") {
+    const t = createTaskDraft(intent.taskDraft);
+    return {
+      say: `Task created: "${t.title}". It is local and ready for owner review.`,
+      cards: [card("Task", t.title, t.detail, [openAction("Open Workers", "workforce")], `Priority: ${t.priority}`)],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "create_automation" || intent.primaryIntent === "reminder") {
+    if (intent.shouldAskClarifyingQuestion) {
+      return {
+        say: "I can make that an automation, but I need the cadence or time first. Tell me when it should run.",
+        cards: [card("Automation needs timing", intent.automationDraft?.title || "Automation draft", "Example: daily at 9am, every Friday, or tomorrow morning.", [])],
+        open: null,
+      };
+    }
+    const a = createAutomation(intent.automationDraft?.title || null, text);
+    return {
+      say: `Automation drafted: "${a.name}". It is waiting for approval before anything runs.`,
+      cards: [card("Automation draft", a.name, a.mission, [openAction("Review approval", "approvals"), openAction("Open Automation", "automation")], "Approval required")],
+      open: "automation",
+    };
+  }
+  if (intent.primaryIntent === "looper_build") {
+    const plan = looperPlan(intent.looperDraft);
+    const packet = createLooperBuildPacket(plan, intent.looperDraft);
+    return {
+      say: `Looper drafted a guarded build packet for "${plan.goal}". I’ll keep it in review mode until approval.`,
+      cards: [card("Looper build packet", packet.title, plan.steps.join(" "), [openAction("Open Site Creator", "sites")], "Guarded build mode")],
+      open: null,
+    };
+  }
+  return null;
+}
+
 /* ---------------- the router ---------------- */
 export function handleCommand(raw) {
   const text = (raw || "").trim();
   const s = text.toLowerCase();
   const subject = subjectOf(text);
   const admin = isAdmin();
+  const intent = classifyPhantomIntent(text);
+  const guarded = intentResponse(intent, text);
+  if (guarded) return { ...guarded, intent };
 
   /* --- money / pipeline --- */
   if (/pipeline|revenue|money|how much.*(made|worth|owed)|unpaid|invoice|cash/.test(s)) {

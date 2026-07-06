@@ -418,6 +418,12 @@ function accountInitials(name) {
   const initials = String(name || "PhantomForce").split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
   return initials || "PF";
 }
+function accountRoleLabel() {
+  return isAdmin() ? "Administrator" : "Employee";
+}
+function accountIdentityLine() {
+  return ctx.session?.email || ctx.session?.label || `${accountRoleLabel()} - ${wsName(currentWs())}`;
+}
 function accountRenewalLabel() {
   return new Date(Date.now() + ACCOUNT_PLAN.renewalOffsetDays * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
 }
@@ -474,6 +480,7 @@ function renderAccountPlan(body) {
         <div class="account-hero-main">
           <p class="account-kicker">Account profile</p>
           <h3>${esc(owner)}</h3>
+          <p class="account-identity">${esc(accountIdentityLine())}</p>
           <p class="account-status account-status-${status.tone}"><span aria-hidden="true"></span>${esc(status.label)}</p>
         </div>
         <div class="account-plan-chip">
@@ -501,6 +508,19 @@ function renderAccountPlan(body) {
             <button class="btn" data-account-action="invoice">Request invoice</button>
           </div>
         </article>
+      </section>
+      <section class="account-section">
+        <div class="set-sec-head">
+          <div>
+            <p class="account-card-k">Billing history</p>
+            <h3>Invoices and receipts</h3>
+          </div>
+        </div>
+        <div class="account-billing-list">
+          <span><b>Status</b><i>No invoices loaded in this local shell.</i></span>
+          <span><b>Payment connector</b><i>Not wired here. Manual billing only.</i></span>
+          <span><b>Next safe action</b><i>Use Request invoice to prepare an owner-review note.</i></span>
+        </div>
       </section>
       <section class="account-section">
         <div class="set-sec-head">

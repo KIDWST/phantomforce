@@ -517,6 +517,7 @@ function renderWebsitePreview(site, products) {
 function renderSites(el, rerender) {
   const sites = visible(store.state.sites);
   const products = visible(store.state.products);
+  const looperPlans = visible(store.state.looperPlans || []);
   const active = sites[0] || null;
   if (active) ensureSiteDesign(active);
   el.innerHTML = `
@@ -580,6 +581,23 @@ function renderSites(el, rerender) {
             <div data-site-preview-mount>${renderWebsitePreview(active, products)}</div>
           </div>
         </div>`}
+      <h3 class="ws-subhead">Looper build packets</h3>
+      <div class="card-grid">
+        ${looperPlans.map((plan) => `
+          <article class="record looper-packet">
+            <div class="record-top">${wsTag(plan.ws)}<h4>${esc(plan.title)}</h4><span>${chip(plan.status || "draft")}</span></div>
+            <p class="record-sub">${esc(plan.output || "build plan")} · ${esc(plan.risk || "approval-gated")} · ${ago(plan.updatedAt || plan.createdAt)}</p>
+            <p class="record-notes">${esc(plan.goal || "No goal recorded.")}</p>
+            <ul class="looper-step-list">
+              ${(plan.steps || []).slice(0, 5).map((step) => `<li>${esc(step)}</li>`).join("")}
+            </ul>
+            <p class="record-proof">${esc((plan.safeguards || ["Owner approval required before outside-world action."])[0])}</p>
+            <div class="record-actions">
+              <button class="btn btn-primary" data-act="looper-site-draft" data-id="${plan.id}">Start site draft</button>
+              <button class="btn btn-quiet" data-act="looper-review" data-id="${plan.id}">Mark reviewed</button>
+            </div>
+          </article>`).join("") || empty("No Looper packets yet. Ask Phantom to build a landing page, intake form, campaign, or website copy.")}
+      </div>
       <h3 class="ws-subhead">Drafts</h3>
       <div class="card-grid">
         ${sites.map((s) => `
@@ -633,6 +651,27 @@ function renderSites(el, rerender) {
     "start-site": () => createDraft(`${wsName(currentWs())} site`, "Website"),
     "start-store": () => createDraft(`${wsName(currentWs())} store`, "Store"),
     "focus-existing": () => createDraft("Existing site rebuild", "Website"),
+    "looper-site-draft": (id) => {
+      const plan = store.state.looperPlans.find((x) => x.id === id);
+      if (!plan) return;
+      const kind = /store|shop|e-?commerce/i.test(plan.goal || plan.output || "") ? "Store" : "Website";
+      const draft = baseSiteDraft(plan.title || `${wsName(currentWs())} site`, kind);
+      draft.looperRef = plan.id;
+      applyWebsitePrompt(draft, plan.goal || plan.title || "");
+      store.state.sites.unshift(draft);
+      plan.status = "reviewed";
+      plan.updatedAt = new Date().toISOString();
+      pushActivity("Looper", `turned "${plan.title}" into a local ${kind.toLowerCase()} draft.`, plan.ws);
+      store.save(); rerender();
+    },
+    "looper-review": (id) => {
+      const plan = store.state.looperPlans.find((x) => x.id === id);
+      if (!plan) return;
+      plan.status = "reviewed";
+      plan.updatedAt = new Date().toISOString();
+      pushActivity("Looper", `marked "${plan.title}" reviewed.`, plan.ws);
+      store.save(); rerender();
+    },
     "ask-service": () => { if (active) { applyWebsitePrompt(active, "make this a simple service business site with services, reviews, quote request, and clear contact button"); store.save(); rerender(); } },
     "ask-store": () => { if (active) { applyWebsitePrompt(active, "turn this into an online store with products, offer, reviews, and checkout plan"); store.save(); rerender(); } },
     "ask-booking": () => { if (active) { applyWebsitePrompt(active, "add booking, schedule, reminders, and a book now button"); store.save(); rerender(); } },

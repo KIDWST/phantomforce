@@ -8,6 +8,7 @@ import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-3
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
 export const PRESENCE_STATES = {
+  online: { label: "Systems online", caption: "Systems online.", dot: "ok", mood: "idle", emotion: "calm", hold: 0 },
   idle: { label: "Systems online", caption: "Ready when you are.", dot: "ok", mood: "idle", emotion: "calm", hold: 0 },
   listening: { label: "Listening", caption: "I'm listening.", dot: "ok", mood: "listening", emotion: "calm", hold: 2400 },
   thinking: { label: "Thinking", caption: "Thinking through the best move...", dot: "ok", mood: "thinking", emotion: "bright", hold: 12000 },
