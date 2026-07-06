@@ -1658,6 +1658,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   border: 1px solid var(--line); border-radius: 14px; padding: 14px; background: rgba(4,12,9,.48);
 }
 .ch-idea-card { display: flex; flex-direction: column; gap: 11px; }
+.ch-removable { position: relative; }
+.ch-remove {
+  position: absolute; top: 8px; right: 8px; z-index: 3;
+  width: 24px; height: 24px; display: grid; place-items: center;
+  border: 1px solid rgba(234,255,242,.18); border-radius: 50%;
+  background: rgba(2,10,8,.76); color: #ff97a4; cursor: pointer;
+  font: 700 13px "DM Mono", monospace; line-height: 1;
+}
+.ch-remove:hover { border-color: rgba(255,92,115,.62); background: rgba(255,92,115,.14); color: #ffc7ce; }
+.ch-idea-card .ch-remove, .ch-draft .ch-remove, .ch-calendar-item .ch-remove { opacity: .9; }
+.ch-calendar-item.ch-removable { padding-right: 44px; }
 .ch-idea-top { display: flex; flex-direction: column; gap: 5px; }
 .ch-idea-top span, .ch-draft-meta span, .ch-calendar-item em, .an-trend span {
   align-self: flex-start; font: 700 8.5px "DM Mono", monospace; letter-spacing: .1em; text-transform: uppercase;

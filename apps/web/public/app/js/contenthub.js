@@ -7,6 +7,7 @@
    anything else) can fetch the same numbers with zero coupling. */
 
 const CH_KEY = "pf.contenthub.v2";
+const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
 const DAY = 864e5;
 
 export const PLATFORMS = [
@@ -27,10 +28,10 @@ function mulberry(seed) { return function () { seed |= 0; seed = (seed + 0x6D2B7
 const CAPTIONS = [
   "Your business, running while you sleep 👻", "One prompt. A whole campaign.", "Watch PhantomForce close a lead in real time",
   "The operator you couldn't afford to hire", "Before / after: an inbox on autopilot", "5 things PhantomForce did before your coffee",
-  "How we turned a DM into a $2,400 booking", "The green ghost never misses a follow-up", "AI that drafts, you approve, it sends",
+  "How we turned a DM into a $2,400 booking", "The green ghost never misses a follow-up", "AI that drafts, checks risk, and ships safe work",
   "Behind the scenes: the Media Lab", "Threat watch caught this scam in 3 seconds", "From quote to paid in one thread",
   "Your calendar, booked without the back-and-forth", "Meet the phantom that runs the boring half", "We generated this ad in 11 seconds",
-  "Nothing sends without you. Ever.", "The dashboard that reads your whole business", "Reels that write themselves",
+  "Risky sends stop for you. Safe work keeps moving.", "The dashboard that reads your whole business", "Reels that write themselves",
   "Proof: 24/7 and never tired", "Ask for an outcome, not a task",
 ];
 const COMMENTS = [
@@ -43,19 +44,19 @@ const COMMENTS = [
 ];
 const HASHTAGS = ["#AI", "#smallbusiness", "#automation", "#phantomforce", "#entrepreneur", "#marketing", "#solopreneur", "#contentcreation", "#business", "#productivity"];
 const IDEA_BANK = [
-  { title: "Founder proof clip", angle: "Show one before/after operator win in 30 seconds.", format: "Reel", platforms: ["instagram", "tiktok", "youtube"], next: "Record screen capture plus owner voiceover." },
-  { title: "Client objection carousel", angle: "Turn the top sales objection into a five-card answer.", format: "Carousel", platforms: ["instagram", "linkedin"], next: "Pull the strongest objection from recent leads." },
-  { title: "Behind the build", angle: "Show the cockpit, approvals, and safety gates without naming tools.", format: "Short", platforms: ["youtube", "x"], next: "Clip the dashboard and write a plain-language hook." },
-  { title: "Offer breakdown", angle: "Explain what the Pro Plan actually handles for a business owner.", format: "Post", platforms: ["linkedin", "facebook"], next: "Draft three outcomes and one proof point." },
-  { title: "Trend response", angle: "React to the current creator/business automation trend with a PhantomForce take.", format: "Text + image", platforms: ["x", "linkedin"], next: "Use Analytics trend signals before drafting." },
-  { title: "Trust and safety note", angle: "Show that nothing sends, spends, or publishes without approval.", format: "Story", platforms: ["instagram", "facebook"], next: "Turn approval gates into a simple visual sequence." },
+  { id: "founder-proof", title: "Founder proof clip", angle: "Show one before/after operator win in 30 seconds.", format: "Reel", platforms: ["instagram", "tiktok", "youtube"], next: "Record screen capture plus owner voiceover." },
+  { id: "objection-carousel", title: "Client objection carousel", angle: "Turn the top sales objection into a five-card answer.", format: "Carousel", platforms: ["instagram", "linkedin"], next: "Pull the strongest objection from recent leads." },
+  { id: "behind-build", title: "Behind the build", angle: "Show the cockpit, autopilot lanes, and safety gates without naming tools.", format: "Short", platforms: ["youtube", "x"], next: "Clip the dashboard and write a plain-language hook." },
+  { id: "offer-breakdown", title: "Offer breakdown", angle: "Explain what the Pro Plan actually handles for a business owner.", format: "Post", platforms: ["linkedin", "facebook"], next: "Draft three outcomes and one proof point." },
+  { id: "trend-response", title: "Trend response", angle: "React to the current creator/business automation trend with a PhantomForce take.", format: "Text + image", platforms: ["x", "linkedin"], next: "Use Analytics trend signals before drafting." },
+  { id: "trust-safety", title: "Trust and safety note", angle: "Show that safe work runs automatically while risky sends or claims stop for review.", format: "Story", platforms: ["instagram", "facebook"], next: "Turn autopilot and risk gates into a simple visual sequence." },
 ];
 const PRODUCTION_STEPS = [
   ["Idea", "Choose the hook and business outcome."],
   ["Draft", "Write caption, visual direction, and CTA."],
   ["Asset", "Create or attach image/video source."],
-  ["Review", "Owner checks claims, pricing, and safety."],
-  ["Schedule", "Queue manually or wait for approved connector."],
+  ["Risk check", "Only claims, spend, sends, and public posts need review."],
+  ["Autopilot", "Safe steps move forward without sitting in a manual review pile."],
 ];
 
 function genPosts() {
@@ -110,6 +111,39 @@ export function loadContent() {
   const data = { posts: genPosts(), updatedAt: Date.now() };
   try { localStorage.setItem(CH_KEY, JSON.stringify(data)); } catch {}
   return data;
+}
+function loadRemovedContent() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CH_REMOVED_KEY) || "[]");
+    return new Set(Array.isArray(saved) ? saved : []);
+  } catch {
+    return new Set();
+  }
+}
+function saveRemovedContent(removed) {
+  try { localStorage.setItem(CH_REMOVED_KEY, JSON.stringify([...removed].slice(0, 200))); } catch {}
+}
+function isRemoved(id) {
+  return loadRemovedContent().has(id);
+}
+function activeIdeas() {
+  const removed = loadRemovedContent();
+  return IDEA_BANK.filter((idea) => !removed.has(`idea:${idea.id}`));
+}
+function removeButton(id, label) {
+  const safeLabel = String(label || "Remove item").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  return `<button class="ch-remove" data-ch-remove="${id}" aria-label="${safeLabel}" title="${safeLabel}" type="button">x</button>`;
+}
+function wireRemovals(body, opts, root) {
+  body.querySelectorAll("[data-ch-remove]").forEach((btn) => btn.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const removed = loadRemovedContent();
+    removed.add(btn.dataset.chRemove);
+    saveRemovedContent(removed);
+    opts.notify?.("Content Hub", "Removed local queued item. No live post, task, or external action was touched.");
+    if (root) renderContentHub(root, opts);
+  }));
 }
 export function analyze(posts) {
   const pub = posts.filter((p) => p.status === "published");
@@ -166,6 +200,8 @@ const chState = { tab: "ideas", platform: "all", ctype: "all", eng: "likes" };
 export function renderContentHub(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const data = loadContent();
+  const ideas = activeIdeas();
+  const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
   const tabs = [["ideas", "New ideas"], ["drafts", "Draft queue"], ["calendar", "Calendar"], ["production", "Production"], ["library", "Library"]];
   el.innerHTML = `
     <div class="ch">
@@ -173,19 +209,19 @@ export function renderContentHub(el, opts = {}) {
         <div>
           <p class="ch-eyebrow">Creator workspace</p>
           <h3>Plan the next useful thing to publish.</h3>
-          <p>Content Hub is for ideas, drafts, creative direction, approval-ready posts, and scheduled content. Analytics handles performance and business trends.</p>
+          <p>Content Hub is for ideas, drafts, creative direction, autopilot-ready posts, and scheduled content. Analytics handles performance and business trends.</p>
         </div>
         <button class="btn btn-primary" data-ch-action="new-idea">Capture idea</button>
       </section>
       <div class="ch-tabs">
         ${tabs.map(([id, l]) => `<button class="ch-tab ${chState.tab === id ? "is-active" : ""}" data-ch-tab="${id}">${l}</button>`).join("")}
-        <span class="ch-src">${IDEA_BANK.length} ideas · ${data.posts.filter((p) => p.status === "scheduled").length} scheduled · updated ${ago(new Date(data.updatedAt).toISOString())}</span>
+        <span class="ch-src">${ideas.length} ideas · ${scheduled} queued · updated ${ago(new Date(data.updatedAt).toISOString())}</span>
       </div>
       <div class="ch-body" data-ch-body></div>
     </div>`;
   el.querySelectorAll("[data-ch-tab]").forEach((b) => b.onclick = () => { chState.tab = b.dataset.chTab; renderContentHub(el, opts); });
   el.querySelector("[data-ch-action='new-idea']")?.addEventListener("click", () => {
-    opts.notify?.("Content Hub", "New content idea capture prepared. No post was created or sent.");
+    opts.notify?.("Content Hub", "New content idea capture prepared locally. Safe steps can run on autopilot; risky sends still stop for review.");
     chState.tab = "ideas";
     renderContentHub(el, opts);
   });
@@ -202,76 +238,84 @@ function kpi(label, value, sub, tone) {
   return `<div class="ch-kpi ${tone || ""}"><span class="ch-kpi-k">${label}</span><b class="ch-kpi-v">${value}</b><span class="ch-kpi-s">${sub || ""}</span></div>`;
 }
 function ideaCard(idea, esc, i) {
-  return `<article class="ch-idea-card">
+  return `<article class="ch-idea-card ch-removable">
+    ${removeButton(`idea:${idea.id}`, `Remove ${idea.title}`)}
     <div class="ch-idea-top"><span>${esc(idea.format)}</span><b>${esc(idea.title)}</b></div>
     <p>${esc(idea.angle)}</p>
     <div class="ch-idea-platforms">${idea.platforms.map((id) => `<span><i class="ch-dot" style="background:${plat(id).color}"></i>${esc(plat(id).name)}</span>`).join("")}</div>
     <div class="ch-idea-next"><b>Next:</b> ${esc(idea.next)}</div>
-    <button class="btn btn-good" data-ch-action="draft" data-idea-i="${i}">Turn into draft</button>
+    <button class="btn btn-good" data-ch-action="draft" data-idea-i="${i}" data-idea-id="${idea.id}">Queue autopilot draft</button>
   </article>`;
 }
 function renderCreatorIdeas(body, data, esc, root, opts) {
-  const scheduled = data.posts.filter((p) => p.status === "scheduled").length;
+  const ideas = activeIdeas();
+  const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
   body.innerHTML = `
     <div class="ch-kpis">
-      ${kpi("Ideas ready", IDEA_BANK.length, "creator backlog")}
-      ${kpi("Draft prompts", 4, "ready to shape")}
-      ${kpi("Scheduled", scheduled, "waiting to publish")}
-      ${kpi("Approval-needed", 3, "claim and CTA review")}
+      ${kpi("Ideas ready", ideas.length, "creator backlog")}
+      ${kpi("Draft prompts", Math.min(4, ideas.length), "ready to shape")}
+      ${kpi("Autopilot queue", scheduled, "safe scheduled items")}
+      ${kpi("Risk checks", 3, "claims, spend, sends")}
       ${kpi("Creator mode", "Active", "content planning", "good")}
     </div>
     <div class="ch-creator-layout">
       <section class="ch-card">
         <div class="ch-card-h"><h3>Recommended next ideas</h3><span class="ch-src">AI-filtered for creator action</span></div>
-        <div class="ch-idea-grid">${IDEA_BANK.slice(0, 4).map((idea, i) => ideaCard(idea, esc, i)).join("")}</div>
+        <div class="ch-idea-grid">${ideas.slice(0, 4).map((idea, i) => ideaCard(idea, esc, i)).join("") || `<p class="empty-line">All queued ideas were removed locally.</p>`}</div>
       </section>
       <aside class="ch-card ch-creator-side">
         <h3>Creator brief</h3>
-        <p>Make content that helps a business owner understand the outcome, trust the system, and know what to approve next.</p>
+        <p>Make content that helps a business owner understand the outcome, trust the system, and know what autopilot should handle next.</p>
         <div class="ch-brief-list">
           <span><b>Hook</b>Outcome first</span>
           <span><b>Proof</b>Show workflow, not tool names</span>
-          <span><b>CTA</b>Ask for manual approval or discovery</span>
-          <span><b>Guardrail</b>No fake live claims</span>
+          <span><b>CTA</b>Ask for discovery or next step</span>
+          <span><b>Guardrail</b>Review risky sends, claims, spend</span>
         </div>
       </aside>
     </div>`;
   wireCreatorActions(body, opts, root);
+  wireRemovals(body, opts, root);
 }
 function renderDraftQueue(body, data, esc, root, opts) {
-  const drafts = IDEA_BANK.slice(1, 5);
+  const drafts = activeIdeas().slice(1, 5).filter((idea) => !isRemoved(`draft:${idea.id}`));
   body.innerHTML = `
     <div class="ch-card">
-      <div class="ch-card-h"><h3>Draft queue</h3><span class="ch-src">Concepts waiting for copy, assets, and approval</span></div>
+      <div class="ch-card-h"><h3>Draft queue</h3><span class="ch-src">Safe drafts move on autopilot; risky claims stop for review</span></div>
       <div class="ch-draft-list">
-        ${drafts.map((idea, i) => `<article class="ch-draft">
+        ${drafts.length ? drafts.map((idea, i) => `<article class="ch-draft ch-removable">
+          ${removeButton(`draft:${idea.id}`, `Remove ${idea.title} draft`)}
           <span class="ch-draft-step">${i + 1}</span>
           <div>
             <h4>${esc(idea.title)}</h4>
             <p>${esc(idea.angle)}</p>
-            <div class="ch-draft-meta"><span>${esc(idea.format)}</span><span>Needs caption</span><span>Needs asset direction</span></div>
+            <div class="ch-draft-meta"><span>${esc(idea.format)}</span><span>Autopilot copy pass</span><span>Asset direction</span></div>
           </div>
-          <button class="btn" data-ch-action="approve-draft" data-idea-i="${i + 1}">Prepare approval</button>
-        </article>`).join("")}
+          <button class="btn" data-ch-action="approve-draft" data-idea-id="${idea.id}">Prepare autopilot</button>
+        </article>`).join("") : `<p class="empty-line">No draft items are waiting. Removed items stay local to this browser.</p>`}
       </div>
     </div>`;
   wireCreatorActions(body, opts, root);
+  wireRemovals(body, opts, root);
 }
 function renderContentCalendar(body, data, esc, root, opts) {
-  const rows = data.posts.filter((p) => p.status === "scheduled").sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
+  const rows = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
   body.innerHTML = `
     <div class="ch-card">
-      <div class="ch-card-h"><h3>Upcoming content calendar</h3><span class="ch-src">Approval-only schedule view</span></div>
-      ${rows.length ? `<div class="ch-calendar-list">${rows.map((p) => `<button class="ch-calendar-item" data-ch-open="${p.id}">
+      <div class="ch-card-h"><h3>Upcoming content calendar</h3><span class="ch-src">Autopilot schedule view, owner can remove</span></div>
+      ${rows.length ? `<div class="ch-calendar-list">${rows.map((p) => `<article class="ch-calendar-item ch-removable" data-ch-open="${p.id}" role="button" tabindex="0">
+        ${removeButton(`schedule:${p.id}`, `Remove scheduled ${p.caption}`)}
         <span class="ch-calendar-date">${ago(p.publishedAt)}</span>
         <span class="ch-tr-thumb" style="${thumb(p)}"></span>
         <span><b>${esc(p.caption)}</b><i>${esc(plat(p.platform).name)} · ${esc(TYPES[p.type])}</i></span>
-        <em>scheduled</em>
-      </button>`).join("")}</div>` : `<p class="empty-line">Nothing scheduled. Generate content in the Media Lab and queue it here.</p>`}
+        <em>queued</em>
+      </article>`).join("")}</div>` : `<p class="empty-line">Nothing queued. Generate content in the Media Lab and queue it here.</p>`}
     </div>`;
   wirePostCards(body, data, esc, root, opts);
+  wireRemovals(body, opts, root);
 }
 function renderProductionBoard(body, data, esc, root, opts) {
+  const assetIdeas = activeIdeas().slice(0, 3).filter((idea) => !isRemoved(`asset:${idea.id}`));
   body.innerHTML = `
     <div class="ch-card">
       <div class="ch-card-h"><h3>Production workflow</h3><span class="ch-src">Creator-side pipeline</span></div>
@@ -284,15 +328,17 @@ function renderProductionBoard(body, data, esc, root, opts) {
       </div>
     </div>
     <div class="ch-card">
-      <div class="ch-card-h"><h3>Asset requests</h3><span class="ch-src">ready for Media Lab</span></div>
+      <div class="ch-card-h"><h3>Asset requests</h3><span class="ch-src">safe asset prep can run on autopilot</span></div>
       <div class="ch-draft-list">
-        ${IDEA_BANK.slice(0, 3).map((idea, i) => `<article class="ch-draft">
+        ${assetIdeas.length ? assetIdeas.map((idea, i) => `<article class="ch-draft ch-removable">
+          ${removeButton(`asset:${idea.id}`, `Remove ${idea.title} asset request`)}
           <span class="ch-draft-step">${i + 1}</span>
           <div><h4>${esc(idea.title)}</h4><p>${esc(idea.next)}</p><div class="ch-draft-meta"><span>${esc(idea.format)}</span><span>Media Lab optional</span></div></div>
           <button class="btn" data-open-ws="media">Open Media Lab</button>
-        </article>`).join("")}
+        </article>`).join("") : `<p class="empty-line">No asset requests are waiting.</p>`}
       </div>
     </div>`;
+  wireRemovals(body, opts, root);
 }
 function renderContentLibrary(body, data, esc, root, opts) {
   const rows = data.posts.slice(0, 18);
@@ -306,9 +352,9 @@ function renderContentLibrary(body, data, esc, root, opts) {
 }
 function wireCreatorActions(body, opts, root) {
   body.querySelectorAll("[data-ch-action]").forEach((btn) => btn.addEventListener("click", () => {
-    const idea = IDEA_BANK[Number(btn.dataset.ideaI || 0)] || IDEA_BANK[0];
-    const action = btn.dataset.chAction === "approve-draft" ? "Approval preview prepared" : "Draft prepared";
-    opts.notify?.("Content Hub", `${action} for ${idea.title}. No post was sent or published.`);
+    const idea = IDEA_BANK.find((row) => row.id === btn.dataset.ideaId) || activeIdeas()[Number(btn.dataset.ideaI || 0)] || IDEA_BANK[0];
+    const action = btn.dataset.chAction === "approve-draft" ? "Risk check prepared" : "Autopilot draft queued";
+    opts.notify?.("Content Hub", `${action} for ${idea.title}. Safe preparation can continue automatically; no live post was sent.`);
     if (root) renderContentHub(root, opts);
   }));
 }
@@ -429,8 +475,8 @@ function renderEngagement(body, data, esc, root, opts) {
 }
 
 function renderScheduled(body, data, esc) {
-  const rows = data.posts.filter((p) => p.status === "scheduled").sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
-  body.innerHTML = rows.length ? `<div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("")}</div>` : `<p class="empty-line">Nothing scheduled. Generate content in the Media Lab and queue it here.</p>`;
+  const rows = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
+  body.innerHTML = rows.length ? `<div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("")}</div>` : `<p class="empty-line">Nothing queued. Generate content in the Media Lab and queue it here.</p>`;
 }
 
 function postCard(p, esc, options = {}) {
@@ -457,7 +503,16 @@ function postCard(p, esc, options = {}) {
 }
 
 function wirePostCards(body, data, esc, root, opts) {
-  body.querySelectorAll("[data-ch-open]").forEach((b) => b.onclick = () => openPost(data.posts.find((p) => p.id === b.dataset.chOpen), esc));
+  body.querySelectorAll("[data-ch-open]").forEach((b) => {
+    const open = () => openPost(data.posts.find((p) => p.id === b.dataset.chOpen), esc);
+    b.onclick = open;
+    b.onkeydown = (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    };
+  });
 }
 function openPost(p, esc) {
   if (!p) return;
@@ -563,7 +618,7 @@ export function renderAnalytics(el, opts = {}) {
         <div class="ch-card-h"><h3>Business recommendations</h3><span class="ch-src">from content signals</span></div>
         <div class="an-reco-grid">
           <article><b>Double down</b><p>Keep publishing short-form proof and workflow clips where reach is already moving.</p></article>
-          <article><b>Convert attention</b><p>Turn comments and clicks into follow-up prompts, lead magnets, and owner-approved offers.</p></article>
+          <article><b>Convert attention</b><p>Turn comments and clicks into follow-up prompts, lead magnets, and owner-safe offers.</p></article>
           <article><b>Test next</b><p>Run one objection carousel and one offer breakdown before changing the whole strategy.</p></article>
         </div>
       </div>
