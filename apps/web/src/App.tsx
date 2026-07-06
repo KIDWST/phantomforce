@@ -5234,7 +5234,7 @@ function App() {
         ) : null}
       </main>
 
-      {mobileMoreOpen && moreMobileNavItems.length ? (
+      {route !== "command" && mobileMoreOpen && moreMobileNavItems.length ? (
         <div className="mobile-more-sheet" role="menu" aria-label="More sections">
           {moreMobileNavItems.map((item) => (
             <button
@@ -5253,7 +5253,7 @@ function App() {
           ))}
         </div>
       ) : null}
-      <nav className="mobile-nav" aria-label="Mobile navigation">
+      <nav className={`mobile-nav${route === "command" ? " command-dashboard-hidden" : ""}`} aria-label="Mobile navigation">
         {coreMobileNavItems.map((item) => (
           <button
             key={item.id}
@@ -6364,6 +6364,31 @@ function PhantomDeck({
   const visibleQuickMoves = quickMoves.filter((move) =>
     canOpenPhantomDeckWorkspace(move.workspace, canManageAccess),
   );
+  const mobileAdminWorkspace: PhantomDeckWorkspaceId = canManageAccess ? "brain" : "status";
+  const mobileAdminActions = ([
+    { label: "Video", detail: "Create and edit", workspace: "video", icon: <Play size={19} /> },
+    { label: "Website", detail: "Site and store", workspace: "site", icon: <Link2 size={19} /> },
+    { label: "Admin", detail: "Systems and memory", workspace: mobileAdminWorkspace, icon: <Settings size={19} /> },
+    { label: "Leads", detail: "CRM and follow-ups", workspace: "leads", icon: <Inbox size={19} /> },
+    { label: "Money", detail: "Quotes and pipeline", workspace: "money", icon: <BarChart3 size={19} /> },
+    { label: "Review", detail: "Approvals", workspace: "review", icon: <ShieldCheck size={19} /> },
+  ] satisfies Array<{ label: string; detail: string; workspace: PhantomDeckWorkspaceId; icon: ReactNode }>).filter((move) =>
+    canOpenPhantomDeckWorkspace(move.workspace, canManageAccess),
+  );
+  const mobileBottomNav = ([
+    { label: "Home", workspace: null, route: null, icon: <Sparkles size={18} /> },
+    { label: "Content", workspace: null, route: "content", icon: <FileText size={18} /> },
+    { label: "Video", workspace: "video", route: null, icon: <Play size={18} /> },
+    { label: "Analytics", workspace: null, route: "activity", icon: <BarChart3 size={18} /> },
+    { label: "Review", workspace: "review", route: null, icon: <ShieldCheck size={18} /> },
+  ] satisfies Array<{
+    label: string;
+    workspace: PhantomDeckWorkspaceId | null;
+    route: Route | null;
+    icon: ReactNode;
+  }>).filter((item) =>
+    !item.workspace || canOpenPhantomDeckWorkspace(item.workspace, canManageAccess),
+  );
 
   const atAGlanceItems = [
     { label: "Due today", value: String(stats.today), tone: "cyan" },
@@ -6774,6 +6799,7 @@ function PhantomDeck({
             <div>
               <strong>PhantomForce</strong>
               <span>PHANTOM DECK</span>
+              <span className="mobile-admin-word">Admin</span>
             </div>
           </div>
           <div className="phantom-top-chips" aria-label="Live deck readouts">
@@ -6792,7 +6818,22 @@ function PhantomDeck({
               <Settings size={17} />
             </button>
           </div>
+          <div className="mobile-admin-actions" aria-label="Mobile admin actions">
+            <button type="button" title="Notifications">
+              <Bell size={17} />
+            </button>
+            <span className="mobile-admin-avatar" aria-label="Jordan admin">
+              JW
+            </span>
+          </div>
         </header>
+
+        <div className="mobile-status-strip" aria-label="Compact system status">
+          <span><i />Phantom <strong>Online</strong></span>
+          <span><i />Systems <strong>Operational</strong></span>
+          <span><i />Memory <strong>Private</strong></span>
+          <span><i />Workspace <strong>{selectedOrg}</strong></span>
+        </div>
 
         <section className="phantom-command-stage" aria-label="Phantom intelligence center">
           <div className="phantom-command-orb" aria-hidden="true" />
@@ -6830,6 +6871,22 @@ function PhantomDeck({
                   <Sparkles size={18} />
                   <span>More</span>
                 </button>
+              </div>
+              <div className="mobile-admin-action-grid" aria-label="Mobile admin lanes">
+                {mobileAdminActions.map((move) => (
+                  <button
+                    key={move.label}
+                    className={activeWorkspace === move.workspace ? "active" : ""}
+                    type="button"
+                    onClick={() => openWorkspace(move.workspace)}
+                  >
+                    {move.icon}
+                    <span>
+                      <strong>{move.label}</strong>
+                      <small>{move.detail}</small>
+                    </span>
+                  </button>
+                ))}
               </div>
               <PhantomWidgetRail widgets={phantomWidgets} activateWidget={activatePhantomWidget} />
               <PhantomOpsLivePanel
@@ -6878,6 +6935,18 @@ function PhantomDeck({
                   onSpeechClick={answerModeActive ? undefined : () => openWorkspace(companionMessage.workspace)}
                 />
                 <span className="holo-label">PHANTOMFORCE AI</span>
+              </div>
+            ) : null}
+
+            {!showBootHologram ? (
+              <div className="mobile-phantom-ambient" aria-hidden="true">
+                <PhantomCompanion
+                  mood={companionMood}
+                  speech=""
+                  thinking={commandFocused || deckLoading || phantomAiBusy}
+                  oracle={false}
+                  answerMode={false}
+                />
               </div>
             ) : null}
 
@@ -6991,6 +7060,30 @@ function PhantomDeck({
             openWorkspace={openWorkspace}
           />
         </div>
+        <nav className="mobile-admin-bottom-nav" aria-label="Mobile admin navigation">
+          {mobileBottomNav.map((item) => {
+            const active = item.workspace ? activeWorkspace === item.workspace : !activeWorkspace;
+            return (
+              <button
+                key={item.label}
+                className={active ? "active" : ""}
+                type="button"
+                onClick={() => {
+                  if (item.route) {
+                    setRoute(item.route);
+                  } else if (item.workspace) {
+                    openWorkspace(item.workspace);
+                  } else {
+                    closeWorkspace();
+                  }
+                }}
+              >
+                {item.icon}
+                <span>{item.label}</span>
+              </button>
+            );
+          })}
+        </nav>
       </div>
       {workspaceOverlay && typeof document !== "undefined" ? createPortal(
         <div className="workspace-focus-overlay" role="dialog" aria-modal="true" aria-label={`${activeWorkspaceMeta?.label ?? "Workspace"} workspace`}>

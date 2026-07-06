@@ -6,7 +6,7 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
-} from "./store.js?v=phantom-live-20260706-06";
+} from "./store.js?v=phantom-live-20260706-07";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -273,11 +273,12 @@ export function handleCommand(raw) {
 
   /* --- workforce --- */
   if (/(workforce|agents?|team|who('| i)s working|workers)/.test(s)) {
-    const active = store.state.agents.filter((a) => a.status === "active").length;
+    const active = (store.state.toolSpine || []).filter((tool) => ["active", "owner-controlled", "available", "planning"].includes(tool.mode)).length;
+    const total = Math.max(1, (store.state.toolSpine || []).length + 1);
     return {
       say: admin
-        ? `${active} of ${store.state.agents.length} desks are active right now. Opening the workforce board.`
-        : `${active} workers are on your account right now. Opening your workforce view.`,
+        ? `${active} of ${total} workers are active or ready. Opening the Workers cockpit.`
+        : `${active} workers are ready on your account. Opening your Workers view.`,
       cards: [], open: "workforce",
     };
   }

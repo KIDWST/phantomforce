@@ -4,13 +4,13 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-06";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-06";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-06";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-06";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-06";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-06";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-06";
+} from "./store.js?v=phantom-live-20260706-07";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-07";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-07";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-07";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-07";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-07";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-07";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -188,17 +188,17 @@ const NAV = [
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
-  { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
+  { id: "workers",    label: "Workers",      icon: "users", ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 const MOBILE_NAV = [
-  { id: "dashboard", label: "Home",    icon: "grid",  route: "nav", target: "dashboard" },
-  { id: "media",     label: "Video",   icon: "media", route: "nav", target: "media" },
-  { id: "sites",     label: "Website", icon: "grid",  route: "ws",  target: "sites" },
-  { id: "adminos",   label: "Admin",   icon: "auto",  route: "ws",  target: "adminos", adminOnly: true },
-  { id: "approvals", label: "Review",  icon: "check", route: "nav", target: "approvals" },
+  { id: "dashboard", label: "Home",      icon: "grid",  route: "nav", target: "dashboard" },
+  { id: "content",   label: "Content",   icon: "doc",   route: "nav", target: "content" },
+  { id: "media",     label: "Video",     icon: "media", route: "nav", target: "media" },
+  { id: "workers",   label: "Workers",   icon: "users", route: "nav", target: "workers" },
+  { id: "analytics", label: "Analytics", icon: "chart", route: "nav", target: "analytics" },
 ];
 let activeNav = "dashboard";
 let activePageId = null;
@@ -476,7 +476,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-06";
+const POSE_VERSION = "phantom-live-20260706-07";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -644,16 +644,16 @@ function thisWeekCount() {
 function renderStatCards() {
   const media = visible(store.state.media);
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
-  const delivered = media.filter((m) => m.status === "delivered").length;
+  const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "owner-controlled", "available", "planning"].includes(tool.mode)).length;
+  const workerTotal = Math.max(1, (store.state.toolSpine || []).length + 1);
   const mem = memoryStats();
 
   const cards = [
-    { icon: "db",    title: "Memory",       value: mem.total, sub: mem.total ? `${mem.categories} categories` : "No memories yet", foot: mem.remembered ? `${mem.remembered} remembered` : (mem.expiresSoon ? `${mem.expiresSoon} expiring soon` : "Local conversation memory"), open: "memory", trend: mem.total ? "local" : "empty" },
-    { icon: "media", title: "Media Lab",    value: media.length, sub: "Video requests", foot: media.length ? `${delivered} delivered` : "No requests yet", open: "media", trend: media.length ? "ready" : "empty" },
-    { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "Queue clear", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear" },
-    { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: thisWeekCount() ? "Real activity only" : "No activity yet", open: "media", trend: thisWeekCount() ? "live" : "empty" },
-    { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: activeAgents ? "Real workers only" : "Not configured", open: "workforce", trend: activeAgents ? "live" : "empty" },
+    { icon: "brain", title: "Phantom AI", value: "ON", sub: "Ready", foot: "Tap to talk", open: "phantom", trend: "online", sparkSeed: 8 },
+    { icon: "users", title: "Workers", value: activeTools, sub: `${workerTotal} rostered`, foot: "Preview roster", open: "workforce", trend: "active", sparkSeed: activeTools + 12 },
+    { icon: "check", title: "Approvals", value: pending ? pending : "OK", sub: pending ? "Review" : "Clear", foot: pending ? "Needs owner call" : "All systems go", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear", sparkSeed: pending + 4 },
+    { icon: "db", title: "Memory", value: mem.total ? "ON" : "OK", sub: mem.total ? `${mem.total} notes` : "Ready", foot: mem.remembered ? `${mem.remembered} pinned` : "Private context", open: "memory", trend: mem.total ? "live" : "ready", sparkSeed: mem.total + 7 },
+    { icon: "media", title: "Media", value: media.length ? media.length : "OK", sub: media.length ? "Requests" : "Ready", foot: media.length ? "In pipeline" : "No blockers", open: "media", trend: media.length ? "run" : "ready", sparkSeed: media.length + thisWeekCount() + 9 },
   ];
   $("[data-statcards]").innerHTML = cards.map((c) => `
     <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
@@ -664,7 +664,7 @@ function renderStatCards() {
       <span class="statcard-k">${esc(c.title)}</span>
       <b class="statcard-v">${c.value}</b>
       <span class="statcard-sub">${esc(c.sub)}</span>
-      ${sparkline(c.value + c.title.length, !c.alert)}
+      ${sparkline(c.sparkSeed ?? (Number(c.value) || c.title.length), !c.alert)}
       <span class="statcard-foot">${esc(c.foot)}</span>
     </button>`).join("");
 }

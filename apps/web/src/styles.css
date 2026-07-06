@@ -13516,6 +13516,24 @@ button.phantom-speech {
   background: linear-gradient(180deg, #4bff8c, #17d969);
 }
 
+.mobile-admin-word,
+.mobile-admin-actions,
+.mobile-status-strip,
+.mobile-admin-action-grid,
+.mobile-phantom-ambient,
+.mobile-admin-bottom-nav {
+  display: none;
+}
+
+.phantom-deck.v3 .phantom-brand-lockup div > span:not(.mobile-admin-word) {
+  color: var(--deck-green);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  opacity: 0.78;
+}
+
 @media (max-width: 1100px) {
   .phantom-deck.v3 .phantom-command-core {
     grid-template-columns: minmax(300px, 0.92fr) minmax(360px, 1fr);
@@ -14017,5 +14035,461 @@ button.phantom-speech {
       "mission"
       "intel";
     padding-top: 0;
+  }
+}
+
+/* Mobile-only admin home. Keeps the desktop dashboard intact while turning the
+   phone view into a compact app shell instead of a compressed desktop grid. */
+@media (max-width: 767px) {
+  .mobile-nav.command-dashboard-hidden,
+  .mobile-more-sheet.command-dashboard-hidden {
+    display: none;
+  }
+
+  .phantom-deck.v3 {
+    min-height: 100dvh;
+    overflow-x: hidden;
+    background:
+      radial-gradient(circle at 75% 8%, rgba(56, 255, 139, 0.16), transparent 26%),
+      linear-gradient(180deg, rgba(5, 24, 16, 0.6), rgba(0, 0, 0, 0.97) 48%),
+      repeating-linear-gradient(90deg, rgba(83, 255, 165, 0.04) 0 1px, transparent 1px 68px),
+      repeating-linear-gradient(180deg, rgba(83, 255, 165, 0.035) 0 1px, transparent 1px 68px),
+      #000403;
+  }
+
+  .phantom-deck.v3 .phantom-deck-main {
+    width: 100%;
+    min-height: 100dvh;
+    padding:
+      calc(env(safe-area-inset-top) + 8px)
+      14px
+      calc(env(safe-area-inset-bottom) + 96px);
+    overflow-x: hidden;
+  }
+
+  .phantom-deck.v3 .phantom-deck-header {
+    position: sticky;
+    top: 0;
+    z-index: 24;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 58px;
+    gap: 10px;
+    width: 100%;
+    margin: 0 0 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(83, 255, 165, 0.12);
+    background:
+      linear-gradient(180deg, rgba(0, 7, 5, 0.94), rgba(0, 7, 5, 0.74)),
+      rgba(0, 0, 0, 0.58);
+    backdrop-filter: blur(16px);
+  }
+
+  .phantom-deck.v3 .phantom-brand-lockup {
+    min-width: 0;
+    gap: 9px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .phantom-deck.v3 .phantom-brand-lockup strong {
+    font-size: 0.86rem;
+    line-height: 1;
+  }
+
+  .phantom-deck.v3 .phantom-brand-lockup div > span:not(.mobile-admin-word) {
+    display: none;
+  }
+
+  .phantom-deck.v3 .mobile-admin-word {
+    display: block;
+    margin-top: 2px;
+    color: var(--pf-neon);
+    font-size: 0.64rem;
+    font-weight: 900;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    opacity: 0.9;
+  }
+
+  .phantom-deck.v3 .mini-ghost {
+    width: 24px;
+    height: 28px;
+  }
+
+  .phantom-deck.v3 .phantom-top-chips,
+  .phantom-deck.v3 .phantom-top-actions {
+    display: none;
+  }
+
+  .phantom-deck.v3 .mobile-admin-actions {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .phantom-deck.v3 .mobile-admin-actions button,
+  .phantom-deck.v3 .mobile-admin-avatar {
+    width: 38px;
+    height: 38px;
+    min-width: 38px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid rgba(83, 255, 165, 0.22);
+    border-radius: 999px;
+    background: rgba(2, 13, 9, 0.82);
+    color: #eafff3;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  }
+
+  .phantom-deck.v3 .mobile-admin-avatar {
+    color: #001d11;
+    background: linear-gradient(180deg, #5fff9c, #20df73);
+    font-size: 0.72rem;
+    font-weight: 950;
+  }
+
+  .phantom-deck.v3 .mobile-status-strip {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    width: 100%;
+    margin: 0 0 10px;
+  }
+
+  .phantom-deck.v3 .mobile-status-strip span {
+    min-width: 0;
+    min-height: 38px;
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 8px 10px;
+    border: 1px solid rgba(83, 255, 165, 0.16);
+    border-radius: 14px;
+    color: rgba(226, 255, 238, 0.72);
+    background: rgba(0, 10, 7, 0.64);
+    font-size: 0.7rem;
+    line-height: 1.1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .phantom-deck.v3 .mobile-status-strip i {
+    width: 7px;
+    height: 7px;
+    flex: 0 0 7px;
+    border-radius: 50%;
+    background: var(--pf-neon);
+    box-shadow: 0 0 13px rgba(83, 255, 165, 0.8);
+  }
+
+  .phantom-deck.v3 .mobile-status-strip strong {
+    min-width: 0;
+    color: #f4fff8;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .phantom-deck.v3 .phantom-command-stage {
+    width: 100%;
+    margin: 0;
+  }
+
+  .phantom-deck.v3 .phantom-command-core,
+  .phantom-deck.v3.boot-hologram-complete .phantom-command-core {
+    position: relative;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      "mission"
+      "intel";
+    gap: 10px;
+    width: 100%;
+    min-height: 0;
+    padding-top: 0;
+  }
+
+  .phantom-deck.v3 .mission-control-panel {
+    position: relative;
+    z-index: 2;
+    min-height: 0;
+    padding: 14px;
+    border-radius: 22px;
+    background:
+      radial-gradient(circle at 92% 16%, rgba(83, 255, 165, 0.13), transparent 25%),
+      linear-gradient(180deg, rgba(6, 24, 17, 0.9), rgba(0, 8, 6, 0.86));
+  }
+
+  .phantom-deck.v3 .mission-control-head {
+    gap: 3px;
+    margin-bottom: 10px;
+    padding-right: 96px;
+  }
+
+  .phantom-deck.v3 .mission-control-head .eyebrow {
+    font-size: 0.62rem;
+  }
+
+  .phantom-deck.v3 .mission-control-head strong {
+    font-size: clamp(1.4rem, 7vw, 1.9rem);
+  }
+
+  .phantom-deck.v3 .mission-control-head p {
+    max-width: 21rem;
+    font-size: 0.82rem;
+  }
+
+  .phantom-deck.v3 .phantom-command-dock {
+    gap: 9px;
+    margin-bottom: 10px;
+  }
+
+  .phantom-deck.v3 .phantom-command {
+    width: 100%;
+    min-height: 58px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: 10px;
+    padding: 8px 8px 8px 12px;
+    border-radius: 19px;
+  }
+
+  .phantom-deck.v3 .phantom-command-label {
+    display: none;
+  }
+
+  .phantom-deck.v3 .phantom-command > svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .phantom-deck.v3 .phantom-command input {
+    width: 100%;
+    min-width: 0;
+    font-size: 0.96rem;
+  }
+
+  .phantom-deck.v3 .phantom-command button {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    border-radius: 15px;
+  }
+
+  .phantom-deck.v3 .tool-orbit-button.harbor {
+    display: none;
+  }
+
+  .phantom-deck.v3 .mobile-admin-action-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+  }
+
+  .phantom-deck.v3 .mobile-admin-action-grid button {
+    min-width: 0;
+    min-height: 74px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px;
+    border: 1px solid rgba(83, 255, 165, 0.18);
+    border-radius: 18px;
+    color: #effff6;
+    background:
+      linear-gradient(180deg, rgba(83, 255, 165, 0.09), rgba(0, 0, 0, 0.12)),
+      rgba(0, 7, 5, 0.64);
+    text-align: left;
+  }
+
+  .phantom-deck.v3 .mobile-admin-action-grid button.active {
+    border-color: rgba(83, 255, 165, 0.72);
+    box-shadow: 0 0 28px rgba(83, 255, 165, 0.14);
+  }
+
+  .phantom-deck.v3 .mobile-admin-action-grid svg {
+    flex: 0 0 auto;
+    color: var(--pf-neon);
+  }
+
+  .phantom-deck.v3 .mobile-admin-action-grid span {
+    min-width: 0;
+    display: grid;
+    gap: 2px;
+  }
+
+  .phantom-deck.v3 .mobile-admin-action-grid strong {
+    font-size: 0.9rem;
+    line-height: 1.1;
+  }
+
+  .phantom-deck.v3 .mobile-admin-action-grid small {
+    color: rgba(226, 255, 238, 0.6);
+    font-size: 0.69rem;
+    line-height: 1.2;
+  }
+
+  .phantom-deck.v3 .phantom-widget-section,
+  .phantom-deck.v3 .phantomops-live-panel,
+  .phantom-deck.v3 .quick-moves {
+    display: none;
+  }
+
+  .phantom-deck.v3 .phantom-holo-stage {
+    position: absolute;
+    top: 16px;
+    right: 14px;
+    z-index: 0;
+    width: 116px;
+    height: 116px;
+    min-height: 0;
+    border: 0;
+    border-radius: 26px;
+    pointer-events: none;
+    opacity: 0.42;
+    overflow: hidden;
+    background: radial-gradient(circle, rgba(83, 255, 165, 0.13), transparent 64%);
+    box-shadow: none;
+  }
+
+  .phantom-deck.v3 .phantom-holo-stage::before,
+  .phantom-deck.v3 .phantom-holo-stage::after,
+  .phantom-deck.v3 .holo-label {
+    display: none;
+  }
+
+  .phantom-deck.v3 .phantom-holo-stage .phantom-companion {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    transform: scale(0.62);
+    transform-origin: center;
+  }
+
+  .phantom-deck.v3 .phantom-holo-stage .phantom-ghost {
+    width: 7.8rem;
+    height: 9.2rem;
+  }
+
+  .phantom-deck.v3 .phantom-holo-stage .phantom-speech {
+    display: none;
+  }
+
+  .phantom-deck.v3 .mobile-phantom-ambient {
+    position: absolute;
+    top: 16px;
+    right: 14px;
+    z-index: 0;
+    width: 116px;
+    height: 116px;
+    display: block;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0.32;
+    filter: saturate(1.15);
+  }
+
+  .phantom-deck.v3 .mobile-phantom-ambient .phantom-companion {
+    width: 100%;
+    height: 100%;
+    min-height: 0;
+    transform: scale(0.58);
+    transform-origin: center;
+  }
+
+  .phantom-deck.v3 .mobile-phantom-ambient .phantom-speech {
+    display: none;
+  }
+
+  .phantom-deck.v3 .mobile-phantom-ambient .phantom-ghost {
+    width: 7.8rem;
+    height: 9.2rem;
+  }
+
+  .phantom-deck.v3 .phantom-intel-stack {
+    position: relative;
+    z-index: 1;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 9px;
+  }
+
+  .phantom-deck.v3 .phantom-intel-stack .intel-card {
+    padding: 12px;
+    border-radius: 18px;
+  }
+
+  .phantom-deck.v3 .workspace-context-card,
+  .phantom-deck.v3 .resource-vault-card {
+    display: none;
+  }
+
+  .phantom-deck.v3 .at-glance-card {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .phantom-deck.v3 .mission-queue-card button {
+    min-height: 54px;
+  }
+
+  .phantom-deck.v3 .phantom-activity-ticker,
+  .phantom-deck.v3 .pulse-strip {
+    display: none;
+  }
+
+  .phantom-deck.v3 .phantom-deck-body {
+    margin-top: 10px;
+  }
+
+  .phantom-deck.v3 .mobile-admin-bottom-nav {
+    position: fixed;
+    left: max(10px, env(safe-area-inset-left));
+    right: max(10px, env(safe-area-inset-right));
+    bottom: max(10px, env(safe-area-inset-bottom));
+    z-index: 60;
+    display: grid;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 4px;
+    padding: 7px;
+    border: 1px solid rgba(83, 255, 165, 0.2);
+    border-radius: 24px;
+    background: rgba(0, 7, 5, 0.9);
+    box-shadow:
+      0 18px 56px rgba(0, 0, 0, 0.62),
+      0 0 34px rgba(83, 255, 165, 0.12);
+    backdrop-filter: blur(20px);
+  }
+
+  .phantom-deck.v3 .mobile-admin-bottom-nav button {
+    min-width: 0;
+    min-height: 48px;
+    display: grid;
+    place-items: center;
+    gap: 2px;
+    border: 0;
+    border-radius: 18px;
+    color: rgba(226, 255, 238, 0.66);
+    background: transparent;
+    font-size: 0.62rem;
+    font-weight: 850;
+  }
+
+  .phantom-deck.v3 .mobile-admin-bottom-nav button.active {
+    color: #001f12;
+    background: linear-gradient(180deg, #5fff9c, #20df73);
+  }
+
+  .phantom-deck.v3 .mobile-admin-bottom-nav span {
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .phantom-deck.v3 .workspace-focus-overlay {
+    padding-bottom: calc(env(safe-area-inset-bottom) + 12px);
   }
 }
