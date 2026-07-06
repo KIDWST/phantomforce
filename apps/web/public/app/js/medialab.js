@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-20";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-21";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -184,6 +184,11 @@ const SOCIAL_CONNECTORS = {
   },
 };
 let socialNotice = "";
+const HERMES_EXTENSION_PROTOCOL = "phantomforce.hermes.extension.v1";
+const HERMES_EXTENSION_KEY = "pf.hermes.extension.connect.v1";
+let mediaSettingsMount = null;
+let mediaSettingsOpts = {};
+let hermesExtensionListenerReady = false;
 
 function defaultSocialAccounts() {
   return PLATFORMS.map((p) => ({
@@ -266,6 +271,138 @@ function socialPostingState(account) {
   if (account.officialConnectState === "oauth_planned") return "oauth planned";
   if (socialStatus(account) !== "empty") return "profile linked";
   return "draft-only";
+}
+function clampHermesText(value = "", limit = 180) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+}
+function redactHermesVisibleText(value = "", limit = 180) {
+  return clampHermesText(String(value || "")
+    .replace(/-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]")
+    .replace(/\bBearer\s+[^\s'"`;&]+/gi, "Bearer [REDACTED_BEARER]")
+    .replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g, "[REDACTED_SECRET]")
+    .replace(/\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})\b/g, "[REDACTED_SECRET]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED_JWT]")
+    .replace(/\b(api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|password|passwd|secret|private[_-]?key)\b["'`]?\s*[:=]\s*["'`]?([^\s'"`;&]+)/gi, (_match, key) => `${key}=[REDACTED_SECRET]`), limit);
+}
+function loadHermesExtensionState() {
+  try {
+    return JSON.parse(localStorage.getItem(HERMES_EXTENSION_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+function saveHermesExtensionState(patch = {}) {
+  const next = {
+    ...loadHermesExtensionState(),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  try { localStorage.setItem(HERMES_EXTENSION_KEY, JSON.stringify(next)); } catch {}
+  return next;
+}
+function sanitizeHermesProfilePacket(payload = {}) {
+  const platform = String(payload.platform || "").toLowerCase().trim();
+  if (!PLATFORMS.some((p) => p.id === platform)) {
+    return { ok: false, reason: "unsupported platform" };
+  }
+  const url = normalizeSocialUrl(payload.url || "");
+  const handle = cleanSocialHandle(payload.handle || url);
+  return {
+    ok: Boolean(url || handle),
+    platform,
+    handle,
+    url,
+    displayName: redactHermesVisibleText(payload.displayName || ""),
+    pageTitle: redactHermesVisibleText(payload.pageTitle || ""),
+    source: "hermes-extension",
+    sourceTab: redactHermesVisibleText(payload.sourceTab || "visible social profile", 80),
+    connectedAt: payload.capturedAt || new Date().toISOString(),
+    userConfirmed: Boolean(payload.userConfirmed),
+    safety: {
+      cookiesRead: false,
+      passwordsRead: false,
+      tokensRead: false,
+      privateMessagesRead: false,
+      browserHistoryRead: false,
+    },
+  };
+}
+function rerenderMediaSettings() {
+  if (mediaSettingsMount) renderMediaSettings(mediaSettingsMount, mediaSettingsOpts);
+}
+function applyHermesProfilePacket(payload = {}) {
+  const packet = sanitizeHermesProfilePacket(payload);
+  if (!packet.ok) {
+    socialNotice = "Hermes Extension did not find a supported public social profile yet. Open the signed-in profile tab once, then come back and click Link latest profile.";
+    saveHermesExtensionState({ detected: true, lastSeenAt: new Date().toISOString(), lastResult: "unsupported" });
+    rerenderMediaSettings();
+    return;
+  }
+  const accounts = loadSocialAccounts();
+  const account = accounts.find((row) => row.id === packet.platform);
+  if (!account) return;
+  account.handle = packet.handle || account.handle || "";
+  account.url = packet.url || socialProfileFromHandle(account.id, account.handle);
+  account.enabled = true;
+  account.connectMode = "hermes-extension";
+  account.lastConnectAt = packet.connectedAt;
+  account.hermesProof = packet;
+  saveSocialAccounts(accounts);
+  saveHermesExtensionState({
+    detected: true,
+    lastSeenAt: new Date().toISOString(),
+    lastLinkedPlatform: packet.platform,
+    lastResult: "linked",
+  });
+  socialNotice = `Hermes linked ${account.name} from the visible browser profile. Stored only public handle/profile fields; no cookies, passwords, tokens, or private messages were read.`;
+  rerenderMediaSettings();
+}
+function handleHermesExtensionPageMessage(event) {
+  if (event.source !== window) return;
+  const data = event.data || {};
+  if (data.protocol !== HERMES_EXTENSION_PROTOCOL) return;
+  if (data.type === "PF_HERMES_EXTENSION_READY") {
+    saveHermesExtensionState({
+      detected: true,
+      version: redactHermesVisibleText(data.payload?.version || "", 80),
+      lastSeenAt: new Date().toISOString(),
+    });
+    rerenderMediaSettings();
+    return;
+  }
+  if (data.type === "PF_HERMES_LINK_CURRENT_TAB_RESULT") {
+    applyHermesProfilePacket(data.payload || {});
+  }
+}
+function ensureHermesExtensionListener() {
+  if (hermesExtensionListenerReady || typeof window === "undefined") return;
+  hermesExtensionListenerReady = true;
+  window.addEventListener("message", handleHermesExtensionPageMessage);
+  setTimeout(() => requestHermesExtensionPing(), 300);
+}
+function requestHermesExtensionPing() {
+  if (typeof window === "undefined") return;
+  window.postMessage({
+    protocol: HERMES_EXTENSION_PROTOCOL,
+    type: "PF_HERMES_EXTENSION_PING",
+    requestedAt: new Date().toISOString(),
+    forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
+  }, window.location.origin);
+}
+function requestHermesExtensionProfileLink() {
+  if (typeof window === "undefined") return;
+  socialNotice = "Hermes Extension link requested. If the extension is installed, it will return the latest visible signed-in social profile proof with public fields only.";
+  saveHermesExtensionState({ lastLinkRequestedAt: new Date().toISOString() });
+  window.postMessage({
+    protocol: HERMES_EXTENSION_PROTOCOL,
+    type: "PF_HERMES_LINK_CURRENT_TAB_REQUEST",
+    requestedAt: new Date().toISOString(),
+    userConfirmed: true,
+    allowedFields: ["platform", "handle", "url", "displayName", "pageTitle"],
+    forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
+  }, window.location.origin);
+  rerenderMediaSettings();
 }
 
 /* ---------------- config ---------------- */
@@ -989,10 +1126,16 @@ function downloadAsset(a) {
    SETTINGS  (provider configuration)
    ========================================================================= */
 export function renderMediaSettings(el, opts = {}) {
+  mediaSettingsMount = el;
+  mediaSettingsOpts = opts;
+  ensureHermesExtensionListener();
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   const socialAccounts = loadSocialAccounts();
   const linkedCount = socialAccounts.filter((account) => socialStatus(account) !== "empty").length;
+  const hermesState = loadHermesExtensionState();
+  const hermesOnline = Boolean(hermesState.detected);
+  const hermesLastSeen = hermesState.lastSeenAt ? new Date(hermesState.lastSeenAt).toLocaleString() : "Not detected yet";
   const routeRow = (modality, label) => {
     const provs = providersFor(cfg, modality === "enhance" ? "enhance" : modality);
     return `<label class="set-route"><span>${label}</span>
@@ -1036,6 +1179,22 @@ export function renderMediaSettings(el, opts = {}) {
             <b>${svgIc("spark")} Draft-first safety</b>
             <span>Until each platform OAuth app is approved, PhantomForce prepares drafts and handoffs only.</span>
           </article>
+        </div>
+        <div class="set-hermes-connect ${hermesOnline ? "is-online" : ""}">
+          <div class="set-hermes-orb" aria-hidden="true"></div>
+          <div class="set-hermes-copy">
+            <b>Hermes Extension</b>
+            <span>${hermesOnline ? "Connected to safe visible-profile bridge" : "Not detected on this page yet"}</span>
+            <em>Links the latest visible signed-in social profile. No cookies, passwords, tokens, private messages, or browser history are read.</em>
+          </div>
+          <div class="set-hermes-status">
+            <span>${hermesOnline ? "online" : "not detected"}</span>
+            <small>${esc(hermesLastSeen)}</small>
+          </div>
+          <div class="set-hermes-actions">
+            <button class="set-social-open" data-hermes-detect type="button">Detect Hermes</button>
+            <button class="set-social-open" data-hermes-link type="button">${svgIc("bolt")} Link latest profile</button>
+          </div>
         </div>
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
@@ -1083,6 +1242,7 @@ export function renderMediaSettings(el, opts = {}) {
     const clear = card.querySelector("[data-social-clear]");
     if (clear) clear.onclick = () => {
       account.handle = ""; account.url = ""; account.loginIdentity = ""; account.enabled = false; account.connectMode = "manual"; account.lastConnectAt = "";
+      delete account.hermesProof;
       socialNotice = `${account.name} link cleared locally. No remote account was changed.`;
       saveAndRender();
     };
@@ -1112,6 +1272,17 @@ export function renderMediaSettings(el, opts = {}) {
     socialNotice = "Lightning connect opens platform sign-in pages only. Browser sessions/password manager can help on those pages, and account linking is confirmed by the public profile URL or handle you save here.";
     opts.notify?.("Settings", "Lightning connect rules shown. No cookies, tokens, sends, or external writes were touched.");
     renderMediaSettings(el, opts);
+  };
+  const hermesDetect = el.querySelector("[data-hermes-detect]");
+  if (hermesDetect) hermesDetect.onclick = () => {
+    requestHermesExtensionPing();
+    socialNotice = "Hermes detection requested. If the extension is loaded on this page, the status will flip online automatically.";
+    renderMediaSettings(el, opts);
+  };
+  const hermesLink = el.querySelector("[data-hermes-link]");
+  if (hermesLink) hermesLink.onclick = () => {
+    requestHermesExtensionProfileLink();
+    opts.notify?.("Settings", "Hermes link requested. Only public profile fields can be returned.");
   };
 
   // provider cards
@@ -1144,6 +1315,9 @@ function socialCard(account, esc) {
   const connector = socialConnector(account);
   const targetLabel = socialProfileTarget(account) ? "Open profile" : "Open login";
   const lastConnect = account.lastConnectAt ? `Last sign-in assist ${new Date(account.lastConnectAt).toLocaleDateString()}` : "Password is never stored here";
+  const hermesProof = account.hermesProof
+    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Hermes verified visible profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
+    : "";
   return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
     <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
     <div class="set-social-top">
@@ -1156,6 +1330,7 @@ function socialCard(account, esc) {
       <span>${esc(connector.lane)}</span>
       <b>${esc(socialPostingState(account))}</b>
     </div>
+    ${hermesProof}
     <label class="set-mini"><span>Login email / username</span><input data-social-login autocomplete="username" placeholder="email or username" value="${esc(account.loginIdentity || "")}"/></label>
     <label class="set-mini"><span>Handle</span><input data-social-handle placeholder="@client" value="${esc(account.handle || "")}"/></label>
     <label class="set-mini"><span>Profile URL</span><input data-social-url placeholder="https://" value="${esc(account.url || "")}"/></label>
