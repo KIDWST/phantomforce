@@ -4,7 +4,7 @@
    memory notes) and renders Automation honestly from the live store (agents +
    tool spine). No fabricated records — drafts and notes are real, local data. */
 
-import { store, visible, pushActivity, uid, ago, TOOL_SPINE } from "./store.js?v=phantom-live-20260705-20";
+import { store, visible, pushActivity, uid, ago, TOOL_SPINE } from "./store.js?v=phantom-live-20260705-21";
 
 const BRAND_KEY = "pf.brand.v1";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));

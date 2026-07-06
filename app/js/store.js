@@ -168,6 +168,13 @@ export function resolveSession() {
 
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
+  /* preview entrance: lets the owner review the latest deployed admin build on
+     the static host (Pages) without being bounced to the live admin server.
+     Local demo data only — the live host's owner login is untouched. */
+  if (q.get("demo") === "1" || key === "preview" || key === "demo") {
+    const s = { role: "admin", name: "Jordan", ws: "phantomforce", demo: true };
+    session.set(s); return s;
+  }
   if (key === "owner-admin" || key === "admin" || key === "jordan") {
     if (isStaticPublicHost()) {
       redirectToLiveAdmin();
@@ -189,7 +196,7 @@ export function resolveSession() {
     if (!store.state.workspaces.some((w) => w.id === saved.ws)) saved.ws = "phantomforce";
     session.set(saved);
   }
-  if (saved?.role === "admin" && isStaticPublicHost()) {
+  if (saved?.role === "admin" && !saved.demo && isStaticPublicHost()) {
     redirectToLiveAdmin();
     return null;
   }

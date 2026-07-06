@@ -4,15 +4,15 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-20";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-20";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-20";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-20";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-20";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-20";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-20";
-import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260705-20";
-import { renderBrandMemory, renderAutomation, brandCounts } from "./brandops.js?v=phantom-live-20260705-20";
+} from "./store.js?v=phantom-live-20260705-21";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-21";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-21";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-21";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-21";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-21";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-21";
+import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260705-21";
+import { renderBrandMemory, renderAutomation, brandCounts } from "./brandops.js?v=phantom-live-20260705-21";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -164,6 +164,7 @@ function goNav(id) {
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
   const pills = [
+    ...(ctx.session?.demo ? [{ label: "Mode", value: `Preview · ${window.PHANTOM_BUILD || "latest build"}`, tone: "warn", dot: true }] : []),
     { label: "Phantom Status", value: "Online", tone: "ok", dot: true },
     { label: "System Status", value: attention ? "Attention needed" : "All Systems Operational", tone: attention ? "warn" : "ok", dot: true },
     { label: "Brand Memory", value: "Private & Local", tone: "ok", lock: true },
@@ -217,7 +218,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-20";
+const POSE_VERSION = "phantom-live-20260705-21";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {

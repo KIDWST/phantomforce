@@ -7,7 +7,7 @@ import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-live-20260705-20";
+} from "./store.js?v=phantom-live-20260705-21";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
