@@ -297,16 +297,19 @@ function renderMedia(el, rerender) {
       <button class="btn btn-primary" data-act="add">+ Video request</button>
     </div>
     <div class="card-grid">
-      ${media.map((m) => `
+      ${media.map((m) => {
+        const shots = Array.isArray(m.shots) ? m.shots : [];
+        const updated = m.updated || new Date().toISOString();
+        return `
         <article class="record">
           <button class="record-x" data-act="remove" data-id="${m.id}" aria-label="Remove video request">×</button>
-          <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title)}</h4></div>
-          <p class="record-sub">${esc(m.type)} · ${chip(m.status)} · ${ago(m.updated)}</p>
-          <p class="record-notes"><b>Angle:</b> ${esc(m.angle)}</p>
-          <details class="shotlist"><summary>Video plan (${m.shots.length})</summary>
-            <ol>${m.shots.map((s) => `<li>${esc(s)}</li>`).join("")}</ol>
+          <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title || "Video request")}</h4></div>
+          <p class="record-sub">${esc(m.type || "Video brief")} · ${chip(m.status || "draft")} · ${ago(updated)}</p>
+          <p class="record-notes"><b>Angle:</b> ${esc(m.angle || m.notes || "Draft the angle before production.")}</p>
+          <details class="shotlist"><summary>Video plan (${shots.length})</summary>
+            <ol>${shots.map((s) => `<li>${esc(s)}</li>`).join("") || `<li>Draft shot list needed.</li>`}</ol>
           </details>
-          <p class="record-notes"><b>Caption:</b> ${esc(m.caption)}</p>
+          <p class="record-notes"><b>Caption:</b> ${esc(m.caption || "Caption draft needed.")}</p>
           ${m.proof ? `<p class="record-proof">Proof: <code>${esc(m.proof)}</code></p>` : ""}
           <div class="record-actions">
             <button class="btn" data-act="copy" data-id="${m.id}">Copy plan</button>
@@ -314,7 +317,8 @@ function renderMedia(el, rerender) {
             ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Request generation (approval)</button>` : ""}
             ${m.status === "generation-approved" ? `<button class="btn" data-act="delivered" data-id="${m.id}">Mark delivered</button>` : ""}
           </div>
-        </article>`).join("") || empty("Media Lab is quiet. Create a video request to get rolling.")}
+        </article>`;
+      }).join("") || empty("Media Lab is quiet. Create a video request to get rolling.")}
     </div>`;
   const find = (id) => store.state.media.find((m) => m.id === id);
   bindActions(el, {
@@ -325,7 +329,11 @@ function renderMedia(el, rerender) {
       pushActivity("Media Factory", `created a video request: ${t.trim()}.`);
       store.save(); rerender();
     },
-    copy: (id, btn) => { const m = find(id); copyText(btn, `${m.title}\n${m.type}\n\nAngle: ${m.angle}\n\nShots:\n${m.shots.map((s, i) => `${i + 1}. ${s}`).join("\n")}\n\nCaption: ${m.caption}`); },
+    copy: (id, btn) => {
+      const m = find(id);
+      const shots = Array.isArray(m.shots) ? m.shots : [];
+      copyText(btn, `${m.title || "Video request"}\n${m.type || "Video brief"}\n\nAngle: ${m.angle || m.notes || "Draft the angle before production."}\n\nShots:\n${shots.map((s, i) => `${i + 1}. ${s}`).join("\n") || "1. Draft shot list needed."}\n\nCaption: ${m.caption || "Caption draft needed."}`);
+    },
     ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `ready to produce: ${m.title}.`, m.ws); store.save(); rerender(); },
     remove: (id) => {
       const m = find(id);
