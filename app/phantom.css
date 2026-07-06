@@ -4266,6 +4266,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     radial-gradient(circle at 78% 46%, rgba(65, 255, 161, 0.12), rgba(65, 255, 161, 0.04) 22%, transparent 44%),
     linear-gradient(180deg, rgba(10, 22, 17, 0.76), rgba(4, 10, 9, 0.9));
 }
+.console .chatbox-head,
+.console .chatbox-log,
+.console .chatbox-composer,
+.console .chatbox-tools,
+.console .chatbox-trust {
+  position: relative;
+  z-index: 3;
+}
 .console .chatbox-head {
   padding: 14px 18px;
 }
@@ -4312,33 +4320,50 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .console .hero2-stage {
   position: absolute;
-  top: 50%;
-  right: clamp(42px, 7cqw, 92px);
-  width: clamp(260px, 24cqw, 410px);
-  min-height: clamp(260px, 24cqw, 410px);
-  transform: translateY(-50%);
+  top: clamp(104px, 13cqw, 154px);
+  right: clamp(24px, 5cqw, 74px);
+  bottom: clamp(116px, 12cqw, 156px);
+  width: clamp(380px, 42cqw, 620px);
+  min-height: 0;
+  height: auto;
+  align-items: center;
+  justify-items: end;
+  transform: none;
   pointer-events: none;
-  opacity: 0.28;
+  opacity: 0.34;
   z-index: 1;
   mix-blend-mode: screen;
+  -webkit-mask-image: radial-gradient(circle at 56% 48%, #000 0 50%, rgba(0, 0, 0, 0.78) 66%, transparent 88%);
+  mask-image: radial-gradient(circle at 56% 48%, #000 0 50%, rgba(0, 0, 0, 0.78) 66%, transparent 88%);
 }
 .console .phantom-mode-stage {
-  width: min(100%, 320px);
-  filter: saturate(1.14) drop-shadow(0 0 48px rgba(65, 255, 161, 0.32));
+  width: min(100%, 570px);
+  height: 100%;
+  aspect-ratio: auto;
+  filter: saturate(1.16) contrast(1.1) drop-shadow(0 0 58px rgba(65, 255, 161, 0.34));
+}
+.console .phantom-mode-pose {
+  width: min(92%, 540px);
+  max-height: 100%;
+  opacity: 0.9;
 }
 .console .hero2-stage .ghost-canvas {
-  opacity: 0.24;
-  transform: scale(0.88);
+  opacity: 0.16;
+  transform: scale(1.08);
+}
+.console .phantom-mode-caption {
+  display: none;
 }
 
 @container (min-width: 900px) {
   .console .hero2-stage {
-    top: 50%;
-    right: clamp(42px, 7cqw, 92px);
-    width: clamp(260px, 24cqw, 410px);
-    min-height: clamp(260px, 24cqw, 410px);
-    transform: translateY(-50%);
-    opacity: 0.28;
+    top: clamp(104px, 13cqw, 154px);
+    right: clamp(24px, 5cqw, 74px);
+    bottom: clamp(116px, 12cqw, 156px);
+    width: clamp(380px, 42cqw, 620px);
+    min-height: 0;
+    transform: none;
+    opacity: 0.34;
   }
 }
 
