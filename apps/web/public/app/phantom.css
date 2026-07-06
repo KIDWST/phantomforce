@@ -4191,3 +4191,179 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .hero2 { padding-right: clamp(250px, 24vw, 300px); }
   .hero2-copy { max-width: 680px; }
 }
+
+/* ============================================================= */
+/* ==========  CHAT-FIRST DASHBOARD HERO — companion pass  ===== */
+/* ============================================================= */
+.console .hero2 {
+  container-type: inline-size;
+  min-height: clamp(620px, calc(100vh - 190px), 780px);
+  position: relative;
+  display: block;
+  padding: clamp(20px, 3.2vw, 44px) clamp(20px, 4vw, 58px);
+}
+.console .hero2-title,
+.console .hero2-sub,
+.console .cmd-chips {
+  display: none;
+}
+.console .hero2-copy {
+  display: flex;
+  align-items: stretch;
+  max-width: none;
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+}
+.console .chatbox {
+  flex: 1 1 auto;
+  width: 100%;
+  max-width: none;
+  min-height: clamp(560px, 66vh, 740px);
+  border-radius: 20px;
+}
+.console .chatbox-head {
+  padding: 14px 18px;
+}
+.console .chatbox-log {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: none;
+  padding: clamp(16px, 2.2vw, 24px);
+}
+.console .msg-body {
+  max-width: min(780px, 88%);
+}
+.console .chatbox-composer {
+  padding: 13px 13px 13px 18px;
+}
+.console .chatbox-composer input {
+  height: 44px;
+  font-size: 17px;
+}
+.console .chatbox-composer .cmd-send {
+  width: 46px;
+  height: 46px;
+  border-radius: 14px;
+}
+.console .chatbox-tools {
+  padding: 11px 18px 12px;
+}
+.console .chatbox-trust {
+  padding: 0 18px 14px;
+}
+.console .chat-start {
+  padding-top: 12px;
+}
+.console .chat-start-t {
+  font-size: 20px;
+}
+.console .chat-start-s {
+  max-width: 720px;
+  font-size: 14px;
+}
+.console .chat-start-btn {
+  min-height: 44px;
+  padding: 11px 18px;
+}
+.console .hero2-stage {
+  position: absolute;
+  top: 24px;
+  right: 24px;
+  width: 156px;
+  min-height: 156px;
+  transform: none;
+  pointer-events: none;
+  opacity: 0.18;
+  z-index: 1;
+}
+.console .phantom-mode-stage {
+  width: min(100%, 320px);
+  filter: drop-shadow(0 0 42px rgba(65, 255, 161, 0.25));
+}
+.console .hero2-stage .ghost-canvas {
+  opacity: 0.24;
+  transform: scale(0.88);
+}
+
+@container (min-width: 900px) {
+  .console .hero2-copy {
+    width: min(100%, calc(100% - clamp(220px, 24cqw, 340px)));
+  }
+  .console .hero2-stage {
+    top: 50%;
+    right: clamp(22px, 4cqw, 58px);
+    width: clamp(220px, 22cqw, 330px);
+    min-height: min(48vh, 390px);
+    transform: translateY(-50%);
+    opacity: 0.82;
+  }
+}
+
+@media (max-width: 1100px) {
+  .console .hero2-copy {
+    width: 100%;
+  }
+  .console .hero2-stage {
+    top: 24px;
+    right: 24px;
+    width: 156px;
+    min-height: 156px;
+    transform: none;
+    opacity: 0.18;
+  }
+}
+
+@media (max-width: 900px) {
+  .console .hero2 {
+    display: block !important;
+    min-height: auto;
+    padding: 16px;
+  }
+  .console .chatbox {
+    min-height: min(72vh, 660px);
+  }
+  .console .hero2-stage {
+    position: absolute !important;
+    top: 18px;
+    right: 18px;
+    width: 112px;
+    height: 112px !important;
+    min-height: 112px !important;
+    margin: 0 !important;
+    order: 0 !important;
+    transform: none;
+    opacity: 0.34;
+    z-index: 0;
+  }
+  .console .hero2-copy {
+    position: relative;
+    z-index: 2;
+  }
+  .console .phantom-mode-stage {
+    width: 112px !important;
+    max-width: 112px;
+  }
+  .console .phantom-mode-pose {
+    width: 104px !important;
+    max-height: 112px !important;
+  }
+  .console .phantom-mode-caption,
+  .console .hero2-stage .ghost-canvas {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .console .chatbox {
+    min-height: min(76vh, 640px);
+    border-radius: 16px;
+  }
+  .console .chatbox-log {
+    padding: 13px;
+  }
+  .console .chatbox-composer input {
+    height: 38px;
+    font-size: 15px;
+  }
+}
