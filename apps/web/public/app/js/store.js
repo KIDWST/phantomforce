@@ -3,8 +3,6 @@
    no payments, no provider calls happen from here — records move through
    draft → approval → *-ready states and stop there until a connector exists. */
 
-import { APIFY_DEFAULT_STATE, APIFY_TOOL_SPINE } from "./apify-tools.js?v=phantom-live-20260705-18";
-
 const DB_KEY = "pf.phantom.v4";
 const SESSION_KEY = "pf.session.v3";
 const LIVE_TOKEN_KEY = "pf.live.sessionToken.v1";
@@ -170,7 +168,6 @@ export const TOOL_SPINE = [
     path: "Private backend",
     visibleToClients: false,
   },
-  ...APIFY_TOOL_SPINE,
 ];
 
 function toolActivitySeed() {
@@ -195,7 +192,6 @@ function seed() {
     approvals: [],
     agents: [],
     toolSpine: TOOL_SPINE,
-    apify: { ...APIFY_DEFAULT_STATE },
     activity: [],
   };
 }
@@ -216,9 +212,6 @@ function normalizeData(data) {
   d.approvals = Array.isArray(d.approvals) ? d.approvals : [];
   d.agents = Array.isArray(d.agents) ? d.agents : [];
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...((d.toolSpine || []).find((x) => x.id === tool.id) || {}), ...tool }));
-  d.apify = { ...APIFY_DEFAULT_STATE, ...(d.apify && typeof d.apify === "object" ? d.apify : {}) };
-  d.apify.selectedActorIds = Array.isArray(d.apify.selectedActorIds) ? d.apify.selectedActorIds : [];
-  d.apify.selectedRecipeIds = Array.isArray(d.apify.selectedRecipeIds) ? d.apify.selectedRecipeIds : [];
   d.activity = Array.isArray(d.activity) ? d.activity : [];
   d.activity = d.activity.slice(0, 80);
   d.version = 4;
