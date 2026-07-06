@@ -7,7 +7,15 @@
    anything else) can fetch the same numbers with zero coupling. */
 
 const CH_KEY = "pf.contenthub.v2";
+const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
+const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
 const DAY = 864e5;
+export const CONTENT_ASSET_LIMITS = Object.freeze({
+  retentionDays: 30,
+  maxItems: 30,
+  budgetBytes: 3000000,
+  maxInlineChars: 280000,
+});
 
 export const PLATFORMS = [
   { id: "instagram", name: "Instagram", color: "#e1306c", handle: "@phantomforce", types: ["image", "carousel", "reel", "story"] },
@@ -27,21 +35,36 @@ function mulberry(seed) { return function () { seed |= 0; seed = (seed + 0x6D2B7
 const CAPTIONS = [
   "Your business, running while you sleep 👻", "One prompt. A whole campaign.", "Watch PhantomForce close a lead in real time",
   "The operator you couldn't afford to hire", "Before / after: an inbox on autopilot", "5 things PhantomForce did before your coffee",
-  "How we turned a DM into a $2,400 booking", "The green ghost never misses a follow-up", "AI that drafts, you approve, it sends",
+  "How we turned a DM into a $2,400 booking", "The green ghost never misses a follow-up", "AI that drafts, checks risk, and ships safe work",
   "Behind the scenes: the Media Lab", "Threat watch caught this scam in 3 seconds", "From quote to paid in one thread",
   "Your calendar, booked without the back-and-forth", "Meet the phantom that runs the boring half", "We generated this ad in 11 seconds",
-  "Nothing sends without you. Ever.", "The dashboard that reads your whole business", "Reels that write themselves",
+  "Risky sends stop for you. Safe work keeps moving.", "The dashboard that reads your whole business", "Reels that write themselves",
   "Proof: 24/7 and never tired", "Ask for an outcome, not a task",
 ];
 const COMMENTS = [
   ["marketing_mia", "okay this is actually insane 🔥", "pos"], ["deshawn.builds", "how much is it??", "neu"],
   ["the_realtor_kate", "just signed up, wish me luck", "pos"], ["gymowner_rob", "does it do DMs on IG too?", "neu"],
   ["skeptic_sam", "seems too good to be true tbh", "neg"], ["salonbyleah", "the follow-ups alone are worth it", "pos"],
-  ["chicagoshots", "the media lab is unreal 👻", "pos"], ["frank_hvac", "finally something that just works", "pos"],
+  ["local_media", "the media lab is unreal 👻", "pos"], ["frank_hvac", "finally something that just works", "pos"],
   ["nina.codes", "the privacy angle sold me", "pos"], ["coach_will", "can it post for me automatically?", "neu"],
   ["mant_detail", "booked 3 jobs this week off this", "pos"], ["quiet_lurker", "commenting so i remember this", "neu"],
 ];
 const HASHTAGS = ["#AI", "#smallbusiness", "#automation", "#phantomforce", "#entrepreneur", "#marketing", "#solopreneur", "#contentcreation", "#business", "#productivity"];
+const IDEA_BANK = [
+  { id: "founder-proof", title: "Founder proof clip", angle: "Show one before/after operator win in 30 seconds.", format: "Reel", platforms: ["instagram", "tiktok", "youtube"], next: "Record screen capture plus owner voiceover." },
+  { id: "objection-carousel", title: "Client objection carousel", angle: "Turn the top sales objection into a five-card answer.", format: "Carousel", platforms: ["instagram", "linkedin"], next: "Pull the strongest objection from recent leads." },
+  { id: "behind-build", title: "Behind the build", angle: "Show the cockpit, autopilot lanes, and safety gates without naming tools.", format: "Short", platforms: ["youtube", "x"], next: "Clip the dashboard and write a plain-language hook." },
+  { id: "offer-breakdown", title: "Offer breakdown", angle: "Explain what the Pro Plan actually handles for a business owner.", format: "Post", platforms: ["linkedin", "facebook"], next: "Draft three outcomes and one proof point." },
+  { id: "trend-response", title: "Trend response", angle: "React to the current creator/business automation trend with a PhantomForce take.", format: "Text + image", platforms: ["x", "linkedin"], next: "Use Analytics trend signals before drafting." },
+  { id: "trust-safety", title: "Trust and safety note", angle: "Show that safe work runs automatically while risky sends or claims stop for review.", format: "Story", platforms: ["instagram", "facebook"], next: "Turn autopilot and risk gates into a simple visual sequence." },
+];
+const PRODUCTION_STEPS = [
+  ["Idea", "Choose the hook and business outcome."],
+  ["Draft", "Write caption, visual direction, and CTA."],
+  ["Asset", "Create or attach image/video source."],
+  ["Risk check", "Only claims, spend, sends, and public posts need review."],
+  ["Autopilot", "Safe steps move forward without sitting in a manual review pile."],
+];
 
 function genPosts() {
   const rng = mulberry(20260705);
@@ -96,6 +119,143 @@ export function loadContent() {
   try { localStorage.setItem(CH_KEY, JSON.stringify(data)); } catch {}
   return data;
 }
+function dataBytes(url) {
+  if (!url || typeof url !== "string") return 0;
+  return url.startsWith("data:") ? url.length * 2 : Math.min(url.length * 2, 2048);
+}
+function assetBytes(asset) {
+  const copy = { ...asset, url: asset.url ? `[${asset.url.length} chars]` : "" };
+  let meta = 0;
+  try { meta = JSON.stringify(copy).length * 2; } catch { meta = 512; }
+  return meta + dataBytes(asset.url);
+}
+function normalizeContentAsset(input = {}) {
+  const meta = input.meta || {};
+  const createdAt = Number(input.createdAt || input.at || Date.now()) || Date.now();
+  const rawType = String(input.type || input.kind || "image").toLowerCase();
+  const type = isVideo(rawType) ? "video" : "image";
+  let url = typeof input.url === "string" ? input.url : "";
+  let trimmed = !!input.trimmed;
+  if (url.startsWith("data:") && url.length > CONTENT_ASSET_LIMITS.maxInlineChars) {
+    url = "";
+    trimmed = true;
+  }
+  return {
+    id: String(input.id || `media-${createdAt}-${Math.random().toString(36).slice(2, 8)}`),
+    type,
+    title: String(input.title || meta.title || (type === "video" ? "Generated video" : "Generated image")),
+    prompt: String(input.prompt || meta.prompt || ""),
+    source: String(input.source || "Media Lab"),
+    provider: String(input.provider || meta.provider || ""),
+    model: String(input.model || meta.model || ""),
+    style: String(input.style || meta.style || ""),
+    aspect: String(input.aspect || meta.aspect || ""),
+    duration: Number(input.duration || meta.duration || 0) || 0,
+    hue: Number(input.hue || meta.hue || 155) || 155,
+    createdAt,
+    expiresAt: createdAt + CONTENT_ASSET_LIMITS.retentionDays * DAY,
+    url,
+    trimmed,
+    live: !!input.live,
+    bytes: dataBytes(url),
+  };
+}
+function pruneContentAssets(items = []) {
+  const cutoff = Date.now() - CONTENT_ASSET_LIMITS.retentionDays * DAY;
+  const seen = new Set();
+  const ordered = items
+    .map(normalizeContentAsset)
+    .filter((asset) => asset.createdAt >= cutoff)
+    .sort((a, b) => b.createdAt - a.createdAt);
+  const kept = [];
+  let used = 0;
+  for (const item of ordered) {
+    if (seen.has(item.id) || kept.length >= CONTENT_ASSET_LIMITS.maxItems) continue;
+    seen.add(item.id);
+    let candidate = { ...item };
+    let nextBytes = assetBytes(candidate);
+    if (used + nextBytes > CONTENT_ASSET_LIMITS.budgetBytes && candidate.url) {
+      candidate = { ...candidate, url: "", trimmed: true, bytes: 0 };
+      nextBytes = assetBytes(candidate);
+    }
+    if (used + nextBytes > CONTENT_ASSET_LIMITS.budgetBytes) continue;
+    used += nextBytes;
+    kept.push(candidate);
+  }
+  return kept;
+}
+export function loadContentAssets() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(CH_ASSETS_KEY) || "null"); } catch {}
+  const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.assets) ? raw.assets : []);
+  const pruned = pruneContentAssets(list);
+  if (pruned.length !== list.length) saveContentAssets(pruned);
+  return pruned;
+}
+export function saveContentAssets(items = []) {
+  let clean = pruneContentAssets(items);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      localStorage.setItem(CH_ASSETS_KEY, JSON.stringify({ assets: clean, updatedAt: Date.now(), limits: CONTENT_ASSET_LIMITS }));
+      return clean;
+    } catch {
+      const withUrl = clean.filter((asset) => asset.url);
+      if (!withUrl.length) break;
+      const dropId = withUrl[withUrl.length - 1].id;
+      clean = clean.map((asset) => asset.id === dropId ? { ...asset, url: "", trimmed: true, bytes: 0 } : asset);
+    }
+  }
+  return clean;
+}
+export function registerContentAsset(asset) {
+  const normalized = normalizeContentAsset(asset);
+  const current = loadContentAssets().filter((item) => item.id !== normalized.id);
+  const saved = saveContentAssets([normalized, ...current]);
+  return { asset: saved.find((item) => item.id === normalized.id) || normalized, stats: contentAssetStats(saved) };
+}
+export function contentAssetStats(items = loadContentAssets()) {
+  const bytes = items.reduce((sum, asset) => sum + assetBytes(asset), 0);
+  return {
+    count: items.length,
+    bytes,
+    budgetBytes: CONTENT_ASSET_LIMITS.budgetBytes,
+    percent: Math.min(100, Math.round((bytes / CONTENT_ASSET_LIMITS.budgetBytes) * 100)),
+    trimmed: items.filter((asset) => asset.trimmed).length,
+  };
+}
+function loadRemovedContent() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(CH_REMOVED_KEY) || "[]");
+    return new Set(Array.isArray(saved) ? saved : []);
+  } catch {
+    return new Set();
+  }
+}
+function saveRemovedContent(removed) {
+  try { localStorage.setItem(CH_REMOVED_KEY, JSON.stringify([...removed].slice(0, 200))); } catch {}
+}
+function isRemoved(id) {
+  return loadRemovedContent().has(id);
+}
+function activeIdeas() {
+  const removed = loadRemovedContent();
+  return IDEA_BANK.filter((idea) => !removed.has(`idea:${idea.id}`));
+}
+function removeButton(id, label) {
+  const safeLabel = String(label || "Remove item").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+  return `<button class="ch-remove" data-ch-remove="${id}" aria-label="${safeLabel}" title="${safeLabel}" type="button">x</button>`;
+}
+function wireRemovals(body, opts, root) {
+  body.querySelectorAll("[data-ch-remove]").forEach((btn) => btn.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const removed = loadRemovedContent();
+    removed.add(btn.dataset.chRemove);
+    saveRemovedContent(removed);
+    opts.notify?.("Content Hub", "Removed local queued item. No live post, task, or external action was touched.");
+    if (root) renderContentHub(root, opts);
+  }));
+}
 export function analyze(posts) {
   const pub = posts.filter((p) => p.status === "published");
   const sum = (f) => pub.reduce((a, p) => a + f(p.metrics), 0);
@@ -137,6 +297,23 @@ function thumb(post) {
     radial-gradient(70% 80% at 85% 90%, ${c}55, transparent 60%),
     linear-gradient(150deg, #08120e, #050b09);`;
 }
+function assetBg(asset) {
+  const hue = Number(asset.hue || 155);
+  return `background:
+    radial-gradient(80% 90% at 25% 10%, hsla(${hue},80%,58%,0.46), transparent 62%),
+    radial-gradient(70% 80% at 86% 90%, rgba(65,255,161,.28), transparent 60%),
+    linear-gradient(145deg, #08120e, #020807);`;
+}
+function formatBytes(bytes) {
+  if (!bytes) return "0 MB";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes > 9 * 1024 * 1024 ? 0 : 1)} MB`;
+}
+function expiresText(asset) {
+  const days = Math.ceil(((asset.expiresAt || 0) - Date.now()) / DAY);
+  if (days <= 1) return "expires soon";
+  return `${days} days left`;
+}
 const PGLYPH = { instagram: "◉", tiktok: "♪", youtube: "▶", facebook: "f", x: "𝕏", linkedin: "in", pinterest: "P" };
 function svgIc(k) {
   const P = { heart: `<path d="M8 13.5S2.5 10 2.5 6.2A2.7 2.7 0 0 1 8 5a2.7 2.7 0 0 1 5.5 1.2C13.5 10 8 13.5 8 13.5z"/>`, chat: `<path d="M3 4h10v7H7l-3 2v-2H3z"/>`, share: `<path d="M11 5.5a2 2 0 1 0-2-2M5 8a2 2 0 1 0 0 .1M11 12.5a2 2 0 1 0-2-2M9.2 4.6L6.8 6.9M6.8 9.1l2.4 2.3"/>`, save: `<path d="M4 3h8v10l-4-2.5L4 13z"/>`, eye: `<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>`, users: `<circle cx="6" cy="6" r="2.1"/><path d="M2.6 13c0-2 1.5-3.3 3.4-3.3S9.4 11 9.4 13"/>`, up: `<path d="M8 13V4M4.5 7.5L8 4l3.5 3.5"/>` };
@@ -146,32 +323,207 @@ function svgIc(k) {
 /* =========================================================================
    CONTENT HUB
    ========================================================================= */
-const chState = { tab: "overview", platform: "all", ctype: "all", eng: "likes" };
+const chState = { tab: "ideas", platform: "all", ctype: "all", eng: "likes" };
 
 export function renderContentHub(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const data = loadContent();
-  const tabs = [["overview", "Overview"], ["platforms", "Social platforms"], ["content", "Content types"], ["engagement", "Engagement"], ["scheduled", "Scheduled"]];
+  const mediaAssets = loadContentAssets();
+  const mediaStats = contentAssetStats(mediaAssets);
+  const ideas = activeIdeas();
+  const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
+  const tabs = [["ideas", "New ideas"], ["drafts", "Draft queue"], ["calendar", "Calendar"], ["production", "Production"], ["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`]];
   el.innerHTML = `
     <div class="ch">
+      <section class="ch-creator-head">
+        <div>
+          <p class="ch-eyebrow">Creator workspace</p>
+          <h3>Plan the next useful thing to publish.</h3>
+          <p>Content Hub is for ideas, drafts, creative direction, autopilot-ready posts, and scheduled content. Analytics handles performance and business trends.</p>
+        </div>
+        <button class="btn btn-primary" data-ch-action="new-idea">Capture idea</button>
+      </section>
       <div class="ch-tabs">
         ${tabs.map(([id, l]) => `<button class="ch-tab ${chState.tab === id ? "is-active" : ""}" data-ch-tab="${id}">${l}</button>`).join("")}
-        <span class="ch-src">${data.posts.length} items · updated ${ago(new Date(data.updatedAt).toISOString())}</span>
+        <span class="ch-src">${ideas.length} ideas · ${scheduled} queued · ${mediaAssets.length} media · ${formatBytes(mediaStats.bytes)}/${formatBytes(mediaStats.budgetBytes)}</span>
       </div>
       <div class="ch-body" data-ch-body></div>
     </div>`;
   el.querySelectorAll("[data-ch-tab]").forEach((b) => b.onclick = () => { chState.tab = b.dataset.chTab; renderContentHub(el, opts); });
+  el.querySelector("[data-ch-action='new-idea']")?.addEventListener("click", () => {
+    opts.notify?.("Content Hub", "New content idea capture prepared locally. Safe steps can run on autopilot; risky sends still stop for review.");
+    chState.tab = "ideas";
+    renderContentHub(el, opts);
+  });
   const body = el.querySelector("[data-ch-body]");
   const t = chState.tab;
-  if (t === "overview") renderOverview(body, data, esc, el, opts);
-  else if (t === "platforms") renderPlatforms(body, data, esc, el, opts);
-  else if (t === "content") renderContentTypes(body, data, esc, el, opts);
-  else if (t === "engagement") renderEngagement(body, data, esc, el, opts);
-  else if (t === "scheduled") renderScheduled(body, data, esc);
+  if (t === "ideas") renderCreatorIdeas(body, data, esc, el, opts);
+  else if (t === "drafts") renderDraftQueue(body, data, esc, el, opts);
+  else if (t === "calendar") renderContentCalendar(body, data, esc, el, opts);
+  else if (t === "production") renderProductionBoard(body, data, esc, el, opts);
+  else if (t === "library") renderContentLibrary(body, data, esc, el, opts);
 }
 
 function kpi(label, value, sub, tone) {
   return `<div class="ch-kpi ${tone || ""}"><span class="ch-kpi-k">${label}</span><b class="ch-kpi-v">${value}</b><span class="ch-kpi-s">${sub || ""}</span></div>`;
+}
+function ideaCard(idea, esc, i) {
+  return `<article class="ch-idea-card ch-removable">
+    ${removeButton(`idea:${idea.id}`, `Remove ${idea.title}`)}
+    <div class="ch-idea-top"><span>${esc(idea.format)}</span><b>${esc(idea.title)}</b></div>
+    <p>${esc(idea.angle)}</p>
+    <div class="ch-idea-platforms">${idea.platforms.map((id) => `<span><i class="ch-dot" style="background:${plat(id).color}"></i>${esc(plat(id).name)}</span>`).join("")}</div>
+    <div class="ch-idea-next"><b>Next:</b> ${esc(idea.next)}</div>
+    <button class="btn btn-good" data-ch-action="draft" data-idea-i="${i}" data-idea-id="${idea.id}">Queue autopilot draft</button>
+  </article>`;
+}
+function renderCreatorIdeas(body, data, esc, root, opts) {
+  const ideas = activeIdeas();
+  const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
+  body.innerHTML = `
+    <div class="ch-kpis">
+      ${kpi("Ideas ready", ideas.length, "creator backlog")}
+      ${kpi("Draft prompts", Math.min(4, ideas.length), "ready to shape")}
+      ${kpi("Autopilot queue", scheduled, "safe scheduled items")}
+      ${kpi("Risk checks", 3, "claims, spend, sends")}
+      ${kpi("Creator mode", "Active", "content planning", "good")}
+    </div>
+    <div class="ch-creator-layout">
+      <section class="ch-card">
+        <div class="ch-card-h"><h3>Recommended next ideas</h3><span class="ch-src">AI-filtered for creator action</span></div>
+        <div class="ch-idea-grid">${ideas.slice(0, 4).map((idea, i) => ideaCard(idea, esc, i)).join("") || `<p class="empty-line">All queued ideas were removed locally.</p>`}</div>
+      </section>
+      <aside class="ch-card ch-creator-side">
+        <h3>Creator brief</h3>
+        <p>Make content that helps a business owner understand the outcome, trust the system, and know what autopilot should handle next.</p>
+        <div class="ch-brief-list">
+          <span><b>Hook</b>Outcome first</span>
+          <span><b>Proof</b>Show workflow, not tool names</span>
+          <span><b>CTA</b>Ask for discovery or next step</span>
+          <span><b>Guardrail</b>Review risky sends, claims, spend</span>
+        </div>
+      </aside>
+    </div>`;
+  wireCreatorActions(body, opts, root);
+  wireRemovals(body, opts, root);
+}
+function renderDraftQueue(body, data, esc, root, opts) {
+  const drafts = activeIdeas().slice(1, 5).filter((idea) => !isRemoved(`draft:${idea.id}`));
+  body.innerHTML = `
+    <div class="ch-card">
+      <div class="ch-card-h"><h3>Draft queue</h3><span class="ch-src">Safe drafts move on autopilot; risky claims stop for review</span></div>
+      <div class="ch-draft-list">
+        ${drafts.length ? drafts.map((idea, i) => `<article class="ch-draft ch-removable">
+          ${removeButton(`draft:${idea.id}`, `Remove ${idea.title} draft`)}
+          <span class="ch-draft-step">${i + 1}</span>
+          <div>
+            <h4>${esc(idea.title)}</h4>
+            <p>${esc(idea.angle)}</p>
+            <div class="ch-draft-meta"><span>${esc(idea.format)}</span><span>Autopilot copy pass</span><span>Asset direction</span></div>
+          </div>
+          <button class="btn" data-ch-action="approve-draft" data-idea-id="${idea.id}">Prepare autopilot</button>
+        </article>`).join("") : `<p class="empty-line">No draft items are waiting. Removed items stay local to this browser.</p>`}
+      </div>
+    </div>`;
+  wireCreatorActions(body, opts, root);
+  wireRemovals(body, opts, root);
+}
+function renderContentCalendar(body, data, esc, root, opts) {
+  const rows = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
+  body.innerHTML = `
+    <div class="ch-card">
+      <div class="ch-card-h"><h3>Upcoming content calendar</h3><span class="ch-src">Autopilot schedule view, owner can remove</span></div>
+      ${rows.length ? `<div class="ch-calendar-list">${rows.map((p) => `<article class="ch-calendar-item ch-removable" data-ch-open="${p.id}" role="button" tabindex="0">
+        ${removeButton(`schedule:${p.id}`, `Remove scheduled ${p.caption}`)}
+        <span class="ch-calendar-date">${ago(p.publishedAt)}</span>
+        <span class="ch-tr-thumb" style="${thumb(p)}"></span>
+        <span><b>${esc(p.caption)}</b><i>${esc(plat(p.platform).name)} · ${esc(TYPES[p.type])}</i></span>
+        <em>queued</em>
+      </article>`).join("")}</div>` : `<p class="empty-line">Nothing queued. Generate content in the Media Lab and queue it here.</p>`}
+    </div>`;
+  wirePostCards(body, data, esc, root, opts);
+  wireRemovals(body, opts, root);
+}
+function renderProductionBoard(body, data, esc, root, opts) {
+  const assetIdeas = activeIdeas().slice(0, 3).filter((idea) => !isRemoved(`asset:${idea.id}`));
+  body.innerHTML = `
+    <div class="ch-card">
+      <div class="ch-card-h"><h3>Production workflow</h3><span class="ch-src">Creator-side pipeline</span></div>
+      <div class="ch-production">
+        ${PRODUCTION_STEPS.map(([name, copy], i) => `<article class="ch-production-step">
+          <span>${i + 1}</span>
+          <h4>${esc(name)}</h4>
+          <p>${esc(copy)}</p>
+        </article>`).join("")}
+      </div>
+    </div>
+    <div class="ch-card">
+      <div class="ch-card-h"><h3>Asset requests</h3><span class="ch-src">safe asset prep can run on autopilot</span></div>
+      <div class="ch-draft-list">
+        ${assetIdeas.length ? assetIdeas.map((idea, i) => `<article class="ch-draft ch-removable">
+          ${removeButton(`asset:${idea.id}`, `Remove ${idea.title} asset request`)}
+          <span class="ch-draft-step">${i + 1}</span>
+          <div><h4>${esc(idea.title)}</h4><p>${esc(idea.next)}</p><div class="ch-draft-meta"><span>${esc(idea.format)}</span><span>Media Lab optional</span></div></div>
+          <button class="btn" data-open-ws="media">Open Media Lab</button>
+        </article>`).join("") : `<p class="empty-line">No asset requests are waiting.</p>`}
+      </div>
+    </div>`;
+  wireRemovals(body, opts, root);
+}
+function renderContentLibrary(body, data, esc, root, opts) {
+  const assets = loadContentAssets();
+  const stats = contentAssetStats(assets);
+  const assetFilter = (asset) => chState.ctype === "all" || asset.type === chState.ctype || (asset.type === "video" && ["reel", "short"].includes(chState.ctype));
+  const shownAssets = assets.filter(assetFilter);
+  const rows = data.posts.slice(0, 18);
+  body.innerHTML = `
+    <section class="ch-card ch-created-media">
+      <div class="ch-card-h ch-library-head">
+        <div>
+          <h3>Created media</h3>
+          <span class="ch-src">auto-saved from Media Lab · clears after ${CONTENT_ASSET_LIMITS.retentionDays} days</span>
+        </div>
+        <div class="ch-storage">
+          <span>${formatBytes(stats.bytes)} / ${formatBytes(stats.budgetBytes)}</span>
+          <i><b style="width:${stats.percent}%"></b></i>
+        </div>
+      </div>
+      ${shownAssets.length ? `<div class="ch-asset-grid">${shownAssets.map((asset) => contentAssetCard(asset, esc)).join("")}</div>`
+      : `<p class="empty-line">No generated images or videos yet. Create media in Media Lab and it will land here automatically.</p>`}
+      ${stats.trimmed ? `<p class="ch-src">Space saver active: ${stats.trimmed} older/heavier preview${stats.trimmed === 1 ? "" : "s"} kept as metadata only.</p>` : ""}
+    </section>
+    <div class="ch-chips" data-ch-type>
+      ${[["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]].map(([id, l]) => `<button class="ch-chip ${chState.ctype === id ? "is-on" : ""}" data-v="${id}">${esc(l)}</button>`).join("")}
+    </div>
+    <div class="ch-grid ch-grid-lg">${rows.filter((p) => chState.ctype === "all" || p.type === chState.ctype).map((p) => postCard(p, esc, { creator: true })).join("")}</div>`;
+  body.querySelectorAll("[data-ch-type] button").forEach((b) => b.onclick = () => { chState.ctype = b.dataset.v; renderContentHub(root, opts); });
+  wirePostCards(body, data, esc, root, opts);
+}
+function contentAssetCard(asset, esc) {
+  const hasUrl = !!asset.url;
+  const typeLabel = asset.type === "video" ? "Video" : "Image";
+  const prompt = asset.prompt || "No prompt saved.";
+  const meta = asset.type === "video" ? "Media Lab video" : "Media Lab image";
+  return `<article class="ch-asset-card">
+    <span class="ch-asset-thumb" style="${hasUrl ? "" : assetBg(asset)}">
+      ${hasUrl ? `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>` : `<em>preview trimmed</em>`}
+      ${asset.type === "video" ? `<span class="ch-post-play">▶</span>` : ""}
+      <b>${typeLabel}</b>
+    </span>
+    <span class="ch-asset-body">
+      <strong>${esc(asset.title)}</strong>
+      <small>${esc(meta)} · ${expiresText(asset)} · ${formatBytes(assetBytes(asset))}</small>
+      <span>${esc(prompt)}</span>
+    </span>
+  </article>`;
+}
+function wireCreatorActions(body, opts, root) {
+  body.querySelectorAll("[data-ch-action]").forEach((btn) => btn.addEventListener("click", () => {
+    const idea = IDEA_BANK.find((row) => row.id === btn.dataset.ideaId) || activeIdeas()[Number(btn.dataset.ideaI || 0)] || IDEA_BANK[0];
+    const action = btn.dataset.chAction === "approve-draft" ? "Risk check prepared" : "Autopilot draft queued";
+    opts.notify?.("Content Hub", `${action} for ${idea.title}. Safe preparation can continue automatically; no live post was sent.`);
+    if (root) renderContentHub(root, opts);
+  }));
 }
 function renderOverview(body, data, esc, root, opts) {
   const a = analyze(data.posts);
@@ -290,11 +642,11 @@ function renderEngagement(body, data, esc, root, opts) {
 }
 
 function renderScheduled(body, data, esc) {
-  const rows = data.posts.filter((p) => p.status === "scheduled").sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
-  body.innerHTML = rows.length ? `<div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("")}</div>` : `<p class="empty-line">Nothing scheduled. Generate content in the Media Lab and queue it here.</p>`;
+  const rows = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
+  body.innerHTML = rows.length ? `<div class="ch-grid ch-grid-lg">${rows.map((p) => postCard(p, esc)).join("")}</div>` : `<p class="empty-line">Nothing queued. Generate content in the Media Lab and queue it here.</p>`;
 }
 
-function postCard(p, esc) {
+function postCard(p, esc, options = {}) {
   const P = plat(p.platform);
   return `<button class="ch-post" data-ch-open="${p.id}">
     <span class="ch-post-thumb" style="${thumb(p)}">
@@ -305,17 +657,29 @@ function postCard(p, esc) {
     </span>
     <span class="ch-post-cap">${esc(p.caption)}</span>
     <span class="ch-post-meta">${P.name} · ${p.status === "scheduled" ? "upcoming" : ago(p.publishedAt)}</span>
-    <span class="ch-post-stats">
+    ${options.creator ? `<span class="ch-post-stats ch-post-creator">
+      <span>${esc(TYPES[p.type])}</span>
+      <span>${p.hashtags.slice(0, 2).map((h) => esc(h)).join(" ")}</span>
+    </span>` : `<span class="ch-post-stats">
       <span>${svgIc("eye")}${K(p.metrics.reach)}</span>
       <span>${svgIc("heart")}${K(p.metrics.likes)}</span>
       <span>${svgIc("chat")}${K(p.metrics.comments)}</span>
       <span>${svgIc("share")}${K(p.metrics.shares)}</span>
-    </span>
+    </span>`}
   </button>`;
 }
 
 function wirePostCards(body, data, esc, root, opts) {
-  body.querySelectorAll("[data-ch-open]").forEach((b) => b.onclick = () => openPost(data.posts.find((p) => p.id === b.dataset.chOpen), esc));
+  body.querySelectorAll("[data-ch-open]").forEach((b) => {
+    const open = () => openPost(data.posts.find((p) => p.id === b.dataset.chOpen), esc);
+    b.onclick = open;
+    b.onkeydown = (event) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        open();
+      }
+    };
+  });
 }
 function openPost(p, esc) {
   if (!p) return;
@@ -354,46 +718,76 @@ export function renderAnalytics(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const data = loadContent();
   const a = analyze(data.posts);
+  const topPlatform = a.byPlatform[0];
+  const topType = a.byType[0];
+  const clickToLeadRate = +(100 * Math.max(1, Math.round(a.totals.clicks * 0.08)) / Math.max(1, a.totals.clicks)).toFixed(1);
+  const modeledLeads = Math.max(1, Math.round(a.totals.clicks * 0.08));
+  const modeledPipeline = modeledLeads * 850;
+  const trendRows = [
+    { label: "Short-form video", signal: `${K(a.totals.views)} views`, take: "Use reels and shorts for discovery, then retarget with offer posts." },
+    { label: topPlatform ? `${topPlatform.name} reach` : "Channel reach", signal: topPlatform ? K(topPlatform.reach) : "-", take: "Put the strongest creator ideas on the channel already moving." },
+    { label: topType ? `${topType.label} format` : "Content format", signal: topType ? `${topType.count} posts` : "-", take: "Keep the winning format in rotation before adding new experiments." },
+    { label: "Audience intent", signal: `${K(a.totals.comments)} comments`, take: "Mine comments for objections, questions, and next content hooks." },
+  ];
   const maxR = Math.max(1, ...a.series.map((s) => s.reach));
   const W = 640, H = 150;
   const pts = a.series.map((s, i) => [i / (a.series.length - 1) * W, H - (s.reach / maxR) * (H - 12) - 6]);
   const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
   const area = `${line} L${W} ${H} L0 ${H} Z`;
   const maxPlat = Math.max(1, ...a.byPlatform.map((p) => p.engagement));
-  const typeTotal = a.byType.reduce((s, t) => s + t.count, 0) || 1;
-  let acc = 0;
-  const donut = a.byType.map((t, i) => { const frac = t.count / typeTotal; const seg = { off: acc, len: frac, hue: 150 + i * 26 }; acc += frac; return seg; });
   el.innerHTML = `
     <div class="an">
-      <div class="an-src">${svgIc("up")} Live from <b>Content Hub</b> · ${a.totals.posts} published items · updated ${ago(new Date(data.updatedAt).toISOString())}</div>
+      <section class="an-hero">
+        <div>
+          <p class="ch-eyebrow">Business intelligence</p>
+          <h3>What is trending, what is working, and what should change.</h3>
+          <p>Analytics is the business view: performance, audience signals, channel trends, and modeled pipeline impact from local content data.</p>
+        </div>
+        <span class="an-src">${svgIc("up")} Source: <b>Content Hub data</b> · ${a.totals.posts} published items</span>
+      </section>
       <div class="ch-kpis">
-        ${kpi("Reach", K(a.totals.reach), "30-day")}
+        ${kpi("Reach", K(a.totals.reach), "market attention")}
         ${kpi("Engagement rate", a.totals.engagementRate + "%", `${K(a.totals.engagement)} actions`)}
-        ${kpi("Followers gained", "+" + K(a.totals.followers), "net new", "good")}
-        ${kpi("Video views", K(a.totals.views), "watch-through")}
-        ${kpi("Top platform", a.byPlatform[0] ? a.byPlatform[0].name : "—", a.byPlatform[0] ? K(a.byPlatform[0].reach) + " reach" : "")}
+        ${kpi("Site clicks", K(a.totals.clicks), "intent signal")}
+        ${kpi("Modeled leads", K(modeledLeads), `${clickToLeadRate}% of clicks`, "good")}
+        ${kpi("Modeled pipeline", "$" + K(modeledPipeline), "estimate, not booked")}
       </div>
       <div class="ch-cols">
         <div class="ch-card an-wide">
-          <div class="ch-card-h"><h3>Reach — last 30 days</h3></div>
+          <div class="ch-card-h"><h3>Market attention trend</h3><span class="ch-src">reach over time</span></div>
           <svg class="an-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path class="an-area" d="${area}"/><path class="an-line" d="${line}"/></svg>
         </div>
-        <div class="ch-card">
-          <div class="ch-card-h"><h3>Content mix</h3></div>
-          <div class="an-donut-wrap">
-            <svg class="an-donut" viewBox="0 0 42 42">${donut.map((s) => `<circle class="an-seg" cx="21" cy="21" r="15.9" fill="none" stroke="hsl(${s.hue},80%,55%)" stroke-width="6" stroke-dasharray="${(s.len * 100).toFixed(2)} ${(100 - s.len * 100).toFixed(2)}" stroke-dashoffset="${(25 - s.off * 100).toFixed(2)}"/>`).join("")}<text x="21" y="22.5" class="an-donut-c">${a.totals.posts}</text></svg>
-            <div class="an-legend">${a.byType.map((t, i) => `<span><i style="background:hsl(${150 + i * 26},80%,55%)"></i>${esc(t.label)} <b>${t.count}</b></span>`).join("")}</div>
-          </div>
+        <div class="ch-card an-insight-card">
+          <div class="ch-card-h"><h3>Top business read</h3></div>
+          <b>${topPlatform ? esc(topPlatform.name) : "No channel"} is carrying attention.</b>
+          <p>${topPlatform ? `${esc(topPlatform.name)} has the strongest current reach. Use it for proof-led posts and push experimental ideas elsewhere.` : "Publish more content before drawing a conclusion."}</p>
+          <button class="section-link" data-open-ws="content">Plan next content -></button>
         </div>
       </div>
-      <div class="ch-card">
-        <div class="ch-card-h"><h3>Engagement by platform</h3></div>
-        <div class="ch-bars">${a.byPlatform.map((p) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${p.color}"></i>${esc(p.name)}</span>
-          <span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round(100 * p.engagement / maxPlat)}%;background:${p.color}"></span></span><b class="ch-bar-val">${K(p.engagement)}</b></div>`).join("")}</div>
+      <div class="an-business-grid">
+        <section class="ch-card">
+          <div class="ch-card-h"><h3>Trend signals</h3><span class="ch-src">what deserves attention</span></div>
+          <div class="an-trend-list">
+            ${trendRows.map((row) => `<article class="an-trend">
+              <span>${esc(row.signal)}</span>
+              <b>${esc(row.label)}</b>
+              <p>${esc(row.take)}</p>
+            </article>`).join("")}
+          </div>
+        </section>
+        <section class="ch-card">
+          <div class="ch-card-h"><h3>Channel performance</h3><span class="ch-src">engagement quality</span></div>
+          <div class="ch-bars">${a.byPlatform.map((p) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${p.color}"></i>${esc(p.name)}</span>
+            <span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round(100 * p.engagement / maxPlat)}%;background:${p.color}"></span></span><b class="ch-bar-val">${K(p.engagement)}</b></div>`).join("")}</div>
+        </section>
       </div>
       <div class="ch-card">
-        <div class="ch-card-h"><h3>Top performing</h3><button class="section-link" data-open-ws="content">Open Content Hub →</button></div>
-        <div class="ch-grid">${a.topPosts.map((p) => postCard(p, esc)).join("")}</div>
+        <div class="ch-card-h"><h3>Business recommendations</h3><span class="ch-src">from content signals</span></div>
+        <div class="an-reco-grid">
+          <article><b>Double down</b><p>Keep publishing short-form proof and workflow clips where reach is already moving.</p></article>
+          <article><b>Convert attention</b><p>Turn comments and clicks into follow-up prompts, lead magnets, and owner-safe offers.</p></article>
+          <article><b>Test next</b><p>Run one objection carousel and one offer breakdown before changing the whole strategy.</p></article>
+        </div>
       </div>
     </div>`;
   el.querySelectorAll("[data-ch-open]").forEach((b) => b.onclick = () => openPost(data.posts.find((p) => p.id === b.dataset.chOpen), esc));

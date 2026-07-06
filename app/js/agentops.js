@@ -5,7 +5,7 @@
    (store.js) — no fabricated business records. Self-contained: owns its own
    timers, guards against double-mount, and respects reduced-motion. */
 
-import { TOOL_SPINE } from "./store.js?v=phantom-live-20260705-21";
+import { TOOL_SPINE } from "./store.js?v=phantom-live-20260706-14";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));

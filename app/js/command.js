@@ -5,8 +5,8 @@
 
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
-  PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil,
-} from "./store.js?v=phantom-live-20260705-21";
+  PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
+} from "./store.js?v=phantom-live-20260706-14";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -23,6 +23,7 @@ function card(kicker, name, body, actions = [], meta = "") {
   return { kicker, title: name, body, actions, meta };
 }
 const openAction = (label, ws) => ({ label, open: ws });
+
 /* ---------------- artifact builders ---------------- */
 function createLead(subject) {
   const name = subject ? title(subject) : "New lead";
@@ -58,13 +59,13 @@ function createMediaBrief(subject) {
   const t = subject ? title(subject) : "New creative";
   const m = {
     id: uid("med"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(),
-    title: `${t} — video brief`, type: "Reel (vertical, 30s)", status: "draft",
+    title: `${t} — video request`, type: "Reel (vertical, 30s)", status: "draft",
     angle: "Hook in 2 seconds, one idea, end on the offer.",
     shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"],
     caption: `${t} — draft caption. Punch it up before approval.`, proof: null, updated: new Date().toISOString(),
   };
   store.state.media.unshift(m);
-  pushActivity("Media Factory", `drafted a brief: ${m.title}.`, m.ws);
+  pushActivity("Media Factory", `created a video request: ${m.title}.`, m.ws);
   store.save();
   return m;
 }
@@ -171,13 +172,14 @@ export function handleCommand(raw) {
     if (/(brief|plan|draft|create|make|new|idea)/.test(s) || subject) {
       const m = createMediaBrief(subject);
       return {
-        say: `Media Factory drafted "${m.title}" — angle, five-shot list, and a starter caption. Generation stays approval-gated.`,
-        cards: [card("Media brief", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
+        say: `Media Factory created "${m.title}" — angle, five-shot list, and a starter caption. Generation stays approval-gated.`,
+        cards: [card("Video request", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
         open: "media",
       };
     }
-    return { say: "Media Lab is open — briefs, shot lists, and what's ready to produce.", cards: [], open: "media" };
+    return { say: "Media Lab is open — video requests, shot lists, and what's ready to produce.", cards: [], open: "media" };
   }
+
   /* --- store --- */
   if (/(store|shop|product|catalog|merch|sell|checkout)/.test(s)) {
     if (/(build|create|draft|make|new|add)/.test(s)) {
@@ -254,13 +256,29 @@ export function handleCommand(raw) {
     };
   }
 
+  /* --- memory --- */
+  if (/(memory|remember|saved context|what do you know|knowledge|database|local data|past conversations)/.test(s)) {
+    const mem = memoryStats();
+    return {
+      say: mem.total
+        ? `Memory has ${mem.total} saved item${mem.total === 1 ? "" : "s"} across ${mem.categories || 1} categor${mem.categories === 1 ? "y" : "ies"}.`
+        : "Memory is empty right now. New conversations start saving locally from here.",
+      cards: [card("Memory", "Local context database",
+        "Conversations auto-organize into categories. Normal memories expire after 30 days unless you or Phantom mark them to remember.",
+        [openAction("Open Memory", "memory")],
+        mem.remembered ? `${mem.remembered} remembered` : "Private and local")],
+      open: "memory",
+    };
+  }
+
   /* --- workforce --- */
   if (/(workforce|agents?|team|who('| i)s working|workers)/.test(s)) {
-    const active = store.state.agents.filter((a) => a.status === "active").length;
+    const active = (store.state.toolSpine || []).filter((tool) => ["active", "owner-controlled", "available", "planning"].includes(tool.mode)).length;
+    const total = Math.max(1, (store.state.toolSpine || []).length + 1);
     return {
       say: admin
-        ? `${active} of ${store.state.agents.length} desks are active right now. Opening the workforce board.`
-        : `${active} workers are on your account right now. Opening your workforce view.`,
+        ? `${active} of ${total} workers are active or ready. Opening the Workers cockpit.`
+        : `${active} workers are ready on your account. Opening your Workers view.`,
       cards: [], open: "workforce",
     };
   }
@@ -269,7 +287,7 @@ export function handleCommand(raw) {
   if (/(today|plan|what('| i)s next|priorit|status|morning|catch me up|summary)/.test(s)) {
     const plan = todaysPlan();
     return {
-      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "No real tasks are loaded yet. Start by adding a lead, drafting a proposal, or creating a brief.",
+      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "No real tasks are loaded yet. Start by adding a lead, drafting a proposal, or creating a video request.",
       cards: plan.slice(0, 3).map((p) => card("Today", p.text, "", [openAction("Open", p.open)])),
       open: null,
     };
@@ -280,7 +298,7 @@ export function handleCommand(raw) {
     return {
       say: "Ask in plain business language. I route it to the right desk and hand you something real — a draft, a plan, or the workspace it lives in.",
       cards: [card("Try one of these", "Commands that create things",
-        "Draft a proposal · Create a video brief · Build a store · Run a security check · What's my pipeline?", [])],
+        "Draft a proposal · Create a video request · Build a store · Run a security check · What's my pipeline?", [])],
       open: null,
     };
   }
@@ -289,8 +307,8 @@ export function handleCommand(raw) {
   const plan = todaysPlan();
   return {
     say: subject
-      ? `Noted. I filed “${text}” and can turn it into a lead, a proposal, or a brief — say which, or open a workspace below.`
-      : "I can turn that into work — a lead, a proposal, a media brief, a page, a booking, or a security check. Say the outcome you want.",
+      ? `Noted. I filed “${text}” and can turn it into a lead, a proposal, or a video request — say which, or open a workspace below.`
+      : "I can turn that into work — a lead, a proposal, a video request, a page, a booking, or a security check. Say the outcome you want.",
     cards: [
       card("Quick routes", "Where this usually goes",
         "Handle a lead · Build a quote · Create a media plan · Build a page or store · Run a security check · Check pipeline",
@@ -304,6 +322,6 @@ export function handleCommand(raw) {
 /* Suggestion chips under the command input. */
 export function commandSuggestions() {
   return isAdmin()
-    ? ["Catch me up", "Stage Protect Sweep", "Reputation Radar", "Local Growth Miner", "Social Trend Lab", "Create a video brief"]
+    ? ["Catch me up", "What do you remember?", "Stage Protect Sweep", "Reputation Radar", "Social Trend Lab", "Create a video request"]
     : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Run a security check"];
 }

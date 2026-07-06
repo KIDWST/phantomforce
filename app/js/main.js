@@ -3,25 +3,81 @@
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
-  ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-21";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-21";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-21";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-21";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-21";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-21";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-21";
-import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260705-21";
-import { renderBrandMemory, renderAutomation, brandCounts } from "./brandops.js?v=phantom-live-20260705-21";
+  ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
+} from "./store.js?v=phantom-live-20260706-14";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-14";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-14";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-14";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-14";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-14";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-14";
+import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260706-14";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-14";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
+const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 
 const gate = $("[data-gate]");
 const phantom = $("[data-phantom]");
 const overlayRoot = $("[data-overlay-root]");
+const consoleRoot = $("[data-console]");
+const dashboardShellHtml = consoleRoot ? consoleRoot.innerHTML : "";
+let commandTouchScroll = { x: 0, y: 0 };
+let keyboardViewportBound = false;
+
+function updateKeyboardOffset() {
+  const vv = window.visualViewport;
+  const offset = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  document.documentElement.style.setProperty("--phantom-keyboard-offset", `${Math.round(offset)}px`);
+}
+
+function bindKeyboardViewport() {
+  if (keyboardViewportBound || !window.visualViewport) return;
+  keyboardViewportBound = true;
+  window.visualViewport.addEventListener("resize", updateKeyboardOffset, { passive: true });
+  window.visualViewport.addEventListener("scroll", updateKeyboardOffset, { passive: true });
+  updateKeyboardOffset();
+}
+
+function restoreMobileScroll(x = commandTouchScroll.x, y = commandTouchScroll.y) {
+  if (!isMobileView()) return;
+  requestAnimationFrame(() => window.scrollTo(x, y));
+  setTimeout(() => window.scrollTo(x, y), 90);
+}
+
+function focusWithoutScroll(input) {
+  if (!input) return;
+  const x = window.scrollX;
+  const y = window.scrollY;
+  try { input.focus({ preventScroll: true }); }
+  catch { input.focus(); }
+  if (isMobileView()) restoreMobileScroll(x, y);
+}
+
+function setCommandFocusState(active) {
+  phantom?.classList.toggle("is-command-focused", !!active);
+  if (active) {
+    commandTouchScroll = { x: window.scrollX, y: window.scrollY };
+    bindKeyboardViewport();
+    updateKeyboardOffset();
+    if (mobileNavOpen) setMobileNav(false);
+  } else {
+    document.documentElement.style.setProperty("--phantom-keyboard-offset", "0px");
+  }
+}
+
+function focusCommandInput(delay = 0) {
+  const run = () => {
+    const input = $("[data-command-input]");
+    setCommandFocusState(true);
+    focusWithoutScroll(input);
+  };
+  if (delay) setTimeout(run, delay);
+  else run();
+}
 
 /* ---- inline line-icons (stroke = currentColor) ---- */
 const I = {
@@ -41,6 +97,7 @@ const I = {
   arrow: `<path d="M3 8h9M9 5l3 3-3 3"/>`,
   clock: `<circle cx="8" cy="8" r="5.2"/><path d="M8 5.2V8l2 1.4"/>`,
   db:    `<ellipse cx="8" cy="4.5" rx="4.5" ry="1.8"/><path d="M3.5 4.5v7c0 1 2 1.8 4.5 1.8s4.5-.8 4.5-1.8v-7"/>`,
+  dev:   `<path d="M5.5 5L3 8l2.5 3M10.5 5L13 8l-2.5 3M9 3.5 7 12.5"/>`,
   search:`<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/>`,
   bell:  `<path d="M8 2.5a3.5 3.5 0 0 0-3.5 3.5c0 3-1.2 4-1.2 4h9.4s-1.2-1-1.2-4A3.5 3.5 0 0 0 8 2.5zM6.6 12.5a1.4 1.4 0 0 0 2.8 0"/>`,
   bolt:  `<path d="M8.5 2L4 9h3l-.5 5L11 7H8z"/>`,
@@ -51,22 +108,6 @@ const I = {
   calendar:`<rect x="2.8" y="3.5" width="10.4" height="9.5" rx="1.2"/><path d="M2.8 6h10.4M5.5 2.4v2M10.5 2.4v2"/>`,
 };
 const svg = (key, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[key] || ""}</svg>`;
-
-/* a tiny deterministic trend sparkline for a stat value (stable per value) */
-function sparkline(seed, up = true) {
-  const n = 12, pts = [];
-  let v = 0.5;
-  for (let i = 0; i < n; i++) {
-    const r = (Math.sin(seed * 12.9898 + i * 4.1414) * 43758.5453) % 1;
-    v = Math.max(0.08, Math.min(0.92, v + (Math.abs(r) - 0.5) * 0.34 + (up ? 0.02 : -0.02)));
-    pts.push(v);
-  }
-  const W = 100, H = 30;
-  const d = pts.map((p, i) => `${i === 0 ? "M" : "L"}${((i / (n - 1)) * W).toFixed(1)} ${((1 - p) * H).toFixed(1)}`).join(" ");
-  const area = `${d} L${W} ${H} L0 ${H} Z`;
-  return `<svg class="spark" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" aria-hidden="true">
-    <path class="spark-area" d="${area}"/><path class="spark-line" d="${d}"/></svg>`;
-}
 
 /* ============================ access gate ============================ */
 function showGate() {
@@ -118,7 +159,7 @@ function showGate() {
       const kind = btn.dataset.enter;
       if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
       ctx.session = kind === "admin"
-        ? { role: "admin", name: "Jordan", ws: "phantomforce" }
+        ? { role: "admin", name: "Jordan", label: "PhantomForce Owner", ws: "phantomforce", sessionId: "local-admin", canManageAccess: true }
         : { role: "employee", name: "Employee", ws: "phantomforce" };
       session.set(ctx.session);
       enterPhantom();
@@ -131,24 +172,81 @@ const NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
-  { id: "brand",      label: "Brand Memory", icon: "brain", ws: "brand" },
-  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
+  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
+  { id: "brand",      label: "Brand Memory", icon: "db",    ws: "brand" },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "automation" },
-  { id: "workforce",  label: "Workforce",    icon: "users", ws: "workforce" },
+  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
+  { id: "workers",    label: "Workers",      icon: "users", ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
+  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
+const MOBILE_NAV = [
+  { id: "dashboard", label: "Home",      icon: "grid",  route: "nav", target: "dashboard" },
+  { id: "content",   label: "Content",   icon: "doc",   route: "nav", target: "content" },
+  { id: "media",     label: "Video",     icon: "media", route: "nav", target: "media" },
+  { id: "workers",   label: "Workers",   icon: "users", route: "nav", target: "workers" },
+  { id: "analytics", label: "Analytics", icon: "chart", route: "nav", target: "analytics" },
+];
 let activeNav = "dashboard";
+let activePageId = null;
+let mobileNavOpen = false;
+
+const WORKSPACE_ALIASES = {
+  memory: "memory",
+  content: "content",
+  analytics: "analytics",
+};
+
+function workspaceId(id) {
+  return WORKSPACE_ALIASES[id] || id;
+}
+
+function canAccessSurface(surface) {
+  if (surface?.ownerOnly && !isOwnerOperator()) return false;
+  if (surface?.adminOnly && !isAdmin()) return false;
+  return true;
+}
 
 function renderNav() {
   const nav = $("[data-nav]");
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  nav.innerHTML = NAV.filter((n) => !n.adminOnly || isAdmin()).map((n) => `
+  nav.innerHTML = NAV.filter(canAccessSurface).map((n) => `
     <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}">
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
     </button>`).join("");
+  renderMobileBottomNav();
+}
+
+function mobileNavActive(item) {
+  const target = workspaceId(item.target);
+  if (item.route === "nav") return activeNav === item.target || (item.target === "dashboard" && !activePageId);
+  return activePageId === target || openId === target;
+}
+
+function renderMobileBottomNav() {
+  const nav = $("[data-mobile-bottom-nav]");
+  if (!nav) return;
+  nav.innerHTML = MOBILE_NAV.filter(canAccessSurface).map((item) => `
+    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""}" data-mobile-nav="${esc(item.id)}" type="button">
+      ${svg(item.icon)}
+      <span>${esc(item.label)}</span>
+    </button>`).join("");
+}
+
+function setMobileNav(open) {
+  mobileNavOpen = !!open;
+  const shell = $("[data-phantom]");
+  const sidebar = $(".sidebar");
+  const toggle = $("[data-side-toggle]");
+  shell?.classList.toggle("nav-expanded", mobileNavOpen);
+  sidebar?.classList.toggle("is-expanded", mobileNavOpen);
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", String(mobileNavOpen));
+    toggle.setAttribute("aria-label", mobileNavOpen ? "Close navigation" : "Open navigation");
+  }
 }
 
 function goNav(id) {
@@ -156,8 +254,13 @@ function goNav(id) {
   if (!item) return;
   activeNav = id;
   renderNav();
-  if (item.view === "main") { closeOverlay(true); }
-  else if (item.ws) { openWorkspace(item.ws); }
+  if (id !== "dashboard") {
+    const mood = item.id === "approvals" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
+    setGhostMood(mood.mood, { emotion: mood.emotion, ms: 1200 });
+    stageReact("nav", 640);
+  }
+  if (item.view === "main") renderDashboardPage(true);
+  else if (item.ws) renderWorkspacePage(item.ws, true);
 }
 
 /* ============================ topbar ============================ */
@@ -167,7 +270,7 @@ function renderStatusPills() {
     ...(ctx.session?.demo ? [{ label: "Mode", value: `Preview · ${window.PHANTOM_BUILD || "latest build"}`, tone: "warn", dot: true }] : []),
     { label: "Phantom Status", value: "Online", tone: "ok", dot: true },
     { label: "System Status", value: attention ? "Attention needed" : "All Systems Operational", tone: attention ? "warn" : "ok", dot: true },
-    { label: "Brand Memory", value: "Private & Local", tone: "ok", lock: true },
+    { label: "Memory", value: "Private & Local", tone: "ok", lock: true },
   ];
   $("[data-status-pills]").innerHTML = pills.map((p) => `
     <div class="pill pill-${p.tone}">
@@ -198,6 +301,8 @@ function renderUser() {
   const name = ctx.session?.name || "Phantom";
   const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   $("[data-user-avatar]").textContent = initials || "PF";
+  const mobileAvatar = $("[data-mobile-user-avatar]");
+  if (mobileAvatar) mobileAvatar.textContent = initials || "PF";
   $("[data-user-name]").textContent = name;
   $("[data-user-role]").textContent = isAdmin() ? "Administrator" : "Employee";
   const btn = $("[data-user-btn]");
@@ -208,77 +313,290 @@ function renderUser() {
   };
 }
 
+/* ============================ account + plan ============================ */
+const ACCOUNT_PLAN = {
+  name: "Pro Plan",
+  price: "$2,500/mo",
+  renewalOffsetDays: 30,
+  paymentState: "Manual billing ready",
+  workspaceLimit: "Owner workspace",
+};
+const ACCOUNT_TIERS = [
+  {
+    id: "starter",
+    name: "Starter",
+    price: "$750/mo",
+    badge: "Launch",
+    copy: "Core cockpit, local approvals, and one active business workspace.",
+    features: ["Command Center", "Leads and tasks", "Manual proposal workflow"],
+  },
+  {
+    id: "pro",
+    name: "Pro Plan",
+    price: "$2,500/mo",
+    badge: "Current",
+    current: true,
+    copy: "Managed Phantom AI operations, content workflow, Media Lab, and owner controls.",
+    features: ["Phantom AI cockpit", "Content and Media Lab", "Approval-safe ops"],
+  },
+  {
+    id: "scale",
+    name: "Scale",
+    price: "Custom",
+    badge: "Operator",
+    copy: "Expanded workspaces, deeper automations, and managed launch support.",
+    features: ["Multi-workspace ops", "Automation planning", "Launch support"],
+  },
+];
+let accountNotice = "";
+
+function accountOwnerName() {
+  return ctx.session?.name || (isAdmin() ? "Jordan" : "Owner");
+}
+function accountInitials(name) {
+  const initials = String(name || "PhantomForce").split(/\s+/).map((p) => p[0]).filter(Boolean).slice(0, 2).join("").toUpperCase();
+  return initials || "PF";
+}
+function accountRenewalLabel() {
+  return new Date(Date.now() + ACCOUNT_PLAN.renewalOffsetDays * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+}
+function accountStatusMeta() {
+  const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
+  return attention
+    ? { label: "Attention needed", tone: "error", detail: "One or more systems need owner review before everything is clean." }
+    : { label: "Systems online", tone: "online", detail: "PhantomForce systems are online and protected for this workspace." };
+}
+function renderAccountPlan(body) {
+  const owner = accountOwnerName();
+  const status = accountStatusMeta();
+  const renewal = accountRenewalLabel();
+  body.innerHTML = `
+    <div class="account-plan">
+      ${accountNotice ? `<div class="account-notice">${esc(accountNotice)}</div>` : ""}
+      <section class="account-hero">
+        <div class="account-avatar" aria-label="Profile picture">${esc(accountInitials(owner))}</div>
+        <div class="account-hero-main">
+          <p class="account-kicker">Account profile</p>
+          <h3>${esc(owner)}</h3>
+          <p class="account-status account-status-${status.tone}"><span aria-hidden="true"></span>${esc(status.label)}</p>
+        </div>
+        <div class="account-plan-chip">
+          <span>${esc(ACCOUNT_PLAN.name)}</span>
+          <b>${esc(ACCOUNT_PLAN.price)}</b>
+        </div>
+      </section>
+      <section class="account-grid">
+        <article class="account-card account-current">
+          <p class="account-card-k">Current plan</p>
+          <h4>${esc(ACCOUNT_PLAN.name)}</h4>
+          <p>${esc(status.detail)}</p>
+          <div class="account-facts">
+            <span><b>Renewal</b>${esc(renewal)}</span>
+            <span><b>Billing</b>${esc(ACCOUNT_PLAN.paymentState)}</span>
+            <span><b>Access</b>${esc(ACCOUNT_PLAN.workspaceLimit)}</span>
+          </div>
+        </article>
+        <article class="account-card account-payment">
+          <p class="account-card-k">Payment options</p>
+          <h4>Billing controls</h4>
+          <p>No live payment connector is wired in this shell. These buttons prepare owner actions only.</p>
+          <div class="account-actions">
+            <button class="btn btn-primary" data-account-action="payment">Update payment method</button>
+            <button class="btn" data-account-action="invoice">Request invoice</button>
+          </div>
+        </article>
+      </section>
+      <section class="account-section">
+        <div class="set-sec-head">
+          <div>
+            <p class="account-card-k">Plan tiers</p>
+            <h3>Choose the operating level</h3>
+          </div>
+        </div>
+        <div class="account-tiers">
+          ${ACCOUNT_TIERS.map((tier) => `
+            <article class="account-tier ${tier.current ? "is-current" : ""}">
+              <span class="account-tier-badge">${esc(tier.badge)}</span>
+              <h4>${esc(tier.name)}</h4>
+              <b>${esc(tier.price)}</b>
+              <p>${esc(tier.copy)}</p>
+              <ul>${tier.features.map((feature) => `<li>${esc(feature)}</li>`).join("")}</ul>
+              <button class="btn ${tier.current ? "btn-good" : "btn-primary"}" data-account-action="${tier.current ? "current" : `plan-${tier.id}`}">
+                ${tier.current ? "Current plan" : `Request ${esc(tier.name)}`}
+              </button>
+            </article>`).join("")}
+        </div>
+      </section>
+      <section class="account-section account-cancel">
+        <div>
+          <p class="account-card-k">Cancellation</p>
+          <h3>Plan changes stay owner-controlled</h3>
+          <p>Cancellation is not automated here. PhantomForce can prepare a cancellation request, keep access through renewal, and wait for manual confirmation.</p>
+        </div>
+        <button class="btn btn-quiet" data-account-action="cancel">Prepare cancellation request</button>
+      </section>
+    </div>`;
+  body.querySelectorAll("[data-account-action]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const action = btn.dataset.accountAction || "plan";
+      const label = {
+        payment: "Payment-method update",
+        invoice: "Manual invoice request",
+        current: "Current plan review",
+        cancel: "Cancellation request",
+      }[action] || `${btn.textContent.trim()} request`;
+      accountNotice = `${label} prepared for owner review. No billing, cancellation, payment, or access change was executed.`;
+      pushActivity("Account", accountNotice);
+      store.save();
+      renderAccountPlan(body);
+    });
+  });
+}
+
 /* ============================ hero + command deck ============================ */
 const MODES = {
   ask:     { label: "Ask",     icon: "chat",  placeholder: "Ask PhantomForce anything…", prefix: "" },
   write:   { label: "Write",   icon: "doc",   placeholder: "Write a proposal, a caption, a follow-up…", prefix: "Draft " },
-  image:   { label: "Image",   icon: "spark", placeholder: "Describe an image to create…", prefix: "Create an image brief for " },
-  video:   { label: "Video",   icon: "film",  placeholder: "Describe a video to produce…", prefix: "Create a video brief for " },
+  image:   { label: "Image",   icon: "spark", placeholder: "Describe an image to create…", prefix: "Create an image request for " },
+  video:   { label: "Video",   icon: "film",  placeholder: "Describe a video to produce…", prefix: "Create a video request for " },
   website: { label: "Website", icon: "grid",  placeholder: "Describe a page or site to build…", prefix: "Build a website for " },
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-21";
+const POSE_VERSION = "phantom-live-20260706-14";
 let phantom3d = null;
 let phantomBootSettled = false;
+let stageReactionTimer = 0;
+let emotePoseTimer = 0;
+let transientPoseKey = "";
 const MODE_POSES = {
   ask: {
-    src: "/app/assets/poses/mode-dark-ask.webp",
+    src: "/app/assets/poses/chin.webp",
     caption: "Listening",
     alt: "Phantom listening",
   },
   write: {
-    src: "/app/assets/poses/mode-dark-write.webp",
+    src: "/app/assets/poses/point.webp",
     caption: "Drafting",
     alt: "Phantom writing",
   },
   image: {
-    src: "/app/assets/poses/mode-dark-image.webp",
+    src: "/app/assets/poses/conjure.webp",
     caption: "Conjuring",
     alt: "Phantom creating an image",
   },
   video: {
-    src: "/app/assets/poses/mode-dark-video.webp",
+    src: "/app/assets/poses/present.webp",
     caption: "Directing video",
     alt: "Phantom directing a video",
   },
   website: {
-    src: "/app/assets/poses/mode-dark-website.webp",
+    src: "/app/assets/poses/scheme.webp",
     caption: "Building pages",
     alt: "Phantom building a website",
   },
   admin: {
-    src: "/app/assets/poses/mode-dark-admin.webp",
+    src: "/app/assets/poses/assert.webp",
     caption: "Control",
     alt: "Phantom in admin control mode",
   },
+};
+const EMOTE_POSES = {
+  listen: {
+    src: "/app/assets/poses/chin.webp",
+    caption: "Listening",
+    alt: "Phantom leaning in to listen",
+    pose: "listen",
+  },
+  think: {
+    src: "/app/assets/poses/scheme.webp",
+    caption: "Thinking",
+    alt: "Phantom thinking through the request",
+    pose: "think",
+  },
+  typing: {
+    src: "/app/assets/poses/point.webp",
+    caption: "Reading",
+    alt: "Phantom tracking your typed request",
+    pose: "typing",
+  },
+  talk: {
+    src: "/app/assets/poses/coy.webp",
+    caption: "Answering",
+    alt: "Phantom answering",
+    pose: "talk",
+  },
+  answer: {
+    src: "/app/assets/poses/assert.webp",
+    caption: "Got it",
+    alt: "Phantom found the answer",
+    pose: "answer",
+  },
+  alert: {
+    src: "/app/assets/poses/cross.webp",
+    caption: "Heads up",
+    alt: "Phantom warning about something important",
+    pose: "alert",
+  },
+  happy: {
+    src: "/app/assets/poses/welcome.webp",
+    caption: "Ready",
+    alt: "Phantom ready to help",
+    pose: "happy",
+  },
+};
+const MODE_REACTIONS = {
+  ask:     { mood: "listening", emotion: "calm", caption: "Listening" },
+  write:   { mood: "thinking",  emotion: "bright", caption: "Writing" },
+  image:   { mood: "thinking",  emotion: "excited", caption: "Conjuring" },
+  video:   { mood: "thinking",  emotion: "bright", caption: "Directing" },
+  website: { mood: "thinking",  emotion: "calm", caption: "Building" },
+  admin:   { mood: "talking",   emotion: "alert", caption: "Operator mode" },
 };
 
 function poseUrl(src) {
   return `${src}?v=${POSE_VERSION}`;
 }
 
-function syncPoseMood(mood = "idle", emotion = "calm") {
-  const stage = $("[data-mode-stage]");
-  if (stage) {
-    stage.dataset.mood = mood;
-    stage.dataset.emotion = emotion;
-  }
-  if (phantom3d) phantom3d.setMood(mood, emotion);
+function reactionForMode(id = activeMode) {
+  return MODE_REACTIONS[id] || MODE_REACTIONS.ask;
 }
 
-function renderModePose(id = activeMode) {
-  const pose = MODE_POSES[id] || MODE_POSES.ask;
-  const poseId = MODE_POSES[id] ? id : "ask";
+function inferModeFromText(text = "") {
+  const s = text.toLowerCase();
+  if (/\b(video|reel|clip|shoot|phantomcut|edit|render)\b/.test(s)) return "video";
+  if (/\b(image|photo|picture|graphic|creative|thumbnail|visual)\b/.test(s)) return "image";
+  if (/\b(site|website|page|landing|store|checkout|web)\b/.test(s)) return "website";
+  if (/\b(write|draft|proposal|quote|caption|email|follow.?up|copy)\b/.test(s)) return "write";
+  if (/\b(status|admin|system|approval|protect|security|scan|worker|settings)\b/.test(s)) return "admin";
+  return activeMode;
+}
+
+function stageCaptionText(mood = ghostMood, emotion = ghostEmotion) {
+  if (transientPoseKey && EMOTE_POSES[transientPoseKey]?.caption) return EMOTE_POSES[transientPoseKey].caption;
+  const mode = reactionForMode(activeMode);
+  if (mood === "thinking") {
+    if (activeMode === "write") return "Drafting";
+    if (activeMode === "image") return "Conjuring";
+    if (activeMode === "video") return "Directing";
+    if (activeMode === "website") return "Building";
+    return "Thinking";
+  }
+  if (mood === "talking") return emotion === "alert" ? "Heads up" : "Answering";
+  if (mood === "listening") return "Listening";
+  return mode.caption;
+}
+
+function applyStagePose(pose, poseId, cssPose = poseId) {
   const stage = $("[data-mode-stage]");
   const img = $("[data-mode-pose]");
-  const caption = $("[data-mode-caption]");
-  if (!stage || !img) return;
+  if (!stage || !img || !pose) return;
   phantom?.classList.add("has-mode-poses");
   const nextSrc = poseUrl(pose.src);
-  const poseChanged = stage.dataset.pose !== poseId || img.getAttribute("src") !== nextSrc;
-  stage.dataset.pose = poseId;
-  if (poseChanged) {
+  const assetChanged = stage.dataset.poseAsset !== poseId || img.getAttribute("src") !== nextSrc;
+  stage.dataset.pose = cssPose;
+  stage.dataset.poseAsset = poseId;
+  if (assetChanged) {
     stage.classList.remove("is-swapping");
     void stage.offsetWidth;
     stage.classList.add("is-swapping");
@@ -287,8 +605,67 @@ function renderModePose(id = activeMode) {
     img.setAttribute("src", nextSrc);
     if (phantom3d) phantom3d.setPose({ ...pose, id: poseId, src: nextSrc });
   }
-  img.setAttribute("alt", pose.alt);
-  if (caption) caption.textContent = pose.caption;
+  img.setAttribute("alt", pose.alt || "PhantomForce AI character");
+  const caption = $("[data-mode-caption]");
+  if (caption) caption.textContent = stageCaptionText(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
+}
+
+function renderEmotePose(key, ms = 900) {
+  const pose = EMOTE_POSES[key];
+  if (!pose) return;
+  transientPoseKey = key;
+  applyStagePose(pose, `${activeMode}-${key}`, pose.pose || key);
+  clearTimeout(emotePoseTimer);
+  emotePoseTimer = setTimeout(() => {
+    if (transientPoseKey === key) {
+      transientPoseKey = "";
+      renderModePose(activeMode);
+    }
+  }, Math.max(300, ms));
+}
+
+function stageReact(kind = "pulse", ms = 700) {
+  const stage = $("[data-mode-stage]");
+  if (!stage || reduceMotion) return;
+  stage.dataset.reaction = kind;
+  stage.classList.remove("is-reacting");
+  void stage.offsetWidth;
+  stage.classList.add("is-reacting");
+  clearTimeout(stageReactionTimer);
+  stageReactionTimer = setTimeout(() => {
+    stage.classList.remove("is-reacting");
+    if (stage.dataset.reaction === kind) delete stage.dataset.reaction;
+  }, ms);
+  const emote = {
+    listen: "listen",
+    think: "think",
+    typing: "typing",
+    answer: "answer",
+    nav: "happy",
+  }[kind] || (MODE_POSES[kind] ? "" : "");
+  if (emote) renderEmotePose(emote, ms + 220);
+  if (phantom3d?.burst) phantom3d.burst(kind, ms);
+}
+
+function syncPoseMood(mood = "idle", emotion = "calm") {
+  const stage = $("[data-mode-stage]");
+  if (stage) {
+    stage.dataset.mood = mood;
+    stage.dataset.emotion = emotion;
+  }
+  const caption = $("[data-mode-caption]");
+  if (caption) caption.textContent = stageCaptionText(mood, emotion);
+  if (phantom) {
+    phantom.dataset.phantomMood = mood;
+    phantom.dataset.phantomEmotion = emotion;
+  }
+  if (phantom3d) phantom3d.setMood(mood, emotion);
+}
+
+function renderModePose(id = activeMode) {
+  const pose = MODE_POSES[id] || MODE_POSES.ask;
+  const poseId = MODE_POSES[id] ? id : "ask";
+  if (!transientPoseKey) applyStagePose(pose, poseId, poseId);
   syncPoseMood(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
 }
 
@@ -306,10 +683,13 @@ function setMode(id) {
   activeMode = id;
   renderChips();
   renderModePose(id);
-  if (m.open) { openWorkspace(m.open); return; }
+  const reaction = reactionForMode(id);
+  setGhostMood(reaction.mood, { emotion: reaction.emotion, ms: id === "ask" ? 1800 : 1400 });
+  stageReact(id, 760);
+  if (m.open) { routeWorkspace(m.open); return; }
   const input = $("[data-command-input]");
   input.placeholder = m.placeholder;
-  input.focus();
+  focusWithoutScroll(input);
 }
 
 function renderHero() {
@@ -318,23 +698,18 @@ function renderHero() {
 }
 
 /* ============================ stat cards ============================ */
-function thisWeekCount() {
-  const weekAgo = Date.now() - 7 * 864e5;
-  return visible(store.state.activity).filter((a) => new Date(a.at).getTime() >= weekAgo).length;
-}
 function renderStatCards() {
   const media = visible(store.state.media);
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
-  const delivered = media.filter((m) => m.status === "delivered").length;
+  const workerTotal = Math.max(1, (store.state.toolSpine || []).length + 1);
+  const mem = memoryStats();
 
-  const bc = brandCounts();
   const cards = [
-    { icon: "db",    title: "Brand Memory", value: bc.total, sub: bc.total ? `${bc.assets} assets · ${bc.memory} memories` : "Nothing stored yet", foot: bc.total ? "Private & local" : "Add brand facts to start", open: "brand", trend: bc.total ? "live" : "empty" },
-    { icon: "media", title: "Media Lab",    value: media.length, sub: "Briefs in lab", foot: media.length ? `${delivered} delivered` : "No briefs yet", open: "media", trend: media.length ? "ready" : "empty" },
-    { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "Queue clear", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear" },
-    { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: thisWeekCount() ? "Real activity only" : "No activity yet", open: "content", trend: thisWeekCount() ? "live" : "empty" },
-    { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: activeAgents ? "Real workers only" : "Not configured", open: "automation", trend: activeAgents ? "live" : "empty" },
+    { icon: "brain", title: "Phantom AI", value: "ON", sub: "Protected", foot: "Tap to talk", open: "phantom", trend: "on" },
+    { icon: "users", title: "Workers", value: workerTotal, sub: "0 active now", foot: "Open roster", open: "workforce", trend: "ready" },
+    { icon: "check", title: "Approvals", value: pending ? pending : "OK", sub: pending ? "Review" : "Clear", foot: pending ? "Needs owner call" : "All systems go", open: "approvals", alert: pending > 0, trend: pending ? "needs you" : "ready" },
+    { icon: "db", title: "Memory", value: mem.total ? "ON" : "OK", sub: mem.total ? `${mem.total} notes` : "Ready", foot: mem.remembered ? `${mem.remembered} pinned` : "Private context", open: "memory", trend: "ready" },
+    { icon: "media", title: "Media", value: media.length ? media.length : "OK", sub: media.length ? "Requests" : "Ready", foot: media.length ? "In pipeline" : "No blockers", open: "media", trend: "ready" },
   ];
   $("[data-statcards]").innerHTML = cards.map((c) => `
     <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
@@ -345,7 +720,6 @@ function renderStatCards() {
       <span class="statcard-k">${esc(c.title)}</span>
       <b class="statcard-v">${c.value}</b>
       <span class="statcard-sub">${esc(c.sub)}</span>
-      ${sparkline(c.value + c.title.length, !c.alert)}
       <span class="statcard-foot">${esc(c.foot)}</span>
     </button>`).join("");
 }
@@ -397,19 +771,13 @@ function renderPlan() {
       </button>`;
     return;
   }
-  const m = moneyView();
-  const money = m.wonValue + m.pipeline > 0 ? m.wonValue / (m.wonValue + m.pipeline) : 0.4;
-  // an upbeat "on track" read: fewer open items + more won momentum = higher.
-  const pct = Math.max(55, Math.min(97, Math.round(88 - plan.length * 4 + money * 18)));
-  const R = 30, C = 2 * Math.PI * R, off = C * (1 - pct / 100);
-  const msg = pct >= 85 ? "You're ahead. Ride it." : pct >= 45 ? "You're on track." : "Let's clear the runway.";
+  const msg = plan.length === 1 ? "One real thing needs you." : "A few real things need you.";
   $("[data-plan]").innerHTML = `
     <div class="section-head"><h2>Today's plan</h2></div>
     <button class="plan-inner" data-open-ws="approvals">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
-        <circle cx="36" cy="36" r="${R}" class="plan-track"/>
-        <circle cx="36" cy="36" r="${R}" class="plan-arc" stroke-dasharray="${C.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}"/>
-        <text x="36" y="40" class="plan-pct">${pct}%</text>
+        <circle cx="36" cy="36" r="30" class="plan-track"/>
+        <text x="36" y="40" class="plan-pct">${plan.length}</text>
       </svg>
       <span class="plan-copy">
         <b>${msg}</b>
@@ -421,7 +789,7 @@ function renderPlan() {
 
 /* ============================ mission queue ============================ */
 const AGENT_STATE = {
-  active: { label: "RUNNING", cls: "run" },
+  active: { label: "READY", cls: "run" },
   waiting: { label: "WAITING", cls: "wait" },
   "needs-approval": { label: "APPROVE", cls: "wait" },
   blocked: { label: "BLOCKED", cls: "block" },
@@ -443,10 +811,10 @@ function renderQueue() {
 
 /* ============================ quick actions ============================ */
 const QUICK = [
-  { label: "Create new content", icon: "spark",  run: "Draft a media brief for a new campaign" },
-  { label: "Start video campaign", icon: "film",  run: "Create a video brief for the launch" },
-  { label: "Run brand analysis", icon: "chart",   run: "What's my pipeline?" },
-  { label: "Upload brand asset", icon: "upload",   open: "media" },
+  { label: "Create new content", icon: "spark",  run: "Create a media request for a new campaign" },
+  { label: "Start video campaign", icon: "film",  run: "Create a video request for the launch" },
+  { label: "Check pipeline", icon: "chart",   run: "What's my pipeline?" },
+  { label: "Open media library", icon: "upload",   open: "media" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
 function renderQuick() {
@@ -498,7 +866,9 @@ function renderNotifs() {
   const items = attentionItems();
   const btnIc = $("[data-notif-ic]"); if (btnIc) btnIc.innerHTML = svg("bell");
   const dot = $("[data-notif-dot]");
+  const mobileDot = $("[data-mobile-notif-dot]");
   if (dot) { dot.hidden = items.length === 0; dot.textContent = items.length > 9 ? "9+" : String(items.length); }
+  if (mobileDot) { mobileDot.hidden = items.length === 0; mobileDot.textContent = items.length > 9 ? "9+" : String(items.length); }
   const menu = $("[data-notif-menu]");
   if (!menu) return;
   menu.hidden = !notifOpen;
@@ -522,24 +892,24 @@ function fuzzy(q, text) {
 function paletteSources(query) {
   const q = query.trim().toLowerCase();
   const items = [];
-  NAV.filter((n) => !n.adminOnly || isAdmin()).forEach((n) =>
+  NAV.filter(canAccessSurface).forEach((n) =>
     items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}` : "Console home", run: () => goNav(n.id) }));
   for (const id in WORKSPACE_DEFS) {
     const def = WORKSPACE_DEFS[id];
-    if (def.adminOnly && !isAdmin()) continue;
+    if (!canAccessSurface(def)) continue;
     if (NAV.some((n) => n.ws === id)) continue;
     items.push({ group: "Go to", label: def.title, icon: "grid", sub: def.kicker, run: () => openWorkspace(id) });
   }
-  QUICK.forEach((a) => items.push({ group: "Do", label: a.label, icon: a.icon, sub: a.run ? "Run command" : "Open", run: () => (a.run ? runCommand(a.run) : openWorkspace(a.open)) }));
+  QUICK.forEach((a) => items.push({ group: "Do", label: a.label, icon: a.icon, sub: a.run ? "Run command" : "Open", run: () => (a.run ? runCommand(a.run) : routeWorkspace(a.open)) }));
   commandSuggestions().forEach((s) => items.push({ group: "Ask", label: s, icon: "chat", sub: "Run", run: () => runCommand(s) }));
   if (q.length >= 2) {
-    const add = (label, sub, open, icon) => items.push({ group: "Records", label, icon, sub, run: () => openWorkspace(open) });
+    const add = (label, sub, open, icon) => items.push({ group: "Records", label, icon, sub, run: () => routeWorkspace(open) });
     visible(store.state.leads).filter((l) => (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((l) => add(l.name, `Lead · ${l.company || l.status}`, "leads", "users"));
     visible(store.state.proposals).filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((p) => add(p.client, `Proposal · ${fmtMoney(p.price)}`, "proposals", "dollar"));
     visible(store.state.media).filter((m) => (m.title || "").toLowerCase().includes(q)).slice(0, 4)
-      .forEach((m) => add(m.title, "Media brief", "media", "film"));
+      .forEach((m) => add(m.title, "Video request", "media", "film"));
     visible(store.state.sites).filter((s) => (s.title || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((s) => add(s.title, `${s.kind}`, "sites", "grid"));
   }
@@ -583,7 +953,7 @@ function openPalette() {
   requestAnimationFrame(() => root.classList.add("is-open"));
   $("[data-cmdk-input-ic]").innerHTML = svg("search");
   const input = $("[data-cmdk-input]"); input.value = ""; renderPalette("");
-  setTimeout(() => input.focus(), 20);
+  setTimeout(() => focusWithoutScroll(input), 20);
 }
 function closePalette() {
   cmdkOpen = false;
@@ -637,12 +1007,42 @@ function briefingText() {
 
 /* ============================ console render ============================ */
 function renderPlanMeta() {
-  const renew = new Date(Date.now() + 30 * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
+  const renew = accountRenewalLabel();
+  const owner = accountOwnerName();
+  const status = accountStatusMeta();
+  const nameEl = $("[data-profile-name]");
+  const avatarEl = $("[data-profile-avatar]");
+  const statusEl = $("[data-account-status]");
+  const planEl = $("[data-plan-name]");
   const el = $("[data-plan-renew]");
+  if (nameEl) nameEl.textContent = owner;
+  if (avatarEl) avatarEl.textContent = accountInitials(owner);
+  if (statusEl) {
+    statusEl.className = `side-profile-status is-${status.tone}`;
+    statusEl.innerHTML = `<span class="side-profile-dot" aria-hidden="true"></span>${esc(status.label)}`;
+  }
+  if (planEl) planEl.textContent = ACCOUNT_PLAN.name;
   if (el) el.textContent = `Renewal: ${renew}`;
 }
 
+function ensureDashboardShell() {
+  const root = $("[data-console]");
+  if (!root) return null;
+  if (root.dataset.consoleView !== "dashboard") {
+    root.className = "console";
+    root.dataset.consoleView = "dashboard";
+    delete root.dataset.pageWs;
+    root.innerHTML = dashboardShellHtml;
+  }
+  return root;
+}
+
 function renderConsole() {
+  if (activePageId) {
+    renderWorkspacePage(activePageId, false);
+    return;
+  }
+  ensureDashboardShell();
   renderNav();
   renderStatusPills();
   renderPlanMeta();
@@ -657,7 +1057,11 @@ function renderConsole() {
   renderPlan();
   renderQueue();
   renderQuick();
+  bindCommandForm();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
+  mountAgentTicker($("[data-agent-ticker]"));
+  mountAgentConsole($("[data-agentops]"));
+  mountHeroTicker($("[data-hero-ticker]"));
 }
 
 /* ============================ command run ============================ */
@@ -693,14 +1097,22 @@ function speechHoldMs(text = "") {
 function speak(text, cls = "", emotionOverride = null) {
   clearTimeout(typeTimer);
   const box = sayBox();
+  if (!box) return;
   box.hidden = false;
   const p = document.createElement("p");
   p.className = `say-line ${cls}`.trim();
   box.replaceChildren(p);
   const emotion = emotionOverride || emotionForText(text);
-  if (cls === "thinking") setGhostMood("thinking", { emotion: "bright" });
-  else if (cls === "user") setGhostMood("listening", { emotion: "calm", ms: 1600 });
-  else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+  if (cls === "thinking") {
+    setGhostMood("thinking", { emotion: "bright" });
+    renderEmotePose("think", 900);
+  } else if (cls === "user") {
+    setGhostMood("listening", { emotion: "calm", ms: 1600 });
+    renderEmotePose("listen", 1100);
+  } else {
+    setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+    renderEmotePose(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talk", Math.min(2200, speechHoldMs(text)));
+  }
   if (cls || reduceMotion) {
     p.textContent = text;
     if (!cls) setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
@@ -714,9 +1126,12 @@ function speak(text, cls = "", emotionOverride = null) {
   };
   tick();
 }
-function cardHtml(c) {
+function cardHtml(c, cardIndex = "", entryIndex = "") {
+  const cardAttr = cardIndex !== "" ? ` data-card-index="${cardIndex}"` : "";
+  const entryAttr = entryIndex !== "" ? ` data-entry-index="${entryIndex}"` : "";
   return `
-    <article class="rcard">
+    <article class="rcard"${cardAttr}${entryAttr}>
+      <button class="rcard-x" data-card-remove data-card-index="${cardIndex}" data-entry-index="${entryIndex}" aria-label="Remove card">×</button>
       <p class="rcard-kicker">${esc(c.kicker)}</p>
       <h4>${esc(c.title)}</h4>
       ${c.body ? `<p class="rcard-body">${esc(c.body)}</p>` : ""}
@@ -724,29 +1139,86 @@ function cardHtml(c) {
       ${c.actions?.length ? `<div class="rcard-actions">${c.actions.map((a) => `<button class="btn" data-open-ws="${a.open}">${esc(a.label)}</button>`).join("")}</div>` : ""}
     </article>`;
 }
+function bindCardRemovers(root, onRemove) {
+  if (!root) return;
+  root.querySelectorAll("[data-card-remove]").forEach((btn) => {
+    btn.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const entryIndex = btn.dataset.entryIndex;
+      const cardIndex = btn.dataset.cardIndex;
+      if (onRemove && entryIndex !== "" && cardIndex !== "") onRemove(Number(entryIndex), Number(cardIndex));
+      else btn.closest(".rcard")?.remove();
+    };
+  });
+}
 function runCommand(raw) {
   phantomHasActed = true;
+  const inferredMode = inferModeFromText(raw);
+  if (inferredMode !== activeMode && MODES[inferredMode]) {
+    activeMode = inferredMode;
+    renderChips();
+    renderModePose(inferredMode);
+  }
   const mode = MODES[activeMode] || MODES.ask;
   const text = mode.prefix && !/\b(draft|create|build|make|write|new)\b/i.test(raw) ? mode.prefix + raw : raw;
   speak(raw, "user");
   ghostFlare("listening");
+  stageReact("listen", 620);
   const respBox = $("[data-response]");
-  respBox.innerHTML = "";
+  if (respBox) respBox.innerHTML = "";
   setTimeout(() => {
     speak("· · ·", "thinking");
+    stageReact("think", 780);
     setTimeout(() => {
       const r = handleCommand(text);
       speak(r.say);
-      respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
+      rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
+      if (respBox) {
+        respBox.innerHTML = (r.cards || []).map((c, i) => cardHtml(c, i)).join("");
+        bindCardRemovers(respBox);
+      }
       renderConsole();
-      if (r.open) setTimeout(() => openWorkspace(r.open), reduceMotion ? 150 : 750);
+      stageReact("answer", 1100);
+      if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
     }, reduceMotion ? 120 : 620);
   }, reduceMotion ? 60 : 260);
 }
 
-function wireDeck() {
+function bindCommandForm() {
   const form = $("[data-command-form]");
   const input = $("[data-command-input]");
+  if (!form || !input || form.dataset.bound === "true") return;
+  form.dataset.bound = "true";
+  form.addEventListener("pointerdown", () => {
+    commandTouchScroll = { x: window.scrollX, y: window.scrollY };
+  }, { passive: true });
+  input.addEventListener("focus", () => {
+    setCommandFocusState(true);
+    const reaction = reactionForMode(activeMode);
+    setGhostMood("listening", { emotion: reaction.emotion });
+    stageReact("listen", 520);
+    restoreMobileScroll();
+  });
+  input.addEventListener("input", () => {
+    const value = input.value.trim();
+    if (!value) {
+      setGhostMood("listening", { emotion: reactionForMode(activeMode).emotion });
+      return;
+    }
+    const inferredMode = inferModeFromText(value);
+    if (inferredMode !== activeMode && MODES[inferredMode]) {
+      activeMode = inferredMode;
+      renderChips();
+      renderModePose(inferredMode);
+    }
+    setGhostMood("thinking", { emotion: reactionForMode(activeMode).emotion, ms: 1100 });
+    stageReact("typing", 520);
+  });
+  input.addEventListener("blur", () => {
+    setCommandFocusState(false);
+    if (!input.value.trim()) setGhostMood("idle", { emotion: "happy", ms: 1200 });
+  });
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const v = input.value.trim();
@@ -754,16 +1226,37 @@ function wireDeck() {
     input.value = "";
     runCommand(v);
   });
+}
+
+function wireDeck() {
+  bindCommandForm();
   document.addEventListener("click", (e) => {
     const mode = e.target.closest("[data-mode]");
     if (mode) { setMode(mode.dataset.mode); return; }
+    if (e.target.closest("[data-mobile-home]")) { renderDashboardPage(true); return; }
+    if (e.target.closest("[data-mobile-command]")) {
+      renderDashboardPage(true);
+      focusCommandInput(40);
+      return;
+    }
+    if (e.target.closest("[data-mobile-bell]")) { routeWorkspace("approvals"); return; }
+    if (e.target.closest("[data-mobile-user-btn]")) { routeWorkspace("account"); return; }
+    const mobileNav = e.target.closest("[data-mobile-nav]");
+    if (mobileNav) {
+      const item = MOBILE_NAV.find((n) => n.id === mobileNav.dataset.mobileNav);
+      if (!item) return;
+      if (item.route === "nav") goNav(item.target);
+      else routeWorkspace(item.target);
+      return;
+    }
+    if (e.target.closest("[data-side-toggle]")) { setMobileNav(!mobileNavOpen); return; }
     const navBtn = e.target.closest("[data-nav-id]");
-    if (navBtn) { goNav(navBtn.dataset.navId); return; }
+    if (navBtn) { goNav(navBtn.dataset.navId); setMobileNav(false); return; }
     const quick = e.target.closest("[data-quick]");
     if (quick) {
       const q = QUICK[+quick.dataset.quick];
       if (q?.run) runCommand(q.run);
-      else if (q?.open) openWorkspace(q.open);
+      else if (q?.open) routeWorkspace(q.open);
       return;
     }
     if (e.target.closest("[data-cmdk-open]")) { openPalette(); return; }
@@ -772,7 +1265,8 @@ function wireDeck() {
     if (cItem) { execPalette(+cItem.dataset.cmdkI); return; }
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     const opener = e.target.closest("[data-open-ws]");
-    if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } openWorkspace(opener.dataset.openWs); return; }
+    if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
+    if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
     // click outside notif menu closes it
     if (notifOpen && !e.target.closest(".notif-wrap")) { notifOpen = false; renderNotifs(); }
   });
@@ -791,7 +1285,8 @@ function wireDeck() {
     }
     if (phantom.hidden) return;
     const typing = /^(input|textarea|select)$/i.test(e.target.tagName);
-    if (e.key === "/" && !typing) { e.preventDefault(); $("[data-command-input]")?.focus(); }
+    if (e.key === "/" && !typing) { e.preventDefault(); focusCommandInput(); }
+    else if (e.key === "Escape" && mobileNavOpen) { setMobileNav(false); }
     else if (e.key === "Escape" && notifOpen) { notifOpen = false; renderNotifs(); }
   });
 }
@@ -803,25 +1298,193 @@ const mediaOpts = () => ({
   esc,
   isAdmin: isAdmin(),
   notify: (who, text) => { pushActivity(who, text); store.save(); },
-  openSettings: () => openWorkspace("settings"),
+  openSettings: () => routeWorkspace("settings"),
   renderBriefs: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
+
+function renderDeveloperPage(body) {
+  if (!isOwnerOperator()) {
+    body.innerHTML = `
+      <div class="developer-denied">
+        <p class="developer-kicker">Owner-only</p>
+        <h3>Developer access is reserved for the PhantomForce owner account.</h3>
+        <p>This surface is hidden from normal client, employee, and admin sessions.</p>
+      </div>`;
+    return;
+  }
+  const s = ctx.session || {};
+  const mem = memoryStats();
+  const state = store.state || {};
+  const pendingApprovals = visible(state.approvals || []).filter((a) => a.status === "pending").length;
+  const queuedArtifacts = (state.contentQueue || []).filter((item) => !item.archived && item.status !== "removed").length;
+  const routes = [
+    ["Owner account", "PhantomForce Owner"],
+    ["Session", s.sessionId || "owner-admin"],
+    ["Access guard", s.canManageAccess ? "canManageAccess true" : "local owner session"],
+    ["Workspace", wsName(currentWs())],
+    ["Host", location.hostname || "local"],
+    ["Build", document.querySelector('meta[name="phantom-build"]')?.content || "local"],
+  ];
+  const safety = [
+    ["Provider calls", "Blocked here"],
+    ["Approval execution", "Absent"],
+    ["External sends", "Blocked"],
+    ["Queue writes", "Not from this page"],
+    ["Production ledger writes", "Blocked"],
+    ["Secrets", "Never displayed"],
+  ];
+  const shortcuts = [
+    ["PhantomOps", "adminos", "System status, tool lane, and owner ops cockpit."],
+    ["Memory", "memory", "Memory, recall, and local context."],
+    ["Approvals", "approvals", "Human approval queue and blocked-action review."],
+    ["Settings", "settings", "Media and provider configuration guardrails."],
+  ];
+  body.innerHTML = `
+    <div class="developer-shell">
+      <section class="developer-hero">
+        <div>
+          <p class="developer-kicker">Owner operator surface</p>
+          <h3>Developer Control Room</h3>
+          <p>Private operational visibility for the PhantomForce owner account. This page is read-only and does not execute providers, approvals, sends, or production writes.</p>
+        </div>
+        <div class="developer-owner">
+          <span class="developer-owner-avatar">JW</span>
+          <b>${esc(s.name || "Jordan")}</b>
+          <i><span></span>Owner systems protected</i>
+        </div>
+      </section>
+
+      <section class="stat-row developer-stats">
+        <article class="stat-card"><span>Memory records</span><b>${mem.total}</b><i>Local memory surface</i></article>
+        <article class="stat-card"><span>Pending approvals</span><b>${pendingApprovals}</b><i>Execution still gated</i></article>
+        <article class="stat-card"><span>Queued artifacts</span><b>${queuedArtifacts}</b><i>Awaiting autopilot or removal</i></article>
+        <article class="stat-card"><span>Owner gate</span><b>On</b><i>Owner-only tab</i></article>
+      </section>
+
+      <div class="developer-grid">
+        <article class="developer-card">
+          <p class="developer-kicker">Identity proof</p>
+          <h4>Owner session</h4>
+          <div class="developer-list">${routes.map(([k, v]) => `<span><b>${esc(k)}</b><i>${esc(v)}</i></span>`).join("")}</div>
+        </article>
+        <article class="developer-card">
+          <p class="developer-kicker">Safety posture</p>
+          <h4>No live execution from Developer</h4>
+          <div class="developer-list">${safety.map(([k, v]) => `<span><b>${esc(k)}</b><i>${esc(v)}</i></span>`).join("")}</div>
+        </article>
+      </div>
+
+      <section class="developer-card">
+        <p class="developer-kicker">Owner shortcuts</p>
+        <h4>Jump to protected operator surfaces</h4>
+        <div class="developer-shortcuts">
+          ${shortcuts.map(([label, open, copy]) => `
+            <button class="developer-shortcut" data-open-ws="${esc(open)}">
+              <b>${esc(label)}</b>
+              <span>${esc(copy)}</span>
+            </button>`).join("")}
+        </div>
+      </section>
+    </div>`;
+}
+
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "AI studio", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
+  content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
+  analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
+  account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
+  developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
-  content: { title: "Content Hub", kicker: "Everything you've published", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
-  analytics: { title: "Analytics", kicker: "Live from Content Hub", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   brand: { title: "Brand Memory", kicker: "Private & local brand brain", custom: true, wide: true, render: (body) => renderBrandMemory(body, mediaOpts()) },
   automation: { title: "Automation", kicker: "Approved workflows only", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
 };
 
 let openId = null;
-function openWorkspace(id, pushHash = true) {
-  const def = CUSTOM[id] || WORKSPACE_DEFS[id];
+function workspaceDef(id) {
+  const key = workspaceId(id);
+  return CUSTOM[key] || WORKSPACE_DEFS[key] || null;
+}
+function navForWorkspace(id) {
+  const key = workspaceId(id);
+  return NAV.find((n) => n.id === activeNav && n.ws === key && canAccessSurface(n))
+    || NAV.find((n) => n.ws === key && canAccessSurface(n))
+    || null;
+}
+function clearOverlayOnly() {
+  openId = null;
+  overlayRoot.innerHTML = "";
+  document.body.classList.remove("overlay-open");
+}
+function renderDashboardPage(pushHash = true) {
+  activePageId = null;
+  activeNav = "dashboard";
+  clearOverlayOnly();
+  ensureDashboardShell();
+  setGhostMood("idle", { emotion: "happy", ms: 1200 });
+  stageReact("dashboard", 520);
+  renderConsole();
+  if (pushHash && location.hash) {
+    try { history.pushState(null, "", location.pathname + location.search); } catch {}
+  }
+}
+function renderWorkspacePage(id, pushHash = true) {
+  const key = workspaceId(id);
+  const def = workspaceDef(key);
   if (!def) return;
-  if (def.adminOnly && !isAdmin()) return;
-  closeOverlay(false);
-  openId = id;
+  if (!canAccessSurface(def)) return;
+  const wsMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
+  setGhostMood(wsMood.mood, { emotion: wsMood.emotion, ms: 1400 });
+  stageReact(key === "media" ? "video" : key === "sites" ? "website" : "workspace", 720);
+  const root = $("[data-console]");
+  if (!root) return;
+  const navHit = navForWorkspace(key);
+  if (navHit) activeNav = navHit.id;
+  activePageId = key;
+  clearOverlayOnly();
+  root.className = `console console-workspace ${def.wide ? "console-workspace-wide" : ""}`.trim();
+  root.dataset.consoleView = "workspace";
+  root.dataset.pageWs = key;
+  root.innerHTML = `
+    <section class="workspace-page ${def.wide ? "workspace-page-wide" : ""}" data-workspace-page="${esc(key)}">
+      <header class="workspace-page-head">
+        <div>
+          <p class="workspace-page-kicker">${esc(def.kicker)}${!def.custom && isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
+          <h1>${esc(def.title)}</h1>
+        </div>
+      </header>
+      <div class="workspace-page-body" data-workspace-page-body></div>
+    </section>`;
+  renderNav();
+  renderStatusPills();
+  renderPlanMeta();
+  renderUser();
+  renderNotifs();
+  const body = $("[data-workspace-page-body]", root);
+  const rerender = () => {
+    if (def.custom) def.render(body);
+    else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
+  };
+  rerender();
+  if (pushHash && location.hash !== `#page/${key}`) {
+    try { history.pushState(null, "", `#page/${key}`); } catch {}
+  }
+}
+function routeWorkspace(id, pushHash = true) {
+  const key = workspaceId(id);
+  if (key === "dashboard") { renderDashboardPage(pushHash); return; }
+  if (navForWorkspace(key)) renderWorkspacePage(key, pushHash);
+  else openWorkspace(key, pushHash);
+}
+function openWorkspace(id, pushHash = true) {
+  const key = workspaceId(id);
+  const def = workspaceDef(key);
+  if (!def) return;
+  if (!canAccessSurface(def)) return;
+  const overlayMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
+  setGhostMood(overlayMood.mood, { emotion: overlayMood.emotion, ms: 1400 });
+  stageReact("workspace", 720);
+  clearOverlayOnly();
+  openId = key;
   document.body.classList.add("overlay-open");
   overlayRoot.innerHTML = `
     <div class="overlay ${def.wide ? "overlay-wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(def.title)}">
@@ -840,13 +1503,14 @@ function openWorkspace(id, pushHash = true) {
   const body = $("[data-overlay-body]", overlayRoot);
   const rerender = () => {
     if (def.custom) def.render(body);
-    else { def.render(body, rerender); if (id === "phantom") wirePhantomConsole(body); }
+    else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
   };
   rerender();
   overlayRoot.querySelectorAll("[data-overlay-close]").forEach((b) => b.addEventListener("click", () => closeOverlay(true)));
-  if (pushHash && location.hash !== `#ws/${id}`) {
-    try { history.pushState(null, "", `#ws/${id}`); } catch {}
+  if (pushHash && location.hash !== `#ws/${key}`) {
+    try { history.pushState(null, "", `#ws/${key}`); } catch {}
   }
+  renderMobileBottomNav();
 }
 function closeOverlay(clearHash) {
   if (!openId) { if (clearHash) syncNavToView(); return; }
@@ -854,21 +1518,33 @@ function closeOverlay(clearHash) {
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
   if (clearHash && location.hash.startsWith("#ws/")) {
-    try { history.pushState(null, "", location.pathname + location.search); } catch {}
+    try { history.pushState(null, "", activePageId ? `#page/${activePageId}` : location.pathname + location.search); } catch {}
   }
   syncNavToView();
-  renderConsole();
+  if (activePageId) renderWorkspacePage(activePageId, false);
+  else renderConsole();
 }
 function syncNavToView() {
-  if (!openId) { activeNav = "dashboard"; renderNav(); return; }
-  const hit = NAV.find((n) => n.ws === openId);
+  if (!openId) {
+    if (activePageId) {
+      const hit = navForWorkspace(activePageId);
+      if (hit) activeNav = hit.id;
+    } else {
+      activeNav = "dashboard";
+    }
+    renderNav();
+    return;
+  }
+  const hit = NAV.find((n) => n.ws === openId && canAccessSurface(n));
   if (hit) { activeNav = hit.id; renderNav(); }
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });
 window.addEventListener("popstate", () => {
-  const m = location.hash.match(/^#ws\/([a-z]+)/);
-  if (m && (CUSTOM[m[1]] || WORKSPACE_DEFS[m[1]])) openWorkspace(m[1], false);
-  else closeOverlay(false);
+  const page = location.hash.match(/^#page\/([a-z-]+)/);
+  const ws = location.hash.match(/^#ws\/([a-z-]+)/);
+  if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
+  else if (ws && workspaceDef(ws[1])) routeWorkspace(ws[1], false);
+  else renderDashboardPage(false);
 });
 
 /* ============================ phantom console (chat overlay) ============================ */
@@ -878,12 +1554,18 @@ function wirePhantomConsole(body) {
   const form = $("[data-phantom-form]", body);
   const input = $("[data-phantom-input]", body);
   const paint = () => {
-    log.innerHTML = phantomHistory.map((h) => `
+    log.innerHTML = phantomHistory.map((h, entryIndex) => `
       <div class="phantom-entry">
         <p class="phantom-user">› ${esc(h.q)}</p>
         <p class="phantom-reply">${esc(h.say)}</p>
-        ${(h.cards || []).map(cardHtml).join("")}
-      </div>`).join("") || `<p class="phantom-hello">This is the full command console. Everything you ask lands as real work — drafts, briefs, and pipelines, never just chat.</p>`;
+        ${(h.cards || []).map((c, cardIndex) => cardHtml(c, cardIndex, entryIndex)).join("")}
+      </div>`).join("") || `<p class="phantom-hello">This is the full command console. Everything you ask lands as real work — drafts, requests, and pipelines, never just chat.</p>`;
+    bindCardRemovers(log, (entryIndex, cardIndex) => {
+      const cards = phantomHistory[entryIndex]?.cards;
+      if (!cards) return;
+      cards.splice(cardIndex, 1);
+      paint();
+    });
     log.scrollTop = log.scrollHeight;
   };
   paint();
@@ -894,10 +1576,11 @@ function wirePhantomConsole(body) {
     input.value = "";
     const r = handleCommand(v);
     phantomHistory.push({ q: v, say: r.say, cards: r.cards });
+    rememberConversation({ prompt: v, reply: r.say, mode: "phantom-console", route: r.open || "" });
     paint();
     renderConsole();
   });
-  setTimeout(() => input.focus(), 60);
+  setTimeout(() => focusWithoutScroll(input), 60);
 }
 
 /* ============================ ghost (2D character) ============================ */
@@ -921,27 +1604,28 @@ function initPhantom3D() {
     phantom3d = null;
   }
 }
-/* the ghost tracks you: pointer parallax on the hero stage (3D tilt + drift).
-   rAF-smoothed so it feels weighted, not snappy. Disabled under reduced motion. */
+/* the ghost tracks you: pointer parallax on the hero stage (rAF-smoothed). */
 function initHeroParallax() {
-  if (reduceMotion) return;
-  const stage = $("[data-mode-stage]");
-  const hero = $(".hero2");
-  if (!stage || !hero) return;
+  if (reduceMotion || initHeroParallax.on) return;
+  initHeroParallax.on = true;
   let tx = 0, ty = 0, cx = 0, cy = 0;
-  stage.style.willChange = "transform";
   const tick = () => {
-    cx += (tx - cx) * 0.055;
-    cy += (ty - cy) * 0.055;
-    stage.style.transform = `rotateY(${(cx * 7).toFixed(2)}deg) rotateX(${(-cy * 4.5).toFixed(2)}deg) translate3d(${(cx * 8).toFixed(1)}px, ${(cy * -5).toFixed(1)}px, 0)`;
+    const stage = $("[data-mode-stage]");
+    if (stage) {
+      cx += (tx - cx) * 0.055;
+      cy += (ty - cy) * 0.055;
+      stage.style.transform = `rotateY(${(cx * 7).toFixed(2)}deg) rotateX(${(-cy * 4.5).toFixed(2)}deg) translate3d(${(cx * 8).toFixed(1)}px, ${(cy * -5).toFixed(1)}px, 0)`;
+    }
     requestAnimationFrame(tick);
   };
-  hero.addEventListener("pointermove", (e) => {
+  document.addEventListener("pointermove", (e) => {
+    const hero = $(".hero2");
+    if (!hero) { tx = 0; ty = 0; return; }
     const r = hero.getBoundingClientRect();
+    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) { tx = 0; ty = 0; return; }
     tx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2));
     ty = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2));
   }, { passive: true });
-  hero.addEventListener("pointerleave", () => { tx = 0; ty = 0; }, { passive: true });
   requestAnimationFrame(tick);
 }
 
@@ -972,13 +1656,20 @@ function initGhost() {
     if (document.hidden) { requestAnimationFrame(frame); return; }
     const t = (now - t0) * 0.001;
     const dt = Math.min(0.05, (now - last) * 0.001); last = now;
-    if (ghostMoodUntil && now > ghostMoodUntil) { ghostMood = "idle"; ghostMoodUntil = 0; ghostMoodStartedAt = now; }
+    if (ghostMoodUntil && now > ghostMoodUntil) {
+      ghostMood = "idle";
+      ghostMoodUntil = 0;
+      ghostMoodStartedAt = now;
+      syncPoseMood(ghostMood, ghostEmotion);
+      if (!transientPoseKey) renderModePose(activeMode);
+    }
     ghostPulse = Math.max(0, ghostPulse - 0.02);
     cpx += (px - cpx) * 0.08; cpy += (py - cpy) * 0.08;
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx2.clearRect(0, 0, w, h);
     const mood =
       ghostMood === "talking" || ghostMood === "thinking" || ghostMood === "listening" ? ghostMood :
+      ghostEmotion === "happy" || ghostEmotion === "excited" ? "happy" :
       ghostEmotion === "alert" ? "menace" : "idle";
     character.draw(ctx2, {
       t, dt,
@@ -1003,20 +1694,19 @@ function enterPhantom() {
   if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); initHeroParallax(); startClock(); startPulse(); }
   activeNav = "dashboard";
   renderConsole();
-  mountAgentTicker($("[data-agent-ticker]"));
-  mountAgentConsole($("[data-agentops]"));
-  mountHeroTicker($("[data-hero-ticker]"));
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
-  if (view && view !== "command" && (CUSTOM[view] || WORKSPACE_DEFS[view])) openWorkspace(view);
-  const m = location.hash.match(/^#ws\/([a-z]+)/);
-  if (m && WORKSPACE_DEFS[m[1]]) openWorkspace(m[1], false);
+  const page = location.hash.match(/^#page\/([a-z-]+)/);
+  const m = location.hash.match(/^#ws\/([a-z-]+)/);
+  if (page && workspaceDef(page[1])) renderWorkspacePage(page[1], false);
+  else if (m && workspaceDef(m[1])) routeWorkspace(m[1], false);
+  else if (view && view !== "command" && workspaceDef(view)) routeWorkspace(view, false);
   // a data-driven spoken briefing once the reveal settles
   setTimeout(() => {
     phantomBootSettled = true;
     setGhostMood("idle", { emotion: "happy" });
-    if (!openId) speak(briefingText(), "", "bright");
+    if (!openId && !activePageId) speak(briefingText(), "", "bright");
   }, 1400);
 }
 
@@ -1025,6 +1715,7 @@ async function boot() {
   wireDeck();
   store.onChange(() => {
     if (!phantom.hidden) {
+      if (activePageId) { renderConsole(); return; }
       renderNav(); renderStatusPills(); renderNotifs(); renderInsights();
       renderStatCards(); renderActivity(); renderPlan(); renderQueue();
     }

@@ -18,6 +18,15 @@
   still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
+- **UNIFICATION (2026-07-06)** — main's `app/` is now the merge of BOTH forks:
+  Codex's `client-sim/trainer-visible-truth-20260629` admin app (Memory, Workers,
+  Developer, compact hero, page-based nav, mobile shell — their 233-commit line)
+  PLUS main's post-absorb features (agent-ops ticker/console, hero typewriter,
+  pointer-parallax ghost, Brand Memory + Automation true pages, preview entrance
+  `?demo=1`, automation approval flow). Build id scheme: `phantom-live-20260706-N`.
+  Codex: main is the canonical deployable trunk (Pages serves it; root public site
+  lives here). Please build on main's `app/` from now on — your branch is preserved
+  as reference but is now BEHIND main.
 - **Content Hub + Analytics** (`4742880`) — `app/js/contenthub.js`: aggregates every
   social post/image/video. Self-contained (own localStorage lib, seeded/deterministic)
   and exports an `analyze()` data API. Content Hub tabs split by **platform** and by

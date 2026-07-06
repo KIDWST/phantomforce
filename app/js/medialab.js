@@ -12,6 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-14";
+
 const CFG_KEY = "pf.medialab.v1";
 const TAU = Math.PI * 2;
 
@@ -55,8 +57,69 @@ export const DEFAULT_PROVIDERS = [
 
 const STYLES = ["None", "Cinematic", "Product", "Portrait", "Neon", "Editorial", "3D render", "Analog film"];
 const IMG_ASPECTS = [["1:1", 1], ["4:5", 0.8], ["3:2", 1.5], ["16:9", 1.777], ["9:16", 0.5625]];
-const VID_ASPECTS = [["16:9", 1.777], ["9:16", 0.5625], ["1:1", 1]];
-const DURATIONS = [4, 6, 8, 10];
+const VID_ASPECTS = [["16:9", 1.777], ["9:16", 0.5625], ["4:5", 0.8], ["1:1", 1]];
+const DURATIONS = [4, 6, 8, 10, 15, 30];
+const MEDIA_PRESETS = [
+  {
+    id: "reels-tiktok", label: "Reels / TikTok", use: "Social vertical", modality: "video", aspect: "9:16", duration: 8, style: "Cinematic",
+    prompt: "Fast vertical social clip with a strong first-second hook, premium motion, bold subject, quick cuts, and a clear end card",
+  },
+  {
+    id: "story-ad", label: "Story Ad", use: "Paid social", modality: "video", aspect: "9:16", duration: 6, style: "Product",
+    prompt: "Vertical story ad with a simple product reveal, clear benefit moment, clean background, and room for headline text",
+  },
+  {
+    id: "feed-video", label: "Feed Video", use: "Instagram / LinkedIn", modality: "video", aspect: "4:5", duration: 10, style: "Editorial",
+    prompt: "Polished feed video with a premium business visual, readable center framing, and a smooth call-to-action finish",
+  },
+  {
+    id: "youtube-trailer", label: "YouTube Trailer", use: "Wide trailer", modality: "video", aspect: "16:9", duration: 30, style: "Cinematic",
+    prompt: "Cinematic wide trailer with establishing shot, product reveal, proof moments, and a confident final title card",
+  },
+  {
+    id: "teaser", label: "15s Teaser", use: "Launch clip", modality: "video", aspect: "16:9", duration: 15, style: "Neon",
+    prompt: "Short launch teaser with dramatic lighting, one memorable visual idea, controlled camera movement, and punchy ending",
+  },
+  {
+    id: "square-post", label: "Square Post", use: "Social image", modality: "image", aspect: "1:1", count: 2, style: "Editorial",
+    prompt: "Clean square social post image with one strong subject, balanced negative space, premium lighting, and no tiny text",
+  },
+  {
+    id: "feed-portrait", label: "Feed Portrait", use: "IG / Meta image", modality: "image", aspect: "4:5", count: 2, style: "Portrait",
+    prompt: "Vertical feed portrait image with confident subject, soft directional light, premium texture, and scroll-stopping composition",
+  },
+  {
+    id: "youtube-thumb", label: "Thumbnail", use: "YouTube cover", modality: "image", aspect: "16:9", count: 2, style: "Neon",
+    prompt: "Bold wide YouTube thumbnail composition with a clear focal subject, high contrast lighting, and space for a short headline",
+  },
+  {
+    id: "web-hero", label: "Website Hero", use: "Site / app header", modality: "image", aspect: "16:9", count: 2, style: "3D render",
+    prompt: "Premium website hero image with cinematic depth, clean product space, dark polished background, and room for UI copy",
+  },
+  {
+    id: "product-shot", label: "Product Shot", use: "Offer image", modality: "image", aspect: "4:5", count: 2, style: "Product",
+    prompt: "High-end product shot with controlled studio lighting, crisp edges, subtle reflection, and premium commercial finish",
+  },
+];
+
+/* Customer-safe display names for render lanes; option values stay untouched
+   so requests keep sending the real model ids. */
+const LANE_LABELS = {
+  "higgsfield-soul": "Signature stills",
+  "higgsfield-turbo": "Rapid stills",
+  "higgsfield-dop": "Cinema motion",
+  "higgsfield-motion": "Motion loop",
+  "higgsfield-soul-edit": "Signature retouch",
+  "gpt-image-1": "Studio stills",
+  "sora-2": "Story motion",
+  "gen-4": "Feature motion",
+  "gen-3-alpha-turbo": "Rapid motion",
+  "frames": "Frame stills",
+  "flux-1.1-pro": "Photoreal pro",
+  "flux-dev": "Photoreal draft",
+  "flux-kontext": "Context retouch",
+};
+const laneLabel = (m) => LANE_LABELS[m] || String(m || "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
 /* ---------------- config ---------------- */
 export function loadCfg() {
@@ -202,7 +265,7 @@ function previewAsset(req, i) {
   // watermark
   g.fillStyle = "rgba(180,255,220,0.5)"; g.font = "600 11px 'DM Mono', monospace";
   g.fillText("PHANTOM · PREVIEW", 14, H - 14);
-  return { type: req.modality, url: c.toDataURL("image/webp", 0.85), meta: { preview: true, prompt: req.prompt, style: req.style } };
+  return { type: req.modality, url: c.toDataURL("image/webp", 0.85), meta: { preview: true, prompt: req.prompt, style: req.style, preset: req.preset || "Custom" } };
 }
 
 /* =========================================================================
@@ -213,12 +276,19 @@ let session = { assets: [], tab: "generate", edit: null };
 export function renderMediaStudio(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
-  const tabs = [["generate", "Generate"], ["edit", "Edit"], ["library", `Library${session.assets.length ? ` · ${session.assets.length}` : ""}`], ["briefs", "Briefs"]];
+  const tabs = [["generate", "Generate"], ["edit", "Edit"], ["library", `Library${session.assets.length ? ` · ${session.assets.length}` : ""}`], ["briefs", "Video Requests"]];
+  const engineReady = providersFor(cfg, "image").length + providersFor(cfg, "video").length > 0;
   el.innerHTML = `
     <div class="ml">
-      <div class="ml-tabs">
-        ${tabs.map(([id, label]) => `<button class="ml-tab ${session.tab === id ? "is-active" : ""}" data-ml-tab="${id}">${label}</button>`).join("")}
-        <span class="ml-credits" title="Generation credits">${svgIc("bolt")} ${cfg.credits} credits</span>
+      <div class="ml-deck">
+        <div class="ml-tabs" role="tablist" aria-label="Media Lab views">
+          ${tabs.map(([id, label]) => `<button class="ml-tab ${session.tab === id ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id}" data-ml-tab="${id}">${label}</button>`).join("")}
+        </div>
+        <div class="ml-deck-status">
+          <span class="ml-chip ${engineReady ? "is-ready" : ""}"><i aria-hidden="true"></i>Cinematic Engine · ${engineReady ? "ready" : "standby"}</span>
+          <span class="ml-chip"><i aria-hidden="true"></i>Queue · ${session.assets.length}</span>
+          <span class="ml-credits" title="Production credits">${svgIc("bolt")} ${cfg.credits} credits</span>
+        </div>
       </div>
       <div class="ml-body" data-ml-body></div>
     </div>`;
@@ -227,11 +297,30 @@ export function renderMediaStudio(el, opts = {}) {
   if (session.tab === "generate") renderGenerate(body, cfg, opts, el);
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderLibrary(body, opts, el);
-  else if (session.tab === "briefs") (opts.renderBriefs ? opts.renderBriefs(body) : (body.innerHTML = `<p class="empty-line">Briefs unavailable.</p>`));
+  else if (session.tab === "briefs") (opts.renderBriefs ? opts.renderBriefs(body) : (body.innerHTML = `<p class="empty-line">Video requests unavailable.</p>`));
 }
 
 /* ---- Generate ---- */
-const genState = { modality: "image", provider: "higgsfield", model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, busy: false, showNeg: false };
+const genState = { modality: "image", provider: "higgsfield", model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, busy: false, showNeg: false, preset: "custom" };
+
+function activePreset() {
+  return MEDIA_PRESETS.find((p) => p.id === genState.preset) || null;
+}
+function presetSpec(p) {
+  return `${p.modality === "video" ? "Video" : "Image"} · ${p.aspect}${p.modality === "video" ? ` · ${p.duration}s` : ` · ${p.count || 1} take${(p.count || 1) > 1 ? "s" : ""}`}`;
+}
+function applyPreset(p) {
+  genState.preset = p.id;
+  genState.modality = p.modality;
+  genState.aspect = p.aspect;
+  genState.style = p.style || genState.style;
+  if (p.modality === "video") genState.duration = p.duration || genState.duration;
+  else genState.count = p.count || genState.count;
+  if (!genState.prompt.trim()) genState.prompt = p.prompt || "";
+}
+function markCustomPreset() {
+  genState.preset = "custom";
+}
 
 function renderGenerate(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
@@ -244,26 +333,37 @@ function renderGenerate(body, cfg, opts, root) {
   if (!aspects.find(([k]) => k === genState.aspect)) genState.aspect = aspects[0][0];
 
   body.innerHTML = `
-    <div class="ml-gen">
-      <div class="ml-panel">
+    <div class="ml-studio">
+      <aside class="ml-panel ml-builder" aria-label="Shot Builder">
+        <div class="ml-card-head"><b>Shot Builder</b><i>Brief the engine, then roll</i></div>
         <div class="ml-seg" data-ml-modality>
           <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
           <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
         </div>
 
-        <label class="ml-field"><span>Provider</span>
-          <div class="ml-provs" data-ml-provs>
-            ${provs.map((pr) => `<button class="ml-prov ${genState.provider === pr.id ? "is-on" : ""}" data-v="${pr.id}" style="--pb:${pr.brand}">
-              <i style="background:${pr.brand}"></i>${esc(pr.name)}</button>`).join("") || `<span class="ml-hint">No provider enabled for ${genState.modality}. <b data-ml-open-settings>Configure →</b></span>`}
+        <label class="ml-field ml-field-presets"><span>Presets</span>
+          <div class="ml-presets" data-ml-presets>
+            ${MEDIA_PRESETS.map((p) => `<button class="ml-preset ${genState.preset === p.id ? "is-on" : ""}" data-v="${p.id}" title="${esc(p.prompt)}">
+              <b>${esc(p.label)}</b>
+              <span>${esc(presetSpec(p))}</span>
+              <i>${esc(p.use)}</i>
+            </button>`).join("")}
           </div>
         </label>
 
-        ${models.length ? `<label class="ml-field"><span>Model</span>
-          <select class="ml-select" data-ml-model>${models.map((m) => `<option ${genState.model === m ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></label>` : ""}
+        <label class="ml-field"><span>Engine</span>
+          <div class="ml-provs" data-ml-provs>
+            ${provs.map((pr) => `<button class="ml-prov ${genState.provider === pr.id ? "is-on" : ""}" data-v="${pr.id}" style="--pb:${pr.brand}">
+              <i style="background:${pr.brand}"></i>${esc(pr.name)}</button>`).join("") || `<span class="ml-hint">No engine enabled for ${genState.modality}. <b data-ml-open-settings>Configure →</b></span>`}
+          </div>
+        </label>
 
-        <label class="ml-field"><span>Prompt</span>
+        ${models.length ? `<label class="ml-field"><span>Render lane</span>
+          <select class="ml-select" data-ml-model>${models.map((m) => `<option value="${esc(m)}" ${genState.model === m ? "selected" : ""}>${esc(laneLabel(m))}</option>`).join("")}</select></label>` : ""}
+
+        <label class="ml-field ml-field-brief"><span>Shot brief</span>
           <div class="ml-prompt-wrap">
-            <textarea class="ml-prompt" data-ml-prompt rows="3" placeholder="Describe the shot — subject, setting, light, mood…">${esc(genState.prompt)}</textarea>
+            <textarea class="ml-prompt" data-ml-prompt rows="4" placeholder="Describe the shot — subject, setting, light, mood…">${esc(genState.prompt)}</textarea>
             <button class="ml-enhance" data-ml-enhance title="Improve prompt">${svgIc("spark")} Enhance</button>
           </div>
         </label>
@@ -271,12 +371,12 @@ function renderGenerate(body, cfg, opts, root) {
         ${genState.showNeg ? `<label class="ml-field"><textarea class="ml-prompt" data-ml-neg rows="2" placeholder="What to avoid…">${esc(genState.negative)}</textarea></label>` : ""}
 
         <div class="ml-row">
-          <label class="ml-field ml-grow"><span>Aspect</span>
+          <label class="ml-field ml-grow"><span>Frame</span>
             <div class="ml-chips" data-ml-aspect>${aspects.map(([k]) => `<button class="${genState.aspect === k ? "is-on" : ""}" data-v="${k}">${k}</button>`).join("")}</div>
           </label>
           ${genState.modality === "video" ? `<label class="ml-field"><span>Duration</span>
             <div class="ml-chips" data-ml-dur>${DURATIONS.map((d) => `<button class="${genState.duration === d ? "is-on" : ""}" data-v="${d}">${d}s</button>`).join("")}</div></label>`
-          : `<label class="ml-field"><span>Count</span>
+          : `<label class="ml-field"><span>Takes</span>
             <div class="ml-chips" data-ml-count>${[1, 2, 3, 4].map((n) => `<button class="${genState.count === n ? "is-on" : ""}" data-v="${n}">${n}</button>`).join("")}</div></label>`}
         </div>
 
@@ -286,61 +386,187 @@ function renderGenerate(body, cfg, opts, root) {
 
         <label class="ml-field"><span>Reference (optional)</span>
           <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop>
-            ${genState.ref ? `<img src="${genState.ref}" alt="reference"/><button class="ml-drop-x" data-ml-clearref>✕</button>`
+            ${genState.ref ? `<img src="${genState.ref}" alt="reference"/><button class="ml-drop-x" data-ml-clearref aria-label="Remove reference image">✕</button>`
             : `<span>${svgIc("upload")} Drop an image or click to upload — for img→${genState.modality}, style, or continuity</span>`}
             <input type="file" accept="image/*" data-ml-file hidden />
           </div>
         </label>
 
         <button class="ml-generate" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
-          ${genState.busy ? `${svgIc("spark")} Generating…` : `${svgIc("bolt")} Generate ${genState.modality} · ~${estCredits()} credits`}
+          ${genState.busy ? `${svgIc("spark")} Rendering…` : `${svgIc("bolt")} Generate ${genState.modality} · ~${estCredits()} credits`}
         </button>
-      </div>
+      </aside>
 
-      <div class="ml-results" data-ml-results>
-        ${genState.busy ? skeletons(genState.count) : resultsHtml(esc)}
-      </div>
+      <section class="ml-stage" data-ml-results aria-label="Preview Stage">
+        <div class="ml-stage-frame ${genState.busy ? "is-busy" : ""}">
+          <header class="ml-stage-top">
+            <span class="ml-rec ${genState.busy ? "is-live" : ""}"><i aria-hidden="true"></i>${genState.busy ? "Rendering" : "Stage ready"}</span>
+            <b>Preview Stage</b>
+            <span class="ml-stage-chip">${genState.aspect}${genState.modality === "video" ? ` · ${genState.duration}s` : ""}</span>
+          </header>
+          <div class="ml-stage-view">
+            ${genState.busy ? skeletons(genState.modality === "video" ? 1 : genState.count) : resultsHtml(esc)}
+          </div>
+          <footer class="ml-stage-meta">${briefChips(esc)}</footer>
+        </div>
+      </section>
+
+      ${railHtml(cfg, esc)}
     </div>`;
 
   wireGenerate(body, cfg, opts, root, esc);
 }
 
+function briefChips(esc) {
+  const preset = activePreset();
+  const chips = [
+    preset ? preset.label : "Custom",
+    genState.modality === "video" ? "Video" : "Image",
+    genState.model ? laneLabel(genState.model) : null,
+    genState.style !== "None" ? genState.style : null,
+    genState.aspect,
+    genState.modality === "video" ? `${genState.duration}s` : `${genState.count} take${genState.count > 1 ? "s" : ""}`,
+    `≈ ${estCredits()} credits`,
+  ].filter(Boolean);
+  return `<div class="ml-brief-chips" aria-label="Current shot brief">${chips.map((c) => `<span>${esc(String(c))}</span>`).join("")}</div>`;
+}
+
+function railHtml(cfg, esc) {
+  const queue = session.assets.slice(0, 4);
+  const meterPct = Math.max(4, Math.min(100, Math.round((cfg.credits / 480) * 100)));
+  return `
+      <aside class="ml-rail" aria-label="Production rail">
+        <section class="ml-rail-card">
+          <h4>Production credits</h4>
+          <div class="ml-rail-credit"><b>${cfg.credits}</b><span>available</span></div>
+          <div class="ml-meter" role="img" aria-label="${cfg.credits} production credits available"><i style="width:${meterPct}%"></i></div>
+          <p>Next run ≈ ${estCredits()} credits · owner-controlled spend</p>
+        </section>
+        <section class="ml-rail-card">
+          <h4>Render mode</h4>
+          <div class="ml-rail-rows">
+            <span><b>Preset</b><i>${esc(activePreset()?.label || "Custom")}</i></span>
+            <span><b>Mode</b><i>${genState.modality === "video" ? "Video" : "Image"}</i></span>
+            ${genState.model ? `<span><b>Lane</b><i>${esc(laneLabel(genState.model))}</i></span>` : ""}
+            <span><b>Look</b><i>${esc(genState.style)}</i></span>
+            <span><b>Frame</b><i>${esc(genState.aspect)}${genState.modality === "video" ? ` · ${genState.duration}s` : ""}</i></span>
+          </div>
+        </section>
+        <section class="ml-rail-card">
+          <h4>Content Hub routing</h4>
+          <p>Every finished render is captured to your Content Hub automatically.</p>
+          <span class="ml-chip is-ready"><i aria-hidden="true"></i>Auto-capture on</span>
+        </section>
+        <section class="ml-rail-card ml-rail-guard">
+          <h4>Safeguards</h4>
+          <p>${cfg.requireApproval ? "Approval is required before paid renders." : "Paid renders stay owner-approved."} Nothing posts externally without you.</p>
+        </section>
+        <section class="ml-rail-card">
+          <h4>Production queue</h4>
+          ${queue.length
+            ? `<div class="ml-queue">${queue.map((a) => queueRow(a, esc)).join("")}</div>`
+            : `<p class="ml-rail-empty">Queue clear — the stage is yours.</p>`}
+        </section>
+      </aside>`;
+}
+
+function queueRow(a, esc) {
+  const status = a.saved ? "saved" : (a.meta && a.meta.preview) ? "preview" : "live";
+  const label = a.type === "video" ? "Video take" : "Still frame";
+  return `<button class="ml-q-row" data-tile-act="edit" data-id="${a.id}" title="Open in editor" aria-label="Open ${label.toLowerCase()} in editor">
+    <img src="${a.url}" alt=""/>
+    <span class="ml-q-info"><b>${label}</b><i>${esc(String((a.meta && a.meta.prompt) || "Untitled shot").slice(0, 42))}</i></span>
+    <em class="ml-q-badge is-${status}">${status}</em>
+  </button>`;
+}
+
 const estCredits = () => genState.modality === "video" ? genState.duration * 4 : genState.count * (genState.quality === "high" ? 6 : 3);
-function skeletons(n) { return `<div class="ml-grid">${Array.from({ length: n }, () => `<div class="ml-skel"><div class="ml-skel-shim"></div></div>`).join("")}</div>`; }
+function captureForContentHub(asset, extra = {}) {
+  try {
+    const result = registerContentAsset({
+      ...asset,
+      title: extra.title || (asset.type === "video" ? "Generated video" : "Generated image"),
+      prompt: extra.prompt || (asset.meta && asset.meta.prompt) || genState.prompt,
+      source: "Media Lab",
+      provider: extra.provider || genState.provider,
+      model: extra.model || genState.model,
+      style: extra.style || genState.style,
+      aspect: extra.aspect || genState.aspect,
+      duration: extra.duration || genState.duration,
+      live: !!extra.live,
+      createdAt: asset.at || Date.now(),
+    });
+    return result.stats;
+  } catch {
+    return null;
+  }
+}
+function refreshGeneratePanel(body, cfg, opts, root) {
+  genState.busy = false;
+  try {
+    renderGenerate(body, cfg, opts, root);
+  } catch {
+    if (root) renderMediaStudio(root, opts);
+  }
+  setTimeout(() => {
+    const btn = body?.querySelector?.("[data-ml-generate]");
+    if (btn?.disabled && root) renderMediaStudio(root, opts);
+  }, 0);
+}
+function skeletons(n) { return `<div class="ml-grid ml-stage-grid">${Array.from({ length: n }, () => `<div class="ml-skel"><div class="ml-skel-shim"></div></div>`).join("")}</div>`; }
+const IDLE_HINTS = ["Neon product hero on wet asphalt", "Founder portrait, window light", "Emerald smoke logo reveal"];
 function resultsHtml(esc) {
   const recent = session.assets.filter((a) => a.fromGen);
-  if (!recent.length) return `<div class="ml-empty">${svgIc("image")}<b>Your generations appear here</b><i>Write a prompt and hit Generate. No provider connected yet? You'll get a live preview.</i></div>`;
-  return `<div class="ml-grid">${recent.slice(0, 8).map((a) => tileHtml(a, esc)).join("")}</div>`;
+  if (!recent.length) return `
+    <div class="ml-idle">
+      <div class="ml-idle-orb" aria-hidden="true"><span></span><span></span><span></span></div>
+      <b>The stage is lit and waiting</b>
+      <i>Write a shot brief and roll — your frames land here. No engine connected yet? You still get a live preview.</i>
+      <div class="ml-board" aria-hidden="true">
+        ${["1:1", "4:5", "16:9", "9:16", "3:2"].map((r, i) => `<span class="ml-board-cell" style="--d:${(i * 0.4).toFixed(1)}s" data-ratio="${r}"></span>`).join("")}
+      </div>
+      <div class="ml-idle-hints">
+        ${IDLE_HINTS.map((h) => `<button data-ml-hint="${esc(h)}">${esc(h)}</button>`).join("")}
+      </div>
+    </div>`;
+  return `<div class="ml-grid ml-stage-grid">${recent.slice(0, 8).map((a) => tileHtml(a, esc)).join("")}</div>`;
 }
 function tileHtml(a, esc) {
   return `<figure class="ml-tile ${a.meta && a.meta.preview ? "is-preview" : ""}" data-asset="${a.id}">
+    <button class="ml-tile-x" data-tile-act="remove" data-id="${a.id}" title="Remove" aria-label="Remove generated asset">×</button>
     <img src="${a.url}" alt="${esc((a.meta && a.meta.prompt) || "generation")}" loading="lazy"/>
     ${a.type === "video" ? `<span class="ml-play">${svgIc("play")}</span>` : ""}
     ${a.meta && a.meta.preview ? `<span class="ml-badge">preview</span>` : `<span class="ml-badge ml-badge-live">live</span>`}
     <figcaption class="ml-tile-bar">
-      <button data-tile-act="edit" data-id="${a.id}" title="Edit">${svgIc("edit")}</button>
-      <button data-tile-act="save" data-id="${a.id}" title="Save to library">${svgIc("check")}</button>
-      <button data-tile-act="download" data-id="${a.id}" title="Download">${svgIc("upload")}</button>
-      <button data-tile-act="regen" data-id="${a.id}" title="Regenerate">${svgIc("spark")}</button>
-      <button data-tile-act="ref" data-id="${a.id}" title="Use as reference">${svgIc("image")}</button>
+      <button data-tile-act="edit" data-id="${a.id}" title="Edit" aria-label="Edit">${svgIc("edit")}</button>
+      <button data-tile-act="save" data-id="${a.id}" title="Save to library" aria-label="Save to library">${svgIc("check")}</button>
+      <button data-tile-act="download" data-id="${a.id}" title="Download" aria-label="Download">${svgIc("upload")}</button>
+      <button data-tile-act="regen" data-id="${a.id}" title="Regenerate" aria-label="Regenerate">${svgIc("spark")}</button>
+      <button data-tile-act="ref" data-id="${a.id}" title="Use as reference" aria-label="Use as reference">${svgIc("image")}</button>
     </figcaption>
   </figure>`;
 }
 
 function wireGenerate(body, cfg, opts, root, esc) {
   const seg = (sel, fn) => body.querySelectorAll(`${sel} button`).forEach((b) => b.onclick = () => { fn(b.dataset.v); renderGenerate(body, cfg, opts, root); });
-  seg("[data-ml-modality]", (v) => { genState.modality = v; });
+  body.querySelectorAll("[data-ml-presets] button").forEach((b) => b.onclick = () => {
+    const preset = MEDIA_PRESETS.find((p) => p.id === b.dataset.v);
+    if (preset) applyPreset(preset);
+    renderGenerate(body, cfg, opts, root);
+  });
+  seg("[data-ml-modality]", (v) => { genState.modality = v; markCustomPreset(); });
   seg("[data-ml-provs]", (v) => { genState.provider = v; });
-  seg("[data-ml-aspect]", (v) => { genState.aspect = v; });
-  if (body.querySelector("[data-ml-count]")) seg("[data-ml-count]", (v) => { genState.count = +v; });
-  if (body.querySelector("[data-ml-dur]")) seg("[data-ml-dur]", (v) => { genState.duration = +v; });
-  seg("[data-ml-style]", (v) => { genState.style = v; });
+  seg("[data-ml-aspect]", (v) => { genState.aspect = v; markCustomPreset(); });
+  if (body.querySelector("[data-ml-count]")) seg("[data-ml-count]", (v) => { genState.count = +v; markCustomPreset(); });
+  if (body.querySelector("[data-ml-dur]")) seg("[data-ml-dur]", (v) => { genState.duration = +v; markCustomPreset(); });
+  seg("[data-ml-style]", (v) => { genState.style = v; markCustomPreset(); });
   const modelSel = body.querySelector("[data-ml-model]");
   if (modelSel) modelSel.onchange = () => { genState.model = modelSel.value; };
   const pr = body.querySelector("[data-ml-prompt]"); if (pr) pr.oninput = () => { genState.prompt = pr.value; };
   const neg = body.querySelector("[data-ml-neg]"); if (neg) neg.oninput = () => { genState.negative = neg.value; };
   const tgl = body.querySelector("[data-ml-toggleneg]"); if (tgl) tgl.onclick = () => { genState.showNeg = !genState.showNeg; renderGenerate(body, cfg, opts, root); };
   const os = body.querySelector("[data-ml-open-settings]"); if (os) os.onclick = () => opts.openSettings && opts.openSettings();
+  body.querySelectorAll("[data-ml-hint]").forEach((b) => b.onclick = () => { genState.prompt = b.dataset.mlHint; renderGenerate(body, cfg, opts, root); });
 
   const enh = body.querySelector("[data-ml-enhance]");
   if (enh) enh.onclick = async () => {
@@ -373,20 +599,38 @@ async function runGenerate(body, cfg, opts, root, esc) {
   if (!genState.prompt.trim()) { const t = body.querySelector("[data-ml-prompt]"); if (t) { t.focus(); t.classList.add("shake"); setTimeout(() => t.classList.remove("shake"), 500); } return; }
   genState.busy = true;
   renderGenerate(body, cfg, opts, root);
-  const req = {
-    modality: genState.modality, provider: genState.provider, model: genState.model,
-    prompt: genState.prompt, negative: genState.negative, style: genState.style,
-    ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
-  };
-  const out = await generate(cfg, req);
-  const stamp = Date.now();
-  out.assets.forEach((a, i) => session.assets.unshift({ id: `gen-${stamp}-${i}`, ...a, fromGen: true, at: stamp }));
-  session.assets = session.assets.slice(0, 60);
-  if (opts.notify) opts.notify("Media Factory", `generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}${out.live ? "" : " (preview)"} — "${genState.prompt.slice(0, 40)}".`);
-  // spend credits (client-side demo accounting)
-  cfg.credits = Math.max(0, cfg.credits - estCredits()); saveCfg(cfg);
-  genState.busy = false;
-  renderGenerate(body, cfg, opts, root);
+  try {
+    const req = {
+      modality: genState.modality, provider: genState.provider, model: genState.model,
+      prompt: genState.prompt, negative: genState.negative, style: genState.style,
+      preset: activePreset()?.label || "Custom",
+      ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
+    };
+    const out = await generate(cfg, req);
+    const stamp = Date.now();
+    const created = out.assets.map((a, i) => ({ id: `gen-${stamp}-${i}`, ...a, fromGen: true, at: stamp }));
+    created.forEach((asset) => {
+      session.assets.unshift(asset);
+      captureForContentHub(asset, {
+        title: `${genState.modality === "video" ? "Generated video" : "Generated image"} · ${genState.style}`,
+        prompt: genState.prompt,
+        provider: genState.provider,
+        model: genState.model,
+        style: genState.style,
+        aspect: genState.aspect,
+        duration: genState.duration,
+        preset: activePreset()?.label || "Custom",
+        live: out.live,
+      });
+    });
+    session.assets = session.assets.slice(0, 60);
+    refreshGeneratePanel(body, cfg, opts, root);
+    if (opts.notify) opts.notify("Media Factory", `generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}${out.live ? "" : " (preview)"} - "${genState.prompt.slice(0, 40)}".`);
+    // spend credits (client-side demo accounting)
+    cfg.credits = Math.max(0, cfg.credits - estCredits()); saveCfg(cfg);
+  } finally {
+    if (genState.busy) refreshGeneratePanel(body, cfg, opts, root);
+  }
 }
 
 function tileAction(act, id, cfg, opts, root, esc, body) {
@@ -395,8 +639,14 @@ function tileAction(act, id, cfg, opts, root, esc, body) {
   if (act === "download") return downloadAsset(a);
   if (act === "regen") { runGenerate(body, cfg, opts, root, esc); return; }
   if (act === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); return; }
-  if (act === "save") { a.saved = true; if (opts.notify) opts.notify("Media Factory", "saved a generation to the library."); renderMediaStudio(root, opts); return; }
+  if (act === "save") { a.saved = true; captureForContentHub(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to the library."); renderMediaStudio(root, opts); return; }
   if (act === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); return; }
+  if (act === "remove") {
+    session.assets = session.assets.filter((x) => x.id !== id);
+    if (session.edit?.id === id) session.edit = null;
+    if (opts.notify) opts.notify("Media Factory", "removed a local media asset.");
+    renderMediaStudio(root, opts);
+  }
 }
 
 /* ---- Library ---- */
@@ -411,6 +661,12 @@ function renderLibrary(body, opts, root) {
     if (b.dataset.tileAct === "download") downloadAsset(a);
     else if (b.dataset.tileAct === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); }
     else if (b.dataset.tileAct === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); }
+    else if (b.dataset.tileAct === "remove") {
+      session.assets = session.assets.filter((x) => x.id !== b.dataset.id);
+      if (session.edit?.id === b.dataset.id) session.edit = null;
+      if (opts.notify) opts.notify("Media Factory", "removed a local media asset.");
+      renderMediaStudio(root, opts);
+    }
   });
 }
 
@@ -487,7 +743,15 @@ function renderEdit(body, cfg, opts, root) {
   };
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; renderMediaStudio(root, opts); };
-  body.querySelector("[data-ml-savedit]").onclick = () => { const url = canvas.toDataURL("image/webp", 0.9); session.assets.unshift({ id: `edit-${Date.now()}`, type: "image", url, saved: true, at: Date.now(), meta: { edited: true } }); if (opts.notify) opts.notify("Media Factory", "saved an edited image to the library."); session.tab = "library"; renderMediaStudio(root, opts); };
+  body.querySelector("[data-ml-savedit]").onclick = () => {
+    const at = Date.now();
+    const asset = { id: `edit-${at}`, type: "image", url: canvas.toDataURL("image/webp", 0.9), saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
+    session.assets.unshift(asset);
+    captureForContentHub(asset, { title: "Edited image", prompt: editState.text || "Edited image" });
+    if (opts.notify) opts.notify("Media Factory", "saved an edited image to the library.");
+    session.tab = "library";
+    renderMediaStudio(root, opts);
+  };
   body.querySelector("[data-ml-dledit]").onclick = () => downloadAsset({ url: canvas.toDataURL("image/webp", 0.92), type: "image", id: "edit" });
 }
 function slider(label, key, min, max, val) {
@@ -598,6 +862,7 @@ export function renderMediaSettings(el, opts = {}) {
 
 function providerCard(p, esc) {
   return `<div class="set-prov ${p.enabled ? "is-on" : ""}" data-prov-card="${p.id}">
+    ${p.custom ? `<button class="set-card-x" data-prov-del aria-label="Remove custom provider">×</button>` : ""}
     <div class="set-prov-top">
       <span class="set-prov-dot" style="background:${p.brand}"></span>
       <div class="set-prov-id"><b>${esc(p.name)}${p.custom ? ` <em class="set-tag">custom</em>` : ""}</b><i>${esc(p.tagline || "")}</i></div>
