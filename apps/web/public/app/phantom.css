@@ -652,107 +652,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .apify-lane span { font: 700 22px "DM Mono", monospace; color: var(--neon); }
 .apify-lane h4 { position: relative; margin: 10px 0 5px; font-size: 16px; }
 .apify-lane p { position: relative; margin: 0; color: var(--dim); font-size: 13px; line-height: 1.35; }
-.apify-pack-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
-}
-.apify-pack {
-  position: relative;
-  display: grid;
-  gap: 10px;
-  min-width: 0;
-  padding: 15px;
-  overflow: hidden;
-  border: 1px solid rgba(65,255,161,0.16);
-  border-radius: 18px;
-  background:
-    radial-gradient(circle at 88% 0%, rgba(30,240,255,0.08), transparent 34%),
-    linear-gradient(160deg, rgba(5, 22, 18, 0.86), rgba(2, 8, 10, 0.78));
-  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.025);
-}
-.apify-pack::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(120deg, transparent, rgba(65,255,161,0.07), transparent);
-  transform: translateX(-120%);
-  opacity: 0;
-  pointer-events: none;
-}
-.apify-pack:hover::before,
-.apify-pack.is-selected::before { animation: toolSweep 5.5s ease-in-out infinite; opacity: 1; }
-.apify-pack.is-selected {
-  border-color: rgba(65,255,161,0.48);
-  box-shadow: 0 0 34px rgba(65,255,161,0.1), inset 0 0 0 1px rgba(65,255,161,0.14);
-}
-.apify-pack > * { position: relative; }
-.apify-pack-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-.apify-pack-lane {
-  font: 700 9px "DM Mono", monospace;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--neon);
-}
-.apify-pack h4 { margin: 0; font-size: 17px; }
-.apify-pack p { margin: 0; color: var(--dim); line-height: 1.45; }
-.apify-pack-meta {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-.apify-pack-meta span {
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  padding: 8px;
-  border: 1px solid rgba(255,255,255,0.06);
-  border-radius: 10px;
-  color: var(--dim);
-  font-size: 11.5px;
-}
-.apify-pack-meta b {
-  color: #dfffee;
-  font: 700 9px "DM Mono", monospace;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-.apify-pack-flow {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-.apify-pack-flow i {
-  font-style: normal;
-  padding: 5px 8px;
-  border: 1px solid rgba(65,255,161,0.14);
-  border-radius: 999px;
-  color: #caffdf;
-  background: rgba(65,255,161,0.045);
-  font: 700 10px "DM Mono", monospace;
-}
-.apify-pack-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: grid;
-  gap: 5px;
-  color: #b8d1c3;
-  font-size: 12.5px;
-}
-.apify-pack-list li::before { content: "+ "; color: var(--neon); }
-.apify-surface-grid {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
-  margin-bottom: 18px;
-}
 .apify-category-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -778,7 +677,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   background: rgba(5, 20, 17, 0.6);
 }
 .apify-actor.is-selected { border-color: rgba(65,255,161,0.5); box-shadow: 0 0 24px rgba(65,255,161,0.08); }
-.apify-actor.is-pack-linked { border-color: rgba(30,240,255,0.28); background: rgba(5, 24, 22, 0.7); }
 .apify-actor h5 { margin: 0; font-size: 15px; }
 .apify-actor p { margin: 0; color: var(--dim); line-height: 1.45; }
 .apify-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
@@ -928,15 +826,10 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .tool-spine-compact { grid-template-columns: 1fr; }
   .apify-hero,
   .apify-lanes,
-  .apify-pack-grid,
-  .apify-surface-grid,
   .apify-category-grid,
   .apify-stack,
-  .apify-pack-meta,
   .apify-fields { grid-template-columns: 1fr; }
   .apify-hero { padding: 14px; border-radius: 18px; }
-  .apify-pack { padding: 13px; border-radius: 15px; }
-  .apify-pack-flow { gap: 5px; }
   .apify-category { padding: 12px; }
   .widget {
     flex: 0 0 min(76vw, 278px);
@@ -959,7 +852,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .gate-options { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .speakline-hero::before, .ticker-tag, .speak-caret, .say-line, .rcard, .overlay-panel, .widget-alert::before, .tool-card::before, .apify-lane::after, .apify-pack::before, .flow-halo, .flow-live i, .flow-node, .flow-spark, .flow-edge-watch, .flow-stage::before, .flow-stage::after { animation: none !important; }
+  .speakline-hero::before, .ticker-tag, .speak-caret, .say-line, .rcard, .overlay-panel, .widget-alert::before, .tool-card::before, .flow-halo, .flow-live i, .flow-node, .flow-spark, .flow-edge-watch, .flow-stage::before, .flow-stage::after { animation: none !important; }
   .flow-edge-pulse { animation: none !important; stroke-dasharray: none; opacity: 0.3; }
   .ghost-canvas { display: none; }
   .phantom, .widget, .btn, .overlay-x { transition: none; }

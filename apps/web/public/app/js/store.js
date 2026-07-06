@@ -3,7 +3,7 @@
    no payments, no provider calls happen from here — records move through
    draft → approval → *-ready states and stop there until a connector exists. */
 
-import { APIFY_DEFAULT_STATE, APIFY_TOOL_SPINE } from "./apify-tools.js?v=phantom-live-20260705-17";
+import { APIFY_DEFAULT_STATE, APIFY_TOOL_SPINE } from "./apify-tools.js?v=phantom-live-20260705-16";
 
 const DB_KEY = "pf.phantom.v4";
 const SESSION_KEY = "pf.session.v3";
@@ -218,7 +218,6 @@ function normalizeData(data) {
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...tool, ...(d.toolSpine || []).find((x) => x.id === tool.id) }));
   d.apify = { ...APIFY_DEFAULT_STATE, ...(d.apify && typeof d.apify === "object" ? d.apify : {}) };
   d.apify.selectedActorIds = Array.isArray(d.apify.selectedActorIds) ? d.apify.selectedActorIds : [];
-  d.apify.selectedRecipeIds = Array.isArray(d.apify.selectedRecipeIds) ? d.apify.selectedRecipeIds : [];
   d.activity = Array.isArray(d.activity) ? d.activity : [];
   d.activity = d.activity.slice(0, 80);
   d.version = 4;
@@ -459,6 +458,5 @@ export const STATUS_LABEL = {
   "active": "Active", "standby": "Standby", "sandbox": "Sandbox", "gated": "Gated",
   "setup-ready": "Setup ready", "available": "Available", "planning": "Planning", "owner-controlled": "Owner-controlled",
   "cataloged": "Cataloged", "server-only": "Server-only", "approval-gated": "Approval-gated",
-  "not-scheduled": "Not scheduled",
 };
 export const statusLabel = (s) => STATUS_LABEL[s] || s;
