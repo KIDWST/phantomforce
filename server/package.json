@@ -17,6 +17,7 @@
     "test:chicagoshots-crm": "tsx scripts/test-chicagoshots-nexprospex-crm.ts",
     "test:send-readiness-status": "tsx scripts/test-send-readiness-status.ts",
     "test:agent-workforce": "tsx scripts/test-agent-workforce-status.ts",
+    "test:internal-harness": "tsx scripts/test-internal-harness-router.ts",
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
     "test:auth:production-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-production-fail-closed.ps1",
     "test:auth:owner-production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-owner-production.ps1",

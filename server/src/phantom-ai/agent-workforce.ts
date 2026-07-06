@@ -1,5 +1,6 @@
 import type { HermesLedgerRecord, ProviderRoute } from "./types.js";
 import { getHermesLedgerStatus, readHermesLedgerRecords } from "./hermes-ledger.js";
+import { inspectInternalHarnessReadiness } from "./internal-harness-router.js";
 import { buildToolLanePreview, loadToolRegistry } from "./tool-lane.js";
 
 const DEFAULT_WINDOW_HOURS = 24;
@@ -396,11 +397,12 @@ export async function buildAgentWorkforceStatus(options: {
   windowHours?: number;
 }) {
   const windowHours = options.windowHours ?? DEFAULT_WINDOW_HOURS;
-  const [ledgerStatus, allRecords, registry, n8nPreview] = await Promise.all([
+  const [ledgerStatus, allRecords, registry, n8nPreview, internalHarness] = await Promise.all([
     getHermesLedgerStatus(),
     readHermesLedgerRecords({ limit: 1000 }),
     loadToolRegistry(),
     buildToolLanePreview({ toolId: "n8n" }),
+    inspectInternalHarnessReadiness(),
   ]);
   const recent = recordsSince(allRecords, windowHours);
   const workers = workerDefinitions.map((definition) => buildWorkerMetrics(definition, allRecords));
@@ -449,6 +451,8 @@ export async function buildAgentWorkforceStatus(options: {
     n8n_running: n8nPreview.n8n_status.n8n_running,
     tool_registry_loaded: registry.loaded,
     tool_count: registry.tool_count,
+    operator_harness_ready: internalHarness.ready_for_internal_use,
+    operator_harness_hidden: internalHarness.hidden_infrastructure,
   };
   const clientSummary = buildClientSummary(workers);
   const ticker = buildTicker(allRecords, workers);
@@ -494,6 +498,8 @@ export async function buildAgentWorkforceStatus(options: {
       approval_executed: false,
       queue_written: false,
       production_ledger_written: false,
+      internal_harness_customer_visible: false,
+      internal_harness_execution_enabled: false,
     },
   };
 }

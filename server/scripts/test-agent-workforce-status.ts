@@ -124,6 +124,7 @@ try {
   });
   assert(adminStatus.statusCode === 200, "Admin agent status should return 200.");
   const adminBody = parseJson<AdminAgentStatusResponse>(adminStatus.payload);
+  const adminPayload = JSON.stringify(adminBody);
   assert(adminBody.ok === true, "Admin response should be ok.");
   assert(adminBody.read_only === true, "Agent status must be read-only.");
   assert(adminBody.workforce.role === "admin", "Admin response should expose admin role.");
@@ -145,6 +146,9 @@ try {
     adminBody.workforce.programs.every((program) => program.commercial_visible === false),
     "Internal program names must remain admin-only.",
   );
+  assert(!adminPayload.includes("PHANTOM_PI"), "Admin workforce payload must not expose hidden harness env keys.");
+  assert(!adminPayload.includes("minimal_agent_harness"), "Admin workforce payload must not expose hidden harness ids.");
+  assert(!adminPayload.includes('"Pi"'), "Admin workforce payload must not expose raw hidden harness brand.");
   assert(adminBody.workforce.ticker.length >= 3, "Admin should receive an activity ticker.");
   assert(
     adminBody.workforce.ticker.some((item) => item.text.includes("tokens")),
