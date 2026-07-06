@@ -6377,9 +6377,9 @@ function PhantomDeck({
   );
   const mobileBottomNav = ([
     { label: "Home", workspace: null, route: null, icon: <Sparkles size={18} /> },
-    { label: "Content", workspace: null, route: "content", icon: <FileText size={18} /> },
     { label: "Video", workspace: "video", route: null, icon: <Play size={18} /> },
-    { label: "Analytics", workspace: null, route: "activity", icon: <BarChart3 size={18} /> },
+    { label: "Website", workspace: "site", route: null, icon: <Link2 size={18} /> },
+    { label: "Admin", workspace: mobileAdminWorkspace, route: null, icon: <Settings size={18} /> },
     { label: "Review", workspace: "review", route: null, icon: <ShieldCheck size={18} /> },
   ] satisfies Array<{
     label: string;
