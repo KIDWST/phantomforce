@@ -15,6 +15,7 @@ import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-36";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-36";
 import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-36";
 import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-36";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-36";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1173,6 +1174,13 @@ function renderConsole() {
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
   mountPhantomWire($("[data-phantomwire]") || $("[data-agent-ticker]"));
   mountAgentConsole($("[data-agentops]"));
+  mountDesktopContextWidget($("[data-desktop-context]"), {
+    notify: (who, text) => {
+      pushActivity(who, text);
+      store.save();
+      renderActivity();
+    },
+  });
   mountCompanion($("[data-chatbox] .chatbox-head"), { onMode: applyCompanionMode });
   renderChatLog();
 }
