@@ -2121,35 +2121,50 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-seg button .ic { width: 15px; height: 15px; }
 .ml-seg button.is-on { background: linear-gradient(120deg, var(--neon), #15d97f); color: #04160d; }
 .ml-field-presets { gap: 9px; }
+.ml-preset-heading { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.ml-field > .ml-preset-heading { color: var(--dim); }
+.ml-preset-heading b { color: #aee9c7; font: 700 9.5px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; }
+.ml-preset-heading i { flex: 0 0 auto; font: 600 9px "DM Mono", monospace; font-style: normal; letter-spacing: 0.08em; color: rgba(186,255,221,0.58); text-transform: uppercase; }
 .ml-presets {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  max-height: 220px;
+  gap: 9px;
+  max-height: 286px;
   overflow-y: auto;
-  padding-right: 2px;
+  padding: 1px 4px 2px 1px;
   scrollbar-width: thin;
   scrollbar-color: rgba(65,255,161,0.35) rgba(0,0,0,0.15);
 }
 .ml-preset {
-  min-height: 76px;
+  position: relative;
+  min-height: 112px;
   display: grid;
   align-content: start;
-  gap: 3px;
-  padding: 10px;
+  gap: 7px;
+  padding: 11px;
   border: 1px solid var(--line);
-  border-radius: 12px;
-  background: linear-gradient(150deg, rgba(65,255,161,0.045), rgba(0,0,0,0.22));
+  border-radius: 14px;
+  overflow: hidden;
+  background:
+    radial-gradient(90% 80% at 10% 0%, rgba(65,255,161,0.11), transparent 56%),
+    linear-gradient(160deg, rgba(7,24,16,0.82), rgba(0,0,0,0.28));
   color: var(--ink);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.16s, background 0.16s, transform 0.16s;
+  transition: border-color 0.16s, background 0.16s, box-shadow 0.16s;
 }
-.ml-preset:hover { border-color: var(--line-strong); background: rgba(65,255,161,0.07); transform: translateY(-1px); }
-.ml-preset.is-on { border-color: var(--neon); box-shadow: 0 0 0 1px rgba(65,255,161,0.35) inset, 0 10px 24px rgba(65,255,161,0.08); }
-.ml-preset b { font-size: 12px; line-height: 1.1; }
-.ml-preset span { font: 600 10px "DM Mono", monospace; color: var(--neon); line-height: 1.25; }
-.ml-preset i { font-style: normal; font-size: 10.5px; color: var(--dim); line-height: 1.25; }
+.ml-preset::before { content: ""; position: absolute; inset: 0 0 auto; height: 2px; background: linear-gradient(90deg, transparent, rgba(65,255,161,0.72), transparent); opacity: 0.35; }
+.ml-preset.is-video::before { background: linear-gradient(90deg, transparent, rgba(48,238,255,0.78), transparent); }
+.ml-preset:hover { border-color: var(--line-strong); background: linear-gradient(160deg, rgba(14,42,28,0.88), rgba(0,0,0,0.28)); box-shadow: inset 0 0 0 1px rgba(65,255,161,0.12); }
+.ml-preset.is-on { border-color: var(--neon); box-shadow: 0 0 0 1px rgba(65,255,161,0.36) inset, 0 12px 28px rgba(65,255,161,0.1); }
+.ml-preset.is-video.is-on { border-color: rgba(48,238,255,0.9); box-shadow: 0 0 0 1px rgba(48,238,255,0.26) inset, 0 12px 28px rgba(48,238,255,0.09); }
+.ml-preset b { font-size: 13px; line-height: 1.12; letter-spacing: -0.01em; }
+.ml-preset-kicker { display: inline-flex; align-items: center; gap: 5px; width: fit-content; max-width: 100%; color: #9fe7c2; font: 700 8.5px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-preset-kicker .ic { width: 12px; height: 12px; flex: 0 0 auto; color: var(--neon); }
+.ml-preset-meta { display: flex; flex-wrap: wrap; gap: 5px; }
+.ml-preset-meta i { display: inline-flex; align-items: center; min-height: 19px; padding: 2px 6px; border: 1px solid rgba(65,255,161,0.2); border-radius: 999px; background: rgba(65,255,161,0.06); color: #d9ffe9; font: 700 9px "DM Mono", monospace; font-style: normal; line-height: 1; }
+.ml-preset.is-video .ml-preset-meta i { border-color: rgba(48,238,255,0.19); background: rgba(48,238,255,0.055); }
+.ml-preset em { font-style: normal; font-size: 10.5px; color: var(--dim); line-height: 1.32; }
 .ml-provs { display: flex; flex-wrap: wrap; gap: 8px; }
 .ml-prov { display: inline-flex; align-items: center; gap: 8px; padding: 9px 12px; border: 1px solid var(--line); border-radius: 11px; background: var(--glass); color: var(--ink); cursor: pointer; font-size: 13px; font-weight: 500; transition: border-color 0.18s, background 0.18s; }
 .ml-prov i { width: 9px; height: 9px; border-radius: 50%; }

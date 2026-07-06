@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-13";
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-15";
 
 const CFG_KEY = "pf.medialab.v1";
 const TAU = Math.PI * 2;
@@ -61,44 +61,52 @@ const VID_ASPECTS = [["16:9", 1.777], ["9:16", 0.5625], ["4:5", 0.8], ["1:1", 1]
 const DURATIONS = [4, 6, 8, 10, 15, 30];
 const MEDIA_PRESETS = [
   {
-    id: "reels-tiktok", label: "Reels / TikTok", use: "Social vertical", modality: "video", aspect: "9:16", duration: 8, style: "Cinematic",
-    prompt: "Fast vertical social clip with a strong first-second hook, premium motion, bold subject, quick cuts, and a clear end card",
+    id: "portrait-ad", label: "Portrait Ad", use: "Paid social", modality: "image", aspect: "4:5", count: 2, style: "Product",
+    note: "Clean offer image", prompt: "Premium 4:5 paid social image with one clear offer, strong product or service focal point, polished lighting, and room for a short headline",
+  },
+  {
+    id: "square-brand-post", label: "Square Brand Post", use: "Instagram / LinkedIn", modality: "image", aspect: "1:1", count: 2, style: "Editorial",
+    note: "Polished feed creative", prompt: "Clean square brand post image with one strong subject, balanced negative space, premium lighting, and no tiny text",
+  },
+  {
+    id: "story-poster", label: "Story Poster", use: "Stories / Shorts cover", modality: "image", aspect: "9:16", count: 2, style: "Neon",
+    note: "Vertical hero still", prompt: "Vertical story poster with cinematic depth, bold central subject, premium neon accents, and safe space for large mobile text",
+  },
+  {
+    id: "youtube-thumbnail", label: "YouTube Thumbnail", use: "Video cover", modality: "image", aspect: "16:9", count: 2, style: "Neon",
+    note: "High contrast cover", prompt: "Bold wide YouTube thumbnail composition with a clear focal subject, high contrast lighting, expressive emotion, and room for a short headline",
+  },
+  {
+    id: "website-hero", label: "Website Hero", use: "Landing page", modality: "image", aspect: "16:9", count: 2, style: "3D render",
+    note: "Premium site header", prompt: "Premium website hero image with cinematic depth, clean product space, dark polished background, and room for interface copy",
+  },
+  {
+    id: "carousel-slide", label: "Carousel Slide", use: "Education / proof", modality: "image", aspect: "4:5", count: 3, style: "Editorial",
+    note: "Swipeable visual set", prompt: "Premium carousel slide visual with editorial composition, clean information hierarchy, consistent visual system, and strong first-card impact",
+  },
+  {
+    id: "reels-tiktok", label: "Reels / TikTok", use: "Short social", modality: "video", aspect: "9:16", duration: 8, style: "Cinematic",
+    note: "Hook-first vertical", prompt: "Fast vertical social clip with a strong first-second hook, premium motion, bold subject, quick cuts, and a clear end card",
   },
   {
     id: "story-ad", label: "Story Ad", use: "Paid social", modality: "video", aspect: "9:16", duration: 6, style: "Product",
-    prompt: "Vertical story ad with a simple product reveal, clear benefit moment, clean background, and room for headline text",
+    note: "Mobile ad creative", prompt: "Vertical story ad with a simple product reveal, clear benefit moment, clean background, and room for headline text",
   },
   {
-    id: "feed-video", label: "Feed Video", use: "Instagram / LinkedIn", modality: "video", aspect: "4:5", duration: 10, style: "Editorial",
-    prompt: "Polished feed video with a premium business visual, readable center framing, and a smooth call-to-action finish",
+    id: "feed-clip", label: "Feed Clip", use: "Instagram / LinkedIn", modality: "video", aspect: "4:5", duration: 10, style: "Editorial",
+    note: "Professional feed cut", prompt: "Polished feed video with a premium business visual, readable center framing, smooth camera motion, and a confident call-to-action finish",
+  },
+  {
+    id: "launch-teaser", label: "Launch Teaser", use: "Product launch", modality: "video", aspect: "16:9", duration: 15, style: "Neon",
+    note: "Punchy reveal clip", prompt: "Short launch teaser with dramatic lighting, one memorable visual idea, controlled camera movement, and a punchy ending",
   },
   {
     id: "youtube-trailer", label: "YouTube Trailer", use: "Wide trailer", modality: "video", aspect: "16:9", duration: 30, style: "Cinematic",
-    prompt: "Cinematic wide trailer with establishing shot, product reveal, proof moments, and a confident final title card",
+    note: "Full trailer arc", prompt: "Cinematic wide trailer with establishing shot, product reveal, proof moments, and a confident final title card",
   },
   {
-    id: "teaser", label: "15s Teaser", use: "Launch clip", modality: "video", aspect: "16:9", duration: 15, style: "Neon",
-    prompt: "Short launch teaser with dramatic lighting, one memorable visual idea, controlled camera movement, and punchy ending",
-  },
-  {
-    id: "square-post", label: "Square Post", use: "Social image", modality: "image", aspect: "1:1", count: 2, style: "Editorial",
-    prompt: "Clean square social post image with one strong subject, balanced negative space, premium lighting, and no tiny text",
-  },
-  {
-    id: "feed-portrait", label: "Feed Portrait", use: "IG / Meta image", modality: "image", aspect: "4:5", count: 2, style: "Portrait",
-    prompt: "Vertical feed portrait image with confident subject, soft directional light, premium texture, and scroll-stopping composition",
-  },
-  {
-    id: "youtube-thumb", label: "Thumbnail", use: "YouTube cover", modality: "image", aspect: "16:9", count: 2, style: "Neon",
-    prompt: "Bold wide YouTube thumbnail composition with a clear focal subject, high contrast lighting, and space for a short headline",
-  },
-  {
-    id: "web-hero", label: "Website Hero", use: "Site / app header", modality: "image", aspect: "16:9", count: 2, style: "3D render",
-    prompt: "Premium website hero image with cinematic depth, clean product space, dark polished background, and room for UI copy",
-  },
-  {
-    id: "product-shot", label: "Product Shot", use: "Offer image", modality: "image", aspect: "4:5", count: 2, style: "Product",
-    prompt: "High-end product shot with controlled studio lighting, crisp edges, subtle reflection, and premium commercial finish",
+    id: "product-demo", label: "Product Demo", use: "Sales enablement", modality: "video", aspect: "16:9", duration: 15, style: "Product",
+    note: "Feature walkthrough", prompt: "Clean product demo video showing the interface or offer in motion, clear feature beats, realistic pacing, and a polished final frame",
   },
 ];
 
@@ -309,6 +317,16 @@ function activePreset() {
 function presetSpec(p) {
   return `${p.modality === "video" ? "Video" : "Image"} · ${p.aspect}${p.modality === "video" ? ` · ${p.duration}s` : ` · ${p.count || 1} take${(p.count || 1) > 1 ? "s" : ""}`}`;
 }
+function presetDeckLabel() {
+  return genState.modality === "video" ? "Video presets" : "Image presets";
+}
+function presetCardMeta(p) {
+  return [
+    p.aspect,
+    p.modality === "video" ? `${p.duration}s` : `${p.count || 1} take${(p.count || 1) > 1 ? "s" : ""}`,
+    p.style,
+  ].filter(Boolean);
+}
 function applyPreset(p) {
   genState.preset = p.id;
   genState.modality = p.modality;
@@ -331,22 +349,24 @@ function renderGenerate(body, cfg, opts, root) {
   if (!models.includes(genState.model)) genState.model = models[0] || "";
   const aspects = genState.modality === "video" ? VID_ASPECTS : IMG_ASPECTS;
   if (!aspects.find(([k]) => k === genState.aspect)) genState.aspect = aspects[0][0];
+  const visiblePresets = MEDIA_PRESETS.filter((preset) => preset.modality === genState.modality);
 
   body.innerHTML = `
     <div class="ml-studio">
       <aside class="ml-panel ml-builder" aria-label="Shot Builder">
-        <div class="ml-card-head"><b>Shot Builder</b><i>Brief the engine, then roll</i></div>
+        <div class="ml-card-head"><b>Shot Builder</b><i>Pick a format, then roll</i></div>
         <div class="ml-seg" data-ml-modality>
           <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
           <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
         </div>
 
-        <label class="ml-field ml-field-presets"><span>Presets</span>
+        <label class="ml-field ml-field-presets"><span class="ml-preset-heading"><b>${presetDeckLabel()}</b><i>${visiblePresets.length} pro formats</i></span>
           <div class="ml-presets" data-ml-presets>
-            ${MEDIA_PRESETS.map((p) => `<button class="ml-preset ${genState.preset === p.id ? "is-on" : ""}" data-v="${p.id}" title="${esc(p.prompt)}">
+            ${visiblePresets.map((p) => `<button class="ml-preset is-${p.modality} ${genState.preset === p.id ? "is-on" : ""}" data-v="${p.id}" title="${esc(p.prompt)}">
+              <span class="ml-preset-kicker">${svgIc(p.modality === "video" ? "film" : "image")} ${esc(p.use)}</span>
               <b>${esc(p.label)}</b>
-              <span>${esc(presetSpec(p))}</span>
-              <i>${esc(p.use)}</i>
+              <span class="ml-preset-meta">${presetCardMeta(p).map((m) => `<i>${esc(m)}</i>`).join("")}</span>
+              <em>${esc(p.note || presetSpec(p))}</em>
             </button>`).join("")}
           </div>
         </label>
