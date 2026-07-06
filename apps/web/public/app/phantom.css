@@ -1189,7 +1189,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   padding: 1px 6px; border-radius: 999px; background: var(--warn); color: #1a1400;
 }
 .nav-item.is-active .nav-badge { background: rgba(4, 22, 13, 0.35); color: #04160d; }
-.side-plan { border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--glass); }
+.side-plan { margin-top: auto; border: 1px solid var(--line); border-radius: 16px; padding: 14px; background: var(--glass); }
 .side-account-card { display: flex; flex-direction: column; gap: 12px; }
 .side-profile-row { display: flex; align-items: center; gap: 11px; min-width: 0; }
 .side-profile-avatar {
@@ -1688,7 +1688,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   }
   .sidebar.is-expanded {
     width: min(296px, calc(100vw - 24px));
-    height: auto;
+    height: calc(100dvh - env(safe-area-inset-top, 0px) - 24px);
     max-height: calc(100dvh - env(safe-area-inset-top, 0px) - 24px);
     padding: 12px;
     gap: 12px;
@@ -1746,6 +1746,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     flex-direction: column;
     gap: 6px;
     overflow: visible;
+    flex: 0 1 auto;
   }
   .sidebar.is-expanded .nav-item {
     flex: 0 0 auto;
@@ -1763,6 +1764,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   }
   .sidebar.is-expanded .side-plan {
     display: flex;
+    margin-top: auto;
   }
   .topbar2 {
     position: sticky;
