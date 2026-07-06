@@ -34,7 +34,19 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { ChangeEvent, CSSProperties, FormEvent, MouseEvent, ReactNode, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ChangeEvent,
+  CSSProperties,
+  FormEvent,
+  MouseEvent,
+  ReactNode,
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import {
   phantomWidgetRegistry,
@@ -172,6 +184,8 @@ type SimulationItem = {
   detail: string;
   status?: string;
 };
+
+const PhantomDismissalScopeContext = createContext("anonymous::default");
 
 type ClientAccess = {
   id: string;
@@ -1166,6 +1180,49 @@ async function copyPlainText(text: string) {
     document.body.removeChild(textArea);
     return copied;
   }
+}
+
+function safeLocalStorageGet(key: string) {
+  try {
+    return window.localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeLocalStorageSet(key: string, value: string) {
+  try {
+    window.localStorage.setItem(key, value);
+  } catch {
+    // Private browsing or strict browser settings can block storage. The app
+    // should still run; it just cannot remember dismissed local cards.
+  }
+}
+
+function readStoredIdSet(key: string) {
+  try {
+    const parsed = JSON.parse(safeLocalStorageGet(key) || "[]");
+    if (!Array.isArray(parsed)) return new Set<string>();
+    return new Set(parsed.filter((item): item is string => typeof item === "string"));
+  } catch {
+    return new Set<string>();
+  }
+}
+
+function writeStoredIdSet(key: string, ids: Set<string>) {
+  safeLocalStorageSet(key, JSON.stringify(Array.from(ids).slice(-500)));
+}
+
+function storageSafeSlug(value: string) {
+  return value.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") || "default";
+}
+
+function phantomDismissalStorageKey(scope: string, bucket: string) {
+  return `pf.dismissed.${storageSafeSlug(scope)}.${storageSafeSlug(bucket)}.v1`;
+}
+
+function simulationItemDismissId(sectionTitle: string, item: SimulationItem) {
+  return `${sectionTitle}::${item.title}::${item.status ?? "item"}`;
 }
 
 function requestsExternalAction(text: string) {
@@ -3724,6 +3781,17 @@ function App() {
     () => availableSessions.find((session) => session.id === activeSessionId) ?? availableSessions[0] ?? initialSessions[0],
     [activeSessionId, availableSessions],
   );
+  const dismissalScope = useMemo(
+    () => `${activeSession.id}::${selectedOrg}`,
+    [activeSession.id, selectedOrg],
+  );
+  const taskDismissalStorageKey = useMemo(
+    () => phantomDismissalStorageKey(dismissalScope, "tasks"),
+    [dismissalScope],
+  );
+  const [dismissedTaskIds, setDismissedTaskIds] = useState<Set<string>>(() =>
+    readStoredIdSet(phantomDismissalStorageKey("owner-admin::PhantomForce", "tasks")),
+  );
   const canManageAccess = activeSession.canManageAccess;
   const visibleNavItems = useMemo(() => {
     if (canManageAccess) return navItems;
@@ -3761,6 +3829,14 @@ function App() {
     if (canManageAccess && selectedWorkspaceClient) return [selectedWorkspaceClient];
     return visibleClientAccess;
   }, [canManageAccess, selectedWorkspaceClient, visibleClientAccess]);
+  const visibleTasks = useMemo(
+    () => tasks.filter((task) => !dismissedTaskIds.has(task.id)),
+    [dismissedTaskIds, tasks],
+  );
+
+  useEffect(() => {
+    setDismissedTaskIds(readStoredIdSet(taskDismissalStorageKey));
+  }, [taskDismissalStorageKey]);
 
   useEffect(() => {
     if (!canManageAccess && ADMIN_ONLY_ROUTES.has(route)) {
@@ -4185,11 +4261,11 @@ function App() {
     return {
       urgent: emails.filter((email) => email.status === "needs-reply").length,
       pending: approvals.filter((approval) => approval.status === "pending").length,
-      today: tasks.filter((task) => task.status === "today").length,
+      today: visibleTasks.filter((task) => task.status === "today").length,
       events: events.length,
       revoked: clientAccess.filter((client) => client.accessStatus === "revoked").length,
     };
-  }, [emails, approvals, tasks, events, clientAccess]);
+  }, [emails, approvals, visibleTasks, events, clientAccess]);
 
   function addActivity(title: string, detail: string, level: ActivityLevel = "info") {
     setActivity((current) => [
@@ -4755,10 +4831,16 @@ function App() {
   }
 
   function completeTask(id: string) {
+    setDismissedTaskIds((current) => {
+      const next = new Set(current);
+      next.add(id);
+      writeStoredIdSet(taskDismissalStorageKey, next);
+      return next;
+    });
     setTasks((current) =>
       current.map((task) => (task.id === id ? { ...task, status: "done" } : task)),
     );
-    addActivity("Task completed", "A task was marked complete from the PhantomForce app.", "ok");
+    addActivity("Task cleared", "A work item was removed from this workspace and saved locally.", "ok");
   }
 
   async function updateClientAccess(id: string, nextStatus: ClientAccessStatus) {
@@ -5045,6 +5127,7 @@ function App() {
   }
 
   return (
+    <PhantomDismissalScopeContext.Provider value={dismissalScope}>
     <div className="app-shell">
       <aside className="sidebar">
         <div className="brand-row">
@@ -5147,7 +5230,7 @@ function App() {
             rejectAction={rejectAction}
             emails={emails}
             events={events}
-            tasks={tasks}
+            tasks={visibleTasks}
             activity={activity}
             clientAccess={scopedClientAccess}
             setRoute={setRoute}
@@ -5175,7 +5258,7 @@ function App() {
           />
         ) : null}
         {route === "calendar" ? <CalendarView events={events} /> : null}
-        {route === "tasks" ? <TasksView tasks={tasks} completeTask={completeTask} /> : null}
+        {route === "tasks" ? <TasksView tasks={visibleTasks} completeTask={completeTask} /> : null}
         {route === "content" ? <ContentView /> : null}
         {route === "media" ? (
           <MediaLabView
@@ -5283,6 +5366,7 @@ function App() {
         ) : null}
       </nav>
     </div>
+    </PhantomDismissalScopeContext.Provider>
   );
 }
 
@@ -9036,7 +9120,7 @@ function InboxView({
           </div>
           <ResultModeToggle mode={mode} setMode={setMode} />
         </div>
-        <SimulationList items={visibleItems} />
+        <SimulationList sectionTitle="Leads and clients" items={visibleItems} />
       </section>
 
       <section className="module-panel review-engine-panel">
@@ -9269,7 +9353,7 @@ function ApprovalsView({
             </span>
             <h3>Review needed</h3>
           </div>
-          <SimulationList items={demoApprovals} />
+          <SimulationList sectionTitle="Review needed" items={demoApprovals} />
         </section>
       )}
     </Page>
@@ -9300,7 +9384,7 @@ function ContentView() {
           </div>
           <ResultModeToggle mode={mode} setMode={setMode} />
         </div>
-        <SimulationList items={visibleContent} />
+        <SimulationList sectionTitle="Create recommended" items={visibleContent} />
       </section>
 
       <div className="destination-grid">
@@ -10113,7 +10197,7 @@ function OffersView() {
           </div>
           <ResultModeToggle mode={mode} setMode={setMode} />
         </div>
-        <SimulationList items={visibleOfferItems} />
+        <SimulationList sectionTitle="Offers recommended" items={visibleOfferItems} />
       </section>
 
       <div className="destination-grid">
@@ -14622,33 +14706,71 @@ function SimulationSection({ icon, title, items }: { icon: ReactNode; title: str
         <span>{icon}</span>
         <h3>{title}</h3>
       </div>
-      <SimulationList items={items} />
+      <SimulationList sectionTitle={title} items={items} />
     </section>
   );
 }
 
-function SimulationList({ items }: { items: SimulationItem[] }) {
-  if (!items.length) {
+function SimulationList({ items, sectionTitle = "results" }: { items: SimulationItem[]; sectionTitle?: string }) {
+  const dismissalScope = useContext(PhantomDismissalScopeContext);
+  const storageKey = useMemo(
+    () => phantomDismissalStorageKey(dismissalScope, `cards-${sectionTitle}`),
+    [dismissalScope, sectionTitle],
+  );
+  const [dismissedIds, setDismissedIds] = useState<Set<string>>(() => readStoredIdSet(storageKey));
+
+  useEffect(() => {
+    setDismissedIds(readStoredIdSet(storageKey));
+  }, [storageKey]);
+
+  const visibleItems = useMemo(
+    () => items.filter((item) => !dismissedIds.has(simulationItemDismissId(sectionTitle, item))),
+    [dismissedIds, items, sectionTitle],
+  );
+
+  function dismissItem(id: string) {
+    setDismissedIds((current) => {
+      const next = new Set(current);
+      next.add(id);
+      writeStoredIdSet(storageKey, next);
+      return next;
+    });
+  }
+
+  if (!visibleItems.length) {
     return (
       <EmptyState
         icon={<Sparkles size={20} />}
-        title="No matching results"
-        detail="Switch to All results to see the full local result list."
+        title="Nothing showing here"
+        detail={items.length ? "You cleared these local cards. They will stay hidden on this device." : "Switch to All results to see the full local result list."}
       />
     );
   }
 
   return (
     <div className="simulation-list">
-      {items.map((item) => (
-        <article key={`${item.title}-${item.status ?? "item"}`}>
-          <div>
-            <strong>{item.title}</strong>
-            <p>{item.detail}</p>
-          </div>
-          {item.status ? <span className="simulation-status">{item.status}</span> : null}
-        </article>
-      ))}
+      {visibleItems.map((item) => {
+        const dismissId = simulationItemDismissId(sectionTitle, item);
+
+        return (
+          <article key={dismissId}>
+            <div>
+              <strong>{item.title}</strong>
+              <p>{item.detail}</p>
+            </div>
+            {item.status ? <span className="simulation-status">{item.status}</span> : null}
+            <button
+              className="simulation-dismiss"
+              type="button"
+              onClick={() => dismissItem(dismissId)}
+              title="Hide this card"
+              aria-label={`Hide ${item.title}`}
+            >
+              <X size={14} />
+            </button>
+          </article>
+        );
+      })}
     </div>
   );
 }
