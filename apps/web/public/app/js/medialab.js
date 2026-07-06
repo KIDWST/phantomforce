@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-31";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-32";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -204,7 +204,7 @@ function socialLoginTarget(account) {
   return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
 }
 function socialStatus(account) {
-  if (account.hermesProof || account.handle || account.url) return "linked";
+  if (account.hermesProof || account.enabled) return "linked";
   if (account.lastConnectAt || account.loginIdentity) return "saved";
   return "empty";
 }
@@ -217,7 +217,7 @@ function socialStatusLabel(account) {
 function socialPostingState(account) {
   const st = socialStatus(account);
   if (st === "linked") return "connected";
-  if (st === "saved") return "finish login";
+  if (st === "saved") return "sign-in opened";
   return "ready";
 }
 function clampHermesText(value = "", limit = 180) {
@@ -282,7 +282,7 @@ function rerenderMediaSettings() {
 function applyHermesProfilePacket(payload = {}) {
   const packet = sanitizeHermesProfilePacket(payload);
   if (!packet.ok) {
-    socialNotice = "Auto-connect did not find a supported public social profile yet. Open the signed-in profile once, then click Auto-connect again.";
+    socialNotice = "Sign-in did not find a supported public social profile yet. Open the platform profile once, then sign in again.";
     saveHermesExtensionState({ detected: true, lastSeenAt: new Date().toISOString(), lastResult: "unsupported" });
     rerenderMediaSettings();
     return;
@@ -340,7 +340,7 @@ function requestHermesExtensionPing() {
 }
 function requestHermesExtensionProfileLink(targetPlatform = "") {
   if (typeof window === "undefined") return;
-  socialNotice = "Auto-connect requested. If the browser bridge is active, it will link the visible signed-in profile using public fields only.";
+  socialNotice = "Sign-in requested. If the browser bridge is active, it will link the visible signed-in profile using public fields only.";
   saveHermesExtensionState({ lastLinkRequestedAt: new Date().toISOString() });
   window.postMessage({
     protocol: HERMES_EXTENSION_PROTOCOL,
@@ -1107,21 +1107,11 @@ export function renderMediaSettings(el, opts = {}) {
         <div class="set-sec-head">
           <div>
             <h3>Social accounts</h3>
-            <p class="set-note">Connect each platform with one official login button or the lightning auto-connect. PhantomForce never reads cookies, tokens, saved passwords, private messages, or browser sessions.</p>
+            <p class="set-note">Connect each platform with one sign-in button. The platform handles login and OAuth; PhantomForce never reads cookies, tokens, saved passwords, private messages, or browser sessions.</p>
           </div>
           <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} linked</span>
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
-        <div class="set-connect-model set-connect-model-simple" aria-label="Social account connection options">
-          <article>
-            <b>${svgIc("bolt")} Auto-connect</b>
-            <span>Uses the browser bridge when available to link the visible signed-in profile with public fields only.</span>
-          </article>
-          <article>
-            <b>${svgIc("lock")} Open Login</b>
-            <span>Opens the real platform login page directly. The platform handles the password, not PhantomForce.</span>
-          </article>
-        </div>
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>
@@ -1146,19 +1136,6 @@ export function renderMediaSettings(el, opts = {}) {
     const account = socialAccounts.find((row) => row.id === id);
     if (!account) return;
     const saveAndRender = () => { saveSocialAccounts(socialAccounts); renderMediaSettings(el, opts); };
-    const handle = card.querySelector("[data-social-handle]");
-    if (handle) handle.onchange = () => {
-      account.handle = handle.value.trim();
-      if (!normalizeSocialUrl(account.url)) account.url = socialProfileFromHandle(account.id, account.handle);
-      account.enabled = Boolean(account.handle || account.url);
-      saveAndRender();
-    };
-    const url = card.querySelector("[data-social-url]");
-    if (url) url.onchange = () => {
-      account.url = normalizeSocialUrl(url.value);
-      account.enabled = Boolean(account.handle || account.url);
-      saveAndRender();
-    };
     const clear = card.querySelector("[data-social-clear]");
     if (clear) clear.onclick = () => {
       account.handle = ""; account.url = ""; account.loginIdentity = ""; account.enabled = false; account.connectMode = "manual"; account.lastConnectAt = "";
@@ -1168,19 +1145,11 @@ export function renderMediaSettings(el, opts = {}) {
     };
     const open = card.querySelector("[data-social-open]");
     if (open) open.onclick = () => {
-      window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
-      account.connectMode = "open-login";
-      account.lastConnectAt = new Date().toISOString();
-      socialNotice = `${account.name} login opened on the official platform page. Finish there; PhantomForce did not read or store the password.`;
-      saveAndRender();
-    };
-    const auto = card.querySelector("[data-social-auto]");
-    if (auto) auto.onclick = () => {
       requestHermesExtensionProfileLink(account.id);
       window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
-      account.connectMode = "auto-connect";
+      account.connectMode = "platform-oauth";
       account.lastConnectAt = new Date().toISOString();
-      socialNotice = `${account.name} auto-connect started. If the browser bridge sees a signed-in profile, it will link public profile fields; otherwise finish login on the official page.`;
+      socialNotice = `${account.name} sign-in opened on the official platform page. OAuth connection happens there; PhantomForce did not read or store the password.`;
       saveAndRender();
     };
   });
@@ -1214,7 +1183,7 @@ function socialCard(account, esc) {
   const status = socialStatus(account);
   const lastConnect = account.lastConnectAt ? `Last sign-in assist ${new Date(account.lastConnectAt).toLocaleDateString()}` : "Password is never stored here";
   const hermesProof = account.hermesProof
-    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Auto-connected profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
+    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Signed-in profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
     : "";
   return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
     <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
@@ -1223,20 +1192,14 @@ function socialCard(account, esc) {
       <span><b>${esc(account.name)}</b><i>${esc(socialStatusLabel(account))}</i></span>
     </div>
     <div class="set-social-connect-state">
-      <span>${esc(account.connectMode === "auto-connect" ? "Auto-connect" : "Official login")}</span>
+      <span>Official sign-in</span>
       <b>${esc(socialPostingState(account))}</b>
     </div>
     ${hermesProof}
     <div class="set-social-actions set-social-primary-actions">
-      <button class="set-social-lightning set-social-action" data-social-auto aria-label="Auto-connect ${esc(account.name)}" title="Auto-connect ${esc(account.name)}" type="button">${svgIc("bolt")} Auto-connect</button>
-      <button class="set-social-open set-social-action" data-social-open type="button">Open Login</button>
+      <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">Sign in with ${esc(account.name)}</button>
       <span>${esc(lastConnect)}</span>
     </div>
-    <details class="set-social-link-details">
-      <summary>Saved profile</summary>
-      <label class="set-mini"><span>Handle</span><input data-social-handle placeholder="@client" value="${esc(account.handle || "")}"/></label>
-      <label class="set-mini"><span>Profile URL</span><input data-social-url placeholder="https://" value="${esc(account.url || "")}"/></label>
-    </details>
   </article>`;
 }
 

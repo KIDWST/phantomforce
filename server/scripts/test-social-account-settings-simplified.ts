@@ -10,7 +10,7 @@ function readProjectFile(relativePath: string) {
   return readFileSync(new URL(`../../${relativePath}`, import.meta.url), "utf8");
 }
 
-const buildId = "phantom-live-20260706-31";
+const buildId = "phantom-live-20260706-32";
 const indexHtml = readProjectFile("apps/web/public/app/index.html");
 const mainJs = readProjectFile("apps/web/public/app/js/main.js");
 const mediaLab = readProjectFile("apps/web/public/app/js/medialab.js");
@@ -21,12 +21,9 @@ assert(mainJs.includes(`./medialab.js?v=${buildId}`), "Main should load the curr
 assert(mediaLab.includes(`./contenthub.js?v=${buildId}`), "Media Lab should load the current Content Hub bundle.");
 
 const requiredTokens = [
-  "Auto-connect",
-  "Open Login",
-  "data-social-auto",
+  "Sign in with",
+  "set-social-signin",
   "data-social-open",
-  "set-social-link-details",
-  "Saved profile",
   "preferredPlatform",
   "socialLoginTarget(account)",
   "window.open(socialLoginTarget(account)",
@@ -42,9 +39,15 @@ const forbiddenTokens = [
   "Official OAuth/API",
   "Login email / username",
   "manual email/handle/profile fields",
+  "Auto-connect",
+  "Open Login",
+  "Saved profile",
+  "data-social-auto",
   "data-social-oauth",
   "data-social-enabled",
   "data-social-login",
+  "data-social-handle",
+  "data-social-url",
   "Connection rules",
   "Detect Hermes",
   "Link latest profile",
@@ -56,16 +59,15 @@ for (const token of forbiddenTokens) {
   assert(!mediaLab.includes(token), `Settings social account flow should not expose ${token}.`);
 }
 
-assert(css.includes(".set-connect-model.set-connect-model-simple"), "CSS should support the simplified two-choice social model.");
 assert(css.includes(".set-social-primary-actions"), "CSS should style the simplified action row.");
-assert(css.includes(".set-social-link-details"), "CSS should style the optional saved profile drawer.");
+assert(css.includes(".set-social-signin"), "CSS should style the single sign-in action.");
 
 console.log(
   JSON.stringify(
     {
       ok: true,
       buildId,
-      socialActions: ["Auto-connect", "Open Login"],
+      socialActions: ["Sign in with platform"],
       removedConfusingControls: true,
       noManualLoginFields: true,
       noOauthPlanUi: true,
