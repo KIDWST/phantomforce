@@ -1062,10 +1062,45 @@ function renderConsole() {
   mountAgentTicker($("[data-agent-ticker]"));
   mountAgentConsole($("[data-agentops]"));
   mountHeroTicker($("[data-hero-ticker]"));
+  renderChatLog();
 }
 
 /* ============================ command run ============================ */
-const sayBox = () => $("[data-say]");
+/* ---- unified chat: persistent history rendered as bubbles ---- */
+const chatHistory = [];            // { who: "user"|"phantom", text, cards? }
+const chatLogEl = () => $("[data-chat-log]");
+function msgHtml(m, i) {
+  const cards = (m.cards || []).map((c, ci) => cardHtml(c, ci, i)).join("");
+  return `<div class="msg msg-${m.who}" data-msg-i="${i}">
+    ${m.who === "phantom" ? `<span class="msg-avatar" aria-hidden="true"></span>` : ""}
+    <div class="msg-body"><p class="msg-text"></p>${cards ? `<div class="msg-cards">${cards}</div>` : ""}</div>
+  </div>`;
+}
+function renderChatLog() {
+  const log = chatLogEl();
+  if (!log) return;
+  log.innerHTML = chatHistory.map(msgHtml).join("");
+  log.querySelectorAll(".msg").forEach((el, i) => { const t = el.querySelector(".msg-text"); if (t) t.textContent = chatHistory[i]?.text || ""; });
+  bindCardRemovers(log, (entryIndex, cardIndex) => {
+    const entry = chatHistory[entryIndex];
+    if (entry?.cards) { entry.cards.splice(cardIndex, 1); renderChatLog(); }
+  });
+  log.scrollTop = log.scrollHeight;
+}
+function chatTypingOn() {
+  const log = chatLogEl();
+  if (!log || log.querySelector(".msg-typing")) return;
+  log.insertAdjacentHTML("beforeend", `<div class="msg msg-phantom msg-typing"><span class="msg-avatar" aria-hidden="true"></span><div class="msg-body"><p class="msg-text msg-dots"><i></i><i></i><i></i></p></div></div>`);
+  log.scrollTop = log.scrollHeight;
+}
+function chatTypingOff() { chatLogEl()?.querySelector(".msg-typing")?.remove(); }
+function chatAttachCards(cards) {
+  if (!cards?.length) return;
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    if (chatHistory[i].who === "phantom") { chatHistory[i].cards = cards; break; }
+  }
+  renderChatLog();
+}
 let typeTimer = 0;
 let ghostMood = "idle";
 let ghostEmotion = "calm";
@@ -1096,31 +1131,43 @@ function speechHoldMs(text = "") {
 }
 function speak(text, cls = "", emotionOverride = null) {
   clearTimeout(typeTimer);
-  const box = sayBox();
-  if (!box) return;
-  box.hidden = false;
-  const p = document.createElement("p");
-  p.className = `say-line ${cls}`.trim();
-  box.replaceChildren(p);
   const emotion = emotionOverride || emotionForText(text);
   if (cls === "thinking") {
     setGhostMood("thinking", { emotion: "bright" });
     renderEmotePose("think", 900);
-  } else if (cls === "user") {
+    chatTypingOn();
+    return;
+  }
+  if (cls === "user") {
     setGhostMood("listening", { emotion: "calm", ms: 1600 });
     renderEmotePose("listen", 1100);
-  } else {
-    setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
-    renderEmotePose(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talk", Math.min(2200, speechHoldMs(text)));
+    chatHistory.push({ who: "user", text });
+    if (chatHistory.length > 40) chatHistory.shift();
+    renderChatLog();
+    return;
   }
-  if (cls || reduceMotion) {
-    p.textContent = text;
-    if (!cls) setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+  setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+  renderEmotePose(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talk", Math.min(2200, speechHoldMs(text)));
+  chatTypingOff();
+  chatHistory.push({ who: "phantom", text: "" });
+  if (chatHistory.length > 40) chatHistory.shift();
+  const entry = chatHistory[chatHistory.length - 1];
+  renderChatLog();
+  const paintLast = () => {
+    const log = chatLogEl();
+    const el = log?.querySelector(`[data-msg-i="${chatHistory.indexOf(entry)}"] .msg-text`);
+    if (el) { el.textContent = entry.text; log.scrollTop = log.scrollHeight; }
+  };
+  if (reduceMotion) {
+    entry.text = text;
+    paintLast();
+    setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
     return;
   }
   let i = 0;
   const tick = () => {
-    p.textContent = text.slice(0, i);
+    entry.text = text.slice(0, i);
+    paintLast();
     if (i++ < text.length) typeTimer = setTimeout(tick, 11 + Math.random() * 16);
     else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
   };
@@ -1152,6 +1199,27 @@ function bindCardRemovers(root, onRemove) {
     };
   });
 }
+
+/* live brain: the same server-side-key proxy the public site uses. The local
+   operator (handleCommand) stays authoritative for ACTIONS — drafts, briefs,
+   workspace routing. The live brain answers pure conversation when reachable;
+   otherwise the operator's reply stands. */
+const ADMIN_AI_ENDPOINT =
+  (location.hostname === "127.0.0.1" || location.hostname === "localhost")
+    ? "http://127.0.0.1:8788/chat"
+    : "https://ai.phantomforce.online/chat";
+async function askPhantomLive(message) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 9000);
+  try {
+    const r = await fetch(ADMIN_AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }), signal: ctrl.signal });
+    const d = await r.json();
+    if (d && d.reply) return String(d.reply).slice(0, 700);
+  } catch { /* unreachable -> operator reply stands */ }
+  finally { clearTimeout(timer); }
+  return null;
+}
+
 function runCommand(raw) {
   phantomHasActed = true;
   const inferredMode = inferModeFromText(raw);
@@ -1165,22 +1233,23 @@ function runCommand(raw) {
   speak(raw, "user");
   ghostFlare("listening");
   stageReact("listen", 620);
-  const respBox = $("[data-response]");
-  if (respBox) respBox.innerHTML = "";
   setTimeout(() => {
     speak("· · ·", "thinking");
     stageReact("think", 780);
     setTimeout(() => {
       const r = handleCommand(text);
-      speak(r.say);
-      rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
-      if (respBox) {
-        respBox.innerHTML = (r.cards || []).map((c, i) => cardHtml(c, i)).join("");
-        bindCardRemovers(respBox);
-      }
-      renderConsole();
-      stageReact("answer", 1100);
-      if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
+      const isAction = Boolean(r.open || (r.cards && r.cards.length));
+      const finish = (reply, cards) => {
+        speak(reply);
+        if (cards?.length) chatAttachCards(cards);
+        rememberConversation({ prompt: raw, reply, mode: activeMode, route: r.open || "" });
+        renderConsole();
+        stageReact("answer", 1100);
+        if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
+      };
+      if (isAction) { finish(r.say, r.cards); return; }
+      // pure conversation: try the live brain, fall back to the operator's line
+      askPhantomLive(raw).then((ai) => finish(ai || r.say, r.cards));
     }, reduceMotion ? 120 : 620);
   }, reduceMotion ? 60 : 260);
 }

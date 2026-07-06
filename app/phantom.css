@@ -3737,3 +3737,85 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 @media (prefers-reduced-motion: reduce) {
   .overlay-x:hover { transform: none; }
 }
+
+/* ============================================================= */
+/* ================  UNIFIED CHATBOX (hero brain)  ============= */
+/* ============================================================= */
+.chatbox {
+  display: flex; flex-direction: column; width: min(100%, 500px); overflow: hidden;
+  border: 1px solid var(--line-strong); border-radius: 18px;
+  background: linear-gradient(180deg, rgba(10, 22, 17, 0.72), rgba(4, 10, 9, 0.85));
+  box-shadow: var(--edge-hi), 0 18px 50px -18px rgba(0, 0, 0, 0.7), 0 0 40px rgba(65, 255, 161, 0.05);
+  transition: border-color 0.25s, box-shadow 0.25s;
+}
+.chatbox:focus-within { border-color: rgba(65, 255, 161, 0.55); box-shadow: var(--edge-hi), 0 18px 50px -18px rgba(0, 0, 0, 0.7), 0 0 46px rgba(65, 255, 161, 0.12); }
+.chatbox-head {
+  display: flex; align-items: center; gap: 12px; padding: 9px 14px;
+  border-bottom: 1px solid var(--line); background: rgba(65, 255, 161, 0.028);
+}
+.chatbox-brand { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; font: 700 9px "DM Mono", monospace; letter-spacing: 0.22em; color: var(--neon); }
+.chatbox-brand i { width: 6px; height: 6px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 8px var(--neon); animation: livePulse 2.4s ease-in-out infinite; }
+.chatbox .hero2-ticker { margin: 0; flex: 1 1 auto; min-width: 0; max-width: none; font-size: 10.5px; opacity: 0.85; }
+.chatbox-log {
+  display: flex; flex-direction: column; gap: 10px;
+  min-height: 128px; max-height: 250px; overflow-y: auto; padding: 14px;
+  scrollbar-width: thin; overscroll-behavior: contain;
+}
+.msg { display: flex; align-items: flex-end; gap: 8px; animation: msgIn 0.32s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes msgIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+.msg-user { justify-content: flex-end; }
+.msg-avatar {
+  flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%; margin-bottom: 2px;
+  background:
+    radial-gradient(circle at 50% 38%, rgba(101, 255, 190, 0.95), rgba(65, 255, 161, 0.35) 58%, transparent 72%),
+    rgba(65, 255, 161, 0.08);
+  box-shadow: 0 0 10px rgba(65, 255, 161, 0.4), inset 0 0 0 1px rgba(65, 255, 161, 0.3);
+}
+.msg-body { max-width: 82%; min-width: 0; display: flex; flex-direction: column; gap: 8px; }
+.msg-phantom .msg-body {
+  padding: 9px 13px; border-radius: 4px 14px 14px 14px;
+  border: 1px solid var(--line); border-left: 2px solid rgba(65, 255, 161, 0.55);
+  background: rgba(65, 255, 161, 0.05);
+}
+.msg-user .msg-body {
+  padding: 8px 13px; border-radius: 14px 4px 14px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.07); background: rgba(255, 255, 255, 0.045);
+}
+.msg-text { margin: 0; font-size: 13.5px; line-height: 1.5; color: #e6fbee; overflow-wrap: anywhere; }
+.msg-user .msg-text { color: #cfe3da; font-size: 13px; }
+.msg-cards { display: flex; flex-direction: column; gap: 8px; }
+.msg-cards .rcard { width: 100%; }
+.msg-dots { display: inline-flex; gap: 4px; align-items: center; min-height: 14px; }
+.msg-dots i { width: 5px; height: 5px; border-radius: 50%; background: var(--neon); opacity: 0.5; animation: dotBeat 1.1s ease-in-out infinite; }
+.msg-dots i:nth-child(2) { animation-delay: 0.16s; }
+.msg-dots i:nth-child(3) { animation-delay: 0.32s; }
+@keyframes dotBeat { 40% { opacity: 1; transform: translateY(-3px); } }
+.chatbox-composer {
+  display: flex; align-items: center; gap: 9px; padding: 9px 9px 9px 15px;
+  border-top: 1px solid var(--line); background: rgba(0, 0, 0, 0.22);
+}
+.chatbox-composer input {
+  flex: 1 1 auto; min-width: 0; height: 32px; background: none; border: 0; outline: none;
+  color: var(--ink); caret-color: var(--neon); font-size: 14.5px;
+}
+.chatbox-composer input::placeholder { color: var(--dim); }
+.chatbox-composer .cmd-send { width: 38px; height: 38px; border-radius: 11px; }
+.chatbox-tools { display: flex; gap: 16px; padding: 8px 15px 11px; }
+.chatbox-tools .cmd-tool { font-size: 12px; }
+@media (max-width: 720px) {
+  .chatbox { width: 100%; }
+  .chatbox-log { max-height: 205px; min-height: 96px; padding: 12px; }
+  .msg-body { max-width: 88%; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .msg, .msg-dots i, .chatbox-brand i { animation: none !important; }
+}
+
+/* chat-first hero: give the conversation column the room it deserves */
+.chatbox { width: 100%; max-width: 640px; }
+@media (min-width: 901px) {
+  /* the compact hero reserves ghost space via padding-right; trim it so the
+     conversation gets a real chat column */
+  .hero2 { padding-right: clamp(250px, 24vw, 300px); }
+  .hero2-copy { max-width: 680px; }
+}

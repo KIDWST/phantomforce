@@ -196,23 +196,24 @@
                 <h1 class="hero2-title">Welcome back,<br /><span data-hero-name>Jordan.</span></h1>
                 <p class="hero2-sub">Tell me what you need<br />or choose a lane below.</p>
 
-                <p class="hero2-ticker" data-hero-ticker aria-live="off"></p>
-
                 <div class="cmd-chips" data-cmd-chips></div>
 
-                <form class="cmd-input" data-command-form>
-                  <input type="text" data-command-input autocomplete="off" spellcheck="false"
-                         placeholder="Ask PhantomForce anything…" aria-label="Ask PhantomForce" />
-                  <button class="cmd-send" type="submit" aria-label="Send"><span aria-hidden="true">→</span></button>
-                </form>
-
-                <div class="cmd-tools">
-                  <button class="cmd-tool" data-open-ws="memory"><span aria-hidden="true">◈</span> Memory</button>
-                  <button class="cmd-tool" data-open-ws="phantom"><span aria-hidden="true">▤</span> Prompt Library</button>
+                <div class="chatbox" data-chatbox>
+                  <div class="chatbox-head">
+                    <span class="chatbox-brand"><i></i>PHANTOM</span>
+                    <p class="hero2-ticker" data-hero-ticker aria-live="off"></p>
+                  </div>
+                  <div class="chatbox-log" data-chat-log aria-live="polite"></div>
+                  <form class="chatbox-composer" data-command-form>
+                    <input type="text" data-command-input autocomplete="off" spellcheck="false"
+                           placeholder="Ask PhantomForce anything…" aria-label="Ask PhantomForce" />
+                    <button class="cmd-send" type="submit" aria-label="Send"><span aria-hidden="true">→</span></button>
+                  </form>
+                  <div class="chatbox-tools">
+                    <button class="cmd-tool" data-open-ws="memory"><span aria-hidden="true">◈</span> Memory</button>
+                    <button class="cmd-tool" data-open-ws="phantom"><span aria-hidden="true">▤</span> Prompt Library</button>
+                  </div>
                 </div>
-
-                <div class="hero-say" data-say aria-live="polite" hidden></div>
-                <div class="response-cards" data-response></div>
               </div>
 
               <div class="hero2-stage">
