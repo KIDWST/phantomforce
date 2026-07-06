@@ -1,0 +1,109 @@
+import { appendFile, mkdir, readFile, stat } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import type { HermesLedgerRecord } from "./types.js";
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(moduleDir, "../../..");
+
+export const DEFAULT_HERMES_LEDGER_PATH = resolve(repoRoot, ".phantom", "hermes-ledger.jsonl");
+
+export function resolveHermesLedgerPath(pathFromEnv = process.env.PHANTOM_HERMES_LEDGER_PATH) {
+  return pathFromEnv?.trim() ? resolve(pathFromEnv) : DEFAULT_HERMES_LEDGER_PATH;
+}
+
+export async function appendHermesLedgerRecord(
+  record: HermesLedgerRecord,
+  options: { ledgerPath?: string } = {},
+) {
+  const ledgerPath = options.ledgerPath ?? resolveHermesLedgerPath();
+  await mkdir(dirname(ledgerPath), { recursive: true });
+  await appendFile(ledgerPath, `${JSON.stringify(record)}\n`, "utf8");
+  return { ledgerPath, record };
+}
+
+export async function readHermesLedgerRecords(
+  options: { ledgerPath?: string; limit?: number } = {},
+): Promise<HermesLedgerRecord[]> {
+  const ledgerPath = options.ledgerPath ?? resolveHermesLedgerPath();
+  const limit = options.limit ?? 50;
+
+  try {
+    const raw = await readFile(ledgerPath, "utf8");
+    return raw
+      .split(/\r?\n/)
+      .filter(Boolean)
+      .slice(-limit)
+      .map((line) => JSON.parse(line) as HermesLedgerRecord);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    throw error;
+  }
+}
+
+export function redactSensitiveText(value: string) {
+  return value
+    .replace(/\bsk-[A-Za-z0-9_-]{8,}\b/g, "[redacted-key]")
+    .replace(/\bBearer\s+[A-Za-z0-9._-]{8,}\b/gi, "Bearer [redacted-token]")
+    .replace(
+      /\b([A-Z0-9_]*(?:API[_-]?KEY|PASSWORD|SECRET|TOKEN|AUTHORIZATION)[A-Z0-9_]*)\s*[:=]\s*("[^"]+"|'[^']+'|[^\s,;]+)/gi,
+      "$1=[redacted]",
+    )
+    .replace(
+      /\b(api[_ -]?key|password|secret|token|authorization)\s*[:=]\s*("[^"]+"|'[^']+'|[^\s,;]+)/gi,
+      "$1=[redacted]",
+    )
+    .replace(/\b(?:\d[ -]?){13,19}\b/g, "[redacted-number]");
+}
+
+function redactValue<T>(value: T): T {
+  if (typeof value === "string") {
+    return redactSensitiveText(value) as T;
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => redactValue(item)) as T;
+  }
+
+  if (value && typeof value === "object") {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [key, redactValue(item)]),
+    ) as T;
+  }
+
+  return value;
+}
+
+export function redactHermesLedgerRecord(record: HermesLedgerRecord) {
+  return redactValue(record);
+}
+
+export async function readRedactedHermesLedgerRecords(options: { ledgerPath?: string; limit?: number } = {}) {
+  const records = await readHermesLedgerRecords(options);
+  return records.map((record) => redactHermesLedgerRecord(record));
+}
+
+export async function getHermesLedgerStatus(options: { ledgerPath?: string } = {}) {
+  const ledgerPath = options.ledgerPath ?? resolveHermesLedgerPath();
+
+  try {
+    const fileStat = await stat(ledgerPath);
+    return {
+      enabled: true,
+      exists: true,
+      ledgerPath,
+      bytes: fileStat.size,
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+      return {
+        enabled: true,
+        exists: false,
+        ledgerPath,
+        bytes: 0,
+      };
+    }
+    throw error;
+  }
+}

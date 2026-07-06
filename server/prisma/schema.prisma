@@ -1,0 +1,294 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum MembershipRole {
+  owner
+  admin
+  member
+}
+
+enum ActionStatus {
+  proposed
+  pending
+  approved
+  rejected
+  executed
+  failed
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum TaskStatus {
+  open
+  queued
+  done
+}
+
+enum FalconJobStatus {
+  pending
+  running
+  succeeded
+  failed
+}
+
+enum ClientAccessStatus {
+  active
+  past_due
+  suspended
+  revoked
+}
+
+enum PaymentStatus {
+  trialing
+  paid
+  due
+  failed
+  cancelled
+}
+
+enum GatewayProvider {
+  local
+  pangolin
+}
+
+model User {
+  id           String       @id @default(uuid())
+  email        String       @unique
+  passwordHash String?
+  name         String?
+  createdAt    DateTime     @default(now())
+  memberships  Membership[]
+  chatThreads  ChatThread[]
+  decisions    Approval[]   @relation("ApprovalDecider")
+}
+
+model Org {
+  id          String       @id @default(uuid())
+  name        String
+  createdAt   DateTime     @default(now())
+  memberships Membership[]
+  connections Connection[]
+  chatThreads ChatThread[]
+  actions     Action[]
+  approvals   Approval[]
+  tasks       Task[]
+  notes       Note[]
+  contacts    Contact[]
+  auditEvents AuditEvent[]
+  falconJobs  FalconJob[]
+  clientAccess ClientAccess?
+  moduleEntitlements ModuleEntitlement[]
+}
+
+model Membership {
+  id        String         @id @default(uuid())
+  userId    String
+  orgId     String
+  role      MembershipRole @default(member)
+  createdAt DateTime       @default(now())
+  user      User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  org       Org            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, orgId])
+  @@index([orgId])
+}
+
+model Connection {
+  id             String   @id @default(uuid())
+  orgId          String
+  type           String
+  status         String
+  encryptedToken Json?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  org            Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, type])
+}
+
+model ChatThread {
+  id        String        @id @default(uuid())
+  orgId     String
+  userId    String
+  title     String?
+  createdAt DateTime      @default(now())
+  org       Org           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  user      User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  messages  ChatMessage[]
+
+  @@index([orgId])
+}
+
+model ChatMessage {
+  id        String     @id @default(uuid())
+  threadId  String
+  role      String
+  content   String
+  actionId  String?
+  createdAt DateTime   @default(now())
+  thread    ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  action    Action?    @relation(fields: [actionId], references: [id])
+
+  @@index([threadId])
+}
+
+model Action {
+  id          String        @id @default(uuid())
+  orgId       String
+  type        String
+  payload     Json
+  policy      Json
+  status      ActionStatus  @default(proposed)
+  proposedBy  String
+  rationale   String
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+  org         Org           @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  approval    Approval?
+  tasks       Task[]
+  falconJobs  FalconJob[]
+  messages    ChatMessage[]
+
+  @@index([orgId, status])
+  @@index([orgId, type])
+}
+
+model Approval {
+  id              String         @id @default(uuid())
+  orgId           String
+  actionId         String         @unique
+  status          ApprovalStatus @default(pending)
+  decidedByUserId String?
+  decidedAt       DateTime?
+  reason          String?
+  payload         Json?
+  createdAt       DateTime       @default(now())
+  org             Org            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  action          Action         @relation(fields: [actionId], references: [id], onDelete: Cascade)
+  decidedBy       User?          @relation("ApprovalDecider", fields: [decidedByUserId], references: [id])
+
+  @@index([orgId, status])
+}
+
+model Task {
+  id             String     @id @default(uuid())
+  orgId          String
+  title          String
+  status         TaskStatus @default(open)
+  dueAt          DateTime?
+  priority       String     @default("medium")
+  project        String?
+  sourceActionId String?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  org            Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  sourceAction   Action?    @relation(fields: [sourceActionId], references: [id])
+
+  @@index([orgId, status])
+}
+
+model Note {
+  id        String   @id @default(uuid())
+  orgId     String
+  title     String
+  body      String
+  tags      String[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model Contact {
+  id           String   @id @default(uuid())
+  orgId        String
+  name         String
+  email        String?
+  phone        String?
+  organization String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  org          Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+}
+
+model ClientAccess {
+  id              String             @id @default(uuid())
+  orgId           String             @unique
+  gatewayProvider GatewayProvider    @default(pangolin)
+  privateRoute    String?
+  accessStatus    ClientAccessStatus @default(active)
+  paymentStatus   PaymentStatus      @default(paid)
+  planName         String?
+  ownerName        String?
+  connectorCredentials Json?
+  lastAudit        String?
+  revokedAt       DateTime?
+  revokedReason   String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+  org             Org                @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([accessStatus])
+  @@index([paymentStatus])
+}
+
+model ModuleEntitlement {
+  id        String   @id @default(uuid())
+  orgId     String
+  moduleKey String
+  enabled   Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@unique([orgId, moduleKey])
+  @@index([orgId, enabled])
+}
+
+model AuditEvent {
+  id         String   @id @default(uuid())
+  orgId      String
+  actor      String
+  eventType  String
+  targetType String
+  targetId   String
+  payload    Json
+  prevHash   String?
+  hash       String
+  createdAt  DateTime @default(now())
+  org        Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, createdAt])
+  @@index([orgId, targetType, targetId])
+}
+
+model FalconJob {
+  id          String          @id @default(uuid())
+  orgId       String
+  actionId    String?
+  jobType     String
+  typedInput  Json
+  typedOutput Json?
+  status      FalconJobStatus @default(pending)
+  error       String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  org         Org             @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  action      Action?         @relation(fields: [actionId], references: [id])
+
+  @@index([orgId, status])
+  @@index([orgId, jobType])
+}

@@ -1,0 +1,42 @@
+{
+  "name": "@phantomforce/server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test:access": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-workflow.ps1",
+    "test:access:postgres": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-workflow-postgres.ps1",
+    "test:access:postgres-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-access-postgres-fail-closed.ps1",
+    "test:connector-boundary": "tsx scripts/test-connector-boundary.ts",
+    "test:deployment-model": "tsx scripts/test-deployment-model-status.ts",
+    "test:security-scanner": "tsx scripts/test-security-scanner-route.ts",
+    "test:chicagoshots-crm": "tsx scripts/test-chicagoshots-nexprospex-crm.ts",
+    "test:send-readiness-status": "tsx scripts/test-send-readiness-status.ts",
+    "test:agent-workforce": "tsx scripts/test-agent-workforce-status.ts",
+    "test:internal-harness": "tsx scripts/test-internal-harness-router.ts",
+    "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
+    "test:auth:production-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-production-fail-closed.ps1",
+    "test:auth:owner-production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-owner-production.ps1",
+    "start": "node dist/index.js",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev"
+  },
+  "dependencies": {
+    "@fastify/cors": "^10.0.1",
+    "@phantomforce/contracts": "file:../packages/contracts",
+    "@prisma/client": "^6.1.0",
+    "dotenv": "^16.4.7",
+    "fastify": "^5.2.1",
+    "zod": "^3.25.76"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "prisma": "^6.1.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
+  }
+}
