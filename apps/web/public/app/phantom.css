@@ -239,11 +239,18 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 
 .response-cards { position: relative; z-index: 1; display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; width: 100%; max-width: 1080px; }
 .rcard {
-  flex: 1 1 280px; max-width: 360px; text-align: left; padding: 16px 18px; border-radius: 18px;
+  position: relative; flex: 1 1 280px; max-width: 360px; text-align: left; padding: 16px 50px 16px 18px; border-radius: 18px;
   border: 1px solid var(--line-strong); background: var(--glass);
   box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4), 0 0 30px rgba(65, 255, 161, 0.08);
   animation: emerge 0.5s ease both;
 }
+.rcard-x {
+  position: absolute; top: 10px; right: 10px; z-index: 2; width: 28px; height: 28px;
+  display: grid; place-items: center; border-radius: 50%; border: 1px solid rgba(234, 255, 242, 0.14);
+  background: rgba(2, 8, 10, 0.68); color: rgba(234, 255, 242, 0.68); cursor: pointer;
+  font-size: 17px; line-height: 1; transition: border-color 0.2s, color 0.2s, background 0.2s, transform 0.16s;
+}
+.rcard-x:hover { border-color: rgba(255, 77, 99, 0.62); color: #ff97a4; background: rgba(255, 77, 99, 0.1); transform: scale(1.06); }
 .rcard-kicker { margin: 0 0 5px; font: 500 9.5px "DM Mono", monospace; letter-spacing: 0.22em; text-transform: uppercase; color: var(--neon); }
 .rcard h4 { margin: 0 0 6px; font-size: 15.5px; }
 .rcard-body { margin: 0 0 6px; font-size: 13px; line-height: 1.5; color: #c4e6d2; }
@@ -2241,6 +2248,13 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .ml-badge { position: absolute; top: 9px; left: 9px; font: 600 8.5px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase; padding: 3px 7px; border-radius: 999px; background: rgba(2,10,8,0.7); color: var(--warn); }
 .ml-badge-live { color: var(--neon); }
+.ml-tile-x {
+  position: absolute; top: 8px; right: 8px; z-index: 4; width: 28px; height: 28px; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid rgba(234, 255, 242, 0.16); background: rgba(2, 8, 10, 0.76);
+  color: rgba(234, 255, 242, 0.72); cursor: pointer; font-size: 17px; line-height: 1;
+  opacity: 0.86; transition: border-color 0.18s, color 0.18s, background 0.18s, transform 0.16s;
+}
+.ml-tile-x:hover { border-color: rgba(255, 77, 99, 0.65); color: #ff97a4; background: rgba(255, 77, 99, 0.12); transform: scale(1.06); }
 .ml-play { position: absolute; inset: 0; margin: auto; width: 46px; height: 46px; display: grid; place-items: center; color: #cfffe6; pointer-events: none; }
 .ml-play .ic { width: 26px; height: 26px; filter: drop-shadow(0 2px 8px rgba(0,0,0,0.6)); }
 .ml-tile-bar { position: absolute; inset: auto 0 0 0; display: flex; gap: 4px; padding: 8px; background: linear-gradient(0deg, rgba(2,8,6,0.9), transparent); opacity: 0; transition: opacity 0.2s; }
@@ -2291,7 +2305,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-field span { font: 600 9.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
 .set-field em { font-size: 11px; color: var(--dim-2); font-style: normal; }
 .set-providers { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 14px; }
-.set-prov { border: 1px solid var(--line); border-radius: 15px; padding: 15px; background: rgba(4,12,9,0.5); transition: border-color 0.2s; }
+.set-prov { position: relative; border: 1px solid var(--line); border-radius: 15px; padding: 15px; background: rgba(4,12,9,0.5); transition: border-color 0.2s; }
 .set-prov.is-on { border-color: rgba(65,255,161,0.3); }
 .set-prov-top { display: flex; align-items: center; gap: 10px; }
 .set-prov-dot { width: 12px; height: 12px; border-radius: 50%; flex: 0 0 auto; box-shadow: 0 0 10px currentColor; }
@@ -2320,6 +2334,12 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-adv[open] summary { color: var(--neon); }
 .set-adv > .set-mini { margin-top: 10px; }
 .set-del { color: #ff97a4 !important; margin-top: 8px; }
+.set-card-x {
+  position: absolute; top: 9px; right: 9px; z-index: 2; width: 27px; height: 27px; display: grid; place-items: center;
+  border-radius: 50%; border: 1px solid rgba(234,255,242,0.14); background: rgba(2,8,10,0.7);
+  color: rgba(234,255,242,0.68); cursor: pointer; font-size: 16px; line-height: 1;
+}
+.set-card-x:hover { border-color: rgba(255,77,99,0.62); color: #ff97a4; background: rgba(255,77,99,0.1); }
 
 /* ---------------- account / plan manager ---------------- */
 .account-plan { display: flex; flex-direction: column; gap: 18px; }

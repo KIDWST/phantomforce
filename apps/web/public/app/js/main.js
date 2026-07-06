@@ -1120,15 +1120,31 @@ function speak(text, cls = "", emotionOverride = null) {
   };
   tick();
 }
-function cardHtml(c) {
+function cardHtml(c, cardIndex = "", entryIndex = "") {
+  const cardAttr = cardIndex !== "" ? ` data-card-index="${cardIndex}"` : "";
+  const entryAttr = entryIndex !== "" ? ` data-entry-index="${entryIndex}"` : "";
   return `
-    <article class="rcard">
+    <article class="rcard"${cardAttr}${entryAttr}>
+      <button class="rcard-x" data-card-remove data-card-index="${cardIndex}" data-entry-index="${entryIndex}" aria-label="Remove card">×</button>
       <p class="rcard-kicker">${esc(c.kicker)}</p>
       <h4>${esc(c.title)}</h4>
       ${c.body ? `<p class="rcard-body">${esc(c.body)}</p>` : ""}
       ${c.meta ? `<p class="rcard-meta">${esc(c.meta)}</p>` : ""}
       ${c.actions?.length ? `<div class="rcard-actions">${c.actions.map((a) => `<button class="btn" data-open-ws="${a.open}">${esc(a.label)}</button>`).join("")}</div>` : ""}
     </article>`;
+}
+function bindCardRemovers(root, onRemove) {
+  if (!root) return;
+  root.querySelectorAll("[data-card-remove]").forEach((btn) => {
+    btn.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const entryIndex = btn.dataset.entryIndex;
+      const cardIndex = btn.dataset.cardIndex;
+      if (onRemove && entryIndex !== "" && cardIndex !== "") onRemove(Number(entryIndex), Number(cardIndex));
+      else btn.closest(".rcard")?.remove();
+    };
+  });
 }
 function runCommand(raw) {
   phantomHasActed = true;
@@ -1152,7 +1168,10 @@ function runCommand(raw) {
       const r = handleCommand(text);
       speak(r.say);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
-      if (respBox) respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
+      if (respBox) {
+        respBox.innerHTML = (r.cards || []).map((c, i) => cardHtml(c, i)).join("");
+        bindCardRemovers(respBox);
+      }
       renderConsole();
       stageReact("answer", 1100);
       if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
@@ -1527,12 +1546,18 @@ function wirePhantomConsole(body) {
   const form = $("[data-phantom-form]", body);
   const input = $("[data-phantom-input]", body);
   const paint = () => {
-    log.innerHTML = phantomHistory.map((h) => `
+    log.innerHTML = phantomHistory.map((h, entryIndex) => `
       <div class="phantom-entry">
         <p class="phantom-user">› ${esc(h.q)}</p>
         <p class="phantom-reply">${esc(h.say)}</p>
-        ${(h.cards || []).map(cardHtml).join("")}
+        ${(h.cards || []).map((c, cardIndex) => cardHtml(c, cardIndex, entryIndex)).join("")}
       </div>`).join("") || `<p class="phantom-hello">This is the full command console. Everything you ask lands as real work — drafts, requests, and pipelines, never just chat.</p>`;
+    bindCardRemovers(log, (entryIndex, cardIndex) => {
+      const cards = phantomHistory[entryIndex]?.cards;
+      if (!cards) return;
+      cards.splice(cardIndex, 1);
+      paint();
+    });
     log.scrollTop = log.scrollHeight;
   };
   paint();

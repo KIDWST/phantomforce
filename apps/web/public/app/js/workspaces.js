@@ -54,6 +54,7 @@ function renderLeads(el, rerender) {
         return `<div class="lane"><div class="lane-head">${label} <b>${items.length}</b></div>
           ${items.map((l) => `
             <article class="record ${daysUntil(l.due) <= 0 && ["new", "follow-up"].includes(l.status) ? "record-due" : ""}">
+              <button class="record-x" data-act="remove" data-id="${l.id}" aria-label="Remove lead">×</button>
               ${wsTag(l.ws)}
               <h4>${esc(l.name)}</h4>
               <p class="record-sub">${esc(l.company)} · ${esc(l.source)} · ${fmtMoney(l.value)}</p>
@@ -77,6 +78,12 @@ function renderLeads(el, rerender) {
       if (!name) return;
       store.state.leads.unshift({ id: uid("lead"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), name: name.trim(), company: name.trim(), source: "Manual capture", status: "new", value: 750, next: "Qualify the need and the budget", due: new Date(Date.now() + 86400000).toISOString(), owner: "Lead Hunter", notes: "", proposalId: null });
       pushActivity("Lead Hunter", `captured a new lead: ${name.trim()}.`);
+      store.save(); rerender();
+    },
+    remove: (id) => {
+      const l = find(id);
+      store.state.leads = store.state.leads.filter((item) => item.id !== id);
+      if (l) pushActivity("Lead Hunter", `removed lead: ${l.name}.`, l.ws);
       store.save(); rerender();
     },
     advance: (id) => { const l = find(id); l.status = "follow-up"; store.save(); rerender(); },
@@ -128,6 +135,7 @@ function renderProposals(el, rerender) {
         const ret = RETAINERS.find((x) => x.id === p.retainer);
         return `
         <article class="record record-wide">
+          <button class="record-x" data-act="remove" data-id="${p.id}" aria-label="Remove proposal">×</button>
           <div class="record-top">
             ${wsTag(p.ws)}
             <h4>${esc(p.client)} ${chip(p.status)}</h4>
@@ -157,6 +165,13 @@ function renderProposals(el, rerender) {
       store.save(); rerender();
     },
     copy: (id, btn) => copyText(btn, proposalText(find(id))),
+    remove: (id) => {
+      const p = find(id);
+      store.state.proposals = store.state.proposals.filter((item) => item.id !== id);
+      store.state.leads.forEach((lead) => { if (lead.proposalId === id) lead.proposalId = null; });
+      if (p) pushActivity("Proposal Forge", `removed proposal: ${p.client}.`, p.ws);
+      store.save(); rerender();
+    },
     ready: (id) => { const p = find(id); p.status = "sent-ready"; p.updated = new Date().toISOString(); pushActivity("Proposal Forge", `moved ${p.client} to send-ready.`, p.ws); store.save(); rerender(); },
     won: (id) => { const p = find(id); p.status = "won"; pushActivity("Revenue Tracker", `${p.client} proposal won — ${fmtMoney(p.price)}.`, p.ws); store.save(); rerender(); },
     lost: (id) => { const p = find(id); p.status = "lost"; store.save(); rerender(); },
@@ -175,6 +190,7 @@ function renderReviews(el, rerender) {
     <div class="stack">
       ${reviews.map((r) => `
         <article class="record record-wide">
+          <button class="record-x" data-act="remove" data-id="${r.id}" aria-label="Remove review request">×</button>
           <div class="record-top">${wsTag(r.ws)}<h4>${esc(r.client)} ${chip(r.status)}</h4><b class="record-price">${esc(r.channel)}</b></div>
           ${r.draft ? `<p class="record-notes"><b>Request draft:</b> ${esc(r.draft)}</p>` : ""}
           ${r.quote ? `<blockquote class="quote-preview">“${esc(r.quote)}”<footer>— ${esc(r.client.split(" — ")[0])}</footer></blockquote>` : ""}
@@ -198,6 +214,12 @@ function renderReviews(el, rerender) {
       store.save(); rerender();
     },
     copy: (id, btn) => { const r = find(id); copyText(btn, `${r.draft}\n\n${r.link || ""}`); },
+    remove: (id) => {
+      const r = find(id);
+      store.state.reviews = store.state.reviews.filter((item) => item.id !== id);
+      if (r) pushActivity("Review Desk", `removed review request: ${r.client}.`, r.ws);
+      store.save(); rerender();
+    },
     "approve-req": (id) => { const r = find(id); r.status = "approved"; store.save(); rerender(); },
     sent: (id) => { const r = find(id); r.status = "sent"; pushActivity("Review Desk", `review request for ${r.client} marked sent (manual).`, r.ws); store.save(); rerender(); },
     received: (id) => {
@@ -228,6 +250,7 @@ function renderBookings(el, rerender) {
     <div class="stack">
       ${bookings.map((b) => `
         <article class="record record-wide">
+          <button class="record-x" data-act="remove" data-id="${b.id}" aria-label="Remove booking draft">×</button>
           <div class="record-top">${wsTag(b.ws)}<h4>${esc(b.type)} — ${esc(b.client)} ${chip(b.status)}</h4><b class="record-price">${fmtDateTime(b.when)}</b></div>
           <p class="record-sub">${b.duration} min · ${esc(b.location)}</p>
           <p class="record-notes"><b>Booking copy:</b> ${esc(b.copy)}</p>
@@ -249,6 +272,12 @@ function renderBookings(el, rerender) {
       store.save(); rerender();
     },
     copy: (id, btn) => copyText(btn, find(id).copy),
+    remove: (id) => {
+      const b = find(id);
+      store.state.bookings = store.state.bookings.filter((item) => item.id !== id);
+      if (b) pushActivity("Booking Coordinator", `removed booking draft: ${b.client}.`, b.ws);
+      store.save(); rerender();
+    },
     queue: (id) => {
       const b = find(id);
       store.state.approvals.unshift({ id: uid("app"), ws: b.ws, type: "booking", title: `Approve booking: ${b.type} with ${b.client}`, detail: `${fmtDateTime(b.when)} · ${b.duration} min · ${b.location}`, ref: b.id, status: "pending", requestedBy: "Booking Coordinator", at: new Date().toISOString() });
@@ -547,6 +576,7 @@ function renderSites(el, rerender) {
       <div class="card-grid">
         ${sites.map((s) => `
           <article class="record">
+            <button class="record-x" data-act="remove-site" data-id="${s.id}" aria-label="Remove website draft">×</button>
             <div class="record-top">${wsTag(s.ws)}<h4>${esc(s.title)}</h4></div>
             <p class="record-sub">${esc(s.kind)} · ${chip(s.status)} · ${ago(s.updated)}</p>
             <div class="page-preview">${s.sections.map((x) => `<div class="page-preview-row">${esc(x)}</div>`).join("")}</div>
@@ -564,6 +594,7 @@ function renderSites(el, rerender) {
       <div class="card-grid">
         ${products.map((p) => `
           <article class="record">
+            <button class="record-x" data-act="remove-product" data-id="${p.id}" aria-label="Remove product or service">×</button>
             <div class="record-top">${wsTag(p.ws)}<h4>${esc(p.name)}</h4><b class="record-price">${fmtMoney(p.price)}</b></div>
             <p class="record-sub">${esc(p.category)} · publish: ${chip(p.publish)} · checkout: ${chip(p.checkout)}</p>
             <p class="record-notes">${esc(p.desc)}</p>
@@ -614,6 +645,12 @@ function renderSites(el, rerender) {
       store.save(); rerender();
     },
     ready: (id) => { const s = store.state.sites.find((x) => x.id === id); s.status = "publish-ready"; s.updated = new Date().toISOString(); pushActivity("Site Builder", `${s.title} is publish-ready.`, s.ws); store.save(); rerender(); },
+    "remove-site": (id) => {
+      const s = store.state.sites.find((x) => x.id === id);
+      store.state.sites = store.state.sites.filter((item) => item.id !== id);
+      if (s) pushActivity("Site Builder", `removed ${s.title}.`, s.ws);
+      store.save(); rerender();
+    },
     "focus-site": (id) => {
       const index = store.state.sites.findIndex((x) => x.id === id);
       if (index <= 0) return;
@@ -641,6 +678,12 @@ function renderSites(el, rerender) {
       if (!name) return;
       store.state.products.unshift({ id: uid("prod"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), name, price, category: cat, desc, fulfillment: "Define fulfillment before publish", checkout: "not-wired", publish: "draft" });
       pushActivity("Store Builder", `added ${name} to the catalog.`);
+      store.save(); rerender();
+    },
+    "remove-product": (id) => {
+      const p = store.state.products.find((x) => x.id === id);
+      store.state.products = store.state.products.filter((item) => item.id !== id);
+      if (p) pushActivity("Store Builder", `removed product: ${p.name}.`, p.ws);
       store.save(); rerender();
     },
     "pub-ready": (id) => { const p = store.state.products.find((x) => x.id === id); p.publish = "publish-ready"; store.save(); rerender(); },
@@ -795,6 +838,7 @@ function renderMemory(el, rerender) {
           <div class="stack">
             ${filtered.map((item) => `
               <article class="record memory-record ${(item.pinnedByUser || item.pinnedByAi) ? "is-remembered" : ""}">
+                <button class="record-x" data-act="remove-memory" data-id="${item.id}" aria-label="Remove memory">×</button>
                 <div class="record-top">
                   ${wsTag(item.ws)}
                   <h4>${esc(item.title)}</h4>
@@ -860,6 +904,7 @@ function renderMemory(el, rerender) {
     "forget-memory": (id) => {
       if (confirm("Delete this local memory?")) { forgetMemory(id); rerender(); }
     },
+    "remove-memory": (id) => { forgetMemory(id); rerender(); },
   });
 }
 
@@ -1291,6 +1336,7 @@ function renderApprovals(el, rerender) {
     ${pending.length ? `<div class="stack">
       ${pending.map((a) => `
         <article class="record record-wide approval-card">
+          <button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval request">×</button>
           <div class="record-top">${wsTag(a.ws)}<h4>${esc(a.title)}</h4><i class="record-time">${ago(a.at)}</i></div>
           <p class="record-notes">${esc(a.detail)}</p>
           <p class="record-sub">Requested by ${esc(a.requestedBy)} · type: ${esc(a.type)}</p>
@@ -1301,11 +1347,17 @@ function renderApprovals(el, rerender) {
         </article>`).join("")}
     </div>` : empty("Queue is clear. Nothing is waiting for approval.")}
     ${done.length ? `<h3 class="ws-subhead">Recent decisions</h3><div class="stack">
-      ${done.map((a) => `<article class="record record-row">${wsTag(a.ws)}<h4>${esc(a.title)}</h4>${chip(a.status)}</article>`).join("")}
+      ${done.map((a) => `<article class="record record-row"><button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval record">×</button>${wsTag(a.ws)}<h4>${esc(a.title)}</h4>${chip(a.status)}</article>`).join("")}
     </div>` : ""}`;
   bindActions(el, {
     approve: (id) => { resolveApproval(id, true); rerender(); },
     decline: (id) => { resolveApproval(id, false); rerender(); },
+    remove: (id) => {
+      const a = store.state.approvals.find((item) => item.id === id);
+      store.state.approvals = store.state.approvals.filter((item) => item.id !== id);
+      if (a) pushActivity("Approval Desk", `removed approval request: ${a.title}.`, a.ws);
+      store.save(); rerender();
+    },
   });
 }
 

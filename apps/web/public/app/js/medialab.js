@@ -533,6 +533,7 @@ function resultsHtml(esc) {
 }
 function tileHtml(a, esc) {
   return `<figure class="ml-tile ${a.meta && a.meta.preview ? "is-preview" : ""}" data-asset="${a.id}">
+    <button class="ml-tile-x" data-tile-act="remove" data-id="${a.id}" title="Remove" aria-label="Remove generated asset">×</button>
     <img src="${a.url}" alt="${esc((a.meta && a.meta.prompt) || "generation")}" loading="lazy"/>
     ${a.type === "video" ? `<span class="ml-play">${svgIc("play")}</span>` : ""}
     ${a.meta && a.meta.preview ? `<span class="ml-badge">preview</span>` : `<span class="ml-badge ml-badge-live">live</span>`}
@@ -640,6 +641,12 @@ function tileAction(act, id, cfg, opts, root, esc, body) {
   if (act === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); return; }
   if (act === "save") { a.saved = true; captureForContentHub(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to the library."); renderMediaStudio(root, opts); return; }
   if (act === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); return; }
+  if (act === "remove") {
+    session.assets = session.assets.filter((x) => x.id !== id);
+    if (session.edit?.id === id) session.edit = null;
+    if (opts.notify) opts.notify("Media Factory", "removed a local media asset.");
+    renderMediaStudio(root, opts);
+  }
 }
 
 /* ---- Library ---- */
@@ -654,6 +661,12 @@ function renderLibrary(body, opts, root) {
     if (b.dataset.tileAct === "download") downloadAsset(a);
     else if (b.dataset.tileAct === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); }
     else if (b.dataset.tileAct === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); }
+    else if (b.dataset.tileAct === "remove") {
+      session.assets = session.assets.filter((x) => x.id !== b.dataset.id);
+      if (session.edit?.id === b.dataset.id) session.edit = null;
+      if (opts.notify) opts.notify("Media Factory", "removed a local media asset.");
+      renderMediaStudio(root, opts);
+    }
   });
 }
 
@@ -849,6 +862,7 @@ export function renderMediaSettings(el, opts = {}) {
 
 function providerCard(p, esc) {
   return `<div class="set-prov ${p.enabled ? "is-on" : ""}" data-prov-card="${p.id}">
+    ${p.custom ? `<button class="set-card-x" data-prov-del aria-label="Remove custom provider">×</button>` : ""}
     <div class="set-prov-top">
       <span class="set-prov-dot" style="background:${p.brand}"></span>
       <div class="set-prov-id"><b>${esc(p.name)}${p.custom ? ` <em class="set-tag">custom</em>` : ""}</b><i>${esc(p.tagline || "")}</i></div>
