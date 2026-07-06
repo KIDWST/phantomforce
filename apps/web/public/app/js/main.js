@@ -1,16 +1,16 @@
-/* PhantomForce — AI Operations Console: shell, sidebar, dashboard, ghost, overlays. */
+﻿/* PhantomForce — AI Operations Console: shell, sidebar, dashboard, ghost, overlays. */
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-13";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-13";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-13";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-13";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-13";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-13";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-13";
+} from "./store.js?v=phantom-live-20260706-14";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-14";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-14";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-14";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-14";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-14";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-14";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -460,7 +460,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-13";
+const POSE_VERSION = "phantom-live-20260706-14";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -692,6 +692,26 @@ function setMode(id) {
 function renderHero() {
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
   $("[data-hero-name]").textContent = `${name}.`;
+  renderHeroWorkAlert();
+}
+
+function renderHeroWorkAlert() {
+  const alert = $("[data-hero-work-alert]");
+  if (!alert) return;
+  const latest = liveFeed[0] || visible(store.state.activity)[0] || {
+    who: "Proposal Forge",
+    text: "prepared quote #114 - waiting on your approval",
+    icon: "chart",
+    live: true,
+    at: new Date().toISOString(),
+  };
+  alert.innerHTML = `
+    <span class="hero-work-alert-ping" aria-hidden="true"></span>
+    <span class="hero-work-alert-body">
+      <b>${esc(latest.who || "PhantomForce")}</b>
+      <em>${esc(latest.text || "prepared the next owner-safe move.")}</em>
+    </span>
+    <span class="hero-work-alert-time">${latest.live ? "now" : latest.at ? ago(latest.at) : "ready"}</span>`;
 }
 
 /* ============================ stat cards ============================ */
@@ -982,6 +1002,7 @@ function pushLive() {
   if (!ev) return;
   liveFeed.unshift({ ...ev, at: new Date().toISOString(), live: true });
   liveFeed = liveFeed.slice(0, 6);
+  renderHeroWorkAlert();
   if (!cmdkOpen) renderActivity();
 }
 function startPulse() {

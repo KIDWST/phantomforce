@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260706-13";
+      window.PHANTOM_BUILD = "phantom-live-20260706-14";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260706-13" />
+    <meta name="phantom-build" content="phantom-live-20260706-14" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -65,11 +65,11 @@
         display: none;
       }
     </style>
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=phantom-live-20260706-13" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=phantom-live-20260706-14" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260706-13" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260706-14" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -217,13 +217,14 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260706-13"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260706-14"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
                   />
                   <figcaption class="phantom-mode-caption" data-mode-caption>Listening</figcaption>
                 </figure>
+                <div class="hero-work-alert" data-hero-work-alert aria-live="polite"></div>
                 <canvas class="ghost-canvas" data-ghost width="10" height="10" aria-hidden="true"></canvas>
               </div>
             </section>
@@ -288,6 +289,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260706-13"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260706-14"></script>
   </body>
 </html>
