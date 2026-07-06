@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-14";
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-15";
 
 const CFG_KEY = "pf.medialab.v1";
 const TAU = Math.PI * 2;
@@ -481,6 +481,67 @@ function queueRow(a, esc) {
 }
 
 const estCredits = () => genState.modality === "video" ? genState.duration * 4 : genState.count * (genState.quality === "high" ? 6 : 3);
+const REMBG_EDIT_RE = /\b(remove|erase|delete|cut\s*out|knock\s*out|transparent|isolate)\b.*\b(bg|background|backdrop)\b|\b(bg|background)\b.*\b(remove|erase|delete|transparent)\b|\bcutout\b/;
+const PROVIDER_EDIT_RE = /\b(add|replace|swap|generate|extend|outpaint|inpaint|change\s+the\s+subject|new\s+background|object|person|product|logo|higgsfield|codex|provider|make\s+it\s+look)\b/;
+function activeEditProvider(cfg) {
+  return providersFor(cfg, "edit")[0] || provider(cfg, genState.provider) || DEFAULT_PROVIDERS[0];
+}
+function estimateProviderEditCredits(cfg, prompt = "") {
+  const p = activeEditProvider(cfg);
+  const model = (p.defaultModel && p.defaultModel.edit) || (p.models && p.models.edit && p.models.edit[0]) || "";
+  const q = prompt.toLowerCase();
+  if (/\bcodex\b/.test(q)) return { credits: 2, providerName: "Codex", model: "planning lane" };
+  const base = p.id === "higgsfield" ? 12 : p.id === "openai" ? 10 : p.id === "replicate" ? 8 : p.id === "claude" ? 2 : 8;
+  const complexity = /\b(precise|realistic|face|hands|product|commerce|ad|campaign|background|scene)\b/.test(q) ? 2 : 0;
+  return { credits: base + complexity, providerName: p.name || "Provider", model: model ? laneLabel(model) : "edit lane" };
+}
+function estimateEditCredits(prompt = "", cfg) {
+  const q = prompt.trim().toLowerCase();
+  if (!q) {
+    return {
+      credits: 0,
+      mode: "local",
+      title: "0 credits",
+      route: "Local canvas",
+      detail: "Adjustments, filters, captions, rotate, flip, save, and download are free."
+    };
+  }
+  if (REMBG_EDIT_RE.test(q)) {
+    return {
+      credits: 0,
+      mode: "rembg",
+      title: "0 credits",
+      route: "Local rembg",
+      detail: "Background removal stays local with rembg when installed. No Higgsfield or Codex spend."
+    };
+  }
+  if (PROVIDER_EDIT_RE.test(q)) {
+    const est = estimateProviderEditCredits(cfg, q);
+    return {
+      credits: est.credits,
+      mode: "provider",
+      title: `~${est.credits} credits`,
+      route: `${est.providerName} ${est.model}`,
+      detail: "Provider-style edits are estimate-only here and still require approval before any paid call."
+    };
+  }
+  return {
+    credits: 0,
+    mode: "local",
+    title: "0 credits",
+    route: "Local preview",
+    detail: "This maps to browser-side image tuning. No provider, no Codex, no paid credits."
+  };
+}
+function editCostHtml(prompt, cfg, esc) {
+  const e = estimateEditCredits(prompt, cfg);
+  const paid = e.credits > 0;
+  return `<div class="ml-edit-cost ${paid ? "is-paid" : "is-free"}" data-ml-edit-cost>
+    <span class="ml-cost-pill">${paid ? svgIc("bolt") : svgIc("check")} ${esc(e.title)}</span>
+    <b>${esc(e.route)}</b>
+    <p>${esc(e.detail)}</p>
+  </div>`;
+}
 function captureForContentHub(asset, extra = {}) {
   try {
     const result = registerContentAsset({
@@ -707,8 +768,9 @@ function renderEdit(body, cfg, opts, root) {
         <div class="ml-tool-head">AI edit ${svgIc("spark")}</div>
         <div class="ml-prompt-wrap">
           <input class="ml-text-in" data-ml-aiedit placeholder="e.g. remove background, make it night, add rain"/>
-          <button class="ml-enhance" data-ml-runai>Apply</button>
+          <button class="ml-enhance" data-ml-runai>Preview</button>
         </div>
+        ${editCostHtml("", cfg, esc)}
         <div class="ml-editor-actions">
           <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to library</button>
           <button class="ml-generate ml-ghost" data-ml-dledit>${svgIc("upload")} Download</button>
@@ -727,10 +789,23 @@ function renderEdit(body, cfg, opts, root) {
   const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { editState.flip = !editState.flip; flip.classList.toggle("is-on"); if (canvas._img) paintEdit(canvas, canvas._img); };
   body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { applyFilterPreset(b.dataset.v); syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img); });
   const tin = body.querySelector("[data-ml-text]"); if (tin) tin.oninput = () => { editState.text = tin.value; if (canvas._img) paintEdit(canvas, canvas._img); };
+  const aiInput = body.querySelector("[data-ml-aiedit]");
+  const syncEditCost = () => {
+    const box = body.querySelector("[data-ml-edit-cost]");
+    if (box) box.outerHTML = editCostHtml(aiInput?.value || "", cfg, esc);
+  };
+  if (aiInput) aiInput.oninput = syncEditCost;
   const runai = body.querySelector("[data-ml-runai]");
   if (runai) runai.onclick = async () => {
-    const q = (body.querySelector("[data-ml-aiedit]").value || "").toLowerCase();
+    const q = (aiInput?.value || "").toLowerCase();
+    const estimate = estimateEditCredits(q, cfg);
+    syncEditCost();
     runai.disabled = true; runai.textContent = "…";
+    if (estimate.mode === "rembg") {
+      runai.disabled = false; runai.textContent = "Preview";
+      if (opts.notify) opts.notify("Media Factory", "remove background is local rembg: 0 credits. No provider was triggered.");
+      return;
+    }
     // local heuristic "AI edit" preview (real backend routes to provider edit)
     if (/night|dark|noir/.test(q)) { editState.brightness = 70; editState.saturate = 80; editState.hue = 210; }
     else if (/warm|sunset|golden/.test(q)) { editState.brightness = 108; editState.saturate = 140; editState.hue = 20; }
@@ -738,8 +813,11 @@ function renderEdit(body, cfg, opts, root) {
     else if (/vivid|pop|vibrant/.test(q)) { editState.saturate = 175; editState.contrast = 120; }
     else { editState.contrast = 115; editState.saturate = 130; }
     syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img);
-    runai.disabled = false; runai.textContent = "Apply";
-    if (opts.notify) opts.notify("Media Factory", `applied an AI edit: "${q.slice(0, 30)}".`);
+    runai.disabled = false; runai.textContent = "Preview";
+    if (opts.notify) {
+      const spend = estimate.credits > 0 ? `provider estimate ~${estimate.credits} credits; 0 spent in preview` : "0 credits spent";
+      opts.notify("Media Factory", `previewed edit: "${q.slice(0, 30)}" - ${spend}.`);
+    }
   };
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; renderMediaStudio(root, opts); };
