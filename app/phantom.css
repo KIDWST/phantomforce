@@ -1480,6 +1480,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   filter: blur(0.25px) brightness(1.2) contrast(1.12) drop-shadow(0 0 34px rgba(65, 255, 161, 0.26));
   transform: scale(0.9);
 }
+.phantomwire-alert,
 .forcewire-alert {
   position: relative; z-index: 1;
   display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
@@ -1492,31 +1493,39 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
   overflow: hidden; animation: heroWorkIn 0.72s cubic-bezier(0.16, 1, 0.3, 1) both, heroWorkFloat 6s ease-in-out 0.8s infinite;
 }
+.phantomwire-alert::before,
 .forcewire-alert::before {
   content: ""; position: absolute; inset: 0; pointer-events: none;
   background: linear-gradient(100deg, transparent 0 28%, rgba(159, 255, 210, 0.18) 44%, transparent 62% 100%);
   transform: translateX(-120%); animation: heroWorkScan 4.8s ease-in-out 1.2s infinite;
 }
+.phantomwire-alert-label,
 .forcewire-alert-label {
   color: rgba(65, 255, 161, 0.9); font: 800 10px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase;
   white-space: nowrap;
 }
+.phantomwire-alert-ping,
 .forcewire-alert-ping {
   position: relative; width: 9px; height: 9px; border-radius: 50%; background: var(--neon);
   box-shadow: 0 0 11px var(--neon), 0 0 22px rgba(65, 255, 161, 0.45); animation: livePulse 2.1s ease-in-out infinite;
 }
+.phantomwire-alert-ping::after,
 .forcewire-alert-ping::after {
   content: ""; position: absolute; inset: -8px; border: 1px solid rgba(65, 255, 161, 0.32); border-radius: 50%;
   animation: heroWorkRing 2.1s ease-out infinite;
 }
+.phantomwire-alert-body,
 .forcewire-alert-body { display: flex; align-items: center; gap: 9px; min-width: 0; overflow: hidden; }
+.phantomwire-alert-body b,
 .forcewire-alert-body b {
   flex: 0 0 auto; color: #effff6; font: 700 11px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase;
 }
+.phantomwire-alert-body em,
 .forcewire-alert-body em {
   min-width: 0; max-width: 100%; color: rgba(201, 255, 223, 0.78);
   font: 500 12px/1.35 "DM Mono", monospace; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+.phantomwire-alert-time,
 .forcewire-alert-time {
   color: rgba(30, 240, 255, 0.82); font: 700 9px "DM Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase;
 }
@@ -1814,12 +1823,16 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .phantom-webgl { min-height: 320px; inset: -7% -5% -5%; }
   .phantom-mode-stage { width: min(100%, 380px); }
   .phantom-mode-pose { max-height: 310px; }
+  .phantomwire-alert,
   .forcewire-alert {
     margin-top: 0; grid-template-columns: auto auto minmax(0, 1fr);
     border-radius: 18px; padding: 9px 11px;
   }
+  .phantomwire-alert-time,
   .forcewire-alert-time { display: none; }
+  .phantomwire-alert-body,
   .forcewire-alert-body { gap: 6px; }
+  .phantomwire-alert-body em,
   .forcewire-alert-body em { max-width: 100%; }
   .site-builder-grid,
   .site-start-grid { grid-template-columns: 1fr; }
@@ -1852,9 +1865,13 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .phantom-mode-stage { width: min(100%, 310px); }
   .phantom-mode-pose { width: min(88%, 270px); max-height: 240px; opacity: 0.9; }
   .phantom-mode-caption { bottom: 2%; padding: 5px 9px; font-size: 8px; letter-spacing: 0.16em; opacity: 0.82; }
+  .phantomwire-alert,
   .forcewire-alert { padding: 8px 10px; }
+  .phantomwire-alert-label,
   .forcewire-alert-label { display: none; }
+  .phantomwire-alert-body b,
   .forcewire-alert-body b { font-size: 9.5px; }
+  .phantomwire-alert-body em,
   .forcewire-alert-body em { font-size: 10.5px; }
   .cmd-chip { min-height: 42px; justify-content: center; padding: 10px 8px; }
   .cmd-chip span { font-size: 12px; }
@@ -2064,9 +2081,13 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .phantom-mode-stage::after,
   .phantom-mode-pose,
   .phantom-mode-stage.is-swapping .phantom-mode-pose,
+  .phantomwire-alert,
   .forcewire-alert,
+  .phantomwire-alert::before,
   .forcewire-alert::before,
+  .phantomwire-alert-ping,
   .forcewire-alert-ping,
+  .phantomwire-alert-ping::after,
   .forcewire-alert-ping::after { animation: none !important; }
 }
 
@@ -3589,12 +3610,19 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     max-height: 252px !important;
   }
   .phantom-mode-caption { display: none; }
+  .phantomwire-alert,
   .forcewire-alert {
     grid-template-columns: auto minmax(0, 1fr); border-radius: 17px; padding: 8px 10px;
   }
-  .forcewire-alert-label, .forcewire-alert-time { display: none; }
+  .phantomwire-alert-label,
+  .forcewire-alert-label,
+  .phantomwire-alert-time,
+  .forcewire-alert-time { display: none; }
+  .phantomwire-alert-body,
   .forcewire-alert-body { gap: 6px; }
+  .phantomwire-alert-body b,
   .forcewire-alert-body b { font-size: 9.5px; }
+  .phantomwire-alert-body em,
   .forcewire-alert-body em { max-width: 100%; font-size: 10.5px; }
   .hero2-stage .ghost-canvas,
   .phantom.has-mode-poses .hero2-stage .ghost-canvas {
@@ -3806,10 +3834,11 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 
 /* ============================================================= */
-/* =====================  AGENT OPERATIONS  =================== */
+/* ========================  PHANTOMWIRE  ===================== */
 /* ============================================================= */
 
 /* ---- scrolling report ticker (band under the topbar) ---- */
+.phantomwire,
 .agent-ticker {
   display: flex; align-items: stretch; gap: 0; overflow: hidden;
   border-bottom: 1px solid var(--line);
@@ -3836,6 +3865,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   will-change: transform; animation: atkScroll 64s linear infinite;
 }
 .atk-track.is-static { animation: none; }
+.phantomwire:hover .atk-track,
 .agent-ticker:hover .atk-track { animation-play-state: paused; }
 .atk-item { display: inline-flex; align-items: center; gap: 8px; padding: 0 6px; font-size: 12px; }
 .atk-item b { font-weight: 600; color: var(--ink); }
@@ -3949,6 +3979,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .aops-tele { grid-template-columns: repeat(2, 1fr); }
 }
 @media (max-width: 720px) {
+  .phantomwire,
   .agent-ticker { display: none; }
   .aops-tele { grid-template-columns: repeat(2, 1fr); }
   .aops-scan { display: none; }

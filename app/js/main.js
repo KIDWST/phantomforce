@@ -4,17 +4,17 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-28";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-28";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-28";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-28";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-28";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-28";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-28";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-28";
-import { mountAgentTicker, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-28";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-28";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-28";
+} from "./store.js?v=phantom-live-20260706-29";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-29";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-29";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-29";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-29";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-29";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-29";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-29";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-29";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-29";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-29";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -507,7 +507,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-28";
+const POSE_VERSION = "phantom-live-20260706-29";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -743,23 +743,17 @@ function renderHero() {
 }
 
 function renderHeroWorkAlert() {
-  const alert = $("[data-hero-work-alert]");
+  const alert = $("[data-phantomwire-alert]") || $("[data-hero-work-alert]");
   if (!alert) return;
-  const latest = liveFeed[0] || visible(store.state.activity)[0] || {
-    who: "Proposal Forge",
-    text: "prepared quote #114 - waiting on your approval",
-    icon: "chart",
-    live: true,
-    at: new Date().toISOString(),
-  };
+  const latest = liveFeed[0] || visible(store.state.activity)[0] || null;
   alert.innerHTML = `
-    <span class="forcewire-alert-label">Forcewire</span>
-    <span class="forcewire-alert-ping" aria-hidden="true"></span>
-    <span class="forcewire-alert-body">
-      <b>${esc(latest.who || "PhantomForce")}</b>
-      <em>${esc(latest.text || "prepared the next owner-safe move.")}</em>
+    <span class="phantomwire-alert-label">PhantomWire</span>
+    <span class="phantomwire-alert-ping" aria-hidden="true"></span>
+    <span class="phantomwire-alert-body">
+      <b>${esc(latest?.who || "System")}</b>
+      <em>${esc(latest?.text || "No recent activity yet. Worker and user activity will appear here.")}</em>
     </span>
-    <span class="forcewire-alert-time">${latest.live ? "now" : latest.at ? ago(latest.at) : "ready"}</span>`;
+    <span class="phantomwire-alert-time">${latest?.live ? "now" : latest?.at ? ago(latest.at) : "ready"}</span>`;
 }
 
 /* ============================ stat cards ============================ */
@@ -1126,7 +1120,7 @@ function renderConsole() {
   renderQuick();
   bindCommandForm();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
-  mountAgentTicker($("[data-agent-ticker]"));
+  mountPhantomWire($("[data-phantomwire]") || $("[data-agent-ticker]"));
   mountAgentConsole($("[data-agentops]"));
   mountCompanion($("[data-chatbox] .chatbox-head"), { onMode: applyCompanionMode });
   renderChatLog();

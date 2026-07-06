@@ -1,11 +1,11 @@
-/* PhantomForce — Agent Operations layer.
-   A live, honest picture of the internal worker spine: a scrolling report
+/* PhantomForce — PhantomWire layer.
+   A live, honest picture of users and the internal worker spine: a scrolling report
    ticker, a tail-style operations log, a worker roster with status LEDs, and
    session telemetry. Everything here is driven by the real TOOL_SPINE workers
    (store.js) — no fabricated business records. Self-contained: owns its own
    timers, guards against double-mount, and respects reduced-motion. */
 
-import { TOOL_SPINE } from "./store.js?v=phantom-live-20260706-28";
+import { store, visible, TOOL_SPINE } from "./store.js?v=phantom-live-20260706-29";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -53,25 +53,50 @@ const now2 = () => {
   return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
 };
 
+function wireItems(limit = 14) {
+  const recent = visible(store.state.activity || []).slice(0, 8).map((a) => ({
+    worker: a.who || "Phantom",
+    internal: a.toolId ? "Worker activity" : "User activity",
+    activity: a.text || "activity recorded.",
+    mode: "active",
+  }));
+  const workers = TOOL_SPINE.map((t) => ({
+    worker: t.worker,
+    internal: t.internal,
+    activity: t.activity,
+    mode: t.mode,
+  }));
+  return (recent.length ? [...recent, ...workers] : workers).slice(0, limit);
+}
+
 /* ======================================================================
-   SCROLLING REPORT TICKER  (thin band under the topbar)
+   PHANTOMWIRE TICKER  (thin band under the topbar)
    ====================================================================== */
-export function mountAgentTicker(el) {
+export function mountPhantomWire(el) {
   if (!el || el.dataset.mounted) return;
   el.dataset.mounted = "1";
-  const items = TOOL_SPINE.map((t) => {
-    const m = modeMeta(t.mode);
-    return `<span class="atk-item">
-      <i class="atk-led atk-${m.tone}"></i>
-      <b>${esc(t.worker)}</b>
-      <em>${esc(t.internal)}</em>
-      <span class="atk-txt">${esc(t.activity)}</span>
-    </span>`;
-  }).join(`<span class="atk-sep">/</span>`);
-  // duplicated track for a seamless marquee loop
-  el.innerHTML = `<div class="atk-label">AGENT&nbsp;OPS</div>
-    <div class="atk-view"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-sep">/</span>${items}</div></div>`;
+  const render = () => {
+    const items = wireItems().map((t) => {
+      const m = modeMeta(t.mode);
+      return `<span class="atk-item">
+        <i class="atk-led atk-${m.tone}"></i>
+        <b>${esc(t.worker)}</b>
+        <em>${esc(t.internal)}</em>
+        <span class="atk-txt">${esc(t.activity)}</span>
+      </span>`;
+    }).join(`<span class="atk-sep">/</span>`);
+    // duplicated track for a seamless marquee loop
+    el.innerHTML = `<div class="atk-label">PHANTOMWIRE</div>
+      <div class="atk-view"><div class="atk-track ${reduceMotion ? "is-static" : ""}">${items}<span class="atk-sep">/</span>${items}</div></div>`;
+  };
+  render();
+  const off = store.onChange(() => {
+    if (!el.isConnected) { off(); return; }
+    render();
+  });
 }
+
+export const mountAgentTicker = mountPhantomWire;
 
 /* ======================================================================
    AGENT OPERATIONS CONSOLE  (roster + telemetry + live tail log)
@@ -128,8 +153,8 @@ export function mountAgentConsole(el) {
     <div class="aops-head">
       <div class="aops-title">
         <span class="aops-live"><i></i>LIVE</span>
-        <h2>Agent operations</h2>
-        <span class="aops-sub">Real workers on the PhantomForce spine</span>
+        <h2>PhantomWire</h2>
+        <span class="aops-sub">Recent activity from workers and users</span>
       </div>
       <span class="aops-scan" aria-hidden="true"></span>
     </div>
@@ -137,7 +162,7 @@ export function mountAgentConsole(el) {
     <div class="aops-grid">
       <div class="aops-roster" data-aops-roster>${TOOL_SPINE.map(rosterRow).join("")}</div>
       <div class="aops-log-wrap">
-        <div class="aops-log-head"><span>OPERATIONS LOG</span><i data-aops-tail>tail -f</i></div>
+        <div class="aops-log-head"><span>PHANTOMWIRE LOG</span><i data-aops-tail>tail -f</i></div>
         <div class="aops-log" data-aops-log></div>
       </div>
     </div>`;
@@ -248,7 +273,7 @@ function countUp(el, target, ms = 600) {
 
 /* one call to wire everything the dashboard needs */
 export function mountAgentOps({ ticker, console: consoleEl, heroTicker } = {}) {
-  if (ticker) mountAgentTicker(ticker);
+  if (ticker) mountPhantomWire(ticker);
   if (consoleEl) mountAgentConsole(consoleEl);
   if (heroTicker) mountHeroTicker(heroTicker);
 }
