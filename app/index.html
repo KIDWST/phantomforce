@@ -139,21 +139,6 @@
 
         <nav class="side-nav" data-nav aria-label="Sections"></nav>
 
-        <div class="side-plan side-account-card">
-          <div class="side-profile-row">
-            <div class="side-profile-avatar" data-profile-avatar aria-label="Profile picture">PF</div>
-            <div class="side-profile-main">
-              <p class="side-plan-kicker">ACCOUNT</p>
-              <p class="side-profile-name" data-profile-name>Owner</p>
-              <p class="side-profile-status is-online" data-account-status><span class="side-profile-dot" aria-hidden="true"></span>Systems online</p>
-            </div>
-          </div>
-          <div class="side-plan-meta">
-            <span data-plan-name>Pro Plan</span>
-            <span data-plan-renew>Renewal: —</span>
-          </div>
-          <button class="side-plan-btn" data-open-ws="account">Manage Plan <span aria-hidden="true">→</span></button>
-        </div>
       </aside>
 
       <!-- ---------- main ---------- -->
@@ -176,14 +161,17 @@
             </button>
             <div class="notif-menu" data-notif-menu hidden></div>
           </div>
-          <button class="topbar-user" data-user-btn>
-            <span class="user-avatar" data-user-avatar>··</span>
-            <span class="user-meta">
-              <b data-user-name>—</b>
-              <i data-user-role>—</i>
-            </span>
-            <span class="user-caret" aria-hidden="true">▾</span>
-          </button>
+          <div class="user-menu-wrap">
+            <button class="topbar-user" data-user-btn aria-haspopup="menu" aria-expanded="false">
+              <span class="user-avatar" data-user-avatar>··</span>
+              <span class="user-meta">
+                <b data-user-name>—</b>
+                <i data-user-role>—</i>
+              </span>
+              <span class="user-caret" aria-hidden="true">▾</span>
+            </button>
+            <div class="user-menu" data-user-menu hidden></div>
+          </div>
         </header>
 
         <div class="phantomwire" data-phantomwire data-agent-ticker aria-label="PhantomWire recent activity"></div>

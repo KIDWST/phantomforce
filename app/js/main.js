@@ -333,6 +333,7 @@ function renderStatusPills() {
 }
 
 let clockTimer = 0;
+let accountMenuOpen = false;
 function startClock() {
   const paint = () => {
     const now = new Date();
@@ -353,11 +354,23 @@ function renderUser() {
   $("[data-user-name]").textContent = name;
   $("[data-user-role]").textContent = isAdmin() ? "Administrator" : "Employee";
   const btn = $("[data-user-btn]");
-  btn.onclick = () => {
-    if (confirm("Sign out of PhantomForce?")) {
-      session.clear(); ctx.session = null; closeOverlay(true); showGate();
-    }
-  };
+  if (btn) {
+    btn.classList.toggle("is-open", accountMenuOpen);
+    btn.setAttribute("aria-expanded", accountMenuOpen ? "true" : "false");
+    btn.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      accountMenuOpen = !accountMenuOpen;
+      renderAccountMenu();
+    };
+  }
+  renderAccountMenu();
+}
+
+function signOut() {
+  if (confirm("Sign out of PhantomForce?")) {
+    session.clear(); ctx.session = null; accountMenuOpen = false; closeOverlay(true); showGate();
+  }
 }
 
 /* ============================ account + plan ============================ */
@@ -412,6 +425,41 @@ function accountStatusMeta() {
   return attention
     ? { label: "Attention needed", tone: "error", detail: "One or more systems need owner review before everything is clean." }
     : { label: "Systems online", tone: "online", detail: "PhantomForce systems are online and protected for this workspace." };
+}
+function renderAccountMenu() {
+  const menu = $("[data-user-menu]");
+  const btn = $("[data-user-btn]");
+  if (!menu) return;
+  const owner = accountOwnerName();
+  const status = accountStatusMeta();
+  const renewal = accountRenewalLabel();
+  if (btn) {
+    btn.classList.toggle("is-open", accountMenuOpen);
+    btn.setAttribute("aria-expanded", accountMenuOpen ? "true" : "false");
+  }
+  menu.hidden = !accountMenuOpen;
+  if (!accountMenuOpen) return;
+  menu.innerHTML = `
+    <div class="user-menu-head">
+      <span class="user-menu-avatar">${esc(accountInitials(owner))}</span>
+      <span>
+        <b>${esc(owner)}</b>
+        <i>${isAdmin() ? "Administrator" : "Employee"}</i>
+      </span>
+    </div>
+    <button class="user-menu-plan" data-user-menu-action="account" type="button">
+      <span>
+        <i>Current plan</i>
+        <b>${esc(ACCOUNT_PLAN.name)}</b>
+        <em>Renewal: ${esc(renewal)}</em>
+      </span>
+      <strong>Manage →</strong>
+    </button>
+    <div class="user-menu-status is-${status.tone}">
+      <span aria-hidden="true"></span>
+      <b>${esc(status.label)}</b>
+    </div>
+    <button class="user-menu-link" data-user-menu-action="signout" type="button">Sign out</button>`;
 }
 function renderAccountPlan(body) {
   const owner = accountOwnerName();
@@ -1415,6 +1463,15 @@ function wireDeck() {
     }
     if (e.target.closest("[data-mobile-bell]")) { routeWorkspace("approvals"); return; }
     if (e.target.closest("[data-mobile-user-btn]")) { routeWorkspace("account"); return; }
+    const accountAction = e.target.closest("[data-user-menu-action]");
+    if (accountAction) {
+      const action = accountAction.dataset.userMenuAction;
+      accountMenuOpen = false;
+      renderAccountMenu();
+      if (action === "account") routeWorkspace("account");
+      if (action === "signout") signOut();
+      return;
+    }
     const mobileNav = e.target.closest("[data-mobile-nav]");
     if (mobileNav) {
       const item = MOBILE_NAV.find((n) => n.id === mobileNav.dataset.mobileNav);
@@ -1443,6 +1500,7 @@ function wireDeck() {
     const opener = e.target.closest("[data-open-ws]");
     if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
     if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
+    if (accountMenuOpen && !e.target.closest(".user-menu-wrap")) { accountMenuOpen = false; renderAccountMenu(); }
     // click outside notif menu closes it
     if (notifOpen && !e.target.closest(".notif-wrap")) { notifOpen = false; renderNotifs(); }
   });
