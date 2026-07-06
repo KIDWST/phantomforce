@@ -52,17 +52,91 @@
         background:
           radial-gradient(circle at 50% 42%, rgba(0, 255, 181, 0.18), transparent 32%),
           #02060a;
-        color: rgba(234, 255, 244, 0.82);
-        font-size: 13px;
-        font-weight: 700;
-        letter-spacing: 0.18em;
-        text-align: center;
-        text-transform: uppercase;
+      }
+
+      .boot-chat-loop {
+        display: inline-flex;
+        align-items: flex-end;
+        gap: 8px;
+        padding: 10px;
+        border-radius: 18px;
+        border: 1px solid rgba(65, 255, 161, 0.18);
+        background: rgba(4, 12, 9, 0.54);
+        box-shadow:
+          0 18px 50px rgba(0, 0, 0, 0.42),
+          0 0 30px rgba(65, 255, 161, 0.12);
+      }
+
+      .boot-chat-avatar {
+        flex: 0 0 auto;
+        width: 22px;
+        height: 22px;
+        margin-bottom: 2px;
+        border-radius: 50%;
+        background:
+          radial-gradient(circle at 50% 38%, rgba(101, 255, 190, 0.95), rgba(65, 255, 161, 0.35) 58%, transparent 72%),
+          rgba(65, 255, 161, 0.08);
+        box-shadow: 0 0 10px rgba(65, 255, 161, 0.4), inset 0 0 0 1px rgba(65, 255, 161, 0.3);
+        animation: bootAvatarPulse 1.8s ease-in-out infinite;
+      }
+
+      .boot-chat-bubble {
+        display: inline-flex;
+        align-items: center;
+        min-height: 34px;
+        padding: 9px 13px;
+        border: 1px solid rgba(65, 255, 161, 0.2);
+        border-left: 2px solid rgba(65, 255, 161, 0.55);
+        border-radius: 4px 14px 14px 14px;
+        background: rgba(65, 255, 161, 0.05);
+      }
+
+      .boot-chat-dots {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        min-height: 14px;
+      }
+
+      .boot-chat-dots i {
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: #41ffa1;
+        opacity: 0.5;
+        animation: bootDotBeat 1.1s ease-in-out infinite;
+      }
+
+      .boot-chat-dots i:nth-child(2) {
+        animation-delay: 0.16s;
+      }
+
+      .boot-chat-dots i:nth-child(3) {
+        animation-delay: 0.32s;
       }
 
       .gate:not([hidden]) ~ .boot-fallback,
       .phantom:not([hidden]) ~ .boot-fallback {
         display: none;
+      }
+
+      @keyframes bootDotBeat {
+        40% { opacity: 1; transform: translateY(-3px); }
+      }
+
+      @keyframes bootAvatarPulse {
+        50% {
+          box-shadow:
+            0 0 18px rgba(65, 255, 161, 0.56),
+            inset 0 0 0 1px rgba(65, 255, 161, 0.48);
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .boot-chat-avatar,
+        .boot-chat-dots i {
+          animation: none !important;
+        }
       }
     </style>
     <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=phantom-live-20260707-36" />
@@ -279,7 +353,14 @@
       <nav class="mobile-bottom-nav" data-mobile-bottom-nav aria-label="Mobile sections"></nav>
     </div>
 
-    <div class="boot-fallback" data-boot-fallback>Loading PhantomForce</div>
+    <div class="boot-fallback" data-boot-fallback role="status" aria-label="Booting Phantom AI">
+      <div class="boot-chat-loop" aria-hidden="true">
+        <span class="boot-chat-avatar"></span>
+        <span class="boot-chat-bubble">
+          <span class="boot-chat-dots"><i></i><i></i><i></i></span>
+        </span>
+      </div>
+    </div>
 
     <!-- ⌘K command palette -->
     <div class="cmdk" data-cmdk hidden>
