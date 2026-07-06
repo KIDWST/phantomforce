@@ -9,10 +9,10 @@
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
     </script>
-    <title>PhantomForce</title>
-    <meta name="description" content="Meet PhantomForce — the private cyber AI that runs your business. Just speak to it." />
-    <meta property="og:title" content="PhantomForce" />
-    <meta property="og:description" content="The private cyber AI that runs your business." />
+    <title>PhantomForce — Your AI Operations Team</title>
+    <meta name="description" content="PhantomForce captures leads, prepares replies, books work, drafts quotes, plans content, and keeps follow-up moving — with every important action approval-gated by you." />
+    <meta property="og:title" content="PhantomForce — Your AI Operations Team" />
+    <meta property="og:description" content="Every lead captured. Every reply handled. Every job moving. Approval-first AI operations for small business." />
     <meta property="og:type" content="website" />
     <meta property="og:url" content="https://phantomforce.online/" />
     <meta name="theme-color" content="#030910" />
@@ -20,54 +20,164 @@
     <link rel="canonical" href="https://phantomforce.online/" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="void.css?v=phantom-live-20260706-30" />
+    <link rel="stylesheet" href="void.css?v=phantom-live-20260706-34" />
   </head>
   <body>
-    <canvas class="void-canvas" data-void aria-hidden="true"></canvas>
-    <div class="void-fallback" aria-hidden="true"></div>
-    <div class="vignette" aria-hidden="true"></div>
-    <div class="riskfield" data-riskfield aria-hidden="true"></div>
-    <div class="grain" aria-hidden="true"></div>
+    <!-- ============ HERO / COMMAND CENTER (the living void, now contained) ============ -->
+    <header class="hero-void" id="top">
+      <canvas class="void-canvas" data-void aria-hidden="true"></canvas>
+      <div class="void-fallback" aria-hidden="true"></div>
+      <div class="vignette" aria-hidden="true"></div>
+      <div class="riskfield" data-riskfield aria-hidden="true"></div>
+      <div class="grain" aria-hidden="true"></div>
 
-    <main class="presence" id="main">
-      <header class="crown">
-        <p class="wordmark" data-wordmark>PHANTOMFORCE</p>
-        <p class="status" aria-hidden="true"><span class="status-dot"></span>online</p>
-      </header>
-      <p class="ops-line" data-ops aria-hidden="true"></p>
-
-      <!-- the phantom (3D entity on the canvas behind, void.js) lives in this reserved zone -->
-      <div class="phantom-zone" data-phantom-zone aria-hidden="true"></div>
-
-      <div class="converse">
-        <!-- the entity speaks and tours its own powers; no quiz, no dead-end clicks -->
-        <div class="say" data-say aria-live="polite">
-          <p class="say-line">I'm a private cyber-AI that runs your business. All of it.</p>
+      <main class="presence" id="main">
+        <div class="crown">
+          <p class="wordmark" data-wordmark>PHANTOMFORCE</p>
+          <p class="status" aria-hidden="true"><span class="status-dot"></span>workforce online</p>
         </div>
-        <div class="powers" data-powers role="list" aria-label="What PhantomForce handles">
-          <button type="button" role="listitem" data-power>Leads</button>
-          <button type="button" role="listitem" data-power>Replies</button>
-          <button type="button" role="listitem" data-power>Bookings</button>
-          <button type="button" role="listitem" data-power>Quotes &amp; money</button>
-          <button type="button" role="listitem" data-power>Content &amp; video</button>
-          <button type="button" role="listitem" data-power>Threat watch</button>
+
+        <!-- the phantom (living entity on the canvas behind, void.js) lives in this reserved zone -->
+        <div class="phantom-zone" data-phantom-zone aria-hidden="true"></div>
+
+        <div class="converse">
+          <!-- the entity speaks the headline, then tours its powers; visitors can talk back -->
+          <div class="say" data-say aria-live="polite">
+            <p class="say-line">Every lead captured. Every reply handled. Every job moving.</p>
+          </div>
+          <p class="hero-sub" data-hero-sub>
+            Your AI operations team for leads, bookings, content, quotes, and follow-up —
+            anything important comes back for <b>your approval</b>.
+          </p>
+          <div class="powers" data-powers role="list" aria-label="What PhantomForce handles">
+            <button type="button" role="listitem" data-power>Leads</button>
+            <button type="button" role="listitem" data-power>Replies</button>
+            <button type="button" role="listitem" data-power>Bookings</button>
+            <button type="button" role="listitem" data-power>Quotes</button>
+            <button type="button" role="listitem" data-power>Content</button>
+            <button type="button" role="listitem" data-power>Websites</button>
+            <button type="button" role="listitem" data-power>Follow-up</button>
+            <button type="button" role="listitem" data-power>Risk watch</button>
+          </div>
+          <form class="speak" data-speak>
+            <span class="speak-caret" aria-hidden="true">›</span>
+            <input type="text" data-speak-input autocomplete="off" spellcheck="false" placeholder="Ask PhantomForce to follow up with every new lead…" aria-label="Speak to PhantomForce" />
+          </form>
+
+          <!-- CTA block: button + support line + live status line, one intentional unit -->
+          <div class="cta-block" data-cta-block>
+            <button class="download-cta" type="button" data-download-cta>
+              Start with PhantomForce <span aria-hidden="true">→</span>
+            </button>
+            <p class="cta-support">See how your AI workforce handles leads, quotes, content, and approvals.</p>
+            <p class="ops-line" data-ops aria-hidden="true"></p>
+          </div>
         </div>
-        <form class="speak" data-speak>
-          <span class="speak-caret" aria-hidden="true">›</span>
-          <input type="text" data-speak-input autocomplete="off" spellcheck="false" placeholder="ask phantomforce…" aria-label="Speak to PhantomForce" />
-        </form>
-        <button class="download-cta" type="button" data-download-cta>
-          Download PhantomForce <span aria-hidden="true">→</span>
-        </button>
+
+        <p class="creed" aria-hidden="true">
+          <span>Private by design</span><i>·</i><span>Never sleeps</span><i>·</i><span>Nothing sends without you</span>
+        </p>
+        <a class="hero-more" href="#handles" aria-label="See what PhantomForce handles"><span></span></a>
+      </main>
+    </header>
+
+    <!-- ============ PROOF / STATUS STRIP ============ -->
+    <section class="strip" data-reveal aria-label="System status">
+      <div class="strip-in">
+        <span class="strip-item"><i class="sdot"></i>Workforce online</span>
+        <span class="strip-item"><i class="sdot"></i>Approval-first by design</span>
+        <span class="strip-item"><i class="sdot"></i>Routed specialists, one command</span>
+        <span class="strip-item"><i class="sdot"></i>Built to keep work moving</span>
       </div>
+    </section>
 
-      <p class="creed" aria-hidden="true">
-        <span>Private by design</span><i>·</i><span>Never sleeps</span><i>·</i><span>Nothing sends without you</span>
-      </p>
-    </main>
+    <!-- ============ WHAT PHANTOMFORCE HANDLES ============ -->
+    <section class="sect" id="handles" data-reveal>
+      <div class="sect-head">
+        <p class="sect-kicker">THE DESKS</p>
+        <h2>What PhantomForce handles</h2>
+        <p class="sect-sub">One system covering the work that eats your week — organized, drafted, and prepared for your approval.</p>
+      </div>
+      <div class="handle-grid">
+        <article class="hcard"><span class="hcard-ic">◉</span><h3>Lead Capture</h3><p>Catches new inquiries, organizes them, and prepares replies.</p><em class="hpill">always watching</em></article>
+        <article class="hcard"><span class="hcard-ic">✉</span><h3>Smart Replies</h3><p>Drafts fast, brand-aware responses for owner approval.</p><em class="hpill">draft → approve</em></article>
+        <article class="hcard"><span class="hcard-ic">◷</span><h3>Bookings</h3><p>Turns conversations into scheduled jobs and next steps.</p><em class="hpill">schedule desk</em></article>
+        <article class="hcard"><span class="hcard-ic">◈</span><h3>Quotes &amp; Money</h3><p>Prepares estimates, invoices, reminders, and payment follow-up.</p><em class="hpill">approval-gated</em></article>
+        <article class="hcard"><span class="hcard-ic">▶</span><h3>Content &amp; Video</h3><p>Helps plan, draft, package, and schedule content.</p><em class="hpill">media desk</em></article>
+        <article class="hcard"><span class="hcard-ic">▦</span><h3>Website &amp; Updates</h3><p>Helps maintain pages, offers, service info, and client updates.</p><em class="hpill">build surface</em></article>
+        <article class="hcard"><span class="hcard-ic">↻</span><h3>Follow-Up</h3><p>Keeps old leads, clients, and prospects from going cold.</p><em class="hpill">nothing slips</em></article>
+        <article class="hcard"><span class="hcard-ic">⬡</span><h3>Risk Watch</h3><p>Flags sensitive items, access issues, overdue work, and approval-needed actions.</p><em class="hpill">policy watch</em></article>
+      </div>
+    </section>
 
+    <!-- ============ MEET YOUR AI WORKFORCE ============ -->
+    <section class="sect sect-alt" id="workforce" data-reveal>
+      <div class="sect-head">
+        <p class="sect-kicker">THE TEAM</p>
+        <h2>Meet your AI workforce</h2>
+        <p class="sect-sub">Behind Phantom AI is a routed workforce of specialists. You ask once — PhantomForce assigns the right worker, prepares the work, and brings the final action back for approval.</p>
+      </div>
+      <div class="wf-grid" data-workforce-grid><!-- rendered from WORKFORCE data in void.js --></div>
+    </section>
+
+    <!-- ============ HOW IT WORKS ============ -->
+    <section class="sect" id="how" data-reveal>
+      <div class="sect-head">
+        <p class="sect-kicker">THE LOOP</p>
+        <h2>How it works</h2>
+      </div>
+      <ol class="how-steps">
+        <li class="how-step"><span class="how-n">1</span><h3>Tell PhantomForce what you need</h3><p>One command, message, or request.</p></li>
+        <li class="how-step"><span class="how-n">2</span><h3>Your workforce prepares the work</h3><p>Leads, replies, quotes, content, bookings, and updates get organized.</p></li>
+        <li class="how-step"><span class="how-n">3</span><h3>You approve important actions</h3><p>Sending, posting, uploading, and billing stay approval-gated.</p></li>
+        <li class="how-step"><span class="how-n">4</span><h3>Nothing slips</h3><p>Work is tracked, followed up, and surfaced when it matters.</p></li>
+      </ol>
+    </section>
+
+    <!-- ============ BUILT FOR REAL SMALL BUSINESSES ============ -->
+    <section class="sect sect-alt" id="for" data-reveal>
+      <div class="sect-head">
+        <p class="sect-kicker">THE OWNERS</p>
+        <h2>Built for real small businesses</h2>
+        <p class="sect-sub">Missed DMs. Forgotten follow-ups. Slow quotes. Content backlog. Too many tabs, no backend team. PhantomForce is the backend team in a box.</p>
+      </div>
+      <div class="who-grid">
+        <span class="who">Media teams</span><span class="who">Coaches &amp; trainers</span><span class="who">Contractors</span><span class="who">Local services</span>
+        <span class="who">Creators</span><span class="who">Event companies</span><span class="who">Consultants</span><span class="who">Small agencies</span>
+      </div>
+    </section>
+
+    <!-- ============ APPROVAL-FIRST AUTOMATION ============ -->
+    <section class="sect" id="approval" data-reveal>
+      <div class="approval-card">
+        <div class="approval-copy">
+          <p class="sect-kicker">OWNER IN CONTROL</p>
+          <h2>Approval-first automation</h2>
+          <p class="sect-sub">PhantomForce prepares work fast — but you stay in control. Nothing leaves the building without your word.</p>
+        </div>
+        <ul class="approval-list">
+          <li><i>✓</i>Draft before send</li>
+          <li><i>✓</i>Review before post</li>
+          <li><i>✓</i>Approve before upload</li>
+          <li><i>✓</i>Confirm before charge</li>
+          <li><i>✓</i>Track every action</li>
+        </ul>
+      </div>
+    </section>
+
+    <!-- ============ FINAL CTA ============ -->
+    <section class="sect final-cta" data-reveal>
+      <h2>Put your business backend on autopilot —<br /><span>without losing control.</span></h2>
+      <p class="sect-sub">PhantomForce helps capture leads, prepare replies, organize work, and keep your business moving.</p>
+      <div class="final-btns">
+        <button class="download-cta" type="button" data-download-cta-2>Start with PhantomForce <span aria-hidden="true">→</span></button>
+        <a class="ghost-btn" href="#workforce">See the workforce</a>
+      </div>
+      <p class="final-creed"><span>Private by design</span><i>·</i><span>Never sleeps</span><i>·</i><span>Nothing sends without you</span></p>
+    </section>
+
+    <!-- download gate: name/email -> automated demo email (existing flow, unchanged) -->
     <div class="download-modal" hidden data-download-modal role="dialog" aria-modal="true" aria-labelledby="download-title">
       <button class="download-backdrop" type="button" data-download-close aria-label="Close download form"></button>
       <form class="download-card" data-download-form>
@@ -90,6 +200,6 @@
       </form>
     </div>
     <p class="hint" data-hint hidden></p>
-    <script type="module" src="void.js?v=phantom-live-20260706-30"></script>
+    <script type="module" src="void.js?v=phantom-live-20260706-34"></script>
   </body>
 </html>

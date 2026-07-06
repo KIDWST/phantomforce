@@ -122,9 +122,11 @@ function initConversation() {
     } else {
       // typewriter: the entity speaks
       let i = 0;
+      const step = text.length > 44 ? 2 : 1;
       const tick = () => {
         p.textContent = text.slice(0, i);
-        if (i++ < text.length) typeTimer = window.setTimeout(tick, 15 + Math.random() * 24);
+        if (i < text.length) { i += step; typeTimer = window.setTimeout(tick, 14 + Math.random() * 20); }
+        else p.textContent = text;
       };
       tick();
     }
@@ -144,12 +146,14 @@ function initConversation() {
   // ---- the power tour: the entity walks through everything it runs, unprompted ----
   // one line per chip, same order as the [data-power] buttons in the HTML
   const powerLines = [
-    "Every lead captured, answered, and chased — nothing slips.",
-    "Your inbox, cleared — replies drafted and waiting on one tap.",
-    "Your calendar runs itself: booked, reminded, reshuffled.",
-    "Quotes sent, invoices chased, the money trail tracked.",
-    "Posts, decks, docs, images, and video — created through gated Media Lab generation.",
-    "Scams, leaks, and threats flagged before they cost you.",
+    "Every new inquiry captured, organized, and answered — nothing slips.",
+    "Replies drafted in your voice, waiting on one tap from you.",
+    "Conversations become booked jobs, reminders, and next steps.",
+    "Estimates and invoices prepared, payment follow-up tracked.",
+    "Posts, reels, and campaigns planned, drafted, and packaged.",
+    "Pages, offers, and client updates kept current.",
+    "Old leads and quiet clients get warmed back up.",
+    "Risky items and approval-needed actions flagged before they cost you.",
   ];
   // after a full lap, the coda: every chip lit at once, the ask made plainly
   const codaLine = "The whole job — handled, around the clock. Take me with you.";
@@ -204,6 +208,7 @@ function initConversation() {
   };
 
   downloadCta?.addEventListener("click", openDownload);
+  document.querySelector("[data-download-cta-2]")?.addEventListener("click", openDownload);
   document.querySelectorAll("[data-download-close]").forEach((btn) => btn.addEventListener("click", closeDownload));
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape" && downloadModal && !downloadModal.hidden) closeDownload();
@@ -300,7 +305,7 @@ function initConversation() {
   // boot: the entity wakes, introduces itself, then tours its powers on its own
   say.replaceChildren();
   window.setTimeout(() => {
-    speak("I'm a private cyber-AI that runs your business. All of it.");
+    speak("Every lead captured. Every reply handled. Every job moving.");
     scheduleTour(4300);
   }, 650);
 }
@@ -313,7 +318,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260706-30")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260706-34")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -442,7 +447,7 @@ function initRiskRadar() {
   const active = [];
   const overlaps = (a, b, pad) =>
     a.left - pad < b.right && a.right + pad > b.left && a.top - pad < b.bottom && a.bottom + pad > b.top;
-  const uiSel = "[data-wordmark], [data-say], [data-powers], [data-speak], [data-download-cta], [data-download-modal]";
+  const uiSel = "[data-wordmark], [data-say], [data-hero-sub], [data-powers], [data-speak], [data-cta-block], [data-download-modal]";
   const place = (ping) => {
     const W = innerWidth, H = innerHeight;
     const obstacles = active.map((e) => e.getBoundingClientRect())
@@ -528,6 +533,56 @@ function initOpsFeed() {
   if (!reduceMotion) window.setInterval(() => { if (!document.hidden) paint(); }, 4400);
 }
 
-function boot() { initConversation(); initEntity(); initRiskRadar(); initOpsFeed(); }
+function initPromptExamples() {
+  const input = document.querySelector("[data-speak-input]");
+  if (!input) return;
+  const EXAMPLES = [
+    "Ask PhantomForce to follow up with every new lead…",
+    "Ask PhantomForce to prepare today's content plan…",
+    "Ask PhantomForce to draft a quote and booking reply…",
+    "Ask PhantomForce to warm up last month's quiet leads…",
+  ];
+  if (reduceMotion) { input.placeholder = EXAMPLES[0]; return; }
+  let i = 0;
+  window.setInterval(() => {
+    if (document.hidden || input.value || document.activeElement === input) return;
+    i = (i + 1) % EXAMPLES.length;
+    input.placeholder = EXAMPLES[i];
+  }, 3600);
+}
+
+/* the AI workforce — centralized seed data; swap for a backend feed later */
+const WORKFORCE = [
+  { name: "Maya Brooks",  role: "Client Success",         status: "Preparing reply",       tone: "on" },
+  { name: "Leo Grant",    role: "Lead Research",          status: "Organizing new leads",  tone: "on" },
+  { name: "Nina Cross",   role: "Content Producer",       status: "Building content plan", tone: "on" },
+  { name: "Marcus Vale",  role: "Website Technician",     status: "Reviewing page update", tone: "idle" },
+  { name: "Ava Monroe",   role: "Scheduling Coordinator", status: "Checking schedule",     tone: "on" },
+  { name: "Eli Rhodes",   role: "Finance Assistant",      status: "Waiting approval",      tone: "warn" },
+];
+function initWorkforce() {
+  const grid = document.querySelector("[data-workforce-grid]");
+  if (!grid) return;
+  grid.innerHTML = WORKFORCE.map((w, i) => {
+    const initials = w.name.split(" ").map((p) => p[0]).join("");
+    return `<article class="wf-card">
+      <span class="wf-avatar wf-hue-${i % 6}">${initials}</span>
+      <span class="wf-main"><b>${w.name}</b><i>${w.role}</i></span>
+      <span class="wf-status wf-${w.tone}"><em></em>${w.status}</span>
+    </article>`;
+  }).join("");
+}
+
+function initReveal() {
+  const els = Array.from(document.querySelectorAll("[data-reveal]"));
+  if (!els.length) return;
+  if (reduceMotion || !("IntersectionObserver" in window)) { els.forEach((el) => el.classList.add("in")); return; }
+  const io = new IntersectionObserver((entries) => {
+    entries.forEach((en) => { if (en.isIntersecting) { en.target.classList.add("in"); io.unobserve(en.target); } });
+  }, { threshold: 0.12 });
+  els.forEach((el) => io.observe(el));
+}
+
+function boot() { initConversation(); initEntity(); initRiskRadar(); initOpsFeed(); initPromptExamples(); initWorkforce(); initReveal(); }
 if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
 else boot();
