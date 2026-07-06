@@ -2797,6 +2797,58 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     backdrop-filter: blur(20px);
     transition: opacity 0.18s ease, transform 0.18s ease;
   }
+  .phantom.is-command-focused .app-main {
+    padding-bottom: calc(122px + var(--phantom-keyboard-offset) + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .phantom.is-command-focused .console {
+    padding-bottom: calc(134px + var(--phantom-keyboard-offset) + env(safe-area-inset-bottom, 0px)) !important;
+  }
+  .phantom.is-command-focused .hero2 {
+    overflow: visible;
+  }
+  .phantom.is-command-focused .hero2-stage {
+    width: 132px;
+    height: 112px;
+    min-height: 0 !important;
+    opacity: 0.2;
+  }
+  .phantom.is-command-focused .phantom-webgl {
+    min-height: 0 !important;
+  }
+  .phantom.is-command-focused .phantom-mode-stage {
+    width: 116px !important;
+    max-width: 116px;
+  }
+  .phantom.is-command-focused .phantom-mode-pose {
+    width: 106px !important;
+    max-height: 112px !important;
+  }
+  .phantom.is-command-focused .cmd-input {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + var(--phantom-keyboard-offset) + env(safe-area-inset-bottom, 0px));
+    z-index: 110;
+    max-width: none;
+    min-height: 58px;
+    border-radius: 18px;
+    background: rgba(3, 12, 9, 0.96);
+    box-shadow: 0 18px 44px rgba(0, 0, 0, 0.56), 0 0 0 1px rgba(65, 255, 161, 0.24), 0 0 36px rgba(65, 255, 161, 0.18);
+    -webkit-backdrop-filter: blur(18px);
+    backdrop-filter: blur(18px);
+    transform: translateZ(0);
+  }
+  .phantom.is-command-focused .cmd-input input {
+    font-size: 16px;
+  }
+  .phantom.is-command-focused .cmd-chips {
+    margin-bottom: 82px;
+  }
+  .phantom.is-command-focused .mobile-bottom-nav {
+    opacity: 0;
+    transform: translateY(120%);
+    pointer-events: none;
+  }
   .mobile-bottom-item {
     min-width: 0;
     min-height: 50px;
