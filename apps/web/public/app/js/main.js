@@ -4,13 +4,13 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-19";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-19";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-19";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-19";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-19";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-19";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-19";
+} from "./store.js?v=phantom-live-20260705-20";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-20";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-20";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-20";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-20";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-20";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-20";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -167,6 +167,11 @@ function goNav(id) {
   if (!item) return;
   activeNav = id;
   renderNav();
+  if (id !== "dashboard") {
+    const mood = item.id === "approvals" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
+    setGhostMood(mood.mood, { emotion: mood.emotion, ms: 1200 });
+    stageReact("nav", 640);
+  }
   if (item.view === "main") renderDashboardPage(true);
   else if (item.ws) renderWorkspacePage(item.ws, true);
 }
@@ -368,9 +373,10 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-19";
+const POSE_VERSION = "phantom-live-20260705-20";
 let phantom3d = null;
 let phantomBootSettled = false;
+let stageReactionTimer = 0;
 const MODE_POSES = {
   ask: {
     src: "/app/assets/poses/mode-dark-ask.webp",
@@ -403,9 +409,60 @@ const MODE_POSES = {
     alt: "Phantom in admin control mode",
   },
 };
+const MODE_REACTIONS = {
+  ask:     { mood: "listening", emotion: "calm", caption: "Listening" },
+  write:   { mood: "thinking",  emotion: "bright", caption: "Writing" },
+  image:   { mood: "thinking",  emotion: "excited", caption: "Conjuring" },
+  video:   { mood: "thinking",  emotion: "bright", caption: "Directing" },
+  website: { mood: "thinking",  emotion: "calm", caption: "Building" },
+  admin:   { mood: "talking",   emotion: "alert", caption: "Operator mode" },
+};
 
 function poseUrl(src) {
   return `${src}?v=${POSE_VERSION}`;
+}
+
+function reactionForMode(id = activeMode) {
+  return MODE_REACTIONS[id] || MODE_REACTIONS.ask;
+}
+
+function inferModeFromText(text = "") {
+  const s = text.toLowerCase();
+  if (/\b(video|reel|clip|shoot|phantomcut|edit|render)\b/.test(s)) return "video";
+  if (/\b(image|photo|picture|graphic|creative|thumbnail|visual)\b/.test(s)) return "image";
+  if (/\b(site|website|page|landing|store|checkout|web)\b/.test(s)) return "website";
+  if (/\b(write|draft|proposal|quote|caption|email|follow.?up|copy)\b/.test(s)) return "write";
+  if (/\b(status|admin|system|approval|protect|security|scan|worker|settings)\b/.test(s)) return "admin";
+  return activeMode;
+}
+
+function stageCaptionText(mood = ghostMood, emotion = ghostEmotion) {
+  const mode = reactionForMode(activeMode);
+  if (mood === "thinking") {
+    if (activeMode === "write") return "Drafting";
+    if (activeMode === "image") return "Conjuring";
+    if (activeMode === "video") return "Directing";
+    if (activeMode === "website") return "Building";
+    return "Thinking";
+  }
+  if (mood === "talking") return emotion === "alert" ? "Heads up" : "Answering";
+  if (mood === "listening") return "Listening";
+  return mode.caption;
+}
+
+function stageReact(kind = "pulse", ms = 700) {
+  const stage = $("[data-mode-stage]");
+  if (!stage || reduceMotion) return;
+  stage.dataset.reaction = kind;
+  stage.classList.remove("is-reacting");
+  void stage.offsetWidth;
+  stage.classList.add("is-reacting");
+  clearTimeout(stageReactionTimer);
+  stageReactionTimer = setTimeout(() => {
+    stage.classList.remove("is-reacting");
+    if (stage.dataset.reaction === kind) delete stage.dataset.reaction;
+  }, ms);
+  if (phantom3d?.burst) phantom3d.burst(kind, ms);
 }
 
 function syncPoseMood(mood = "idle", emotion = "calm") {
@@ -413,6 +470,12 @@ function syncPoseMood(mood = "idle", emotion = "calm") {
   if (stage) {
     stage.dataset.mood = mood;
     stage.dataset.emotion = emotion;
+  }
+  const caption = $("[data-mode-caption]");
+  if (caption) caption.textContent = stageCaptionText(mood, emotion);
+  if (phantom) {
+    phantom.dataset.phantomMood = mood;
+    phantom.dataset.phantomEmotion = emotion;
   }
   if (phantom3d) phantom3d.setMood(mood, emotion);
 }
@@ -438,7 +501,7 @@ function renderModePose(id = activeMode) {
     if (phantom3d) phantom3d.setPose({ ...pose, id: poseId, src: nextSrc });
   }
   img.setAttribute("alt", pose.alt);
-  if (caption) caption.textContent = pose.caption;
+  if (caption) caption.textContent = stageCaptionText(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
   syncPoseMood(typeof ghostMood === "string" ? ghostMood : "idle", typeof ghostEmotion === "string" ? ghostEmotion : "calm");
 }
 
@@ -456,6 +519,9 @@ function setMode(id) {
   activeMode = id;
   renderChips();
   renderModePose(id);
+  const reaction = reactionForMode(id);
+  setGhostMood(reaction.mood, { emotion: reaction.emotion, ms: id === "ask" ? 1800 : 1400 });
+  stageReact(id, 760);
   if (m.open) { routeWorkspace(m.open); return; }
   const input = $("[data-command-input]");
   input.placeholder = m.placeholder;
@@ -910,16 +976,25 @@ function cardHtml(c) {
 }
 function runCommand(raw) {
   phantomHasActed = true;
+  const inferredMode = inferModeFromText(raw);
+  if (inferredMode !== activeMode && MODES[inferredMode]) {
+    activeMode = inferredMode;
+    renderChips();
+    renderModePose(inferredMode);
+  }
   const mode = MODES[activeMode] || MODES.ask;
   const text = mode.prefix && !/\b(draft|create|build|make|write|new)\b/i.test(raw) ? mode.prefix + raw : raw;
   speak(raw, "user");
   ghostFlare("listening");
+  stageReact("listen", 620);
   const respBox = $("[data-response]");
   if (respBox) respBox.innerHTML = "";
   setTimeout(() => {
     speak("· · ·", "thinking");
+    stageReact("think", 780);
     setTimeout(() => {
       const r = handleCommand(text);
+      stageReact("answer", 980);
       speak(r.say);
       if (respBox) respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
       renderConsole();
@@ -933,6 +1008,29 @@ function bindCommandForm() {
   const input = $("[data-command-input]");
   if (!form || !input || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
+  input.addEventListener("focus", () => {
+    const reaction = reactionForMode(activeMode);
+    setGhostMood("listening", { emotion: reaction.emotion });
+    stageReact("listen", 520);
+  });
+  input.addEventListener("input", () => {
+    const value = input.value.trim();
+    if (!value) {
+      setGhostMood("listening", { emotion: reactionForMode(activeMode).emotion });
+      return;
+    }
+    const inferredMode = inferModeFromText(value);
+    if (inferredMode !== activeMode && MODES[inferredMode]) {
+      activeMode = inferredMode;
+      renderChips();
+      renderModePose(inferredMode);
+    }
+    setGhostMood("thinking", { emotion: reactionForMode(activeMode).emotion, ms: 1100 });
+    stageReact("typing", 520);
+  });
+  input.addEventListener("blur", () => {
+    if (!input.value.trim()) setGhostMood("idle", { emotion: "happy", ms: 1200 });
+  });
   form.addEventListener("submit", (e) => {
     e.preventDefault();
     const v = input.value.trim();
@@ -999,7 +1097,7 @@ const mediaOpts = () => ({
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "AI studio", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
-  analytics: { title: "Analytics", kicker: "Live from Content Hub", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
+  analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
 };
@@ -1025,6 +1123,8 @@ function renderDashboardPage(pushHash = true) {
   activeNav = "dashboard";
   clearOverlayOnly();
   ensureDashboardShell();
+  setGhostMood("idle", { emotion: "happy", ms: 1200 });
+  stageReact("dashboard", 520);
   renderConsole();
   if (pushHash && location.hash) {
     try { history.pushState(null, "", location.pathname + location.search); } catch {}
@@ -1035,6 +1135,9 @@ function renderWorkspacePage(id, pushHash = true) {
   const def = workspaceDef(key);
   if (!def) return;
   if (def.adminOnly && !isAdmin()) return;
+  const wsMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
+  setGhostMood(wsMood.mood, { emotion: wsMood.emotion, ms: 1400 });
+  stageReact(key === "media" ? "video" : key === "sites" ? "website" : "workspace", 720);
   const root = $("[data-console]");
   if (!root) return;
   const navHit = navForWorkspace(key);
@@ -1080,6 +1183,9 @@ function openWorkspace(id, pushHash = true) {
   const def = workspaceDef(key);
   if (!def) return;
   if (def.adminOnly && !isAdmin()) return;
+  const overlayMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
+  setGhostMood(overlayMood.mood, { emotion: overlayMood.emotion, ms: 1400 });
+  stageReact("workspace", 720);
   clearOverlayOnly();
   openId = key;
   document.body.classList.add("overlay-open");
@@ -1227,6 +1333,7 @@ function initGhost() {
     ctx2.clearRect(0, 0, w, h);
     const mood =
       ghostMood === "talking" || ghostMood === "thinking" || ghostMood === "listening" ? ghostMood :
+      ghostEmotion === "happy" || ghostEmotion === "excited" ? "happy" :
       ghostEmotion === "alert" ? "menace" : "idle";
     character.draw(ctx2, {
       t, dt,

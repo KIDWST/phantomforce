@@ -142,6 +142,8 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
   let smoothY = 0;
   let alive = true;
   let started = false;
+  let burstUntil = 0;
+  let burstKind = "";
 
   function resolveAccent() {
     return ACCENTS[emotion] || ACCENTS.calm;
@@ -192,6 +194,11 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     applyAccent();
   }
 
+  function burst(kind = "answer", ms = 850) {
+    burstKind = kind;
+    burstUntil = performance.now() + ms;
+  }
+
   function resize() {
     const box = canvas.getBoundingClientRect();
     const width = Math.max(1, box.width);
@@ -213,6 +220,12 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     pointerY = clamp((event.clientY - centerY) / Math.max(1, box.height), -0.18, 0.18);
   }, { passive: true });
 
+  window.addEventListener("deviceorientation", (event) => {
+    if (event.gamma == null && event.beta == null) return;
+    pointerX = clamp((event.gamma || 0) / 85, -0.22, 0.22);
+    pointerY = clamp(((event.beta || 0) - 45) / 160, -0.18, 0.18);
+  }, { passive: true });
+
   function frame(now) {
     if (!alive) return;
     requestAnimationFrame(frame);
@@ -223,16 +236,20 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     smoothY += (pointerY - smoothY) * 0.045;
     const talk = mood === "talking" ? Math.abs(Math.sin(t * 8.2)) * 0.35 : 0;
     const think = mood === "thinking" ? Math.abs(Math.sin(t * 3.6)) * 0.35 : 0;
-    const pulse = m.pulse + talk * 0.08 + think * 0.06;
+    const burstAge = Math.max(0, burstUntil - performance.now());
+    const burstPower = burstAge ? clamp(burstAge / 850, 0, 1) : 0;
+    const answerBurst = burstKind === "answer" ? burstPower : 0;
+    const inputBurst = burstKind && burstKind !== "answer" ? burstPower * 0.55 : 0;
+    const pulse = m.pulse + talk * 0.08 + think * 0.06 + answerBurst * 0.18 + inputBurst * 0.08;
 
-    root.position.y = -0.07 + Math.sin(t * 0.95) * m.bob + talk * 0.008;
+    root.position.y = -0.07 + Math.sin(t * 0.95) * m.bob + talk * 0.008 - answerBurst * 0.035;
     root.rotation.y = smoothX * 0.09 + Math.sin(t * 0.38) * 0.012;
     root.rotation.x = -smoothY * 0.022 + Math.sin(t * 0.48) * 0.004;
     root.rotation.z = smoothX * -0.006 + Math.sin(t * 0.32) * 0.002;
     const breathe = 1 + Math.sin(t * 1.2) * m.breathe + talk * 0.004;
     root.scale.set(breathe, breathe, 1);
 
-    bodyMat.opacity = 0.92 + pulse * 0.035;
+    bodyMat.opacity = 0.9 + pulse * 0.06;
     auraGroup.position.x = -smoothX * 0.018;
     auraGroup.rotation.z = smoothX * -0.035 + Math.sin(t * 0.38) * 0.004;
     auraRings.forEach(({ ring, baseOpacity }, i) => {
@@ -240,8 +257,8 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
       ring.material.opacity = baseOpacity + pulse * (0.009 + i * 0.002);
     });
 
-    ringGroup.rotation.z += (0.002 + m.spin * 0.006) * (reduceMotion ? 0.2 : 1);
-    ringGroup.scale.setScalar(1 + Math.sin(t * 1.1) * 0.008 + pulse * 0.012);
+    ringGroup.rotation.z += (0.002 + m.spin * 0.006 + answerBurst * 0.052) * (reduceMotion ? 0.2 : 1);
+    ringGroup.scale.setScalar(1 + Math.sin(t * 1.1) * 0.008 + pulse * 0.018 + answerBurst * 0.08);
     rings.forEach((ring, i) => {
       ring.rotation.z = -t * (0.16 + i * 0.06);
       ring.material.opacity = (0.07 + m.ring * 0.12) * (1 - i * 0.13) + talk * 0.01;
@@ -256,7 +273,7 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
     }
     attr.needsUpdate = true;
     particles.rotation.y = root.rotation.y * 0.5;
-    particleMat.opacity = 0.22 + pulse * 0.18;
+    particleMat.opacity = 0.2 + pulse * 0.22 + answerBurst * 0.12;
 
     renderer.render(scene, camera);
   }
@@ -282,5 +299,5 @@ export function createPhantomStage3D({ canvas, reduceMotion = false } = {}) {
 
   applyAccent();
   start();
-  return { setPose, setMood, resize, destroy };
+  return { setPose, setMood, burst, resize, destroy };
 }
