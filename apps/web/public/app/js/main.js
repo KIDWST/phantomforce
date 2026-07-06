@@ -4,24 +4,78 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260705-27";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-27";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-27";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-27";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-27";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-27";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-27";
+} from "./store.js?v=phantom-live-20260706-06";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-06";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-06";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-06";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-06";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-06";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-06";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const isPhoneView = () => window.matchMedia("(max-width: 720px)").matches;
+const isMobileView = () => window.matchMedia("(max-width: 900px)").matches;
 
 const gate = $("[data-gate]");
 const phantom = $("[data-phantom]");
 const overlayRoot = $("[data-overlay-root]");
 const consoleRoot = $("[data-console]");
 const dashboardShellHtml = consoleRoot ? consoleRoot.innerHTML : "";
+let commandTouchScroll = { x: 0, y: 0 };
+let keyboardViewportBound = false;
+
+function updateKeyboardOffset() {
+  const vv = window.visualViewport;
+  const offset = vv ? Math.max(0, window.innerHeight - vv.height - vv.offsetTop) : 0;
+  document.documentElement.style.setProperty("--phantom-keyboard-offset", `${Math.round(offset)}px`);
+}
+
+function bindKeyboardViewport() {
+  if (keyboardViewportBound || !window.visualViewport) return;
+  keyboardViewportBound = true;
+  window.visualViewport.addEventListener("resize", updateKeyboardOffset, { passive: true });
+  window.visualViewport.addEventListener("scroll", updateKeyboardOffset, { passive: true });
+  updateKeyboardOffset();
+}
+
+function restoreMobileScroll(x = commandTouchScroll.x, y = commandTouchScroll.y) {
+  if (!isMobileView()) return;
+  requestAnimationFrame(() => window.scrollTo(x, y));
+  setTimeout(() => window.scrollTo(x, y), 90);
+}
+
+function focusWithoutScroll(input) {
+  if (!input) return;
+  const x = window.scrollX;
+  const y = window.scrollY;
+  try { input.focus({ preventScroll: true }); }
+  catch { input.focus(); }
+  if (isMobileView()) restoreMobileScroll(x, y);
+}
+
+function setCommandFocusState(active) {
+  phantom?.classList.toggle("is-command-focused", !!active);
+  if (active) {
+    commandTouchScroll = { x: window.scrollX, y: window.scrollY };
+    bindKeyboardViewport();
+    updateKeyboardOffset();
+    if (mobileNavOpen) setMobileNav(false);
+  } else {
+    document.documentElement.style.setProperty("--phantom-keyboard-offset", "0px");
+  }
+}
+
+function focusCommandInput(delay = 0) {
+  const run = () => {
+    const input = $("[data-command-input]");
+    setCommandFocusState(true);
+    focusWithoutScroll(input);
+  };
+  if (delay) setTimeout(run, delay);
+  else run();
+}
 
 /* ---- inline line-icons (stroke = currentColor) ---- */
 const I = {
@@ -139,8 +193,16 @@ const NAV = [
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
+const MOBILE_NAV = [
+  { id: "dashboard", label: "Home",    icon: "grid",  route: "nav", target: "dashboard" },
+  { id: "media",     label: "Video",   icon: "media", route: "nav", target: "media" },
+  { id: "sites",     label: "Website", icon: "grid",  route: "ws",  target: "sites" },
+  { id: "adminos",   label: "Admin",   icon: "auto",  route: "ws",  target: "adminos", adminOnly: true },
+  { id: "approvals", label: "Review",  icon: "check", route: "nav", target: "approvals" },
+];
 let activeNav = "dashboard";
 let activePageId = null;
+let mobileNavOpen = false;
 
 const WORKSPACE_ALIASES = {
   brand: "memory",
@@ -169,6 +231,36 @@ function renderNav() {
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
     </button>`).join("");
+  renderMobileBottomNav();
+}
+
+function mobileNavActive(item) {
+  const target = workspaceId(item.target);
+  if (item.route === "nav") return activeNav === item.target || (item.target === "dashboard" && !activePageId);
+  return activePageId === target || openId === target;
+}
+
+function renderMobileBottomNav() {
+  const nav = $("[data-mobile-bottom-nav]");
+  if (!nav) return;
+  nav.innerHTML = MOBILE_NAV.filter(canAccessSurface).map((item) => `
+    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""}" data-mobile-nav="${esc(item.id)}" type="button">
+      ${svg(item.icon)}
+      <span>${esc(item.label)}</span>
+    </button>`).join("");
+}
+
+function setMobileNav(open) {
+  mobileNavOpen = !!open;
+  const shell = $("[data-phantom]");
+  const sidebar = $(".sidebar");
+  const toggle = $("[data-side-toggle]");
+  shell?.classList.toggle("nav-expanded", mobileNavOpen);
+  sidebar?.classList.toggle("is-expanded", mobileNavOpen);
+  if (toggle) {
+    toggle.setAttribute("aria-expanded", String(mobileNavOpen));
+    toggle.setAttribute("aria-label", mobileNavOpen ? "Close navigation" : "Open navigation");
+  }
 }
 
 function goNav(id) {
@@ -222,6 +314,8 @@ function renderUser() {
   const name = ctx.session?.name || "Phantom";
   const initials = name.split(/\s+/).map((p) => p[0]).slice(0, 2).join("").toUpperCase();
   $("[data-user-avatar]").textContent = initials || "PF";
+  const mobileAvatar = $("[data-mobile-user-avatar]");
+  if (mobileAvatar) mobileAvatar.textContent = initials || "PF";
   $("[data-user-name]").textContent = name;
   $("[data-user-role]").textContent = isAdmin() ? "Administrator" : "Employee";
   const btn = $("[data-user-btn]");
@@ -382,7 +476,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-27";
+const POSE_VERSION = "phantom-live-20260706-06";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -534,7 +628,7 @@ function setMode(id) {
   if (m.open) { routeWorkspace(m.open); return; }
   const input = $("[data-command-input]");
   input.placeholder = m.placeholder;
-  input.focus();
+  focusWithoutScroll(input);
 }
 
 function renderHero() {
@@ -723,7 +817,9 @@ function renderNotifs() {
   const items = attentionItems();
   const btnIc = $("[data-notif-ic]"); if (btnIc) btnIc.innerHTML = svg("bell");
   const dot = $("[data-notif-dot]");
+  const mobileDot = $("[data-mobile-notif-dot]");
   if (dot) { dot.hidden = items.length === 0; dot.textContent = items.length > 9 ? "9+" : String(items.length); }
+  if (mobileDot) { mobileDot.hidden = items.length === 0; mobileDot.textContent = items.length > 9 ? "9+" : String(items.length); }
   const menu = $("[data-notif-menu]");
   if (!menu) return;
   menu.hidden = !notifOpen;
@@ -808,7 +904,7 @@ function openPalette() {
   requestAnimationFrame(() => root.classList.add("is-open"));
   $("[data-cmdk-input-ic]").innerHTML = svg("search");
   const input = $("[data-cmdk-input]"); input.value = ""; renderPalette("");
-  setTimeout(() => input.focus(), 20);
+  setTimeout(() => focusWithoutScroll(input), 20);
 }
 function closePalette() {
   cmdkOpen = false;
@@ -1016,10 +1112,15 @@ function bindCommandForm() {
   const input = $("[data-command-input]");
   if (!form || !input || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
+  form.addEventListener("pointerdown", () => {
+    commandTouchScroll = { x: window.scrollX, y: window.scrollY };
+  }, { passive: true });
   input.addEventListener("focus", () => {
+    setCommandFocusState(true);
     const reaction = reactionForMode(activeMode);
     setGhostMood("listening", { emotion: reaction.emotion });
     stageReact("listen", 520);
+    restoreMobileScroll();
   });
   input.addEventListener("input", () => {
     const value = input.value.trim();
@@ -1037,6 +1138,7 @@ function bindCommandForm() {
     stageReact("typing", 520);
   });
   input.addEventListener("blur", () => {
+    setCommandFocusState(false);
     if (!input.value.trim()) setGhostMood("idle", { emotion: "happy", ms: 1200 });
   });
   form.addEventListener("submit", (e) => {
@@ -1053,8 +1155,25 @@ function wireDeck() {
   document.addEventListener("click", (e) => {
     const mode = e.target.closest("[data-mode]");
     if (mode) { setMode(mode.dataset.mode); return; }
+    if (e.target.closest("[data-mobile-home]")) { renderDashboardPage(true); return; }
+    if (e.target.closest("[data-mobile-command]")) {
+      renderDashboardPage(true);
+      focusCommandInput(40);
+      return;
+    }
+    if (e.target.closest("[data-mobile-bell]")) { routeWorkspace("approvals"); return; }
+    if (e.target.closest("[data-mobile-user-btn]")) { routeWorkspace("account"); return; }
+    const mobileNav = e.target.closest("[data-mobile-nav]");
+    if (mobileNav) {
+      const item = MOBILE_NAV.find((n) => n.id === mobileNav.dataset.mobileNav);
+      if (!item) return;
+      if (item.route === "nav") goNav(item.target);
+      else routeWorkspace(item.target);
+      return;
+    }
+    if (e.target.closest("[data-side-toggle]")) { setMobileNav(!mobileNavOpen); return; }
     const navBtn = e.target.closest("[data-nav-id]");
-    if (navBtn) { goNav(navBtn.dataset.navId); return; }
+    if (navBtn) { goNav(navBtn.dataset.navId); setMobileNav(false); return; }
     const quick = e.target.closest("[data-quick]");
     if (quick) {
       const q = QUICK[+quick.dataset.quick];
@@ -1069,6 +1188,7 @@ function wireDeck() {
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     const opener = e.target.closest("[data-open-ws]");
     if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
+    if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
     // click outside notif menu closes it
     if (notifOpen && !e.target.closest(".notif-wrap")) { notifOpen = false; renderNotifs(); }
   });
@@ -1087,7 +1207,8 @@ function wireDeck() {
     }
     if (phantom.hidden) return;
     const typing = /^(input|textarea|select)$/i.test(e.target.tagName);
-    if (e.key === "/" && !typing) { e.preventDefault(); $("[data-command-input]")?.focus(); }
+    if (e.key === "/" && !typing) { e.preventDefault(); focusCommandInput(); }
+    else if (e.key === "Escape" && mobileNavOpen) { setMobileNav(false); }
     else if (e.key === "Escape" && notifOpen) { notifOpen = false; renderNotifs(); }
   });
 }
@@ -1309,6 +1430,7 @@ function openWorkspace(id, pushHash = true) {
   if (pushHash && location.hash !== `#ws/${key}`) {
     try { history.pushState(null, "", `#ws/${key}`); } catch {}
   }
+  renderMobileBottomNav();
 }
 function closeOverlay(clearHash) {
   if (!openId) { if (clearHash) syncNavToView(); return; }
@@ -1372,7 +1494,7 @@ function wirePhantomConsole(body) {
     paint();
     renderConsole();
   });
-  setTimeout(() => input.focus(), 60);
+  setTimeout(() => focusWithoutScroll(input), 60);
 }
 
 /* ============================ ghost (2D character) ============================ */
