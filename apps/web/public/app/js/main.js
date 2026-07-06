@@ -87,7 +87,7 @@ function showGate() {
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
-      <p class="gate-note">Pangolin provides the private route. PhantomForce owns the visible login and session.</p>`;
+      <p class="gate-note">The private gateway protects this route. PhantomForce owns the visible login and session.</p>`;
     const form = card.querySelector("[data-owner-login]");
     const input = card.querySelector("[data-owner-key]");
     const error = card.querySelector("[data-owner-error]");

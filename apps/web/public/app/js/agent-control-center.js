@@ -4,10 +4,10 @@ const CONTROL_CENTER_URL = "http://127.0.0.1:5757/";
 const ADMIN_CHECK_MS = 650;
 
 const signals = [
-  ["AgentLab", "local control"],
-  ["n8n", "worker lane"],
-  ["OpenSpec", "proposal gate"],
-  ["Serena", "read-only"],
+  ["Operator Desk", "local control"],
+  ["Workflow Lane", "worker lane"],
+  ["Proposal Gate", "approval gate"],
+  ["Code Lens", "read-only"],
   ["Security", "local scans"],
 ];
 
@@ -215,7 +215,7 @@ function render() {
           <article>
             <span>Allowed</span>
             <strong>View status</strong>
-            <p>Agent loops, local scans, OpenSpec, Serena profile, n8n lane, and safe process notes.</p>
+            <p>Agent loops, local scans, proposal gates, code profile, workflow lane, and safe process notes.</p>
           </article>
           <article>
             <span>Blocked</span>

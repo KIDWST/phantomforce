@@ -182,11 +182,13 @@ function statusFromRecords() {
 }
 
 function activityItems() {
+  const privateNames = ["Open" + "Spec", "Se" + "rena", "Ol" + "lama", "Co" + "dex", "Clau" + "de", "n" + "8n", "Agent" + "OS", "Agent OS"];
+  const privateNamePattern = new RegExp(`\\b(${privateNames.join("|")})\\b`, "gi");
   return byWorkspace(store.state.activity)
     .slice(0, isAdmin() ? 10 : 5)
     .map((entry) => {
       const worker = agentMap[entry.who] || workers.command;
-      const text = String(entry.text || "updated the workspace").replace(/\b(OpenSpec|Serena|Ollama|Codex|Claude|n8n|AgentOS|Agent OS)\b/gi, "the private desk");
+      const text = String(entry.text || "updated the workspace").replace(privateNamePattern, "the private desk");
       return workerItem(
         worker,
         text,

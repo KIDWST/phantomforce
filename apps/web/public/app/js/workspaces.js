@@ -7,7 +7,7 @@ import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-live-20260705-15";
+} from "./store.js?v=phantom-live-20260705-18";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -477,12 +477,12 @@ function renderToolSpineCards({ compact = false } = {}) {
             <h4><span class="agent-dot"></span>${esc(tool.name)}</h4>
             <span class="chip chip-${esc(tool.status)}">${esc(statusLabel(tool.status))}</span>
           </div>
-          <p class="record-sub">${esc(tool.worker)} · ${esc(tool.internal)}</p>
+          <p class="record-sub">${esc(tool.worker)}</p>
           <p class="record-next"><b>What it does:</b> ${esc(tool.role)}</p>
           <p class="record-notes"><b>Owner control:</b> ${esc(tool.ownerControl || "Available from admin Phantom when connected.")}</p>
           <div class="tool-meta">
             <span>${esc(statusLabel(tool.mode))}</span>
-            <span>${esc(tool.path)}</span>
+            <span>${esc(tool.internal)}</span>
           </div>
         </article>`).join("") || empty("No security scans have been run yet. Connect a scanner or start a real check before Phantom reports posture.")}
     </div>`;
@@ -521,11 +521,10 @@ function renderWorkforce(el, rerender) {
           </div>
           <p class="record-notes"><b>Last output:</b> ${esc(a.last)}</p>
           ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
-          <p class="agent-bundle">internal lane: ${esc(a.bundle)}</p>
         </article>`).join("") || empty("No workers have produced real activity yet. Connect a tool or create the first task to populate this board.")}
     </div>
-    <h3 class="ws-subhead">Owner tool controls</h3>
-    <p class="ws-note">These are the programs behind Phantom. Client workspaces see simple outcomes; your admin view sees the controls, connectors, and setup state.</p>
+    <h3 class="ws-subhead">Owner controls</h3>
+    <p class="ws-note">These are PhantomForce capabilities, not vendor names. Employee workspaces see only the outcomes you allow.</p>
     ${renderToolSpineCards({ compact: true })}`;
 }
 
