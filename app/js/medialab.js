@@ -139,50 +139,6 @@ const SOCIAL_LOGIN_URLS = {
   linkedin: "https://www.linkedin.com/login",
   pinterest: "https://www.pinterest.com/login/",
 };
-const SOCIAL_CONNECTORS = {
-  instagram: {
-    lane: "Meta OAuth",
-    capability: "Profile + publish API after Meta review",
-    posting: "Draft-only until business/API approval",
-    scopes: ["Profile identity", "Publishing permission", "Page/account selection"],
-  },
-  tiktok: {
-    lane: "TikTok OAuth",
-    capability: "Creator/business account authorization",
-    posting: "Draft-only until TikTok app approval",
-    scopes: ["Profile identity", "Video upload permission", "Publish permission"],
-  },
-  youtube: {
-    lane: "Google OAuth",
-    capability: "Channel connection with scoped YouTube access",
-    posting: "API upload after Google verification",
-    scopes: ["Channel identity", "Video upload permission", "Manage own videos"],
-  },
-  facebook: {
-    lane: "Meta OAuth",
-    capability: "Page connection with owner-approved posting",
-    posting: "API publish after Page permission",
-    scopes: ["Profile identity", "Page selection", "Publishing permission"],
-  },
-  x: {
-    lane: "X OAuth",
-    capability: "Account authorization for post drafts/publish",
-    posting: "Draft-only until paid API/app approval",
-    scopes: ["Profile identity", "Post write permission", "Offline refresh if approved"],
-  },
-  linkedin: {
-    lane: "LinkedIn OAuth",
-    capability: "Member/company authorization",
-    posting: "API publish after LinkedIn app approval",
-    scopes: ["Profile identity", "Organization selection", "Posting permission"],
-  },
-  pinterest: {
-    lane: "Pinterest OAuth",
-    capability: "Board/account authorization",
-    posting: "API pin creation after app approval",
-    scopes: ["Profile identity", "Board selection", "Pin write permission"],
-  },
-};
 let socialNotice = "";
 const HERMES_EXTENSION_PROTOCOL = "phantomforce.hermes.extension.v1";
 const HERMES_EXTENSION_KEY = "pf.hermes.extension.connect.v1";
@@ -247,30 +203,22 @@ function socialProfileTarget(account) {
 function socialLoginTarget(account) {
   return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
 }
-function socialConnector(account) {
-  return SOCIAL_CONNECTORS[account.id] || {
-    lane: "Official OAuth",
-    capability: "Scoped platform authorization",
-    posting: "Draft-only until approved",
-    scopes: ["Profile identity", "Approved posting permission"],
-  };
-}
 function socialStatus(account) {
-  if (account.enabled && (account.handle || account.url)) return "linked";
-  if (account.handle || account.url || account.loginIdentity) return "saved";
+  if (account.hermesProof || account.enabled) return "linked";
+  if (account.lastConnectAt || account.loginIdentity) return "saved";
   return "empty";
 }
 function socialStatusLabel(account) {
   const st = socialStatus(account);
   if (st === "linked") return "connected";
-  if (st === "saved") return "saved";
+  if (st === "saved") return "sign-in opened";
   return "not linked";
 }
 function socialPostingState(account) {
-  if (account.officialConnectState === "oauth_connected") return "posting gated";
-  if (account.officialConnectState === "oauth_planned") return "oauth planned";
-  if (socialStatus(account) !== "empty") return "profile linked";
-  return "draft-only";
+  const st = socialStatus(account);
+  if (st === "linked") return "connected";
+  if (st === "saved") return "sign-in opened";
+  return "ready";
 }
 function clampHermesText(value = "", limit = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -334,7 +282,7 @@ function rerenderMediaSettings() {
 function applyHermesProfilePacket(payload = {}) {
   const packet = sanitizeHermesProfilePacket(payload);
   if (!packet.ok) {
-    socialNotice = "Hermes Extension did not find a supported public social profile yet. Open the signed-in profile tab once, then come back and click Link latest profile.";
+    socialNotice = "Sign-in did not find a supported public social profile yet. Open the platform profile once, then sign in again.";
     saveHermesExtensionState({ detected: true, lastSeenAt: new Date().toISOString(), lastResult: "unsupported" });
     rerenderMediaSettings();
     return;
@@ -355,7 +303,7 @@ function applyHermesProfilePacket(payload = {}) {
     lastLinkedPlatform: packet.platform,
     lastResult: "linked",
   });
-  socialNotice = `Hermes linked ${account.name} from the visible browser profile. Stored only public handle/profile fields; no cookies, passwords, tokens, or private messages were read.`;
+  socialNotice = `${account.name} signed in from the visible browser profile. Stored only public handle/profile fields; no cookies, passwords, tokens, or private messages were read.`;
   rerenderMediaSettings();
 }
 function handleHermesExtensionPageMessage(event) {
@@ -390,15 +338,16 @@ function requestHermesExtensionPing() {
     forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
   }, window.location.origin);
 }
-function requestHermesExtensionProfileLink() {
+function requestHermesExtensionProfileLink(targetPlatform = "") {
   if (typeof window === "undefined") return;
-  socialNotice = "Hermes Extension link requested. If the extension is installed, it will return the latest visible signed-in social profile proof with public fields only.";
+  socialNotice = "Sign-in requested. If the browser bridge is active, it will link the visible signed-in profile using public fields only.";
   saveHermesExtensionState({ lastLinkRequestedAt: new Date().toISOString() });
   window.postMessage({
     protocol: HERMES_EXTENSION_PROTOCOL,
     type: "PF_HERMES_LINK_CURRENT_TAB_REQUEST",
     requestedAt: new Date().toISOString(),
     userConfirmed: true,
+    preferredPlatform: targetPlatform || "",
     allowedFields: ["platform", "handle", "url", "displayName", "pageTitle"],
     forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
   }, window.location.origin);
@@ -1133,9 +1082,6 @@ export function renderMediaSettings(el, opts = {}) {
   const cfg = loadCfg();
   const socialAccounts = loadSocialAccounts();
   const linkedCount = socialAccounts.filter((account) => socialStatus(account) !== "empty").length;
-  const hermesState = loadHermesExtensionState();
-  const hermesOnline = Boolean(hermesState.detected);
-  const hermesLastSeen = hermesState.lastSeenAt ? new Date(hermesState.lastSeenAt).toLocaleString() : "Not detected yet";
   const routeRow = (modality, label) => {
     const provs = providersFor(cfg, modality === "enhance" ? "enhance" : modality);
     return `<label class="set-route"><span>${label}</span>
@@ -1161,50 +1107,13 @@ export function renderMediaSettings(el, opts = {}) {
         <div class="set-sec-head">
           <div>
             <h3>Social accounts</h3>
-            <p class="set-note">Link each client platform with the lightning sign-in assist or manual email/handle/profile fields. If your browser is already signed in, the platform may recognize you automatically; PhantomForce never reads cookies, tokens, saved passwords, or private sessions.</p>
+            <p class="set-note">Connect each platform with one sign-in button. The platform handles login and OAuth; PhantomForce never reads cookies, tokens, saved passwords, private messages, or browser sessions.</p>
           </div>
           <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} linked</span>
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
-        <div class="set-connect-model" aria-label="Connected account safety model">
-          <article>
-            <b>${svgIc("bolt")} Browser-assisted</b>
-            <span>Opens official login pages. Browser autofill/session may help there; PhantomForce receives no cookies or passwords.</span>
-          </article>
-          <article>
-            <b>${svgIc("lock")} Official OAuth/API</b>
-            <span>Future production connection uses scoped, revocable platform permissions and approval-gated posting.</span>
-          </article>
-          <article>
-            <b>${svgIc("spark")} Draft-first safety</b>
-            <span>Until each platform OAuth app is approved, PhantomForce prepares drafts and handoffs only.</span>
-          </article>
-        </div>
-        <div class="set-hermes-connect ${hermesOnline ? "is-online" : ""}">
-          <div class="set-hermes-orb" aria-hidden="true"></div>
-          <div class="set-hermes-copy">
-            <b>Hermes Extension</b>
-            <span>${hermesOnline ? "Connected to safe visible-profile bridge" : "Not detected on this page yet"}</span>
-            <em>Links the latest visible signed-in social profile. No cookies, passwords, tokens, private messages, or browser history are read.</em>
-          </div>
-          <div class="set-hermes-status">
-            <span>${hermesOnline ? "online" : "not detected"}</span>
-            <small>${esc(hermesLastSeen)}</small>
-          </div>
-          <div class="set-hermes-actions">
-            <button class="set-social-open" data-hermes-detect type="button">Detect Hermes</button>
-            <button class="set-social-open" data-hermes-link type="button">${svgIc("bolt")} Link latest profile</button>
-          </div>
-        </div>
         <div class="set-social-grid">
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
-        </div>
-        <div class="set-social-assist">
-          <div>
-            <b>Lightning browser connect</b>
-            <p>Use the bolt on a platform card to open the right sign-in page. After you sign in, save the public profile URL or handle here. Browser autofill/session can help on the platform page; PhantomForce stores only the public link fields below.</p>
-          </div>
-          <button class="set-add" data-social-smart type="button">${svgIc("bolt")} Connection rules</button>
         </div>
       </div>
 
@@ -1227,18 +1136,6 @@ export function renderMediaSettings(el, opts = {}) {
     const account = socialAccounts.find((row) => row.id === id);
     if (!account) return;
     const saveAndRender = () => { saveSocialAccounts(socialAccounts); renderMediaSettings(el, opts); };
-    const enabled = card.querySelector("[data-social-enabled]");
-    if (enabled) enabled.onchange = () => { account.enabled = enabled.checked; saveAndRender(); };
-    const login = card.querySelector("[data-social-login]");
-    if (login) login.onchange = () => { account.loginIdentity = login.value.trim(); saveAndRender(); };
-    const handle = card.querySelector("[data-social-handle]");
-    if (handle) handle.onchange = () => {
-      account.handle = handle.value.trim();
-      if (!normalizeSocialUrl(account.url)) account.url = socialProfileFromHandle(account.id, account.handle);
-      saveAndRender();
-    };
-    const url = card.querySelector("[data-social-url]");
-    if (url) url.onchange = () => { account.url = normalizeSocialUrl(url.value); saveAndRender(); };
     const clear = card.querySelector("[data-social-clear]");
     if (clear) clear.onclick = () => {
       account.handle = ""; account.url = ""; account.loginIdentity = ""; account.enabled = false; account.connectMode = "manual"; account.lastConnectAt = "";
@@ -1248,42 +1145,14 @@ export function renderMediaSettings(el, opts = {}) {
     };
     const open = card.querySelector("[data-social-open]");
     if (open) open.onclick = () => {
-      const target = socialProfileTarget(account) || socialLoginTarget(account);
-      window.open(target, "_blank", "noopener,noreferrer");
-    };
-    const oauth = card.querySelector("[data-social-oauth]");
-    if (oauth) oauth.onclick = () => {
-      account.officialConnectState = "oauth_planned";
-      account.connectMode = "official-oauth-planned";
-      socialNotice = `${account.name} official OAuth lane prepared. Production posting stays draft-only until the platform app, scopes, redirect URI, token encryption, and owner approval gate are configured.`;
-      saveAndRender();
-    };
-    const auto = card.querySelector("[data-social-auto]");
-    if (auto) auto.onclick = () => {
+      requestHermesExtensionProfileLink(account.id);
       window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
-      account.connectMode = "browser-assisted";
+      account.connectMode = "platform-oauth";
       account.lastConnectAt = new Date().toISOString();
-      socialNotice = `${account.name} lightning sign-in opened. If your browser is already signed in, the platform can use that session there; PhantomForce did not read cookies, tokens, or passwords.`;
+      socialNotice = `${account.name} sign-in opened on the official platform page. OAuth connection happens there; PhantomForce did not read or store the password.`;
       saveAndRender();
     };
   });
-  const smart = el.querySelector("[data-social-smart]");
-  if (smart) smart.onclick = () => {
-    socialNotice = "Lightning connect opens platform sign-in pages only. Browser sessions/password manager can help on those pages, and account linking is confirmed by the public profile URL or handle you save here.";
-    opts.notify?.("Settings", "Lightning connect rules shown. No cookies, tokens, sends, or external writes were touched.");
-    renderMediaSettings(el, opts);
-  };
-  const hermesDetect = el.querySelector("[data-hermes-detect]");
-  if (hermesDetect) hermesDetect.onclick = () => {
-    requestHermesExtensionPing();
-    socialNotice = "Hermes detection requested. If the extension is loaded on this page, the status will flip online automatically.";
-    renderMediaSettings(el, opts);
-  };
-  const hermesLink = el.querySelector("[data-hermes-link]");
-  if (hermesLink) hermesLink.onclick = () => {
-    requestHermesExtensionProfileLink();
-    opts.notify?.("Settings", "Hermes link requested. Only public profile fields can be returned.");
-  };
 
   // provider cards
   el.querySelectorAll("[data-prov-card]").forEach((card) => {
@@ -1312,37 +1181,23 @@ export function renderMediaSettings(el, opts = {}) {
 
 function socialCard(account, esc) {
   const status = socialStatus(account);
-  const connector = socialConnector(account);
-  const targetLabel = socialProfileTarget(account) ? "Open profile" : "Open login";
   const lastConnect = account.lastConnectAt ? `Last sign-in assist ${new Date(account.lastConnectAt).toLocaleDateString()}` : "Password is never stored here";
   const hermesProof = account.hermesProof
-    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Hermes verified visible profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
+    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Signed-in profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
     : "";
   return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
     <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
     <div class="set-social-top">
       <span class="set-social-dot" style="background:${account.color}"></span>
       <span><b>${esc(account.name)}</b><i>${esc(socialStatusLabel(account))}</i></span>
-      <button class="set-social-lightning" data-social-auto aria-label="Lightning sign-in assist for ${esc(account.name)}" title="Lightning sign-in assist" type="button">${svgIc("bolt")}</button>
-      <label class="set-switch"><input type="checkbox" data-social-enabled ${account.enabled ? "checked" : ""}/><span></span></label>
     </div>
     <div class="set-social-connect-state">
-      <span>${esc(connector.lane)}</span>
+      <span>Official sign-in</span>
       <b>${esc(socialPostingState(account))}</b>
     </div>
     ${hermesProof}
-    <label class="set-mini"><span>Login email / username</span><input data-social-login autocomplete="username" placeholder="email or username" value="${esc(account.loginIdentity || "")}"/></label>
-    <label class="set-mini"><span>Handle</span><input data-social-handle placeholder="@client" value="${esc(account.handle || "")}"/></label>
-    <label class="set-mini"><span>Profile URL</span><input data-social-url placeholder="https://" value="${esc(account.url || "")}"/></label>
-    <details class="set-social-oauth">
-      <summary>Official connect plan</summary>
-      <p>${esc(connector.capability)}</p>
-      <div>${connector.scopes.map((scope) => `<span>${esc(scope)}</span>`).join("")}</div>
-      <em>${esc(connector.posting)}</em>
-    </details>
     <div class="set-social-actions">
-      <button class="set-social-open" data-social-open type="button">${esc(targetLabel)}</button>
-      <button class="set-social-open" data-social-oauth type="button">Prepare OAuth</button>
+      <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">Sign in with ${esc(account.name)}</button>
       <span>${esc(lastConnect)}</span>
     </div>
   </article>`;
