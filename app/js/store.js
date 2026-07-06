@@ -424,13 +424,6 @@ export function resolveSession() {
 
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
-  /* preview entrance: review the latest deployed admin build on the static
-     host (Pages) without bouncing to the live admin server. Local demo data
-     only — the live host's owner login is untouched. */
-  if (q.get("demo") === "1" || key === "preview" || key === "demo") {
-    const s = { role: "admin", name: "Jordan", ws: "phantomforce", demo: true };
-    session.set(s); return s;
-  }
   if (key === OWNER_SESSION_ID) {
     if (isStaticPublicHost()) {
       redirectToLiveAdmin();
@@ -474,7 +467,7 @@ export function resolveSession() {
     if (!store.state.workspaces.some((w) => w.id === saved.ws)) saved.ws = "phantomforce";
     session.set(saved);
   }
-  if (saved?.role === "admin" && !saved.demo && isStaticPublicHost()) {
+  if (saved?.role === "admin" && isStaticPublicHost()) {
     redirectToLiveAdmin();
     return null;
   }
@@ -697,9 +690,7 @@ export function resolveApproval(id, approved) {
     if (a.type === "publish-page") { const s = store.state.sites.find((x) => x.id === a.ref); if (s) s.status = "approved-to-publish"; }
     if (a.type === "media-generation") { const m = store.state.media.find((x) => x.id === a.ref); if (m) m.status = "generation-approved"; }
     if (a.type === "booking") { const b = store.state.bookings.find((x) => x.id === a.ref); if (b) b.status = "approved"; }
-    if (a.type === "automation") { const g = store.state.agents.find((x) => x.id === a.ref); if (g) g.status = "active"; }
   }
-  if (!approved && a.type === "automation") { const g = store.state.agents.find((x) => x.id === a.ref); if (g) g.status = "blocked"; }
   pushActivity("Command Router", `${approved ? "approved" : "declined"}: ${a.title}`, a.ws);
   store.save();
 }

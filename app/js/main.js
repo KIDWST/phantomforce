@@ -4,16 +4,17 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-17";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-17";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-17";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-17";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-17";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-17";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-17";
-import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260706-17";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-17";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-17";
+} from "./store.js?v=phantom-live-20260706-24";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-24";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-24";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-24";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-24";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-24";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-24";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-24";
+import { mountAgentTicker, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-24";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-24";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-24";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -264,11 +265,53 @@ function goNav(id) {
   else if (item.ws) renderWorkspacePage(item.ws, true);
 }
 
+function openOperationsMap() {
+  if (activePageId) renderDashboardPage(true);
+  const section = $("[data-map-section]");
+  if (!section) return;
+  if (section.classList.contains("is-map-open")) {
+    closeOperationsMap();
+    return;
+  }
+  section.classList.remove("is-map-closed");
+  section.classList.add("is-map-open");
+  updateOperationsMapControls();
+  renderFlowMap();
+  section.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+  const stage = $("[data-flowmap]", section);
+  if (stage) setTimeout(() => {
+    try { stage.focus({ preventScroll: true }); }
+    catch { stage.focus(); }
+  }, reduceMotion ? 0 : 260);
+  setGhostMood("listening", { emotion: "bright", ms: 1200 });
+  stageReact("nav", 620);
+}
+function closeOperationsMap() {
+  const section = $("[data-map-section]");
+  if (!section) return;
+  section.classList.remove("is-map-open");
+  section.classList.add("is-map-closed");
+  updateOperationsMapControls();
+  const opener = $("[data-map-open]", section) || $("[data-map-open]");
+  if (opener) {
+    try { opener.focus({ preventScroll: true }); }
+    catch { opener.focus(); }
+  }
+}
+function updateOperationsMapControls() {
+  const section = $("[data-map-section]");
+  const isOpen = Boolean(section?.classList.contains("is-map-open"));
+  $$("[data-map-open]").forEach((button) => {
+    button.setAttribute("aria-expanded", String(isOpen));
+    button.setAttribute("aria-label", isOpen ? "Close operations map" : "Open operations map");
+  });
+  $$("[data-map-open-label]").forEach((label) => { label.textContent = isOpen ? "Close map" : "Open map"; });
+}
+
 /* ============================ topbar ============================ */
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
   const pills = [
-    ...(ctx.session?.demo ? [{ label: "Mode", value: `Preview · ${window.PHANTOM_BUILD || "latest build"}`, tone: "warn", dot: true }] : []),
     { label: "Phantom Status", value: "Online", tone: "ok", dot: true },
     { label: "System Status", value: attention ? "Attention needed" : "All Systems Operational", tone: attention ? "warn" : "ok", dot: true },
     { label: "Memory", value: "Private & Local", tone: "ok", lock: true },
@@ -464,7 +507,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-17";
+const POSE_VERSION = "phantom-live-20260706-24";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -696,6 +739,27 @@ function setMode(id) {
 function renderHero() {
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
   $("[data-hero-name]").textContent = `${name}.`;
+  renderHeroWorkAlert();
+}
+
+function renderHeroWorkAlert() {
+  const alert = $("[data-hero-work-alert]");
+  if (!alert) return;
+  const latest = liveFeed[0] || visible(store.state.activity)[0] || {
+    who: "Proposal Forge",
+    text: "prepared quote #114 - waiting on your approval",
+    icon: "chart",
+    live: true,
+    at: new Date().toISOString(),
+  };
+  alert.innerHTML = `
+    <span class="forcewire-alert-label">Forcewire</span>
+    <span class="forcewire-alert-ping" aria-hidden="true"></span>
+    <span class="forcewire-alert-body">
+      <b>${esc(latest.who || "PhantomForce")}</b>
+      <em>${esc(latest.text || "prepared the next owner-safe move.")}</em>
+    </span>
+    <span class="forcewire-alert-time">${latest.live ? "now" : latest.at ? ago(latest.at) : "ready"}</span>`;
 }
 
 /* ============================ stat cards ============================ */
@@ -986,6 +1050,7 @@ function pushLive() {
   if (!ev) return;
   liveFeed.unshift({ ...ev, at: new Date().toISOString(), live: true });
   liveFeed = liveFeed.slice(0, 6);
+  renderHeroWorkAlert();
   if (!cmdkOpen) renderActivity();
 }
 function startPulse() {
@@ -1054,6 +1119,7 @@ function renderConsole() {
   renderModePose(activeMode);
   renderInsights();
   renderStatCards();
+  renderFlowMap();
   renderActivity();
   renderPlan();
   renderQueue();
@@ -1067,8 +1133,7 @@ function renderConsole() {
 }
 
 /* ============================ command run ============================ */
-/* ---- unified chat: persistent history rendered as bubbles ---- */
-const chatHistory = [];            // { who: "user"|"phantom", text, cards? }
+const chatHistory = [];
 const chatLogEl = () => $("[data-chat-log]");
 function msgHtml(m, i) {
   const cards = (m.cards || []).map((c, ci) => cardHtml(c, ci, i)).join("");
@@ -1081,32 +1146,37 @@ function renderChatLog() {
   const log = chatLogEl();
   if (!log) return;
   log.innerHTML = chatHistory.map(msgHtml).join("") + (chatHistory.length <= 1 ? starterHtml() : "");
-  log.querySelectorAll(".msg").forEach((el, i) => { const t = el.querySelector(".msg-text"); if (t) t.textContent = chatHistory[i]?.text || ""; });
+  log.querySelectorAll(".msg").forEach((el, i) => {
+    const text = el.querySelector(".msg-text");
+    if (text) text.textContent = chatHistory[i]?.text || "";
+  });
   bindStarters(log);
   bindCardRemovers(log, (entryIndex, cardIndex) => {
     const entry = chatHistory[entryIndex];
-    if (entry?.cards) { entry.cards.splice(cardIndex, 1); renderChatLog(); }
+    if (entry?.cards) {
+      entry.cards.splice(cardIndex, 1);
+      renderChatLog();
+    }
   });
   log.scrollTop = log.scrollHeight;
 }
-/* Build mode: an honest planning entry — reshapes the composer and presence.
-   No fake execution: commands still flow through the same approval-gated operator. */
 function applyCompanionMode(mode) {
   const input = $("[data-command-input]");
-  if (input) input.placeholder = mode === "build"
-    ? "Describe what you want built — I'll turn it into a plan and drafts…"
-    : "Ask PhantomForce anything…";
+  if (!input) return;
+  input.placeholder = mode === "build"
+    ? "Describe what you want built - I'll turn it into a plan and drafts..."
+    : "Ask PhantomForce anything...";
 }
 
-/* empty-state starters: Phantom invites the first move */
 const CHAT_STARTERS = [
   { label: "Build a landing page", run: "Build a landing page for my business" },
-  { label: "Create a proposal",    run: "Draft a proposal for a new client" },
-  { label: "Plan a campaign",      run: "Draft a media brief for a new campaign" },
-  { label: "Make an intake form",  run: "Build a client intake form page" },
-  { label: "Review my business",   run: "What's my pipeline?" },
-  { label: "Start Build Mode",     build: true },
+  { label: "Create a proposal", run: "Draft a proposal for a new client" },
+  { label: "Plan a campaign", run: "Draft a media brief for a new campaign" },
+  { label: "Make an intake form", run: "Build a client intake form page" },
+  { label: "Review my business", run: "What's my pipeline?" },
+  { label: "Start Build Mode", build: true },
 ];
+
 function starterHtml() {
   return `<div class="chat-start" data-chat-start>
     <p class="chat-start-t">Build with Phantom.</p>
@@ -1114,17 +1184,20 @@ function starterHtml() {
     <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn ${st.build ? "is-build" : ""}" data-starter="${i}">${esc(st.label)}</button>`).join("")}</div>
   </div>`;
 }
+
 function bindStarters(log) {
-  log.querySelectorAll("[data-starter]").forEach((b) => b.onclick = () => {
-    const st = CHAT_STARTERS[+b.dataset.starter];
-    if (!st) return;
-    if (st.build) {
-      setCompanionMode("build");
-      const input = $("[data-command-input]");
-      if (input) { input.focus(); }
-      return;
-    }
-    runCommand(st.run);
+  log.querySelectorAll("[data-starter]").forEach((button) => {
+    button.onclick = () => {
+      const starter = CHAT_STARTERS[Number(button.dataset.starter)];
+      if (!starter) return;
+      if (starter.build) {
+        setCompanionMode("build");
+        const input = $("[data-command-input]");
+        input?.focus();
+        return;
+      }
+      runCommand(starter.run);
+    };
   });
 }
 
@@ -1134,11 +1207,16 @@ function chatTypingOn() {
   log.insertAdjacentHTML("beforeend", `<div class="msg msg-phantom msg-typing"><span class="msg-avatar" aria-hidden="true"></span><div class="msg-body"><p class="msg-text msg-dots"><i></i><i></i><i></i></p></div></div>`);
   log.scrollTop = log.scrollHeight;
 }
-function chatTypingOff() { chatLogEl()?.querySelector(".msg-typing")?.remove(); }
+function chatTypingOff() {
+  chatLogEl()?.querySelector(".msg-typing")?.remove();
+}
 function chatAttachCards(cards) {
   if (!cards?.length) return;
   for (let i = chatHistory.length - 1; i >= 0; i--) {
-    if (chatHistory[i].who === "phantom") { chatHistory[i].cards = cards; break; }
+    if (chatHistory[i].who === "phantom") {
+      chatHistory[i].cards = cards;
+      break;
+    }
   }
   renderChatLog();
 }
@@ -1175,12 +1253,14 @@ function speak(text, cls = "", emotionOverride = null) {
   const emotion = emotionOverride || emotionForText(text);
   if (cls === "thinking") {
     setGhostMood("thinking", { emotion: "bright" });
+    renderEmotePose("think", 900);
     setCompanionState("thinking");
     chatTypingOn();
     return;
   }
   if (cls === "user") {
     setGhostMood("listening", { emotion: "calm", ms: 1600 });
+    renderEmotePose("listen", 1100);
     setCompanionState("listening");
     chatHistory.push({ who: "user", text });
     if (chatHistory.length > 40) chatHistory.shift();
@@ -1188,6 +1268,7 @@ function speak(text, cls = "", emotionOverride = null) {
     return;
   }
   setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+  renderEmotePose(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talk", Math.min(2200, speechHoldMs(text)));
   setCompanionState(emotion === "alert" ? "warning" : emotion === "happy" || emotion === "excited" ? "success" : "speaking");
   chatTypingOff();
   chatHistory.push({ who: "phantom", text: "" });
@@ -1197,12 +1278,16 @@ function speak(text, cls = "", emotionOverride = null) {
   const paintLast = () => {
     const log = chatLogEl();
     const el = log?.querySelector(`[data-msg-i="${chatHistory.indexOf(entry)}"] .msg-text`);
-    if (el) { el.textContent = entry.text; log.scrollTop = log.scrollHeight; }
+    if (el) {
+      el.textContent = entry.text;
+      log.scrollTop = log.scrollHeight;
+    }
   };
   if (reduceMotion) {
     entry.text = text;
     paintLast();
     setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+    setCompanionState(emotion === "alert" ? "warning" : emotion === "happy" || emotion === "excited" ? "success" : "speaking");
     return;
   }
   let i = 0;
@@ -1210,7 +1295,10 @@ function speak(text, cls = "", emotionOverride = null) {
     entry.text = text.slice(0, i);
     paintLast();
     if (i++ < text.length) typeTimer = setTimeout(tick, 11 + Math.random() * 16);
-    else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+    else {
+      setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+      setCompanionState(emotion === "alert" ? "warning" : emotion === "happy" || emotion === "excited" ? "success" : "speaking");
+    }
   };
   tick();
 }
@@ -1240,27 +1328,6 @@ function bindCardRemovers(root, onRemove) {
     };
   });
 }
-
-/* live brain: the same server-side-key proxy the public site uses. The local
-   operator (handleCommand) stays authoritative for ACTIONS — drafts, briefs,
-   workspace routing. The live brain answers pure conversation when reachable;
-   otherwise the operator's reply stands. */
-const ADMIN_AI_ENDPOINT =
-  (location.hostname === "127.0.0.1" || location.hostname === "localhost")
-    ? "http://127.0.0.1:8788/chat"
-    : "https://ai.phantomforce.online/chat";
-async function askPhantomLive(message) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 9000);
-  try {
-    const r = await fetch(ADMIN_AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }), signal: ctrl.signal });
-    const d = await r.json();
-    if (d && d.reply) return String(d.reply).slice(0, 700);
-  } catch { /* unreachable -> operator reply stands */ }
-  finally { clearTimeout(timer); }
-  return null;
-}
-
 function runCommand(raw) {
   phantomHasActed = true;
   const inferredMode = inferModeFromText(raw);
@@ -1279,18 +1346,12 @@ function runCommand(raw) {
     stageReact("think", 780);
     setTimeout(() => {
       const r = handleCommand(text);
-      const isAction = Boolean(r.open || (r.cards && r.cards.length));
-      const finish = (reply, cards) => {
-        speak(reply);
-        if (cards?.length) chatAttachCards(cards);
-        rememberConversation({ prompt: raw, reply, mode: activeMode, route: r.open || "" });
-        renderConsole();
-        stageReact("answer", 1100);
-        if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
-      };
-      if (isAction) { finish(r.say, r.cards); return; }
-      // pure conversation: try the live brain, fall back to the operator's line
-      askPhantomLive(raw).then((ai) => finish(ai || r.say, r.cards));
+      speak(r.say);
+      if (r.cards?.length) chatAttachCards(r.cards);
+      rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
+      renderConsole();
+      stageReact("answer", 1100);
+      if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
     }, reduceMotion ? 120 : 620);
   }, reduceMotion ? 60 : 260);
 }
@@ -1298,15 +1359,6 @@ function runCommand(raw) {
 function bindCommandForm() {
   const form = $("[data-command-form]");
   const input = $("[data-command-input]");
-  if (input && !input.dataset.pcListen) {
-    input.dataset.pcListen = "1";
-    let lt = 0;
-    input.addEventListener("input", () => {
-      if (!input.value.trim()) return;
-      clearTimeout(lt);
-      lt = setTimeout(() => setCompanionState("listening"), 140);
-    });
-  }
   if (!form || !input || form.dataset.bound === "true") return;
   form.dataset.bound = "true";
   form.addEventListener("pointerdown", () => {
@@ -1316,6 +1368,7 @@ function bindCommandForm() {
     setCommandFocusState(true);
     const reaction = reactionForMode(activeMode);
     setGhostMood("listening", { emotion: reaction.emotion });
+    setCompanionState("listening");
     stageReact("listen", 520);
     restoreMobileScroll();
   });
@@ -1323,6 +1376,7 @@ function bindCommandForm() {
     const value = input.value.trim();
     if (!value) {
       setGhostMood("listening", { emotion: reactionForMode(activeMode).emotion });
+      setCompanionState("listening");
       return;
     }
     const inferredMode = inferModeFromText(value);
@@ -1332,11 +1386,15 @@ function bindCommandForm() {
       renderModePose(inferredMode);
     }
     setGhostMood("thinking", { emotion: reactionForMode(activeMode).emotion, ms: 1100 });
+    setCompanionState("listening");
     stageReact("typing", 520);
   });
   input.addEventListener("blur", () => {
     setCommandFocusState(false);
-    if (!input.value.trim()) setGhostMood("idle", { emotion: "happy", ms: 1200 });
+    if (!input.value.trim()) {
+      setGhostMood("idle", { emotion: "happy", ms: 1200 });
+      setCompanionState(companionMode() === "build" ? "building" : "idle");
+    }
   });
   form.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -1383,6 +1441,8 @@ function wireDeck() {
     const cItem = e.target.closest("[data-cmdk-i]");
     if (cItem) { execPalette(+cItem.dataset.cmdkI); return; }
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
+    if (e.target.closest("[data-map-open]")) { openOperationsMap(); return; }
+    if (e.target.closest("[data-map-close]")) { closeOperationsMap(); return; }
     const opener = e.target.closest("[data-open-ws]");
     if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
     if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
@@ -1405,6 +1465,7 @@ function wireDeck() {
     if (phantom.hidden) return;
     const typing = /^(input|textarea|select)$/i.test(e.target.tagName);
     if (e.key === "/" && !typing) { e.preventDefault(); focusCommandInput(); }
+    else if (e.key === "Escape" && $("[data-map-section]")?.classList.contains("is-map-open")) { closeOperationsMap(); }
     else if (e.key === "Escape" && mobileNavOpen) { setMobileNav(false); }
     else if (e.key === "Escape" && notifOpen) { notifOpen = false; renderNotifs(); }
   });
@@ -1418,6 +1479,7 @@ const mediaOpts = () => ({
   isAdmin: isAdmin(),
   notify: (who, text) => { pushActivity(who, text); store.save(); },
   openSettings: () => routeWorkspace("settings"),
+  openWorkspace: (id) => routeWorkspace(id),
   renderBriefs: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
 
@@ -1723,31 +1785,6 @@ function initPhantom3D() {
     phantom3d = null;
   }
 }
-/* the ghost tracks you: pointer parallax on the hero stage (rAF-smoothed). */
-function initHeroParallax() {
-  if (reduceMotion || initHeroParallax.on) return;
-  initHeroParallax.on = true;
-  let tx = 0, ty = 0, cx = 0, cy = 0;
-  const tick = () => {
-    const stage = $("[data-mode-stage]");
-    if (stage) {
-      cx += (tx - cx) * 0.055;
-      cy += (ty - cy) * 0.055;
-      stage.style.transform = `rotateY(${(cx * 7).toFixed(2)}deg) rotateX(${(-cy * 4.5).toFixed(2)}deg) translate3d(${(cx * 8).toFixed(1)}px, ${(cy * -5).toFixed(1)}px, 0)`;
-    }
-    requestAnimationFrame(tick);
-  };
-  document.addEventListener("pointermove", (e) => {
-    const hero = $(".hero2");
-    if (!hero) { tx = 0; ty = 0; return; }
-    const r = hero.getBoundingClientRect();
-    if (e.clientX < r.left || e.clientX > r.right || e.clientY < r.top || e.clientY > r.bottom) { tx = 0; ty = 0; return; }
-    tx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2));
-    ty = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2));
-  }, { passive: true });
-  requestAnimationFrame(tick);
-}
-
 function initGhost() {
   const canvas = $("[data-ghost]");
   if (!canvas || reduceMotion) return;
@@ -1810,7 +1847,7 @@ let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; startClock(); startPulse(); }
+  if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); startClock(); startPulse(); }
   activeNav = "dashboard";
   renderConsole();
   requestAnimationFrame(() => phantom.classList.add("booted"));
@@ -1836,7 +1873,7 @@ async function boot() {
     if (!phantom.hidden) {
       if (activePageId) { renderConsole(); return; }
       renderNav(); renderStatusPills(); renderNotifs(); renderInsights();
-      renderStatCards(); renderActivity(); renderPlan(); renderQueue();
+      renderStatCards(); renderFlowMap(); renderActivity(); renderPlan(); renderQueue();
     }
   });
   if (ctx.session) enterPhantom();

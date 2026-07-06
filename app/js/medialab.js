@@ -12,9 +12,11 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-17";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-24";
 
 const CFG_KEY = "pf.medialab.v1";
+const SOCIAL_KEY = "pf.social.accounts.v1";
+const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const TAU = Math.PI * 2;
 
 /* ---------------- provider registry (pluggable defaults) ---------------- */
@@ -61,44 +63,52 @@ const VID_ASPECTS = [["16:9", 1.777], ["9:16", 0.5625], ["4:5", 0.8], ["1:1", 1]
 const DURATIONS = [4, 6, 8, 10, 15, 30];
 const MEDIA_PRESETS = [
   {
-    id: "reels-tiktok", label: "Reels / TikTok", use: "Social vertical", modality: "video", aspect: "9:16", duration: 8, style: "Cinematic",
-    prompt: "Fast vertical social clip with a strong first-second hook, premium motion, bold subject, quick cuts, and a clear end card",
+    id: "portrait-ad", label: "Portrait Ad", use: "Paid social", modality: "image", aspect: "4:5", count: 2, style: "Product",
+    note: "Clean offer image", prompt: "Premium 4:5 paid social image with one clear offer, strong product or service focal point, polished lighting, and room for a short headline",
+  },
+  {
+    id: "square-brand-post", label: "Square Brand Post", use: "Feed social", modality: "image", aspect: "1:1", count: 2, style: "Editorial",
+    note: "Polished feed creative", prompt: "Clean square brand post image with one strong subject, balanced negative space, premium lighting, and no tiny text",
+  },
+  {
+    id: "story-poster", label: "Story Poster", use: "Story cover", modality: "image", aspect: "9:16", count: 2, style: "Neon",
+    note: "Vertical hero still", prompt: "Vertical story poster with cinematic depth, bold central subject, premium neon accents, and safe space for large mobile text",
+  },
+  {
+    id: "youtube-thumbnail", label: "YouTube Thumbnail", use: "Video cover", modality: "image", aspect: "16:9", count: 2, style: "Neon",
+    note: "High contrast cover", prompt: "Bold wide YouTube thumbnail composition with a clear focal subject, high contrast lighting, expressive emotion, and room for a short headline",
+  },
+  {
+    id: "website-hero", label: "Website Hero", use: "Landing page", modality: "image", aspect: "16:9", count: 2, style: "3D render",
+    note: "Premium site header", prompt: "Premium website hero image with cinematic depth, clean product space, dark polished background, and room for interface copy",
+  },
+  {
+    id: "carousel-slide", label: "Carousel Slide", use: "Carousel", modality: "image", aspect: "4:5", count: 3, style: "Editorial",
+    note: "Swipeable visual set", prompt: "Premium carousel slide visual with editorial composition, clean information hierarchy, consistent visual system, and strong first-card impact",
+  },
+  {
+    id: "reels-tiktok", label: "Reels / TikTok", use: "Short social", modality: "video", aspect: "9:16", duration: 8, style: "Cinematic",
+    note: "Hook-first vertical", prompt: "Fast vertical social clip with a strong first-second hook, premium motion, bold subject, quick cuts, and a clear end card",
   },
   {
     id: "story-ad", label: "Story Ad", use: "Paid social", modality: "video", aspect: "9:16", duration: 6, style: "Product",
-    prompt: "Vertical story ad with a simple product reveal, clear benefit moment, clean background, and room for headline text",
+    note: "Mobile ad creative", prompt: "Vertical story ad with a simple product reveal, clear benefit moment, clean background, and room for headline text",
   },
   {
-    id: "feed-video", label: "Feed Video", use: "Instagram / LinkedIn", modality: "video", aspect: "4:5", duration: 10, style: "Editorial",
-    prompt: "Polished feed video with a premium business visual, readable center framing, and a smooth call-to-action finish",
+    id: "feed-clip", label: "Feed Clip", use: "Feed social", modality: "video", aspect: "4:5", duration: 10, style: "Editorial",
+    note: "Professional feed cut", prompt: "Polished feed video with a premium business visual, readable center framing, smooth camera motion, and a confident call-to-action finish",
+  },
+  {
+    id: "launch-teaser", label: "Launch Teaser", use: "Product launch", modality: "video", aspect: "16:9", duration: 15, style: "Neon",
+    note: "Punchy reveal clip", prompt: "Short launch teaser with dramatic lighting, one memorable visual idea, controlled camera movement, and a punchy ending",
   },
   {
     id: "youtube-trailer", label: "YouTube Trailer", use: "Wide trailer", modality: "video", aspect: "16:9", duration: 30, style: "Cinematic",
-    prompt: "Cinematic wide trailer with establishing shot, product reveal, proof moments, and a confident final title card",
+    note: "Full trailer arc", prompt: "Cinematic wide trailer with establishing shot, product reveal, proof moments, and a confident final title card",
   },
   {
-    id: "teaser", label: "15s Teaser", use: "Launch clip", modality: "video", aspect: "16:9", duration: 15, style: "Neon",
-    prompt: "Short launch teaser with dramatic lighting, one memorable visual idea, controlled camera movement, and punchy ending",
-  },
-  {
-    id: "square-post", label: "Square Post", use: "Social image", modality: "image", aspect: "1:1", count: 2, style: "Editorial",
-    prompt: "Clean square social post image with one strong subject, balanced negative space, premium lighting, and no tiny text",
-  },
-  {
-    id: "feed-portrait", label: "Feed Portrait", use: "IG / Meta image", modality: "image", aspect: "4:5", count: 2, style: "Portrait",
-    prompt: "Vertical feed portrait image with confident subject, soft directional light, premium texture, and scroll-stopping composition",
-  },
-  {
-    id: "youtube-thumb", label: "Thumbnail", use: "YouTube cover", modality: "image", aspect: "16:9", count: 2, style: "Neon",
-    prompt: "Bold wide YouTube thumbnail composition with a clear focal subject, high contrast lighting, and space for a short headline",
-  },
-  {
-    id: "web-hero", label: "Website Hero", use: "Site / app header", modality: "image", aspect: "16:9", count: 2, style: "3D render",
-    prompt: "Premium website hero image with cinematic depth, clean product space, dark polished background, and room for UI copy",
-  },
-  {
-    id: "product-shot", label: "Product Shot", use: "Offer image", modality: "image", aspect: "4:5", count: 2, style: "Product",
-    prompt: "High-end product shot with controlled studio lighting, crisp edges, subtle reflection, and premium commercial finish",
+    id: "product-demo", label: "Product Demo", use: "Sales enablement", modality: "video", aspect: "16:9", duration: 15, style: "Product",
+    note: "Feature walkthrough", prompt: "Clean product demo video showing the interface or offer in motion, clear feature beats, realistic pacing, and a polished final frame",
   },
 ];
 
@@ -120,6 +130,280 @@ const LANE_LABELS = {
   "flux-kontext": "Context retouch",
 };
 const laneLabel = (m) => LANE_LABELS[m] || String(m || "").replace(/[-_]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+const SOCIAL_LOGIN_URLS = {
+  instagram: "https://www.instagram.com/accounts/login/",
+  tiktok: "https://www.tiktok.com/login",
+  youtube: "https://accounts.google.com/",
+  facebook: "https://www.facebook.com/login",
+  x: "https://x.com/i/flow/login",
+  linkedin: "https://www.linkedin.com/login",
+  pinterest: "https://www.pinterest.com/login/",
+};
+const SOCIAL_CONNECTORS = {
+  instagram: {
+    lane: "Meta OAuth",
+    capability: "Profile + publish API after Meta review",
+    posting: "Draft-only until business/API approval",
+    scopes: ["Profile identity", "Publishing permission", "Page/account selection"],
+  },
+  tiktok: {
+    lane: "TikTok OAuth",
+    capability: "Creator/business account authorization",
+    posting: "Draft-only until TikTok app approval",
+    scopes: ["Profile identity", "Video upload permission", "Publish permission"],
+  },
+  youtube: {
+    lane: "Google OAuth",
+    capability: "Channel connection with scoped YouTube access",
+    posting: "API upload after Google verification",
+    scopes: ["Channel identity", "Video upload permission", "Manage own videos"],
+  },
+  facebook: {
+    lane: "Meta OAuth",
+    capability: "Page connection with owner-approved posting",
+    posting: "API publish after Page permission",
+    scopes: ["Profile identity", "Page selection", "Publishing permission"],
+  },
+  x: {
+    lane: "X OAuth",
+    capability: "Account authorization for post drafts/publish",
+    posting: "Draft-only until paid API/app approval",
+    scopes: ["Profile identity", "Post write permission", "Offline refresh if approved"],
+  },
+  linkedin: {
+    lane: "LinkedIn OAuth",
+    capability: "Member/company authorization",
+    posting: "API publish after LinkedIn app approval",
+    scopes: ["Profile identity", "Organization selection", "Posting permission"],
+  },
+  pinterest: {
+    lane: "Pinterest OAuth",
+    capability: "Board/account authorization",
+    posting: "API pin creation after app approval",
+    scopes: ["Profile identity", "Board selection", "Pin write permission"],
+  },
+};
+let socialNotice = "";
+const HERMES_EXTENSION_PROTOCOL = "phantomforce.hermes.extension.v1";
+const HERMES_EXTENSION_KEY = "pf.hermes.extension.connect.v1";
+let mediaSettingsMount = null;
+let mediaSettingsOpts = {};
+let hermesExtensionListenerReady = false;
+
+function defaultSocialAccounts() {
+  return PLATFORMS.map((p) => ({
+    id: p.id,
+    name: p.name,
+    color: p.color,
+    handle: "",
+    url: "",
+    loginIdentity: "",
+    enabled: false,
+    connectMode: "manual",
+    officialConnectState: "not_configured",
+    lastConnectAt: "",
+  }));
+}
+function loadSocialAccounts() {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(SOCIAL_KEY) || "[]"); } catch {}
+  const rows = Array.isArray(saved) ? saved : [];
+  return defaultSocialAccounts().map((base) => ({ ...base, ...(rows.find((row) => row && row.id === base.id) || {}) }));
+}
+function saveSocialAccounts(accounts) {
+  try { localStorage.setItem(SOCIAL_KEY, JSON.stringify(accounts)); } catch {}
+}
+function cleanSocialHandle(value = "") {
+  return String(value || "")
+    .trim()
+    .replace(/^https?:\/\/(www\.)?/i, "")
+    .replace(/^(instagram\.com|tiktok\.com|youtube\.com|youtu\.be|facebook\.com|x\.com|twitter\.com|linkedin\.com|pinterest\.com)\//i, "")
+    .replace(/^@+/, "")
+    .replace(/^in\//i, "")
+    .replace(/^company\//i, "")
+    .replace(/[/?#].*$/, "")
+    .trim();
+}
+function normalizeSocialUrl(value = "") {
+  const text = String(value || "").trim();
+  if (!text || text === "https://") return "";
+  return /^https?:\/\//i.test(text) ? text : `https://${text}`;
+}
+function socialProfileFromHandle(platformId, handle = "") {
+  const h = cleanSocialHandle(handle);
+  if (!h) return "";
+  if (platformId === "instagram") return `https://www.instagram.com/${h}/`;
+  if (platformId === "tiktok") return `https://www.tiktok.com/@${h}`;
+  if (platformId === "youtube") return `https://www.youtube.com/@${h}`;
+  if (platformId === "facebook") return `https://www.facebook.com/${h}`;
+  if (platformId === "x") return `https://x.com/${h}`;
+  if (platformId === "linkedin") return `https://www.linkedin.com/in/${h}/`;
+  if (platformId === "pinterest") return `https://www.pinterest.com/${h}/`;
+  return "";
+}
+function socialProfileTarget(account) {
+  return normalizeSocialUrl(account.url) || socialProfileFromHandle(account.id, account.handle);
+}
+function socialLoginTarget(account) {
+  return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
+}
+function socialConnector(account) {
+  return SOCIAL_CONNECTORS[account.id] || {
+    lane: "Official OAuth",
+    capability: "Scoped platform authorization",
+    posting: "Draft-only until approved",
+    scopes: ["Profile identity", "Approved posting permission"],
+  };
+}
+function socialStatus(account) {
+  if (account.enabled && (account.handle || account.url)) return "linked";
+  if (account.handle || account.url || account.loginIdentity) return "saved";
+  return "empty";
+}
+function socialStatusLabel(account) {
+  const st = socialStatus(account);
+  if (st === "linked") return "connected";
+  if (st === "saved") return "saved";
+  return "not linked";
+}
+function socialPostingState(account) {
+  if (account.officialConnectState === "oauth_connected") return "posting gated";
+  if (account.officialConnectState === "oauth_planned") return "oauth planned";
+  if (socialStatus(account) !== "empty") return "profile linked";
+  return "draft-only";
+}
+function clampHermesText(value = "", limit = 180) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
+}
+function redactHermesVisibleText(value = "", limit = 180) {
+  return clampHermesText(String(value || "")
+    .replace(/-----BEGIN (?:[A-Z0-9 ]+ )?PRIVATE KEY-----[\s\S]*?-----END (?:[A-Z0-9 ]+ )?PRIVATE KEY-----/g, "[REDACTED_PRIVATE_KEY]")
+    .replace(/\bBearer\s+[^\s'"`;&]+/gi, "Bearer [REDACTED_BEARER]")
+    .replace(/\bsk-[A-Za-z0-9_-]{12,}\b/g, "[REDACTED_SECRET]")
+    .replace(/\b(?:gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{40,})\b/g, "[REDACTED_SECRET]")
+    .replace(/\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\b/g, "[REDACTED_JWT]")
+    .replace(/\b(api[_-]?key|access[_-]?token|auth[_-]?token|refresh[_-]?token|session[_-]?token|client[_-]?secret|password|passwd|secret|private[_-]?key)\b["'`]?\s*[:=]\s*["'`]?([^\s'"`;&]+)/gi, (_match, key) => `${key}=[REDACTED_SECRET]`), limit);
+}
+function loadHermesExtensionState() {
+  try {
+    return JSON.parse(localStorage.getItem(HERMES_EXTENSION_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+function saveHermesExtensionState(patch = {}) {
+  const next = {
+    ...loadHermesExtensionState(),
+    ...patch,
+    updatedAt: new Date().toISOString(),
+  };
+  try { localStorage.setItem(HERMES_EXTENSION_KEY, JSON.stringify(next)); } catch {}
+  return next;
+}
+function sanitizeHermesProfilePacket(payload = {}) {
+  const platform = String(payload.platform || "").toLowerCase().trim();
+  if (!PLATFORMS.some((p) => p.id === platform)) {
+    return { ok: false, reason: "unsupported platform" };
+  }
+  const url = normalizeSocialUrl(payload.url || "");
+  const handle = cleanSocialHandle(payload.handle || url);
+  return {
+    ok: Boolean(url || handle),
+    platform,
+    handle,
+    url,
+    displayName: redactHermesVisibleText(payload.displayName || ""),
+    pageTitle: redactHermesVisibleText(payload.pageTitle || ""),
+    source: "hermes-extension",
+    sourceTab: redactHermesVisibleText(payload.sourceTab || "visible social profile", 80),
+    connectedAt: payload.capturedAt || new Date().toISOString(),
+    userConfirmed: Boolean(payload.userConfirmed),
+    safety: {
+      cookiesRead: false,
+      passwordsRead: false,
+      tokensRead: false,
+      privateMessagesRead: false,
+      browserHistoryRead: false,
+    },
+  };
+}
+function rerenderMediaSettings() {
+  if (mediaSettingsMount) renderMediaSettings(mediaSettingsMount, mediaSettingsOpts);
+}
+function applyHermesProfilePacket(payload = {}) {
+  const packet = sanitizeHermesProfilePacket(payload);
+  if (!packet.ok) {
+    socialNotice = "Hermes Extension did not find a supported public social profile yet. Open the signed-in profile tab once, then come back and click Link latest profile.";
+    saveHermesExtensionState({ detected: true, lastSeenAt: new Date().toISOString(), lastResult: "unsupported" });
+    rerenderMediaSettings();
+    return;
+  }
+  const accounts = loadSocialAccounts();
+  const account = accounts.find((row) => row.id === packet.platform);
+  if (!account) return;
+  account.handle = packet.handle || account.handle || "";
+  account.url = packet.url || socialProfileFromHandle(account.id, account.handle);
+  account.enabled = true;
+  account.connectMode = "hermes-extension";
+  account.lastConnectAt = packet.connectedAt;
+  account.hermesProof = packet;
+  saveSocialAccounts(accounts);
+  saveHermesExtensionState({
+    detected: true,
+    lastSeenAt: new Date().toISOString(),
+    lastLinkedPlatform: packet.platform,
+    lastResult: "linked",
+  });
+  socialNotice = `Hermes linked ${account.name} from the visible browser profile. Stored only public handle/profile fields; no cookies, passwords, tokens, or private messages were read.`;
+  rerenderMediaSettings();
+}
+function handleHermesExtensionPageMessage(event) {
+  if (event.source !== window) return;
+  const data = event.data || {};
+  if (data.protocol !== HERMES_EXTENSION_PROTOCOL) return;
+  if (data.type === "PF_HERMES_EXTENSION_READY") {
+    saveHermesExtensionState({
+      detected: true,
+      version: redactHermesVisibleText(data.payload?.version || "", 80),
+      lastSeenAt: new Date().toISOString(),
+    });
+    rerenderMediaSettings();
+    return;
+  }
+  if (data.type === "PF_HERMES_LINK_CURRENT_TAB_RESULT") {
+    applyHermesProfilePacket(data.payload || {});
+  }
+}
+function ensureHermesExtensionListener() {
+  if (hermesExtensionListenerReady || typeof window === "undefined") return;
+  hermesExtensionListenerReady = true;
+  window.addEventListener("message", handleHermesExtensionPageMessage);
+  setTimeout(() => requestHermesExtensionPing(), 300);
+}
+function requestHermesExtensionPing() {
+  if (typeof window === "undefined") return;
+  window.postMessage({
+    protocol: HERMES_EXTENSION_PROTOCOL,
+    type: "PF_HERMES_EXTENSION_PING",
+    requestedAt: new Date().toISOString(),
+    forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
+  }, window.location.origin);
+}
+function requestHermesExtensionProfileLink() {
+  if (typeof window === "undefined") return;
+  socialNotice = "Hermes Extension link requested. If the extension is installed, it will return the latest visible signed-in social profile proof with public fields only.";
+  saveHermesExtensionState({ lastLinkRequestedAt: new Date().toISOString() });
+  window.postMessage({
+    protocol: HERMES_EXTENSION_PROTOCOL,
+    type: "PF_HERMES_LINK_CURRENT_TAB_REQUEST",
+    requestedAt: new Date().toISOString(),
+    userConfirmed: true,
+    allowedFields: ["platform", "handle", "url", "displayName", "pageTitle"],
+    forbiddenFields: ["cookies", "passwords", "tokens", "privateMessages", "browserHistory"],
+  }, window.location.origin);
+  rerenderMediaSettings();
+}
 
 /* ---------------- config ---------------- */
 export function loadCfg() {
@@ -273,7 +557,27 @@ function previewAsset(req, i) {
    ========================================================================= */
 let session = { assets: [], tab: "generate", edit: null };
 
+function consumeEditIntent(opts = {}) {
+  let intent = null;
+  try { intent = JSON.parse(localStorage.getItem(EDIT_INTENT_KEY) || "null"); } catch {}
+  if (!intent || intent.type !== "image" || !intent.url) return;
+  try { localStorage.removeItem(EDIT_INTENT_KEY); } catch {}
+  const asset = {
+    id: intent.id || `hub-edit-${Date.now()}`,
+    type: "image",
+    url: intent.url,
+    saved: true,
+    meta: { prompt: intent.prompt || "", title: intent.title || "Content Hub edit" },
+  };
+  if (!session.assets.some((item) => item.id === asset.id)) session.assets.unshift(asset);
+  session.edit = { url: asset.url, type: "image", id: asset.id };
+  session.tab = "edit";
+  resetEdit();
+  opts.notify?.("Media Factory", `loaded ${intent.title || "Content Hub asset"} for local edit.`);
+}
+
 export function renderMediaStudio(el, opts = {}) {
+  consumeEditIntent(opts);
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   const tabs = [["generate", "Generate"], ["edit", "Edit"], ["library", `Library${session.assets.length ? ` · ${session.assets.length}` : ""}`], ["briefs", "Video Requests"]];
@@ -309,6 +613,16 @@ function activePreset() {
 function presetSpec(p) {
   return `${p.modality === "video" ? "Video" : "Image"} · ${p.aspect}${p.modality === "video" ? ` · ${p.duration}s` : ` · ${p.count || 1} take${(p.count || 1) > 1 ? "s" : ""}`}`;
 }
+function presetDeckLabel() {
+  return genState.modality === "video" ? "Video presets" : "Image presets";
+}
+function presetCardMeta(p) {
+  return [
+    p.aspect,
+    p.modality === "video" ? `${p.duration}s` : `${p.count || 1} take${(p.count || 1) > 1 ? "s" : ""}`,
+    p.style,
+  ].filter(Boolean);
+}
 function applyPreset(p) {
   genState.preset = p.id;
   genState.modality = p.modality;
@@ -317,6 +631,17 @@ function applyPreset(p) {
   if (p.modality === "video") genState.duration = p.duration || genState.duration;
   else genState.count = p.count || genState.count;
   if (!genState.prompt.trim()) genState.prompt = p.prompt || "";
+}
+function setModality(v) {
+  genState.modality = v;
+  markCustomPreset();
+  if (v === "video") {
+    genState.aspect = "9:16";
+    genState.duration = 8;
+  } else {
+    genState.aspect = "1:1";
+    genState.count = 2;
+  }
 }
 function markCustomPreset() {
   genState.preset = "custom";
@@ -331,22 +656,24 @@ function renderGenerate(body, cfg, opts, root) {
   if (!models.includes(genState.model)) genState.model = models[0] || "";
   const aspects = genState.modality === "video" ? VID_ASPECTS : IMG_ASPECTS;
   if (!aspects.find(([k]) => k === genState.aspect)) genState.aspect = aspects[0][0];
+  const visiblePresets = MEDIA_PRESETS.filter((preset) => preset.modality === genState.modality);
 
   body.innerHTML = `
     <div class="ml-studio">
       <aside class="ml-panel ml-builder" aria-label="Shot Builder">
-        <div class="ml-card-head"><b>Shot Builder</b><i>Brief the engine, then roll</i></div>
+        <div class="ml-card-head"><b>Shot Builder</b><i>Pick a format, then roll</i></div>
         <div class="ml-seg" data-ml-modality>
           <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
           <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
         </div>
 
-        <label class="ml-field ml-field-presets"><span>Presets</span>
+        <label class="ml-field ml-field-presets"><span class="ml-preset-heading"><b>${presetDeckLabel()}</b><i>${visiblePresets.length} pro formats</i></span>
           <div class="ml-presets" data-ml-presets>
-            ${MEDIA_PRESETS.map((p) => `<button class="ml-preset ${genState.preset === p.id ? "is-on" : ""}" data-v="${p.id}" title="${esc(p.prompt)}">
+            ${visiblePresets.map((p) => `<button class="ml-preset is-${p.modality} ${genState.preset === p.id ? "is-on" : ""}" data-v="${p.id}" title="${esc(p.prompt)}">
+              <span class="ml-preset-kicker">${svgIc(p.modality === "video" ? "film" : "image")} ${esc(p.use)}</span>
               <b>${esc(p.label)}</b>
-              <span>${esc(presetSpec(p))}</span>
-              <i>${esc(p.use)}</i>
+              <span class="ml-preset-meta">${presetCardMeta(p).map((m) => `<i>${esc(m)}</i>`).join("")}</span>
+              <em>${esc(p.note || presetSpec(p))}</em>
             </button>`).join("")}
           </div>
         </label>
@@ -481,67 +808,6 @@ function queueRow(a, esc) {
 }
 
 const estCredits = () => genState.modality === "video" ? genState.duration * 4 : genState.count * (genState.quality === "high" ? 6 : 3);
-const REMBG_EDIT_RE = /\b(remove|erase|delete|cut\s*out|knock\s*out|transparent|isolate)\b.*\b(bg|background|backdrop)\b|\b(bg|background)\b.*\b(remove|erase|delete|transparent)\b|\bcutout\b/;
-const PROVIDER_EDIT_RE = /\b(add|replace|swap|generate|extend|outpaint|inpaint|change\s+the\s+subject|new\s+background|object|person|product|logo|higgsfield|codex|provider|make\s+it\s+look)\b/;
-function activeEditProvider(cfg) {
-  return providersFor(cfg, "edit")[0] || provider(cfg, genState.provider) || DEFAULT_PROVIDERS[0];
-}
-function estimateProviderEditCredits(cfg, prompt = "") {
-  const p = activeEditProvider(cfg);
-  const model = (p.defaultModel && p.defaultModel.edit) || (p.models && p.models.edit && p.models.edit[0]) || "";
-  const q = prompt.toLowerCase();
-  if (/\bcodex\b/.test(q)) return { credits: 2, providerName: "Codex", model: "planning lane" };
-  const base = p.id === "higgsfield" ? 12 : p.id === "openai" ? 10 : p.id === "replicate" ? 8 : p.id === "claude" ? 2 : 8;
-  const complexity = /\b(precise|realistic|face|hands|product|commerce|ad|campaign|background|scene)\b/.test(q) ? 2 : 0;
-  return { credits: base + complexity, providerName: p.name || "Provider", model: model ? laneLabel(model) : "edit lane" };
-}
-function estimateEditCredits(prompt = "", cfg) {
-  const q = prompt.trim().toLowerCase();
-  if (!q) {
-    return {
-      credits: 0,
-      mode: "local",
-      title: "0 credits",
-      route: "Local canvas",
-      detail: "Adjustments, filters, captions, rotate, flip, save, and download are free."
-    };
-  }
-  if (REMBG_EDIT_RE.test(q)) {
-    return {
-      credits: 0,
-      mode: "rembg",
-      title: "0 credits",
-      route: "Local rembg",
-      detail: "Background removal stays local with rembg when installed. No Higgsfield or Codex spend."
-    };
-  }
-  if (PROVIDER_EDIT_RE.test(q)) {
-    const est = estimateProviderEditCredits(cfg, q);
-    return {
-      credits: est.credits,
-      mode: "provider",
-      title: `~${est.credits} credits`,
-      route: `${est.providerName} ${est.model}`,
-      detail: "Provider-style edits are estimate-only here and still require approval before any paid call."
-    };
-  }
-  return {
-    credits: 0,
-    mode: "local",
-    title: "0 credits",
-    route: "Local preview",
-    detail: "This maps to browser-side image tuning. No provider, no Codex, no paid credits."
-  };
-}
-function editCostHtml(prompt, cfg, esc) {
-  const e = estimateEditCredits(prompt, cfg);
-  const paid = e.credits > 0;
-  return `<div class="ml-edit-cost ${paid ? "is-paid" : "is-free"}" data-ml-edit-cost>
-    <span class="ml-cost-pill">${paid ? svgIc("bolt") : svgIc("check")} ${esc(e.title)}</span>
-    <b>${esc(e.route)}</b>
-    <p>${esc(e.detail)}</p>
-  </div>`;
-}
 function captureForContentHub(asset, extra = {}) {
   try {
     const result = registerContentAsset({
@@ -615,7 +881,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
     if (preset) applyPreset(preset);
     renderGenerate(body, cfg, opts, root);
   });
-  seg("[data-ml-modality]", (v) => { genState.modality = v; markCustomPreset(); });
+  seg("[data-ml-modality]", setModality);
   seg("[data-ml-provs]", (v) => { genState.provider = v; });
   seg("[data-ml-aspect]", (v) => { genState.aspect = v; markCustomPreset(); });
   if (body.querySelector("[data-ml-count]")) seg("[data-ml-count]", (v) => { genState.count = +v; markCustomPreset(); });
@@ -768,9 +1034,8 @@ function renderEdit(body, cfg, opts, root) {
         <div class="ml-tool-head">AI edit ${svgIc("spark")}</div>
         <div class="ml-prompt-wrap">
           <input class="ml-text-in" data-ml-aiedit placeholder="e.g. remove background, make it night, add rain"/>
-          <button class="ml-enhance" data-ml-runai>Preview</button>
+          <button class="ml-enhance" data-ml-runai>Apply</button>
         </div>
-        ${editCostHtml("", cfg, esc)}
         <div class="ml-editor-actions">
           <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to library</button>
           <button class="ml-generate ml-ghost" data-ml-dledit>${svgIc("upload")} Download</button>
@@ -789,23 +1054,10 @@ function renderEdit(body, cfg, opts, root) {
   const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { editState.flip = !editState.flip; flip.classList.toggle("is-on"); if (canvas._img) paintEdit(canvas, canvas._img); };
   body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { applyFilterPreset(b.dataset.v); syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img); });
   const tin = body.querySelector("[data-ml-text]"); if (tin) tin.oninput = () => { editState.text = tin.value; if (canvas._img) paintEdit(canvas, canvas._img); };
-  const aiInput = body.querySelector("[data-ml-aiedit]");
-  const syncEditCost = () => {
-    const box = body.querySelector("[data-ml-edit-cost]");
-    if (box) box.outerHTML = editCostHtml(aiInput?.value || "", cfg, esc);
-  };
-  if (aiInput) aiInput.oninput = syncEditCost;
   const runai = body.querySelector("[data-ml-runai]");
   if (runai) runai.onclick = async () => {
-    const q = (aiInput?.value || "").toLowerCase();
-    const estimate = estimateEditCredits(q, cfg);
-    syncEditCost();
+    const q = (body.querySelector("[data-ml-aiedit]").value || "").toLowerCase();
     runai.disabled = true; runai.textContent = "…";
-    if (estimate.mode === "rembg") {
-      runai.disabled = false; runai.textContent = "Preview";
-      if (opts.notify) opts.notify("Media Factory", "remove background is local rembg: 0 credits. No provider was triggered.");
-      return;
-    }
     // local heuristic "AI edit" preview (real backend routes to provider edit)
     if (/night|dark|noir/.test(q)) { editState.brightness = 70; editState.saturate = 80; editState.hue = 210; }
     else if (/warm|sunset|golden/.test(q)) { editState.brightness = 108; editState.saturate = 140; editState.hue = 20; }
@@ -813,11 +1065,8 @@ function renderEdit(body, cfg, opts, root) {
     else if (/vivid|pop|vibrant/.test(q)) { editState.saturate = 175; editState.contrast = 120; }
     else { editState.contrast = 115; editState.saturate = 130; }
     syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img);
-    runai.disabled = false; runai.textContent = "Preview";
-    if (opts.notify) {
-      const spend = estimate.credits > 0 ? `provider estimate ~${estimate.credits} credits; 0 spent in preview` : "0 credits spent";
-      opts.notify("Media Factory", `previewed edit: "${q.slice(0, 30)}" - ${spend}.`);
-    }
+    runai.disabled = false; runai.textContent = "Apply";
+    if (opts.notify) opts.notify("Media Factory", `applied an AI edit: "${q.slice(0, 30)}".`);
   };
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; renderMediaStudio(root, opts); };
@@ -877,8 +1126,16 @@ function downloadAsset(a) {
    SETTINGS  (provider configuration)
    ========================================================================= */
 export function renderMediaSettings(el, opts = {}) {
+  mediaSettingsMount = el;
+  mediaSettingsOpts = opts;
+  ensureHermesExtensionListener();
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
+  const socialAccounts = loadSocialAccounts();
+  const linkedCount = socialAccounts.filter((account) => socialStatus(account) !== "empty").length;
+  const hermesState = loadHermesExtensionState();
+  const hermesOnline = Boolean(hermesState.detected);
+  const hermesLastSeen = hermesState.lastSeenAt ? new Date(hermesState.lastSeenAt).toLocaleString() : "Not detected yet";
   const routeRow = (modality, label) => {
     const provs = providersFor(cfg, modality === "enhance" ? "enhance" : modality);
     return `<label class="set-route"><span>${label}</span>
@@ -900,6 +1157,57 @@ export function renderMediaSettings(el, opts = {}) {
           <em>Where /generate and /chat are served. Leave blank to auto-detect.</em></label>
       </div>
 
+      <div class="set-section set-social-section">
+        <div class="set-sec-head">
+          <div>
+            <h3>Social accounts</h3>
+            <p class="set-note">Link each client platform with the lightning sign-in assist or manual email/handle/profile fields. If your browser is already signed in, the platform may recognize you automatically; PhantomForce never reads cookies, tokens, saved passwords, or private sessions.</p>
+          </div>
+          <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} linked</span>
+        </div>
+        ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
+        <div class="set-connect-model" aria-label="Connected account safety model">
+          <article>
+            <b>${svgIc("bolt")} Browser-assisted</b>
+            <span>Opens official login pages. Browser autofill/session may help there; PhantomForce receives no cookies or passwords.</span>
+          </article>
+          <article>
+            <b>${svgIc("lock")} Official OAuth/API</b>
+            <span>Future production connection uses scoped, revocable platform permissions and approval-gated posting.</span>
+          </article>
+          <article>
+            <b>${svgIc("spark")} Draft-first safety</b>
+            <span>Until each platform OAuth app is approved, PhantomForce prepares drafts and handoffs only.</span>
+          </article>
+        </div>
+        <div class="set-hermes-connect ${hermesOnline ? "is-online" : ""}">
+          <div class="set-hermes-orb" aria-hidden="true"></div>
+          <div class="set-hermes-copy">
+            <b>Hermes Extension</b>
+            <span>${hermesOnline ? "Connected to safe visible-profile bridge" : "Not detected on this page yet"}</span>
+            <em>Links the latest visible signed-in social profile. No cookies, passwords, tokens, private messages, or browser history are read.</em>
+          </div>
+          <div class="set-hermes-status">
+            <span>${hermesOnline ? "online" : "not detected"}</span>
+            <small>${esc(hermesLastSeen)}</small>
+          </div>
+          <div class="set-hermes-actions">
+            <button class="set-social-open" data-hermes-detect type="button">Detect Hermes</button>
+            <button class="set-social-open" data-hermes-link type="button">${svgIc("bolt")} Link latest profile</button>
+          </div>
+        </div>
+        <div class="set-social-grid">
+          ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
+        </div>
+        <div class="set-social-assist">
+          <div>
+            <b>Lightning browser connect</b>
+            <p>Use the bolt on a platform card to open the right sign-in page. After you sign in, save the public profile URL or handle here. Browser autofill/session can help on the platform page; PhantomForce stores only the public link fields below.</p>
+          </div>
+          <button class="set-add" data-social-smart type="button">${svgIc("bolt")} Connection rules</button>
+        </div>
+      </div>
+
       <div class="set-section">
         <div class="set-sec-head"><h3>Providers</h3><button class="set-add" data-set-addprov>${svgIc("bolt")} Add provider</button></div>
         <div class="set-providers" data-set-providers>
@@ -912,6 +1220,70 @@ export function renderMediaSettings(el, opts = {}) {
   el.querySelectorAll("[data-route]").forEach((s) => s.onchange = () => { cfg.routing[s.dataset.route] = s.value; saveCfg(cfg); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
   const base = el.querySelector("[data-set-base]"); base.onchange = () => { cfg.endpointBase = base.value.trim(); saveCfg(cfg); };
+
+  // social account linking stays local and never reads browser cookies/tokens
+  el.querySelectorAll("[data-social-card]").forEach((card) => {
+    const id = card.dataset.socialCard;
+    const account = socialAccounts.find((row) => row.id === id);
+    if (!account) return;
+    const saveAndRender = () => { saveSocialAccounts(socialAccounts); renderMediaSettings(el, opts); };
+    const enabled = card.querySelector("[data-social-enabled]");
+    if (enabled) enabled.onchange = () => { account.enabled = enabled.checked; saveAndRender(); };
+    const login = card.querySelector("[data-social-login]");
+    if (login) login.onchange = () => { account.loginIdentity = login.value.trim(); saveAndRender(); };
+    const handle = card.querySelector("[data-social-handle]");
+    if (handle) handle.onchange = () => {
+      account.handle = handle.value.trim();
+      if (!normalizeSocialUrl(account.url)) account.url = socialProfileFromHandle(account.id, account.handle);
+      saveAndRender();
+    };
+    const url = card.querySelector("[data-social-url]");
+    if (url) url.onchange = () => { account.url = normalizeSocialUrl(url.value); saveAndRender(); };
+    const clear = card.querySelector("[data-social-clear]");
+    if (clear) clear.onclick = () => {
+      account.handle = ""; account.url = ""; account.loginIdentity = ""; account.enabled = false; account.connectMode = "manual"; account.lastConnectAt = "";
+      delete account.hermesProof;
+      socialNotice = `${account.name} link cleared locally. No remote account was changed.`;
+      saveAndRender();
+    };
+    const open = card.querySelector("[data-social-open]");
+    if (open) open.onclick = () => {
+      const target = socialProfileTarget(account) || socialLoginTarget(account);
+      window.open(target, "_blank", "noopener,noreferrer");
+    };
+    const oauth = card.querySelector("[data-social-oauth]");
+    if (oauth) oauth.onclick = () => {
+      account.officialConnectState = "oauth_planned";
+      account.connectMode = "official-oauth-planned";
+      socialNotice = `${account.name} official OAuth lane prepared. Production posting stays draft-only until the platform app, scopes, redirect URI, token encryption, and owner approval gate are configured.`;
+      saveAndRender();
+    };
+    const auto = card.querySelector("[data-social-auto]");
+    if (auto) auto.onclick = () => {
+      window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
+      account.connectMode = "browser-assisted";
+      account.lastConnectAt = new Date().toISOString();
+      socialNotice = `${account.name} lightning sign-in opened. If your browser is already signed in, the platform can use that session there; PhantomForce did not read cookies, tokens, or passwords.`;
+      saveAndRender();
+    };
+  });
+  const smart = el.querySelector("[data-social-smart]");
+  if (smart) smart.onclick = () => {
+    socialNotice = "Lightning connect opens platform sign-in pages only. Browser sessions/password manager can help on those pages, and account linking is confirmed by the public profile URL or handle you save here.";
+    opts.notify?.("Settings", "Lightning connect rules shown. No cookies, tokens, sends, or external writes were touched.");
+    renderMediaSettings(el, opts);
+  };
+  const hermesDetect = el.querySelector("[data-hermes-detect]");
+  if (hermesDetect) hermesDetect.onclick = () => {
+    requestHermesExtensionPing();
+    socialNotice = "Hermes detection requested. If the extension is loaded on this page, the status will flip online automatically.";
+    renderMediaSettings(el, opts);
+  };
+  const hermesLink = el.querySelector("[data-hermes-link]");
+  if (hermesLink) hermesLink.onclick = () => {
+    requestHermesExtensionProfileLink();
+    opts.notify?.("Settings", "Hermes link requested. Only public profile fields can be returned.");
+  };
 
   // provider cards
   el.querySelectorAll("[data-prov-card]").forEach((card) => {
@@ -936,6 +1308,44 @@ export function renderMediaSettings(el, opts = {}) {
     cfg.providers.push({ id, name: name.trim(), tagline: "Custom provider", brand: "#41ffa1", keyEnv: `${id.toUpperCase().replace(/-/g, "_")}_API_KEY`, enabled: true, modalities, models, custom: true, endpoint: "", localKey: "", defaultModel: {} });
     saveCfg(cfg); renderMediaSettings(el, opts);
   };
+}
+
+function socialCard(account, esc) {
+  const status = socialStatus(account);
+  const connector = socialConnector(account);
+  const targetLabel = socialProfileTarget(account) ? "Open profile" : "Open login";
+  const lastConnect = account.lastConnectAt ? `Last sign-in assist ${new Date(account.lastConnectAt).toLocaleDateString()}` : "Password is never stored here";
+  const hermesProof = account.hermesProof
+    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Hermes verified visible profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
+    : "";
+  return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
+    <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
+    <div class="set-social-top">
+      <span class="set-social-dot" style="background:${account.color}"></span>
+      <span><b>${esc(account.name)}</b><i>${esc(socialStatusLabel(account))}</i></span>
+      <button class="set-social-lightning" data-social-auto aria-label="Lightning sign-in assist for ${esc(account.name)}" title="Lightning sign-in assist" type="button">${svgIc("bolt")}</button>
+      <label class="set-switch"><input type="checkbox" data-social-enabled ${account.enabled ? "checked" : ""}/><span></span></label>
+    </div>
+    <div class="set-social-connect-state">
+      <span>${esc(connector.lane)}</span>
+      <b>${esc(socialPostingState(account))}</b>
+    </div>
+    ${hermesProof}
+    <label class="set-mini"><span>Login email / username</span><input data-social-login autocomplete="username" placeholder="email or username" value="${esc(account.loginIdentity || "")}"/></label>
+    <label class="set-mini"><span>Handle</span><input data-social-handle placeholder="@client" value="${esc(account.handle || "")}"/></label>
+    <label class="set-mini"><span>Profile URL</span><input data-social-url placeholder="https://" value="${esc(account.url || "")}"/></label>
+    <details class="set-social-oauth">
+      <summary>Official connect plan</summary>
+      <p>${esc(connector.capability)}</p>
+      <div>${connector.scopes.map((scope) => `<span>${esc(scope)}</span>`).join("")}</div>
+      <em>${esc(connector.posting)}</em>
+    </details>
+    <div class="set-social-actions">
+      <button class="set-social-open" data-social-open type="button">${esc(targetLabel)}</button>
+      <button class="set-social-open" data-social-oauth type="button">Prepare OAuth</button>
+      <span>${esc(lastConnect)}</span>
+    </div>
+  </article>`;
 }
 
 function providerCard(p, esc) {
