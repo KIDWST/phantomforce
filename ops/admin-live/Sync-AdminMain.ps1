@@ -12,7 +12,10 @@ function Invoke-Git {
   if ($LASTEXITCODE -ne 0) {
     throw "git $($Args -join ' ') failed: $output"
   }
-  return $output
+  if ($null -eq $output) {
+    return ""
+  }
+  return ($output -join "`n")
 }
 
 function Write-Manifest {
