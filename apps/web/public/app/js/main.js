@@ -4,14 +4,16 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-22";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-22";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-22";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-22";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-22";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-22";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-22";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-22";
+} from "./store.js?v=phantom-live-20260706-23";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-23";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-23";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-23";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-23";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-23";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-23";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-23";
+import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260706-23";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-23";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -172,6 +174,8 @@ const NAV = [
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
+  { id: "brand",      label: "Brand Memory", icon: "db",    ws: "brand" },
+  { id: "automation", label: "Automation",   icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workers",      icon: "users", ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
@@ -190,10 +194,8 @@ let activePageId = null;
 let mobileNavOpen = false;
 
 const WORKSPACE_ALIASES = {
-  brand: "memory",
   memory: "memory",
   content: "content",
-  automation: "workforce",
   analytics: "analytics",
 };
 
@@ -270,6 +272,7 @@ function openOperationsMap() {
     closeOperationsMap();
     return;
   }
+  section.classList.remove("is-map-closed");
   section.classList.add("is-map-open");
   updateOperationsMapControls();
   renderFlowMap();
@@ -286,6 +289,7 @@ function closeOperationsMap() {
   const section = $("[data-map-section]");
   if (!section) return;
   section.classList.remove("is-map-open");
+  section.classList.add("is-map-closed");
   updateOperationsMapControls();
   const opener = $("[data-map-open]", section) || $("[data-map-open]");
   if (opener) {
@@ -502,7 +506,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-22";
+const POSE_VERSION = "phantom-live-20260706-23";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1121,10 +1125,58 @@ function renderConsole() {
   renderQuick();
   bindCommandForm();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
+  mountAgentTicker($("[data-agent-ticker]"));
+  mountAgentConsole($("[data-agentops]"));
+  mountHeroTicker($("[data-hero-ticker]"));
+  renderChatLog();
 }
 
 /* ============================ command run ============================ */
-const sayBox = () => $("[data-say]");
+const chatHistory = [];
+const chatLogEl = () => $("[data-chat-log]");
+function msgHtml(m, i) {
+  const cards = (m.cards || []).map((c, ci) => cardHtml(c, ci, i)).join("");
+  return `<div class="msg msg-${m.who}" data-msg-i="${i}">
+    ${m.who === "phantom" ? `<span class="msg-avatar" aria-hidden="true"></span>` : ""}
+    <div class="msg-body"><p class="msg-text"></p>${cards ? `<div class="msg-cards">${cards}</div>` : ""}</div>
+  </div>`;
+}
+function renderChatLog() {
+  const log = chatLogEl();
+  if (!log) return;
+  log.innerHTML = chatHistory.map(msgHtml).join("");
+  log.querySelectorAll(".msg").forEach((el, i) => {
+    const text = el.querySelector(".msg-text");
+    if (text) text.textContent = chatHistory[i]?.text || "";
+  });
+  bindCardRemovers(log, (entryIndex, cardIndex) => {
+    const entry = chatHistory[entryIndex];
+    if (entry?.cards) {
+      entry.cards.splice(cardIndex, 1);
+      renderChatLog();
+    }
+  });
+  log.scrollTop = log.scrollHeight;
+}
+function chatTypingOn() {
+  const log = chatLogEl();
+  if (!log || log.querySelector(".msg-typing")) return;
+  log.insertAdjacentHTML("beforeend", `<div class="msg msg-phantom msg-typing"><span class="msg-avatar" aria-hidden="true"></span><div class="msg-body"><p class="msg-text msg-dots"><i></i><i></i><i></i></p></div></div>`);
+  log.scrollTop = log.scrollHeight;
+}
+function chatTypingOff() {
+  chatLogEl()?.querySelector(".msg-typing")?.remove();
+}
+function chatAttachCards(cards) {
+  if (!cards?.length) return;
+  for (let i = chatHistory.length - 1; i >= 0; i--) {
+    if (chatHistory[i].who === "phantom") {
+      chatHistory[i].cards = cards;
+      break;
+    }
+  }
+  renderChatLog();
+}
 let typeTimer = 0;
 let ghostMood = "idle";
 let ghostEmotion = "calm";
@@ -1155,31 +1207,46 @@ function speechHoldMs(text = "") {
 }
 function speak(text, cls = "", emotionOverride = null) {
   clearTimeout(typeTimer);
-  const box = sayBox();
-  if (!box) return;
-  box.hidden = false;
-  const p = document.createElement("p");
-  p.className = `say-line ${cls}`.trim();
-  box.replaceChildren(p);
   const emotion = emotionOverride || emotionForText(text);
   if (cls === "thinking") {
     setGhostMood("thinking", { emotion: "bright" });
     renderEmotePose("think", 900);
-  } else if (cls === "user") {
+    chatTypingOn();
+    return;
+  }
+  if (cls === "user") {
     setGhostMood("listening", { emotion: "calm", ms: 1600 });
     renderEmotePose("listen", 1100);
-  } else {
-    setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
-    renderEmotePose(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talk", Math.min(2200, speechHoldMs(text)));
+    chatHistory.push({ who: "user", text });
+    if (chatHistory.length > 40) chatHistory.shift();
+    renderChatLog();
+    return;
   }
-  if (cls || reduceMotion) {
-    p.textContent = text;
-    if (!cls) setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+  setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
+  renderEmotePose(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talk", Math.min(2200, speechHoldMs(text)));
+  chatTypingOff();
+  chatHistory.push({ who: "phantom", text: "" });
+  if (chatHistory.length > 40) chatHistory.shift();
+  const entry = chatHistory[chatHistory.length - 1];
+  renderChatLog();
+  const paintLast = () => {
+    const log = chatLogEl();
+    const el = log?.querySelector(`[data-msg-i="${chatHistory.indexOf(entry)}"] .msg-text`);
+    if (el) {
+      el.textContent = entry.text;
+      log.scrollTop = log.scrollHeight;
+    }
+  };
+  if (reduceMotion) {
+    entry.text = text;
+    paintLast();
+    setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
     return;
   }
   let i = 0;
   const tick = () => {
-    p.textContent = text.slice(0, i);
+    entry.text = text.slice(0, i);
+    paintLast();
     if (i++ < text.length) typeTimer = setTimeout(tick, 11 + Math.random() * 16);
     else setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
   };
@@ -1224,19 +1291,14 @@ function runCommand(raw) {
   speak(raw, "user");
   ghostFlare("listening");
   stageReact("listen", 620);
-  const respBox = $("[data-response]");
-  if (respBox) respBox.innerHTML = "";
   setTimeout(() => {
     speak("· · ·", "thinking");
     stageReact("think", 780);
     setTimeout(() => {
       const r = handleCommand(text);
       speak(r.say);
+      if (r.cards?.length) chatAttachCards(r.cards);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
-      if (respBox) {
-        respBox.innerHTML = (r.cards || []).map((c, i) => cardHtml(c, i)).join("");
-        bindCardRemovers(respBox);
-      }
       renderConsole();
       stageReact("answer", 1100);
       if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
@@ -1458,6 +1520,8 @@ const CUSTOM = {
   account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
+  brand: { title: "Brand Memory", kicker: "Private & local brand brain", custom: true, wide: true, render: (body) => renderBrandMemory(body, mediaOpts()) },
+  automation: { title: "Automation", kicker: "Approved workflows only", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
 };
 
 let openId = null;
