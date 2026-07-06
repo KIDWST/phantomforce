@@ -36,6 +36,111 @@ export const RETAINERS = [
   { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full workforce running weekly: media, pipeline, protection." },
 ];
 
+/* ---------------- local memory ---------------- */
+export const MEMORY_RETENTION_DAYS = 30;
+export const MEMORY_CATEGORY_LABELS = {
+  conversation: "Conversations",
+  preference: "Preferences",
+  business: "Business",
+  client: "Clients",
+  proposal: "Quotes",
+  media: "Media",
+  website: "Websites",
+  security: "Security",
+  money: "Money",
+  operations: "Operations",
+};
+const MEMORY_LIMIT = 300;
+const SECRET_REDACTIONS = [
+  [/\b(sk-[a-z0-9_-]{12,}|hf_[a-z0-9]{12,}|ghp_[a-z0-9_]{20,})\b/gi, "[redacted-key]"],
+  [/\b(AKIA|ASIA)[A-Z0-9]{16}\b/g, "[redacted-aws-key]"],
+  [/\bBearer\s+[A-Za-z0-9._~+/=-]{12,}\b/gi, "Bearer [redacted]"],
+  [/\bxox[baprs]-[A-Za-z0-9-]{10,}\b/gi, "[redacted-slack-token]"],
+  [/\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/g, "[redacted-jwt]"],
+  [/\b(api[_ -]?key|token|secret|password|passcode|owner key|cookie|session)\s*[:=]\s*[^\s,;]+/gi, "$1: [redacted]"],
+  [/\b(password|passcode|token|secret|api[_ -]?key|owner key)\s+(is|was|are)\s+[^\s,;]+/gi, "$1 $2 [redacted]"],
+];
+
+export function sanitizeMemoryText(value = "") {
+  let text = String(value || "").replace(/\s+/g, " ").trim();
+  for (const [pattern, replacement] of SECRET_REDACTIONS) text = text.replace(pattern, replacement);
+  return text.slice(0, 1400);
+}
+
+export function classifyMemory(value = "") {
+  const text = String(value || "").toLowerCase();
+  if (/\b(remember|make sure|from now on|always|never|prefer|preference|i like|i don't like|i hate|don't use|use this)\b/.test(text)) return "preference";
+  if (/(breach|leak|malware|phish|password|security|protect|scan|risk|vulnerability|tracker|spybot|scam)/.test(text)) return "security";
+  if (/(video|reel|photo|image|higgsfield|media|content|caption|ad|creative|social|tiktok|instagram|facebook|youtube)/.test(text)) return "media";
+  if (/(website|site|page|store|dashboard|ui|mobile|phantom deck|admin\.phantomforce|app\.phantomforce)/.test(text)) return "website";
+  if (/(proposal|quote|pricing|estimate|package|scope|cover letter|resume|cv)/.test(text)) return "proposal";
+  if (/(lead|client|customer|prospect|crm|contact|account|company|business|buyer|follow[- ]?up)/.test(text)) return "client";
+  if (/(money|revenue|invoice|payment|retainer|sale|deal|pipeline|cost|credits|subscription)/.test(text)) return "money";
+  if (/(automation|workflow|agent|worker|deploy|build|scan|daily check|gateway|vault|process note|private route|connector)/.test(text)) return "operations";
+  if (/(phantomforce|business|company|brand|owner|employee|job|linkedin)/.test(text)) return "business";
+  return "conversation";
+}
+
+function memoryTitle(value = "", category = "conversation") {
+  const clean = sanitizeMemoryText(value);
+  const first = clean.split(/[.!?]/)[0].trim();
+  return (first || MEMORY_CATEGORY_LABELS[category] || "Memory").slice(0, 82);
+}
+
+function memoryTags(value = "", category = "conversation") {
+  const text = String(value || "").toLowerCase();
+  const tags = [category];
+  [
+    ["phantom", /phantomforce|phantom/],
+    ["admin", /admin|owner|jordan/],
+    ["mobile", /mobile|phone|iphone|safari/],
+    ["client", /client|customer|lead/],
+    ["local", /local|private|pc|desktop/],
+    ["approval", /approval|approve|review/],
+  ].forEach(([tag, pattern]) => { if (pattern.test(text)) tags.push(tag); });
+  return [...new Set(tags)].slice(0, 6);
+}
+
+export function shouldAiRemember(value = "") {
+  return /\b(remember|make sure|from now on|always|never|i like|i don't like|important|owner|employee|policy|pricing|package|business|brand|client|customer|workspace)\b/i.test(String(value || ""));
+}
+
+export function pruneMemory(entries = []) {
+  const cutoff = Date.now() - MEMORY_RETENTION_DAYS * DAY;
+  return entries
+    .filter(Boolean)
+    .map((entry) => {
+      const createdAt = entry.createdAt || entry.at || new Date().toISOString();
+      const text = sanitizeMemoryText(entry.text || entry.summary || entry.title || "");
+      const category = entry.category || classifyMemory(text);
+      return {
+        id: entry.id || uid("mem"),
+        ws: entry.ws || "phantomforce",
+        source: entry.source || "manual",
+        category,
+        title: sanitizeMemoryText(entry.title || memoryTitle(text, category)).slice(0, 90),
+        summary: sanitizeMemoryText(entry.summary || text).slice(0, 220),
+        text,
+        tags: Array.isArray(entry.tags) ? entry.tags.slice(0, 8).map((tag) => sanitizeMemoryText(tag).slice(0, 28)).filter(Boolean) : memoryTags(text, category),
+        createdAt,
+        updatedAt: entry.updatedAt || createdAt,
+        lastAccessedAt: entry.lastAccessedAt || createdAt,
+        pinnedByUser: !!entry.pinnedByUser,
+        pinnedByAi: !!entry.pinnedByAi,
+      };
+    })
+    .filter((entry) => entry.text && (entry.pinnedByUser || entry.pinnedByAi || new Date(entry.createdAt).getTime() >= cutoff))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, MEMORY_LIMIT);
+}
+
+export function memoryRetention(entry) {
+  if (entry?.pinnedByUser) return "remembered by you";
+  if (entry?.pinnedByAi) return "remembered by Phantom";
+  const ageDays = Math.floor((Date.now() - new Date(entry?.createdAt || Date.now()).getTime()) / DAY);
+  return `${Math.max(0, MEMORY_RETENTION_DAYS - ageDays)}d left`;
+}
+
 /* ---------------- internal tool spine ---------------- */
 export const TOOL_SPINE = [
   {
@@ -191,6 +296,7 @@ function seed() {
     security: [],
     approvals: [],
     agents: [],
+    memory: [],
     toolSpine: TOOL_SPINE,
     activity: [],
   };
@@ -211,6 +317,7 @@ function normalizeData(data) {
   d.security = Array.isArray(d.security) ? d.security : [];
   d.approvals = Array.isArray(d.approvals) ? d.approvals : [];
   d.agents = Array.isArray(d.agents) ? d.agents : [];
+  d.memory = pruneMemory(Array.isArray(d.memory) ? d.memory : []);
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...((d.toolSpine || []).find((x) => x.id === tool.id) || {}), ...tool }));
   d.activity = Array.isArray(d.activity) ? d.activity : [];
   d.activity = d.activity.slice(0, 80);
@@ -265,6 +372,7 @@ export const session = {
 
 export const ADMIN_PUBLIC_HOST = "admin.phantomforce.online";
 export const PUBLIC_PAGES_HOSTS = new Set(["phantomforce.online", "www.phantomforce.online"]);
+export const OWNER_SESSION_ID = "owner-admin";
 
 export const isLiveAdminHost = () => location.hostname === ADMIN_PUBLIC_HOST;
 export const isStaticPublicHost = () => PUBLIC_PAGES_HOSTS.has(location.hostname);
@@ -289,12 +397,27 @@ export function resolveSession() {
 
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
-  if (key === "owner-admin" || key === "admin" || key === "jordan") {
+  if (key === OWNER_SESSION_ID) {
     if (isStaticPublicHost()) {
       redirectToLiveAdmin();
       return null;
     }
-    const s = { role: "admin", name: "Jordan", ws: "phantomforce" };
+    const s = {
+      role: "admin",
+      name: "Jordan",
+      label: "PhantomForce Owner",
+      ws: "phantomforce",
+      sessionId: OWNER_SESSION_ID,
+      canManageAccess: true,
+    };
+    session.set(s); return s;
+  }
+  if (key === "admin" || key === "jordan") {
+    if (isStaticPublicHost()) {
+      redirectToLiveAdmin();
+      return null;
+    }
+    const s = { role: "admin", name: "Jordan", ws: "phantomforce", sessionId: "local-admin" };
     session.set(s); return s;
   }
   if (key === "employee" || key === "team" || key === "client") {
@@ -327,10 +450,15 @@ export async function ownerLogin(ownerKey) {
   if (!response.ok || !payload?.token || !payload?.session) {
     throw new Error(payload?.error || "Owner login failed.");
   }
+  const sessionId = payload.session.id || OWNER_SESSION_ID;
+  const isOwnerSession = sessionId === OWNER_SESSION_ID;
   const s = {
     role: "admin",
-    name: payload.session.label || "Jordan",
+    name: payload.session.name || (isOwnerSession ? "Jordan" : payload.session.label || "Operator"),
+    label: payload.session.label || (isOwnerSession ? "PhantomForce Owner" : ""),
     ws: "phantomforce",
+    sessionId,
+    canManageAccess: !!payload.session.canManageAccess,
     token: payload.token,
   };
   session.set(s);
@@ -353,7 +481,17 @@ export async function verifyLiveSession() {
     session.clear();
     return null;
   }
-  const s = { role: "admin", name: payload.session.label || "Jordan", ws: "phantomforce", token };
+  const sessionId = payload.session.id || OWNER_SESSION_ID;
+  const isOwnerSession = sessionId === OWNER_SESSION_ID;
+  const s = {
+    role: "admin",
+    name: payload.session.name || (isOwnerSession ? "Jordan" : payload.session.label || "Operator"),
+    label: payload.session.label || (isOwnerSession ? "PhantomForce Owner" : ""),
+    ws: "phantomforce",
+    sessionId,
+    canManageAccess: !!payload.session.canManageAccess,
+    token,
+  };
   session.set(s);
   return s;
 }
@@ -361,6 +499,13 @@ export async function verifyLiveSession() {
 /* ---------------- selectors ---------------- */
 export const ctx = { session: null };
 export const isAdmin = () => ctx.session?.role === "admin";
+export const isOwnerOperator = () => {
+  const s = ctx.session || {};
+  if (s.role !== "admin") return false;
+  const identity = `${s.sessionId || ""} ${s.name || ""} ${s.label || ""}`.toLowerCase();
+  return s.sessionId === OWNER_SESSION_ID
+    || (s.canManageAccess === true && /\b(jordan|phantomforce owner)\b/.test(identity));
+};
 export const currentWs = () => ctx.session?.ws || "phantomforce";
 export const setWorkspace = (id) => { if (!isAdmin()) return; ctx.session.ws = id; session.set(ctx.session); store.save(); };
 
@@ -393,6 +538,80 @@ export function pushToolPulse(toolId) {
     });
   }
   store.state.activity = store.state.activity.slice(0, 80);
+}
+
+export function addMemory(entry = {}) {
+  const rawText = sanitizeMemoryText(entry.text || entry.summary || entry.title || "");
+  if (!rawText) return null;
+  const sourceText = `${entry.title || ""} ${entry.summary || ""} ${rawText}`;
+  const category = entry.category || classifyMemory(sourceText);
+  const now = new Date().toISOString();
+  const memory = {
+    id: entry.id || uid("mem"),
+    ws: entry.ws || (currentWs() === "phantomforce" ? "phantomforce" : currentWs()),
+    source: entry.source || "manual",
+    category,
+    title: sanitizeMemoryText(entry.title || memoryTitle(rawText, category)).slice(0, 90),
+    summary: sanitizeMemoryText(entry.summary || rawText).slice(0, 220),
+    text: rawText,
+    tags: Array.isArray(entry.tags) && entry.tags.length
+      ? entry.tags.slice(0, 8).map((tag) => sanitizeMemoryText(tag).slice(0, 28)).filter(Boolean)
+      : memoryTags(sourceText, category),
+    createdAt: entry.createdAt || now,
+    updatedAt: now,
+    lastAccessedAt: now,
+    pinnedByUser: !!entry.pinnedByUser,
+    pinnedByAi: !!entry.pinnedByAi || shouldAiRemember(sourceText),
+  };
+  const recentDuplicate = (store.state.memory || []).find((item) =>
+    item.text === memory.text && Date.now() - new Date(item.createdAt).getTime() < 60000);
+  if (recentDuplicate) return recentDuplicate;
+  store.state.memory = pruneMemory([memory, ...(store.state.memory || [])]);
+  store.save();
+  return memory;
+}
+
+export function rememberConversation({ prompt = "", reply = "", mode = "ask", route = "" } = {}) {
+  const cleanPrompt = sanitizeMemoryText(prompt);
+  if (!cleanPrompt) return null;
+  const cleanReply = sanitizeMemoryText(reply);
+  const combined = cleanReply ? `User: ${cleanPrompt}\nPhantom: ${cleanReply}` : `User: ${cleanPrompt}`;
+  const category = classifyMemory(`${cleanPrompt} ${cleanReply}`);
+  return addMemory({
+    source: "conversation",
+    category,
+    title: cleanPrompt,
+    summary: cleanReply || cleanPrompt,
+    text: combined,
+    tags: [mode, route, category].filter(Boolean),
+    pinnedByAi: shouldAiRemember(cleanPrompt) || shouldAiRemember(cleanReply),
+  });
+}
+
+export function toggleMemoryRemember(id) {
+  const memory = store.state.memory.find((item) => item.id === id);
+  if (!memory) return null;
+  memory.pinnedByUser = !memory.pinnedByUser;
+  memory.updatedAt = new Date().toISOString();
+  store.state.memory = pruneMemory(store.state.memory);
+  store.save();
+  return memory;
+}
+
+export function forgetMemory(id) {
+  store.state.memory = (store.state.memory || []).filter((item) => item.id !== id);
+  store.save();
+}
+
+export function memoryStats(list = visible(store.state.memory || [])) {
+  const memories = Array.isArray(list) ? list : [];
+  const remembered = memories.filter((item) => item.pinnedByUser || item.pinnedByAi).length;
+  const categories = new Set(memories.map((item) => item.category)).size;
+  const expiresSoon = memories.filter((item) => {
+    if (item.pinnedByUser || item.pinnedByAi) return false;
+    return Date.now() - new Date(item.createdAt).getTime() > (MEMORY_RETENTION_DAYS - 5) * DAY;
+  }).length;
+  return { total: memories.length, remembered, categories, expiresSoon };
 }
 
 /* ---------------- derived: money ---------------- */

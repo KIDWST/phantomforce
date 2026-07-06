@@ -5,8 +5,8 @@
 
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
-  PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil,
-} from "./store.js?v=phantom-live-20260705-20";
+  PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
+} from "./store.js?v=phantom-live-20260705-27";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -256,6 +256,21 @@ export function handleCommand(raw) {
     };
   }
 
+  /* --- memory --- */
+  if (/(memory|remember|saved context|what do you know|knowledge|database|local data|past conversations)/.test(s)) {
+    const mem = memoryStats();
+    return {
+      say: mem.total
+        ? `Memory has ${mem.total} saved item${mem.total === 1 ? "" : "s"} across ${mem.categories || 1} categor${mem.categories === 1 ? "y" : "ies"}.`
+        : "Memory is empty right now. New conversations start saving locally from here.",
+      cards: [card("Memory", "Local context database",
+        "Conversations auto-organize into categories. Normal memories expire after 30 days unless you or Phantom mark them to remember.",
+        [openAction("Open Memory", "memory")],
+        mem.remembered ? `${mem.remembered} remembered` : "Private and local")],
+      open: "memory",
+    };
+  }
+
   /* --- workforce --- */
   if (/(workforce|agents?|team|who('| i)s working|workers)/.test(s)) {
     const active = store.state.agents.filter((a) => a.status === "active").length;
@@ -306,6 +321,6 @@ export function handleCommand(raw) {
 /* Suggestion chips under the command input. */
 export function commandSuggestions() {
   return isAdmin()
-    ? ["Catch me up", "Stage Protect Sweep", "Reputation Radar", "Local Growth Miner", "Social Trend Lab", "Create a video request"]
+    ? ["Catch me up", "What do you remember?", "Stage Protect Sweep", "Reputation Radar", "Social Trend Lab", "Create a video request"]
     : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Run a security check"];
 }

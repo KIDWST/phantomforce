@@ -3,14 +3,14 @@
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
-  ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-20";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-20";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-20";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-20";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-20";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-20";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-20";
+  ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
+} from "./store.js?v=phantom-live-20260705-27";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-27";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-27";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-27";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-27";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-27";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-27";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -41,6 +41,7 @@ const I = {
   arrow: `<path d="M3 8h9M9 5l3 3-3 3"/>`,
   clock: `<circle cx="8" cy="8" r="5.2"/><path d="M8 5.2V8l2 1.4"/>`,
   db:    `<ellipse cx="8" cy="4.5" rx="4.5" ry="1.8"/><path d="M3.5 4.5v7c0 1 2 1.8 4.5 1.8s4.5-.8 4.5-1.8v-7"/>`,
+  dev:   `<path d="M5.5 5L3 8l2.5 3M10.5 5L13 8l-2.5 3M9 3.5 7 12.5"/>`,
   search:`<circle cx="7" cy="7" r="4"/><path d="M10 10l3.5 3.5"/>`,
   bell:  `<path d="M8 2.5a3.5 3.5 0 0 0-3.5 3.5c0 3-1.2 4-1.2 4h9.4s-1.2-1-1.2-4A3.5 3.5 0 0 0 8 2.5zM6.6 12.5a1.4 1.4 0 0 0 2.8 0"/>`,
   bolt:  `<path d="M8.5 2L4 9h3l-.5 5L11 7H8z"/>`,
@@ -131,17 +132,19 @@ const NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
-  { id: "brand",      label: "Brand Memory", icon: "brain", ws: "workforce" },
+  { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
+  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 let activeNav = "dashboard";
 let activePageId = null;
 
 const WORKSPACE_ALIASES = {
-  brand: "workforce",
+  brand: "memory",
+  memory: "memory",
   content: "content",
   automation: "workforce",
   analytics: "analytics",
@@ -151,10 +154,16 @@ function workspaceId(id) {
   return WORKSPACE_ALIASES[id] || id;
 }
 
+function canAccessSurface(surface) {
+  if (surface?.ownerOnly && !isOwnerOperator()) return false;
+  if (surface?.adminOnly && !isAdmin()) return false;
+  return true;
+}
+
 function renderNav() {
   const nav = $("[data-nav]");
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  nav.innerHTML = NAV.filter((n) => !n.adminOnly || isAdmin()).map((n) => `
+  nav.innerHTML = NAV.filter(canAccessSurface).map((n) => `
     <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}">
       ${svg(n.icon)}
       <span>${n.label}</span>
@@ -182,7 +191,7 @@ function renderStatusPills() {
   const pills = [
     { label: "Phantom Status", value: "Online", tone: "ok", dot: true },
     { label: "System Status", value: attention ? "Attention needed" : "All Systems Operational", tone: attention ? "warn" : "ok", dot: true },
-    { label: "Brand Memory", value: "Private & Local", tone: "ok", lock: true },
+    { label: "Memory", value: "Private & Local", tone: "ok", lock: true },
   ];
   $("[data-status-pills]").innerHTML = pills.map((p) => `
     <div class="pill pill-${p.tone}">
@@ -373,7 +382,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-20";
+const POSE_VERSION = "phantom-live-20260705-27";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -540,15 +549,13 @@ function thisWeekCount() {
 }
 function renderStatCards() {
   const media = visible(store.state.media);
-  const sites = visible(store.state.sites);
-  const products = visible(store.state.products);
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
   const delivered = media.filter((m) => m.status === "delivered").length;
-  const files = media.length + sites.length + products.length + visible(store.state.reviews).length;
+  const mem = memoryStats();
 
   const cards = [
-    { icon: "db",    title: "Brand Memory", value: files, sub: files ? "Files indexed" : "No files yet", foot: files ? `Updated ${ago(store.state.activity[0]?.at || new Date().toISOString())}` : "Waiting for first upload", open: "workforce", trend: files ? "live" : "empty" },
+    { icon: "db",    title: "Memory",       value: mem.total, sub: mem.total ? `${mem.categories} categories` : "No memories yet", foot: mem.remembered ? `${mem.remembered} remembered` : (mem.expiresSoon ? `${mem.expiresSoon} expiring soon` : "Local conversation memory"), open: "memory", trend: mem.total ? "local" : "empty" },
     { icon: "media", title: "Media Lab",    value: media.length, sub: "Video requests", foot: media.length ? `${delivered} delivered` : "No requests yet", open: "media", trend: media.length ? "ready" : "empty" },
     { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "Queue clear", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear" },
     { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: thisWeekCount() ? "Real activity only" : "No activity yet", open: "media", trend: thisWeekCount() ? "live" : "empty" },
@@ -663,8 +670,8 @@ function renderQueue() {
 const QUICK = [
   { label: "Create new content", icon: "spark",  run: "Create a media request for a new campaign" },
   { label: "Start video campaign", icon: "film",  run: "Create a video request for the launch" },
-  { label: "Run brand analysis", icon: "chart",   run: "What's my pipeline?" },
-  { label: "Upload brand asset", icon: "upload",   open: "media" },
+  { label: "Check pipeline", icon: "chart",   run: "What's my pipeline?" },
+  { label: "Open media library", icon: "upload",   open: "media" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
 function renderQuick() {
@@ -740,11 +747,11 @@ function fuzzy(q, text) {
 function paletteSources(query) {
   const q = query.trim().toLowerCase();
   const items = [];
-  NAV.filter((n) => !n.adminOnly || isAdmin()).forEach((n) =>
+  NAV.filter(canAccessSurface).forEach((n) =>
     items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}` : "Console home", run: () => goNav(n.id) }));
   for (const id in WORKSPACE_DEFS) {
     const def = WORKSPACE_DEFS[id];
-    if (def.adminOnly && !isAdmin()) continue;
+    if (!canAccessSurface(def)) continue;
     if (NAV.some((n) => n.ws === id)) continue;
     items.push({ group: "Go to", label: def.title, icon: "grid", sub: def.kicker, run: () => openWorkspace(id) });
   }
@@ -996,6 +1003,7 @@ function runCommand(raw) {
       const r = handleCommand(text);
       stageReact("answer", 980);
       speak(r.say);
+      rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
       if (respBox) respBox.innerHTML = (r.cards || []).map(cardHtml).join("");
       renderConsole();
       if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
@@ -1094,11 +1102,99 @@ const mediaOpts = () => ({
   openSettings: () => routeWorkspace("settings"),
   renderBriefs: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
+
+function renderDeveloperPage(body) {
+  if (!isOwnerOperator()) {
+    body.innerHTML = `
+      <div class="developer-denied">
+        <p class="developer-kicker">Owner-only</p>
+        <h3>Developer access is reserved for the PhantomForce owner account.</h3>
+        <p>This surface is hidden from normal client, employee, and admin sessions.</p>
+      </div>`;
+    return;
+  }
+  const s = ctx.session || {};
+  const mem = memoryStats();
+  const state = store.state || {};
+  const pendingApprovals = visible(state.approvals || []).filter((a) => a.status === "pending").length;
+  const queuedArtifacts = (state.contentQueue || []).filter((item) => !item.archived && item.status !== "removed").length;
+  const routes = [
+    ["Owner account", "PhantomForce Owner"],
+    ["Session", s.sessionId || "owner-admin"],
+    ["Access guard", s.canManageAccess ? "canManageAccess true" : "local owner session"],
+    ["Workspace", wsName(currentWs())],
+    ["Host", location.hostname || "local"],
+    ["Build", document.querySelector('meta[name="phantom-build"]')?.content || "local"],
+  ];
+  const safety = [
+    ["Provider calls", "Blocked here"],
+    ["Approval execution", "Absent"],
+    ["External sends", "Blocked"],
+    ["Queue writes", "Not from this page"],
+    ["Production ledger writes", "Blocked"],
+    ["Secrets", "Never displayed"],
+  ];
+  const shortcuts = [
+    ["PhantomOps", "adminos", "System status, tool lane, and owner ops cockpit."],
+    ["Memory", "memory", "Memory, recall, and local context."],
+    ["Approvals", "approvals", "Human approval queue and blocked-action review."],
+    ["Settings", "settings", "Media and provider configuration guardrails."],
+  ];
+  body.innerHTML = `
+    <div class="developer-shell">
+      <section class="developer-hero">
+        <div>
+          <p class="developer-kicker">Owner operator surface</p>
+          <h3>Developer Control Room</h3>
+          <p>Private operational visibility for the PhantomForce owner account. This page is read-only and does not execute providers, approvals, sends, or production writes.</p>
+        </div>
+        <div class="developer-owner">
+          <span class="developer-owner-avatar">JW</span>
+          <b>${esc(s.name || "Jordan")}</b>
+          <i><span></span>Owner systems protected</i>
+        </div>
+      </section>
+
+      <section class="stat-row developer-stats">
+        <article class="stat-card"><span>Memory records</span><b>${mem.total}</b><i>Local memory surface</i></article>
+        <article class="stat-card"><span>Pending approvals</span><b>${pendingApprovals}</b><i>Execution still gated</i></article>
+        <article class="stat-card"><span>Queued artifacts</span><b>${queuedArtifacts}</b><i>Awaiting autopilot or removal</i></article>
+        <article class="stat-card"><span>Owner gate</span><b>On</b><i>Owner-only tab</i></article>
+      </section>
+
+      <div class="developer-grid">
+        <article class="developer-card">
+          <p class="developer-kicker">Identity proof</p>
+          <h4>Owner session</h4>
+          <div class="developer-list">${routes.map(([k, v]) => `<span><b>${esc(k)}</b><i>${esc(v)}</i></span>`).join("")}</div>
+        </article>
+        <article class="developer-card">
+          <p class="developer-kicker">Safety posture</p>
+          <h4>No live execution from Developer</h4>
+          <div class="developer-list">${safety.map(([k, v]) => `<span><b>${esc(k)}</b><i>${esc(v)}</i></span>`).join("")}</div>
+        </article>
+      </div>
+
+      <section class="developer-card">
+        <p class="developer-kicker">Owner shortcuts</p>
+        <h4>Jump to protected operator surfaces</h4>
+        <div class="developer-shortcuts">
+          ${shortcuts.map(([label, open, copy]) => `
+            <button class="developer-shortcut" data-open-ws="${esc(open)}">
+              <b>${esc(label)}</b>
+              <span>${esc(copy)}</span>
+            </button>`).join("")}
+        </div>
+      </section>
+    </div>`;
+}
+
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "AI studio", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
+  developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
 };
 
@@ -1109,8 +1205,8 @@ function workspaceDef(id) {
 }
 function navForWorkspace(id) {
   const key = workspaceId(id);
-  return NAV.find((n) => n.id === activeNav && n.ws === key && (!n.adminOnly || isAdmin()))
-    || NAV.find((n) => n.ws === key && (!n.adminOnly || isAdmin()))
+  return NAV.find((n) => n.id === activeNav && n.ws === key && canAccessSurface(n))
+    || NAV.find((n) => n.ws === key && canAccessSurface(n))
     || null;
 }
 function clearOverlayOnly() {
@@ -1134,7 +1230,7 @@ function renderWorkspacePage(id, pushHash = true) {
   const key = workspaceId(id);
   const def = workspaceDef(key);
   if (!def) return;
-  if (def.adminOnly && !isAdmin()) return;
+  if (!canAccessSurface(def)) return;
   const wsMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
   setGhostMood(wsMood.mood, { emotion: wsMood.emotion, ms: 1400 });
   stageReact(key === "media" ? "video" : key === "sites" ? "website" : "workspace", 720);
@@ -1182,7 +1278,7 @@ function openWorkspace(id, pushHash = true) {
   const key = workspaceId(id);
   const def = workspaceDef(key);
   if (!def) return;
-  if (def.adminOnly && !isAdmin()) return;
+  if (!canAccessSurface(def)) return;
   const overlayMood = key === "approvals" || key === "protect" ? { mood: "talking", emotion: "alert" } : { mood: "listening", emotion: "bright" };
   setGhostMood(overlayMood.mood, { emotion: overlayMood.emotion, ms: 1400 });
   stageReact("workspace", 720);
@@ -1237,7 +1333,7 @@ function syncNavToView() {
     renderNav();
     return;
   }
-  const hit = NAV.find((n) => n.ws === openId);
+  const hit = NAV.find((n) => n.ws === openId && canAccessSurface(n));
   if (hit) { activeNav = hit.id; renderNav(); }
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });
@@ -1272,6 +1368,7 @@ function wirePhantomConsole(body) {
     input.value = "";
     const r = handleCommand(v);
     phantomHistory.push({ q: v, say: r.say, cards: r.cards });
+    rememberConversation({ prompt: v, reply: r.say, mode: "phantom-console", route: r.open || "" });
     paint();
     renderConsole();
   });

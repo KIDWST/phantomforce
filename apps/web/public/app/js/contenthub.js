@@ -8,7 +8,14 @@
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
+const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
 const DAY = 864e5;
+export const CONTENT_ASSET_LIMITS = Object.freeze({
+  retentionDays: 30,
+  maxItems: 30,
+  budgetBytes: 3000000,
+  maxInlineChars: 280000,
+});
 
 export const PLATFORMS = [
   { id: "instagram", name: "Instagram", color: "#e1306c", handle: "@phantomforce", types: ["image", "carousel", "reel", "story"] },
@@ -38,7 +45,7 @@ const COMMENTS = [
   ["marketing_mia", "okay this is actually insane 🔥", "pos"], ["deshawn.builds", "how much is it??", "neu"],
   ["the_realtor_kate", "just signed up, wish me luck", "pos"], ["gymowner_rob", "does it do DMs on IG too?", "neu"],
   ["skeptic_sam", "seems too good to be true tbh", "neg"], ["salonbyleah", "the follow-ups alone are worth it", "pos"],
-  ["chicagoshots", "the media lab is unreal 👻", "pos"], ["frank_hvac", "finally something that just works", "pos"],
+  ["local_media", "the media lab is unreal 👻", "pos"], ["frank_hvac", "finally something that just works", "pos"],
   ["nina.codes", "the privacy angle sold me", "pos"], ["coach_will", "can it post for me automatically?", "neu"],
   ["mant_detail", "booked 3 jobs this week off this", "pos"], ["quiet_lurker", "commenting so i remember this", "neu"],
 ];
@@ -111,6 +118,110 @@ export function loadContent() {
   const data = { posts: genPosts(), updatedAt: Date.now() };
   try { localStorage.setItem(CH_KEY, JSON.stringify(data)); } catch {}
   return data;
+}
+function dataBytes(url) {
+  if (!url || typeof url !== "string") return 0;
+  return url.startsWith("data:") ? url.length * 2 : Math.min(url.length * 2, 2048);
+}
+function assetBytes(asset) {
+  const copy = { ...asset, url: asset.url ? `[${asset.url.length} chars]` : "" };
+  let meta = 0;
+  try { meta = JSON.stringify(copy).length * 2; } catch { meta = 512; }
+  return meta + dataBytes(asset.url);
+}
+function normalizeContentAsset(input = {}) {
+  const meta = input.meta || {};
+  const createdAt = Number(input.createdAt || input.at || Date.now()) || Date.now();
+  const rawType = String(input.type || input.kind || "image").toLowerCase();
+  const type = isVideo(rawType) ? "video" : "image";
+  let url = typeof input.url === "string" ? input.url : "";
+  let trimmed = !!input.trimmed;
+  if (url.startsWith("data:") && url.length > CONTENT_ASSET_LIMITS.maxInlineChars) {
+    url = "";
+    trimmed = true;
+  }
+  return {
+    id: String(input.id || `media-${createdAt}-${Math.random().toString(36).slice(2, 8)}`),
+    type,
+    title: String(input.title || meta.title || (type === "video" ? "Generated video" : "Generated image")),
+    prompt: String(input.prompt || meta.prompt || ""),
+    source: String(input.source || "Media Lab"),
+    provider: String(input.provider || meta.provider || ""),
+    model: String(input.model || meta.model || ""),
+    style: String(input.style || meta.style || ""),
+    aspect: String(input.aspect || meta.aspect || ""),
+    duration: Number(input.duration || meta.duration || 0) || 0,
+    hue: Number(input.hue || meta.hue || 155) || 155,
+    createdAt,
+    expiresAt: createdAt + CONTENT_ASSET_LIMITS.retentionDays * DAY,
+    url,
+    trimmed,
+    live: !!input.live,
+    bytes: dataBytes(url),
+  };
+}
+function pruneContentAssets(items = []) {
+  const cutoff = Date.now() - CONTENT_ASSET_LIMITS.retentionDays * DAY;
+  const seen = new Set();
+  const ordered = items
+    .map(normalizeContentAsset)
+    .filter((asset) => asset.createdAt >= cutoff)
+    .sort((a, b) => b.createdAt - a.createdAt);
+  const kept = [];
+  let used = 0;
+  for (const item of ordered) {
+    if (seen.has(item.id) || kept.length >= CONTENT_ASSET_LIMITS.maxItems) continue;
+    seen.add(item.id);
+    let candidate = { ...item };
+    let nextBytes = assetBytes(candidate);
+    if (used + nextBytes > CONTENT_ASSET_LIMITS.budgetBytes && candidate.url) {
+      candidate = { ...candidate, url: "", trimmed: true, bytes: 0 };
+      nextBytes = assetBytes(candidate);
+    }
+    if (used + nextBytes > CONTENT_ASSET_LIMITS.budgetBytes) continue;
+    used += nextBytes;
+    kept.push(candidate);
+  }
+  return kept;
+}
+export function loadContentAssets() {
+  let raw = null;
+  try { raw = JSON.parse(localStorage.getItem(CH_ASSETS_KEY) || "null"); } catch {}
+  const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.assets) ? raw.assets : []);
+  const pruned = pruneContentAssets(list);
+  if (pruned.length !== list.length) saveContentAssets(pruned);
+  return pruned;
+}
+export function saveContentAssets(items = []) {
+  let clean = pruneContentAssets(items);
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      localStorage.setItem(CH_ASSETS_KEY, JSON.stringify({ assets: clean, updatedAt: Date.now(), limits: CONTENT_ASSET_LIMITS }));
+      return clean;
+    } catch {
+      const withUrl = clean.filter((asset) => asset.url);
+      if (!withUrl.length) break;
+      const dropId = withUrl[withUrl.length - 1].id;
+      clean = clean.map((asset) => asset.id === dropId ? { ...asset, url: "", trimmed: true, bytes: 0 } : asset);
+    }
+  }
+  return clean;
+}
+export function registerContentAsset(asset) {
+  const normalized = normalizeContentAsset(asset);
+  const current = loadContentAssets().filter((item) => item.id !== normalized.id);
+  const saved = saveContentAssets([normalized, ...current]);
+  return { asset: saved.find((item) => item.id === normalized.id) || normalized, stats: contentAssetStats(saved) };
+}
+export function contentAssetStats(items = loadContentAssets()) {
+  const bytes = items.reduce((sum, asset) => sum + assetBytes(asset), 0);
+  return {
+    count: items.length,
+    bytes,
+    budgetBytes: CONTENT_ASSET_LIMITS.budgetBytes,
+    percent: Math.min(100, Math.round((bytes / CONTENT_ASSET_LIMITS.budgetBytes) * 100)),
+    trimmed: items.filter((asset) => asset.trimmed).length,
+  };
 }
 function loadRemovedContent() {
   try {
@@ -186,6 +297,23 @@ function thumb(post) {
     radial-gradient(70% 80% at 85% 90%, ${c}55, transparent 60%),
     linear-gradient(150deg, #08120e, #050b09);`;
 }
+function assetBg(asset) {
+  const hue = Number(asset.hue || 155);
+  return `background:
+    radial-gradient(80% 90% at 25% 10%, hsla(${hue},80%,58%,0.46), transparent 62%),
+    radial-gradient(70% 80% at 86% 90%, rgba(65,255,161,.28), transparent 60%),
+    linear-gradient(145deg, #08120e, #020807);`;
+}
+function formatBytes(bytes) {
+  if (!bytes) return "0 MB";
+  if (bytes < 1024 * 1024) return `${Math.max(1, Math.round(bytes / 1024))} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(bytes > 9 * 1024 * 1024 ? 0 : 1)} MB`;
+}
+function expiresText(asset) {
+  const days = Math.ceil(((asset.expiresAt || 0) - Date.now()) / DAY);
+  if (days <= 1) return "expires soon";
+  return `${days} days left`;
+}
 const PGLYPH = { instagram: "◉", tiktok: "♪", youtube: "▶", facebook: "f", x: "𝕏", linkedin: "in", pinterest: "P" };
 function svgIc(k) {
   const P = { heart: `<path d="M8 13.5S2.5 10 2.5 6.2A2.7 2.7 0 0 1 8 5a2.7 2.7 0 0 1 5.5 1.2C13.5 10 8 13.5 8 13.5z"/>`, chat: `<path d="M3 4h10v7H7l-3 2v-2H3z"/>`, share: `<path d="M11 5.5a2 2 0 1 0-2-2M5 8a2 2 0 1 0 0 .1M11 12.5a2 2 0 1 0-2-2M9.2 4.6L6.8 6.9M6.8 9.1l2.4 2.3"/>`, save: `<path d="M4 3h8v10l-4-2.5L4 13z"/>`, eye: `<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>`, users: `<circle cx="6" cy="6" r="2.1"/><path d="M2.6 13c0-2 1.5-3.3 3.4-3.3S9.4 11 9.4 13"/>`, up: `<path d="M8 13V4M4.5 7.5L8 4l3.5 3.5"/>` };
@@ -200,9 +328,11 @@ const chState = { tab: "ideas", platform: "all", ctype: "all", eng: "likes" };
 export function renderContentHub(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const data = loadContent();
+  const mediaAssets = loadContentAssets();
+  const mediaStats = contentAssetStats(mediaAssets);
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
-  const tabs = [["ideas", "New ideas"], ["drafts", "Draft queue"], ["calendar", "Calendar"], ["production", "Production"], ["library", "Library"]];
+  const tabs = [["ideas", "New ideas"], ["drafts", "Draft queue"], ["calendar", "Calendar"], ["production", "Production"], ["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`]];
   el.innerHTML = `
     <div class="ch">
       <section class="ch-creator-head">
@@ -215,7 +345,7 @@ export function renderContentHub(el, opts = {}) {
       </section>
       <div class="ch-tabs">
         ${tabs.map(([id, l]) => `<button class="ch-tab ${chState.tab === id ? "is-active" : ""}" data-ch-tab="${id}">${l}</button>`).join("")}
-        <span class="ch-src">${ideas.length} ideas · ${scheduled} queued · updated ${ago(new Date(data.updatedAt).toISOString())}</span>
+        <span class="ch-src">${ideas.length} ideas · ${scheduled} queued · ${mediaAssets.length} media · ${formatBytes(mediaStats.bytes)}/${formatBytes(mediaStats.budgetBytes)}</span>
       </div>
       <div class="ch-body" data-ch-body></div>
     </div>`;
@@ -341,14 +471,51 @@ function renderProductionBoard(body, data, esc, root, opts) {
   wireRemovals(body, opts, root);
 }
 function renderContentLibrary(body, data, esc, root, opts) {
+  const assets = loadContentAssets();
+  const stats = contentAssetStats(assets);
+  const assetFilter = (asset) => chState.ctype === "all" || asset.type === chState.ctype || (asset.type === "video" && ["reel", "short"].includes(chState.ctype));
+  const shownAssets = assets.filter(assetFilter);
   const rows = data.posts.slice(0, 18);
   body.innerHTML = `
+    <section class="ch-card ch-created-media">
+      <div class="ch-card-h ch-library-head">
+        <div>
+          <h3>Created media</h3>
+          <span class="ch-src">auto-saved from Media Lab · clears after ${CONTENT_ASSET_LIMITS.retentionDays} days</span>
+        </div>
+        <div class="ch-storage">
+          <span>${formatBytes(stats.bytes)} / ${formatBytes(stats.budgetBytes)}</span>
+          <i><b style="width:${stats.percent}%"></b></i>
+        </div>
+      </div>
+      ${shownAssets.length ? `<div class="ch-asset-grid">${shownAssets.map((asset) => contentAssetCard(asset, esc)).join("")}</div>`
+      : `<p class="empty-line">No generated images or videos yet. Create media in Media Lab and it will land here automatically.</p>`}
+      ${stats.trimmed ? `<p class="ch-src">Space saver active: ${stats.trimmed} older/heavier preview${stats.trimmed === 1 ? "" : "s"} kept as metadata only.</p>` : ""}
+    </section>
     <div class="ch-chips" data-ch-type>
       ${[["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]].map(([id, l]) => `<button class="ch-chip ${chState.ctype === id ? "is-on" : ""}" data-v="${id}">${esc(l)}</button>`).join("")}
     </div>
     <div class="ch-grid ch-grid-lg">${rows.filter((p) => chState.ctype === "all" || p.type === chState.ctype).map((p) => postCard(p, esc, { creator: true })).join("")}</div>`;
   body.querySelectorAll("[data-ch-type] button").forEach((b) => b.onclick = () => { chState.ctype = b.dataset.v; renderContentHub(root, opts); });
   wirePostCards(body, data, esc, root, opts);
+}
+function contentAssetCard(asset, esc) {
+  const hasUrl = !!asset.url;
+  const typeLabel = asset.type === "video" ? "Video" : "Image";
+  const prompt = asset.prompt || "No prompt saved.";
+  const meta = asset.type === "video" ? "Media Lab video" : "Media Lab image";
+  return `<article class="ch-asset-card">
+    <span class="ch-asset-thumb" style="${hasUrl ? "" : assetBg(asset)}">
+      ${hasUrl ? `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>` : `<em>preview trimmed</em>`}
+      ${asset.type === "video" ? `<span class="ch-post-play">▶</span>` : ""}
+      <b>${typeLabel}</b>
+    </span>
+    <span class="ch-asset-body">
+      <strong>${esc(asset.title)}</strong>
+      <small>${esc(meta)} · ${expiresText(asset)} · ${formatBytes(assetBytes(asset))}</small>
+      <span>${esc(prompt)}</span>
+    </span>
+  </article>`;
 }
 function wireCreatorActions(body, opts, root) {
   body.querySelectorAll("[data-ch-action]").forEach((btn) => btn.addEventListener("click", () => {

@@ -12,6 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260705-27";
+
 const CFG_KEY = "pf.medialab.v1";
 const TAU = Math.PI * 2;
 
@@ -306,6 +308,38 @@ function renderGenerate(body, cfg, opts, root) {
 }
 
 const estCredits = () => genState.modality === "video" ? genState.duration * 4 : genState.count * (genState.quality === "high" ? 6 : 3);
+function captureForContentHub(asset, extra = {}) {
+  try {
+    const result = registerContentAsset({
+      ...asset,
+      title: extra.title || (asset.type === "video" ? "Generated video" : "Generated image"),
+      prompt: extra.prompt || (asset.meta && asset.meta.prompt) || genState.prompt,
+      source: "Media Lab",
+      provider: extra.provider || genState.provider,
+      model: extra.model || genState.model,
+      style: extra.style || genState.style,
+      aspect: extra.aspect || genState.aspect,
+      duration: extra.duration || genState.duration,
+      live: !!extra.live,
+      createdAt: asset.at || Date.now(),
+    });
+    return result.stats;
+  } catch {
+    return null;
+  }
+}
+function refreshGeneratePanel(body, cfg, opts, root) {
+  genState.busy = false;
+  try {
+    renderGenerate(body, cfg, opts, root);
+  } catch {
+    if (root) renderMediaStudio(root, opts);
+  }
+  setTimeout(() => {
+    const btn = body?.querySelector?.("[data-ml-generate]");
+    if (btn?.disabled && root) renderMediaStudio(root, opts);
+  }, 0);
+}
 function skeletons(n) { return `<div class="ml-grid">${Array.from({ length: n }, () => `<div class="ml-skel"><div class="ml-skel-shim"></div></div>`).join("")}</div>`; }
 function resultsHtml(esc) {
   const recent = session.assets.filter((a) => a.fromGen);
@@ -373,20 +407,36 @@ async function runGenerate(body, cfg, opts, root, esc) {
   if (!genState.prompt.trim()) { const t = body.querySelector("[data-ml-prompt]"); if (t) { t.focus(); t.classList.add("shake"); setTimeout(() => t.classList.remove("shake"), 500); } return; }
   genState.busy = true;
   renderGenerate(body, cfg, opts, root);
-  const req = {
-    modality: genState.modality, provider: genState.provider, model: genState.model,
-    prompt: genState.prompt, negative: genState.negative, style: genState.style,
-    ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
-  };
-  const out = await generate(cfg, req);
-  const stamp = Date.now();
-  out.assets.forEach((a, i) => session.assets.unshift({ id: `gen-${stamp}-${i}`, ...a, fromGen: true, at: stamp }));
-  session.assets = session.assets.slice(0, 60);
-  if (opts.notify) opts.notify("Media Factory", `generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}${out.live ? "" : " (preview)"} — "${genState.prompt.slice(0, 40)}".`);
-  // spend credits (client-side demo accounting)
-  cfg.credits = Math.max(0, cfg.credits - estCredits()); saveCfg(cfg);
-  genState.busy = false;
-  renderGenerate(body, cfg, opts, root);
+  try {
+    const req = {
+      modality: genState.modality, provider: genState.provider, model: genState.model,
+      prompt: genState.prompt, negative: genState.negative, style: genState.style,
+      ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
+    };
+    const out = await generate(cfg, req);
+    const stamp = Date.now();
+    const created = out.assets.map((a, i) => ({ id: `gen-${stamp}-${i}`, ...a, fromGen: true, at: stamp }));
+    created.forEach((asset) => {
+      session.assets.unshift(asset);
+      captureForContentHub(asset, {
+        title: `${genState.modality === "video" ? "Generated video" : "Generated image"} · ${genState.style}`,
+        prompt: genState.prompt,
+        provider: genState.provider,
+        model: genState.model,
+        style: genState.style,
+        aspect: genState.aspect,
+        duration: genState.duration,
+        live: out.live,
+      });
+    });
+    session.assets = session.assets.slice(0, 60);
+    refreshGeneratePanel(body, cfg, opts, root);
+    if (opts.notify) opts.notify("Media Factory", `generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}${out.live ? "" : " (preview)"} - "${genState.prompt.slice(0, 40)}".`);
+    // spend credits (client-side demo accounting)
+    cfg.credits = Math.max(0, cfg.credits - estCredits()); saveCfg(cfg);
+  } finally {
+    if (genState.busy) refreshGeneratePanel(body, cfg, opts, root);
+  }
 }
 
 function tileAction(act, id, cfg, opts, root, esc, body) {
@@ -395,7 +445,7 @@ function tileAction(act, id, cfg, opts, root, esc, body) {
   if (act === "download") return downloadAsset(a);
   if (act === "regen") { runGenerate(body, cfg, opts, root, esc); return; }
   if (act === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); return; }
-  if (act === "save") { a.saved = true; if (opts.notify) opts.notify("Media Factory", "saved a generation to the library."); renderMediaStudio(root, opts); return; }
+  if (act === "save") { a.saved = true; captureForContentHub(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to the library."); renderMediaStudio(root, opts); return; }
   if (act === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); return; }
 }
 
@@ -487,7 +537,15 @@ function renderEdit(body, cfg, opts, root) {
   };
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; renderMediaStudio(root, opts); };
-  body.querySelector("[data-ml-savedit]").onclick = () => { const url = canvas.toDataURL("image/webp", 0.9); session.assets.unshift({ id: `edit-${Date.now()}`, type: "image", url, saved: true, at: Date.now(), meta: { edited: true } }); if (opts.notify) opts.notify("Media Factory", "saved an edited image to the library."); session.tab = "library"; renderMediaStudio(root, opts); };
+  body.querySelector("[data-ml-savedit]").onclick = () => {
+    const at = Date.now();
+    const asset = { id: `edit-${at}`, type: "image", url: canvas.toDataURL("image/webp", 0.9), saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
+    session.assets.unshift(asset);
+    captureForContentHub(asset, { title: "Edited image", prompt: editState.text || "Edited image" });
+    if (opts.notify) opts.notify("Media Factory", "saved an edited image to the library.");
+    session.tab = "library";
+    renderMediaStudio(root, opts);
+  };
   body.querySelector("[data-ml-dledit]").onclick = () => downloadAsset({ url: canvas.toDataURL("image/webp", 0.92), type: "image", id: "edit" });
 }
 function slider(label, key, min, max, val) {

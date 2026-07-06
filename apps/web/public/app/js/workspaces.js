@@ -6,15 +6,19 @@
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
-  PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-live-20260705-20";
+  PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
+  addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
+} from "./store.js?v=phantom-live-20260705-27";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 
 const chip = (status) => `<span class="chip chip-${esc(status)}">${esc(statusLabel(status))}</span>`;
 const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
+const memoryUi = { query: "", category: "all" };
+const MEMORY_DAY = 86400000;
 
 function bindActions(root, handlers) {
   root.querySelectorAll("[data-act]").forEach((el) => {
@@ -287,7 +291,7 @@ function renderMedia(el, rerender) {
     add: () => {
       const t = prompt("What is this creative for? (client / campaign)");
       if (!t) return;
-      store.state.media.unshift({ id: uid("med"), ws: currentWs() === "phantomforce" ? "chicagoshots" : currentWs(), title: `${t.trim()} — video request`, type: "Reel (vertical, 30s)", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"], caption: `${t.trim()} — draft caption.`, proof: null, updated: new Date().toISOString() });
+      store.state.media.unshift({ id: uid("med"), ws: currentWs(), title: `${t.trim()} — video request`, type: "Reel (vertical, 30s)", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"], caption: `${t.trim()} — draft caption.`, proof: null, updated: new Date().toISOString() });
       pushActivity("Media Factory", `created a video request: ${t.trim()}.`);
       store.save(); rerender();
     },
@@ -310,70 +314,313 @@ function renderMedia(el, rerender) {
 }
 
 /* ========================= SITE + STORE STUDIO ========================= */
+function baseSiteDraft(title = "New website", kind = "Website") {
+  const cleanTitle = title.trim() || "New website";
+  const isStore = kind === "Store";
+  return {
+    id: uid("site"),
+    ws: currentWs(),
+    title: `${cleanTitle} — ${isStore ? "store" : "website"}`,
+    kind,
+    status: "draft",
+    sections: isStore
+      ? ["Hero", "Products", "Offer", "Reviews", "Checkout"]
+      : ["Hero", "Services", "Proof", "Offer", "Contact"],
+    url: null,
+    updated: new Date().toISOString(),
+    design: {
+      brand: cleanTitle,
+      headline: isStore ? `Shop ${cleanTitle}` : `${cleanTitle} helps customers take the next step`,
+      subhead: isStore ? "Products, proof, and checkout in one clean page." : "A simple page that explains the offer, builds trust, and gets the lead.",
+      offer: isStore ? "Featured product or service bundle" : "Book a call, request a quote, or send a message.",
+      cta: isStore ? "Shop now" : "Get started",
+      theme: "neon",
+      style: "premium local",
+      existingUrl: "",
+      storeEnabled: isStore,
+    },
+  };
+}
+
+function ensureSiteDesign(site) {
+  if (!site) return null;
+  const brand = (site.title || "New website").replace(/\s+—\s+(website|landing page|store)$/i, "");
+  site.sections = Array.isArray(site.sections) && site.sections.length ? site.sections : ["Hero", "Services", "Proof", "Offer", "Contact"];
+  site.design = {
+    brand,
+    headline: site.sections[0] && !/hero/i.test(site.sections[0]) ? site.sections[0] : `${brand} helps customers take the next step`,
+    subhead: "A simple page that explains the offer, builds trust, and gets the lead.",
+    offer: site.kind === "Store" ? "Featured product or service bundle" : "Book a call, request a quote, or send a message.",
+    cta: site.kind === "Store" ? "Shop now" : "Get started",
+    theme: "neon",
+    style: "premium local",
+    existingUrl: site.url || "",
+    storeEnabled: site.kind === "Store",
+    ...(site.design || {}),
+  };
+  return site.design;
+}
+
+function firstSentence(value) {
+  return String(value || "").split(/[.!?]/)[0].trim();
+}
+
+function applyWebsitePrompt(site, promptText) {
+  const prompt = String(promptText || "").trim();
+  if (!site || !prompt) return "Tell Phantom what to change first.";
+  const design = ensureSiteDesign(site);
+  const lower = prompt.toLowerCase();
+  const quoted = prompt.match(/["“](.+?)["”]/)?.[1];
+  const afterTo = prompt.match(/\b(?:to|as|called)\s+(.{3,90})$/i)?.[1]?.replace(/[.?!]\s*$/, "").trim();
+  let changed = "";
+
+  if (/store|shop|checkout|cart|product/.test(lower)) {
+    site.kind = "Store";
+    design.storeEnabled = true;
+    site.sections = Array.from(new Set([...site.sections, "Products", "Checkout"]));
+    changed = "Added store sections and checkout planning.";
+  }
+  if (/landing|website|site|page/.test(lower) && !/store|shop/.test(lower)) {
+    site.kind = /landing/.test(lower) ? "Landing page" : "Website";
+    changed = /landing/.test(lower) ? "Set this up as a landing page." : "Set this up as a website.";
+  }
+  if (/existing|link|connect|current site|my site/.test(lower)) {
+    const url = prompt.match(/https?:\/\/\S+|[a-z0-9-]+\.[a-z]{2,}(?:\/\S*)?/i)?.[0];
+    if (url) {
+      const safeUrl = /^https?:\/\//i.test(url) ? url : `https://${url}`;
+      site.url = safeUrl;
+      design.existingUrl = safeUrl;
+      changed = "Saved the existing site URL for redesign planning. Import is not running yet.";
+    }
+  }
+  if (/headline|title|main line/.test(lower)) {
+    design.headline = quoted || afterTo || firstSentence(prompt.replace(/change|make|set|headline|title|main line/gi, ""));
+    changed = "Changed the main headline.";
+  } else if (/more premium|luxury|high end|expensive/.test(lower)) {
+    design.style = "premium";
+    design.headline = design.headline.replace(/\.$/, "");
+    design.subhead = "Sharper proof, cleaner sections, and a stronger offer for serious buyers.";
+    changed = "Made the page feel more premium.";
+  } else if (/simple|clean|less words|shorter/.test(lower)) {
+    design.style = "simple";
+    design.subhead = "Clear offer. Clear proof. Easy next step.";
+    changed = "Simplified the copy.";
+  } else if (/sports|team|coach|trainer/.test(lower)) {
+    design.style = "sports";
+    design.subhead = "Built for signups, schedules, highlights, and parent-friendly updates.";
+    changed = "Shifted the site toward sports/team use.";
+  }
+  if (/green|neon/.test(lower)) { design.theme = "neon"; changed = changed || "Changed the color to neon green."; }
+  if (/blue/.test(lower)) { design.theme = "blue"; changed = changed || "Changed the color to blue."; }
+  if (/gold|yellow/.test(lower)) { design.theme = "gold"; changed = changed || "Changed the color to gold."; }
+  if (/red/.test(lower)) { design.theme = "red"; changed = changed || "Changed the color to red."; }
+  if (/purple/.test(lower)) { design.theme = "purple"; changed = changed || "Changed the color to purple."; }
+  if (/cta|button|call to action/.test(lower)) {
+    design.cta = quoted || afterTo || (/book/.test(lower) ? "Book now" : /buy|shop/.test(lower) ? "Shop now" : "Get started");
+    changed = "Updated the button.";
+  }
+  if (/offer|deal|package/.test(lower)) {
+    design.offer = quoted || afterTo || firstSentence(prompt.replace(/offer|deal|package|make|set/gi, ""));
+    changed = "Updated the offer.";
+  }
+  if (/add section|section for|add a section/.test(lower)) {
+    const section = quoted || afterTo || prompt.replace(/add( a)? section( for)?/i, "").trim();
+    if (section) {
+      site.sections.push(title(section).slice(0, 48));
+      changed = `Added ${title(section)} section.`;
+    }
+  }
+  if (/remove checkout|no checkout|hide checkout/.test(lower)) {
+    design.storeEnabled = false;
+    site.sections = site.sections.filter((x) => !/checkout/i.test(x));
+    changed = "Removed checkout from the preview.";
+  }
+  site.updated = new Date().toISOString();
+  return changed || "I did not catch a site change yet. Try headline, store, color, premium, booking, product, or existing URL.";
+}
+
+function renderWebsitePreview(site, products) {
+  const design = ensureSiteDesign(site);
+  const theme = design.theme || "neon";
+  const showProducts = design.storeEnabled || site.kind === "Store";
+  const sections = site.sections.slice(0, 6);
+  const listedProducts = products.slice(0, 3);
+  return `
+    <div class="site-live-preview theme-${esc(theme)}">
+      <div class="site-browser-bar"><span></span><span></span><span></span><b>${esc(design.existingUrl || `${design.brand.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`)}</b><small>mockup preview</small></div>
+      <div class="site-preview-hero">
+        <div>
+          <p>${esc(design.brand)}</p>
+          <h3>${esc(design.headline)}</h3>
+          <span>${esc(design.subhead)}</span>
+          <button type="button">${esc(design.cta)}</button>
+        </div>
+        <div class="site-preview-orb" aria-hidden="true"><i></i></div>
+      </div>
+      <div class="site-preview-sections">
+        ${sections.map((section) => `<span>${esc(section)}</span>`).join("")}
+      </div>
+      ${showProducts ? `
+        <div class="site-preview-products">
+          ${(listedProducts.length ? listedProducts : [
+            { name: "Featured offer", price: 99, desc: design.offer },
+            { name: "Starter package", price: 199, desc: "Simple entry point" },
+          ]).map((p) => `
+            <article>
+              <b>${esc(p.name)}</b>
+              <em>${fmtMoney(p.price)}</em>
+              <small>${esc(p.desc || "Ready for your details.")}</small>
+            </article>`).join("")}
+        </div>` : `
+        <div class="site-preview-offer"><b>${esc(design.offer)}</b><span>${esc(design.cta)}</span></div>`}
+    </div>`;
+}
+
 function renderSites(el, rerender) {
   const sites = visible(store.state.sites);
   const products = visible(store.state.products);
+  const active = sites[0] || null;
+  if (active) ensureSiteDesign(active);
   el.innerHTML = `
-    <div class="ws-toolbar">
-      <p class="ws-note">Pages and stores are built as drafts with a publish-readiness state. Checkout shows as “not wired” until a payment connector exists — no fake live claims.</p>
-      <span><button class="btn btn-primary" data-act="add-page">+ Page draft</button> <button class="btn btn-primary" data-act="add-store">+ Store draft</button></span>
-    </div>
-    <h3 class="ws-subhead">Pages & stores</h3>
-    <div class="card-grid">
-      ${sites.map((s) => `
-        <article class="record">
-          <div class="record-top">${wsTag(s.ws)}<h4>${esc(s.title)}</h4></div>
-          <p class="record-sub">${esc(s.kind)} · ${chip(s.status)} · ${ago(s.updated)}</p>
-          <div class="page-preview">${s.sections.map((x) => `<div class="page-preview-row">${esc(x)}</div>`).join("")}</div>
-          ${s.url ? `<p class="record-proof">Target: <code>${esc(s.url)}</code></p>` : ""}
-          <div class="record-actions">
-            ${s.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${s.id}">Mark publish-ready</button>` : ""}
-            ${s.status === "publish-ready" && isAdmin() ? `<button class="btn" data-act="queue" data-id="${s.id}">Queue publish approval</button>` : ""}
-            ${s.status === "approved-to-publish" ? `<span class="hint-inline">Approved — goes live when the publish connector runs.</span>` : ""}
-            <button class="btn btn-quiet" data-act="section" data-id="${s.id}">+ Section</button>
-          </div>
-        </article>`).join("") || empty("No page drafts yet.")}
-    </div>
-    <h3 class="ws-subhead">Store catalog</h3>
-    <div class="card-grid">
-      ${products.map((p) => `
-        <article class="record">
-          <div class="record-top">${wsTag(p.ws)}<h4>${esc(p.name)}</h4><b class="record-price">${fmtMoney(p.price)}</b></div>
-          <p class="record-sub">${esc(p.category)} · publish: ${chip(p.publish)} · checkout: ${chip(p.checkout)}</p>
-          <div class="product-thumb" aria-hidden="true">▨ asset placeholder</div>
-          <p class="record-notes">${esc(p.desc)}</p>
-          <p class="record-sub">Fulfillment: ${esc(p.fulfillment)}</p>
-          <div class="record-actions">
-            ${p.publish === "draft" ? `<button class="btn btn-good" data-act="pub-ready" data-id="${p.id}">Mark publish-ready</button>` : ""}
-          </div>
-        </article>`).join("")}
-      <article class="record record-ghostcard">
-        <h4>+ Add product or service</h4>
-        <div class="mini-form">
-          <input type="text" data-prod-name placeholder="Name — e.g. Gym tee, Listing video" />
-          <input type="number" data-prod-price placeholder="Price" min="0" />
-          <input type="text" data-prod-cat placeholder="Category — Merch / Service / Classes" />
-          <textarea data-prod-desc placeholder="Short description" rows="2"></textarea>
-          <button class="btn btn-primary" data-act="add-prod">Add to catalog</button>
+    <section class="site-builder">
+      <div class="site-builder-head">
+        <div>
+          <p class="overlay-kicker">AI SITE BUILDER</p>
+          <h3>Build or edit a website by telling Phantom what to change.</h3>
+          <p>Use plain English. The preview updates here before anything publishes.</p>
         </div>
-      </article>
-    </div>`;
+        <div class="site-builder-actions">
+          <button class="btn btn-primary" data-act="start-site">New website</button>
+          <button class="btn btn-primary" data-act="start-store">New store</button>
+        </div>
+      </div>
+      ${!active ? `
+        <div class="site-start-grid">
+          <button class="site-start-card" data-act="start-site"><b>Start a website</b><span>Services, proof, booking, contact.</span></button>
+          <button class="site-start-card" data-act="start-store"><b>Start a store</b><span>Products, offers, checkout plan.</span></button>
+          <button class="site-start-card" data-act="focus-existing"><b>Use an existing site</b><span>Paste a URL and plan the upgrade.</span></button>
+        </div>` : `
+        <div class="site-builder-grid">
+          <div class="site-command-panel">
+            <div class="site-active-card">
+              <span>${chip(active.status)}</span>
+              <h4>${esc(active.title)}</h4>
+              <p>${esc(active.kind)} · updated ${ago(active.updated)}</p>
+            </div>
+            <form class="site-ai-box" data-site-ai>
+              <label for="sitePrompt">Tell Phantom what to change</label>
+              <textarea id="sitePrompt" data-site-prompt rows="4" placeholder="Example: make this a premium plumbing site with emergency service, reviews, and a book-now button"></textarea>
+              <button class="btn btn-primary" type="submit">Update preview</button>
+            </form>
+            <details class="site-help">
+              <summary>Help me start</summary>
+              <div class="site-help-grid">
+                <button data-act="ask-service">Service business</button>
+                <button data-act="ask-store">Online store</button>
+                <button data-act="ask-booking">Booking page</button>
+                <button data-act="ask-sports">Sports/team site</button>
+              </div>
+            </details>
+            <div class="site-link-card">
+              <label>Existing site URL</label>
+              <div>
+                <input type="url" data-existing-url placeholder="https://your-site.com" value="${esc(active.design.existingUrl || active.url || "")}" />
+                <button class="btn btn-quiet" data-act="link-existing">Link</button>
+              </div>
+            </div>
+            <div class="site-mini-actions">
+              <button class="btn btn-quiet" data-act="make-premium">Make premium</button>
+              <button class="btn btn-quiet" data-act="enable-store">Add store</button>
+              <button class="btn btn-quiet" data-act="add-product-quick">Add sample product</button>
+            </div>
+          </div>
+          <div class="site-preview-panel">
+            <div class="site-preview-top">
+              <span>Design preview</span>
+              <b>${esc(active.design.style)} · ${esc(active.design.theme)}</b>
+            </div>
+            <div data-site-preview-mount>${renderWebsitePreview(active, products)}</div>
+          </div>
+        </div>`}
+      <h3 class="ws-subhead">Drafts</h3>
+      <div class="card-grid">
+        ${sites.map((s) => `
+          <article class="record">
+            <div class="record-top">${wsTag(s.ws)}<h4>${esc(s.title)}</h4></div>
+            <p class="record-sub">${esc(s.kind)} · ${chip(s.status)} · ${ago(s.updated)}</p>
+            <div class="page-preview">${s.sections.map((x) => `<div class="page-preview-row">${esc(x)}</div>`).join("")}</div>
+            ${s.url ? `<p class="record-proof">Existing site saved: <code>${esc(s.url)}</code></p>` : ""}
+            <div class="record-actions">
+              ${s.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${s.id}">Mark ready</button>` : ""}
+              ${s.status === "publish-ready" && isAdmin() ? `<button class="btn" data-act="queue" data-id="${s.id}">Queue publish approval</button>` : ""}
+              ${s.status === "approved-to-publish" ? `<span class="hint-inline">Approved. Publish connector still has to run.</span>` : ""}
+              <button class="btn btn-quiet" data-act="focus-site" data-id="${s.id}">Edit here</button>
+              <button class="btn btn-quiet" data-act="section" data-id="${s.id}">Add section</button>
+            </div>
+          </article>`).join("") || empty("No website yet. Start one above.")}
+      </div>
+      <h3 class="ws-subhead">Products / services</h3>
+      <div class="card-grid">
+        ${products.map((p) => `
+          <article class="record">
+            <div class="record-top">${wsTag(p.ws)}<h4>${esc(p.name)}</h4><b class="record-price">${fmtMoney(p.price)}</b></div>
+            <p class="record-sub">${esc(p.category)} · publish: ${chip(p.publish)} · checkout: ${chip(p.checkout)}</p>
+            <p class="record-notes">${esc(p.desc)}</p>
+            <p class="record-sub">Delivery: ${esc(p.fulfillment)}</p>
+            <div class="record-actions">
+              ${p.publish === "draft" ? `<button class="btn btn-good" data-act="pub-ready" data-id="${p.id}">Mark ready</button>` : ""}
+            </div>
+          </article>`).join("")}
+        <article class="record record-ghostcard">
+          <h4>Add product or service</h4>
+          <div class="mini-form">
+            <input type="text" data-prod-name placeholder="Name" />
+            <input type="number" data-prod-price placeholder="Price" min="0" />
+            <input type="text" data-prod-cat placeholder="Category" />
+            <textarea data-prod-desc placeholder="Short description" rows="2"></textarea>
+            <button class="btn btn-primary" data-act="add-prod">Add</button>
+          </div>
+        </article>
+      </div>
+    </section>`;
+  const createDraft = (name, kind) => {
+    const draft = baseSiteDraft(name, kind);
+    store.state.sites.unshift(draft);
+    pushActivity(kind === "Store" ? "Store Builder" : "Site Builder", `started ${draft.title}.`, draft.ws);
+    store.save(); rerender();
+  };
   bindActions(el, {
-    "add-page": () => {
-      const t = prompt("Page for which client / purpose?");
-      if (!t) return;
-      store.state.sites.unshift({ id: uid("site"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), title: `${t.trim()} — landing page`, kind: "Landing page", status: "draft", sections: ["Hero with one clear promise", "Proof / reviews section", "Offer + pricing", "Call-to-action (approval-gated)"], url: null, updated: new Date().toISOString() });
-      pushActivity("Site Builder", `drafted a landing page for ${t.trim()}.`);
+    "start-site": () => createDraft(`${wsName(currentWs())} site`, "Website"),
+    "start-store": () => createDraft(`${wsName(currentWs())} store`, "Store"),
+    "focus-existing": () => createDraft("Existing site rebuild", "Website"),
+    "ask-service": () => { if (active) { applyWebsitePrompt(active, "make this a simple service business site with services, reviews, quote request, and clear contact button"); store.save(); rerender(); } },
+    "ask-store": () => { if (active) { applyWebsitePrompt(active, "turn this into an online store with products, offer, reviews, and checkout plan"); store.save(); rerender(); } },
+    "ask-booking": () => { if (active) { applyWebsitePrompt(active, "add booking, schedule, reminders, and a book now button"); store.save(); rerender(); } },
+    "ask-sports": () => { if (active) { applyWebsitePrompt(active, "make this a sports team site with signups, schedule, highlights, parent updates, and merch"); store.save(); rerender(); } },
+    "make-premium": () => { if (active) { applyWebsitePrompt(active, "make this more premium and simple with less words"); store.save(); rerender(); } },
+    "enable-store": () => { if (active) { applyWebsitePrompt(active, "add store products and checkout sections"); store.save(); rerender(); } },
+    "add-product-quick": () => {
+      store.state.products.unshift({ id: uid("prod"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), name: "Featured offer", price: 99, category: "Offer", desc: "Edit this into the real product or service.", fulfillment: "Define delivery before publish", checkout: "not-wired", publish: "draft" });
+      pushActivity("Store Builder", "added a sample product to the catalog.");
       store.save(); rerender();
     },
-    "add-store": () => {
-      const t = prompt("Store for which client / brand?");
-      if (!t) return;
-      store.state.sites.unshift({ id: uid("site"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), title: `${t.trim()} — store`, kind: "Store", status: "draft", sections: ["Storefront hero", "Product grid", "Offer section", "Checkout — payment connector not wired yet"], url: null, updated: new Date().toISOString() });
-      pushActivity("Store Builder", `drafted a storefront for ${t.trim()}.`);
+    "link-existing": () => {
+      if (!active) return;
+      const input = el.querySelector("[data-existing-url]");
+      const url = input?.value?.trim();
+      if (!url) return;
+      applyWebsitePrompt(active, `link existing site ${url}`);
       store.save(); rerender();
     },
     ready: (id) => { const s = store.state.sites.find((x) => x.id === id); s.status = "publish-ready"; s.updated = new Date().toISOString(); pushActivity("Site Builder", `${s.title} is publish-ready.`, s.ws); store.save(); rerender(); },
+    "focus-site": (id) => {
+      const index = store.state.sites.findIndex((x) => x.id === id);
+      if (index <= 0) return;
+      const [site] = store.state.sites.splice(index, 1);
+      store.state.sites.unshift(site);
+      pushActivity("Site Builder", `${site.title} is now in the live builder.`, site.ws);
+      store.save(); rerender();
+    },
     queue: (id) => {
       const s = store.state.sites.find((x) => x.id === id);
       store.state.approvals.unshift({ id: uid("app"), ws: s.ws, type: "publish-page", title: `Publish ${s.title}`, detail: "Reviewed draft. Publishing makes it live.", ref: s.id, status: "pending", requestedBy: "Site Builder", at: new Date().toISOString() });
@@ -382,9 +629,7 @@ function renderSites(el, rerender) {
     },
     section: (id) => {
       const s = store.state.sites.find((x) => x.id === id);
-      const sec = prompt("New section:");
-      if (!sec) return;
-      s.sections.push(sec.trim()); s.updated = new Date().toISOString();
+      applyWebsitePrompt(s, "add section Frequently Asked Questions");
       store.save(); rerender();
     },
     "add-prod": () => {
@@ -399,6 +644,23 @@ function renderSites(el, rerender) {
     },
     "pub-ready": (id) => { const p = store.state.products.find((x) => x.id === id); p.publish = "publish-ready"; store.save(); rerender(); },
   });
+  const ai = el.querySelector("[data-site-ai]");
+  if (ai && active) {
+    const input = el.querySelector("[data-site-prompt]");
+    const previewMount = el.querySelector("[data-site-preview-mount]");
+    input?.addEventListener("input", () => {
+      if (!previewMount) return;
+      const previewDraft = JSON.parse(JSON.stringify(active));
+      applyWebsitePrompt(previewDraft, input.value);
+      previewMount.innerHTML = renderWebsitePreview(previewDraft, products);
+    });
+    ai.onsubmit = (event) => {
+      event.preventDefault();
+      const result = applyWebsitePrompt(active, input?.value || "");
+      pushActivity("Site Builder", result, active.ws);
+      store.save(); rerender();
+    };
+  }
 }
 
 /* ============================== PROTECT ============================== */
@@ -464,6 +726,140 @@ function renderMoney(el, rerender) {
       <li>▸ Price-tier check: anything scoped over 20 hours should quote at Pro ($2,500), not Core.</li>
     </ul>` : empty("No money actions yet. Real proposals and invoices will appear here after you create them.")}
     <p class="ws-note">Quote → approval → invoice-ready → payment-tracked. Real invoices and payment requests stay off until a payment connector is configured.</p>`;
+}
+
+/* ============================= MEMORY ============================= */
+function categoryLabel(category) {
+  return MEMORY_CATEGORY_LABELS[category] || title(category).replace(/-/g, " ");
+}
+
+function renderMemory(el, rerender) {
+  const all = visible(store.state.memory || []);
+  const stats = memoryStats(all);
+  const query = memoryUi.query.trim().toLowerCase();
+  const counts = all.reduce((acc, item) => {
+    acc[item.category] = (acc[item.category] || 0) + 1;
+    return acc;
+  }, {});
+  const categories = Object.keys(MEMORY_CATEGORY_LABELS).filter((category) => counts[category]);
+  const filtered = all.filter((item) => {
+    const inCategory = memoryUi.category === "all" || item.category === memoryUi.category;
+    const haystack = `${item.title} ${item.summary} ${item.text} ${(item.tags || []).join(" ")}`.toLowerCase();
+    return inCategory && (!query || haystack.includes(query));
+  });
+  const remembered = all.filter((item) => item.pinnedByUser || item.pinnedByAi).slice(0, 5);
+  const expiring = all.filter((item) => {
+    if (item.pinnedByUser || item.pinnedByAi) return false;
+    const ageDays = Math.floor((Date.now() - new Date(item.createdAt).getTime()) / MEMORY_DAY);
+    return MEMORY_RETENTION_DAYS - ageDays <= 5;
+  }).slice(0, 4);
+  el.innerHTML = `
+    <div class="memory-shell">
+      <section class="memory-hero">
+        <div>
+          <p class="overlay-kicker">LOCAL MEMORY</p>
+          <h3>Everything Phantom should know, organized for research.</h3>
+          <p>Conversations and manual notes stay in this browser. Normal memories auto-expire after ${MEMORY_RETENTION_DAYS} days unless you or Phantom mark them to remember.</p>
+        </div>
+        <div class="memory-score">
+          <b>${stats.total}</b>
+          <span>saved</span>
+        </div>
+      </section>
+      <div class="stat-row memory-stats">
+        <div class="stat"><span>Categories</span><b>${stats.categories}</b><i>auto-organized</i></div>
+        <div class="stat"><span>Remembered</span><b>${stats.remembered}</b><i>kept past 30 days</i></div>
+        <div class="stat"><span>Expiring soon</span><b>${stats.expiresSoon}</b><i>normal cleanup</i></div>
+      </div>
+      <div class="memory-controls">
+        <label class="memory-search">
+          <span>Search memory</span>
+          <input type="search" data-memory-search value="${esc(memoryUi.query)}" placeholder="Search conversations, clients, sites, security, money..." />
+        </label>
+      </div>
+      <form class="memory-add" data-memory-add>
+        <textarea rows="3" data-memory-note placeholder="Add a note Phantom should remember for this workspace..."></textarea>
+        <button class="btn btn-primary" type="submit">Save memory</button>
+      </form>
+      <div class="memory-cats" role="list" aria-label="Memory categories">
+        <button class="memory-cat ${memoryUi.category === "all" ? "is-active" : ""}" data-memory-cat="all">All <b>${all.length}</b></button>
+        ${categories.map((category) => `
+          <button class="memory-cat ${memoryUi.category === category ? "is-active" : ""}" data-memory-cat="${esc(category)}">
+            ${esc(categoryLabel(category))} <b>${counts[category]}</b>
+          </button>`).join("")}
+      </div>
+      <div class="memory-layout">
+        <section>
+          <h3 class="ws-subhead">${memoryUi.category === "all" ? "Saved memory" : categoryLabel(memoryUi.category)}</h3>
+          <div class="stack">
+            ${filtered.map((item) => `
+              <article class="record memory-record ${(item.pinnedByUser || item.pinnedByAi) ? "is-remembered" : ""}">
+                <div class="record-top">
+                  ${wsTag(item.ws)}
+                  <h4>${esc(item.title)}</h4>
+                  <span class="memory-retention">${esc(memoryRetention(item))}</span>
+                </div>
+                <p class="record-sub">${esc(categoryLabel(item.category))} · ${esc(item.source)} · ${ago(item.createdAt)}</p>
+                <p class="record-notes">${esc(item.summary)}</p>
+                <div class="memory-tags">${(item.tags || []).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>
+                <div class="record-actions">
+                  <button class="btn ${item.pinnedByUser ? "btn-good" : ""}" data-act="pin-memory" data-id="${item.id}">${item.pinnedByUser ? "Unremember" : "Remember"}</button>
+                  <button class="btn btn-quiet" data-act="forget-memory" data-id="${item.id}">Delete</button>
+                </div>
+              </article>`).join("") || empty(query ? "No memories matched that search." : "No memories yet. Ask Phantom something or capture a manual note.")}
+          </div>
+        </section>
+        <aside class="memory-side">
+          <article class="record">
+            <h4>Research packages</h4>
+            <p class="record-notes">Phantom groups memory by topic so the database stays searchable instead of becoming a long chat log.</p>
+            <div class="memory-package-grid">
+              ${Object.entries(MEMORY_CATEGORY_LABELS).map(([category, label]) => `
+                <button class="memory-package" data-memory-cat="${esc(category)}">
+                  <span>${esc(label)}</span><b>${counts[category] || 0}</b>
+                </button>`).join("")}
+            </div>
+          </article>
+          <article class="record">
+            <h4>Remembered</h4>
+            ${remembered.map((item) => `<p class="record-next">▸ ${esc(item.title)}</p>`).join("") || `<p class="record-notes">Nothing pinned yet. Phantom will pin durable business rules automatically, and you can pin any memory yourself.</p>`}
+          </article>
+          <article class="record">
+            <h4>Cleanup watch</h4>
+            ${expiring.map((item) => `<p class="record-next">▸ ${esc(item.title)} <i>${esc(memoryRetention(item))}</i></p>`).join("") || `<p class="record-notes">Nothing is about to expire. Normal cleanup keeps the account lightweight.</p>`}
+          </article>
+        </aside>
+      </div>
+    </div>`;
+
+  const search = el.querySelector("[data-memory-search]");
+  if (search) search.addEventListener("input", () => {
+    memoryUi.query = search.value;
+    renderMemory(el, rerender);
+    const next = el.querySelector("[data-memory-search]");
+    if (next) {
+      next.focus();
+      next.setSelectionRange(next.value.length, next.value.length);
+    }
+  });
+  el.querySelectorAll("[data-memory-cat]").forEach((btn) => btn.addEventListener("click", () => {
+    memoryUi.category = btn.dataset.memoryCat || "all";
+    renderMemory(el, rerender);
+  }));
+  el.querySelector("[data-memory-add]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const note = el.querySelector("[data-memory-note]")?.value || "";
+    if (!note.trim()) return;
+    addMemory({ source: "manual", text: note, summary: note, pinnedByUser: true });
+    pushActivity("Memory", "saved a private workspace memory.", currentWs());
+    rerender();
+  });
+  bindActions(el, {
+    "pin-memory": (id) => { toggleMemoryRemember(id); rerender(); },
+    "forget-memory": (id) => {
+      if (confirm("Delete this local memory?")) { forgetMemory(id); rerender(); }
+    },
+  });
 }
 
 /* ============================= TOOL SPINE ============================= */
@@ -631,6 +1027,7 @@ export const WORKSPACE_DEFS = {
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
+  memory: { title: "Memory", kicker: "Local context database", render: renderMemory },
   workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
