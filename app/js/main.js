@@ -4,14 +4,15 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-19";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-19";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-19";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-19";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-19";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-19";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-19";
-import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260705-19";
+} from "./store.js?v=phantom-live-20260705-20";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-20";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-20";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-20";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-20";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-20";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-20";
+import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260705-20";
+import { renderBrandMemory, renderAutomation, brandCounts } from "./brandops.js?v=phantom-live-20260705-20";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -130,9 +131,10 @@ const NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
-  { id: "brand",      label: "Brand Memory", icon: "brain", ws: "workforce" },
+  { id: "brand",      label: "Brand Memory", icon: "brain", ws: "brand" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
-  { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
+  { id: "automation", label: "Automation",   icon: "auto",  ws: "automation" },
+  { id: "workforce",  label: "Workforce",    icon: "users", ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
@@ -215,7 +217,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-19";
+const POSE_VERSION = "phantom-live-20260705-20";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {
@@ -321,19 +323,17 @@ function thisWeekCount() {
 }
 function renderStatCards() {
   const media = visible(store.state.media);
-  const sites = visible(store.state.sites);
-  const products = visible(store.state.products);
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
   const delivered = media.filter((m) => m.status === "delivered").length;
-  const files = media.length + sites.length + products.length + visible(store.state.reviews).length;
 
+  const bc = brandCounts();
   const cards = [
-    { icon: "db",    title: "Brand Memory", value: files, sub: files ? "Files indexed" : "No files yet", foot: files ? `Updated ${ago(store.state.activity[0]?.at || new Date().toISOString())}` : "Waiting for first upload", open: "workforce", trend: files ? "live" : "empty" },
+    { icon: "db",    title: "Brand Memory", value: bc.total, sub: bc.total ? `${bc.assets} assets · ${bc.memory} memories` : "Nothing stored yet", foot: bc.total ? "Private & local" : "Add brand facts to start", open: "brand", trend: bc.total ? "live" : "empty" },
     { icon: "media", title: "Media Lab",    value: media.length, sub: "Briefs in lab", foot: media.length ? `${delivered} delivered` : "No briefs yet", open: "media", trend: media.length ? "ready" : "empty" },
     { icon: "check", title: "Approvals",    value: pending, sub: "Pending", foot: pending ? "Needs your review" : "Queue clear", open: "approvals", alert: pending > 0, trend: pending ? "action" : "clear" },
-    { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: thisWeekCount() ? "Real activity only" : "No activity yet", open: "media", trend: thisWeekCount() ? "live" : "empty" },
-    { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: activeAgents ? "Real workers only" : "Not configured", open: "workforce", trend: activeAgents ? "live" : "empty" },
+    { icon: "spark", title: "Content",      value: thisWeekCount(), sub: "This week", foot: thisWeekCount() ? "Real activity only" : "No activity yet", open: "content", trend: thisWeekCount() ? "live" : "empty" },
+    { icon: "auto",  title: "Automations",  value: activeAgents, sub: "Active", foot: activeAgents ? "Real workers only" : "Not configured", open: "automation", trend: activeAgents ? "live" : "empty" },
   ];
   $("[data-statcards]").innerHTML = cards.map((c) => `
     <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
@@ -810,6 +810,8 @@ const CUSTOM = {
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
   content: { title: "Content Hub", kicker: "Everything you've published", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Live from Content Hub", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
+  brand: { title: "Brand Memory", kicker: "Private & local brand brain", custom: true, wide: true, render: (body) => renderBrandMemory(body, mediaOpts()) },
+  automation: { title: "Automation", kicker: "Approved workflows only", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
 };
 
 let openId = null;
@@ -918,6 +920,30 @@ function initPhantom3D() {
     phantom3d = null;
   }
 }
+/* the ghost tracks you: pointer parallax on the hero stage (3D tilt + drift).
+   rAF-smoothed so it feels weighted, not snappy. Disabled under reduced motion. */
+function initHeroParallax() {
+  if (reduceMotion) return;
+  const stage = $("[data-mode-stage]");
+  const hero = $(".hero2");
+  if (!stage || !hero) return;
+  let tx = 0, ty = 0, cx = 0, cy = 0;
+  stage.style.willChange = "transform";
+  const tick = () => {
+    cx += (tx - cx) * 0.055;
+    cy += (ty - cy) * 0.055;
+    stage.style.transform = `rotateY(${(cx * 7).toFixed(2)}deg) rotateX(${(-cy * 4.5).toFixed(2)}deg) translate3d(${(cx * 8).toFixed(1)}px, ${(cy * -5).toFixed(1)}px, 0)`;
+    requestAnimationFrame(tick);
+  };
+  hero.addEventListener("pointermove", (e) => {
+    const r = hero.getBoundingClientRect();
+    tx = Math.max(-1, Math.min(1, ((e.clientX - r.left) / r.width - 0.5) * 2));
+    ty = Math.max(-1, Math.min(1, ((e.clientY - r.top) / r.height - 0.5) * 2));
+  }, { passive: true });
+  hero.addEventListener("pointerleave", () => { tx = 0; ty = 0; }, { passive: true });
+  requestAnimationFrame(tick);
+}
+
 function initGhost() {
   const canvas = $("[data-ghost]");
   if (!canvas || reduceMotion) return;
@@ -973,7 +999,7 @@ let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); startClock(); startPulse(); }
+  if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); initHeroParallax(); startClock(); startPulse(); }
   activeNav = "dashboard";
   renderConsole();
   mountAgentTicker($("[data-agent-ticker]"));

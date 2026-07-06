@@ -316,7 +316,9 @@ export function resolveApproval(id, approved) {
     if (a.type === "publish-page") { const s = store.state.sites.find((x) => x.id === a.ref); if (s) s.status = "approved-to-publish"; }
     if (a.type === "media-generation") { const m = store.state.media.find((x) => x.id === a.ref); if (m) m.status = "generation-approved"; }
     if (a.type === "booking") { const b = store.state.bookings.find((x) => x.id === a.ref); if (b) b.status = "approved"; }
+    if (a.type === "automation") { const g = store.state.agents.find((x) => x.id === a.ref); if (g) g.status = "active"; }
   }
+  if (!approved && a.type === "automation") { const g = store.state.agents.find((x) => x.id === a.ref); if (g) g.status = "blocked"; }
   pushActivity("Command Router", `${approved ? "approved" : "declined"}: ${a.title}`, a.ws);
   store.save();
 }

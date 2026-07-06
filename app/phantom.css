@@ -1843,3 +1843,135 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 
 /* keep the refinement out of the way for reduced-motion + small screens (no new motion added) */
+
+/* ============================================================================ */
+/* ==============  REDESIGN v2 — living ghost, true pages, chrome  ============ */
+/* ============================================================================ */
+
+/* ---- the ghost lives: raise the animated 2D layer, deepen the aura ---- */
+.phantom.has-mode-poses .hero2-stage .ghost-canvas {
+  opacity: 0.24; filter: blur(4px) brightness(1.3) contrast(1.14) drop-shadow(0 0 26px rgba(65, 255, 161, 0.24));
+}
+.phantom-mode-stage::before { opacity: 0.85; animation-duration: 5.8s; }
+.phantom-mode-stage { transition: filter 0.3s ease; }
+.hero2:hover .phantom-mode-pose { filter: saturate(1.12) contrast(1.14) brightness(1.08) drop-shadow(0 0 28px rgba(65, 255, 161, 0.34)) drop-shadow(0 26px 54px rgba(0, 0, 0, 0.46)); }
+
+/* ---- overlay chrome: the workspace shell matches the new material ---- */
+.overlay-panel {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(19, 25, 33, 0.97), rgba(9, 13, 18, 0.985));
+  box-shadow: var(--edge-hi), 0 40px 120px -20px rgba(0, 0, 0, 0.85);
+}
+.overlay-head { border-bottom: 1px solid var(--line); }
+.overlay-kicker { color: var(--neon); letter-spacing: 0.22em; }
+.overlay-x {
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); border-radius: 12px;
+  transition: border-color 0.2s, background 0.2s, transform 0.18s;
+}
+.overlay-x:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.07); transform: rotate(90deg); }
+
+/* ---- global finish: scrollbars, selection, focus ---- */
+::selection { background: rgba(65, 255, 161, 0.28); color: #f2fffa; }
+* { scrollbar-width: thin; scrollbar-color: rgba(120, 150, 145, 0.28) transparent; }
+*::-webkit-scrollbar { width: 9px; height: 9px; }
+*::-webkit-scrollbar-track { background: transparent; }
+*::-webkit-scrollbar-thumb { background: rgba(120, 150, 145, 0.22); border-radius: 99px; border: 2px solid transparent; background-clip: padding-box; }
+*::-webkit-scrollbar-thumb:hover { background: rgba(120, 200, 170, 0.4); border: 2px solid transparent; background-clip: padding-box; }
+:where(button, input, select, textarea, a):focus-visible { outline: 2px solid rgba(65, 255, 161, 0.65); outline-offset: 2px; border-radius: 6px; }
+
+/* ---- statcard trend chips: quiet, engineered ---- */
+.statcard-trend {
+  font: 600 8px "DM Mono", monospace; letter-spacing: 0.14em; padding: 3px 8px; border-radius: 999px;
+  border: 1px solid var(--line); color: var(--dim-2); background: rgba(255, 255, 255, 0.02); text-transform: uppercase;
+}
+.statcard-trend.trend-alert { color: var(--warn); border-color: rgba(255, 209, 102, 0.3); background: rgba(255, 209, 102, 0.07); }
+
+/* ---- gate aligned with the material system ---- */
+.gate-card {
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, rgba(20, 27, 35, 0.96), rgba(8, 12, 17, 0.97));
+  box-shadow: var(--edge-hi), 0 40px 130px rgba(0, 0, 0, 0.7), 0 0 80px rgba(65, 255, 161, 0.07);
+}
+.gate-opt { border: 1px solid var(--line); background: rgba(255, 255, 255, 0.025); }
+.gate-opt:hover { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.06); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45), 0 0 30px rgba(65, 255, 161, 0.12); }
+
+/* ============================================================= */
+/* ============  BRAND MEMORY + AUTOMATION (true pages)  ======== */
+/* ============================================================= */
+.bm { display: flex; flex-direction: column; gap: 16px; }
+.bm-note {
+  display: flex; align-items: center; gap: 10px; padding: 11px 15px; border-radius: 13px;
+  border: 1px solid rgba(65, 255, 161, 0.18); background: rgba(65, 255, 161, 0.05);
+  font-size: 12.5px; color: #b9dcc9;
+}
+.bm-note i { flex: 0 0 auto; width: 8px; height: 8px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 9px var(--neon); }
+.bm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.bm-card {
+  border: 1px solid var(--line); border-radius: 18px; padding: 18px;
+  background: var(--card-grad); box-shadow: var(--edge-hi), var(--depth-1);
+}
+.bm-wide { grid-column: 1 / -1; }
+.bm-card-h { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
+.bm-card-h h3 { margin: 0; font: 600 14px "Space Grotesk", sans-serif; letter-spacing: -0.01em; }
+.bm-hint { font: 500 10px "DM Mono", monospace; color: var(--dim-2); letter-spacing: 0.04em; }
+.bm-facts { display: grid; gap: 12px; }
+.bm-facts label { display: grid; gap: 6px; }
+.bm-facts span, .bm-palette > span { font: 500 9px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
+.bm-facts input, .bm-facts textarea, .bm-add input, .bm-add select {
+  width: 100%; min-width: 0; padding: 11px 13px; border-radius: 11px; resize: vertical;
+  border: 1px solid var(--line); background: rgba(0, 0, 0, 0.28); color: var(--ink); outline: none;
+  box-shadow: var(--edge-hi); font-size: 13.5px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.bm-facts input:focus, .bm-facts textarea:focus, .bm-add input:focus, .bm-add select:focus {
+  border-color: rgba(65, 255, 161, 0.5); box-shadow: 0 0 0 3px rgba(65, 255, 161, 0.08);
+}
+.bm-palette { display: grid; gap: 6px; }
+.bm-swatches { display: flex; gap: 8px; }
+.bm-swatches i { width: 30px; height: 30px; border-radius: 9px; border: 1px solid rgba(255, 255, 255, 0.12); box-shadow: var(--edge-hi); }
+.bm-save { justify-self: start; }
+.bm-saved { font: 500 11px "DM Mono", monospace; color: var(--neon); }
+.bm-add { display: flex; gap: 8px; margin-bottom: 12px; }
+.bm-add select { flex: 0 0 auto; width: auto; }
+.bm-add input { flex: 1 1 auto; }
+.bm-add .btn { flex: 0 0 auto; }
+.bm-assets, .bm-mems { display: flex; flex-direction: column; gap: 7px; }
+.bm-asset, .bm-mem {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 11px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.016); font-size: 13px;
+}
+.bm-asset-kind { flex: 0 0 auto; font: 600 8.5px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase; color: var(--neon-2); padding: 3px 8px; border-radius: 999px; background: rgba(30, 240, 255, 0.07); border: 1px solid rgba(30, 240, 255, 0.16); }
+.bm-asset-label { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bm-asset-at, .bm-mem em { flex: 0 0 auto; font: 400 10.5px "DM Mono", monospace; font-style: normal; color: var(--dim-2); }
+.bm-mem { align-items: flex-start; }
+.bm-mem-dot { flex: 0 0 auto; width: 6px; height: 6px; margin-top: 6px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 7px rgba(65, 255, 161, 0.6); }
+.bm-mem span { flex: 1 1 auto; min-width: 0; line-height: 1.45; }
+.bm-x {
+  flex: 0 0 auto; width: 24px; height: 24px; display: grid; place-items: center; cursor: pointer;
+  border: 1px solid transparent; border-radius: 8px; background: none; color: var(--dim-2); font-size: 11px;
+  transition: color 0.18s, border-color 0.18s, background 0.18s;
+}
+.bm-x:hover { color: #ff9aa8; border-color: rgba(255, 77, 99, 0.3); background: rgba(255, 77, 99, 0.07); }
+.bm-empty { margin: 4px 0 0; font-size: 12.5px; color: var(--dim); line-height: 1.5; }
+
+.au { display: flex; flex-direction: column; gap: 16px; }
+.au-list { display: flex; flex-direction: column; gap: 7px; }
+.au-item { display: flex; align-items: center; gap: 11px; padding: 10px 13px; border-radius: 12px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.016); }
+.au-item-main { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.au-item-main b { font-size: 13.5px; font-weight: 600; }
+.au-item-main i { font-size: 11.5px; font-style: normal; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.au-lanes { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px; }
+.au-lane { border: 1px solid var(--line); border-radius: 13px; padding: 13px 14px; background: rgba(255, 255, 255, 0.016); display: flex; flex-direction: column; gap: 7px; }
+.au-lane-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.au-lane-top b { font-size: 13px; font-weight: 600; }
+.au-lane-role { margin: 0; font-size: 11.5px; line-height: 1.5; color: var(--dim); }
+.au-lane-act { margin: 0; display: flex; align-items: baseline; gap: 7px; font: 400 10.5px "DM Mono", monospace; color: #9fc7b4; line-height: 1.45; }
+.au-lane-act i { flex: 0 0 auto; width: 5px; height: 5px; border-radius: 50%; background: var(--neon-2); box-shadow: 0 0 6px rgba(30, 240, 255, 0.5); }
+
+@media (max-width: 900px) {
+  .bm-grid { grid-template-columns: 1fr; }
+  .bm-add { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .overlay-x:hover { transform: none; }
+}
