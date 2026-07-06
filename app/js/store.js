@@ -3,8 +3,6 @@
    no payments, no provider calls happen from here — records move through
    draft → approval → *-ready states and stop there until a connector exists. */
 
-import { APIFY_DEFAULT_STATE, APIFY_TOOL_SPINE } from "./apify-tools.js?v=phantom-live-20260705-17";
-
 const DB_KEY = "pf.phantom.v4";
 const SESSION_KEY = "pf.session.v3";
 const LIVE_TOKEN_KEY = "pf.live.sessionToken.v1";
@@ -40,129 +38,17 @@ export const RETAINERS = [
 
 /* ---------------- internal tool spine ---------------- */
 export const TOOL_SPINE = [
-  {
-    id: "pangolin",
-    name: "Private Gateway",
-    internal: "Pangolin + Newt",
-    worker: "Access Sentinel",
-    mode: "active",
-    status: "watching",
-    role: "Keeps admin Phantom reachable through the private route while hiding raw local ports.",
-    activity: "watching admin.phantomforce.online route and keeping backend ports private.",
-    path: "ops/admin-live",
-    visibleToClients: false,
-  },
-  {
-    id: "hermes",
-    name: "Memory Core",
-    internal: "Hermes",
-    worker: "Memory Keeper",
-    mode: "active",
-    status: "online",
-    role: "Compiles context, receipts, redaction notes, and useful memory for Phantom AI.",
-    activity: "compiled owner context, redacted receipts, and memory hints for Phantom AI.",
-    path: "server/src/phantom-ai/hermes-*",
-    visibleToClients: false,
-  },
-  {
-    id: "obsidian",
-    name: "Process Vault",
-    internal: "Obsidian",
-    worker: "Vault Scribe",
-    mode: "active",
-    status: "indexed",
-    role: "Stores sanitized decisions, process notes, verification logs, and operating memory.",
-    activity: "indexed the PhantomForce Command Center vault for process memory.",
-    path: "C:\\Users\\jorda\\Documents\\Obsidian\\PhantomForce-Command-Center",
-    visibleToClients: false,
-  },
-  {
-    id: "n8n",
-    name: "Automation Desk",
-    internal: "n8n",
-    worker: "Workflow Runner",
-    mode: "standby",
-    status: "scaffolded",
-    role: "Holds local workflow drafts for boring repeatable work after approval.",
-    activity: "detected the local n8n scaffold and ChicagoShots dry-run workflow draft.",
-    path: "ops/n8n",
-    visibleToClients: false,
-  },
-  {
-    id: "openspec",
-    name: "Build Planner",
-    internal: "OpenSpec",
-    worker: "Spec Architect",
-    mode: "active",
-    status: "ready",
-    role: "Turns big requests into scoped proposals, tasks, and implementation guardrails.",
-    activity: "standing by to turn the next feature request into a scoped build plan.",
-    path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\openspec",
-    visibleToClients: false,
-  },
-  {
-    id: "phantomops",
-    name: "Operator Standards",
-    internal: "AgentOS",
-    worker: "PhantomOps",
-    mode: "active",
-    status: "enforcing",
-    role: "Keeps agent work structured around standards, handoffs, and owner-safe execution.",
-    activity: "enforcing PhantomOps standards across command routing and worker handoffs.",
-    path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\agent-os",
-    visibleToClients: false,
-  },
-  {
-    id: "serena",
-    name: "Code Intelligence",
-    internal: "Serena",
-    worker: "Code Navigator",
-    mode: "standby",
-    status: "indexed",
-    role: "Supports read-only semantic repo navigation and code understanding.",
-    activity: "mapped as the read-only code intelligence lane for future repo navigation.",
-    path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\serena",
-    visibleToClients: false,
-  },
-  {
-    id: "ruflo",
-    name: "Squad Planner",
-    internal: "Ruflo",
-    worker: "Swarm Planner",
-    mode: "sandbox",
-    status: "contained",
-    role: "Provides multi-agent planning vocabulary and squad patterns without production autonomy.",
-    activity: "contained in planning mode; squad patterns are available without live autonomy.",
-    path: "C:\\Users\\jorda\\Documents\\PhantomForce-AgentLab\\tool-candidates\\ruflo",
-    visibleToClients: false,
-  },
-  {
-    id: "phantomcut",
-    name: "Media Engine",
-    internal: "PhantomCut + Higgsfield",
-    worker: "Media Factory",
-    mode: "gated",
-    status: "ready",
-    role: "Prepares commercial video generation and Resolve/REAPER bridges with paid runs gated.",
-    activity: "ready for controlled Media Lab generation and editor handoff when approved.",
-    path: "C:\\Users\\jorda\\Documents\\PhantomForce-MediaLab\\phantomcut-ai",
-    visibleToClients: false,
-  },
-  {
-    id: "model-lanes",
-    name: "Model Switchboard",
-    internal: "Codex / Claude / GLM",
-    worker: "Brain Router",
-    mode: "active",
-    status: "routed",
-    role: "Routes admin-only thinking, review, coding, and worker model lanes behind Phantom AI.",
-    activity: "routing requests through the correct brain lane while keeping tool names hidden.",
-    path: "server/src/phantom-ai/providers",
-    visibleToClients: false,
-  },
-  ...APIFY_TOOL_SPINE,
+  { id: "private-gateway", name: "Private Gateway", internal: "Access Layer", worker: "Access Sentinel", mode: "active", status: "watching", role: "Keeps admin Phantom reachable through the private route while hiding raw local ports.", ownerControl: "Owner access is live through the private route. Raw local ports stay hidden from everybody else.", activity: "watching admin.phantomforce.online route and keeping backend ports private.", path: "Private backend", visibleToClients: false },
+  { id: "memory-core", name: "Memory Core", internal: "Memory Layer", worker: "Memory Keeper", mode: "active", status: "online", role: "Compiles context, receipts, redaction notes, and useful memory for Phantom AI.", ownerControl: "Admin memory is on. Employee workspaces keep their own separate memory unless you connect them.", activity: "compiled owner context, redacted receipts, and memory hints for Phantom AI.", path: "Private backend", visibleToClients: false },
+  { id: "process-vault", name: "Process Vault", internal: "Process Memory", worker: "Vault Scribe", mode: "active", status: "indexed", role: "Stores sanitized decisions, process notes, verification logs, and operating memory.", ownerControl: "Owner process memory is indexed. Secrets stay out of the vault.", activity: "indexed the PhantomForce Command Center vault for process memory.", path: "Private backend", visibleToClients: false },
+  { id: "automation-desk", name: "Automation Desk", internal: "Workflow Layer", worker: "Workflow Runner", mode: "standby", status: "ready", role: "Holds workflow drafts for repeatable work after approval.", ownerControl: "Ready for owner setup. Turn on each workflow when the connector and rules are correct.", activity: "detected the local workflow scaffold and dry-run workflow draft.", path: "Private backend", visibleToClients: false },
+  { id: "build-planner", name: "Build Planner", internal: "Planning Layer", worker: "Spec Architect", mode: "active", status: "ready", role: "Turns big requests into scoped proposals, tasks, and implementation guardrails.", ownerControl: "Available for planning real builds, client packages, and sprint scopes.", activity: "standing by to turn the next feature request into a scoped build plan.", path: "Private backend", visibleToClients: false },
+  { id: "operating-standards", name: "Operator Standards", internal: "Standards Layer", worker: "PhantomOps", mode: "active", status: "enforcing", role: "Keeps agent work structured around standards, handoffs, and owner-safe execution.", ownerControl: "Keeps the team organized without exposing tool names to users.", activity: "enforcing PhantomForce standards across routing and worker handoffs.", path: "Private backend", visibleToClients: false },
+  { id: "code-intelligence", name: "Code Intelligence", internal: "Code Layer", worker: "Code Navigator", mode: "standby", status: "indexed", role: "Supports read-only repo navigation and code understanding.", ownerControl: "Available for owner diagnostics and build planning. Write actions stay routed through owner mode.", activity: "code intelligence is indexed and ready for owner diagnostics.", path: "Private backend", visibleToClients: false },
+  { id: "squad-planner", name: "Squad Planner", internal: "Planning Sandbox", worker: "Swarm Planner", mode: "sandbox", status: "contained", role: "Plans multi-step agent work, handoffs, and team-style workflows.", ownerControl: "Ready for owner planning. It becomes real work only when you send the command.", activity: "squad planning is ready for owner-directed work.", path: "Private backend", visibleToClients: false },
+  { id: "media-engine", name: "Media Engine", internal: "Media Layer", worker: "Media Factory", mode: "gated", status: "ready", role: "Prepares commercial image, video, and editor handoff requests.", ownerControl: "Ready in Media Lab. Paid credits and external runs stay owner-controlled.", activity: "Media Lab is ready for owner-controlled creative work.", path: "Private backend", visibleToClients: false },
+  { id: "brain-router", name: "Model Switchboard", internal: "Brain Layer", worker: "Brain Router", mode: "active", status: "routed", role: "Routes admin-only thinking, review, coding, and worker model lanes behind Phantom AI.", ownerControl: "Owner brain routing is active. Users only see Phantom, not the backend model names.", activity: "routing requests through the correct brain lane while keeping tool names hidden.", path: "Private backend", visibleToClients: false },
 ];
-
 function toolActivitySeed() {
   return [];
 }
@@ -185,7 +71,6 @@ function seed() {
     approvals: [],
     agents: [],
     toolSpine: TOOL_SPINE,
-    apify: { ...APIFY_DEFAULT_STATE },
     activity: [],
   };
 }
@@ -205,10 +90,7 @@ function normalizeData(data) {
   d.security = Array.isArray(d.security) ? d.security : [];
   d.approvals = Array.isArray(d.approvals) ? d.approvals : [];
   d.agents = Array.isArray(d.agents) ? d.agents : [];
-  d.toolSpine = TOOL_SPINE.map((tool) => ({ ...tool, ...(d.toolSpine || []).find((x) => x.id === tool.id) }));
-  d.apify = { ...APIFY_DEFAULT_STATE, ...(d.apify && typeof d.apify === "object" ? d.apify : {}) };
-  d.apify.selectedActorIds = Array.isArray(d.apify.selectedActorIds) ? d.apify.selectedActorIds : [];
-  d.apify.selectedRecipeIds = Array.isArray(d.apify.selectedRecipeIds) ? d.apify.selectedRecipeIds : [];
+  d.toolSpine = TOOL_SPINE.map((tool) => ({ ...((d.toolSpine || []).find((x) => x.id === tool.id) || {}), ...tool }));
   d.activity = Array.isArray(d.activity) ? d.activity : [];
   d.activity = d.activity.slice(0, 80);
   d.version = 4;

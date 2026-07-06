@@ -7,13 +7,7 @@ import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS,
-} from "./store.js?v=phantom-live-20260705-17";
-import {
-  APIFY_ACTORS, APIFY_LANES, APIFY_MCP_STACK,
-  APIFY_CAPABILITY_PACKS, APIFY_OUTPUT_SURFACES, APIFY_AUTOMATION_TEMPLATES,
-  apifyActorHref, apifyActorsByCategory, apifyActorsByLane,
-  apifyPackActors,
-} from "./apify-tools.js?v=phantom-live-20260705-17";
+} from "./store.js?v=phantom-live-20260705-18";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
@@ -466,153 +460,6 @@ function renderMoney(el, rerender) {
 }
 
 /* ============================= TOOL SPINE ============================= */
-function renderApify(el, rerender) {
-  if (!isAdmin()) { el.innerHTML = empty("Apify Tool Vault is owner-only until a workspace permission grants access."); return; }
-  const state = store.state.apify || {};
-  const selected = new Set(state.selectedActorIds || []);
-  const selectedPacks = new Set(state.selectedRecipeIds || []);
-  const packActorIds = new Set(
-    APIFY_CAPABILITY_PACKS
-      .filter((pack) => selectedPacks.has(pack.id))
-      .flatMap((pack) => pack.actors)
-  );
-  const byLane = apifyActorsByLane();
-  const byCategory = apifyActorsByCategory();
-  const mapped = APIFY_ACTORS.length;
-  const exact = APIFY_ACTORS.filter((actor) => actor.actor).length;
-  el.innerHTML = `
-    <div class="apify-hero">
-      <div>
-        <p class="overlay-kicker">Apify Store + Actors</p>
-        <h3>Tool Vault mapped. Execution stays server-side.</h3>
-        <p>Phantom can use Apify for lead discovery, competitor monitoring, public web/RAG crawling, social intel, reputation watch, e-commerce research, and data cleanup. New accounts start with a catalog only: no Actor runs, no datasets, no spend, and no outreach until you approve inputs.</p>
-      </div>
-      <div class="apify-status">
-        ${kv("Catalog", `${mapped} Actor candidates`)}
-        ${kv("Packs", `${APIFY_CAPABILITY_PACKS.length} capability packs / ${selectedPacks.size} staged`)}
-        ${kv("Exact Actor IDs", `${exact} ready / ${mapped - exact} store-search candidates`)}
-        ${kv("Token", state.tokenConfigured ? "Configured server-side" : "Not configured here")}
-        ${kv("Mode", esc(state.mode || "approval-gated"))}
-      </div>
-    </div>
-    <div class="apify-lanes">
-      ${byLane.map((lane) => `
-        <article class="apify-lane">
-          <span>${lane.actors.length}</span>
-          <h4>${esc(lane.name)}</h4>
-          <p>${esc(lane.focus)}</p>
-        </article>`).join("")}
-    </div>
-    <h3 class="ws-subhead">Capability packs</h3>
-    <p class="ws-note">These are PhantomForce business moves powered by Apify. Staging a pack only prepares the workflow: inputs, budget, token, and owner approval are still required before any Actor run.</p>
-    <div class="apify-pack-grid">
-      ${APIFY_CAPABILITY_PACKS.map((pack) => {
-        const actors = apifyPackActors(pack);
-        const staged = selectedPacks.has(pack.id);
-        return `
-          <article class="apify-pack ${staged ? "is-selected" : ""}">
-            <div class="apify-pack-top">
-              <span class="apify-pack-lane">${esc(APIFY_LANES.find((lane) => lane.id === pack.lane)?.name || pack.lane)}</span>
-              <span class="chip chip-${esc(pack.status)}">${esc(statusLabel(pack.status))}</span>
-            </div>
-            <h4>${esc(pack.name)}</h4>
-            <p>${esc(pack.summary)}</p>
-            <div class="apify-pack-meta">
-              <span><b>Trigger</b>${esc(pack.trigger)}</span>
-              <span><b>Cadence</b>${esc(pack.cadence)}</span>
-            </div>
-            <div class="apify-pack-flow">
-              ${pack.surfaces.map((surface) => `<i>${esc(surface)}</i>`).join("")}
-            </div>
-            <ul class="apify-pack-list">
-              ${pack.output.slice(0, 4).map((item) => `<li>${esc(item)}</li>`).join("")}
-            </ul>
-            <p class="record-notes"><b>Actors:</b> ${actors.slice(0, 5).map((actor) => esc(actor.name)).join(", ")}${actors.length > 5 ? ` +${actors.length - 5}` : ""}</p>
-            <p class="record-notes"><b>Safety:</b> ${esc(pack.safety)}</p>
-            <button class="btn ${staged ? "btn-good" : ""}" data-act="toggle-pack" data-id="${esc(pack.id)}">${staged ? "Staged" : "Stage pack"}</button>
-          </article>`;
-      }).join("")}
-    </div>
-    <h3 class="ws-subhead">Where outputs land</h3>
-    <div class="apify-surface-grid">
-      ${APIFY_OUTPUT_SURFACES.map((surface) => `
-        <article class="record">
-          <div class="record-top"><h4>${esc(surface.name)}</h4>${chip("ready")}</div>
-          <p class="record-sub">${esc(surface.use)}</p>
-        </article>`).join("")}
-    </div>
-    <h3 class="ws-subhead">Actor shortlist</h3>
-    <p class="ws-note">Selecting an Actor marks it for setup planning only. Runs still require APIFY_TOKEN on the server, input review, budget approval, and output review.</p>
-    <div class="apify-category-grid">
-      ${Object.entries(byCategory).map(([category, actors]) => `
-        <section class="apify-category">
-          <div class="apify-cat-head"><h4>${esc(category)}</h4><span>${actors.length}</span></div>
-          ${actors.map((actor) => `
-            <article class="apify-actor ${selected.has(actor.id) ? "is-selected" : ""} ${packActorIds.has(actor.id) ? "is-pack-linked" : ""}">
-              <div class="record-top">
-                <h5>${esc(actor.name)}</h5>
-                <span class="chip chip-${packActorIds.has(actor.id) ? "setup-ready" : actor.actor ? "approved" : "pending"}">${packActorIds.has(actor.id) ? "pack linked" : actor.actor ? "actor id" : "store search"}</span>
-              </div>
-              <p>${esc(actor.use)}</p>
-              <div class="apify-fields">
-                <span><b>Input</b>${esc(actor.input)}</span>
-                <span><b>Output</b>${esc(actor.output)}</span>
-              </div>
-              <p class="record-notes"><b>Safety:</b> ${esc(actor.safety)}</p>
-              <div class="record-actions">
-                <a class="btn btn-quiet" href="${esc(apifyActorHref(actor))}" target="_blank" rel="noopener">Open Store</a>
-                <button class="btn ${selected.has(actor.id) ? "btn-good" : ""}" data-act="toggle-actor" data-id="${esc(actor.id)}">${selected.has(actor.id) ? "Selected" : "Mark for setup"}</button>
-              </div>
-            </article>`).join("")}
-        </section>`).join("")}
-    </div>
-    <h3 class="ws-subhead">MCP / API wiring path</h3>
-    <div class="apify-stack">
-      ${APIFY_MCP_STACK.map((item, i) => `
-        <article class="record">
-          <div class="record-top"><h4>${i + 1}. ${esc(item.name)}</h4>${chip(i < 2 ? "ready" : "pending")}</div>
-          <p class="record-sub">${esc(item.use)}</p>
-        </article>`).join("")}
-    </div>
-    <h3 class="ws-subhead">Owner-enabled automations</h3>
-    <div class="apify-stack">
-      ${APIFY_AUTOMATION_TEMPLATES.map((item) => {
-        const pack = APIFY_CAPABILITY_PACKS.find((p) => p.id === item.pack);
-        return `
-          <article class="record">
-            <div class="record-top"><h4>${esc(item.name)}</h4>${chip(item.status)}</div>
-            <p class="record-sub">${esc(pack?.name || item.pack)} - ${esc(item.cadence)}</p>
-            <p class="record-notes"><b>Guard:</b> ${esc(item.guard)}</p>
-          </article>`;
-      }).join("")}
-    </div>
-    <h3 class="ws-subhead">Runner contract</h3>
-    <div class="stack">
-      <article class="record record-wide">
-        ${kv("Server env", "<code>APIFY_TOKEN</code> only. Never in browser/localStorage.")}
-        ${kv("Dry run", "<code>node ops/apify/apify-runner.mjs --dry-run --actor apify/google-search-scraper --input input.json</code>")}
-        ${kv("Execute", "<code>--execute</code> requires owner approval and budget guard.")}
-        ${kv("Review gate", "Dataset output becomes Phantom review cards before CRM/sends/posts/export.")}
-      </article>
-    </div>`;
-  bindActions(el, {
-    "toggle-actor": (id) => {
-      const next = new Set(store.state.apify?.selectedActorIds || []);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      store.state.apify = { ...(store.state.apify || {}), selectedActorIds: Array.from(next) };
-      pushActivity("Actor Broker", `${next.has(id) ? "marked" : "unmarked"} ${APIFY_ACTORS.find((a) => a.id === id)?.name || id} for Apify setup review.`);
-      store.save(); rerender();
-    },
-    "toggle-pack": (id) => {
-      const next = new Set(store.state.apify?.selectedRecipeIds || []);
-      if (next.has(id)) next.delete(id); else next.add(id);
-      store.state.apify = { ...(store.state.apify || {}), selectedRecipeIds: Array.from(next) };
-      pushActivity("Harbor Master", `${next.has(id) ? "staged" : "unstaged"} ${APIFY_CAPABILITY_PACKS.find((pack) => pack.id === id)?.name || id} as an Apify capability pack.`);
-      store.save(); rerender();
-    },
-  });
-}
-
 function renderToolSpineCards({ compact = false } = {}) {
   const tools = store.state.toolSpine || [];
   return `
@@ -623,12 +470,12 @@ function renderToolSpineCards({ compact = false } = {}) {
             <h4><span class="agent-dot"></span>${esc(tool.name)}</h4>
             <span class="chip chip-${esc(tool.status)}">${esc(statusLabel(tool.status))}</span>
           </div>
-          <p class="record-sub">${esc(tool.worker)} · internal: ${esc(tool.internal)}</p>
-          <p class="record-next">▸ ${esc(tool.role)}</p>
-          <p class="record-notes"><b>Role:</b> ${esc(tool.role)}</p>
+          <p class="record-sub">${esc(tool.worker)}</p>
+          <p class="record-next"><b>What it does:</b> ${esc(tool.role)}</p>
+          <p class="record-notes"><b>Control:</b> ${esc(tool.ownerControl || "Available from admin Phantom when connected.")}</p>
           <div class="tool-meta">
             <span>${esc(statusLabel(tool.mode))}</span>
-            <span>${esc(tool.path)}</span>
+            <span>${esc(tool.internal)}</span>
           </div>
         </article>`).join("") || empty("No security scans have been run yet. Connect a scanner or start a real check before Phantom reports posture.")}
     </div>`;
@@ -667,11 +514,11 @@ function renderWorkforce(el, rerender) {
           </div>
           <p class="record-notes"><b>Last output:</b> ${esc(a.last)}</p>
           ${a.next && a.next !== "—" ? `<p class="record-notes"><b>Next:</b> ${esc(a.next)}</p>` : ""}
-          <p class="agent-bundle">internal lane: ${esc(a.bundle)}</p>
+
         </article>`).join("") || empty("No workers have produced real activity yet. Connect a tool or create the first task to populate this board.")}
     </div>
-    <h3 class="ws-subhead">Tool spine powering the workers</h3>
-    <p class="ws-note">These are the internal programs behind the desks. Employees see only the outcomes they are allowed to access.</p>
+    <h3 class="ws-subhead">Private desks powering the workers</h3>
+    <p class="ws-note">These are PhantomForce capabilities, not vendor names. Employees see only the outcomes they are allowed to access.</p>
     ${renderToolSpineCards({ compact: true })}`;
 }
 
@@ -780,7 +627,6 @@ export const WORKSPACE_DEFS = {
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
   workforce: { title: "Workforce", kicker: "Your AI team", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
-  apify: { title: "Apify Tool Vault", kicker: "Actor marketplace", render: renderApify, adminOnly: true },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
@@ -798,8 +644,6 @@ export function missionWidgets() {
   const bks = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
   const activeAgents = store.state.agents.filter((a) => a.status === "active").length;
   const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "standby", "gated", "sandbox", "setup-ready", "planning", "available", "owner-controlled"].includes(tool.mode)).length;
-  const selectedApify = store.state.apify?.selectedActorIds?.length || 0;
-  const stagedApifyPacks = store.state.apify?.selectedRecipeIds?.length || 0;
 
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
@@ -813,7 +657,6 @@ export function missionWidgets() {
     { id: "workforce", icon: "⬢", title: "Workforce", stat: `${activeAgents} agents`, sub: isAdmin() ? `${activeTools} tools mapped` : "on your account", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
-  if (isAdmin()) w.push({ id: "apify", icon: "◌", title: "Apify Vault", stat: `${APIFY_ACTORS.length} actors`, sub: stagedApifyPacks ? `${stagedApifyPacks} packs staged` : selectedApify ? `${selectedApify} marked for setup` : "catalog ready", alert: false });
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
   return w;
 }

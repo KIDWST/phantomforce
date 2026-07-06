@@ -18,7 +18,7 @@ const TAU = Math.PI * 2;
 /* ---------------- provider registry (pluggable defaults) ---------------- */
 export const DEFAULT_PROVIDERS = [
   {
-    id: "higgsfield", name: "Higgsfield", tagline: "Cinematic image & video",
+    id: "higgsfield", name: "Cinematic Engine", tagline: "Image and video production",
     brand: "#8b7bff", keyEnv: "HIGGSFIELD_API_KEY", enabled: true,
     modalities: ["image", "video", "edit"],
     models: {
@@ -28,7 +28,7 @@ export const DEFAULT_PROVIDERS = [
     },
   },
   {
-    id: "claude", name: "Claude", tagline: "Prompt intelligence & art direction",
+    id: "claude", name: "Creative Director", tagline: "Prompt intelligence and art direction",
     brand: "#d97757", keyEnv: "ANTHROPIC_API_KEY", enabled: true,
     modalities: ["enhance", "caption", "direct"],
     models: { enhance: ["claude-sonnet-5", "claude-opus-4-8"] },
@@ -264,7 +264,7 @@ function renderGenerate(body, cfg, opts, root) {
         <label class="ml-field"><span>Prompt</span>
           <div class="ml-prompt-wrap">
             <textarea class="ml-prompt" data-ml-prompt rows="3" placeholder="Describe the shot — subject, setting, light, mood…">${esc(genState.prompt)}</textarea>
-            <button class="ml-enhance" data-ml-enhance title="Enhance with Claude">${svgIc("spark")} Enhance</button>
+            <button class="ml-enhance" data-ml-enhance title="Improve prompt">${svgIc("spark")} Enhance</button>
           </div>
         </label>
         <button class="ml-link" data-ml-toggleneg>${genState.showNeg ? "− Hide" : "+ Add"} negative prompt</button>

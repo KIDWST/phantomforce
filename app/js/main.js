@@ -4,14 +4,14 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession,
-} from "./store.js?v=phantom-live-20260705-17";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-17";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-17";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-17";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-17";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-17";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-17";
-import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260705-17";
+} from "./store.js?v=phantom-live-20260705-18";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260705-18";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260705-18";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260705-18";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260705-18";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260705-18";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260705-18";
+import { mountAgentTicker, mountAgentConsole, mountHeroTicker } from "./agentops.js?v=phantom-live-20260705-18";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -88,7 +88,7 @@ function showGate() {
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
-      <p class="gate-note">Pangolin provides the private route. PhantomForce owns the visible login and session.</p>`;
+      <p class="gate-note">The private gateway protects this route. PhantomForce owns the visible login and session.</p>`;
     const form = card.querySelector("[data-owner-login]");
     const input = card.querySelector("[data-owner-key]");
     const error = card.querySelector("[data-owner-error]");
@@ -131,7 +131,6 @@ const NAV = [
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
   { id: "brand",      label: "Brand Memory", icon: "brain", ws: "workforce" },
-  { id: "apify",      label: "Apify Vault",  icon: "db",    ws: "apify", adminOnly: true },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
@@ -216,7 +215,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260705-17";
+const POSE_VERSION = "phantom-live-20260705-18";
 let phantom3d = null;
 let phantomBootSettled = false;
 const MODE_POSES = {

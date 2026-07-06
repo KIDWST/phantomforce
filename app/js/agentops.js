@@ -5,7 +5,7 @@
    (store.js) — no fabricated business records. Self-contained: owns its own
    timers, guards against double-mount, and respects reduced-motion. */
 
-import { TOOL_SPINE } from "./store.js?v=phantom-live-20260705-17";
+import { TOOL_SPINE } from "./store.js?v=phantom-live-20260705-18";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -29,16 +29,16 @@ function agentCode(worker) {
 /* a pool of realistic, domain-specific report fragments per worker.
    The first entry is always the worker's canonical activity from the store. */
 const EXTRA_LINES = {
-  pangolin: ["private route verified · 0 exposed ports", "rotated tunnel handshake", "edge probe rejected — unsolicited", "latency nominal on admin route"],
-  hermes: ["compiled owner context bundle", "redacted 3 receipts before indexing", "refreshed memory hints for Phantom AI", "pruned context older than 30d"],
-  obsidian: ["indexed Command Center vault", "wrote verification log for last decision", "linked process notes to active missions", "snapshotted operating memory"],
-  n8n: ["holding ChicagoShots dry-run draft", "workflow scaffold validated — no live calls", "1 automation queued pending approval", "standby: no approved workflows"],
-  openspec: ["standing by for next build request", "scoped guardrails for feature intake", "drafted task breakdown", "spec schema validated"],
-  phantomops: ["standards pass: 11/11 workers compliant", "audited last worker handoff — clean", "checked owner-safe execution rules", "enforcing standards on command routing"],
-  serena: ["mapped repo symbol graph (read-only)", "indexed module boundaries", "0 write operations — read lane only", "navigation index cached"],
-  ruflo: ["contained in planning mode", "squad pattern generated · no autonomy", "multi-agent plan sandboxed", "held: live autonomy disabled"],
-  phantomcut: ["staged for approved Media Lab runs", "Resolve / REAPER bridge prepared", "paid generation gated — awaiting approval", "render pipeline dry-run ok"],
-  "model-lanes": ["routed request → review lane", "tool names hidden from client view", "load balanced across brain lanes", "model lane health verified"],
+  "private-gateway": ["private route verified · 0 exposed ports", "rotated tunnel handshake", "edge probe rejected — unsolicited", "latency nominal on admin route"],
+  "memory-core": ["compiled owner context bundle", "redacted 3 receipts before indexing", "refreshed memory hints for Phantom AI", "pruned context older than 30d"],
+  "process-vault": ["indexed Command Center vault", "wrote verification log for last decision", "linked process notes to active missions", "snapshotted operating memory"],
+  "automation-desk": ["holding ChicagoShots dry-run draft", "workflow scaffold validated — no live calls", "1 automation queued pending approval", "standby: no approved workflows"],
+  "build-planner": ["standing by for next build request", "scoped guardrails for feature intake", "drafted task breakdown", "spec schema validated"],
+  "operating-standards": ["standards pass: 11/11 workers compliant", "audited last worker handoff — clean", "checked owner-safe execution rules", "enforcing standards on command routing"],
+  "code-intelligence": ["mapped repo graph (read-only)", "indexed module boundaries", "0 write operations — read lane only", "navigation index cached"],
+  "squad-planner": ["contained in planning mode", "squad pattern generated · no autonomy", "multi-agent plan sandboxed", "held: live autonomy disabled"],
+  "media-engine": ["staged for approved Media Lab runs", "editor bridge prepared", "paid generation gated — awaiting approval", "render pipeline dry-run ok"],
+  "brain-router": ["routed request → review lane", "tool names hidden from user view", "load balanced across brain lanes", "model lane health verified"],
 };
 
 function linePool(tool) {
