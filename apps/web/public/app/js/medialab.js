@@ -12,7 +12,7 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-15";
+import { registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-16";
 
 const CFG_KEY = "pf.medialab.v1";
 const TAU = Math.PI * 2;
@@ -65,11 +65,11 @@ const MEDIA_PRESETS = [
     note: "Clean offer image", prompt: "Premium 4:5 paid social image with one clear offer, strong product or service focal point, polished lighting, and room for a short headline",
   },
   {
-    id: "square-brand-post", label: "Square Brand Post", use: "Instagram / LinkedIn", modality: "image", aspect: "1:1", count: 2, style: "Editorial",
+    id: "square-brand-post", label: "Square Brand Post", use: "Feed social", modality: "image", aspect: "1:1", count: 2, style: "Editorial",
     note: "Polished feed creative", prompt: "Clean square brand post image with one strong subject, balanced negative space, premium lighting, and no tiny text",
   },
   {
-    id: "story-poster", label: "Story Poster", use: "Stories / Shorts cover", modality: "image", aspect: "9:16", count: 2, style: "Neon",
+    id: "story-poster", label: "Story Poster", use: "Story cover", modality: "image", aspect: "9:16", count: 2, style: "Neon",
     note: "Vertical hero still", prompt: "Vertical story poster with cinematic depth, bold central subject, premium neon accents, and safe space for large mobile text",
   },
   {
@@ -81,7 +81,7 @@ const MEDIA_PRESETS = [
     note: "Premium site header", prompt: "Premium website hero image with cinematic depth, clean product space, dark polished background, and room for interface copy",
   },
   {
-    id: "carousel-slide", label: "Carousel Slide", use: "Education / proof", modality: "image", aspect: "4:5", count: 3, style: "Editorial",
+    id: "carousel-slide", label: "Carousel Slide", use: "Carousel", modality: "image", aspect: "4:5", count: 3, style: "Editorial",
     note: "Swipeable visual set", prompt: "Premium carousel slide visual with editorial composition, clean information hierarchy, consistent visual system, and strong first-card impact",
   },
   {
@@ -93,7 +93,7 @@ const MEDIA_PRESETS = [
     note: "Mobile ad creative", prompt: "Vertical story ad with a simple product reveal, clear benefit moment, clean background, and room for headline text",
   },
   {
-    id: "feed-clip", label: "Feed Clip", use: "Instagram / LinkedIn", modality: "video", aspect: "4:5", duration: 10, style: "Editorial",
+    id: "feed-clip", label: "Feed Clip", use: "Feed social", modality: "video", aspect: "4:5", duration: 10, style: "Editorial",
     note: "Professional feed cut", prompt: "Polished feed video with a premium business visual, readable center framing, smooth camera motion, and a confident call-to-action finish",
   },
   {
@@ -336,6 +336,17 @@ function applyPreset(p) {
   else genState.count = p.count || genState.count;
   if (!genState.prompt.trim()) genState.prompt = p.prompt || "";
 }
+function setModality(v) {
+  genState.modality = v;
+  markCustomPreset();
+  if (v === "video") {
+    genState.aspect = "9:16";
+    genState.duration = 8;
+  } else {
+    genState.aspect = "1:1";
+    genState.count = 2;
+  }
+}
 function markCustomPreset() {
   genState.preset = "custom";
 }
@@ -574,7 +585,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
     if (preset) applyPreset(preset);
     renderGenerate(body, cfg, opts, root);
   });
-  seg("[data-ml-modality]", (v) => { genState.modality = v; markCustomPreset(); });
+  seg("[data-ml-modality]", setModality);
   seg("[data-ml-provs]", (v) => { genState.provider = v; });
   seg("[data-ml-aspect]", (v) => { genState.aspect = v; markCustomPreset(); });
   if (body.querySelector("[data-ml-count]")) seg("[data-ml-count]", (v) => { genState.count = +v; markCustomPreset(); });

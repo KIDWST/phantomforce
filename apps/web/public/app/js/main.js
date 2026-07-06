@@ -1,16 +1,17 @@
-﻿/* PhantomForce — AI Operations Console: shell, sidebar, dashboard, ghost, overlays. */
+/* PhantomForce — AI Operations Console: shell, sidebar, dashboard, ghost, overlays. */
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-15";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-15";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-15";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-15";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-15";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-15";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-15";
+} from "./store.js?v=phantom-live-20260706-16";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-16";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-16";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-16";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-16";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-16";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-16";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-16";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -261,6 +262,22 @@ function goNav(id) {
   else if (item.ws) renderWorkspacePage(item.ws, true);
 }
 
+function openOperationsMap() {
+  if (activePageId) renderDashboardPage(true);
+  const section = $("[data-map-section]");
+  if (!section) return;
+  section.classList.add("is-map-open");
+  renderFlowMap();
+  section.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
+  const stage = $("[data-flowmap]", section);
+  if (stage) setTimeout(() => {
+    try { stage.focus({ preventScroll: true }); }
+    catch { stage.focus(); }
+  }, reduceMotion ? 0 : 260);
+  setGhostMood("listening", { emotion: "bright", ms: 1200 });
+  stageReact("nav", 620);
+}
+
 /* ============================ topbar ============================ */
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
@@ -460,7 +477,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-15";
+const POSE_VERSION = "phantom-live-20260706-16";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1071,6 +1088,7 @@ function renderConsole() {
   renderModePose(activeMode);
   renderInsights();
   renderStatCards();
+  renderFlowMap();
   renderActivity();
   renderPlan();
   renderQueue();
@@ -1279,6 +1297,7 @@ function wireDeck() {
     const cItem = e.target.closest("[data-cmdk-i]");
     if (cItem) { execPalette(+cItem.dataset.cmdkI); return; }
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
+    if (e.target.closest("[data-map-open]")) { openOperationsMap(); return; }
     const opener = e.target.closest("[data-open-ws]");
     if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
     if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
@@ -1705,7 +1724,7 @@ async function boot() {
     if (!phantom.hidden) {
       if (activePageId) { renderConsole(); return; }
       renderNav(); renderStatusPills(); renderNotifs(); renderInsights();
-      renderStatCards(); renderActivity(); renderPlan(); renderQueue();
+      renderStatCards(); renderFlowMap(); renderActivity(); renderPlan(); renderQueue();
     }
   });
   if (ctx.session) enterPhantom();
