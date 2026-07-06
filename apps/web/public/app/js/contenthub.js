@@ -9,6 +9,7 @@
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
 const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
+const CH_MEDIA_EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const DAY = 864e5;
 export const CONTENT_ASSET_LIMITS = Object.freeze({
   retentionDays: 30,
@@ -157,6 +158,10 @@ function normalizeContentAsset(input = {}) {
     url,
     trimmed,
     live: !!input.live,
+    saved: !!input.saved,
+    batchLabel: String(input.batchLabel || ""),
+    aiEditPlan: String(input.aiEditPlan || ""),
+    updatedAt: Number(input.updatedAt || 0) || 0,
     bytes: dataBytes(url),
   };
 }
@@ -222,6 +227,150 @@ export function contentAssetStats(items = loadContentAssets()) {
     percent: Math.min(100, Math.round((bytes / CONTENT_ASSET_LIMITS.budgetBytes) * 100)),
     trimmed: items.filter((asset) => asset.trimmed).length,
   };
+}
+function safeFileName(value = "phantomforce-content") {
+  return String(value || "phantomforce-content")
+    .toLowerCase()
+    .replace(/[^a-z0-9._-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 72) || "phantomforce-content";
+}
+function downloadText(filename, text, type = "application/json") {
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function downloadUrl(url, filename) {
+  if (!url) return false;
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  return true;
+}
+function selectionKey(kind, id) {
+  return `${kind}:${id}`;
+}
+function itemFromSelectionKey(key, data = loadContent(), assets = loadContentAssets()) {
+  const sep = String(key).indexOf(":");
+  const kind = sep >= 0 ? key.slice(0, sep) : "";
+  const id = sep >= 0 ? key.slice(sep + 1) : "";
+  if (kind === "asset") {
+    const asset = assets.find((item) => item.id === id);
+    return asset ? { kind, id, asset, title: asset.title, type: asset.type, hasDownload: !!asset.url } : null;
+  }
+  if (kind === "post") {
+    const post = data.posts.find((item) => item.id === id);
+    return post ? { kind, id, post, title: post.caption, type: post.type, hasDownload: false } : null;
+  }
+  return null;
+}
+function selectedLibraryItems(data, assets) {
+  return [...chSelection].map((key) => itemFromSelectionKey(key, data, assets)).filter(Boolean);
+}
+function compactAssetForExport(asset) {
+  return {
+    id: asset.id,
+    type: asset.type,
+    title: asset.title,
+    prompt: asset.prompt,
+    source: asset.source,
+    provider: asset.provider,
+    model: asset.model,
+    style: asset.style,
+    aspect: asset.aspect,
+    duration: asset.duration,
+    saved: !!asset.saved,
+    batchLabel: asset.batchLabel || "",
+    aiEditPlan: asset.aiEditPlan || "",
+    createdAt: new Date(asset.createdAt).toISOString(),
+    expiresAt: new Date(asset.expiresAt).toISOString(),
+    bytes: assetBytes(asset),
+    hasInlinePreview: !!asset.url,
+  };
+}
+function compactPostForExport(post) {
+  return {
+    id: post.id,
+    platform: post.platform,
+    type: post.type,
+    caption: post.caption,
+    status: post.status,
+    publishedAt: post.publishedAt,
+    hashtags: post.hashtags,
+    metrics: post.metrics,
+  };
+}
+function exportPayload(items, label = "selection") {
+  return {
+    exported_at: new Date().toISOString(),
+    scope: label,
+    safety: {
+      local_only: true,
+      external_upload: false,
+      public_post: false,
+      provider_call: false,
+      send: false,
+    },
+    assets: items.filter((item) => item.kind === "asset").map((item) => compactAssetForExport(item.asset)),
+    posts: items.filter((item) => item.kind === "post").map((item) => compactPostForExport(item.post)),
+  };
+}
+function exportMarkdown(items, label = "selection") {
+  const payload = exportPayload(items, label);
+  const assetRows = payload.assets.map((asset) => `- ${asset.title} (${asset.type}) - ${asset.prompt || "No prompt saved."}`);
+  const postRows = payload.posts.map((post) => `- ${post.caption} (${post.platform} / ${post.type})`);
+  return [
+    "# PhantomForce Content Export",
+    "",
+    `Exported: ${payload.exported_at}`,
+    `Scope: ${label}`,
+    "",
+    "Safety: local export only. No upload, post, send, provider call, queue write, or external action was performed.",
+    "",
+    "## Media Assets",
+    assetRows.length ? assetRows.join("\n") : "- None",
+    "",
+    "## Posts",
+    postRows.length ? postRows.join("\n") : "- None",
+    "",
+  ].join("\n");
+}
+function downloadLibraryItems(items, label = "selection") {
+  const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-");
+  const base = `phantomforce-content-${safeFileName(label)}-${stamp}`;
+  const downloadable = items.filter((item) => item.kind === "asset" && item.asset.url);
+  downloadable.slice(0, 12).forEach((item, index) => {
+    const ext = item.asset.type === "video" ? "webm" : "webp";
+    setTimeout(() => downloadUrl(item.asset.url, `${base}-${index + 1}-${safeFileName(item.asset.title)}.${ext}`), index * 120);
+  });
+  downloadText(`${base}-manifest.json`, JSON.stringify(exportPayload(items, label), null, 2));
+}
+function exportLibraryItems(items, label = "selection") {
+  const stamp = new Date().toISOString().slice(0, 10);
+  const base = `phantomforce-content-${safeFileName(label)}-${stamp}`;
+  downloadText(`${base}.md`, exportMarkdown(items, label), "text/markdown");
+  downloadText(`${base}.json`, JSON.stringify(exportPayload(items, label), null, 2));
+}
+function setSelectedAssetMetadata(ids, patch) {
+  const updated = loadContentAssets().map((asset) => ids.has(asset.id) ? { ...asset, ...patch, updatedAt: Date.now() } : asset);
+  saveContentAssets(updated);
+}
+function readFileAsDataUrl(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error || new Error("Unable to read file."));
+    reader.readAsDataURL(file);
+  });
 }
 function loadRemovedContent() {
   try {
@@ -324,6 +473,7 @@ function svgIc(k) {
    CONTENT HUB
    ========================================================================= */
 const chState = { tab: "library", platform: "all", ctype: "all", eng: "likes" };
+const chSelection = new Set();
 
 export function renderContentHub(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
@@ -470,7 +620,11 @@ function renderContentLibrary(body, data, esc, root, opts) {
   const stats = contentAssetStats(assets);
   const assetFilter = (asset) => chState.ctype === "all" || asset.type === chState.ctype || (asset.type === "video" && ["reel", "short"].includes(chState.ctype));
   const shownAssets = assets.filter(assetFilter);
-  const rows = data.posts.slice(0, 18);
+  const rows = data.posts.filter((p) => !isRemoved(`post:${p.id}`)).slice(0, 18);
+  const shownPosts = rows.filter((p) => chState.ctype === "all" || p.type === chState.ctype);
+  const selected = selectedLibraryItems(data, assets);
+  const selectedAssets = selected.filter((item) => item.kind === "asset").length;
+  const selectedPosts = selected.filter((item) => item.kind === "post").length;
   body.innerHTML = `
     <section class="ch-card ch-created-media">
       <div class="ch-card-h ch-library-head">
@@ -483,6 +637,27 @@ function renderContentLibrary(body, data, esc, root, opts) {
           <i><b style="width:${stats.percent}%"></b></i>
         </div>
       </div>
+      <div class="ch-library-actions" data-ch-library-actions>
+        <div class="ch-select-summary">
+          <b>${chSelection.size ? `${chSelection.size} selected` : "Selection tools"}</b>
+          <span>${selectedAssets} media · ${selectedPosts} posts · local/browser only</span>
+        </div>
+        <div class="ch-action-row">
+          <button class="ch-tool ${chState.selectMode ? "is-on" : ""}" data-ch-select-mode type="button">${chState.selectMode ? "Done selecting" : "Select"}</button>
+          <button class="ch-tool" data-ch-select-all type="button">Select shown</button>
+          <button class="ch-tool" data-ch-clear-selected type="button" ${chSelection.size ? "" : "disabled"}>Clear</button>
+          <button class="ch-tool" data-ch-download-selected type="button" ${chSelection.size ? "" : "disabled"}>Download selected</button>
+          <button class="ch-tool" data-ch-download-all type="button" ${shownAssets.length || shownPosts.length ? "" : "disabled"}>Download all</button>
+          <button class="ch-tool" data-ch-export-selected type="button" ${chSelection.size ? "" : "disabled"}>Export</button>
+          <button class="ch-tool" data-ch-save-selected type="button" ${selectedAssets ? "" : "disabled"}>Save</button>
+          <button class="ch-tool" data-ch-edit-selected type="button" ${selectedAssets ? "" : "disabled"}>Edit</button>
+          <button class="ch-tool" data-ch-batch-edit type="button" ${selectedAssets ? "" : "disabled"}>Batch edit</button>
+          <button class="ch-tool" data-ch-batch-ai type="button" ${selectedAssets ? "" : "disabled"}>Batch AI edit</button>
+          <button class="ch-tool" data-ch-upload-local type="button">Upload local</button>
+          <button class="ch-tool ch-tool-danger" data-ch-delete-selected type="button" ${chSelection.size ? "" : "disabled"}>Delete</button>
+          <input data-ch-upload-input type="file" accept="image/*,video/*" multiple hidden />
+        </div>
+      </div>
       ${shownAssets.length ? `<div class="ch-asset-grid">${shownAssets.map((asset) => contentAssetCard(asset, esc)).join("")}</div>`
       : `<p class="empty-line">No generated images or videos yet. Create media in Media Lab and it will land here automatically.</p>`}
       ${stats.trimmed ? `<p class="ch-src">Space saver active: ${stats.trimmed} older/heavier preview${stats.trimmed === 1 ? "" : "s"} kept as metadata only.</p>` : ""}
@@ -490,8 +665,9 @@ function renderContentLibrary(body, data, esc, root, opts) {
     <div class="ch-chips" data-ch-type>
       ${[["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]].map(([id, l]) => `<button class="ch-chip ${chState.ctype === id ? "is-on" : ""}" data-v="${id}">${esc(l)}</button>`).join("")}
     </div>
-    <div class="ch-grid ch-grid-lg">${rows.filter((p) => chState.ctype === "all" || p.type === chState.ctype).map((p) => postCard(p, esc, { creator: true })).join("")}</div>`;
+    <div class="ch-grid ch-grid-lg">${shownPosts.map((p) => postCard(p, esc, { creator: true })).join("")}</div>`;
   body.querySelectorAll("[data-ch-type] button").forEach((b) => b.onclick = () => { chState.ctype = b.dataset.v; renderContentHub(root, opts); });
+  wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts);
   wirePostCards(body, data, esc, root, opts);
 }
 function contentAssetCard(asset, esc) {
@@ -499,18 +675,161 @@ function contentAssetCard(asset, esc) {
   const typeLabel = asset.type === "video" ? "Video" : "Image";
   const prompt = asset.prompt || "No prompt saved.";
   const meta = asset.type === "video" ? "Media Lab video" : "Media Lab image";
-  return `<article class="ch-asset-card">
+  const key = selectionKey("asset", asset.id);
+  const selected = chSelection.has(key);
+  const flags = [asset.saved ? "saved" : "", asset.batchLabel ? asset.batchLabel : "", asset.aiEditPlan ? "AI edit plan" : ""].filter(Boolean);
+  return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}">
+    <button class="ch-remove ch-asset-x" data-ch-delete-asset="${esc(asset.id)}" aria-label="Remove ${esc(asset.title)}" title="Remove ${esc(asset.title)}" type="button">x</button>
+    <span class="ch-select-box" data-ch-select-hit aria-hidden="true">${selected ? "✓" : ""}</span>
     <span class="ch-asset-thumb" style="${hasUrl ? "" : assetBg(asset)}">
-      ${hasUrl ? `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>` : `<em>preview trimmed</em>`}
+      ${hasUrl ? (asset.type === "video"
+        ? `<video src="${esc(asset.url)}" muted playsinline preload="metadata"></video>`
+        : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`) : `<em>preview trimmed</em>`}
       ${asset.type === "video" ? `<span class="ch-post-play">▶</span>` : ""}
       <b>${typeLabel}</b>
     </span>
     <span class="ch-asset-body">
       <strong>${esc(asset.title)}</strong>
-      <small>${esc(meta)} · ${expiresText(asset)} · ${formatBytes(assetBytes(asset))}</small>
+      <small>${esc(meta)} · ${expiresText(asset)} · ${formatBytes(assetBytes(asset))}${flags.length ? ` · ${flags.map((flag) => esc(flag)).join(" · ")}` : ""}</small>
       <span>${esc(prompt)}</span>
     </span>
   </article>`;
+}
+function visibleLibraryItems(shownAssets, shownPosts) {
+  return [
+    ...shownAssets.map((asset) => ({ kind: "asset", id: asset.id, asset, title: asset.title, type: asset.type, hasDownload: !!asset.url })),
+    ...shownPosts.map((post) => ({ kind: "post", id: post.id, post, title: post.caption, type: post.type, hasDownload: false })),
+  ];
+}
+function toggleLibrarySelection(key) {
+  if (chSelection.has(key)) chSelection.delete(key);
+  else chSelection.add(key);
+}
+function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts) {
+  const shownItems = visibleLibraryItems(shownAssets, shownPosts);
+  const rerender = () => renderContentHub(root, opts);
+  body.querySelectorAll("[data-ch-select-item]").forEach((card) => card.addEventListener("click", (event) => {
+    if (event.target.closest("button, a, input, select, textarea")) return;
+    if (!chState.selectMode && !event.target.closest("[data-ch-select-hit]")) return;
+    event.preventDefault();
+    event.stopPropagation();
+    toggleLibrarySelection(card.dataset.chSelectItem);
+    chState.selectMode = true;
+    rerender();
+  }));
+  body.querySelectorAll("[data-ch-delete-asset]").forEach((btn) => btn.addEventListener("click", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    const id = btn.dataset.chDeleteAsset;
+    saveContentAssets(loadContentAssets().filter((asset) => asset.id !== id));
+    chSelection.delete(selectionKey("asset", id));
+    opts.notify?.("Content Hub", "Deleted the selected local media item. No external file or post was touched.");
+    rerender();
+  }));
+  body.querySelector("[data-ch-select-mode]")?.addEventListener("click", () => {
+    chState.selectMode = !chState.selectMode;
+    rerender();
+  });
+  body.querySelector("[data-ch-select-all]")?.addEventListener("click", () => {
+    shownItems.forEach((item) => chSelection.add(selectionKey(item.kind, item.id)));
+    chState.selectMode = true;
+    rerender();
+  });
+  body.querySelector("[data-ch-clear-selected]")?.addEventListener("click", () => {
+    chSelection.clear();
+    rerender();
+  });
+  body.querySelector("[data-ch-download-selected]")?.addEventListener("click", () => {
+    const selected = selectedLibraryItems(data, loadContentAssets());
+    downloadLibraryItems(selected, "selected");
+    opts.notify?.("Content Hub", `Downloaded/exported ${selected.length} selected item${selected.length === 1 ? "" : "s"}.`);
+  });
+  body.querySelector("[data-ch-download-all]")?.addEventListener("click", () => {
+    downloadLibraryItems(shownItems, "shown");
+    opts.notify?.("Content Hub", `Downloaded/exported ${shownItems.length} visible item${shownItems.length === 1 ? "" : "s"}.`);
+  });
+  body.querySelector("[data-ch-export-selected]")?.addEventListener("click", () => {
+    const selected = selectedLibraryItems(data, loadContentAssets());
+    exportLibraryItems(selected, "selected");
+    opts.notify?.("Content Hub", "Exported a local selected-content packet.");
+  });
+  body.querySelector("[data-ch-save-selected]")?.addEventListener("click", () => {
+    const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
+    setSelectedAssetMetadata(ids, { saved: true });
+    opts.notify?.("Content Hub", `Saved ${ids.size} media item${ids.size === 1 ? "" : "s"} locally.`);
+    rerender();
+  });
+  body.querySelector("[data-ch-batch-edit]")?.addEventListener("click", () => {
+    const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
+    setSelectedAssetMetadata(ids, { batchLabel: "batch edit ready" });
+    opts.notify?.("Content Hub", `Marked ${ids.size} media item${ids.size === 1 ? "" : "s"} for batch edit.`);
+    rerender();
+  });
+  body.querySelector("[data-ch-batch-ai]")?.addEventListener("click", () => {
+    const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
+    setSelectedAssetMetadata(ids, { aiEditPlan: "Local AI edit plan drafted; provider call still gated." });
+    exportLibraryItems(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset" && ids.has(item.id)), "batch-ai-edit-plan");
+    opts.notify?.("Content Hub", "Created a local batch AI edit plan. No provider call ran.");
+    rerender();
+  });
+  body.querySelector("[data-ch-edit-selected]")?.addEventListener("click", () => {
+    const assetItem = selectedLibraryItems(data, loadContentAssets()).find((item) => item.kind === "asset" && item.asset.type === "image" && item.asset.url);
+    if (!assetItem) {
+      opts.notify?.("Content Hub", "Select an image with a live preview to open it in the local editor.");
+      return;
+    }
+    try {
+      localStorage.setItem(CH_MEDIA_EDIT_INTENT_KEY, JSON.stringify({
+        id: assetItem.asset.id,
+        url: assetItem.asset.url,
+        type: assetItem.asset.type,
+        title: assetItem.asset.title,
+        prompt: assetItem.asset.prompt,
+        at: Date.now(),
+      }));
+    } catch {}
+    opts.notify?.("Content Hub", `Opening ${assetItem.asset.title} in Media Lab edit.`);
+    opts.openWorkspace?.("media");
+  });
+  body.querySelector("[data-ch-delete-selected]")?.addEventListener("click", () => {
+    const selected = selectedLibraryItems(data, loadContentAssets());
+    const assetIds = new Set(selected.filter((item) => item.kind === "asset").map((item) => item.id));
+    const postIds = selected.filter((item) => item.kind === "post").map((item) => item.id);
+    if (assetIds.size) saveContentAssets(loadContentAssets().filter((asset) => !assetIds.has(asset.id)));
+    if (postIds.length) {
+      const removed = loadRemovedContent();
+      postIds.forEach((id) => removed.add(`post:${id}`));
+      saveRemovedContent(removed);
+    }
+    chSelection.clear();
+    chState.selectMode = false;
+    opts.notify?.("Content Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"}. No external post or file was touched.`);
+    rerender();
+  });
+  const uploadInput = body.querySelector("[data-ch-upload-input]");
+  body.querySelector("[data-ch-upload-local]")?.addEventListener("click", () => uploadInput?.click());
+  uploadInput?.addEventListener("change", async () => {
+    const files = [...(uploadInput.files || [])].filter((file) => file.type.startsWith("image/") || file.type.startsWith("video/"));
+    for (let i = 0; i < files.length; i++) {
+      const file = files[i];
+      const url = await readFileAsDataUrl(file);
+      registerContentAsset({
+        id: `upload-${Date.now()}-${i}`,
+        type: file.type.startsWith("video/") ? "video" : "image",
+        title: file.name.replace(/\.[^.]+$/, "") || "Local upload",
+        prompt: "Local file imported into Content Hub.",
+        source: "Local upload",
+        provider: "local",
+        model: "browser-file",
+        style: "Imported",
+        url,
+        saved: true,
+      });
+    }
+    uploadInput.value = "";
+    opts.notify?.("Content Hub", `Imported ${files.length} local file${files.length === 1 ? "" : "s"} into the library.`);
+    rerender();
+  });
 }
 function wireCreatorActions(body, opts, root) {
   body.querySelectorAll("[data-ch-action]").forEach((btn) => btn.addEventListener("click", () => {
@@ -643,7 +962,10 @@ function renderScheduled(body, data, esc) {
 
 function postCard(p, esc, options = {}) {
   const P = plat(p.platform);
-  return `<button class="ch-post" data-ch-open="${p.id}">
+  const key = selectionKey("post", p.id);
+  const selected = chSelection.has(key);
+  return `<button class="ch-post ch-selectable ${selected ? "is-selected" : ""}" data-ch-open="${p.id}" data-ch-select-item="${esc(key)}">
+    <span class="ch-select-box" data-ch-select-hit aria-hidden="true">${selected ? "✓" : ""}</span>
     <span class="ch-post-thumb" style="${thumb(p)}">
       <span class="ch-post-plat" style="background:${P.color}">${PGLYPH[p.platform] || "●"}</span>
       <span class="ch-post-type">${TYPES[p.type]}</span>
@@ -667,11 +989,26 @@ function postCard(p, esc, options = {}) {
 function wirePostCards(body, data, esc, root, opts) {
   body.querySelectorAll("[data-ch-open]").forEach((b) => {
     const open = () => openPost(data.posts.find((p) => p.id === b.dataset.chOpen), esc);
-    b.onclick = open;
+    b.onclick = (event) => {
+      if (chState.selectMode || event.target.closest("[data-ch-select-hit]")) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleLibrarySelection(b.dataset.chSelectItem || selectionKey("post", b.dataset.chOpen));
+        chState.selectMode = true;
+        if (root) renderContentHub(root, opts);
+        return;
+      }
+      open();
+    };
     b.onkeydown = (event) => {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
-        open();
+        if (chState.selectMode) {
+          toggleLibrarySelection(b.dataset.chSelectItem || selectionKey("post", b.dataset.chOpen));
+          if (root) renderContentHub(root, opts);
+        } else {
+          open();
+        }
       }
     };
   });

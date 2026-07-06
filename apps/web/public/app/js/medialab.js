@@ -12,10 +12,11 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-18";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260706-19";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
+const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const TAU = Math.PI * 2;
 
 /* ---------------- provider registry (pluggable defaults) ---------------- */
@@ -141,7 +142,17 @@ const SOCIAL_LOGIN_URLS = {
 let socialNotice = "";
 
 function defaultSocialAccounts() {
-  return PLATFORMS.map((p) => ({ id: p.id, name: p.name, color: p.color, handle: "", url: "", enabled: false, connectMode: "manual" }));
+  return PLATFORMS.map((p) => ({
+    id: p.id,
+    name: p.name,
+    color: p.color,
+    handle: "",
+    url: "",
+    loginIdentity: "",
+    enabled: false,
+    connectMode: "manual",
+    lastConnectAt: "",
+  }));
 }
 function loadSocialAccounts() {
   let saved = [];
@@ -152,9 +163,43 @@ function loadSocialAccounts() {
 function saveSocialAccounts(accounts) {
   try { localStorage.setItem(SOCIAL_KEY, JSON.stringify(accounts)); } catch {}
 }
+function cleanSocialHandle(value = "") {
+  return String(value || "")
+    .trim()
+    .replace(/^https?:\/\/(www\.)?/i, "")
+    .replace(/^(instagram\.com|tiktok\.com|youtube\.com|youtu\.be|facebook\.com|x\.com|twitter\.com|linkedin\.com|pinterest\.com)\//i, "")
+    .replace(/^@+/, "")
+    .replace(/^in\//i, "")
+    .replace(/^company\//i, "")
+    .replace(/[/?#].*$/, "")
+    .trim();
+}
+function normalizeSocialUrl(value = "") {
+  const text = String(value || "").trim();
+  if (!text || text === "https://") return "";
+  return /^https?:\/\//i.test(text) ? text : `https://${text}`;
+}
+function socialProfileFromHandle(platformId, handle = "") {
+  const h = cleanSocialHandle(handle);
+  if (!h) return "";
+  if (platformId === "instagram") return `https://www.instagram.com/${h}/`;
+  if (platformId === "tiktok") return `https://www.tiktok.com/@${h}`;
+  if (platformId === "youtube") return `https://www.youtube.com/@${h}`;
+  if (platformId === "facebook") return `https://www.facebook.com/${h}`;
+  if (platformId === "x") return `https://x.com/${h}`;
+  if (platformId === "linkedin") return `https://www.linkedin.com/in/${h}/`;
+  if (platformId === "pinterest") return `https://www.pinterest.com/${h}/`;
+  return "";
+}
+function socialProfileTarget(account) {
+  return normalizeSocialUrl(account.url) || socialProfileFromHandle(account.id, account.handle);
+}
+function socialLoginTarget(account) {
+  return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
+}
 function socialStatus(account) {
   if (account.enabled && (account.handle || account.url)) return "linked";
-  if (account.handle || account.url) return "saved";
+  if (account.handle || account.url || account.loginIdentity) return "saved";
   return "empty";
 }
 function socialStatusLabel(account) {
@@ -316,7 +361,27 @@ function previewAsset(req, i) {
    ========================================================================= */
 let session = { assets: [], tab: "generate", edit: null };
 
+function consumeEditIntent(opts = {}) {
+  let intent = null;
+  try { intent = JSON.parse(localStorage.getItem(EDIT_INTENT_KEY) || "null"); } catch {}
+  if (!intent || intent.type !== "image" || !intent.url) return;
+  try { localStorage.removeItem(EDIT_INTENT_KEY); } catch {}
+  const asset = {
+    id: intent.id || `hub-edit-${Date.now()}`,
+    type: "image",
+    url: intent.url,
+    saved: true,
+    meta: { prompt: intent.prompt || "", title: intent.title || "Content Hub edit" },
+  };
+  if (!session.assets.some((item) => item.id === asset.id)) session.assets.unshift(asset);
+  session.edit = { url: asset.url, type: "image", id: asset.id };
+  session.tab = "edit";
+  resetEdit();
+  opts.notify?.("Media Factory", `loaded ${intent.title || "Content Hub asset"} for local edit.`);
+}
+
 export function renderMediaStudio(el, opts = {}) {
+  consumeEditIntent(opts);
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   const tabs = [["generate", "Generate"], ["edit", "Edit"], ["library", `Library${session.assets.length ? ` · ${session.assets.length}` : ""}`], ["briefs", "Video Requests"]];
@@ -894,7 +959,7 @@ export function renderMediaSettings(el, opts = {}) {
         <div class="set-sec-head">
           <div>
             <h3>Social accounts</h3>
-            <p class="set-note">Link profile pages and handles so Content Hub knows where client content belongs. This is local/manual setup; nothing posts, sends, or reads private sessions here.</p>
+            <p class="set-note">Link each client platform with the lightning sign-in assist or manual email/handle/profile fields. If your browser is already signed in, the platform may recognize you automatically; PhantomForce never reads cookies, tokens, saved passwords, or private sessions.</p>
           </div>
           <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} linked</span>
         </div>
@@ -904,10 +969,10 @@ export function renderMediaSettings(el, opts = {}) {
         </div>
         <div class="set-social-assist">
           <div>
-            <b>Smart browser connect</b>
-            <p>Codex can help open each platform login page and check visible login status after the owner signs in. It will not read, export, or store cookies, session tokens, passwords, or private messages.</p>
+            <b>Lightning browser connect</b>
+            <p>Use the bolt on a platform card to open the right sign-in page. After you sign in, save the public profile URL or handle here. Browser autofill/session can help on the platform page; PhantomForce stores only the public link fields below.</p>
           </div>
-          <button class="set-add" data-social-smart type="button">${svgIc("spark")} Prepare safe browser check</button>
+          <button class="set-add" data-social-smart type="button">${svgIc("bolt")} Connection rules</button>
         </div>
       </div>
 
@@ -932,23 +997,40 @@ export function renderMediaSettings(el, opts = {}) {
     const saveAndRender = () => { saveSocialAccounts(socialAccounts); renderMediaSettings(el, opts); };
     const enabled = card.querySelector("[data-social-enabled]");
     if (enabled) enabled.onchange = () => { account.enabled = enabled.checked; saveAndRender(); };
+    const login = card.querySelector("[data-social-login]");
+    if (login) login.onchange = () => { account.loginIdentity = login.value.trim(); saveAndRender(); };
     const handle = card.querySelector("[data-social-handle]");
-    if (handle) handle.onchange = () => { account.handle = handle.value.trim(); saveAndRender(); };
+    if (handle) handle.onchange = () => {
+      account.handle = handle.value.trim();
+      if (!normalizeSocialUrl(account.url)) account.url = socialProfileFromHandle(account.id, account.handle);
+      saveAndRender();
+    };
     const url = card.querySelector("[data-social-url]");
-    if (url) url.onchange = () => { account.url = url.value.trim(); saveAndRender(); };
+    if (url) url.onchange = () => { account.url = normalizeSocialUrl(url.value); saveAndRender(); };
     const clear = card.querySelector("[data-social-clear]");
     if (clear) clear.onclick = () => {
-      account.handle = ""; account.url = ""; account.enabled = false; account.connectMode = "manual";
+      account.handle = ""; account.url = ""; account.loginIdentity = ""; account.enabled = false; account.connectMode = "manual"; account.lastConnectAt = "";
       socialNotice = `${account.name} link cleared locally. No remote account was changed.`;
       saveAndRender();
     };
     const open = card.querySelector("[data-social-open]");
-    if (open) open.onclick = () => window.open(SOCIAL_LOGIN_URLS[id] || account.url || "about:blank", "_blank", "noopener,noreferrer");
+    if (open) open.onclick = () => {
+      const target = socialProfileTarget(account) || socialLoginTarget(account);
+      window.open(target, "_blank", "noopener,noreferrer");
+    };
+    const auto = card.querySelector("[data-social-auto]");
+    if (auto) auto.onclick = () => {
+      window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
+      account.connectMode = "browser-assisted";
+      account.lastConnectAt = new Date().toISOString();
+      socialNotice = `${account.name} lightning sign-in opened. If your browser is already signed in, the platform can use that session there; PhantomForce did not read cookies, tokens, or passwords.`;
+      saveAndRender();
+    };
   });
   const smart = el.querySelector("[data-social-smart]");
   if (smart) smart.onclick = () => {
-    socialNotice = "Safe browser connect prepared: open the platform, sign in yourself, then save the public profile URL or handle. Cookie/token scanning is blocked by design.";
-    opts.notify?.("Settings", "Prepared safe social account connect. No cookies, tokens, sends, or external writes were touched.");
+    socialNotice = "Lightning connect opens platform sign-in pages only. Browser sessions/password manager can help on those pages, and account linking is confirmed by the public profile URL or handle you save here.";
+    opts.notify?.("Settings", "Lightning connect rules shown. No cookies, tokens, sends, or external writes were touched.");
     renderMediaSettings(el, opts);
   };
 
@@ -979,16 +1061,23 @@ export function renderMediaSettings(el, opts = {}) {
 
 function socialCard(account, esc) {
   const status = socialStatus(account);
+  const targetLabel = socialProfileTarget(account) ? "Open profile" : "Open login";
+  const lastConnect = account.lastConnectAt ? `Last sign-in assist ${new Date(account.lastConnectAt).toLocaleDateString()}` : "Password is never stored here";
   return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
     <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
     <div class="set-social-top">
       <span class="set-social-dot" style="background:${account.color}"></span>
       <span><b>${esc(account.name)}</b><i>${esc(socialStatusLabel(account))}</i></span>
+      <button class="set-social-lightning" data-social-auto aria-label="Lightning sign-in assist for ${esc(account.name)}" title="Lightning sign-in assist" type="button">${svgIc("bolt")}</button>
       <label class="set-switch"><input type="checkbox" data-social-enabled ${account.enabled ? "checked" : ""}/><span></span></label>
     </div>
+    <label class="set-mini"><span>Login email / username</span><input data-social-login autocomplete="username" placeholder="email or username" value="${esc(account.loginIdentity || "")}"/></label>
     <label class="set-mini"><span>Handle</span><input data-social-handle placeholder="@client" value="${esc(account.handle || "")}"/></label>
     <label class="set-mini"><span>Profile URL</span><input data-social-url placeholder="https://" value="${esc(account.url || "")}"/></label>
-    <button class="set-social-open" data-social-open type="button">Open login / profile</button>
+    <div class="set-social-actions">
+      <button class="set-social-open" data-social-open type="button">${esc(targetLabel)}</button>
+      <span>${esc(lastConnect)}</span>
+    </div>
   </article>`;
 }
 
