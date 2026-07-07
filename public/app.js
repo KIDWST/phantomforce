@@ -161,8 +161,8 @@ function buildCard(card) {
   const link = document.createElement("button");
   link.className = `tile-link${card.linked ? " on" : ""}`;
   link.type = "button";
-  link.title = "Link to broadcast group";
-  link.setAttribute("aria-label", "Link to broadcast group");
+  link.title = "Link this terminal (typing goes to all linked terminals)";
+  link.setAttribute("aria-label", "Link this terminal");
   link.textContent = "⇉";
   link.addEventListener("click", () => {
     card.linked = !card.linked;
@@ -581,7 +581,7 @@ function paletteActions() {
     });
   }
   acts.push({ label: "New empty window", hint: "terminal", run: () => addCard({}, { start: false }) });
-  acts.push({ label: broadcastOn ? "Broadcast: turn OFF" : "Broadcast: turn ON", hint: "action", run: () => toggleBroadcast() });
+  acts.push({ label: broadcastOn ? "Link: turn OFF" : "Link: turn ON", hint: "action", run: () => toggleBroadcast() });
   for (const n of [2, 3, 4]) acts.push({ label: `Columns: ${n}`, hint: "layout", run: () => setColumns(n) });
   acts.push({ label: "Clear all terminals", hint: "action", run: () => cards.forEach((c) => c.term?.clear()) });
   acts.push({ label: "Restart all terminals", hint: "action", run: () => cards.forEach((c) => c.profileId && restartCard(c)) });
@@ -720,12 +720,12 @@ document.getElementById("palette-input").addEventListener("keydown", (e) => {
   }
 });
 
-// Capture phase so Ctrl/Cmd+K works even while a terminal has focus (xterm
+// Capture phase so Ctrl/Cmd+N works even while a terminal has focus (xterm
 // would otherwise consume the keystroke).
 document.addEventListener(
   "keydown",
   (e) => {
-    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "n" || e.key === "N")) {
       e.preventDefault();
       e.stopPropagation();
       togglePalette();

@@ -21,8 +21,8 @@
         </div>
       </div>
       <div class="controls">
-        <button id="palette-open" class="ghost kbd-hint" type="button" title="Command palette (Ctrl+K)">⌘ <span>Ctrl K</span></button>
-        <button id="broadcast" class="ghost" type="button" aria-pressed="false" title="Broadcast typing to linked terminals">⇉ Broadcast</button>
+        <button id="palette-open" class="ghost kbd-hint" type="button" title="New terminal / commands (Ctrl+N)"><span>Ctrl N</span></button>
+        <button id="broadcast" class="ghost" type="button" aria-pressed="false" title="Link terminals so typing in one goes to all linked ones">⇄ Link</button>
         <div class="cols-switch" role="group" aria-label="Columns">
           <button type="button" data-cols="2">2</button>
           <button type="button" data-cols="3" class="active">3</button>
@@ -34,7 +34,7 @@
     </header>
 
     <div id="broadcast-banner" class="broadcast-banner hidden">
-      <span class="pulse"></span> Broadcast on — what you type in a linked terminal is sent to every linked terminal.
+      <span class="pulse"></span> Link on — what you type in one linked terminal is sent to every linked terminal.
     </div>
 
     <div id="new-menu" class="popover hidden" role="dialog" aria-label="Add terminals">
@@ -63,7 +63,7 @@
 
     <div id="palette" class="palette hidden" role="dialog" aria-label="Command palette">
       <div class="palette-box">
-        <input id="palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type a command…  (new codex, broadcast, columns, focus…)" />
+        <input id="palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="New terminal or command…  (new codex, link, columns, focus…)" />
         <ul id="palette-list"></ul>
       </div>
     </div>
