@@ -413,7 +413,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-59")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-60")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -569,6 +569,40 @@ async function initEntity() {
   };
   requestAnimationFrame(frame);
   canvas.classList.add("lit");
+
+  // the living mark: the phantom IS the logo. He glows awake in the little
+  // ring exactly like the chat companion boot, then breathes there — and once
+  // settled he becomes the browser tab icon too.
+  const markCanvas = document.querySelector("[data-mark-logo]");
+  if (markCanvas) {
+    const mctx = markCanvas.getContext("2d");
+    const mchar = createPhantomCharacter({ small: true });
+    const MS = markCanvas.width;
+    const m0 = performance.now();
+    let faviconSet = false;
+    const mFrame = (now) => {
+      if (!mctx || document.hidden) { setTimeout(() => requestAnimationFrame(mFrame), 400); return; }
+      const mt = (now - m0) * 0.001;
+      mctx.setTransform(1, 0, 0, 1, 0, 0);
+      mctx.clearRect(0, 0, MS, MS);
+      mchar.draw(mctx, {
+        t: mt, dt: 0.016,
+        cx: MS / 2, cy: MS * 0.58, scale: MS * 0.31,
+        mood: "idle", emotion: "content",
+        startupOnly: mt < 2.3,
+        pulse: 0, px: 0, py: 0, moodAge: 2,
+      });
+      if (!faviconSet && mt > 3.6) {
+        faviconSet = true;
+        try {
+          const link = document.querySelector("link[rel='icon']");
+          if (link) { link.type = "image/png"; link.href = markCanvas.toDataURL("image/png"); }
+        } catch { }
+      }
+      requestAnimationFrame(mFrame);
+    };
+    requestAnimationFrame(mFrame);
+  }
 }
 
 /* ---------------- threat radar: risks a business faces ---------------- */
@@ -584,7 +618,7 @@ function initRiskRadar() {
     { name: "Jasmine Carter", photo: rmu("women", 68), app: "Instagram", msg: "how much for a shoot?" },
     { name: "Mike Sullivan", photo: rmu("men", 32), app: "Messenger", msg: "you free Saturday?" },
     { name: "Grace Kim", photo: rmu("women", 79), app: "Email", msg: "Re: your quote" },
-    { name: "Liam O'Brien", photo: rmu("men", 45), app: "WhatsApp", msg: "can you call me back?" },
+    { name: "Liam O'Brien", photo: rmu("men", 45), app: "iMessage", msg: "can you call me back?" },
     { name: "Emily Harper", photo: rmu("women", 12), app: "Text", msg: "still on for 3pm?" },
     { name: "Marcus Williams", photo: rmu("men", 11), app: "Facebook", msg: "do you do weddings?" },
     { name: "Sarah Mitchell", photo: rmu("women", 90), app: "Missed call", msg: "called twice" },
@@ -596,13 +630,13 @@ function initRiskRadar() {
     { name: "Leilani Akana", photo: rmu("women", 33), app: "Booking", msg: "needs to reschedule" },
     { name: "Carlos Rivera", photo: rmu("men", 9), app: "Email", msg: "where's my order?" },
     { name: "Amy Nguyen", photo: rmu("women", 41), app: "Comment", msg: "is this available?" },
-    { name: "Keanu Kealoha", photo: rmu("men", 51), app: "New DM", msg: "sent you the details" },
+    { name: "Keanu Kealoha", photo: rmu("men", 51), app: "X", msg: "sent you the details" },
   ];
   // keep pings from overlapping each other OR the text UI in the middle
   const active = [];
   const overlaps = (a, b, pad) =>
     a.left - pad < b.right && a.right + pad > b.left && a.top - pad < b.bottom && a.bottom + pad > b.top;
-  const uiSel = "[data-wordmark], [data-say], [data-hero-sub], [data-powers], [data-speak], [data-cta-block], [data-download-modal]";
+  const uiSel = "[data-wordmark], [data-phantom-zone], [data-say], [data-hero-sub], [data-powers], [data-speak], [data-cta-block], [data-ops], [data-download-modal]";
   const place = (ping) => {
     const W = innerWidth, H = innerHeight;
     const obstacles = active.map((e) => e.getBoundingClientRect())
