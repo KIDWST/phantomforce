@@ -577,6 +577,15 @@ input {
 
 /* ---- single-program camera tile ---- */
 
+.cam-shot.interactive {
+  cursor: text;
+}
+
+.cam-shot:focus {
+  outline: 2px solid rgba(89, 208, 133, 0.7);
+  outline-offset: -2px;
+}
+
 .cam-shot {
   position: absolute;
   inset: 0;

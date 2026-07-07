@@ -312,6 +312,11 @@ function renderShot(index, data) {
   const img = document.getElementById(`shotimg-${index}`);
   const none = document.getElementById(`shotnone-${index}`);
   if (!img || !none) return;
+  const tile = tiles.get(index);
+  if (tile && data && data.w && data.h) {
+    tile.natW = data.w;
+    tile.natH = data.h;
+  }
   if (data && data.ok && data.png) {
     img.src = `data:image/png;base64,${data.png}`;
     img.style.display = "block";
@@ -355,8 +360,69 @@ function attachProgram(index, pid) {
   tiles.set(index, tile);
   // Un-minimize (without stealing focus) so the tile shows it live right away.
   api(`/api/windows/${pid}/reveal`, { method: "POST" }).catch(() => {});
+  wireTileInput(index, pid, shot, tile);
   setTimeout(refresh, 250);
-  tile.timer = setInterval(refresh, 2000);
+  tile.timer = setInterval(refresh, 1400);
+}
+
+// Forward clicks/keystrokes from the tile into the real window (background,
+// no foreground). Works for native Win32 apps; Chromium/Electron ignore it.
+const SPECIAL_KEYS = {
+  Enter: "enter",
+  Backspace: "backspace",
+  Tab: "tab",
+  Delete: "delete",
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowUp: "up",
+  ArrowDown: "down",
+  Home: "home",
+  End: "end",
+  Escape: "escape",
+};
+
+function tileClickCoords(index, ev) {
+  const img = document.getElementById(`shotimg-${index}`);
+  const tile = tiles.get(index);
+  if (!img || img.style.display === "none" || !tile || !tile.natW) return null;
+  const rect = img.getBoundingClientRect();
+  const scale = Math.min(rect.width / tile.natW, rect.height / tile.natH);
+  const dispW = tile.natW * scale;
+  const dispH = tile.natH * scale;
+  const offX = (rect.width - dispW) / 2;
+  const offY = (rect.height - dispH) / 2;
+  const x = ev.clientX - rect.left - offX;
+  const y = ev.clientY - rect.top - offY;
+  if (x < 0 || y < 0 || x > dispW || y > dispH) return null;
+  return { nx: x / dispW, ny: y / dispH };
+}
+
+function wireTileInput(index, pid, shot, tile) {
+  shot.tabIndex = 0;
+  shot.classList.add("interactive");
+  shot.title = "Click or type here to control this program (works for native Windows apps)";
+  const quickRefresh = () => setTimeout(() => tile.refresh?.(), 130);
+
+  shot.addEventListener("mousedown", (ev) => {
+    ev.preventDefault();
+    shot.focus();
+    const c = tileClickCoords(index, ev);
+    if (!c) return;
+    api(`/api/windows/${pid}/send`, { method: "POST", body: JSON.stringify({ kind: "click", nx: c.nx, ny: c.ny }) }).catch(() => {});
+    quickRefresh();
+  });
+
+  shot.addEventListener("keydown", (ev) => {
+    if (ev.key in SPECIAL_KEYS) {
+      ev.preventDefault();
+      api(`/api/windows/${pid}/send`, { method: "POST", body: JSON.stringify({ kind: "key", key: SPECIAL_KEYS[ev.key] }) }).catch(() => {});
+      quickRefresh();
+    } else if (ev.key.length === 1 && !ev.ctrlKey && !ev.metaKey && !ev.altKey) {
+      ev.preventDefault();
+      api(`/api/windows/${pid}/send`, { method: "POST", body: JSON.stringify({ kind: "text", text: ev.key }) }).catch(() => {});
+      quickRefresh();
+    }
+  });
 }
 
 async function programAction(index, action) {

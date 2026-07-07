@@ -190,6 +190,45 @@ async function captureWindow(pid) {
   return runPwsh(path.join(winDir, "capture-window.ps1"), ["-ProcessId", String(pid)]);
 }
 
+async function sendWindowInput(pid, body) {
+  if (process.platform !== "win32") {
+    return { ok: false, error: "windows_only" };
+  }
+  const kind = String(body.kind || "");
+  if (!["click", "text", "key"].includes(kind)) {
+    return { ok: false, error: "bad_kind" };
+  }
+  const args = ["-ProcessId", String(pid), "-Kind", kind];
+  if (kind === "click") {
+    const nx = Math.max(0, Math.min(1, Number(body.nx) || 0));
+    const ny = Math.max(0, Math.min(1, Number(body.ny) || 0));
+    args.push("-NX", String(nx), "-NY", String(ny));
+  } else if (kind === "text") {
+    args.push("-Text", String(body.text ?? "").slice(0, 200));
+  } else if (kind === "key") {
+    args.push("-Key", String(body.key ?? "").slice(0, 20));
+  }
+  return runPwsh(path.join(winDir, "send-input.ps1"), args);
+}
+
+function readJsonBody(req) {
+  return new Promise((resolve) => {
+    let data = "";
+    req.on("data", (chunk) => {
+      data += chunk;
+      if (data.length > 64 * 1024) req.destroy();
+    });
+    req.on("end", () => {
+      try {
+        resolve(data ? JSON.parse(data) : {});
+      } catch {
+        resolve({});
+      }
+    });
+    req.on("error", () => resolve({}));
+  });
+}
+
 // ---- auth helpers -----------------------------------------------------------
 
 function tokenFromRequest(req, url) {
@@ -283,6 +322,13 @@ const server = http.createServer((req, res) => {
   const thumbMatch = pathName.match(/^\/api\/windows\/(\d+)\/thumbnail$/);
   if (thumbMatch && req.method === "GET") {
     captureWindow(Number(thumbMatch[1])).then((data) => sendJson(res, 200, data));
+    return;
+  }
+
+  // Forward a click/keystroke into a window (background input injection).
+  const sendMatch = pathName.match(/^\/api\/windows\/(\d+)\/send$/);
+  if (sendMatch && req.method === "POST") {
+    readJsonBody(req).then((body) => sendWindowInput(Number(sendMatch[1]), body).then((data) => sendJson(res, 200, data)));
     return;
   }
 
