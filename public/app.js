@@ -174,13 +174,8 @@ function buildTile(index) {
     shot.innerHTML = `<img class="cam-img" id="shotimg-${index}" alt="live view of ${escapeHtml(winInfo ? winInfo.title : "program")}" />
       <div class="cam-none" id="shotnone-${index}">Connecting…</div>`;
     screen.append(shot);
-    actions.appendChild(button("Focus", "", () => programAction(index, "focus")));
-    actions.appendChild(button("Min", "", () => programAction(index, "minimize")));
-    actions.appendChild(button("Restore", "", () => programAction(index, "restore")));
-    actions.appendChild(button("Max", "", () => programAction(index, "maximize")));
-    actions.appendChild(button("Close", "danger", () => programAction(index, "close")));
-    actions.appendChild(button("Expand", "", () => expandTile(index)));
-    el.append(head, meta, screen, actions);
+    // No buttons — just pick a source and control it right in the tile.
+    el.append(head, meta, screen);
     return el;
   }
 

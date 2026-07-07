@@ -4,10 +4,24 @@
 
 param(
     [Parameter(Mandatory = $true)][int]$ProcessId,
-    [int]$Width = 480
+    [int]$Width = 820
 )
 
 $ErrorActionPreference = "Stop"
+
+# Become per-monitor DPI aware BEFORE reading any window geometry, so
+# GetWindowRect returns real physical pixels that match what PrintWindow
+# renders. Without this, scaled displays capture only a zoomed-in corner.
+$dpiSig = @'
+using System;
+using System.Runtime.InteropServices;
+public static class TerminaDpi {
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+}
+'@
+Add-Type -TypeDefinition $dpiSig
+try { [void][TerminaDpi]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { try { [void][TerminaDpi]::SetProcessDPIAware() } catch {} }
 
 $proc = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
 if (-not $proc -or $proc.MainWindowHandle -eq 0) {

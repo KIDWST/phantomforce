@@ -18,6 +18,19 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+# Match the capture's DPI awareness so click coordinates line up with the window.
+$dpiSig = @'
+using System;
+using System.Runtime.InteropServices;
+public static class TerminaDpiIn {
+    [DllImport("user32.dll")] public static extern bool SetProcessDpiAwarenessContext(IntPtr value);
+    [DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+}
+'@
+Add-Type -TypeDefinition $dpiSig
+try { [void][TerminaDpiIn]::SetProcessDpiAwarenessContext([IntPtr](-4)) } catch { try { [void][TerminaDpiIn]::SetProcessDPIAware() } catch {} }
+
 $proc = Get-Process -Id $ProcessId -ErrorAction SilentlyContinue
 if (-not $proc -or $proc.MainWindowHandle -eq 0) {
     @{ ok = $false; error = "gone" } | ConvertTo-Json -Compress
