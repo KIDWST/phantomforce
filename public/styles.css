@@ -256,18 +256,19 @@ input {
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 10px 6px;
+  padding: 8px 9px;
+  border-bottom: 1px solid var(--line-soft);
 }
 
 .tile-name {
-  flex: 1;
+  flex: 1 1 55%;
   min-width: 0;
   padding: 7px 11px;
   border-radius: 9px;
   border: 1px solid transparent;
   background: transparent;
   color: var(--text);
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.01em;
 }
@@ -308,13 +309,10 @@ input {
   color: #ff9aa7;
 }
 
-.tile-source {
-  padding: 0 12px 10px;
-}
-
 .instance-select {
-  width: 100%;
-  padding: 7px 11px;
+  flex: 1 1 45%;
+  min-width: 0;
+  padding: 7px 10px;
   border-radius: 9px;
   border: 1px solid var(--line);
   background: var(--panel-2);

@@ -140,6 +140,12 @@ function buildCard(card) {
     saveWorkspace();
   });
 
+  const select = document.createElement("select");
+  select.className = "instance-select";
+  select.setAttribute("aria-label", "Terminal type");
+  select.innerHTML = optionHtml(card.profileId);
+  select.addEventListener("change", () => setCardProfile(card, select.value));
+
   const remove = document.createElement("button");
   remove.className = "tile-remove";
   remove.type = "button";
@@ -148,16 +154,7 @@ function buildCard(card) {
   remove.textContent = "×";
   remove.addEventListener("click", () => removeCard(card));
 
-  head.append(name, remove);
-
-  const source = document.createElement("div");
-  source.className = "tile-source";
-  const select = document.createElement("select");
-  select.className = "instance-select";
-  select.setAttribute("aria-label", "Terminal type");
-  select.innerHTML = optionHtml(card.profileId);
-  select.addEventListener("change", () => setCardProfile(card, select.value));
-  source.append(select);
+  head.append(name, select, remove);
 
   const screen = document.createElement("div");
   screen.className = "screen";
@@ -175,7 +172,7 @@ function buildCard(card) {
   actions.appendChild(smallBtn("Clear", "", () => card.term?.clear()));
   actions.appendChild(smallBtn("Expand", "", () => expandCard(card)));
 
-  el.append(head, source, screen, actions);
+  el.append(head, screen, actions);
   return el;
 }
 
