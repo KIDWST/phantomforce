@@ -549,11 +549,17 @@ export function createPhantomCharacter({ small = false } = {}) {
     const pointerYaw = clamp(o.px * 2.1, -1, 1);
     const pointerPitch = clamp(o.py * 1.35, -1, 1);
     const livingYaw = Math.sin(o.t * 0.36) * 0.14 + swayBias * 0.34 + S.talkBeat * Math.sin(o.t * 7.4) * 0.05;
-    const yaw = clamp(pointerYaw * (small ? 0.16 : 0.23) + livingYaw, -0.34, 0.34);
-    const pitch = clamp(pointerPitch * (small ? 0.035 : 0.055) + Math.sin(o.t * 0.52) * 0.018, -0.08, 0.08);
+    const yaw = clamp(pointerYaw * (small ? 0.22 : 0.31) + livingYaw, -0.42, 0.42);
+    const pitch = clamp(pointerPitch * (small ? 0.045 : 0.07) + Math.sin(o.t * 0.52) * 0.018, -0.1, 0.1);
     const side = Math.sin(yaw);
     const turn = Math.cos(yaw);
+    /* camera-only view of the floor: the emitter is furniture, not flesh —
+       it answers to the viewer's parallax and NEVER to his sway or talk */
+    const camSide = Math.sin(clamp(pointerYaw * (small ? 0.22 : 0.31), -0.42, 0.42));
     return {
+      camSide,
+      camRingRot: camSide * 0.13,
+      camRingY: 0.22 + Math.abs(camSide) * 0.05 + Math.abs(pointerPitch) * 0.045,
       yaw,
       pitch,
       side,
@@ -562,13 +568,11 @@ export function createPhantomCharacter({ small = false } = {}) {
       yScale: 1 + pitch * 0.1,
       skewX: side * 0.135,
       skewY: -pitch * 0.045,
-      xShift: side * o.scale * 0.12,
-      yShift: pitch * o.scale * 0.22,
+      xShift: side * o.scale * 0.15,
+      yShift: pitch * o.scale * 0.26,
       backX: -side * o.scale * 0.22,
       backY: o.scale * (0.035 + Math.abs(pitch) * 0.24),
       rimX: side * o.scale * 0.82,
-      ringRot: side * 0.20,
-      ringY: 0.22 + Math.abs(side) * 0.05 + Math.abs(pitch) * 0.03,
       alpha: 0.11 + Math.abs(side) * 0.15 + S.talkBeat * 0.04,
     };
   };
@@ -622,7 +626,8 @@ export function createPhantomCharacter({ small = false } = {}) {
     const A = (a) => `rgba(${accent[0]},${accent[1]},${accent[2]},${a})`;
     const breath = 1 + Math.sin(t * 0.9) * 0.02 + pulse * 0.06 + S.talkBeat * 0.015 + S.sighAmt * 0.028;
     const floatY = (Math.sin(t * 1.1) * 0.05 * S.floatAmp + Math.sin(t * 3.2) * (mood === "talking" ? 0.025 : 0.008)) * scale * 0.5
-      + (1 - S.reveal) * scale * 0.2 + S.slump * scale * 0.45 + S.sighAmt * scale * 0.03;
+      + (1 - S.reveal) * scale * 0.2 + S.slump * scale * 0.45 + S.sighAmt * scale * 0.03
+      - scale * 0.06;                                    // he hovers, projected — never standing on the emitter
 
     let filter = "";
     if (emotion === "alert") filter = "hue-rotate(215deg) saturate(1.4) brightness(1.05)";
@@ -630,6 +635,121 @@ export function createPhantomCharacter({ small = false } = {}) {
     else if (emotion === "excited" || emotion === "happy") filter = "saturate(1.15) brightness(1.1)";
 
     const depth = hologramDepth(o, S);
+
+    /* ================= PROJECTOR FLOOR — static, always =================
+       The emitter disc is hardware in the scene: no float, no breath, no
+       sway. He bobs and turns ABOVE it; only viewer parallax (camSide)
+       tilts its perspective, and only light intensity reacts to him.    */
+    const floorX = cx + o.px * scale * 0.10;             // less parallax than the body → real depth separation
+    const floorY = cy + scale * 1.72;
+    const hot = Math.min(1, 0.30 + ringBoost * 0.45 + pulse * 0.55 + S.talkBeat * 0.35);
+    ctx2.save();
+    ctx2.translate(floorX, floorY);
+    ctx2.rotate(depth.camRingRot);
+    ctx2.globalCompositeOperation = "lighter";
+    const ery = depth.camRingY;
+    const disc = (r) => { ctx2.beginPath(); ctx2.ellipse(0, 0, scale * r, scale * r * ery, 0, 0, TAU); };
+
+    /* his reflection in the emitter glass — flipped, squashed, fading with depth */
+    const rp = POSES[curPose];
+    if (rp && rp.art && S.settled) {
+      const rk = poseK(rp, scale);
+      const rgx = rp.cx * rp.w, roy = FACE_Y * scale / rk - rp.face.cy * rp.h;
+      for (const [y0, y1, ra] of [[0.02, 0.34, 0.09], [0.34, 0.72, 0.04]]) {
+        ctx2.save();
+        ctx2.beginPath();
+        ctx2.rect(-scale * 1.4, scale * y0, scale * 2.8, scale * (y1 - y0));
+        ctx2.clip();
+        ctx2.scale(1 - Math.abs(depth.camSide) * 0.06, -0.5);
+        ctx2.scale(rk, rk);
+        ctx2.globalAlpha = ra * (0.7 + hot * 0.6);
+        try { ctx2.filter = "blur(5px)"; } catch { }
+        ctx2.drawImage(rp.art, -rgx, roy);
+        try { ctx2.filter = "none"; } catch { }
+        ctx2.restore();
+      }
+      ctx2.globalAlpha = 1;
+    }
+
+    /* pooled glow on the glass */
+    const puddle = ctx2.createRadialGradient(0, 0, 0, 0, 0, scale * 0.92);
+    puddle.addColorStop(0, A(0.28 + hot * 0.20));
+    puddle.addColorStop(0.45, A(0.10 + hot * 0.05));
+    puddle.addColorStop(1, A(0));
+    ctx2.fillStyle = puddle;
+    ctx2.save(); ctx2.scale(1, ery); ctx2.beginPath(); ctx2.arc(0, 0, scale * 0.92, 0, TAU); ctx2.fill(); ctx2.restore();
+
+    /* the emitter rim — the one line in the scene that NEVER moves */
+    ctx2.lineWidth = Math.max(1.2, scale * 0.016);
+    ctx2.strokeStyle = A(0.5 + hot * 0.35);
+    ctx2.shadowColor = A(0.8);
+    ctx2.shadowBlur = 10 + hot * 14;
+    disc(0.86); ctx2.stroke();
+    ctx2.shadowBlur = 0;
+    ctx2.lineWidth = Math.max(1, scale * 0.008);
+    ctx2.strokeStyle = A(0.18 + hot * 0.10);
+    disc(0.98); ctx2.stroke();
+
+    /* instrument dial: ticks crawl one way, the inner arc sweeps the other */
+    ctx2.save();
+    ctx2.setLineDash([scale * 0.045, scale * 0.075]);
+    ctx2.lineDashOffset = -t * scale * 0.55;
+    ctx2.lineWidth = Math.max(1, scale * 0.014);
+    ctx2.strokeStyle = A(0.30 + hot * 0.24);
+    disc(0.72); ctx2.stroke();
+    ctx2.setLineDash([scale * 0.55, scale * 0.95]);
+    ctx2.lineDashOffset = t * scale * 0.4;
+    ctx2.lineWidth = Math.max(1, scale * 0.01);
+    ctx2.strokeStyle = A(0.20 + hot * 0.18);
+    disc(0.55); ctx2.stroke();
+    ctx2.restore();
+
+    /* etched inner rings */
+    ctx2.lineWidth = 1;
+    ctx2.strokeStyle = A(0.10);
+    disc(0.38); ctx2.stroke();
+    disc(0.20); ctx2.stroke();
+
+    /* energy leaves the emitter — the emitter stays put */
+    for (let ring = 0; ring < 2; ring++) {
+      const p2 = (t * 0.30 + ring / 2) % 1;
+      ctx2.strokeStyle = A((0.20 - p2 * 0.17) * (0.5 + hot));
+      ctx2.lineWidth = Math.max(1, scale * 0.008);
+      disc(0.30 + p2 * 0.72); ctx2.stroke();
+    }
+
+    /* the projection cone: three nested veils of light — soft edges, no slab.
+       Each veil is narrower and fainter; they fade to nothing well before
+       the top so there is never a visible cut line across his chest. */
+    const flick = 0.78 + 0.13 * Math.sin(t * 12.7) + 0.09 * Math.sin(t * 33.1 + 1.7);
+    const coneShift = depth.camSide * scale * 0.12;
+    for (const [wMul, aMul] of [[1, 0.35], [0.82, 0.3], [0.6, 0.35]]) {
+      const cg = ctx2.createLinearGradient(0, 0, 0, -scale * 2.75);
+      cg.addColorStop(0, A((0.10 + hot * 0.09) * flick * aMul));
+      cg.addColorStop(0.6, A(0.028 * flick * aMul));
+      cg.addColorStop(0.92, A(0));
+      ctx2.fillStyle = cg;
+      ctx2.beginPath();
+      ctx2.moveTo(-scale * 0.84 * wMul, 0);
+      ctx2.lineTo((-scale * 0.46 + coneShift) * wMul, -scale * 2.75);
+      ctx2.lineTo((scale * 0.46 + coneShift) * wMul, -scale * 2.75);
+      ctx2.lineTo(scale * 0.84 * wMul, 0);
+      ctx2.closePath();
+      ctx2.fill();
+    }
+
+    /* motes riding the beam up into the figure */
+    for (let i = 0; i < 10; i++) {
+      const pp = (t * (0.16 + (i % 5) * 0.03) + i * 0.617) % 1;
+      const mx = Math.sin(i * 2.4 + t * 0.7) * scale * (0.74 - pp * 0.3) + coneShift * pp;
+      const dot = Math.max(1, scale * 0.013);
+      ctx2.fillStyle = A((1 - pp) * 0.26 * (0.5 + hot * 0.8));
+      ctx2.fillRect(mx, -pp * scale * 2.55, dot, dot);
+    }
+    ctx2.restore();
+    ctx2.globalCompositeOperation = "source-over";
+    /* =============== end projector floor — the body floats above =============== */
+
     ctx2.save();
     ctx2.translate(cx + o.px * scale * 0.25, cy + scale * 1.72 + floatY);
     ctx2.rotate(E.tilt * 0.5 + swayBias * 0.3 + depth.yaw * 0.08 + Math.sin(t * 0.5) * 0.012);
@@ -655,37 +775,6 @@ export function createPhantomCharacter({ small = false } = {}) {
     if (cur && cur.art) drawPoseLayer(ctx2, cur, poseBlend < 1 ? poseBlend : 1, o, S, filter, t, depth);
 
     ctx2.globalCompositeOperation = "lighter";
-
-    /* THE ring: engine-drawn, identical for every pose (baked rings are
-       faded out of the assets), so the floor never shifts or resizes */
-    const ringA = 1 + ringBoost * 1.4;
-    for (let ring = 0; ring < 4; ring++) {
-      const p2 = (t * 0.32 + ring / 4) % 1;
-      ctx2.strokeStyle = A((0.30 - p2 * 0.24) * ringA);
-      ctx2.lineWidth = Math.max(1, scale * (ring === 0 ? 0.012 : 0.007));
-      ctx2.beginPath();
-      ctx2.ellipse(0, 0, scale * 1.05 * (0.42 + p2 * 0.62), scale * depth.ringY * (0.42 + p2 * 0.62), depth.ringRot, 0, TAU);
-      ctx2.stroke();
-    }
-    const puddle = ctx2.createRadialGradient(0, 0, 0, 0, 0, scale * 0.85);
-    puddle.addColorStop(0, A(0.30 + pulse * 0.15 + ringBoost * 0.15));
-    puddle.addColorStop(0.4, A(0.10));
-    puddle.addColorStop(1, A(0));
-    ctx2.fillStyle = puddle;
-    ctx2.save();
-    ctx2.rotate(depth.ringRot);
-    ctx2.scale(1 + Math.abs(depth.side) * 0.08, depth.ringY);
-    ctx2.beginPath(); ctx2.arc(0, 0, scale * 0.85, 0, TAU); ctx2.fill();
-    ctx2.restore();
-    /* beam rising from the ring into the robes */
-    ctx2.save();
-    ctx2.transform(0.34, 0, depth.side * 0.08, 1, depth.side * scale * 0.04, 0);
-    const beam = ctx2.createRadialGradient(0, -scale * 0.5, 0, 0, -scale * 0.5, scale * 1.0);
-    beam.addColorStop(0, A(0.16 + ringBoost * 0.14 + pulse * 0.1));
-    beam.addColorStop(1, A(0));
-    ctx2.fillStyle = beam;
-    ctx2.beginPath(); ctx2.arc(0, -scale * 0.5, scale * 1.0, 0, TAU); ctx2.fill();
-    ctx2.restore();
 
     /* the conjured flame breathes on the hero stance */
     if (curPose === "conjure" && poseBlend > 0.5 && flameHold > 0.05 && cur && cur.art) {
@@ -789,7 +878,7 @@ export function createPhantomCharacter({ small = false } = {}) {
     ctx2.globalCompositeOperation = "lighter";
 
     ctx2.save();
-    ctx2.translate(cx, cy + scale * 1.72 + floatY * 3);
+    ctx2.translate(cx, cy + scale * 1.72);   // static floor: his bob never drags the emitter
     const ringA = 1 + ringBoost * 1.6;
     for (let ring = 0; ring < 4; ring++) {
       const p = (t * 0.38 + ring / 4) % 1;

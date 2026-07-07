@@ -258,6 +258,14 @@ function initConversation() {
     });
   });
 
+  // He reacts to YOU: keystrokes get his ear, hovering a power gets his eye.
+  input?.addEventListener("input", () => {
+    if (input.value.trim()) setCharMood("listening", "calm", 1500);
+  });
+  powerEls.forEach((el) => el.addEventListener("pointerenter", () => {
+    if (charState.mood === "idle") setCharMood("listening", "bright", 1200);
+  }));
+
   // Typed input = general live assistant (GLM 5.2 when configured; local responder otherwise).
   let typed = 0;
   const FREE_LIMIT = 5; // feel the power, then crave the full thing
@@ -318,7 +326,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-36")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-49")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
