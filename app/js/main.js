@@ -4,19 +4,19 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260707-45";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-47";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-45";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-45";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-45";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-45";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-45";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-45";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-45";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260707-45";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-47";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-45";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-45";
+} from "./store.js?v=phantom-live-20260707-48";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-48";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-48";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-48";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-48";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-48";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-48";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-48";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-48";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260707-48";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-48";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-48";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-48";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -580,16 +580,17 @@ function renderAccountPlan(body) {
 const MODES = {
   ask:     { label: "Ask",     icon: "chat",  placeholder: "Ask PhantomForce anything…", prefix: "" },
   write:   { label: "Write",   icon: "doc",   placeholder: "Write a proposal, a caption, a follow-up…", prefix: "Draft " },
-  image:   { label: "Image",   icon: "spark", placeholder: "Describe an image to create…", prefix: "Create an image request for " },
-  video:   { label: "Video",   icon: "film",  placeholder: "Describe a video to produce…", prefix: "Create a video request for " },
+  image:   { label: "Image",   icon: "spark", placeholder: "Describe an image to create…", prefix: "Create an image for " },
+  video:   { label: "Video",   icon: "film",  placeholder: "Describe a video to produce…", prefix: "Create a video for " },
   website: { label: "Website", icon: "grid",  placeholder: "Describe a page or site to build…", prefix: "Build a website for " },
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260707-47";
+const POSE_VERSION = "phantom-live-20260707-48";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
+let stageReactionKind = "";
 let emotePoseTimer = 0;
 let transientPoseKey = "";
 const MODE_POSES = {
@@ -717,8 +718,8 @@ function applyStagePose(pose, poseId, cssPose = poseId) {
   phantom?.classList.add("has-mode-poses");
   const nextSrc = poseUrl(pose.src);
   const assetChanged = stage.dataset.poseAsset !== poseId || img.getAttribute("src") !== nextSrc;
-  stage.dataset.pose = cssPose;
-  stage.dataset.poseAsset = poseId;
+  if (stage.dataset.pose !== cssPose) stage.dataset.pose = cssPose;
+  if (stage.dataset.poseAsset !== poseId) stage.dataset.poseAsset = poseId;
   if (assetChanged) {
     stage.classList.remove("is-swapping");
     void stage.offsetWidth;
@@ -750,24 +751,35 @@ function renderEmotePose(key, ms = 900) {
 function stageReact(kind = "pulse", ms = 700) {
   const stage = $("[data-mode-stage]");
   if (!stage || reduceMotion) return;
-  stage.dataset.reaction = kind;
-  stage.classList.remove("is-reacting");
-  void stage.offsetWidth;
-  stage.classList.add("is-reacting");
+  const sameActiveReaction = (
+    stageReactionKind === kind &&
+    stage.dataset.reaction === kind &&
+    stage.classList.contains("is-reacting")
+  );
+  if (!sameActiveReaction) {
+    stageReactionKind = kind;
+    if (stage.dataset.reaction !== kind) stage.dataset.reaction = kind;
+    stage.classList.remove("is-reacting");
+    void stage.offsetWidth;
+    stage.classList.add("is-reacting");
+    const emote = {
+      listen: "listen",
+      think: "think",
+      typing: "typing",
+      answer: "answer",
+      nav: "happy",
+    }[kind] || (MODE_POSES[kind] ? "" : "");
+    if (emote) renderEmotePose(emote, ms + 220);
+    if (phantom3d?.burst) phantom3d.burst(kind, ms);
+  }
   clearTimeout(stageReactionTimer);
   stageReactionTimer = setTimeout(() => {
     stage.classList.remove("is-reacting");
-    if (stage.dataset.reaction === kind) delete stage.dataset.reaction;
+    if (stage.dataset.reaction === kind) {
+      delete stage.dataset.reaction;
+      if (stageReactionKind === kind) stageReactionKind = "";
+    }
   }, ms);
-  const emote = {
-    listen: "listen",
-    think: "think",
-    typing: "typing",
-    answer: "answer",
-    nav: "happy",
-  }[kind] || (MODE_POSES[kind] ? "" : "");
-  if (emote) renderEmotePose(emote, ms + 220);
-  if (phantom3d?.burst) phantom3d.burst(kind, ms);
 }
 
 function syncPoseMood(mood = "idle", emotion = "calm") {
@@ -803,12 +815,15 @@ function renderChips() {
 function setMode(id) {
   const m = MODES[id];
   if (!m) return;
+  const alreadyActive = activeMode === id;
   activeMode = id;
-  renderChips();
-  renderModePose(id);
-  const reaction = reactionForMode(id);
-  setGhostMood(reaction.mood, { emotion: reaction.emotion, ms: id === "ask" ? 1800 : 1400 });
-  stageReact(id, 760);
+  if (!alreadyActive) {
+    renderChips();
+    renderModePose(id);
+    const reaction = reactionForMode(id);
+    setGhostMood(reaction.mood, { emotion: reaction.emotion, ms: id === "ask" ? 1800 : 1400 });
+    stageReact(id, 760);
+  }
   if (m.open) { routeWorkspace(m.open); return; }
   const input = $("[data-command-input]");
   input.placeholder = m.placeholder;
@@ -949,8 +964,8 @@ function renderQueue() {
 
 /* ============================ quick actions ============================ */
 const QUICK = [
-  { label: "Create new content", icon: "spark",  run: "Create a media request for a new campaign" },
-  { label: "Start video campaign", icon: "film",  run: "Create a video request for the launch" },
+  { label: "Create new content", icon: "spark",  run: "Create campaign media" },
+  { label: "Start video campaign", icon: "film",  run: "Create a launch video" },
   { label: "Check pipeline", icon: "chart",   run: "What's my pipeline?" },
   { label: "Open media library", icon: "upload",   open: "media" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
@@ -1047,7 +1062,7 @@ function paletteSources(query) {
     visible(store.state.proposals).filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((p) => add(p.client, `Proposal · ${fmtMoney(p.price)}`, "proposals", "dollar"));
     visible(store.state.media).filter((m) => (m.title || "").toLowerCase().includes(q)).slice(0, 4)
-      .forEach((m) => add(m.title, "Video request", "media", "film"));
+      .forEach((m) => add(m.title, "Media item", "media", "film"));
     visible(store.state.sites).filter((s) => (s.title || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((s) => add(s.title, `${s.kind}`, "sites", "grid"));
   }
@@ -1267,7 +1282,7 @@ function renderChatSettingsPanel(target) {
 const CHAT_STARTERS = [
   { label: "Build a landing page", run: "Build a landing page for my business" },
   { label: "Create a proposal", run: "Draft a proposal for a new client" },
-  { label: "Plan a campaign", run: "Draft a media brief for a new campaign" },
+  { label: "Plan a campaign", run: "Create campaign media for a new campaign" },
   { label: "Make an intake form", run: "Build a client intake form page" },
   { label: "Review my business", run: "What's my pipeline?" },
 ];
@@ -1603,7 +1618,7 @@ const mediaOpts = () => ({
   openSettings: () => routeWorkspace("settings"),
   openWorkspace: (id) => routeWorkspace(id),
   focusCommand: () => { renderDashboardPage(true); focusCommandInput(80); },
-  renderBriefs: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
+  renderPending: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
 
 function renderDeveloperPage(body) {

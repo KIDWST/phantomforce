@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260707-45";
+} from "./store.js?v=phantom-live-20260707-48";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -291,63 +291,64 @@ function renderBookings(el, rerender) {
 /* ============================= MEDIA LAB ============================= */
 function renderMedia(el, rerender) {
   const media = visible(store.state.media);
+  const generatedStates = new Set(["generated", "delivered", "completed", "saved"]);
+  const mediaState = (m) => generatedStates.has(m.status) ? "generated" : "pending";
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Controlled creative work: request → approval → generation → proof → delivery. Paid generation never runs without sign-off.</p>
-      <button class="btn btn-primary" data-act="add">+ Video request</button>
+      <p class="ws-note">Media Lab tracks only two live states: pending generation and generated output. Paid generation never runs without sign-off.</p>
+      <button class="btn btn-primary" data-act="add">+ Pending generation</button>
     </div>
     <div class="card-grid">
       ${media.map((m) => {
         const shots = Array.isArray(m.shots) ? m.shots : [];
         const updated = m.updated || new Date().toISOString();
+        const state = mediaState(m);
         return `
         <article class="record">
-          <button class="record-x" data-act="remove" data-id="${m.id}" aria-label="Remove video request">×</button>
-          <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title || "Video request")}</h4></div>
-          <p class="record-sub">${esc(m.type || "Video brief")} · ${chip(m.status || "draft")} · ${ago(updated)}</p>
-          <p class="record-notes"><b>Angle:</b> ${esc(m.angle || m.notes || "Draft the angle before production.")}</p>
-          <details class="shotlist"><summary>Video plan (${shots.length})</summary>
-            <ol>${shots.map((s) => `<li>${esc(s)}</li>`).join("") || `<li>Draft shot list needed.</li>`}</ol>
+          <button class="record-x" data-act="remove" data-id="${m.id}" aria-label="Remove media item">×</button>
+          <div class="record-top">${wsTag(m.ws)}<h4>${esc(m.title || "Pending generation")}</h4></div>
+          <p class="record-sub">${esc(m.type || "Media generation")} · ${chip(state)} · ${ago(updated)}</p>
+          <p class="record-notes"><b>Prompt:</b> ${esc(m.angle || m.notes || m.prompt || "Prompt not saved yet.")}</p>
+          <details class="shotlist"><summary>Details (${shots.length})</summary>
+            <ol>${shots.map((s) => `<li>${esc(s)}</li>`).join("") || `<li>No saved production details.</li>`}</ol>
           </details>
-          <p class="record-notes"><b>Caption:</b> ${esc(m.caption || "Caption draft needed.")}</p>
+          <p class="record-notes"><b>Caption:</b> ${esc(m.caption || "No caption saved.")}</p>
           ${m.proof ? `<p class="record-proof">Proof: <code>${esc(m.proof)}</code></p>` : ""}
           <div class="record-actions">
-            <button class="btn" data-act="copy" data-id="${m.id}">Copy plan</button>
-            ${m.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${m.id}">Ready to produce</button>` : ""}
-            ${m.status === "brief-ready" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Request generation (approval)</button>` : ""}
-            ${m.status === "generation-approved" ? `<button class="btn" data-act="delivered" data-id="${m.id}">Mark delivered</button>` : ""}
+            <button class="btn" data-act="copy" data-id="${m.id}">Copy details</button>
+            ${state === "pending" && isAdmin() ? `<button class="btn" data-act="request-gen" data-id="${m.id}">Queue generation approval</button>` : ""}
+            ${m.status === "generation-approved" ? `<button class="btn btn-good" data-act="delivered" data-id="${m.id}">Mark generated</button>` : ""}
           </div>
         </article>`;
-      }).join("") || empty("Media Lab is quiet. Create a video request to get rolling.")}
+      }).join("") || empty("Media Lab is empty. Generate an image or video to start.")}
     </div>`;
   const find = (id) => store.state.media.find((m) => m.id === id);
   bindActions(el, {
     add: () => {
       const t = prompt("What is this creative for? (client / campaign)");
       if (!t) return;
-      store.state.media.unshift({ id: uid("med"), ws: currentWs(), title: `${t.trim()} — video request`, type: "Reel (vertical, 30s)", status: "draft", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"], caption: `${t.trim()} — draft caption.`, proof: null, updated: new Date().toISOString() });
-      pushActivity("Media Factory", `created a video request: ${t.trim()}.`);
+      store.state.media.unshift({ id: uid("med"), ws: currentWs(), title: `${t.trim()} — pending video`, type: "Video generation", status: "pending", angle: "Hook in 2 seconds, one idea, end on the offer.", shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"], caption: `${t.trim()} — caption starter.`, proof: null, updated: new Date().toISOString() });
+      pushActivity("Media Factory", `added pending media: ${t.trim()}.`);
       store.save(); rerender();
     },
     copy: (id, btn) => {
       const m = find(id);
       const shots = Array.isArray(m.shots) ? m.shots : [];
-      copyText(btn, `${m.title || "Video request"}\n${m.type || "Video brief"}\n\nAngle: ${m.angle || m.notes || "Draft the angle before production."}\n\nShots:\n${shots.map((s, i) => `${i + 1}. ${s}`).join("\n") || "1. Draft shot list needed."}\n\nCaption: ${m.caption || "Caption draft needed."}`);
+      copyText(btn, `${m.title || "Pending generation"}\n${m.type || "Media generation"}\n\nPrompt: ${m.angle || m.notes || m.prompt || "Prompt not saved yet."}\n\nDetails:\n${shots.map((s, i) => `${i + 1}. ${s}`).join("\n") || "1. No saved production details."}\n\nCaption: ${m.caption || "No caption saved."}`);
     },
-    ready: (id) => { const m = find(id); m.status = "brief-ready"; m.updated = new Date().toISOString(); pushActivity("Media Factory", `ready to produce: ${m.title}.`, m.ws); store.save(); rerender(); },
     remove: (id) => {
       const m = find(id);
       store.state.media = store.state.media.filter((item) => item.id !== id);
-      if (m) pushActivity("Media Factory", `removed video request: ${m.title}.`, m.ws);
+      if (m) pushActivity("Media Factory", `removed media item: ${m.title}.`, m.ws);
       store.save(); rerender();
     },
     "request-gen": (id) => {
       const m = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One generation pass on this video request. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
-      pushActivity("Media Factory", `requested a generation pass on ${m.title}.`, m.ws);
+      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One paid generation pass. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
+      pushActivity("Media Factory", `queued generation approval for ${m.title}.`, m.ws);
       store.save(); rerender();
     },
-    delivered: (id) => { const m = find(id); m.status = "delivered"; m.updated = new Date().toISOString(); pushActivity("Delivery Manager", `delivered ${m.title}.`, m.ws); store.save(); rerender(); },
+    delivered: (id) => { const m = find(id); m.status = "generated"; m.updated = new Date().toISOString(); pushActivity("Delivery Manager", `marked generated: ${m.title}.`, m.ws); store.save(); rerender(); },
   });
 }
 
@@ -1017,8 +1018,8 @@ const WORKFORCE_EMPLOYEES = [
     title: "Content Producer",
     department: "Content",
     status: "working",
-    focus: "Turns ideas into captions, content briefs, shot lists, and approval-ready drafts.",
-    skills: ["captions", "briefs", "campaigns", "content queue"],
+    focus: "Turns ideas into captions, campaign media, generated assets, and approval-ready drafts.",
+    skills: ["captions", "media", "campaigns", "content queue"],
     completed: 36,
     productivity: 89,
     workload: 58,
@@ -1570,7 +1571,8 @@ export function missionWidgets() {
   const dueLeads = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
   const m = moneyView();
   const pend = visible(store.state.approvals).filter((a) => a.status === "pending");
-  const videoRequests = visible(store.state.media).filter((x) => ["brief-ready", "generation-approved"].includes(x.status));
+  const pendingMedia = visible(store.state.media).filter((x) => ["pending", "draft", "brief-ready", "generation-approved"].includes(x.status));
+  const generatedMedia = visible(store.state.media).filter((x) => ["generated", "delivered", "completed", "saved"].includes(x.status));
   const pages = visible(store.state.sites);
   const sec = visible(store.state.security)[0];
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
@@ -1580,7 +1582,7 @@ export function missionWidgets() {
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
-    { id: "media", icon: "▶", title: "Media Lab", stat: `${videoRequests.length} ready`, sub: "video requests & generation", alert: false },
+    { id: "media", icon: "▶", title: "Media Lab", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
     { id: "sites", icon: "▦", title: "Site & Store Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },

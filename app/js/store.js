@@ -281,7 +281,7 @@ export const TOOL_SPINE = [
     worker: "Media Factory",
     mode: "owner-controlled",
     status: "ready",
-    role: "Creates image/video plans, edits, and commercial generation requests.",
+    role: "Creates images, videos, edits, and approval-gated generated outputs.",
     ownerControl: "Ready in Media Lab. Paid credits and external runs stay owner-controlled.",
     activity: "Media Lab is ready for owner-controlled creative work.",
     path: "Private backend",
@@ -676,8 +676,8 @@ export function todaysPlan() {
     .forEach((p) => items.push({ icon: "▸", text: `Proposal send-ready: ${p.client}`, kind: "proposal", open: "proposals" }));
   visible(store.state.tasks || []).filter((t) => ["new", "working"].includes(t.status || "new"))
     .forEach((t) => items.push({ icon: "▸", text: `Task ready: ${t.title}`, kind: "task", open: "workforce" }));
-  visible(store.state.media).filter((m) => m.status === "brief-ready")
-    .forEach((m) => items.push({ icon: "▸", text: `Video request ready: ${m.title}`, kind: "media", open: "media" }));
+  visible(store.state.media).filter((m) => ["pending", "draft", "brief-ready", "generation-approved"].includes(m.status))
+    .forEach((m) => items.push({ icon: "▸", text: `Pending media: ${m.title}`, kind: "media", open: "media" }));
   visible(store.state.security).forEach((s) => {
     if (daysUntil(s.rotationDue) <= 30) items.push({ icon: "⚠", text: `Password rotation window closes in ${daysUntil(s.rotationDue)} days`, kind: "security", open: "protect" });
   });
@@ -711,7 +711,7 @@ export function resolveApproval(id, approved) {
 export const STATUS_LABEL = {
   "new": "New", "follow-up": "Follow-up", "proposal": "Proposal out", "won": "Won", "lost": "Lost",
   "draft": "Draft", "sent-ready": "Send-ready", "sent": "Sent", "approved": "Approved",
-  "brief-ready": "Ready to produce", "generation-approved": "Generation approved", "delivered": "Delivered",
+  "brief-ready": "Pending", "generation-approved": "Pending", "generated": "Generated", "delivered": "Generated",
   "publish-ready": "Publish-ready", "approved-to-publish": "Approved to publish", "published-ready": "Published-ready",
   "received": "Received", "pending": "Pending", "declined": "Declined", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
   "watching": "Watching", "online": "Online", "indexed": "Indexed", "scaffolded": "Scaffolded", "ready": "Ready", "enforcing": "Enforcing", "contained": "Contained", "routed": "Routed",

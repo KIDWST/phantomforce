@@ -7,8 +7,8 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session,
-} from "./store.js?v=phantom-live-20260707-46";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-46";
+} from "./store.js?v=phantom-live-20260707-48";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-48";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -396,7 +396,7 @@ function localQuestionAnswer(text) {
   if (/\b(content|video|reel|shoot|caption|post|media)\b/.test(s)) {
     const media = visible(store.state.media || []);
     return {
-      say: `Media lane is ready. ${media.length} local media item${media.length === 1 ? "" : "s"} loaded. Ask for an angle, shot list, caption, or draft-only brief and I’ll route it without sending or posting.`,
+      say: `Media lane is ready. ${media.length} local media item${media.length === 1 ? "" : "s"} loaded. Ask for an image, video, caption, or edit and I’ll route it without sending or posting.`,
       cards: [card("Media answer", "Draft-only by default", "ChicagoShots/Media Lab work stays local until you approve an external action.", [openAction("Open Media Lab", "media")])],
       open: null,
     };
@@ -590,7 +590,7 @@ export function handleCommand(raw) {
 
   /* --- media / content / video --- */
   if (/(video|reel|content|post|caption|shoot|media|creative|tiktok|short)/.test(s)) {
-    if (/(brief|plan|draft|create|make|new|idea)/.test(s) || subject) {
+    if (/(plan|draft|create|make|new|idea)/.test(s) || subject) {
       const m = createPendingMedia(subject);
       return {
         say: `Media Lab added "${m.title}" as pending. Generate it when you're ready; paid runs stay approval-gated.`,

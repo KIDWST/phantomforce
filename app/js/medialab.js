@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-45";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-45";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-48";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-48";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -463,7 +463,7 @@ function buildGenerationSpec(req = {}) {
   const rawPrompt = cleanBrief(req.prompt);
   const negative = cleanBrief(req.negative, 700);
   const model = normalizeHiggsfieldModel(req) || req.model || "";
-  const brief = [
+  const providerPromptParts = [
     `Primary request: ${rawPrompt}`,
     `Output: ${req.modality === "video" ? "video" : "image"}`,
     `Frame: ${params.aspect || "1:1"}${req.modality === "video" ? `, ${params.duration || 6}s` : `, ${params.count || 1} take${(params.count || 1) > 1 ? "s" : ""}`}`,
@@ -475,7 +475,7 @@ function buildGenerationSpec(req = {}) {
   ].filter(Boolean).join(". ");
   return {
     original_prompt: rawPrompt,
-    provider_prompt: cleanBrief(brief, 2600),
+    provider_prompt: cleanBrief(providerPromptParts, 2600),
     negative_prompt: negative,
     modality: req.modality === "video" ? "video" : "image",
     provider: req.provider || "",
@@ -712,7 +712,7 @@ function previewAsset(req, i, context = {}) {
   g.fillText(`PROVIDER ${context.fallbackReason ? "FALLBACK" : "PREVIEW"} · ${String(spec.aspect || "").toUpperCase()}`, px + 16, py + 25);
   g.fillStyle = "rgba(236,255,246,0.95)";
   g.font = "700 18px 'Space Grotesk', sans-serif";
-  drawWrappedText(g, spec.original_prompt || req.prompt || "Untitled media request", px + 16, py + 52, plateW - 32, 22, 3);
+  drawWrappedText(g, spec.original_prompt || req.prompt || "Untitled media generation", px + 16, py + 52, plateW - 32, 22, 3);
   g.fillStyle = "rgba(180,210,205,0.86)";
   g.font = "600 11px 'DM Mono', monospace";
   const tail = [
@@ -766,7 +766,8 @@ export function renderMediaStudio(el, opts = {}) {
   consumeEditIntent(opts);
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
-  const tabs = [["generate", "Generate"], ["edit", "Edit"], ["library", `Library${session.assets.length ? ` · ${session.assets.length}` : ""}`], ["briefs", "Video Requests"]];
+  if (session.tab === "briefs") session.tab = "pending";
+  const tabs = [["generate", "Generate"], ["pending", "Pending"], ["library", `Generated${session.assets.length ? ` · ${session.assets.length}` : ""}`], ["edit", "Edit"]];
   const engineReady = providersFor(cfg, "image").length + providersFor(cfg, "video").length > 0;
   el.innerHTML = `
     <div class="ml">
@@ -785,9 +786,17 @@ export function renderMediaStudio(el, opts = {}) {
   el.querySelectorAll("[data-ml-tab]").forEach((b) => b.onclick = () => { session.tab = b.dataset.mlTab; renderMediaStudio(el, opts); });
   const body = el.querySelector("[data-ml-body]");
   if (session.tab === "generate") renderGenerate(body, cfg, opts, el);
+  else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderLibrary(body, opts, el);
-  else if (session.tab === "briefs") (opts.renderBriefs ? opts.renderBriefs(body) : (body.innerHTML = `<p class="empty-line">Video requests unavailable.</p>`));
+}
+
+function renderPending(body) {
+  body.innerHTML = `
+    <div class="ml-idle">
+      <b>No pending media.</b>
+      <i>Generate an image or video when you are ready. Outputs land under Generated.</i>
+    </div>`;
 }
 
 /* ---- Generate ---- */
@@ -874,7 +883,7 @@ function renderGenerate(body, cfg, opts, root) {
         ${models.length ? `<label class="ml-field"><span>Render lane</span>
           <select class="ml-select" data-ml-model>${models.map((m) => `<option value="${esc(m)}" ${genState.model === m ? "selected" : ""}>${esc(laneLabel(m))}</option>`).join("")}</select></label>` : ""}
 
-        <label class="ml-field ml-field-brief"><span>Shot brief</span>
+        <label class="ml-field ml-field-brief"><span>Prompt</span>
           <div class="ml-prompt-wrap">
             <textarea class="ml-prompt" data-ml-prompt rows="4" placeholder="Describe the shot — subject, setting, light, mood…">${esc(genState.prompt)}</textarea>
             <button class="ml-enhance" data-ml-enhance title="Improve prompt">${svgIc("spark")} Enhance</button>
@@ -920,7 +929,7 @@ function renderGenerate(body, cfg, opts, root) {
           <div class="ml-stage-view">
             ${genState.busy ? skeletons(genState.modality === "video" ? 1 : genState.count) : resultsHtml(esc)}
           </div>
-          <footer class="ml-stage-meta">${briefChips(esc)}</footer>
+          <footer class="ml-stage-meta">${settingsChips(esc)}</footer>
         </div>
       </section>
 
@@ -930,7 +939,7 @@ function renderGenerate(body, cfg, opts, root) {
   wireGenerate(body, cfg, opts, root, esc);
 }
 
-function briefChips(esc) {
+function settingsChips(esc) {
   const preset = activePreset();
   const chips = [
     preset ? preset.label : "Custom",
@@ -941,7 +950,7 @@ function briefChips(esc) {
     genState.modality === "video" ? `${genState.duration}s` : `${genState.count} take${genState.count > 1 ? "s" : ""}`,
     `≈ ${estCredits()} credits`,
   ].filter(Boolean);
-  return `<div class="ml-brief-chips" aria-label="Current shot brief">${chips.map((c) => `<span>${esc(String(c))}</span>`).join("")}</div>`;
+  return `<div class="ml-brief-chips" aria-label="Current generation settings">${chips.map((c) => `<span>${esc(String(c))}</span>`).join("")}</div>`;
 }
 
 function railHtml(cfg, esc) {
@@ -1034,7 +1043,7 @@ function resultsHtml(esc) {
     <div class="ml-idle">
       <div class="ml-idle-orb" aria-hidden="true"><span></span><span></span><span></span></div>
       <b>The stage is lit and waiting</b>
-      <i>Write a shot brief and roll — your frames land here. No engine connected yet? You still get a live preview.</i>
+      <i>Write a prompt and generate. Finished images and videos land here.</i>
       <div class="ml-board" aria-hidden="true">
         ${["1:1", "4:5", "16:9", "9:16", "3:2"].map((r, i) => `<span class="ml-board-cell" style="--d:${(i * 0.4).toFixed(1)}s" data-ratio="${r}"></span>`).join("")}
       </div>

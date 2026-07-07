@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-45";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-48";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -67,7 +67,9 @@ export function setCompanionState(state, caption) {
 }
 
 export function setCompanionMode(next) {
-  mode = (next === "loop" || next === "build") ? "loop" : "chat";
+  const nextMode = (next === "loop" || next === "build") ? "loop" : "chat";
+  const modeChanged = nextMode !== mode;
+  mode = nextMode;
   if (el?.modeChip) {
     const label = el.modeChip.querySelector("[data-pc-mode-state]");
     if (label) label.textContent = mode === "loop" ? "On" : "Off";
@@ -77,8 +79,9 @@ export function setCompanionMode(next) {
   }
   if (el?.root) el.root.dataset.mode = mode;
   if (el?.menuLoop) el.menuLoop.setAttribute("aria-pressed", mode === "loop" ? "true" : "false");
-  setCompanionState(mode === "loop" ? "building" : "idle");
-  if (onModeChange) onModeChange(mode);
+  const targetState = mode === "loop" ? "building" : "idle";
+  if (modeChanged || current !== targetState) setCompanionState(targetState);
+  if (modeChanged && onModeChange) onModeChange(mode);
 }
 
 export const companionMode = () => mode;

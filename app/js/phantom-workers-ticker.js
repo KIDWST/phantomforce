@@ -88,7 +88,7 @@ function statusFromRecords() {
 
   const dueLeads = leads.filter((lead) => ["new", "follow-up"].includes(lead.status));
   const activeProps = proposals.filter((prop) => ["draft", "sent-ready", "sent", "invoice-ready"].includes(prop.status));
-  const readyMedia = media.filter((item) => ["brief-ready", "generation-approved", "draft"].includes(item.status));
+  const readyMedia = media.filter((item) => ["pending", "brief-ready", "generation-approved", "draft"].includes(item.status));
   const pendingBookings = bookings.filter((booking) => ["draft", "pending", "sent-ready"].includes(booking.status || "draft"));
   const pendingReviews = reviews.filter((review) => ["draft", "sent-ready", "pending"].includes(review.status || "draft"));
   const openTasks = tasks.filter((task) => ["new", "working"].includes(task.status || "new"));
@@ -122,7 +122,7 @@ function statusFromRecords() {
     workerItem(
       workers.media,
       readyMedia.length
-        ? `prepped ${plural(readyMedia.length, "video request")} for the creative desk`
+        ? `found ${plural(readyMedia.length, "pending media item")} for the creative desk`
         : "checked creative inventory; no generation is running automatically",
       "Media work stays controlled and receipt-based.",
       readyMedia[0]?.title || "media desk",
