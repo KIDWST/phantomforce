@@ -517,7 +517,16 @@ function ensureAddCard() {
     add.setAttribute("aria-label", "New terminal");
     add.title = "New terminal";
     add.innerHTML = `<span class="plus">+</span>`;
-    add.addEventListener("click", () => addCard({}, { start: false }));
+    add.addEventListener("click", (e) => {
+      // First time (empty wall): offer to create several at once.
+      // After that, a quick single add.
+      if (cards.length === 0) {
+        e.stopPropagation();
+        toggleNewMenu(true);
+      } else {
+        addCard({}, { start: false });
+      }
+    });
     wall.appendChild(add);
   }
 }
