@@ -109,10 +109,41 @@ function shapePublicReply(message, reply) {
   return clean;
 }
 
-const userHits = new Map(); // ip -> { day, n }
-const lastAsk = new Map();  // ip -> ms timestamp of the last question (burst throttle)
+/* ---------------- visitor identity: harder than an IP ----------------
+   A VPN hop must not mint a fresh quota. Every question is charged to THREE
+   identities at once — a signed visitor token (survives IP changes), the IP,
+   and the subnet — and is DENIED if any one of them is exhausted. Fresh
+   tokens are themselves rationed (per IP, per subnet, per hour globally);
+   overflow visitors share one communal quota instead of minting their own.
+   The global daily cap stays as the hard cost backstop. */
+const VISITOR_SECRET = process.env.PF_VISITOR_SECRET || crypto.randomBytes(32).toString("hex");
+const NEW_IDS_PER_IP_DAILY = Number(process.env.PF_NEW_IDS_PER_IP || 3);
+const NEW_IDS_PER_SUBNET_DAILY = Number(process.env.PF_NEW_IDS_PER_SUBNET || 12);
+const NEW_IDS_PER_HOUR_GLOBAL = Number(process.env.PF_NEW_IDS_PER_HOUR || 60);
+const SUBNET_DAILY = Number(process.env.PF_SUBNET_DAILY || PER_USER_DAILY * 4);
+
+const hits = new Map();     // quota key (v:/ip:/s:) -> { day, n }
+const lastAsk = new Map();  // quota key -> ms of last question (burst throttle)
+const newIds = new Map();   // issuance counters -> { p: period, n }
 let globalHits = { day: "", n: 0 };
 const today = () => new Date().toISOString().slice(0, 10);
+const hourNow = () => new Date().toISOString().slice(0, 13);
+const signVisitor = (id) => crypto.createHmac("sha256", VISITOR_SECRET).update(id).digest("hex").slice(0, 24);
+const subnetOf = (ip) => ip.includes(":") ? ip.split(":").slice(0, 4).join(":") : ip.split(".").slice(0, 3).join(".");
+const bumpIssue = (key, period) => {
+  let e = newIds.get(key);
+  if (!e || e.p !== period) { e = { p: period, n: 0 }; newIds.set(key, e); }
+  e.n += 1;
+  if (newIds.size > 20000) newIds.clear();
+  return e.n;
+};
+const usedOf = (key, day) => { const e = hits.get(key); return e && e.day === day ? e.n : 0; };
+const charge = (key, day) => {
+  let e = hits.get(key);
+  if (!e || e.day !== day) { e = { day, n: 0 }; hits.set(key, e); }
+  e.n += 1;
+  if (hits.size > 50000) hits.clear();
+};
 
 async function askClaude(message) {
   const upstream = await fetch("https://api.anthropic.com/v1/messages", {
@@ -445,7 +476,7 @@ function handleRequest(req, res) {
   const base = {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-admin-key, x-provider-key",
+    "Access-Control-Allow-Headers": "Content-Type, x-admin-key, x-provider-key, x-pf-visitor",
     "Vary": "Origin",
     "Connection": "close",
   };
@@ -469,15 +500,39 @@ function handleRequest(req, res) {
   const d = today();
   if (globalHits.day !== d) globalHits = { day: d, n: 0 };
   const ip = (String(req.headers["x-forwarded-for"] || "").split(",")[0].trim()) || req.socket.remoteAddress || "anon";
-  let u = userHits.get(ip);
-  if (!u || u.day !== d) { u = { day: d, n: 0 }; userHits.set(ip, u); }
-  if (u.n >= PER_USER_DAILY) return send({ error: "limit", message: "That's your free questions for today — download PhantomForce to go deeper." });
+  const subnet = subnetOf(ip);
+
+  // visitor token: same browser = same quota, no matter how many VPN hops
+  const rawTok = String(req.headers["x-pf-visitor"] || "");
+  let vid = "", freshToken = "";
+  const tm = rawTok.match(/^([a-f0-9]{16})\.([a-f0-9]{24})$/);
+  if (tm && signVisitor(tm[1]) === tm[2]) vid = tm[1];
+  if (!vid) {
+    // fresh identities are rationed — cookie-wipe + VPN farms hit this wall
+    // and get shunted into one shared communal quota instead
+    const perIp = bumpIssue(`ip:${ip}`, d);
+    const perSub = bumpIssue(`s:${subnet}`, d);
+    const perHour = bumpIssue("hour", hourNow());
+    if (perIp > NEW_IDS_PER_IP_DAILY || perSub > NEW_IDS_PER_SUBNET_DAILY || perHour > NEW_IDS_PER_HOUR_GLOBAL) {
+      vid = "overflow";
+    } else {
+      vid = crypto.randomBytes(8).toString("hex");
+      freshToken = `${vid}.${signVisitor(vid)}`;
+    }
+  }
+
+  const vKey = `v:${vid}`, ipKey = `ip:${ip}`, sKey = `s:${subnet}`;
+  if (usedOf(vKey, d) >= PER_USER_DAILY || usedOf(ipKey, d) >= PER_USER_DAILY || usedOf(sKey, d) >= SUBNET_DAILY) {
+    return send({ error: "limit", message: "That's your free questions for today — download PhantomForce to go deeper." });
+  }
   if (globalHits.n >= GLOBAL_DAILY_CAP) return send({ error: "busy", message: "I'm at capacity for today — download PhantomForce and I'm all yours." });
-  // burst throttle: one question every couple of seconds per visitor
+  // burst throttle: one question every couple of seconds, per token AND per ip
   const nowMs = Date.now();
-  if (nowMs - (lastAsk.get(ip) || 0) < MIN_GAP_MS) return send({ error: "busy", message: "One at a time — give me a breath." });
-  if (lastAsk.size > 5000) lastAsk.clear();
-  lastAsk.set(ip, nowMs);
+  if (nowMs - Math.max(lastAsk.get(vKey) || 0, lastAsk.get(ipKey) || 0) < MIN_GAP_MS) {
+    return send({ error: "busy", message: "One at a time — give me a breath." });
+  }
+  if (lastAsk.size > 20000) lastAsk.clear();
+  lastAsk.set(vKey, nowMs); lastAsk.set(ipKey, nowMs);
 
   let body = "";
   req.on("data", (c) => { body += c; if (body.length > 4000) req.destroy(); });
@@ -492,8 +547,9 @@ function handleRequest(req, res) {
         : await askOpenRouter(message);
       const clean = shapePublicReply(message, reply);
       if (!clean) return send({ error: "upstream" });
-      u.n += 1; globalHits.n += 1;
-      send({ reply: clean, remaining: PER_USER_DAILY - u.n });
+      charge(vKey, d); charge(ipKey, d); charge(sKey, d); globalHits.n += 1;
+      const remaining = Math.max(0, PER_USER_DAILY - Math.max(usedOf(vKey, d), usedOf(ipKey, d)));
+      send({ reply: clean, remaining, ...(freshToken ? { visitor: freshToken } : {}) });
     } catch {
       send({ error: "upstream" });
     }

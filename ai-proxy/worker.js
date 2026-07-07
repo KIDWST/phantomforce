@@ -65,7 +65,7 @@ function cors(origin) {
   return {
     "Access-Control-Allow-Origin": allow,
     "Access-Control-Allow-Methods": "POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type, x-admin-key, x-provider-key",
+    "Access-Control-Allow-Headers": "Content-Type, x-admin-key, x-provider-key, x-pf-visitor",
     "Vary": "Origin",
   };
 }
@@ -242,16 +242,47 @@ export default {
     if (pathname === "/generate") return handleGenerate(request, env, headers);
     if (!configured) return json({ error: "unconfigured" }, 200, headers);
 
+    /* multi-signal quota: a VPN hop must not mint a fresh allowance.
+       Charge the signed visitor token AND the ip AND the subnet; deny if any
+       is spent. Fresh tokens are rationed per ip/subnet/hour. */
     const ip = request.headers.get("CF-Connecting-IP") || "anon";
+    const subnet = ip.includes(":") ? ip.split(":").slice(0, 4).join(":") : ip.split(".").slice(0, 3).join(".");
     const day = new Date().toISOString().slice(0, 10);
-    const userKey = `u:${ip}:${day}`;
-    const globalKey = `g:${day}`;
+    const hour = new Date().toISOString().slice(0, 13);
+    const secret = env.PF_VISITOR_SECRET || "pf-visitor-fallback";
+    const sign = async (id) => {
+      const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+      const mac = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(id));
+      return [...new Uint8Array(mac)].map((b) => b.toString(16).padStart(2, "0")).join("").slice(0, 24);
+    };
+    const kvNum = async (k) => parseInt((await env.PF_KV.get(k)) || "0", 10);
 
-    const used = parseInt((await env.PF_KV.get(userKey)) || "0", 10);
-    if (used >= PER_USER_DAILY) {
+    const rawTok = request.headers.get("x-pf-visitor") || "";
+    let vid = "", freshToken = "";
+    const tm = rawTok.match(/^([a-f0-9]{16})\.([a-f0-9]{24})$/);
+    if (tm && (await sign(tm[1])) === tm[2]) vid = tm[1];
+    if (!vid) {
+      const issued = await Promise.all([kvNum(`ni:ip:${ip}:${day}`), kvNum(`ni:s:${subnet}:${day}`), kvNum(`ni:h:${hour}`)]);
+      if (issued[0] >= 3 || issued[1] >= 12 || issued[2] >= 60) {
+        vid = "overflow";
+      } else {
+        vid = [...crypto.getRandomValues(new Uint8Array(8))].map((b) => b.toString(16).padStart(2, "0")).join("");
+        freshToken = `${vid}.${await sign(vid)}`;
+        const ttl = ttlToEndOfDay();
+        await Promise.all([
+          env.PF_KV.put(`ni:ip:${ip}:${day}`, String(issued[0] + 1), { expirationTtl: ttl }),
+          env.PF_KV.put(`ni:s:${subnet}:${day}`, String(issued[1] + 1), { expirationTtl: ttl }),
+          env.PF_KV.put(`ni:h:${hour}`, String(issued[2] + 1), { expirationTtl: 3700 }),
+        ]);
+      }
+    }
+
+    const vKey = `v:${vid}:${day}`, userKey = `u:${ip}:${day}`, sKey = `s:${subnet}:${day}`;
+    const globalKey = `g:${day}`;
+    const [vUsed, used, sUsed, gUsed] = await Promise.all([kvNum(vKey), kvNum(userKey), kvNum(sKey), kvNum(globalKey)]);
+    if (vUsed >= PER_USER_DAILY || used >= PER_USER_DAILY || sUsed >= PER_USER_DAILY * 4) {
       return json({ error: "limit", message: "That's your 5 questions for today. Summon an operator to go deeper." }, 200, headers);
     }
-    const gUsed = parseInt((await env.PF_KV.get(globalKey)) || "0", 10);
     if (gUsed >= GLOBAL_DAILY_CAP) {
       return json({ error: "busy", message: "I'm at capacity for today — summon an operator." }, 200, headers);
     }
@@ -272,9 +303,14 @@ export default {
     if (!reply) return json({ error: "upstream" }, 200, headers);
 
     const ttl = ttlToEndOfDay();
-    await env.PF_KV.put(userKey, String(used + 1), { expirationTtl: ttl });
-    await env.PF_KV.put(globalKey, String(gUsed + 1), { expirationTtl: ttl });
+    await Promise.all([
+      env.PF_KV.put(vKey, String(vUsed + 1), { expirationTtl: ttl }),
+      env.PF_KV.put(userKey, String(used + 1), { expirationTtl: ttl }),
+      env.PF_KV.put(sKey, String(sUsed + 1), { expirationTtl: ttl }),
+      env.PF_KV.put(globalKey, String(gUsed + 1), { expirationTtl: ttl }),
+    ]);
 
-    return json({ reply: shapePublicReply(message, reply), remaining: PER_USER_DAILY - (used + 1) }, 200, headers);
+    const remaining = Math.max(0, PER_USER_DAILY - (Math.max(vUsed, used) + 1));
+    return json({ reply: shapePublicReply(message, reply), remaining, ...(freshToken ? { visitor: freshToken } : {}) }, 200, headers);
   },
 };

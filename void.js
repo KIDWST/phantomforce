@@ -67,13 +67,21 @@ async function registerForDemo(name, email) {
   } catch { return false; }
   finally { clearTimeout(timer); }
 }
+const VISITOR_KEY = "pf.visitor.v1";
 async function askPhantom(message) {
   if (!AI_ENDPOINT) return null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 16000);   // reasoning models take a beat
   try {
-    const r = await fetch(AI_ENDPOINT, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ message }), signal: ctrl.signal });
+    // the signed visitor token ties the free quota to the browser, not the
+    // network — a VPN hop no longer mints a fresh allowance
+    let visitor = "";
+    try { visitor = localStorage.getItem(VISITOR_KEY) || ""; } catch { }
+    const headers = { "Content-Type": "application/json" };
+    if (visitor) headers["x-pf-visitor"] = visitor;
+    const r = await fetch(AI_ENDPOINT, { method: "POST", headers, body: JSON.stringify({ message }), signal: ctrl.signal });
     const d = await r.json();
+    if (d && d.visitor) { try { localStorage.setItem(VISITOR_KEY, d.visitor); } catch { } }
     if (d && (d.error === "limit" || d.error === "busy")) return { limited: true, message: d.message };
     if (d && d.reply) return { reply: String(d.reply).slice(0, 600), remaining: typeof d.remaining === "number" ? d.remaining : null };
   } catch { /* unreachable / timeout -> fall back to local responder */ }
@@ -413,7 +421,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-62")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-63")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
