@@ -326,7 +326,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-53")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-54")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -355,12 +355,18 @@ async function initEntity() {
     tx = r.left + r.width / 2;
     // document coords: address-bar resizes mid-scroll must never re-glide him
     ty = r.top + (window.scrollY || 0) + r.height * 0.5;
-    ts = Math.max(42, Math.min(126, (r.height * 0.9) / CHAR_H));
+    ts = Math.max(42, Math.min(smallScreen ? 126 : 152, (r.height * 0.9) / CHAR_H));
   };
   measureZone();
   let gx = tx, gy = ty + 56, gs = ts * 0.82;           // wakes low + small, drifts into place
   window.addEventListener("resize", measureZone, { passive: true });
-  if (window.ResizeObserver && zone) new ResizeObserver(measureZone).observe(zone);
+  if (window.ResizeObserver && zone) {
+    // the observer only helps layout settle at boot — after that his anchor is
+    // HIS: text reflow below him must never drag the disc he lives on
+    const ro = new ResizeObserver(measureZone);
+    ro.observe(zone);
+    setTimeout(() => ro.disconnect(), 3500);
+  }
 
   // gestures: eyes follow the cursor; movement perks it up; a click provokes
   // a flash of MENACE — then it settles back to the smirk. When the cursor
@@ -387,11 +393,13 @@ async function initEntity() {
   const frame = (now) => {
     if (!running) return;
     const t = ((now || performance.now()) - t0) * 0.001;
-    // planted, not pasted: he holds his spot and dissolves with scroll
-    if (t > 3) {
-      const fade = Math.max(0, Math.min(1, 1 - (window.scrollY || 0) / (innerHeight * 0.55)));
+    // he lives over his disc at the top of page one — scrolling dissolves him
+    // fast, and a refresh mid-page starts him already invisible. He never
+    // re-anchors to the viewport.
+    const fade = Math.max(0, Math.min(1, 1 - (window.scrollY || 0) / (innerHeight * 0.26)));
+    if (fade < 0.999 || lastFade >= 0) {
+      if (lastFade < 0) canvas.style.transition = "opacity 0.25s ease";
       if (Math.abs(fade - lastFade) > 0.002) {
-        if (lastFade < 0) canvas.style.transition = "opacity 0.25s ease";
         canvas.style.opacity = fade.toFixed(3);
         lastFade = fade;
       }

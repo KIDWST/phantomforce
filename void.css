@@ -162,7 +162,10 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 
 /* the phantom (3D entity in void.js) renders itself into this reserved space */
 .phantom-zone {
-  flex: 0 0 clamp(132px, 25vh, 216px);
+  /* grows into tall viewports so the hero never strands empty space above
+     the creed — the entity scales up with it (ts cap in void.js) */
+  flex: 1 1 clamp(132px, 25vh, 216px);
+  max-height: min(52vh, 560px);
   width: 100%;
   pointer-events: none;
 }
@@ -382,7 +385,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   .status { display: none; }
   .phantom-zone { flex-basis: 78px; }
   .converse { gap: 10px; }
-  .say { min-height: 2.2em; }
+  .say { min-height: 2.9em; }
 }
 
 /* ---------- evolution pass: living stage + ops feed ---------- */
@@ -452,7 +455,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
 .hero-void .presence { position: absolute; }
 /* the phantom is planted in the room, not stuck to the page: the canvas stays
    fixed to the viewport and he DISSOLVES as you scroll instead of sliding up */
-.hero-void .void-canvas { position: fixed; inset: 0; height: 100svh; pointer-events: none; }
+.hero-void .void-canvas { position: absolute; inset: 0; height: 100%; pointer-events: none; }
 .hero-void .void-fallback { z-index: 0; }
 .hero-void .void-canvas { z-index: 1; }
 .hero-void .vignette { z-index: 2; }
@@ -466,7 +469,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
   line-height: 1.55; color: #9dbcab; text-wrap: balance;
 }
 .hero-sub b { color: var(--neon); font-weight: 600; }
-.say { min-height: 2.2em; }
+.say { min-height: 2.9em; }
 
 /* ---- CTA block: button + support + live status = one intentional unit ---- */
 .cta-block {
@@ -481,48 +484,43 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
   padding: 7px 14px; border-radius: 999px;
   border: 1px solid rgba(77, 255, 171, 0.14); background: rgba(6, 16, 12, 0.55);
 }
-/* ---- on phones the ops line is a real push notification: pinned top-right,
-   out of the layout entirely — the hero gets its space back ---- */
+/* ---- on phones the ops line is a compact one-line notification, in flow:
+   nothing floats, nothing overlaps, nothing shifts — just smaller ---- */
 @media (max-width: 760px) {
   .cta-block .ops-line {
-    position: fixed; top: calc(env(safe-area-inset-top) + 86px); right: 10px; left: auto; bottom: auto;
-    transform: none; z-index: 7; margin: 0;
-    display: grid; grid-template-columns: 30px 1fr; grid-template-rows: auto auto;
-    column-gap: 10px; row-gap: 1px; align-items: center; justify-items: start;
-    width: min(78vw, 320px); max-width: none; padding: 9px 12px 10px; border-radius: 16px;
-    border: 1px solid rgba(77, 255, 171, 0.18); background: rgba(8, 17, 13, 0.88);
-    -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+    position: static; top: auto; right: auto; left: auto; bottom: auto; transform: none;
+    display: inline-flex; align-items: center; gap: 8px;
+    width: auto; max-width: min(88vw, 400px); padding: 5px 12px 5px 6px; border-radius: 999px;
+    border: 1px solid rgba(77, 255, 171, 0.18); background: rgba(8, 17, 13, 0.82);
+    box-shadow: 0 8px 22px rgba(0, 0, 0, 0.3);
     text-align: left;
   }
   .cta-block .ops-line.swap { animation: notifIn 0.5s cubic-bezier(0.22, 1, 0.36, 1); }
   .cta-block .ops-line i {
-    grid-row: 1 / span 2; align-self: center; width: 30px; height: 30px; border-radius: 8px;
+    flex: 0 0 auto; width: 22px; height: 22px; border-radius: 7px;
     background: rgba(77, 255, 171, 0.09); border: 1px solid rgba(77, 255, 171, 0.22);
     box-shadow: none; animation: none;
     display: grid; place-items: center;
   }
   .cta-block .ops-line i::after {
-    content: ""; width: 17px; height: 19px;
+    content: ""; width: 13px; height: 14px;
     background: linear-gradient(180deg, #66ffb6 0%, #2effce 52%, #19d9ff 100%);
     -webkit-mask: url("favicon.svg?v=fable-phantom-20260705-01") center / contain no-repeat;
     mask: url("favicon.svg?v=fable-phantom-20260705-01") center / contain no-repeat;
-    filter: drop-shadow(0 0 6px rgba(65, 255, 161, 0.7));
   }
   .cta-block .ops-line b {
-    justify-self: stretch; display: flex; align-items: baseline; gap: 8px;
-    font: 600 11.5px "Space Grotesk", sans-serif; letter-spacing: 0.01em; color: #eafff2; white-space: nowrap;
-  }
-  .cta-block .ops-line b::after {
-    content: "now"; margin-left: auto;
-    font: 400 9.5px "DM Mono", monospace; letter-spacing: 0.06em; color: var(--dim);
+    flex: 0 0 auto; font: 600 11px "Space Grotesk", sans-serif; letter-spacing: 0.01em;
+    color: #eafff2; white-space: nowrap;
   }
   .cta-block .ops-line span {
-    max-width: none; white-space: normal; text-overflow: clip;
-    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-    font: 400 11px "Space Grotesk", sans-serif; letter-spacing: 0.01em; color: #b9d7c6; line-height: 1.35;
+    flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    max-width: none; font: 400 10.5px "Space Grotesk", sans-serif; letter-spacing: 0.01em; color: #b9d7c6;
   }
-  @keyframes notifIn { from { opacity: 0; transform: translateX(18px); } to { opacity: 1; transform: none; } }
+  .cta-block .ops-line::after {
+    content: "now"; flex: 0 0 auto; margin-left: 2px;
+    font: 400 8.5px "DM Mono", monospace; letter-spacing: 0.06em; color: var(--dim);
+  }
+  @keyframes notifIn { from { opacity: 0; transform: translateX(14px); } to { opacity: 1; transform: none; } }
 }
 .ops-line.ops-away { opacity: 0 !important; pointer-events: none; transition: opacity 0.3s; }
 .creed { margin-top: auto; }
