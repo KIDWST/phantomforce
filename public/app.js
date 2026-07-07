@@ -355,9 +355,6 @@ function attachProgram(index, pid) {
   tiles.set(index, tile);
   // Un-minimize (without stealing focus) so the tile shows it live right away.
   api(`/api/windows/${pid}/reveal`, { method: "POST" }).catch(() => {});
-  // Click the live view to bring the real program to the front and use it.
-  shot.onclick = () => programAction(index, "focus");
-  shot.title = "Click to bring this program to the front";
   setTimeout(refresh, 250);
   tile.timer = setInterval(refresh, 2000);
 }
