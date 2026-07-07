@@ -472,10 +472,6 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
   margin-top: clamp(4px, 1vh, 10px); padding: 0 8px;
 }
 .cta-block .download-cta { margin: 0; }
-.cta-support {
-  margin: 0; max-width: 420px; text-align: center;
-  font-size: 12.5px; line-height: 1.5; color: var(--dim);
-}
 .cta-block .ops-line {
   position: static; top: auto; right: auto; left: auto; bottom: auto; transform: none;
   -webkit-backdrop-filter: none; backdrop-filter: none; box-shadow: none;
@@ -483,8 +479,43 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
   padding: 7px 14px; border-radius: 999px;
   border: 1px solid rgba(77, 255, 171, 0.14); background: rgba(6, 16, 12, 0.55);
 }
+/* ---- on phones the ops line reads as a real push notification, not a pill ---- */
 @media (max-width: 760px) {
-  .cta-block .ops-line { position: static; top: auto; left: auto; transform: none; }
+  .cta-block .ops-line {
+    position: static; top: auto; left: auto; transform: none;
+    display: grid; grid-template-columns: 34px 1fr; grid-template-rows: auto auto;
+    column-gap: 11px; row-gap: 1px; align-items: center; justify-items: start;
+    width: min(100%, 430px); padding: 10px 13px 11px; border-radius: 18px;
+    border: 1px solid rgba(77, 255, 171, 0.18); background: rgba(10, 20, 16, 0.82);
+    box-shadow: 0 14px 36px rgba(0, 0, 0, 0.42);
+    text-align: left;
+  }
+  .cta-block .ops-line i {
+    grid-row: 1 / span 2; align-self: center; width: 34px; height: 34px; border-radius: 9px;
+    background: rgba(77, 255, 171, 0.09); border: 1px solid rgba(77, 255, 171, 0.22);
+    box-shadow: none; animation: none;
+    display: grid; place-items: center;
+  }
+  .cta-block .ops-line i::after {
+    content: ""; width: 20px; height: 22px;
+    background: linear-gradient(180deg, #66ffb6 0%, #2effce 52%, #19d9ff 100%);
+    -webkit-mask: url("favicon.svg?v=fable-phantom-20260705-01") center / contain no-repeat;
+    mask: url("favicon.svg?v=fable-phantom-20260705-01") center / contain no-repeat;
+    filter: drop-shadow(0 0 6px rgba(65, 255, 161, 0.7));
+  }
+  .cta-block .ops-line b {
+    justify-self: stretch; display: flex; align-items: baseline; gap: 8px;
+    font: 600 12px "Space Grotesk", sans-serif; letter-spacing: 0.01em; color: #eafff2; white-space: nowrap;
+  }
+  .cta-block .ops-line b::after {
+    content: "now"; margin-left: auto;
+    font: 400 9.5px "DM Mono", monospace; letter-spacing: 0.06em; color: var(--dim);
+  }
+  .cta-block .ops-line span {
+    max-width: none; white-space: normal; text-overflow: clip;
+    display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    font: 400 11.5px "Space Grotesk", sans-serif; letter-spacing: 0.01em; color: #b9d7c6; line-height: 1.35;
+  }
 }
 .creed { margin-top: auto; }
 /* ============ shared section scaffolding ============ */
@@ -620,7 +651,6 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
 @media (max-width: 640px) {
   .hero-void { min-height: 100svh; }
   .hero-sub { font-size: 12.5px; max-width: 340px; }
-  .cta-block .ops-line { font-size: 9.5px; }
   .handle-grid, .wf-grid, .how-steps { grid-template-columns: 1fr; }
   .approval-card { grid-template-columns: 1fr; }
   .wf-card { flex-wrap: wrap; }
