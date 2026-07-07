@@ -173,6 +173,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .converse {
   display: flex; flex-direction: column; align-items: center;
   gap: clamp(14px, 2.4vh, 24px); width: 100%;
+  margin-top: clamp(10px, 2vh, 22px);   /* the disc is his — the words keep their distance */
 }
 
 .say {
@@ -385,7 +386,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   .status { display: none; }
   .phantom-zone { flex-basis: 78px; }
   .converse { gap: 10px; }
-  .say { min-height: 2.9em; }
+  .say { min-height: 3.65em; }
 }
 
 /* ---------- evolution pass: living stage + ops feed ---------- */
@@ -469,7 +470,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
   line-height: 1.55; color: #9dbcab; text-wrap: balance;
 }
 .hero-sub b { color: var(--neon); font-weight: 600; }
-.say { min-height: 2.9em; }
+.say { min-height: 3.65em; }   /* full 3-line worst case: the rotation can never resize his stage */
 
 /* ---- CTA block: button + support + live status = one intentional unit ---- */
 .cta-block {
@@ -657,6 +658,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
 @media (max-width: 640px) {
   .hero-void { min-height: 100svh; }
   .hero-sub { font-size: 12.5px; max-width: 340px; }
+  .say { min-height: 3.65em; max-width: min(92vw, 380px); }
   .handle-grid, .wf-grid, .how-steps { grid-template-columns: 1fr; }
   .approval-card { grid-template-columns: 1fr; }
   .wf-card { flex-wrap: wrap; }
