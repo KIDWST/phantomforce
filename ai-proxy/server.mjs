@@ -556,6 +556,26 @@ function handleRequest(req, res) {
   });
 }
 
+/* ---- self-update: never ask the owner to restart again ----
+   When a git pull changes this file, the process exits cleanly; the run.sh
+   loop (or pm2/systemd) brings it back on the NEW code within seconds.
+   Disable with PF_EXIT_ON_UPDATE=0. */
+if ((process.env.PF_EXIT_ON_UPDATE || "1") !== "0") {
+  try {
+    const selfPath = fileURLToPath(import.meta.url);
+    let selfMtime = fs.statSync(selfPath).mtimeMs;
+    setInterval(() => {
+      try {
+        const m = fs.statSync(selfPath).mtimeMs;
+        if (m !== selfMtime) {
+          console.log("ai-proxy: new code arrived — exiting so the supervisor restarts me on it");
+          process.exit(0);
+        }
+      } catch { }
+    }, 60000);
+  } catch { }
+}
+
 const server = http.createServer(handleRequest);
 
 server.listen(PORT, HOST, () => {
