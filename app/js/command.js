@@ -7,8 +7,8 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session,
-} from "./store.js?v=phantom-live-20260707-49";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-49";
+} from "./store.js?v=phantom-live-20260707-50";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-50";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -333,23 +333,35 @@ function readinessLine() {
   return `Ready, Jordan. ${pieces.join(" · ")}. Ask, draft, build, track, recall, approve, or route anything.`;
 }
 
-function currentInfoAnswer(text) {
+function currentInfoAnswer(text, settings = null) {
   const s = text.toLowerCase();
-  if (!/\b(weather|forecast|temperature|rain|snow|news|latest|current|today's score|stock price|crypto price|exchange rate)\b/.test(s)) {
+  if (!/\b(weather|forecast|temperature|rain|snow|news|headlines?|latest|current|score|stock|crypto|price of|exchange rate|traffic|sports)\b/.test(s)) {
     return null;
   }
+  const cfg = settings || loadRuntimeAiSettings();
+  if (cfg.brainMode === "local") {
+    return {
+      say: "That's a live-world question — not a task, and I won't fake the answer. Instant mode answers from your business data only. Flip the chat gear to Hermes/API and I'll pull real current info.",
+      cards: [
+        card("Live data question", "Instant mode is offline-only", "Weather, news, prices, and scores need the live backend. Open the gear on the chat header, set Backend to Hermes/API, and ask again — no task or record was created.", [openAction("Open Settings", "settings")], "No record created"),
+      ],
+      open: null,
+    };
+  }
+  /* backend mode was on but the live brain did not answer (we only reach
+     here after the backend attempt) — be honest instead of re-lecturing */
   return {
-    say: "That needs live/current data. In Local brain mode I won’t fake it or create a task. Switch Chat settings to Hermes/API or Subscription brain, then ask again and I’ll route it through the backend.",
+    say: `The ${backendLabel(cfg)} didn't respond just now, and I won't invent live data. Ask again in a moment — the question stays a question; no task was created.`,
     cards: [
-      card("Live data needed", "Use Hermes/API or Subscription", "Local mode can reason over the admin workspace, memory, and saved business data. Weather, news, prices, scores, and other current facts need a live backend.", [openAction("Open Settings", "settings")], "No record created"),
+      card("Live brain unreachable", backendLabel(cfg), "The backend call failed or timed out. Retry shortly, or check that the Phantom backend is running and reachable from this console.", [openAction("Open Settings", "settings")], "No record created"),
     ],
     open: null,
   };
 }
 
-function localQuestionAnswer(text) {
+function localQuestionAnswer(text, settings = null) {
   const s = text.toLowerCase();
-  const live = currentInfoAnswer(text);
+  const live = currentInfoAnswer(text, settings);
   if (live) return live;
 
   if (/\b(proposals?|quotes?|pricing|estimates?|deals?)\b/.test(s)) {
@@ -418,7 +430,7 @@ function localQuestionAnswer(text) {
   };
 }
 
-function intentResponse(intent, text) {
+function intentResponse(intent, text, settings = null) {
   if (intent.primaryIntent === "greeting") {
     return {
       say: isAdmin()
@@ -453,7 +465,7 @@ function intentResponse(intent, text) {
     };
   }
   if (intent.primaryIntent === "question") {
-    return localQuestionAnswer(text);
+    return localQuestionAnswer(text, settings);
   }
   if (intent.primaryIntent === "brainstorm") {
     return {
@@ -508,9 +520,9 @@ function intentResponse(intent, text) {
     }
     const a = createAutomation(intent.automationDraft?.title || null, text);
     return {
-      say: `Automation drafted: "${a.name}". It is waiting for approval before anything runs.`,
+      say: `Automation drafted: "${a.name}". It is waiting for approval before anything runs — we can keep talking here.`,
       cards: [card("Automation draft", a.name, a.mission, [openAction("Review approval", "approvals"), openAction("Open Automation", "automation")], "Approval required")],
-      open: "automation",
+      open: null,
     };
   }
   if (intent.primaryIntent === "looper_build") {
@@ -532,14 +544,40 @@ function intentResponse(intent, text) {
   return null;
 }
 
+/* ---------------- response shaping: the settings you pick actually change
+   how Phantom talks. Length trims or extends; style recolors the voice. --- */
+function shapeResponse(response, settings) {
+  if (!response || !response.say) return response;
+  let say = response.say;
+  if (settings.responseLength === "short") {
+    const sentences = say.match(/[^.!?]+[.!?]+/g) || [say];
+    say = sentences.slice(0, Math.max(1, sentences.length > 2 ? 1 : sentences.length)).join(" ").trim();
+  } else if (settings.responseLength === "deep" && response.cards?.length) {
+    say = `${say} Details are on the card${response.cards.length === 1 ? "" : "s"} below — tell me which thread to pull.`;
+  }
+  if (settings.responseStyle === "coach" && !/^Here's the thinking/i.test(say)) {
+    say = `Here's the thinking: ${say}`;
+  } else if (settings.responseStyle === "sales" && !/pipeline|money|revenue|\$/.test(say)) {
+    say = `${say} Money angle: keep this pointed at revenue.`;
+  } else if (settings.responseStyle === "technical" && response.intent?.reasonCode) {
+    say = `${say} [route: ${response.intent.primaryIntent} · ${response.intent.reasonCode}]`;
+  }
+  return { ...response, say };
+}
+
 /* ---------------- the router ---------------- */
 export function handleCommand(raw) {
+  const settings = loadRuntimeAiSettings();
+  return shapeResponse(routeCommand(raw, settings), settings);
+}
+
+function routeCommand(raw, settings) {
   const text = (raw || "").trim();
   const s = text.toLowerCase();
   const subject = subjectOf(text);
   const admin = isAdmin();
   const intent = classifyPhantomIntent(text);
-  const guarded = intentResponse(intent, text);
+  const guarded = intentResponse(intent, text, settings);
   if (guarded) return { ...guarded, intent };
 
   /* --- money / pipeline --- */

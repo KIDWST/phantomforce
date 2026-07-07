@@ -20,6 +20,10 @@ const AUTOMATION = /\b(automation|automate|workflow|autopilot|recurring|auto[- ]
 const APPROVAL = /\b(approve|approval|sign off|waiting on me|pending|review queue|needs my call)\b/i;
 const MEMORY = /\b(remember|save this memory|make sure you remember|from now on|always remember|forget this)\b/i;
 const STATUS = /\b(status|catch me up|what's next|what is next|today|pipeline|queue|summary|report)\b/i;
+/* live-world facts: these are QUESTIONS to answer (or route to a live brain),
+   never tasks, plans, or board summaries — "what's the weather today" must
+   not be hijacked by the \btoday\b status keyword */
+const CURRENT_INFO = /\b(weather|forecast|temperature|rain|snow|humidity|news|headlines?|stock|crypto|bitcoin|price of|exchange rate|score|game (last night|today|tonight)|traffic|time (is it|in)\b|what day is|sports)\b/i;
 const LOOPER = /\b(start\s+(phantom\s+loop|loopus|looper)|phantom\s+loop|loopus|looper|build me|build a|create a campaign|make an intake form|create an intake form|turn this into a build plan|build plan|landing page|website build|site build|proposal|campaign|crm workflow|booking flow|dashboard idea|website copy)\b/i;
 const EXPLICIT_ARTIFACT = /\b(create|draft|build|make|prepare|write|new)\b/i;
 
@@ -73,6 +77,7 @@ export function classifyPhantomIntent(raw = "") {
     shouldCreateTask: false,
     shouldCreateAutomation: false,
     shouldStartLooper: false,
+    needsLiveData: false,
     shouldAskClarifyingQuestion: false,
     requiresUserConfirmation: false,
     requiresAdminApproval: false,
@@ -146,6 +151,12 @@ export function classifyPhantomIntent(raw = "") {
       reasonCode: "explicit_build_request",
       looperDraft: looperDraft(text),
     };
+  }
+  if (CURRENT_INFO.test(text)) {
+    /* checked after task/reminder/automation so "remind me to check the
+       weather every morning" still becomes an automation — but a bare
+       "what's the weather today?" is a live question, full stop */
+    return { ...result, primaryIntent: "question", needsLiveData: true, confidence: 0.9, reasonCode: "live_data_question" };
   }
   if (PLAN.test(text)) {
     return { ...result, primaryIntent: "plan", confidence: confidenceFor("plan", text), reasonCode: "planning_request" };

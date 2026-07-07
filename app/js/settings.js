@@ -1,7 +1,7 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260707-49";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260707-50";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 
@@ -122,10 +122,10 @@ function renderSafetySummary(settings) {
     owner_rules: "Use owner rules",
   }[settings.externalActionMode] || "External actions ask first";
   const brainLabel = {
-    local: "Local instant brain",
+    local: "Instant brain (no backend)",
     api: "Hermes backend/API",
     subscription: "Subscription managed",
-  }[settings.brainMode] || "Local instant brain";
+  }[settings.brainMode] || "Instant brain (no backend)";
   return `
     <div class="set-status-grid">
       <span><b>Loop</b><i>${esc(settings.phantomLoop ? loopLabel : "Off")}</i></span>
@@ -139,6 +139,12 @@ function saveMiniAndRender(el, opts, settings) {
   saveOperatorSettings(settings);
   if (typeof opts.onChange === "function") opts.onChange(normalizeSettings(settings));
   renderOperatorMiniSettings(el, opts);
+  /* confirmation lives in the panel so nothing can overwrite it */
+  const saved = el.querySelector("[data-mini-saved]");
+  if (saved) {
+    saved.hidden = false;
+    setTimeout(() => { saved.hidden = true; }, 2400);
+  }
 }
 
 export function renderOperatorMiniSettings(el, opts = {}) {
@@ -152,16 +158,17 @@ export function renderOperatorMiniSettings(el, opts = {}) {
     draft_only: "Draft",
   }[settings.loopMode] || "Approval/autopilot";
   const brainLabel = {
-    local: "Local",
+    local: "Instant",
     api: "Hermes/API",
     subscription: "Subscription",
-  }[settings.brainMode] || "Local";
+  }[settings.brainMode] || "Instant";
 
   el.innerHTML = `
     <div class="chat-mini-settings">
       <div class="chat-mini-heading">
         <b>Chat settings</b>
         <span>Operator brain</span>
+        <em class="chat-mini-saved" data-mini-saved hidden>Saved — applies to the next message</em>
       </div>
       <div class="chat-mini-summary">
         <span><b>${esc(brainLabel)}</b><i>${esc(activeProvider.name)} · ${esc(activeModel)}</i></span>
@@ -170,7 +177,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
       <div class="chat-mini-fields">
         <label class="chat-mini-field"><span>Backend</span>
           <select data-mini-brain>${optionList([
-            { id: "local", label: "Local" },
+            { id: "local", label: "Instant (no backend)" },
             { id: "api", label: "Hermes/API" },
             { id: "subscription", label: "Subscription" },
           ], settings.brainMode)}</select>
@@ -262,7 +269,7 @@ export function renderOperatorSettings(el, opts = {}) {
         <div class="set-control-grid">
           <label class="set-control"><span>Chat backend</span>
             <select data-ai-field="brainMode">${optionList([
-              { id: "local", label: "Local - instant safe router" },
+              { id: "local", label: "Instant - answers now, no backend" },
               { id: "api", label: "Hermes/API - backend brain" },
               { id: "subscription", label: "Subscription - managed brain" },
             ], settings.brainMode)}</select>

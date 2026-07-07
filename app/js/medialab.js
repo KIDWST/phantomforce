@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-49";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-49";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-50";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-50";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -647,42 +647,136 @@ function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 4) {
   lines.forEach((row, idx) => ctx.fillText(row, x, y + idx * lineHeight));
   return y + lines.length * lineHeight;
 }
+/* ---- prompt-aware sketching: the offline preview must LOOK like the ask.
+   The prompt picks a palette and a scene archetype; the fallback becomes a
+   directional storyboard frame instead of generic brand-colored noise. ---- */
+const SCENE_PALETTES = [
+  [/sunset|golden hour|dusk|dawn|sunrise|warm light|amber/i, ["#160802", "#5c1f06", "#c95d1a", "#ffb45e", "#ffe3b3"]],
+  [/ocean|sea|beach|underwater|lake|river|wave|water/i, ["#02121f", "#053655", "#0f6f8f", "#2fb3c9", "#a8ecf5"]],
+  [/forest|jungle|garden|moss|greenery/i, ["#04140a", "#0d3a1c", "#1f6b33", "#4faf5d", "#c0f0b0"]],
+  [/night|midnight|neon|cyber|synth|club|glow/i, ["#070313", "#1d0f3d", "#452a8a", "#8f5cff", "#4ef0ff"]],
+  [/fire|flame|lava|explosion|crimson/i, ["#160303", "#4d0e05", "#a3300e", "#ff7a2f", "#ffd0a0"]],
+  [/snow|winter|ice|arctic|frozen/i, ["#04101c", "#12374e", "#3d7ba0", "#9cc9e8", "#eef8ff"]],
+  [/luxury|gold|premium|elegant|champagne/i, ["#0a0804", "#2a2008", "#6b5316", "#c9a227", "#f4e3a1"]],
+  [/city|urban|downtown|skyline|street|chicago|new york|architecture/i, ["#050a12", "#101d31", "#23405e", "#3f6f96", "#9fd0ef"]],
+];
+function scenePalette(prompt) {
+  for (const [re, pal] of SCENE_PALETTES) if (re.test(prompt)) return pal;
+  return ["#03130d", "#07301f", "#12613c", "#2fbf7a", "#b6ffd9"];   // brand emerald default
+}
+function sceneKind(prompt) {
+  const s = String(prompt).toLowerCase();
+  if (/skyline|cityscape|city|urban|downtown|street|building|chicago|new york|architecture/.test(s)) return "city";
+  if (/portrait|person|man\b|woman|face|model|athlete|barber|chef|owner|team|people|client/.test(s)) return "portrait";
+  if (/product|bottle|watch|shoe|sneaker|phone|device|\bcan\b|package|cosmetic|jar|box|merch|offer/.test(s)) return "product";
+  if (/sunset|sunrise|mountain|beach|desert|ocean|lake|field|horizon|landscape|sky|forest|nature|road/.test(s)) return "landscape";
+  if (/food|burger|pizza|coffee|plate|dish|restaurant|drink|cocktail|menu/.test(s)) return "food";
+  return "abstract";
+}
+function drawScene(g, kind, pal, W, H, rng) {
+  const glow = (x, y, r, color, a) => {
+    const rad = g.createRadialGradient(x, y, 0, x, y, r);
+    rad.addColorStop(0, color + Math.round(a * 255).toString(16).padStart(2, "0"));
+    rad.addColorStop(1, color + "00");
+    g.fillStyle = rad; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
+  };
+  if (kind === "landscape") {
+    const horizon = H * (0.58 + rng() * 0.08);
+    const sunX = W * (0.3 + rng() * 0.4);
+    glow(sunX, horizon - H * 0.08, W * 0.34, pal[3], 0.55);
+    g.fillStyle = pal[4]; g.beginPath(); g.arc(sunX, horizon - H * 0.08, W * 0.05, 0, TAU); g.fill();
+    for (let band = 0; band < 3; band++) {          // layered terrain
+      g.fillStyle = pal[Math.max(0, 1 - band)] + (band ? "e6" : "");
+      g.beginPath(); g.moveTo(0, H);
+      const by = horizon + band * H * 0.13;
+      g.lineTo(0, by);
+      for (let x = 0; x <= W; x += W / 7) g.lineTo(x, by - rng() * H * (0.06 - band * 0.015));
+      g.lineTo(W, H); g.closePath(); g.fill();
+    }
+  } else if (kind === "city") {
+    const horizon = H * 0.72;
+    glow(W * 0.5, horizon - H * 0.2, W * 0.5, pal[3], 0.3);
+    for (const [alpha, hMul, wMin] of [[0.75, 0.42, 26], [1, 0.3, 34]]) {   // two skyline depths
+      g.globalAlpha = alpha;
+      let x = -10;
+      while (x < W) {
+        const bw = wMin + rng() * 40, bh = H * (0.1 + rng() * hMul);
+        g.fillStyle = pal[1];
+        g.fillRect(x, horizon - bh, bw, bh);
+        g.fillStyle = pal[4] + "55";                 // lit windows
+        for (let wy = horizon - bh + 8; wy < horizon - 8; wy += 12) {
+          for (let wx = x + 5; wx < x + bw - 6; wx += 11) if (rng() > 0.55) g.fillRect(wx, wy, 3.4, 4.6);
+        }
+        x += bw + 6 + rng() * 12;
+      }
+      g.globalAlpha = 1;
+    }
+    g.fillStyle = pal[0]; g.fillRect(0, horizon, W, H - horizon);
+  } else if (kind === "portrait") {
+    const cx = W / 2, cy = H * 0.46, r = Math.min(W, H) * 0.17;
+    glow(cx - r * 1.6, cy - r, r * 3.4, pal[3], 0.4);        // key light
+    g.fillStyle = pal[1];
+    g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.fill();       // head
+    g.beginPath(); g.ellipse(cx, cy + r * 2.15, r * 1.9, r * 1.45, 0, Math.PI, 0); g.fill(); // shoulders
+    g.strokeStyle = pal[4]; g.lineWidth = 3; g.lineCap = "round";
+    g.beginPath(); g.arc(cx, cy, r + 2, -Math.PI * 0.85, -Math.PI * 0.15); g.stroke();       // rim light
+  } else if (kind === "product") {
+    const cx = W / 2, py = H * 0.72;
+    glow(cx, H * 0.4, W * 0.3, pal[3], 0.5);                 // spotlight
+    g.fillStyle = pal[1];
+    g.beginPath(); g.ellipse(cx, py, W * 0.22, H * 0.045, 0, 0, TAU); g.fill();               // pedestal
+    const pw = W * 0.16, ph = H * 0.34;
+    const body = g.createLinearGradient(cx - pw / 2, 0, cx + pw / 2, 0);
+    body.addColorStop(0, pal[2]); body.addColorStop(0.5, pal[4]); body.addColorStop(1, pal[1]);
+    g.fillStyle = body;
+    roundRect(g, cx - pw / 2, py - ph, pw, ph, 10); g.fill();                                 // the hero object
+    g.globalAlpha = 0.25; g.scale(1, -0.4);
+    roundRect(g, cx - pw / 2, -(py / 0.4) - ph, pw, ph, 10); g.fill();                        // reflection
+    g.setTransform(1, 0, 0, 1, 0, 0); g.globalAlpha = 1;
+  } else if (kind === "food") {
+    const cx = W / 2, cy = H * 0.58;
+    glow(cx, cy - H * 0.2, W * 0.3, pal[3], 0.4);
+    g.fillStyle = pal[4]; g.beginPath(); g.ellipse(cx, cy, W * 0.26, W * 0.16, 0, 0, TAU); g.fill();  // plate
+    g.fillStyle = pal[2]; g.beginPath(); g.ellipse(cx, cy - 6, W * 0.16, W * 0.1, 0, 0, TAU); g.fill(); // dish
+    g.fillStyle = pal[1];
+    for (let k = 0; k < 5; k++) { g.beginPath(); g.arc(cx + (rng() - 0.5) * W * 0.2, cy - 8 + (rng() - 0.5) * W * 0.09, 6 + rng() * 8, 0, TAU); g.fill(); }
+  } else {
+    for (let b = 0; b < 5; b++) {                            // abstract: palette-true blobs
+      glow(rng() * W, rng() * H, (0.2 + rng() * 0.4) * W, pal[2 + Math.floor(rng() * 3)], 0.2 + rng() * 0.16);
+    }
+  }
+}
 function previewAsset(req, i, context = {}) {
   const spec = context.spec || buildGenerationSpec(req);
   const [, ar] = (req.modality === "video" ? VID_ASPECTS : IMG_ASPECTS).find(([k]) => k === req.params.aspect) || ["1:1", 1];
   const W = 640, H = Math.round(W / ar);
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const g = c.getContext("2d");
-  const seed = hashStr((spec.original_prompt || req.prompt || "phantom") + "|" + req.style + "|" + i);
+  const promptText = spec.original_prompt || req.prompt || "phantom";
+  const seed = hashStr(promptText + "|" + req.style + "|" + i);
   const rng = mulberry(seed);
-  // base gradient
-  const hueBase = req.style === "Neon" ? 150 : req.style === "Analog film" ? 40 : req.style === "Portrait" ? 160 : 155;
-  const g1 = g.createLinearGradient(0, 0, W, H);
-  g1.addColorStop(0, `hsl(${hueBase + rng() * 30}, 60%, ${8 + rng() * 6}%)`);
-  g1.addColorStop(1, `hsl(${180 + rng() * 40}, 55%, ${4 + rng() * 4}%)`);
+  const pal = scenePalette(promptText);
+  const kind = sceneKind(promptText);
+  // sky/base from the prompt's palette
+  const g1 = g.createLinearGradient(0, 0, 0, H);
+  g1.addColorStop(0, pal[0]); g1.addColorStop(0.55, pal[1]); g1.addColorStop(1, pal[0]);
   g.fillStyle = g1; g.fillRect(0, 0, W, H);
-  // flowing blobs (emerald palette)
-  for (let b = 0; b < 5; b++) {
-    const x = rng() * W, y = rng() * H, r = (0.2 + rng() * 0.4) * W;
-    const rad = g.createRadialGradient(x, y, 0, x, y, r);
-    const hue = 140 + rng() * 60;
-    rad.addColorStop(0, `hsla(${hue}, 90%, 60%, ${0.16 + rng() * 0.2})`);
-    rad.addColorStop(1, "hsla(160, 90%, 60%, 0)");
-    g.fillStyle = rad; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill();
-  }
-  // flow-field strokes → a "generated" texture
+  drawScene(g, kind, pal, W, H, rng);
+  // light flow-field haze for texture, tinted to the scene
   g.globalCompositeOperation = "screen";
-  for (let s = 0; s < 220; s++) {
+  g.strokeStyle = pal[3];
+  for (let s = 0; s < 120; s++) {
     let x = rng() * W, y = rng() * H;
+    g.globalAlpha = 0.03 + rng() * 0.04;
     g.beginPath(); g.moveTo(x, y);
-    for (let k = 0; k < 14; k++) {
+    for (let k = 0; k < 12; k++) {
       const a = (Math.sin(x * 0.01 + seed) + Math.cos(y * 0.012 - seed)) * Math.PI;
       x += Math.cos(a) * 7; y += Math.sin(a) * 7;
       g.lineTo(x, y);
     }
-    g.strokeStyle = `hsla(${150 + rng() * 40}, 100%, ${55 + rng() * 25}%, ${0.05 + rng() * 0.06})`;
-    g.lineWidth = 0.8 + rng() * 1.4; g.stroke();
+    g.lineWidth = 0.8 + rng() * 1.2; g.stroke();
   }
+  g.globalAlpha = 1;
   g.globalCompositeOperation = "source-over";
   // vignette
   const vg = g.createRadialGradient(W / 2, H / 2, H * 0.2, W / 2, H / 2, H * 0.8);
@@ -709,7 +803,7 @@ function previewAsset(req, i, context = {}) {
   g.stroke();
   g.fillStyle = "rgba(120,255,190,0.88)";
   g.font = "800 10px 'DM Mono', monospace";
-  g.fillText(`PROVIDER ${context.fallbackReason ? "FALLBACK" : "PREVIEW"} · ${String(spec.aspect || "").toUpperCase()}`, px + 16, py + 25);
+  g.fillText(`${context.fallbackReason ? "OFFLINE SKETCH · " + String(context.fallbackReason).replace(/^provider_/i, "").replace(/_/g, " ").toUpperCase().slice(0, 26) : "PREVIEW"} · ${String(spec.aspect || "").toUpperCase()}`, px + 16, py + 25);
   g.fillStyle = "rgba(236,255,246,0.95)";
   g.font = "700 18px 'Space Grotesk', sans-serif";
   drawWrappedText(g, spec.original_prompt || req.prompt || "Untitled media generation", px + 16, py + 52, plateW - 32, 22, 3);
@@ -1148,7 +1242,9 @@ async function runGenerate(body, cfg, opts, root, esc) {
     session.assets = session.assets.slice(0, 60);
     refreshGeneratePanel(body, cfg, opts, root);
     if (opts.notify) {
-      const status = out.live ? "generated" : `prepared preview (${out.fallbackReason || "provider offline"})`;
+      const status = out.live
+        ? "generated"
+        : `media backend didn't respond (${out.fallbackReason || "unreachable"}) — sketched the request locally instead; hit Regenerate once the provider is back for`;
       opts.notify("Media Factory", `${status} ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""} - "${genState.prompt.slice(0, 40)}".`);
     }
     // spend credits only after a live provider asset returns; previews are free.

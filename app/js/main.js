@@ -4,19 +4,19 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260707-49";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-49";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-49";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-49";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-49";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-49";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-49";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-49";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-49";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260707-49";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-49";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-49";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-49";
+} from "./store.js?v=phantom-live-20260707-50";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-50";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-50";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-50";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-50";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-50";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-50";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-50";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-50";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260707-50";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-50";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-50";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-50";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -586,7 +586,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260707-49";
+const POSE_VERSION = "phantom-live-20260707-50";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -686,14 +686,22 @@ function reactionForMode(id = activeMode) {
   return MODE_REACTIONS[id] || MODE_REACTIONS.ask;
 }
 
-function inferModeFromText(text = "") {
+/* mode named by THIS text only — null when the message carries no lane
+   keyword, so a sticky chip can never rewrite an unrelated question */
+function modeNamedInText(text = "") {
   const s = text.toLowerCase();
-  if (/\b(video|reel|clip|shoot|phantomcut|edit|render)\b/.test(s)) return "video";
+  if (/\b(video|reel|clip|shoot|phantomcut|render)\b/.test(s)) return "video";
   if (/\b(image|photo|picture|graphic|creative|thumbnail|visual)\b/.test(s)) return "image";
   if (/\b(site|website|page|landing|store|checkout|web)\b/.test(s)) return "website";
   if (/\b(write|draft|proposal|quote|caption|email|follow.?up|copy)\b/.test(s)) return "write";
-  if (/\b(status|admin|system|approval|protect|security|scan|worker|settings)\b/.test(s)) return "admin";
-  return activeMode;
+  if (/\b(admin|system|approval|protect|security|scan|worker|settings)\b/.test(s)) return "admin";
+  return null;
+}
+function inferModeFromText(text = "") {
+  return modeNamedInText(text) || activeMode;
+}
+function looksLikeQuestion(text = "") {
+  return /\?\s*$/.test(text.trim()) || /^(what|why|how|when|where|who|which|is|are|was|were|can|could|should|would|do|does|did|will)\b/i.test(text.trim());
 }
 
 function stageCaptionText(mood = ghostMood, emotion = ghostEmotion) {
@@ -1271,10 +1279,17 @@ function applyCompanionMode(mode) {
 function renderChatSettingsPanel(target) {
   renderOperatorMiniSettings(target, {
     openSettings: () => routeWorkspace("settings"),
-    onChange: () => {
+    onChange: (settings) => {
       if (!getOperatorSettings().phantomLoop && companionMode() === "loop") setCompanionMode("chat");
       applyCompanionMode(companionMode());
       renderChatLog();
+      /* the change must be VISIBLE immediately, not just saved */
+      const caption = document.querySelector("[data-pc-caption]");
+      if (caption && settings) {
+        const brain = settings.brainMode === "api" ? "Hermes/API" : settings.brainMode === "subscription" ? "Subscription" : "Instant";
+        const model = settings.models?.[settings.provider] || "";
+        caption.textContent = `Settings applied — ${brain} · ${model}${settings.phantomLoop ? " · Loop armed" : ""}`;
+      }
     },
   });
 }
@@ -1453,11 +1468,17 @@ function runCommand(raw) {
     renderModePose(inferredMode);
   }
   const mode = MODES[activeMode] || MODES.ask;
+  /* the prefix only fires when THIS message names the lane and reads like a
+     request — a leftover sticky mode must never turn "whats the weather"
+     into "Create a video for whats the weather" */
+  const namedLane = modeNamedInText(raw);
   const text = loopArmed
     ? (/phantom loop|loopus|looper|build me|build a|create a campaign|make an intake form|turn this into a build plan/i.test(raw)
       ? raw
       : `start phantom loop for ${raw}`)
-    : mode.prefix && !/\b(draft|create|build|make|write|new)\b/i.test(raw) ? mode.prefix + raw : raw;
+    : mode.prefix && namedLane === activeMode && !looksLikeQuestion(raw) && !/\b(draft|create|build|make|write|new)\b/i.test(raw)
+      ? mode.prefix + raw
+      : raw;
   speak(raw, "user");
   ghostFlare("listening");
   stageReact("listen", 620);
