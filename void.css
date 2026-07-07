@@ -402,25 +402,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 @keyframes opsSwap { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
 .creed { margin-top: clamp(20px, 3.4vh, 34px); }
 
-/* holographic ground ring: the entity stands ON something now */
 .phantom-zone { position: relative; }
-.phantom-zone::after {
-  content: ""; position: absolute; left: 50%; bottom: 4%;
-  width: min(52%, 320px); aspect-ratio: 4 / 1; transform: translateX(-50%);
-  border-radius: 50%; border: 1px solid rgba(77, 255, 171, 0.25);
-  box-shadow: 0 0 34px rgba(77, 255, 171, 0.14), inset 0 0 26px rgba(77, 255, 171, 0.07);
-  opacity: 0.55; pointer-events: none;
-  animation: groundRing 6.4s ease-in-out infinite;
-}
-.phantom-zone::before {
-  content: ""; position: absolute; left: 50%; bottom: 0;
-  width: min(64%, 400px); height: 22%; transform: translateX(-50%);
-  background: radial-gradient(50% 100% at 50% 100%, rgba(77, 255, 171, 0.13), transparent 70%);
-  filter: blur(6px); opacity: 0.8; pointer-events: none;
-  animation: groundGlow 6.4s ease-in-out infinite;
-}
-@keyframes groundRing { 50% { opacity: 0.9; transform: translateX(-50%) scaleX(1.05); } }
-@keyframes groundGlow { 50% { opacity: 1; } }
 
 /* the wordmark breathes with the entity */
 .wordmark { animation: markBreathe 5.6s ease-in-out infinite; }
@@ -442,7 +424,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 @media (max-height: 640px) { .ops-line { display: none; } }
 @media (prefers-reduced-motion: reduce) {
-  .ops-line i, .ops-line.swap, .phantom-zone::before, .phantom-zone::after, .wordmark, .powers button.on { animation: none !important; }
+  .ops-line i, .ops-line.swap, .wordmark, .powers button.on { animation: none !important; }
 }
 
 /* ============================================================================ */
