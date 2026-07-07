@@ -413,7 +413,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-60")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-61")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -611,65 +611,99 @@ function initRiskRadar() {
   if (!field || reduceMotion) return;
   // red = threats they face. blue = the everyday flood of real notifications
   // (a face, the app, a real question) — the burdens PhantomForce absorbs.
-  const threats = ["malware", "scam", "data leak", "phishing", "chargeback", "law update", "spam", "fraud", "compliance", "deadline", "downtime", "bad review"];
+  /* red = everything slipping through a busy owner's fingers — mostly the
+     quiet losses (missed calls, cold leads, hours burned on admin), plus a
+     few real threats. This is the problem PhantomForce eats. */
+  const threats = [
+    "missed call", "unread email", "text not answered", "lead going cold",
+    "quote never sent", "follow-up forgotten", "invoice unpaid 14 days",
+    "double-booked", "no-show risk", "3 hrs lost to admin",
+    "same email typed twice", "review never requested", "stale website",
+    "phishing", "scam attempt", "data leak", "chargeback", "bad review", "deadline",
+  ];
   // real portraits + diverse names so the flood feels like actual people
   const rmu = (g, i) => `https://randomuser.me/api/portraits/${g}/${i}.jpg`;
   const stream = [
-    { name: "Jasmine Carter", photo: rmu("women", 68), app: "Instagram", msg: "how much for a shoot?" },
-    { name: "Mike Sullivan", photo: rmu("men", 32), app: "Messenger", msg: "you free Saturday?" },
+    { name: "Jasmine Carter", photo: rmu("women", 68), app: "Instagram", msg: "what are your rates?" },
+    { name: "Mike Sullivan", photo: rmu("men", 32), app: "Messenger", msg: "you open Friday?" },
     { name: "Grace Kim", photo: rmu("women", 79), app: "Email", msg: "Re: your quote" },
     { name: "Liam O'Brien", photo: rmu("men", 45), app: "iMessage", msg: "can you call me back?" },
     { name: "Emily Harper", photo: rmu("women", 12), app: "Text", msg: "still on for 3pm?" },
-    { name: "Marcus Williams", photo: rmu("men", 11), app: "Facebook", msg: "do you do weddings?" },
+    { name: "Marcus Williams", photo: rmu("men", 11), app: "Facebook", msg: "can I get an estimate?" },
     { name: "Sarah Mitchell", photo: rmu("women", 90), app: "Missed call", msg: "called twice" },
     { name: "Tyrone Jackson", photo: rmu("men", 64), app: "New lead", msg: "wants a callback today" },
-    { name: "Destiny Brooks", photo: rmu("women", 87), app: "TikTok", msg: "commented on your post" },
+    { name: "Destiny Brooks", photo: rmu("women", 87), app: "Google", msg: "do you offer payment plans?" },
     { name: "Kenji Tanaka", photo: rmu("men", 76), app: "Voicemail", msg: "left you a message" },
     { name: "Megan Foster", photo: rmu("women", 54), app: "New review", msg: "left you 5 stars" },
     { name: "James Whitfield", photo: rmu("men", 83), app: "Invoice", msg: "payment is overdue" },
     { name: "Leilani Akana", photo: rmu("women", 33), app: "Booking", msg: "needs to reschedule" },
     { name: "Carlos Rivera", photo: rmu("men", 9), app: "Email", msg: "where's my order?" },
-    { name: "Amy Nguyen", photo: rmu("women", 41), app: "Comment", msg: "is this available?" },
-    { name: "Keanu Kealoha", photo: rmu("men", 51), app: "X", msg: "sent you the details" },
+    { name: "Amy Nguyen", photo: rmu("women", 41), app: "Website form", msg: "requested a quote" },
+    { name: "Keanu Kealoha", photo: rmu("men", 51), app: "X", msg: "is this still available?" },
   ];
   // keep pings from overlapping each other OR the text UI in the middle
   const active = [];
   const overlaps = (a, b, pad) =>
     a.left - pad < b.right && a.right + pad > b.left && a.top - pad < b.bottom && a.bottom + pad > b.top;
   const uiSel = "[data-wordmark], [data-phantom-zone], [data-say], [data-hero-sub], [data-powers], [data-speak], [data-cta-block], [data-ops], [data-download-modal]";
+  /* slot grid: 6 vertical slots per side band. A ping takes a FREE slot, so
+     they spread evenly down both edges instead of huddling in the corners. */
+  const SLOTS = 12;                                          // 0-5 left, 6-11 right
+  const slotOwner = new Array(SLOTS).fill(null);
   const place = (ping) => {
     const W = innerWidth, H = innerHeight;
     const obstacles = active.map((e) => e.getBoundingClientRect())
       .concat(Array.from(document.querySelectorAll(uiSel)).map((el) => el.getBoundingClientRect()));
-    for (let tries = 0; tries < 26; tries++) {
-      const right = Math.random() < 0.5;                    // left or right band, fully random within
-      const lp = right ? 76 + Math.random() * 21 : 3 + Math.random() * 21;
-      const tp = 8 + Math.random() * 84;
+    const free = [];
+    for (let i = 0; i < SLOTS; i++) if (!slotOwner[i]) free.push(i);
+    for (let i = free.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [free[i], free[j]] = [free[j], free[i]]; }
+    for (const slot of free) {
+      const rightSide = slot >= 6;
+      const row = slot % 6;
+      const lp = rightSide ? 78 + Math.random() * 15 : 4 + Math.random() * 15;
+      const tp = 9 + row * 13.5 + Math.random() * 5;
       ping.style.left = lp + "%"; ping.style.top = tp + "%";
       const r = ping.getBoundingClientRect();
-      if (r.width < 2 || r.left < 8 || r.right > W - 8 || r.top < 8 || r.bottom > H - 8) continue;   // keep on-screen
+      if (r.width < 2 || r.left < 8 || r.right > W - 8 || r.top < 8 || r.bottom > H - 8) continue;
       let clash = false;
       for (const o of obstacles) { if (overlaps(r, o, 16)) { clash = true; break; } }
-      if (!clash) return true;
+      if (!clash) { slotOwner[slot] = ping; ping._slot = slot; return true; }
     }
-    return false;                                           // no clear spot -> skip this one
+    return false;                                           // no clear slot -> skip this one
   };
-  let lastThreat = -1;
+  /* deck sampling: walk a shuffled deck so nothing repeats until the whole
+     deck has played, and never show a label that is already on screen */
+  const makeDeck = (n) => { const d = [...Array(n).keys()]; for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; } return d; };
+  let threatDeck = makeDeck(threats.length), streamDeck = makeDeck(stream.length);
+  const onScreen = () => new Set(active.map((el) => el.dataset.key));
+  const drawCard = (deckRef, items, keyOf) => {
+    const showing = onScreen();
+    for (let guard = 0; guard < items.length + 2; guard++) {
+      if (!deckRef.deck.length) deckRef.deck = makeDeck(items.length);
+      const idx = deckRef.deck.shift();
+      if (!showing.has(keyOf(items[idx]))) return items[idx];
+    }
+    return null;
+  };
+  const threatRef = { deck: threatDeck }, streamRef = { deck: streamDeck };
   const spawn = () => {
     if (document.hidden) return;
-    const threat = smallScreen ? true : Math.random() < 0.6;   // red threat dots outnumber the bubbles
+    const threat = smallScreen ? true : Math.random() < 0.6;   // red dots outnumber the bubbles
     const ping = document.createElement("div");
     ping.style.visibility = "hidden";
     if (threat) {
+      const label0 = drawCard(threatRef, threats, (x) => x);
+      if (!label0) return;
       ping.className = "risk-ping threat";
-      let ti; do { ti = Math.floor(Math.random() * threats.length); } while (threats.length > 1 && ti === lastThreat);
-      lastThreat = ti;
+      ping.dataset.key = label0;
       const dot = document.createElement("span"); dot.className = "risk-dot";
-      const label = document.createElement("span"); label.className = "risk-label"; label.textContent = threats[ti];
+      const label = document.createElement("span"); label.className = "risk-label"; label.textContent = label0;
       ping.append(dot, label);
     } else {
-      const n = stream[Math.floor(Math.random() * stream.length)];
+      const n = drawCard(streamRef, stream, (x) => x.name);
+      if (!n) return;
       ping.className = "risk-ping stream notif";
+      ping.dataset.key = n.name;
       const av = document.createElement("img");
       av.className = "notif-av"; av.src = n.photo; av.alt = ""; av.loading = "lazy"; av.referrerPolicy = "no-referrer";
       av.addEventListener("error", () => { av.classList.add("notif-av-blank"); av.removeAttribute("src"); });
@@ -686,9 +720,13 @@ function initRiskRadar() {
     active.push(ping);
     requestAnimationFrame(() => ping.classList.add("on"));
     window.setTimeout(() => ping.classList.remove("on"), 3400);
-    window.setTimeout(() => { ping.remove(); const i = active.indexOf(ping); if (i >= 0) active.splice(i, 1); }, 4400);
+    window.setTimeout(() => {
+      ping.remove();
+      const i = active.indexOf(ping); if (i >= 0) active.splice(i, 1);
+      if (ping._slot != null && slotOwner[ping._slot] === ping) slotOwner[ping._slot] = null;
+    }, 4400);
   };
-  const tick = () => { spawn(); window.setTimeout(tick, 800 + Math.random() * 1300); };   // random 0.8-2.1s gap
+  const tick = () => { spawn(); window.setTimeout(tick, 1500 + Math.random() * 900); };   // a calm 1.5-2.4s pulse
   tick();
 }
 
