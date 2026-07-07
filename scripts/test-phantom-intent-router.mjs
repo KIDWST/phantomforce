@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { classifyPhantomIntent } from "../app/js/intent-router.js";
-import { handleCommand, handleSmartCommand } from "../app/js/command.js?v=phantom-live-20260707-44";
-import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-44";
+import { handleCommand, handleSmartCommand } from "../app/js/command.js?v=phantom-live-20260707-45";
+import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-45";
 
 ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 
