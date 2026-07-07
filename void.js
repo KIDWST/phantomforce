@@ -67,7 +67,7 @@ function localReply(text) {
     return pick([
       "Hey. I'm PhantomForce — I run the boring half of your business so you don't. What's eating your time?",
       "Hello. Point me at the chaos — leads, messages, scheduling — and watch it go quiet.",
-      "Hey there. I never sleep, never forget, and nothing leaves without you. What do you need handled?",
+      "Hey there. I never sleep, never forget, and I can work by approval or autopilot under your rules. What do you need handled?",
     ]);
   if (/who are you|what are you|your name|who'?s this|what is this/.test(s))
     return pick([
@@ -76,15 +76,15 @@ function localReply(text) {
     ]);
   if (/what can you do|what do you do|how do you (help|work)|capabilit|feature/.test(s))
     return pick([
-      "I chase leads, draft your replies, book the jobs, build proposals, even make content — all approved by you.",
+      "I chase leads, draft your replies, book the jobs, build proposals, even make content — approval when you want control, autopilot when the rules are clear.",
       "I handle the flood — messages, follow-ups, scheduling, quotes, content — so you do the work you love.",
     ]);
   if (/thank|thanks|cheers|appreciate/.test(s)) return "Anytime. And this is just a taste — imagine it running 24/7.";
   if (/how much|price|cost|pricing|expensive|afford|free/.test(s)) return "Less than the hours you're bleeding. Your operator works out the exact number with you.";
-  if (/real|legit|trust|fake|believe|prove/.test(s)) return "Real, and private. Nothing trains anyone else, nothing sends without you.";
+  if (/real|legit|trust|fake|believe|prove/.test(s)) return "Real, and private. Nothing trains anyone else, and autopilot only runs inside the rules you set.";
   if (/lead|inquir|prospect|follow.?up|chase/.test(s)) return pick(["Every lead captured, answered, and chased — nothing slips.", "Leads stop falling through. I catch them, reply, and keep following up."]);
   if (/sched|book|calendar|remind|appoint|reschedul/.test(s)) return pick(["Bookings, reminders, and changes — handled without the back-and-forth.", "Your calendar runs itself. I book, remind, and reshuffle."]);
-  if (/repl|email|message|inbox|comm|\btext\b|\bdm\b|whatsapp|messenger/.test(s)) return pick(["Replies drafted the second they're needed — you approve, I send.", "I clear the inbox: answers waiting for one tap from you."]);
+  if (/repl|email|message|inbox|comm|\btext\b|\bdm\b|whatsapp|messenger/.test(s)) return pick(["Replies drafted the second they're needed — review them or let approved repeats run.", "I clear the inbox: answers ready for your tap or your autopilot rules."]);
   if (/quote|invoic|money|\bpay\b|sales|deal|proposal/.test(s)) return pick(["Quotes, proposals, and the money trail — drafted and tracked.", "I turn an inquiry into a quote and chase the payment."]);
   if (/content|video|post|deck|\bdoc\b|social|website|\bsite\b|reel|tiktok|instagram|image|photo|ad|commercial/.test(s)) return pick(["Images, videos, posts, docs, and ads — generated through gated Media Lab workflows so credits stay protected.", "Yes, PhantomForce can make creative. Public demos stay capped; full image/video generation opens after signup and approval."]);
   if (/privat|secure|protect|data|risk|malware|phish|threat|hack|scam/.test(s)) return pick(["I watch the risks — scams, leaks, deadlines — and keep it locked inside your business.", "Protection's built in: I flag the scams and threats before they cost you."]);
@@ -147,16 +147,16 @@ function initConversation() {
   // one line per chip, same order as the [data-power] buttons in the HTML
   const powerLines = [
     "Every new inquiry captured, organized, and answered — nothing slips.",
-    "Replies drafted in your voice, waiting on one tap from you.",
+    "Replies drafted in your voice, ready for review or approved autopilot.",
     "Conversations become booked jobs, reminders, and next steps.",
     "Estimates and invoices prepared, payment follow-up tracked.",
     "Posts, reels, and campaigns planned, drafted, and packaged.",
     "Pages, offers, and client updates kept current.",
     "Old leads and quiet clients get warmed back up.",
-    "Risky items and approval-needed actions flagged before they cost you.",
+    "Risky items and autopilot boundaries flagged before they cost you.",
   ];
   // after a full lap, the coda: every chip lit at once, the ask made plainly
-  const codaLine = "The whole job — handled, around the clock. Take me with you.";
+  const codaLine = "Run it yourself, or take the vacation while your agents keep working.";
   let powerTimer = 0, powerIdx = -1, touring = true, beckonTimer = 0;
   const showPower = (i) => {
     powerIdx = i;
@@ -514,7 +514,7 @@ function initOpsFeed() {
     ["Lead Hunter", "captured a new inquiry and drafted the reply"],
     ["Booking Desk", "confirmed Saturday 3pm — reminder queued"],
     ["Review Engine", "requested 2 reviews from happy clients"],
-    ["Media Factory", "rendered a 30s vertical cut for approval"],
+    ["Media Factory", "rendered a 30s vertical cut for review"],
     ["Threat Watch", "blocked a phishing attempt on the inbox"],
     ["Money Desk", "flagged an overdue invoice for follow-up"],
     ["Night Shift", "cleared the inbox while you slept"],
@@ -558,7 +558,7 @@ const WORKFORCE = [
   { name: "Sofia Ramirez",   role: "Content Producer",       status: "Building content plan", tone: "on",   photo: "https://randomuser.me/api/portraits/women/68.jpg" },
   { name: "James O'Neal",    role: "Website Technician",     status: "Reviewing page update", tone: "idle", photo: "https://randomuser.me/api/portraits/men/76.jpg" },
   { name: "Priya Shah",      role: "Scheduling Coordinator", status: "Checking schedule",     tone: "on",   photo: "https://randomuser.me/api/portraits/women/65.jpg" },
-  { name: "David Kim",       role: "Finance Assistant",      status: "Waiting approval",      tone: "warn", photo: "https://randomuser.me/api/portraits/men/52.jpg" },
+  { name: "David Kim",       role: "Finance Assistant",      status: "Rule check ready",      tone: "warn", photo: "https://randomuser.me/api/portraits/men/52.jpg" },
 ];
 const WORKFORCE_POOL_FACES = [
   "https://randomuser.me/api/portraits/women/12.jpg",
