@@ -1,0 +1,50 @@
+{
+  "_comment": "Copy this to termina.config.json (next to server.js) to replace the built-in profiles with your own. Each profile is a predefined local terminal. Commands are always fixed argv arrays run on your own machine. Do not put secrets or offensive tooling here. cwd supports ~ for your home directory.",
+  "profiles": [
+    {
+      "id": "control",
+      "label": "CONTROL",
+      "type": "control",
+      "description": "Main shell in my dev folder",
+      "cwd": "~/Documents",
+      "command": "powershell.exe",
+      "args": ["-NoLogo"],
+      "interactive": true,
+      "note": "Primary shell."
+    },
+    {
+      "id": "project-web",
+      "label": "WEB DEV",
+      "type": "service",
+      "description": "Frontend dev server",
+      "cwd": "~/Documents/my-project",
+      "command": "cmd.exe",
+      "args": ["/d", "/s", "/c", "npm run dev"],
+      "interactive": false,
+      "note": "Runs the web dev server."
+    },
+    {
+      "id": "python",
+      "label": "PYTHON",
+      "type": "shell",
+      "description": "Python REPL",
+      "cwd": "~",
+      "command": "python.exe",
+      "args": ["-i"],
+      "interactive": true,
+      "note": "Live Python REPL."
+    },
+    {
+      "id": "lab-ssh",
+      "label": "LAB SSH",
+      "type": "lab",
+      "description": "Authorized lab box (my own)",
+      "cwd": "~",
+      "command": "ssh.exe",
+      "args": ["labuser@10.0.0.5"],
+      "interactive": true,
+      "blocked": true,
+      "note": "Set blocked=false only for machines you own/control. Nothing offensive auto-runs."
+    }
+  ]
+}

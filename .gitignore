@@ -1,0 +1,6 @@
+node_modules/
+public/vendor/
+assets/termina.ico
+public/favicon.ico
+termina.config.json
+*.log

@@ -1,0 +1,308 @@
+#!/usr/bin/env node
+// Termina — standalone local terminal wall.
+//
+// A tiny HTTP server that serves the wall UI and bridges browser tiles to real
+// local PTY sessions over WebSocket. It binds to 127.0.0.1 only and is guarded
+// by a per-launch token, so nothing off this machine (and no random web page)
+// can reach your shells.
+
+import { spawn as childSpawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
+import { createReadStream, existsSync, statSync } from "node:fs";
+import http from "node:http";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import pty from "node-pty";
+import { WebSocketServer } from "ws";
+
+import { loadProfiles, terminalEnv } from "./profiles.js";
+
+const appDir = path.dirname(fileURLToPath(import.meta.url));
+const publicDir = path.join(appDir, "public");
+
+const HOST = process.env.TERMINA_HOST ?? "127.0.0.1";
+const PORT = Number(process.env.TERMINA_PORT ?? 7420);
+// A fresh secret per launch. The served page embeds it; cross-origin pages
+// cannot read it, so they cannot drive the API or open PTY sockets.
+const TOKEN = process.env.TERMINA_TOKEN ?? randomBytes(24).toString("base64url");
+
+const profiles = loadProfiles();
+const profileById = new Map(profiles.map((p) => [p.id, p]));
+
+// ---- live session registry -------------------------------------------------
+
+const MAX_BUFFER_BYTES = 200 * 1024;
+/** @type {Map<string, { proc: any, status: string, buffer: string, sockets: Set<any>, startedAt: number, exitCode: number|null }>} */
+const sessions = new Map();
+
+function publicProfile(p) {
+  const live = sessions.get(p.id);
+  const running = Boolean(live && live.status === "running");
+  return {
+    id: p.id,
+    label: p.label,
+    type: p.type,
+    description: p.description,
+    cwd: p.cwd,
+    interactive: p.interactive !== false,
+    blocked: Boolean(p.blocked),
+    note: p.note,
+    status: running ? "running" : live && live.status === "exited" ? "exited" : p.blocked ? "blocked" : "idle",
+    exitCode: live?.exitCode ?? null,
+  };
+}
+
+function broadcast(session, frame) {
+  session.buffer = (session.buffer + frame).slice(-MAX_BUFFER_BYTES);
+  for (const socket of session.sockets) {
+    if (socket.readyState === socket.OPEN) {
+      socket.send(JSON.stringify({ type: "output", data: frame }));
+    }
+  }
+}
+
+function startSession(profile) {
+  const existing = sessions.get(profile.id);
+  if (existing && existing.status === "running") {
+    return existing;
+  }
+
+  const session = { proc: null, status: "starting", buffer: "", sockets: new Set(), startedAt: Date.now(), exitCode: null };
+  sessions.set(profile.id, session);
+
+  try {
+    session.proc = pty.spawn(profile.command, profile.args, {
+      name: "xterm-256color",
+      cols: 100,
+      rows: 30,
+      cwd: profile.cwd,
+      env: terminalEnv(),
+    });
+    session.status = "running";
+    session.proc.onData((data) => broadcast(session, data));
+    session.proc.onExit(({ exitCode }) => {
+      session.status = "exited";
+      session.exitCode = exitCode;
+      broadcast(session, `\r\n\x1b[90m[session exited: code ${exitCode}]\x1b[0m\r\n`);
+    });
+  } catch (error) {
+    session.status = "error";
+    session.exitCode = -1;
+    broadcast(session, `\r\n\x1b[91m[failed to start: ${error.message}]\x1b[0m\r\n`);
+  }
+  return session;
+}
+
+function stopSession(id) {
+  const session = sessions.get(id);
+  if (!session || !session.proc) {
+    return false;
+  }
+  try {
+    session.proc.kill();
+  } catch {
+    /* already gone */
+  }
+  return true;
+}
+
+function writeInput(id, data) {
+  const session = sessions.get(id);
+  if (session && session.status === "running" && session.proc) {
+    session.proc.write(data);
+    return true;
+  }
+  return false;
+}
+
+function resize(id, cols, rows) {
+  const session = sessions.get(id);
+  if (session && session.status === "running" && session.proc) {
+    try {
+      session.proc.resize(Math.max(2, cols | 0), Math.max(2, rows | 0));
+    } catch {
+      /* dead pty */
+    }
+  }
+}
+
+// ---- auth helpers -----------------------------------------------------------
+
+function tokenFromRequest(req, url) {
+  const header = req.headers["x-termina-token"];
+  if (typeof header === "string" && header) return header;
+  return url.searchParams.get("token") ?? "";
+}
+
+function sameOriginOk(req) {
+  const origin = req.headers.origin;
+  if (!origin) return true; // non-browser or same-origin navigations
+  return origin === `http://${HOST}:${PORT}` || origin === `http://localhost:${PORT}`;
+}
+
+function sendJson(res, code, body) {
+  const payload = JSON.stringify(body);
+  res.writeHead(code, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+  res.end(payload);
+}
+
+// ---- static files -----------------------------------------------------------
+
+const MIME = {
+  ".html": "text/html; charset=utf-8",
+  ".js": "text/javascript; charset=utf-8",
+  ".css": "text/css; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".png": "image/png",
+  ".svg": "image/svg+xml",
+  ".map": "application/json",
+};
+
+function serveStatic(req, res, urlPath) {
+  const rel = urlPath === "/" ? "index.html" : decodeURIComponent(urlPath.replace(/^\/+/, ""));
+  const filePath = path.join(publicDir, rel);
+  // Contain within publicDir.
+  if (!filePath.startsWith(publicDir) || !existsSync(filePath) || !statSync(filePath).isFile()) {
+    res.writeHead(404, { "Content-Type": "text/plain" });
+    res.end("Not found");
+    return;
+  }
+  if (rel === "index.html") {
+    // Inject the launch token into the page.
+    import("node:fs/promises").then(async ({ readFile }) => {
+      let html = await readFile(filePath, "utf8");
+      html = html.replace("__TERMINA_TOKEN__", TOKEN);
+      res.writeHead(200, { "Content-Type": MIME[".html"], "Cache-Control": "no-store" });
+      res.end(html);
+    });
+    return;
+  }
+  const ext = path.extname(filePath).toLowerCase();
+  res.writeHead(200, { "Content-Type": MIME[ext] ?? "application/octet-stream" });
+  createReadStream(filePath).pipe(res);
+}
+
+// ---- HTTP + REST ------------------------------------------------------------
+
+const server = http.createServer((req, res) => {
+  const url = new URL(req.url, `http://${HOST}:${PORT}`);
+  const pathName = url.pathname;
+
+  if (!pathName.startsWith("/api/")) {
+    serveStatic(req, res, pathName);
+    return;
+  }
+
+  // Every API call needs the launch token and a same-origin request.
+  if (!sameOriginOk(req)) {
+    return sendJson(res, 403, { ok: false, error: "bad_origin" });
+  }
+  if (tokenFromRequest(req, url) !== TOKEN) {
+    return sendJson(res, 401, { ok: false, error: "bad_token" });
+  }
+
+  if (pathName === "/api/health" && req.method === "GET") {
+    return sendJson(res, 200, { ok: true, app: "termina", version: "0.1.0", host: HOST, port: PORT });
+  }
+
+  if (pathName === "/api/profiles" && req.method === "GET") {
+    return sendJson(res, 200, { ok: true, profiles: profiles.map(publicProfile) });
+  }
+
+  const startMatch = pathName.match(/^\/api\/sessions\/([\w.-]+)\/(start|stop)$/);
+  if (startMatch && req.method === "POST") {
+    const [, id, action] = startMatch;
+    const profile = profileById.get(id);
+    if (!profile) return sendJson(res, 404, { ok: false, error: "unknown_profile" });
+    if (action === "start") {
+      if (profile.blocked) {
+        return sendJson(res, 409, { ok: false, error: "profile_blocked", detail: profile.note });
+      }
+      const session = startSession(profile);
+      return sendJson(res, 200, { ok: session.status !== "error", profile: publicProfile(profile) });
+    }
+    stopSession(id);
+    return sendJson(res, 200, { ok: true, profile: publicProfile(profile) });
+  }
+
+  return sendJson(res, 404, { ok: false, error: "not_found" });
+});
+
+// ---- WebSocket PTY bridge ---------------------------------------------------
+
+const wss = new WebSocketServer({ noServer: true });
+
+server.on("upgrade", (req, socket, head) => {
+  const url = new URL(req.url, `http://${HOST}:${PORT}`);
+  if (url.pathname !== "/pty") {
+    socket.destroy();
+    return;
+  }
+  // Same-origin + token gate for the socket, too.
+  const origin = req.headers.origin;
+  const originOk = !origin || origin === `http://${HOST}:${PORT}` || origin === `http://localhost:${PORT}`;
+  if (!originOk || url.searchParams.get("token") !== TOKEN) {
+    socket.destroy();
+    return;
+  }
+  wss.handleUpgrade(req, socket, head, (ws) => {
+    attachSocket(ws, url.searchParams.get("session"));
+  });
+});
+
+function attachSocket(ws, sessionId) {
+  const session = sessionId ? sessions.get(sessionId) : null;
+  if (!session) {
+    ws.send(JSON.stringify({ type: "error", data: "no_live_session" }));
+    ws.close();
+    return;
+  }
+  // Replay scrollback so a newly-opened tile shows history immediately.
+  if (session.buffer) {
+    ws.send(JSON.stringify({ type: "output", data: session.buffer }));
+  }
+  session.sockets.add(ws);
+
+  ws.on("message", (raw) => {
+    let msg;
+    try {
+      msg = JSON.parse(raw.toString());
+    } catch {
+      return;
+    }
+    if (msg.type === "input" && typeof msg.data === "string") {
+      writeInput(sessionId, msg.data);
+    } else if (msg.type === "resize") {
+      resize(sessionId, msg.cols, msg.rows);
+    }
+  });
+
+  ws.on("close", () => session.sockets.delete(ws));
+}
+
+// ---- lifecycle --------------------------------------------------------------
+
+function shutdown() {
+  for (const [, session] of sessions) {
+    try {
+      session.proc?.kill();
+    } catch {
+      /* ignore */
+    }
+  }
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(0), 500).unref();
+}
+process.on("SIGINT", shutdown);
+process.on("SIGTERM", shutdown);
+
+server.listen(PORT, HOST, () => {
+  const url = `http://${HOST}:${PORT}/?token=${TOKEN}`;
+  console.log("Termina is running.");
+  console.log(`  URL:   ${url}`);
+  console.log(`  Token: ${TOKEN}`);
+  console.log(`  Profiles: ${profiles.length}`);
+  // The launcher reads this line to open the app-mode window at the tokened URL.
+  console.log(`TERMINA_URL=${url}`);
+});

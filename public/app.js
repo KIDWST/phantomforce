@@ -1,0 +1,447 @@
+/* Termina wall — vanilla JS frontend. Each tile hosts a real xterm.js terminal
+   bound to a local PTY session over WebSocket. */
+
+const TOKEN = window.TERMINA_TOKEN;
+const LAYOUT_TILES = { "2x2": 4, "3x2": 6, "3x3": 9 };
+
+const TERM_THEME = {
+  background: "#05070a",
+  foreground: "#c9f5d8",
+  cursor: "#59d085",
+  selectionBackground: "#1f3a2b",
+  black: "#0b0f14",
+  green: "#59d085",
+  brightGreen: "#7fe09c",
+  red: "#ec2f45",
+  yellow: "#e5b54b",
+  blue: "#6fa7ff",
+  cyan: "#28c4d8",
+  white: "#c8d1dd",
+};
+
+let profiles = [];
+let profilesById = new Map();
+let currentLayout = "3x3";
+// Default tile → profile assignment (by index). Filled once profiles load.
+let tileAssignments = [];
+
+const tiles = new Map(); // tileIndex -> { term, fit, ws, profileId, disposed }
+
+const api = (path, options = {}) =>
+  fetch(path, {
+    ...options,
+    headers: { "x-termina-token": TOKEN, ...(options.headers || {}) },
+  });
+
+async function loadProfiles() {
+  const banner = document.getElementById("banner");
+  const text = document.getElementById("banner-text");
+  const dot = banner.querySelector(".dot");
+  try {
+    const res = await api("/api/profiles");
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "profiles unavailable");
+    profiles = data.profiles;
+    profilesById = new Map(profiles.map((p) => [p.id, p]));
+    dot.className = "dot green";
+    text.textContent = `Engine live · ${profiles.length} terminal profiles ready.`;
+    if (tileAssignments.length === 0) {
+      tileAssignments = profiles.map((p) => p.id);
+    }
+    renderWall();
+  } catch (err) {
+    dot.className = "dot red";
+    text.textContent = `Cannot reach the Termina engine (${err.message}).`;
+  }
+}
+
+function statusTone(status) {
+  if (status === "running") return "green";
+  if (status === "idle") return "amber";
+  if (status === "blocked" || status === "exited" || status === "error") return "red";
+  return "gray";
+}
+
+function renderWall() {
+  const wall = document.getElementById("wall");
+  const count = LAYOUT_TILES[currentLayout];
+  wall.className = `wall layout-${currentLayout}`;
+
+  // Dispose tiles beyond the new count.
+  for (const [index, tile] of [...tiles.entries()]) {
+    if (index >= count) {
+      disposeTile(index);
+    }
+  }
+  wall.innerHTML = "";
+
+  for (let i = 0; i < count; i += 1) {
+    wall.appendChild(buildTile(i));
+  }
+  // Re-open terminals that were live before a layout change.
+  for (let i = 0; i < count; i += 1) {
+    const tile = tiles.get(i);
+    if (tile && tile.profileId) {
+      const profile = profilesById.get(tile.profileId);
+      if (profile && profile.status === "running") {
+        attachTerminal(i, tile.profileId);
+      }
+    }
+  }
+}
+
+function buildTile(index) {
+  const el = document.createElement("article");
+  el.className = "tile";
+  el.dataset.index = String(index);
+
+  const selectedId = tileAssignments[index] ?? "";
+  const profile = profilesById.get(selectedId) || null;
+
+  const head = document.createElement("div");
+  head.className = "tile-head";
+
+  const select = document.createElement("select");
+  select.className = "instance-select";
+  select.setAttribute("aria-label", `Tile ${index + 1} terminal`);
+  select.innerHTML =
+    `<option value="">Choose terminal…</option>` +
+    profiles.map((p) => `<option value="${p.id}">${p.label}</option>`).join("");
+  select.value = selectedId;
+  select.addEventListener("change", () => selectProfile(index, select.value));
+
+  const status = document.createElement("span");
+  status.className = `status ${profile ? statusTone(profile.status) : "gray"}`;
+  status.innerHTML = `<i></i>${profile ? profile.status : "empty"}`;
+
+  head.append(select, status);
+
+  const meta = document.createElement("div");
+  meta.className = "tile-meta";
+  meta.innerHTML = profile
+    ? `<span class="cam">CAM ${String(index + 1).padStart(2, "0")}</span>
+       <span class="src" title="${profile.description}">${profile.cwd}</span>
+       <span class="ttype">${profile.type}</span>`
+    : `<span class="cam">CAM ${String(index + 1).padStart(2, "0")}</span><span class="src">no source</span>`;
+
+  const screen = document.createElement("div");
+  screen.className = "screen";
+  const term = document.createElement("div");
+  term.className = "term-host";
+  term.id = `term-${index}`;
+  const placeholder = document.createElement("div");
+  placeholder.className = "placeholder";
+  placeholder.innerHTML = profile
+    ? `<p class="big">${profile.blocked ? "BLOCKED" : "READY"}</p><p>${profile.note}</p>`
+    : `<p class="big">UNASSIGNED</p><p>Pick a terminal above to put it on this monitor.</p>`;
+  screen.append(term, placeholder);
+
+  const actions = document.createElement("div");
+  actions.className = "tile-actions";
+  if (profile && !profile.blocked) {
+    const running = profile.status === "running";
+    actions.appendChild(
+      button(running ? "Stop" : "Start", running ? "danger" : "", () =>
+        running ? stopProfile(index) : startProfile(index),
+      ),
+    );
+  } else if (profile && profile.blocked) {
+    actions.appendChild(button("Blocked", "disabled", () => {}, true));
+  }
+  actions.appendChild(button("Clear", "", () => tiles.get(index)?.term?.clear()));
+  actions.appendChild(button("Expand", "", () => expandTile(index)));
+  actions.appendChild(button("Focus", "", () => tiles.get(index)?.term?.focus()));
+
+  el.append(head, meta, screen, actions);
+  return el;
+}
+
+function button(label, cls, onClick, disabled = false) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.textContent = label;
+  if (cls) b.className = cls;
+  if (disabled) b.disabled = true;
+  b.addEventListener("click", onClick);
+  return b;
+}
+
+function selectProfile(index, profileId) {
+  disposeTile(index);
+  tileAssignments[index] = profileId || null;
+  refreshTile(index);
+  // If the chosen session is already running, attach immediately.
+  const profile = profilesById.get(profileId);
+  if (profile && profile.status === "running") {
+    attachTerminal(index, profileId);
+  }
+}
+
+async function startProfile(index) {
+  const profileId = tileAssignments[index];
+  if (!profileId) return;
+  try {
+    const res = await api(`/api/sessions/${encodeURIComponent(profileId)}/start`, { method: "POST" });
+    const data = await res.json();
+    if (!data.ok) {
+      flashTile(index, data.detail || data.error || "start failed");
+      await loadProfilesQuiet();
+      return;
+    }
+    attachTerminal(index, profileId);
+    await loadProfilesQuiet();
+  } catch (err) {
+    flashTile(index, `start failed: ${err.message}`);
+  }
+}
+
+async function stopProfile(index) {
+  const profileId = tileAssignments[index];
+  if (!profileId) return;
+  try {
+    await api(`/api/sessions/${encodeURIComponent(profileId)}/stop`, { method: "POST" });
+  } catch {
+    /* best effort */
+  }
+  await loadProfilesQuiet();
+}
+
+function attachTerminal(index, profileId) {
+  const host = document.getElementById(`term-${index}`);
+  if (!host) return;
+  const existing = tiles.get(index);
+  if (existing && existing.profileId === profileId && existing.term && !existing.disposed) {
+    return; // already attached
+  }
+  disposeTile(index);
+
+  const tileEl = host.closest(".tile");
+  if (tileEl) tileEl.classList.add("live");
+
+  const term = new Terminal({
+    convertEol: false,
+    cursorBlink: true,
+    fontFamily: '"Cascadia Code", "Cascadia Mono", Consolas, monospace',
+    fontSize: 12,
+    theme: TERM_THEME,
+    scrollback: 4000,
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(host);
+  try {
+    fit.fit();
+  } catch {
+    /* not visible yet */
+  }
+
+  const ws = new WebSocket(`ws://${location.host}/pty?session=${encodeURIComponent(profileId)}&token=${encodeURIComponent(TOKEN)}`);
+  const tile = { term, fit, ws, profileId, disposed: false };
+  tiles.set(index, tile);
+
+  ws.onopen = () => {
+    sendResize(tile);
+  };
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "output") term.write(msg.data);
+    } catch {
+      /* ignore */
+    }
+  };
+  ws.onclose = () => {
+    if (!tile.disposed) term.write("\r\n\x1b[90m[disconnected]\x1b[0m\r\n");
+  };
+  term.onData((data) => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "input", data }));
+  });
+  const ro = new ResizeObserver(() => {
+    try {
+      fit.fit();
+      sendResize(tile);
+    } catch {
+      /* ignore */
+    }
+  });
+  ro.observe(host);
+  tile.ro = ro;
+}
+
+function sendResize(tile) {
+  if (tile.ws.readyState === WebSocket.OPEN && tile.term) {
+    tile.ws.send(JSON.stringify({ type: "resize", cols: tile.term.cols, rows: tile.term.rows }));
+  }
+}
+
+function disposeTile(index) {
+  const tile = tiles.get(index);
+  if (!tile) return;
+  tile.disposed = true;
+  try {
+    tile.ro?.disconnect();
+  } catch {
+    /* ignore */
+  }
+  try {
+    tile.ws?.close();
+  } catch {
+    /* ignore */
+  }
+  try {
+    tile.term?.dispose();
+  } catch {
+    /* ignore */
+  }
+  tiles.delete(index);
+  const host = document.getElementById(`term-${index}`);
+  const tileEl = host?.closest(".tile");
+  if (tileEl) tileEl.classList.remove("live");
+}
+
+function refreshTile(index) {
+  const wall = document.getElementById("wall");
+  const old = wall.querySelector(`.tile[data-index="${index}"]`);
+  if (old) {
+    const fresh = buildTile(index);
+    old.replaceWith(fresh);
+  }
+}
+
+function flashTile(index, message) {
+  const host = document.getElementById(`term-${index}`);
+  const tileEl = host?.closest(".tile");
+  const placeholder = tileEl?.querySelector(".placeholder");
+  if (placeholder) {
+    placeholder.innerHTML = `<p class="big err">ERROR</p><p>${message}</p>`;
+  }
+}
+
+// Expand: open a large terminal bound to the same session in the overlay.
+let overlayTile = null;
+function expandTile(index) {
+  const profileId = tileAssignments[index];
+  if (!profileId) return;
+  const overlay = document.getElementById("overlay");
+  const host = document.getElementById("overlay-term");
+  const profile = profilesById.get(profileId);
+  document.getElementById("overlay-title").textContent = profile ? profile.label : "Terminal";
+  overlay.classList.remove("hidden");
+  host.innerHTML = "";
+
+  const term = new Terminal({
+    cursorBlink: true,
+    fontFamily: '"Cascadia Code", "Cascadia Mono", Consolas, monospace',
+    fontSize: 14,
+    theme: TERM_THEME,
+    scrollback: 6000,
+  });
+  const fit = new FitAddon.FitAddon();
+  term.loadAddon(fit);
+  term.open(host);
+  setTimeout(() => {
+    try {
+      fit.fit();
+    } catch {
+      /* ignore */
+    }
+  }, 30);
+
+  const ws = new WebSocket(`ws://${location.host}/pty?session=${encodeURIComponent(profileId)}&token=${encodeURIComponent(TOKEN)}`);
+  overlayTile = { term, fit, ws };
+  ws.onopen = () => ws.send(JSON.stringify({ type: "resize", cols: term.cols, rows: term.rows }));
+  ws.onmessage = (event) => {
+    try {
+      const msg = JSON.parse(event.data);
+      if (msg.type === "output") term.write(msg.data);
+    } catch {
+      /* ignore */
+    }
+  };
+  term.onData((data) => {
+    if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "input", data }));
+  });
+  term.focus();
+}
+
+function closeOverlay() {
+  const overlay = document.getElementById("overlay");
+  overlay.classList.add("hidden");
+  if (overlayTile) {
+    try {
+      overlayTile.ws.close();
+    } catch {
+      /* ignore */
+    }
+    try {
+      overlayTile.term.dispose();
+    } catch {
+      /* ignore */
+    }
+    overlayTile = null;
+  }
+}
+
+async function loadProfilesQuiet() {
+  try {
+    const res = await api("/api/profiles");
+    const data = await res.json();
+    if (data.ok) {
+      profiles = data.profiles;
+      profilesById = new Map(profiles.map((p) => [p.id, p]));
+      // Update only status chips + action buttons without tearing down live terms.
+      for (let i = 0; i < LAYOUT_TILES[currentLayout]; i += 1) {
+        const live = tiles.get(i);
+        if (!live) refreshTile(i);
+        else updateTileChrome(i);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function updateTileChrome(index) {
+  const wall = document.getElementById("wall");
+  const tileEl = wall.querySelector(`.tile[data-index="${index}"]`);
+  if (!tileEl) return;
+  const profile = profilesById.get(tileAssignments[index]);
+  const status = tileEl.querySelector(".status");
+  if (status && profile) {
+    status.className = `status ${statusTone(profile.status)}`;
+    status.innerHTML = `<i></i>${profile.status}`;
+  }
+  const actions = tileEl.querySelector(".tile-actions");
+  if (actions && profile && !profile.blocked) {
+    const running = profile.status === "running";
+    const first = actions.querySelector("button");
+    if (first) {
+      first.textContent = running ? "Stop" : "Start";
+      first.className = running ? "danger" : "";
+      first.onclick = () => (running ? stopProfile(index) : startProfile(index));
+    }
+  }
+}
+
+// ---- wiring -----------------------------------------------------------------
+
+document.querySelectorAll(".layout-switch button").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".layout-switch button").forEach((b) => b.classList.remove("active"));
+    btn.classList.add("active");
+    currentLayout = btn.dataset.layout;
+    renderWall();
+  });
+});
+document.getElementById("rescan").addEventListener("click", loadProfiles);
+document.getElementById("overlay-close").addEventListener("click", closeOverlay);
+document.getElementById("overlay").addEventListener("click", (e) => {
+  if (e.target.id === "overlay") closeOverlay();
+});
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") closeOverlay();
+});
+
+loadProfiles();
+// Light status polling so chips stay honest (session exits, etc.).
+setInterval(loadProfilesQuiet, 5000);

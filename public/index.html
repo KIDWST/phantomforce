@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Termina — Terminal Wall</title>
+    <link rel="icon" href="/favicon.ico" />
+    <link rel="stylesheet" href="/vendor/xterm.css" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script>
+      window.TERMINA_TOKEN = "__TERMINA_TOKEN__";
+    </script>
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="brand">
+        <span class="brand-mark">&gt;_</span>
+        <div class="brand-text">
+          <strong>TERMINA</strong>
+          <span>Terminal wall · local command center</span>
+        </div>
+      </div>
+      <div class="controls">
+        <div class="layout-switch" role="group" aria-label="Wall layout">
+          <button type="button" data-layout="2x2">2×2</button>
+          <button type="button" data-layout="3x2">3×2</button>
+          <button type="button" data-layout="3x3" class="active">3×3</button>
+        </div>
+        <button type="button" id="rescan" class="ghost">Re-scan</button>
+      </div>
+    </header>
+
+    <div class="banner" id="banner">
+      <span class="dot amber"></span>
+      <p id="banner-text">Connecting to the local Termina engine…</p>
+      <small
+        >Local only (127.0.0.1) · single-machine · your own shells. Nothing off this machine can reach
+        these terminals.</small
+      >
+    </div>
+
+    <main id="wall" class="wall layout-3x3"></main>
+
+    <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Expanded terminal">
+      <div class="overlay-panel">
+        <div class="overlay-head">
+          <span id="overlay-title">Terminal</span>
+          <button type="button" id="overlay-close" class="ghost">Close</button>
+        </div>
+        <div id="overlay-term" class="overlay-term"></div>
+      </div>
+    </div>
+
+    <script src="/vendor/xterm.js"></script>
+    <script src="/vendor/addon-fit.js"></script>
+    <script src="/app.js"></script>
+  </body>
+</html>
