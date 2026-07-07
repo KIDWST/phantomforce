@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Termina — Terminal Wall</title>
+    <title>Termina — Workflow Manager</title>
     <link rel="icon" href="/favicon.ico" />
     <link rel="stylesheet" href="/vendor/xterm.css" />
     <link rel="stylesheet" href="/styles.css" />
@@ -17,18 +17,17 @@
         <span class="brand-mark">&gt;_</span>
         <div class="brand-text">
           <strong>TERMINA</strong>
-          <span>Your whole terminal workflow, one wall.</span>
+          <span id="tagline">Workflow Manager</span>
         </div>
-        <span class="engine" id="engine" title="Engine status"><i class="dot amber"></i><span id="engine-text">connecting…</span></span>
       </div>
       <div class="controls">
-        <button id="new-term" class="primary" type="button">+ New terminal</button>
         <div class="cols-switch" role="group" aria-label="Columns">
           <button type="button" data-cols="2">2</button>
           <button type="button" data-cols="3" class="active">3</button>
           <button type="button" data-cols="4">4</button>
         </div>
         <button id="rescan" class="ghost" type="button" title="Rescan available terminal types">Re-scan</button>
+        <button id="new-term" class="primary" type="button">+ New terminal</button>
       </div>
     </header>
 

@@ -62,23 +62,22 @@ function loadWorkspace() {
 // ---- engine / profiles ------------------------------------------------------
 
 async function loadProfiles() {
-  const dot = document.querySelector("#engine .dot");
-  const text = document.getElementById("engine-text");
+  const tagline = document.getElementById("tagline");
   try {
     const res = await api("/api/profiles");
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || "unavailable");
     profiles = data.profiles;
-    dot.className = "dot green";
-    text.textContent = "live";
+    tagline.textContent = "Workflow Manager";
+    tagline.classList.remove("offline");
     // Refresh option lists in any existing cards.
     for (const card of cards) {
       const sel = document.querySelector(`.tile[data-uid="${card.uid}"] .instance-select`);
       if (sel) sel.innerHTML = optionHtml(card.profileId);
     }
   } catch (err) {
-    dot.className = "dot red";
-    text.textContent = "offline";
+    tagline.textContent = "engine offline";
+    tagline.classList.add("offline");
   }
 }
 
@@ -141,16 +140,6 @@ function buildCard(card) {
     saveWorkspace();
   });
 
-  const select = document.createElement("select");
-  select.className = "instance-select";
-  select.setAttribute("aria-label", "Terminal type");
-  select.innerHTML = optionHtml(card.profileId);
-  select.addEventListener("change", () => setCardProfile(card, select.value));
-
-  const status = document.createElement("span");
-  status.className = "status gray";
-  status.innerHTML = `<i></i>idle`;
-
   const remove = document.createElement("button");
   remove.className = "tile-remove";
   remove.type = "button";
@@ -159,7 +148,16 @@ function buildCard(card) {
   remove.textContent = "×";
   remove.addEventListener("click", () => removeCard(card));
 
-  head.append(name, select, status, remove);
+  head.append(name, remove);
+
+  const source = document.createElement("div");
+  source.className = "tile-source";
+  const select = document.createElement("select");
+  select.className = "instance-select";
+  select.setAttribute("aria-label", "Terminal type");
+  select.innerHTML = optionHtml(card.profileId);
+  select.addEventListener("change", () => setCardProfile(card, select.value));
+  source.append(select);
 
   const screen = document.createElement("div");
   screen.className = "screen";
@@ -177,7 +175,7 @@ function buildCard(card) {
   actions.appendChild(smallBtn("Clear", "", () => card.term?.clear()));
   actions.appendChild(smallBtn("Expand", "", () => expandCard(card)));
 
-  el.append(head, screen, actions);
+  el.append(head, source, screen, actions);
   return el;
 }
 
@@ -319,11 +317,6 @@ function disposeTerm(card) {
 }
 
 function setCardStatus(card, live) {
-  const status = document.querySelector(`.tile[data-uid="${card.uid}"] .status`);
-  if (status) {
-    status.className = `status ${live ? "green" : "gray"}`;
-    status.innerHTML = `<i></i>${live ? "live" : "idle"}`;
-  }
   document.querySelector(`.tile[data-uid="${card.uid}"]`)?.classList.toggle("live", live);
 }
 
