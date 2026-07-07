@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createReadStream } from "node:fs";
 import { access, stat } from "node:fs/promises";
+import { spawn } from "node:child_process";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,9 +69,15 @@ function shouldProxy(urlPath) {
     || urlPath.startsWith("/phantom-ai/");
 }
 
-async function readRequestBody(req) {
+async function readRequestBody(req, limit = 6_000_000) {
   const chunks = [];
-  for await (const chunk of req) chunks.push(Buffer.from(chunk));
+  let size = 0;
+  for await (const chunk of req) {
+    const buffer = Buffer.from(chunk);
+    size += buffer.length;
+    if (size > limit) throw new Error("request_too_large");
+    chunks.push(buffer);
+  }
   return chunks.length ? Buffer.concat(chunks) : undefined;
 }
 
@@ -97,13 +104,222 @@ async function proxyToApi(req, res) {
   }
 }
 
+function sendJson(res, status, payload) {
+  send(res, status, JSON.stringify(payload), "application/json; charset=utf-8");
+}
+
+async function validateAdminBearer(req) {
+  const authorization = String(req.headers.authorization || "");
+  if (!/^Bearer\s+\S+/i.test(authorization)) return null;
+  const response = await fetch(`${apiOrigin}/session`, {
+    headers: { Authorization: authorization },
+  }).catch(() => null);
+  if (!response?.ok) return null;
+  const payload = await response.json().catch(() => null);
+  return payload?.session?.canManageAccess ? payload.session : null;
+}
+
+function clampText(value, limit) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
+}
+
+function mediaModel(payload) {
+  const requested = clampText(payload.model, 80);
+  if (payload.modality === "video") {
+    return ["seedance_2_0", "kling3_0", "kling3_0_turbo", "marketing_studio_video"].includes(requested)
+      ? requested
+      : "seedance_2_0";
+  }
+  return ["gpt_image_2", "nano_banana_2", "nano_banana_flash", "image_auto"].includes(requested)
+    ? requested
+    : "gpt_image_2";
+}
+
+function mediaAspect(payload) {
+  const value = clampText(payload?.params?.aspect || payload?.generation_spec?.aspect || "1:1", 16);
+  return /^(auto|21:9|16:9|4:3|3:2|1:1|2:3|3:4|4:5|9:16)$/.test(value) ? value : "1:1";
+}
+
+function mediaResolution(payload) {
+  const quality = clampText(payload?.params?.quality || payload?.generation_spec?.quality || "", 32);
+  if (payload.modality === "video") return quality === "high" ? "1080p" : "720p";
+  return quality === "high" ? "2k" : "1080p";
+}
+
+function mediaCount(payload) {
+  const raw = Number(payload?.params?.count || payload?.generation_spec?.count || 1);
+  return Math.min(4, Math.max(1, Number.isFinite(raw) ? Math.floor(raw) : 1));
+}
+
+function mediaDuration(payload) {
+  const raw = Number(payload?.params?.duration || payload?.generation_spec?.duration || 6);
+  return Math.min(30, Math.max(2, Number.isFinite(raw) ? Math.floor(raw) : 6));
+}
+
+function parseHiggsfieldJson(stdout) {
+  const text = String(stdout || "").trim();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const start = Math.min(
+      ...["[", "{"].map((mark) => {
+        const index = text.indexOf(mark);
+        return index < 0 ? Number.POSITIVE_INFINITY : index;
+      }),
+    );
+    if (!Number.isFinite(start)) return null;
+    try { return JSON.parse(text.slice(start)); } catch { return null; }
+  }
+}
+
+function collectHiggsfieldAssets(value, type, assets = []) {
+  if (!value) return assets;
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectHiggsfieldAssets(item, type, assets));
+    return assets;
+  }
+  if (typeof value === "object") {
+    const url = value.result_url || value.url || value.output_url || value.min_result_url;
+    if (typeof url === "string" && /^https?:\/\//i.test(url)) {
+      assets.push({
+        type,
+        url,
+        meta: {
+          job_id: value.id || "",
+          thumbnail_url: value.thumbnail_url || "",
+          min_result_url: value.min_result_url || "",
+          status: value.status || "",
+        },
+      });
+    }
+  }
+  return assets;
+}
+
+function runHiggsfield(args, timeoutMs = 30 * 60 * 1000) {
+  return new Promise((resolve, reject) => {
+    const command = process.platform === "win32" ? (process.env.ComSpec || "cmd.exe") : "higgsfield";
+    const commandArgs = process.platform === "win32" ? ["/d", "/s", "/c", "higgsfield", ...args] : args;
+    const child = spawn(command, commandArgs, { windowsHide: true });
+    let stdout = "";
+    let stderr = "";
+    const timer = setTimeout(() => {
+      child.kill();
+      reject(new Error("higgsfield_timeout"));
+    }, timeoutMs);
+    child.stdout.on("data", (chunk) => { stdout += chunk; });
+    child.stderr.on("data", (chunk) => { stderr += chunk; });
+    child.on("error", (error) => {
+      clearTimeout(timer);
+      reject(error);
+    });
+    child.on("close", (code) => {
+      clearTimeout(timer);
+      if (code === 0) resolve({ stdout, stderr });
+      else reject(new Error((stderr || stdout || `higgsfield_exit_${code}`).slice(0, 500)));
+    });
+  });
+}
+
+async function handleMediaGenerate(req, res) {
+  if (req.method !== "POST") {
+    sendJson(res, 405, { error: "method_not_allowed" });
+    return;
+  }
+
+  const session = await validateAdminBearer(req);
+  if (!session) {
+    sendJson(res, 401, { error: "admin_session_required" });
+    return;
+  }
+
+  let payload;
+  try {
+    const body = await readRequestBody(req);
+    payload = JSON.parse(String(body || "{}"));
+  } catch (error) {
+    sendJson(res, error?.message === "request_too_large" ? 413 : 400, { error: "bad_request" });
+    return;
+  }
+
+  const prompt = clampText(payload.prompt || payload.original_prompt, 3000);
+  if (!prompt) {
+    sendJson(res, 400, { error: "empty" });
+    return;
+  }
+
+  const modality = payload.modality === "video" ? "video" : "image";
+  const model = mediaModel({ ...payload, modality });
+  const aspect = mediaAspect(payload);
+  const resolution = mediaResolution({ ...payload, modality });
+  const duration = mediaDuration(payload);
+  const count = modality === "video" ? 1 : mediaCount(payload);
+  const assets = [];
+
+  try {
+    for (let index = 0; index < count; index += 1) {
+      const args = [
+        "generate", "create", model,
+        "--prompt", prompt,
+        "--aspect_ratio", aspect,
+        "--resolution", resolution,
+        "--wait",
+        "--wait-timeout", modality === "video" ? "30m" : "15m",
+        "--json",
+        "--no-color",
+      ];
+      if (modality === "video") args.splice(9, 0, "--duration", String(duration));
+      const result = await runHiggsfield(args, modality === "video" ? 31 * 60 * 1000 : 16 * 60 * 1000);
+      const parsed = parseHiggsfieldJson(result.stdout);
+      collectHiggsfieldAssets(parsed, modality, assets);
+      if (!parsed) {
+        const urls = String(result.stdout || "").match(/https?:\/\/\S+/g) || [];
+        urls.forEach((url) => assets.push({ type: modality, url: url.replace(/[),\]]+$/, ""), meta: {} }));
+      }
+    }
+  } catch (error) {
+    sendJson(res, 200, { error: "higgsfield_cli_failed", message: String(error?.message || error).slice(0, 220) });
+    return;
+  }
+
+  if (!assets.length) {
+    sendJson(res, 200, { error: "no_assets" });
+    return;
+  }
+
+  sendJson(res, 200, {
+    assets: assets.map((asset) => ({
+      ...asset,
+      meta: {
+        ...(asset.meta || {}),
+        generation_spec: payload.generation_spec || null,
+        model,
+        aspect,
+        resolution,
+        session_id: session.id || "",
+      },
+    })),
+    live: true,
+    provider: "higgsfield-cli",
+    model,
+    generation_spec: payload.generation_spec || null,
+  });
+}
+
 createServer(async (req, res) => {
   if (req.url === "/health") {
     send(res, 200, JSON.stringify({ ok: true, service: "phantomforce-admin-static", root: repoRoot }), "application/json; charset=utf-8");
     return;
   }
 
-  if (shouldProxy((req.url || "/").split("?")[0])) {
+  const urlPath = (req.url || "/").split("?")[0];
+
+  if (urlPath === "/generate") {
+    await handleMediaGenerate(req, res);
+    return;
+  }
+
+  if (shouldProxy(urlPath)) {
     await proxyToApi(req, res);
     return;
   }

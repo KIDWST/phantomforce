@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-42";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-42";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-44";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-44";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -569,12 +569,18 @@ async function generate(cfg, req) {
     },
   };
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), 45000);
+  const timer = setTimeout(() => ctrl.abort(), spec.modality === "video" ? 31 * 60_000 : 16 * 60_000);
   let fallbackReason = "provider_unavailable";
   try {
+    const token = accessSession.token();
+    const headers = {
+      "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(p.localKey ? { "x-provider-key": p.localKey } : {}),
+    };
     const r = await fetch(url, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(p.localKey ? { "x-provider-key": p.localKey } : {}) },
+      headers,
       body: JSON.stringify(providerReq),
       signal: ctrl.signal,
     });

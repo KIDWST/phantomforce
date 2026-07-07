@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { classifyPhantomIntent } from "../app/js/intent-router.js";
-import { handleCommand, handleSmartCommand } from "../app/js/command.js?v=phantom-live-20260707-43";
-import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-43";
+import { handleCommand, handleSmartCommand } from "../app/js/command.js?v=phantom-live-20260707-44";
+import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-44";
 
 ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 
@@ -121,11 +121,12 @@ assert.equal(store.state.media.length, 0, "questions should not create media");
 
 const greeting = handleCommand("hello");
 assert.equal(greeting.intent.primaryIntent, "greeting");
-assert.match(greeting.say, /Hey Jordan|I'm here|I’m here/i);
+assert.match(greeting.say, /Ready/i);
 assert.equal(store.state.tasks.length, 0, "greetings should not create tasks");
 
 const smartGreeting = await handleSmartCommand("hello");
 assert.equal(smartGreeting.intent.primaryIntent, "greeting");
+assert.equal(smartGreeting.hermes || null, null, "greetings should stay local readiness pings");
 assert.equal(store.state.tasks.length, 0, "smart greetings should not create tasks");
 
 const candidate = handleCommand("the chat box needs better spacing");

@@ -1,18 +1,19 @@
 /* PhantomForce Phantom — the Phantom AI command engine.
-   Talks first, routes second, and creates records only when the user clearly
-   asks. Local mode never sends, uploads, charges, or deploys. */
+   Everything router: classify each prompt, then answer, route, draft, create,
+   automate, recall memory, or hand off. Local mode never sends, uploads,
+   charges, or deploys. */
 
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session,
-} from "./store.js?v=phantom-live-20260707-43";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-43";
+} from "./store.js?v=phantom-live-20260707-44";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-44";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
-const SAFE_BACKEND_INTENTS = new Set(["greeting", "gratitude", "identity", "capability", "question", "brainstorm", "plan", "chat"]);
+const SAFE_BACKEND_INTENTS = new Set(["identity", "capability", "question", "brainstorm", "plan", "chat"]);
 
 /* Pull a subject out of phrases like "draft a proposal for Sarah's gym". */
 function subjectOf(text) {
@@ -307,40 +308,40 @@ function intentResponse(intent, text) {
   if (intent.primaryIntent === "greeting") {
     return {
       say: isAdmin()
-        ? "Hey Jordan. I’m here. Ask me normally, or tell me the exact outcome you want handled. I won’t turn a hello into a task."
-        : "Hey. I’m here. Ask me what’s happening on your account or what needs approval.",
-      cards: [card("Brain online", "Conversation first", "Casual chat stays casual. I only create records when you explicitly ask me to create, draft, track, schedule, or build something.", [openAction("Open Settings", "settings")], "Local safe router")],
+        ? "Ready, Jordan. Give me a command, question, file/context, or objective."
+        : "Ready. Ask for status, approvals, deliverables, or the next action.",
+      cards: [],
       open: null,
     };
   }
   if (intent.primaryIntent === "gratitude") {
     return {
-      say: "Got you. I’m standing by.",
+      say: "Standing by.",
       cards: [],
       open: null,
     };
   }
   if (intent.primaryIntent === "identity") {
     return {
-      say: "I’m the PhantomForce admin brain: part operator, part router, part memory layer. I can talk normally, read the business dashboard, prepare drafts, and route real work behind approval gates.",
+      say: "I’m the PhantomForce admin brain: operator router, memory layer, draft engine, and approval gate. I classify the request, then route it to the right lane.",
       cards: [card("Identity", "Phantom admin brain", "Local mode answers instantly. Hermes/API and subscription modes can add backend reasoning and memory context when enabled in Settings.", [openAction("Open Settings", "settings"), openAction("Open Memory", "memory")])],
       open: null,
     };
   }
   if (intent.primaryIntent === "capability") {
     return {
-      say: "I can answer questions, summarize your pipeline, draft proposals, prep follow-ups, create media briefs, build guarded Phantom Loop packets, check approvals, and remember useful business context. External sends and live actions still need approval.",
+      say: "I can answer, route, draft, create, track, summarize, recall memory, prep approvals, build guarded Phantom Loop packets, and hand work to the right admin lane. External sends and live actions still need approval.",
       cards: [
-        card("Core modes", "Ask, route, draft, remember", "Use normal language for conversation. Use explicit verbs like create, draft, build, schedule, or track when you want records created.", [openAction("Open Settings", "settings")]),
-        card("Memory", "Business context", "The admin brain uses local memory now and is ready to lean on Hermes backend context when enabled.", [openAction("Open Memory", "memory")]),
+        card("Core modes", "Everything router", "Questions get answers. Commands create or route work. Explicit create/draft/build/schedule/track verbs make records.", [openAction("Open Settings", "settings")]),
+        card("Memory", "Business context", "Local memory is active. Hermes/API or subscription backend can add deeper context when enabled.", [openAction("Open Memory", "memory")]),
       ],
       open: null,
     };
   }
   if (intent.primaryIntent === "question") {
     return {
-      say: "Good question. I’ll answer first instead of creating work. If you want this turned into a task or Phantom Loop run, say that directly.",
-      cards: [card("No task created", "Answer mode", "Questions stay conversational until you ask me to create, track, assign, schedule, or build something.", [])],
+      say: "Question received. I won’t create records from a question alone. Add an action verb if you want it drafted, tracked, assigned, scheduled, or built.",
+      cards: [card("No record created", "Question route", "This stayed in the answer/reasoning lane because it was phrased as a question.", [])],
       open: null,
     };
   }
@@ -640,11 +641,11 @@ export function handleCommand(raw) {
   const plan = todaysPlan();
   return {
     say: subject
-      ? `I’m with you on “${text}.” I can answer conversationally, or turn it into a lead, proposal, media brief, page, booking, or task if you say the exact action.`
-      : "I’m with you. Ask a question, or name the outcome and I’ll route it. I only create records when you explicitly ask.",
+      ? `Intent unclear for “${text}.” Tell me the lane: answer, lead, proposal, media brief, page, booking, task, automation, memory, or approval.`
+      : "Intent unclear. Give me a command, question, objective, or target lane.",
     cards: [
       card("Quick routes", "Where this usually goes",
-        "Ask normally · Check pipeline · Draft proposal · Create media brief · Build page or store · Review approvals",
+        "Answer · Check pipeline · Draft proposal · Create media brief · Build page or store · Review approvals",
         [openAction("Leads", "leads"), openAction("Proposal Forge", "proposals"), openAction("Media Lab", "media")]),
       ...(plan.length ? [card("Meanwhile — today", plan[0].text, "", [openAction("Open", plan[0].open)])] : []),
     ],

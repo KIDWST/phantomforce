@@ -4,18 +4,18 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260707-43";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-43";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-43";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-43";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-43";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-43";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-43";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-43";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-43";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-43";
+} from "./store.js?v=phantom-live-20260707-44";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-44";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-44";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-44";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-44";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-44";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-44";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-44";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-44";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-44";
 import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-44";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-43";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-44";
 import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-44";
 
 const $ = (sel, root = document) => root.querySelector(sel);
