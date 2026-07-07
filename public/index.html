@@ -21,6 +21,8 @@
         </div>
       </div>
       <div class="controls">
+        <button id="palette-open" class="ghost kbd-hint" type="button" title="Command palette (Ctrl+K)">⌘ <span>Ctrl K</span></button>
+        <button id="broadcast" class="ghost" type="button" aria-pressed="false" title="Broadcast typing to linked terminals">⇉ Broadcast</button>
         <div class="cols-switch" role="group" aria-label="Columns">
           <button type="button" data-cols="2">2</button>
           <button type="button" data-cols="3" class="active">3</button>
@@ -30,6 +32,10 @@
         <button id="new-term" class="primary icon-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="New terminal" title="New terminal">+</button>
       </div>
     </header>
+
+    <div id="broadcast-banner" class="broadcast-banner hidden">
+      <span class="pulse"></span> Broadcast on — what you type in a linked terminal is sent to every linked terminal.
+    </div>
 
     <div id="new-menu" class="popover hidden" role="dialog" aria-label="Add terminals">
       <div class="popover-row">
@@ -52,6 +58,13 @@
           <button type="button" id="overlay-close" class="ghost">Close</button>
         </div>
         <div id="overlay-term" class="overlay-term"></div>
+      </div>
+    </div>
+
+    <div id="palette" class="palette hidden" role="dialog" aria-label="Command palette">
+      <div class="palette-box">
+        <input id="palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="Type a command…  (new codex, broadcast, columns, focus…)" />
+        <ul id="palette-list"></ul>
       </div>
     </div>
 

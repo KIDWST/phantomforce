@@ -23,9 +23,15 @@ const TERM_THEME = {
 let profiles = [];
 let columns = 3;
 let uidCounter = 0;
+let broadcastOn = false;
+let activeCardUid = null;
 
-// Each card: { uid, name, profileId, sessionId, term, fit, ws, ro, disposed }
+// Each card: { uid, name, profileId, linked, sessionId, term, fit, ws, ro, disposed, lastAlert }
 const cards = [];
+
+// Attention patterns — windows watch their own output and flag when they need you.
+const ALERT_ERROR = /\b(error|failed|failure|exception|fatal|panic|denied|refused)\b/i;
+const ALERT_ATTN = /(\(y\/n\)|\[y\/n\]|password:|passphrase|are you sure|overwrite\?|press any key|do you want to|confirm|waiting for|\?\s*$)/i;
 
 const api = (path, options = {}) =>
   fetch(path, { ...options, headers: { "x-termina-token": TOKEN, ...(options.headers || {}) } });
@@ -42,7 +48,11 @@ function saveWorkspace() {
   try {
     localStorage.setItem(
       STORAGE_KEY,
-      JSON.stringify({ columns, cards: cards.map((c) => ({ name: c.name, profileId: c.profileId })) }),
+      JSON.stringify({
+        columns,
+        broadcastOn,
+        cards: cards.map((c) => ({ name: c.name, profileId: c.profileId, linked: c.linked })),
+      }),
     );
   } catch {
     /* storage unavailable */
@@ -99,12 +109,14 @@ function addCard(init = {}, { save = true, start = false } = {}) {
     uid: uid(),
     name: init.name ?? "",
     profileId: init.profileId ?? null,
+    linked: init.linked !== false,
     sessionId: null,
     term: null,
     fit: null,
     ws: null,
     ro: null,
     disposed: false,
+    lastAlert: 0,
   };
   cards.push(card);
   document.getElementById("wall").insertBefore(buildCard(card), document.getElementById("add-card"));
@@ -146,6 +158,19 @@ function buildCard(card) {
   select.innerHTML = optionHtml(card.profileId);
   select.addEventListener("change", () => setCardProfile(card, select.value));
 
+  const link = document.createElement("button");
+  link.className = `tile-link${card.linked ? " on" : ""}`;
+  link.type = "button";
+  link.title = "Link to broadcast group";
+  link.setAttribute("aria-label", "Link to broadcast group");
+  link.textContent = "⇉";
+  link.addEventListener("click", () => {
+    card.linked = !card.linked;
+    link.classList.toggle("on", card.linked);
+    document.querySelector(`.tile[data-uid="${card.uid}"]`)?.classList.toggle("linked", card.linked);
+    saveWorkspace();
+  });
+
   const remove = document.createElement("button");
   remove.className = "tile-remove";
   remove.type = "button";
@@ -154,7 +179,13 @@ function buildCard(card) {
   remove.textContent = "×";
   remove.addEventListener("click", () => removeCard(card));
 
-  head.append(name, select, remove);
+  head.append(name, select, link, remove);
+
+  const alert = document.createElement("span");
+  alert.className = "tile-alert";
+  alert.title = "New activity";
+  el.appendChild(alert);
+  if (card.linked) el.classList.add("linked");
 
   const screen = document.createElement("div");
   screen.className = "screen";
@@ -252,7 +283,10 @@ function openTerminal(card, sessionId) {
   ws.onmessage = (event) => {
     try {
       const msg = JSON.parse(event.data);
-      if (msg.type === "output") term.write(msg.data);
+      if (msg.type === "output") {
+        term.write(msg.data);
+        if (card.uid !== activeCardUid) markActivity(card, msg.data);
+      }
     } catch {
       /* ignore */
     }
@@ -262,6 +296,18 @@ function openTerminal(card, sessionId) {
   };
   term.onData((data) => {
     if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: "input", data }));
+    // Broadcast: fan the same keystrokes out to every other linked terminal.
+    if (broadcastOn && card.linked) {
+      for (const other of cards) {
+        if (other !== card && other.linked && other.ws && other.ws.readyState === WebSocket.OPEN) {
+          other.ws.send(JSON.stringify({ type: "input", data }));
+        }
+      }
+    }
+  });
+  host.addEventListener("focusin", () => {
+    activeCardUid = card.uid;
+    clearActivity(card);
   });
   const ro = new ResizeObserver(() => {
     try {
@@ -325,6 +371,62 @@ function resetPlaceholder(card) {
 function flashCard(card, message) {
   const ph = document.querySelector(`.tile[data-uid="${card.uid}"] .placeholder`);
   if (ph) ph.innerHTML = `<p class="big err">ERROR</p><p>${escapeHtml(message)}</p>`;
+}
+
+// ---- reactive attention -----------------------------------------------------
+
+function markActivity(card, data) {
+  const el = document.querySelector(`.tile[data-uid="${card.uid}"]`);
+  if (!el) return;
+  el.classList.add("has-activity");
+  const text = String(data);
+  let level = "info";
+  if (ALERT_ERROR.test(text)) level = "error";
+  else if (ALERT_ATTN.test(text)) level = "attn";
+  if (level !== "info") {
+    el.classList.remove("alert-info", "alert-error", "alert-attn");
+    el.classList.add(`alert-${level}`);
+    notifyAttention(card, level);
+  } else if (!el.classList.contains("alert-error") && !el.classList.contains("alert-attn")) {
+    el.classList.add("alert-info");
+  }
+}
+
+function clearActivity(card) {
+  const el = document.querySelector(`.tile[data-uid="${card.uid}"]`);
+  if (el) el.classList.remove("has-activity", "alert-info", "alert-attn", "alert-error");
+}
+
+function notifyAttention(card, level) {
+  if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+  const now = Date.now();
+  if (now - (card.lastAlert || 0) < 8000) return; // cooldown so we don't spam
+  card.lastAlert = now;
+  const label = card.name || profileLabel(card.profileId) || "A terminal";
+  try {
+    const n = new Notification("Termina", {
+      body: level === "error" ? `${label} reported an error.` : `${label} is waiting for you.`,
+      silent: false,
+    });
+    n.onclick = () => {
+      window.focus();
+      card.term?.focus();
+    };
+  } catch {
+    /* notifications unavailable */
+  }
+}
+
+// ---- broadcast --------------------------------------------------------------
+
+function toggleBroadcast(force) {
+  broadcastOn = typeof force === "boolean" ? force : !broadcastOn;
+  document.body.classList.toggle("broadcast-mode", broadcastOn);
+  document.getElementById("broadcast-banner").classList.toggle("hidden", !broadcastOn);
+  const btn = document.getElementById("broadcast");
+  btn.classList.toggle("active", broadcastOn);
+  btn.setAttribute("aria-pressed", String(broadcastOn));
+  saveWorkspace();
 }
 
 // ---- expand overlay ---------------------------------------------------------
@@ -430,12 +532,22 @@ async function boot() {
   ensureAddCard();
   await loadProfiles();
 
+  // Ask once for permission so background terminals can ping you.
+  if (typeof Notification !== "undefined" && Notification.permission === "default") {
+    try {
+      Notification.requestPermission();
+    } catch {
+      /* ignore */
+    }
+  }
+
   const saved = loadWorkspace();
   if (saved && Array.isArray(saved.cards) && saved.cards.length) {
     setColumns(saved.columns || 3);
+    if (saved.broadcastOn) toggleBroadcast(true);
     let delay = 0;
     for (const c of saved.cards) {
-      const card = addCard({ name: c.name, profileId: c.profileId }, { save: false });
+      const card = addCard({ name: c.name, profileId: c.profileId, linked: c.linked }, { save: false });
       if (card.profileId) {
         // Stagger starts so a big workspace doesn't spawn everything at once.
         setTimeout(() => startTerminal(card), delay);
@@ -447,6 +559,87 @@ async function boot() {
     addCard({}, { save: false });
     addCard({}, { save: false });
     saveWorkspace();
+  }
+}
+
+// ---- command palette --------------------------------------------------------
+
+let paletteItems = [];
+let paletteIndex = 0;
+
+function paletteActions() {
+  const acts = [];
+  for (const p of profiles) {
+    acts.push({
+      label: `New ${p.label}`,
+      hint: "terminal",
+      run: () => {
+        const c = addCard({ profileId: p.id }, { save: false });
+        startTerminal(c);
+        saveWorkspace();
+      },
+    });
+  }
+  acts.push({ label: "New empty window", hint: "terminal", run: () => addCard({}, { start: false }) });
+  acts.push({ label: broadcastOn ? "Broadcast: turn OFF" : "Broadcast: turn ON", hint: "action", run: () => toggleBroadcast() });
+  for (const n of [2, 3, 4]) acts.push({ label: `Columns: ${n}`, hint: "layout", run: () => setColumns(n) });
+  acts.push({ label: "Clear all terminals", hint: "action", run: () => cards.forEach((c) => c.term?.clear()) });
+  acts.push({ label: "Restart all terminals", hint: "action", run: () => cards.forEach((c) => c.profileId && restartCard(c)) });
+  acts.push({ label: "Kill all terminals", hint: "action", run: () => [...cards].forEach(removeCard) });
+  cards.forEach((c, i) => {
+    const label = c.name || profileLabel(c.profileId) || `Window ${i + 1}`;
+    if (c.sessionId) acts.push({ label: `Focus: ${label}`, hint: "jump", run: () => c.term?.focus() });
+  });
+  return acts;
+}
+
+function fuzzy(q, s) {
+  q = q.toLowerCase();
+  s = s.toLowerCase();
+  if (!q) return true;
+  let i = 0;
+  for (const ch of s) if (ch === q[i]) i += 1;
+  return i === q.length;
+}
+
+function renderPalette() {
+  const q = document.getElementById("palette-input").value.trim();
+  const all = paletteActions();
+  paletteItems = all.filter((a) => fuzzy(q, a.label));
+  paletteIndex = 0;
+  const list = document.getElementById("palette-list");
+  list.innerHTML = paletteItems
+    .map(
+      (a, i) =>
+        `<li class="${i === 0 ? "sel" : ""}" data-i="${i}"><span>${escapeHtml(a.label)}</span><em>${a.hint}</em></li>`,
+    )
+    .join("");
+  list.querySelectorAll("li").forEach((li) => {
+    li.addEventListener("mouseenter", () => setPaletteIndex(Number(li.dataset.i)));
+    li.addEventListener("click", () => runPalette());
+  });
+}
+
+function setPaletteIndex(i) {
+  paletteIndex = Math.max(0, Math.min(i, paletteItems.length - 1));
+  document.querySelectorAll("#palette-list li").forEach((li, idx) => li.classList.toggle("sel", idx === paletteIndex));
+}
+
+function runPalette() {
+  const item = paletteItems[paletteIndex];
+  togglePalette(false);
+  if (item) item.run();
+}
+
+function togglePalette(show) {
+  const pal = document.getElementById("palette");
+  const open = show ?? pal.classList.contains("hidden");
+  pal.classList.toggle("hidden", !open);
+  if (open) {
+    const input = document.getElementById("palette-input");
+    input.value = "";
+    renderPalette();
+    input.focus();
   }
 }
 
@@ -499,6 +692,7 @@ document.addEventListener("click", (e) => {
 });
 
 document.getElementById("rescan").addEventListener("click", loadProfiles);
+document.getElementById("broadcast").addEventListener("click", () => toggleBroadcast());
 document.querySelectorAll(".cols-switch button").forEach((btn) => {
   btn.addEventListener("click", () => setColumns(Number(btn.dataset.cols)));
 });
@@ -506,10 +700,45 @@ document.getElementById("overlay-close").addEventListener("click", closeOverlay)
 document.getElementById("overlay").addEventListener("click", (e) => {
   if (e.target.id === "overlay") closeOverlay();
 });
+
+// Command palette
+document.getElementById("palette-open").addEventListener("click", () => togglePalette(true));
+document.getElementById("palette").addEventListener("click", (e) => {
+  if (e.target.id === "palette") togglePalette(false);
+});
+document.getElementById("palette-input").addEventListener("input", renderPalette);
+document.getElementById("palette-input").addEventListener("keydown", (e) => {
+  if (e.key === "ArrowDown") {
+    e.preventDefault();
+    setPaletteIndex(paletteIndex + 1);
+  } else if (e.key === "ArrowUp") {
+    e.preventDefault();
+    setPaletteIndex(paletteIndex - 1);
+  } else if (e.key === "Enter") {
+    e.preventDefault();
+    runPalette();
+  }
+});
+
+// Capture phase so Ctrl/Cmd+K works even while a terminal has focus (xterm
+// would otherwise consume the keystroke).
+document.addEventListener(
+  "keydown",
+  (e) => {
+    if ((e.ctrlKey || e.metaKey) && (e.key === "k" || e.key === "K")) {
+      e.preventDefault();
+      e.stopPropagation();
+      togglePalette();
+    }
+  },
+  true,
+);
+
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (!document.getElementById("overlay").classList.contains("hidden")) closeOverlay();
-  if (!document.getElementById("new-menu").classList.contains("hidden")) toggleNewMenu(false);
+  if (!document.getElementById("palette").classList.contains("hidden")) togglePalette(false);
+  else if (!document.getElementById("overlay").classList.contains("hidden")) closeOverlay();
+  else if (!document.getElementById("new-menu").classList.contains("hidden")) toggleNewMenu(false);
 });
 window.addEventListener("beforeunload", () => {
   for (const card of cards) {
