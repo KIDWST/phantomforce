@@ -345,11 +345,11 @@ async function initEntity() {
     const r = zone.getBoundingClientRect();
     if (r.height < 60) return;
     tx = r.left + r.width / 2;
-    ty = r.top + r.height * 0.52;
-    ts = Math.max(40, Math.min(150, (r.height * 0.95) / CHAR_H));
+    ty = r.top + r.height * 0.5;
+    ts = Math.max(42, Math.min(126, (r.height * 0.9) / CHAR_H));
   };
   measureZone();
-  let gx = tx, gy = ty + 90, gs = ts * 0.85;           // wakes low + small, drifts into place
+  let gx = tx, gy = ty + 56, gs = ts * 0.82;           // wakes low + small, drifts into place
   window.addEventListener("resize", measureZone, { passive: true });
   if (window.ResizeObserver && zone) new ResizeObserver(measureZone).observe(zone);
 

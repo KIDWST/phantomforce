@@ -100,7 +100,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 .presence > * { pointer-events: auto; }
 
-.crown { display: flex; flex-direction: column; align-items: center; gap: 9px; }
+.crown { display: flex; flex-direction: column; align-items: center; gap: 6px; }
 .wordmark {
   margin: 0;
   display: inline-flex;
@@ -126,19 +126,20 @@ button:focus-visible, input:focus-visible, a:focus-visible {
     drop-shadow(0 0 16px rgba(25, 217, 255, 0.38));
 }
 .status {
-  margin: 0; display: inline-flex; align-items: center; gap: 7px;
-  padding: 4px 12px; border-radius: 999px;
+  margin: 0; display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px; border-radius: 999px;
   border: 1px solid rgba(77, 255, 171, 0.14); background: rgba(77, 255, 171, 0.04);
-  font: 500 9px "DM Mono", monospace; letter-spacing: 0.3em; text-indent: 0.3em; text-transform: uppercase; color: var(--dim);
+  font: 500 7.5px "DM Mono", monospace; letter-spacing: 0.18em; text-indent: 0.18em; text-transform: uppercase; color: var(--dim);
+  opacity: 0.82;
 }
 /* live signal: pinging core + equalizer bars, no words needed */
-.status-ping { position: relative; width: 6px; height: 6px; }
+.status-ping { position: relative; width: 4px; height: 4px; }
 .status-ping i {
   position: absolute; inset: 0; border-radius: 50%; background: var(--neon);
-  box-shadow: 0 0 8px var(--neon), 0 0 16px rgba(77, 255, 171, 0.6);
+  box-shadow: 0 0 6px var(--neon), 0 0 12px rgba(77, 255, 171, 0.48);
 }
 .status-ping::after {
-  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  content: ""; position: absolute; inset: -2px; border-radius: 50%;
   border: 1px solid var(--neon); opacity: 0;
   animation: statusPing 2.2s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
 }
@@ -146,21 +147,25 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   0% { transform: scale(0.4); opacity: 0.9; }
   70%, 100% { transform: scale(2.4); opacity: 0; }
 }
-.status-bars { display: inline-flex; align-items: flex-end; gap: 2.5px; height: 10px; }
+.status-bars { display: inline-flex; align-items: flex-end; gap: 1.5px; height: 7px; }
 .status-bars i {
-  width: 2.5px; border-radius: 2px; background: linear-gradient(180deg, #41ffa1, #19d9ff);
+  width: 1.6px; border-radius: 2px; background: linear-gradient(180deg, #41ffa1, #19d9ff);
   box-shadow: 0 0 5px rgba(65, 255, 161, 0.55);
   animation: statusEq 1.6s ease-in-out infinite;
 }
-.status-bars i:nth-child(1) { height: 4px; animation-delay: 0s; }
-.status-bars i:nth-child(2) { height: 8px; animation-delay: 0.22s; }
-.status-bars i:nth-child(3) { height: 6px; animation-delay: 0.44s; }
-.status-bars i:nth-child(4) { height: 9px; animation-delay: 0.66s; }
+.status-bars i:nth-child(1) { height: 3px; animation-delay: 0s; }
+.status-bars i:nth-child(2) { height: 5.5px; animation-delay: 0.22s; }
+.status-bars i:nth-child(3) { height: 4.5px; animation-delay: 0.44s; }
+.status-bars i:nth-child(4) { height: 6.5px; animation-delay: 0.66s; }
 @keyframes statusEq { 0%, 100% { transform: scaleY(0.45); } 50% { transform: scaleY(1); } }
 .status-txt { color: var(--neon); }
 
 /* the phantom (3D entity in void.js) renders itself into this reserved space */
-.phantom-zone { flex: 1 1 auto; width: 100%; min-height: 120px; max-height: 46vh; pointer-events: none; }
+.phantom-zone {
+  flex: 0 0 clamp(132px, 25vh, 216px);
+  width: 100%;
+  pointer-events: none;
+}
 
 .converse {
   display: flex; flex-direction: column; align-items: center;
@@ -361,7 +366,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   .presence { padding-left: 16px; padding-right: 16px; }
   .wordmark { font-size: 10.5px; letter-spacing: 0.34em; text-indent: 0; }
   .wordmark::before { width: 16px; height: 18px; }
-  .phantom-zone { min-height: 132px; max-height: 38vh; }
+  .phantom-zone { flex-basis: clamp(108px, 23vh, 164px); }
   .say { max-width: 340px; min-height: 3.65em; }
   .powers { max-width: 350px; gap: 7px 7px; }
   .powers button { padding: 8px 12px; font-size: 9.5px; letter-spacing: 0.13em; gap: 6px; }
@@ -375,7 +380,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 @media (max-height: 640px) {
   .creed { display: none; }
   .status { display: none; }
-  .phantom-zone { min-height: 90px; }
+  .phantom-zone { flex-basis: 78px; }
   .converse { gap: 10px; }
   .say { min-height: 2.2em; }
 }
