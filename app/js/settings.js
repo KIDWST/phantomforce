@@ -1,7 +1,7 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260707-42";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260707-43";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 
@@ -37,6 +37,7 @@ const DEFAULT_SETTINGS = {
   loopMode: "approval_or_autopilot",
   loopCadence: "on_demand",
   provider: "claude",
+  brainMode: "local",
   models: {
     claude: "claude-sonnet-5",
     codex: "gpt-5-codex",
@@ -66,6 +67,7 @@ function providerFor(id) {
 function normalizeSettings(value) {
   const input = value && typeof value === "object" ? value : {};
   const provider = PROVIDERS.some((item) => item.id === input.provider) ? input.provider : DEFAULT_SETTINGS.provider;
+  const brainMode = ["local", "api", "subscription"].includes(input.brainMode) ? input.brainMode : DEFAULT_SETTINGS.brainMode;
   const models = { ...DEFAULT_SETTINGS.models, ...(input.models || {}) };
   for (const option of PROVIDERS) {
     if (!option.models.includes(models[option.id])) models[option.id] = option.models[0];
@@ -74,6 +76,7 @@ function normalizeSettings(value) {
     ...DEFAULT_SETTINGS,
     ...input,
     provider,
+    brainMode,
     models,
   };
 }
@@ -88,6 +91,10 @@ function loadOperatorSettings() {
 
 function saveOperatorSettings(settings) {
   try { localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(normalizeSettings(settings))); } catch {}
+}
+
+export function getOperatorSettings() {
+  return loadOperatorSettings();
 }
 
 function optionList(options, selected) {
@@ -114,13 +121,111 @@ function renderSafetySummary(settings) {
     blocked: "External actions blocked",
     owner_rules: "Use owner rules",
   }[settings.externalActionMode] || "External actions ask first";
+  const brainLabel = {
+    local: "Local instant brain",
+    api: "Hermes backend/API",
+    subscription: "Subscription managed",
+  }[settings.brainMode] || "Local instant brain";
   return `
     <div class="set-status-grid">
       <span><b>Loop</b><i>${esc(settings.phantomLoop ? loopLabel : "Off")}</i></span>
-      <span><b>Brain</b><i>${esc(providerFor(settings.provider).name)} / ${esc(settings.models[settings.provider])}</i></span>
+      <span><b>Brain</b><i>${esc(brainLabel)} · ${esc(providerFor(settings.provider).name)}</i></span>
       <span><b>Autopilot</b><i>${settings.autopilotScope === "safe_repeat" ? "Safe repeat work only" : "Manual only"}</i></span>
       <span><b>Boundary</b><i>${esc(externalLabel)}</i></span>
     </div>`;
+}
+
+function saveMiniAndRender(el, opts, settings) {
+  saveOperatorSettings(settings);
+  if (typeof opts.onChange === "function") opts.onChange(normalizeSettings(settings));
+  renderOperatorMiniSettings(el, opts);
+}
+
+export function renderOperatorMiniSettings(el, opts = {}) {
+  if (!el) return;
+  const settings = loadOperatorSettings();
+  const activeProvider = providerFor(settings.provider);
+  const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
+  const loopLabel = {
+    approval_or_autopilot: "Approval/autopilot",
+    approval_first: "Approval",
+    draft_only: "Draft",
+  }[settings.loopMode] || "Approval/autopilot";
+  const brainLabel = {
+    local: "Local",
+    api: "Hermes/API",
+    subscription: "Subscription",
+  }[settings.brainMode] || "Local";
+
+  el.innerHTML = `
+    <div class="chat-mini-settings">
+      <div class="chat-mini-top">
+        <span><b>Brain</b><i>${esc(brainLabel)} · ${esc(activeProvider.name)}</i></span>
+        <span><b>Loop</b><i>${settings.phantomLoop ? esc(loopLabel) : "Off"}</i></span>
+      </div>
+      <div class="chat-mini-controls">
+        <label><span>Backend</span>
+          <select data-mini-brain>${optionList([
+            { id: "local", label: "Local" },
+            { id: "api", label: "Hermes/API" },
+            { id: "subscription", label: "Subscription" },
+          ], settings.brainMode)}</select>
+        </label>
+        <label><span>Model</span>
+          <select data-mini-provider>${PROVIDERS.map((provider) => `<option value="${esc(provider.id)}" ${provider.id === settings.provider ? "selected" : ""}>${esc(provider.name)}</option>`).join("")}</select>
+        </label>
+        <label><span>Default</span>
+          <select data-mini-model>${activeProvider.models.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(model)}</option>`).join("")}</select>
+        </label>
+        <label><span>Loop mode</span>
+          <select data-mini-loop>${optionList([
+            { id: "approval_or_autopilot", label: "Approval or autopilot" },
+            { id: "approval_first", label: "Approval checkpoints" },
+            { id: "draft_only", label: "Draft only" },
+          ], settings.loopMode)}</select>
+        </label>
+        <label class="chat-mini-toggle">
+          <input type="checkbox" data-mini-loop-toggle ${settings.phantomLoop ? "checked" : ""}/>
+          <span>Phantom Loop</span>
+        </label>
+        <button class="chat-mini-full" type="button" data-mini-full-settings>Full settings</button>
+      </div>
+    </div>`;
+
+  const providerSelect = el.querySelector("[data-mini-provider]");
+  if (providerSelect) providerSelect.onchange = () => {
+    settings.provider = providerSelect.value;
+    saveMiniAndRender(el, opts, settings);
+  };
+
+  const brainSelect = el.querySelector("[data-mini-brain]");
+  if (brainSelect) brainSelect.onchange = () => {
+    settings.brainMode = brainSelect.value;
+    saveMiniAndRender(el, opts, settings);
+  };
+
+  const modelSelect = el.querySelector("[data-mini-model]");
+  if (modelSelect) modelSelect.onchange = () => {
+    settings.models[settings.provider] = modelSelect.value;
+    saveMiniAndRender(el, opts, settings);
+  };
+
+  const loopSelect = el.querySelector("[data-mini-loop]");
+  if (loopSelect) loopSelect.onchange = () => {
+    settings.loopMode = loopSelect.value;
+    saveMiniAndRender(el, opts, settings);
+  };
+
+  const loopToggle = el.querySelector("[data-mini-loop-toggle]");
+  if (loopToggle) loopToggle.onchange = () => {
+    settings.phantomLoop = loopToggle.checked;
+    saveMiniAndRender(el, opts, settings);
+  };
+
+  const full = el.querySelector("[data-mini-full-settings]");
+  if (full) full.onclick = () => {
+    if (typeof opts.openSettings === "function") opts.openSettings();
+  };
 }
 
 export function renderOperatorSettings(el, opts = {}) {
@@ -149,6 +254,13 @@ export function renderOperatorSettings(el, opts = {}) {
         </div>
         <div class="set-model-grid">${renderProviderCards(settings)}</div>
         <div class="set-control-grid">
+          <label class="set-control"><span>Chat backend</span>
+            <select data-ai-field="brainMode">${optionList([
+              { id: "local", label: "Local - instant safe router" },
+              { id: "api", label: "Hermes/API - backend brain" },
+              { id: "subscription", label: "Subscription - managed brain" },
+            ], settings.brainMode)}</select>
+          </label>
           <label class="set-control"><span>Default model</span>
             <select data-ai-model>${activeProvider.models.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(model)}</option>`).join("")}</select>
           </label>

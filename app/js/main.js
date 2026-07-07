@@ -4,19 +4,19 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260707-42";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-42";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-42";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-42";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-42";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-42";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-42";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-42";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-42";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-42";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-42";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-42";
-import { renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-42";
+} from "./store.js?v=phantom-live-20260707-43";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-43";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-43";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-43";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-43";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-43";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-43";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-43";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-43";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-43";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-43";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-43";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-43";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -426,7 +426,11 @@ function accountIdentityLine() {
   return ctx.session?.email || ctx.session?.label || `${accountRoleLabel()} - ${wsName(currentWs())}`;
 }
 function canUsePhantomLoop() {
-  return isAdmin();
+  return isAdmin() && getOperatorSettings().phantomLoop;
+}
+function phantomLoopUnavailableMessage() {
+  if (!isAdmin()) return "Phantom Loop is an Elite feature. Open Account & Plan to upgrade before using it.";
+  return "Phantom Loop is off. Turn it on in the chat settings or full Settings.";
 }
 function accountRenewalLabel() {
   return new Date(Date.now() + ACCOUNT_PLAN.renewalOffsetDays * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
@@ -583,7 +587,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260707-42";
+const POSE_VERSION = "phantom-live-20260707-43";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1208,8 +1212,9 @@ function renderConsole() {
   mountCompanion($("[data-chatbox] .chatbox-head"), {
     onMode: applyCompanionMode,
     canLoop: canUsePhantomLoop,
-    onLoopUnavailable: () => speak("Phantom Loop is an Elite feature. Open Account & Plan to upgrade before using it.", "", "alert"),
+    onLoopUnavailable: () => speak(phantomLoopUnavailableMessage(), "", "alert"),
   });
+  renderChatMiniSettings();
   renderChatLog();
 }
 
@@ -1249,6 +1254,16 @@ function applyCompanionMode(mode) {
     : "Ask PhantomForce anything...";
 }
 
+function renderChatMiniSettings() {
+  renderOperatorMiniSettings($("[data-chat-settings]"), {
+    openSettings: () => routeWorkspace("settings"),
+    onChange: () => {
+      applyCompanionMode(companionMode());
+      renderChatLog();
+    },
+  });
+}
+
 const CHAT_STARTERS = [
   { label: "Build a landing page", run: "Build a landing page for my business" },
   { label: "Create a proposal", run: "Draft a proposal for a new client" },
@@ -1273,7 +1288,7 @@ function bindStarters(log) {
       if (!starter) return;
       if (starter.loop) {
         if (!canUsePhantomLoop()) {
-          speak("Phantom Loop is an Elite feature. Open Account & Plan to upgrade before using it.", "", "alert");
+          speak(phantomLoopUnavailableMessage(), "", "alert");
           return;
         }
         setCompanionMode("loop");
@@ -1436,8 +1451,13 @@ function runCommand(raw) {
     speak("· · ·", "thinking");
     if (loopArmed) setCompanionState("looping");
     stageReact("think", 780);
-    setTimeout(() => {
-      const r = handleCommand(text);
+    setTimeout(async () => {
+      let r;
+      try {
+        r = await handleSmartCommand(text);
+      } catch {
+        r = handleCommand(text);
+      }
       speak(r.say);
       if (r.cards?.length) chatAttachCards(r.cards);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
@@ -1854,12 +1874,12 @@ function wirePhantomConsole(body) {
     log.scrollTop = log.scrollHeight;
   };
   paint();
-  form.addEventListener("submit", (e) => {
+  form.addEventListener("submit", async (e) => {
     e.preventDefault();
     const v = input.value.trim();
     if (!v) return;
     input.value = "";
-    const r = handleCommand(v);
+    const r = await handleSmartCommand(v).catch(() => handleCommand(v));
     phantomHistory.push({ q: v, say: r.say, cards: r.cards });
     rememberConversation({ prompt: v, reply: r.say, mode: "phantom-console", route: r.open || "" });
     paint();

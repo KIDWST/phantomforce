@@ -1,16 +1,18 @@
 /* PhantomForce Phantom — the Phantom AI command engine.
-   Turns plain business language into routed actions and real artifacts
-   (drafts in the store), never chat-only answers when an action fits.
-   Runs fully locally: no provider calls, no sends. */
+   Talks first, routes second, and creates records only when the user clearly
+   asks. Local mode never sends, uploads, charges, or deploys. */
 
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
-} from "./store.js?v=phantom-live-20260707-42";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-42";
+  ctx, session,
+} from "./store.js?v=phantom-live-20260707-43";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-43";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
+const AI_SETTINGS_KEY = "pf.operator.settings.v1";
+const SAFE_BACKEND_INTENTS = new Set(["greeting", "gratitude", "identity", "capability", "question", "brainstorm", "plan", "chat"]);
 
 /* Pull a subject out of phrases like "draft a proposal for Sarah's gym". */
 function subjectOf(text) {
@@ -24,6 +26,111 @@ function card(kicker, name, body, actions = [], meta = "") {
   return { kicker, title: name, body, actions, meta };
 }
 const openAction = (label, ws) => ({ label, open: ws });
+
+function loadRuntimeAiSettings() {
+  const defaults = {
+    provider: "claude",
+    brainMode: "local",
+    responseStyle: "operator",
+    responseLength: "balanced",
+    memoryMode: "business",
+    contextDepth: "standard",
+    externalActionMode: "approval",
+  };
+  try {
+    const saved = JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || "{}");
+    const brainMode = ["local", "api", "subscription"].includes(saved.brainMode) ? saved.brainMode : defaults.brainMode;
+    return { ...defaults, ...saved, brainMode };
+  } catch {
+    return defaults;
+  }
+}
+
+function modelLaneForSettings(settings) {
+  if (settings.provider === "openrouter") return "glm_5_2";
+  if (settings.provider === "local") return "glm_5_2";
+  if (settings.provider === "claude") return "claude_cli";
+  return "codex";
+}
+
+function backendLabel(settings) {
+  if (settings.brainMode === "api") return "Hermes/API";
+  if (settings.brainMode === "subscription") return "Subscription brain";
+  return "Local brain";
+}
+
+function canAskHermes(intent, settings) {
+  return isAdmin()
+    && settings.brainMode !== "local"
+    && SAFE_BACKEND_INTENTS.has(intent.primaryIntent)
+    && !intent.shouldCreateTask
+    && !intent.shouldCreateAutomation
+    && !intent.shouldStartLooper;
+}
+
+async function askHermesBrain(raw, intent, settings) {
+  if (typeof fetch !== "function" || typeof AbortController === "undefined") return null;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6500);
+  const token = typeof session?.token === "function" ? session.token() : "";
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  try {
+    const response = await fetch("/phantom-ai/chat", {
+      method: "POST",
+      headers,
+      signal: controller.signal,
+      body: JSON.stringify({
+        message: raw,
+        user_request: raw,
+        provider: settings.provider === "openrouter" ? "openrouter_glm" : "phantom",
+        admin_model: modelLaneForSettings(settings),
+        model_lane: modelLaneForSettings(settings),
+        execution_mode: settings.externalActionMode === "owner_rules" ? "auto" : "approval",
+        task_type: intent.primaryIntent,
+        business_name: "PhantomForce",
+        actor_user_id: ctx.session?.sessionId || ctx.session?.name || "owner-admin",
+        business_summary: "PhantomForce admin console. AI-assisted operations, media, leads, booking, content, quotes, follow-up, client dashboards, approval gates, and local owner memory.",
+        module_data: {
+          workspace: currentWs(),
+          memory: memoryStats(),
+          money: moneyView(),
+          today: todaysPlan().slice(0, 5),
+          runtime_settings: {
+            brain_mode: settings.brainMode,
+            response_style: settings.responseStyle,
+            response_length: settings.responseLength,
+            memory_mode: settings.memoryMode,
+            context_depth: settings.contextDepth,
+          },
+        },
+      }),
+    });
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || !payload?.message?.content) return null;
+    const say = String(payload.message.content || "").replace(/\s+\n/g, "\n").trim();
+    if (!say) return null;
+    return {
+      say,
+      cards: [
+        card(
+          "Brain route",
+          `${backendLabel(settings)} answered`,
+          `Hermes context ${payload.hermes?.context_used ? "was used" : "was not used"}; no sends, uploads, charges, deploys, or approvals were executed.`,
+          [openAction("Open Memory", "memory"), openAction("Open Settings", "settings")],
+          payload.live_provider_called ? "Live provider called" : "No live provider call reported",
+        ),
+      ],
+      open: null,
+      intent,
+      hermes: payload.hermes || null,
+    };
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 /* ---------------- artifact builders ---------------- */
 function createLead(subject) {
@@ -197,6 +304,39 @@ function createLooperBuildPacket(plan, draft) {
 }
 
 function intentResponse(intent, text) {
+  if (intent.primaryIntent === "greeting") {
+    return {
+      say: isAdmin()
+        ? "Hey Jordan. I’m here. Ask me normally, or tell me the exact outcome you want handled. I won’t turn a hello into a task."
+        : "Hey. I’m here. Ask me what’s happening on your account or what needs approval.",
+      cards: [card("Brain online", "Conversation first", "Casual chat stays casual. I only create records when you explicitly ask me to create, draft, track, schedule, or build something.", [openAction("Open Settings", "settings")], "Local safe router")],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "gratitude") {
+    return {
+      say: "Got you. I’m standing by.",
+      cards: [],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "identity") {
+    return {
+      say: "I’m the PhantomForce admin brain: part operator, part router, part memory layer. I can talk normally, read the business dashboard, prepare drafts, and route real work behind approval gates.",
+      cards: [card("Identity", "Phantom admin brain", "Local mode answers instantly. Hermes/API and subscription modes can add backend reasoning and memory context when enabled in Settings.", [openAction("Open Settings", "settings"), openAction("Open Memory", "memory")])],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "capability") {
+    return {
+      say: "I can answer questions, summarize your pipeline, draft proposals, prep follow-ups, create media briefs, build guarded Phantom Loop packets, check approvals, and remember useful business context. External sends and live actions still need approval.",
+      cards: [
+        card("Core modes", "Ask, route, draft, remember", "Use normal language for conversation. Use explicit verbs like create, draft, build, schedule, or track when you want records created.", [openAction("Open Settings", "settings")]),
+        card("Memory", "Business context", "The admin brain uses local memory now and is ready to lean on Hermes backend context when enabled.", [openAction("Open Memory", "memory")]),
+      ],
+      open: null,
+    };
+  }
   if (intent.primaryIntent === "question") {
     return {
       say: "Good question. I’ll answer first instead of creating work. If you want this turned into a task or Phantom Loop run, say that directly.",
@@ -500,16 +640,29 @@ export function handleCommand(raw) {
   const plan = todaysPlan();
   return {
     say: subject
-      ? `Noted. I filed “${text}” and can turn it into a lead, a proposal, or a video request — say which, or open a workspace below.`
-      : "I can turn that into work — a lead, a proposal, a video request, a page, a booking, or a security check. Say the outcome you want.",
+      ? `I’m with you on “${text}.” I can answer conversationally, or turn it into a lead, proposal, media brief, page, booking, or task if you say the exact action.`
+      : "I’m with you. Ask a question, or name the outcome and I’ll route it. I only create records when you explicitly ask.",
     cards: [
       card("Quick routes", "Where this usually goes",
-        "Handle a lead · Build a quote · Create a media plan · Build a page or store · Run a security check · Check pipeline",
+        "Ask normally · Check pipeline · Draft proposal · Create media brief · Build page or store · Review approvals",
         [openAction("Leads", "leads"), openAction("Proposal Forge", "proposals"), openAction("Media Lab", "media")]),
       ...(plan.length ? [card("Meanwhile — today", plan[0].text, "", [openAction("Open", plan[0].open)])] : []),
     ],
     open: null,
   };
+}
+
+export async function handleSmartCommand(raw) {
+  const text = (raw || "").trim();
+  const intent = classifyPhantomIntent(text);
+  const settings = loadRuntimeAiSettings();
+
+  if (canAskHermes(intent, settings)) {
+    const backend = await askHermesBrain(text, intent, settings);
+    if (backend) return backend;
+  }
+
+  return handleCommand(text);
 }
 
 /* Suggestion chips under the command input. */

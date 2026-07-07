@@ -8,6 +8,10 @@ const EXPLICIT_TASK = /\b(create|add|make|assign|track|put|save|log)\s+(a\s+)?(t
 const TASK_CANDIDATE = /\b(needs?|should|someone should|we need to|have to|must)\s+(to\s+)?(fix|fixing|update|change|improve|make|clean|polish|repair|redo|adjust|better)\b|\bneeds?\s+(better|fixing|spacing|polish|cleanup|work)\b|\bmake\s+.{2,80}\s+better\b|\b(is|looks|feels)\s+(broken|off|bad|ugly|wrong|annoying|confusing)\b/i;
 const BRAINSTORM = /\b(we should|maybe|what if|it would be cool|i think|i want|could we|should we)\b/i;
 const QUESTION = /\?|\b(what|why|how|when|where|who|can|could|should|would|is|are|do|does|did)\b/i;
+const GREETING = /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there|ping|test)[\s.!?]*$/i;
+const GRATITUDE = /^(thanks|thank you|appreciate it|bet|cool|nice|ok|okay|got it|perfect)[\s.!?]*$/i;
+const IDENTITY = /\b(who are you|what are you|are you phantom|what is phantom|what is phantomforce ai|what's your job)\b/i;
+const CAPABILITY = /\b(what can you do|how can you help|what are you able to do|what can phantom do|what can phantomforce do)\b/i;
 const FEEDBACK = /\b(i hate|i don't like|this sucks|looks awful|looks bad|annoying|frustrating|disappointed|not what i wanted|too robotic|too cluttered)\b/i;
 const PLAN = /\b(make|create|give|draft|build)\s+(me\s+)?(a\s+)?(plan|roadmap|breakdown|strategy)|\b(break this down|roadmap this|plan this|help me plan)\b/i;
 const REMINDER = /\b(remind me|reminder|check this every|every morning|every day|daily|weekly|monitor|tell me when|watch this)\b/i;
@@ -79,6 +83,18 @@ export function classifyPhantomIntent(raw = "") {
 
   if (!text) return { ...result, primaryIntent: "chat", confidence: 0.9, reasonCode: "empty_chat" };
 
+  if (GREETING.test(text)) {
+    return { ...result, primaryIntent: "greeting", confidence: 0.96, reasonCode: "simple_greeting" };
+  }
+  if (GRATITUDE.test(text)) {
+    return { ...result, primaryIntent: "gratitude", confidence: 0.94, reasonCode: "simple_gratitude" };
+  }
+  if (IDENTITY.test(text)) {
+    return { ...result, primaryIntent: "identity", confidence: 0.9, reasonCode: "identity_question" };
+  }
+  if (CAPABILITY.test(text)) {
+    return { ...result, primaryIntent: "capability", confidence: 0.9, reasonCode: "capability_question" };
+  }
   if (MEMORY.test(text)) {
     return { ...result, primaryIntent: "memory_update", confidence: confidenceFor("memory_update", text), reasonCode: "memory_keyword" };
   }
@@ -164,11 +180,11 @@ export function classifyPhantomIntent(raw = "") {
       taskDraft: taskDraft(text),
     };
   }
-  if (QUESTION.test(text)) {
-    return { ...result, primaryIntent: "question", confidence: confidenceFor("question", text), reasonCode: "question_not_action" };
-  }
   if (STATUS.test(text)) {
     return { ...result, primaryIntent: "status_check", confidence: confidenceFor("status_check", text), reasonCode: "status_keyword" };
+  }
+  if (QUESTION.test(text)) {
+    return { ...result, primaryIntent: "question", confidence: confidenceFor("question", text), reasonCode: "question_not_action" };
   }
   if (AUTOMATION.test(text)) {
     return {

@@ -1,11 +1,18 @@
 import assert from "node:assert/strict";
 import { classifyPhantomIntent } from "../app/js/intent-router.js";
-import { handleCommand } from "../app/js/command.js?v=phantom-live-20260707-42";
-import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-42";
+import { handleCommand, handleSmartCommand } from "../app/js/command.js?v=phantom-live-20260707-43";
+import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-43";
 
 ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 
 const cases = {
+  conversation: [
+    ["hello", "greeting"],
+    ["hi", "greeting"],
+    ["thanks", "gratitude"],
+    ["who are you?", "identity"],
+    ["what can you do?", "capability"],
+  ],
   noTask: [
     "what do you think about making the website better?",
     "i hate this dashboard",
@@ -17,6 +24,11 @@ const cases = {
     "the bot is annoying",
     "I want Phantom to feel alive",
     "can users build stuff with this?",
+  ],
+  status: [
+    "what's my pipeline?",
+    "catch me up",
+    "what is next today?",
   ],
   createTask: [
     "create a task to fix the chat box spacing",
@@ -48,10 +60,23 @@ const cases = {
   ],
 };
 
+for (const [text, intentName] of cases.conversation) {
+  const r = classifyPhantomIntent(text);
+  assert.equal(r.primaryIntent, intentName, `${text} should be ${intentName}`);
+  assert.equal(r.shouldCreateTask, false, `${text} should not create task`);
+  assert.equal(r.shouldCreateAutomation, false, `${text} should not create automation`);
+}
+
 for (const text of cases.noTask) {
   const r = classifyPhantomIntent(text);
   assert.equal(r.shouldCreateTask, false, `${text} should not create task`);
   assert.equal(r.shouldCreateAutomation, false, `${text} should not create automation`);
+}
+
+for (const text of cases.status) {
+  const r = classifyPhantomIntent(text);
+  assert.equal(r.primaryIntent, "status_check", `${text} should be status_check`);
+  assert.equal(r.shouldCreateTask, false, `${text} should not create task`);
 }
 
 for (const text of cases.createTask) {
@@ -93,6 +118,15 @@ assert.equal(question.intent.primaryIntent, "question");
 assert.equal(store.state.tasks.length, 0, "questions should not create tasks");
 assert.equal(store.state.sites.length, 0, "questions should not create sites");
 assert.equal(store.state.media.length, 0, "questions should not create media");
+
+const greeting = handleCommand("hello");
+assert.equal(greeting.intent.primaryIntent, "greeting");
+assert.match(greeting.say, /Hey Jordan|I'm here|I’m here/i);
+assert.equal(store.state.tasks.length, 0, "greetings should not create tasks");
+
+const smartGreeting = await handleSmartCommand("hello");
+assert.equal(smartGreeting.intent.primaryIntent, "greeting");
+assert.equal(store.state.tasks.length, 0, "smart greetings should not create tasks");
 
 const candidate = handleCommand("the chat box needs better spacing");
 assert.equal(candidate.intent.primaryIntent, "task_candidate");
