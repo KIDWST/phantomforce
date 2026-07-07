@@ -326,7 +326,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-55")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-56")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -389,21 +389,35 @@ async function initEntity() {
   const t0 = performance.now();
   let last = t0, running = true;
   document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
-  let lastFade = -1;
+  let lastFade = -1, shy = 1;
+  const sayEl = document.querySelector("[data-say]");
   const frame = (now) => {
     if (!running) return;
     const t = ((now || performance.now()) - t0) * 0.001;
+    const dtF = Math.min(0.05, (now - last) * 0.001);
     // he lives over his disc at the top of page one — scrolling dissolves him
     // fast, and a refresh mid-page starts him already invisible. He never
     // re-anchors to the viewport.
     const fade = Math.max(0, Math.min(1, 1 - (window.scrollY || 0) / (innerHeight * 0.26)));
-    if (fade < 0.999 || lastFade >= 0) {
-      if (lastFade < 0) canvas.style.transition = "opacity 0.25s ease";
-      if (Math.abs(fade - lastFade) > 0.002) {
-        canvas.style.opacity = fade.toFixed(3);
-        lastFade = fade;
+    // polite hologram: when a long reply spills into his space, he goes
+    // transparent and lets the words through — then steps back in
+    let shyT = 1;
+    if (sayEl) {
+      const sr = sayEl.getBoundingClientRect();
+      if (sr.height > 4) {
+        const sTop = sr.top + (window.scrollY || 0);
+        if (sTop < gy + gs * 2.0 && sTop + sr.height > gy - gs * 2.6) shyT = 0.12;
       }
-      if (fade <= 0.01) { requestAnimationFrame(frame); return; }   // invisible = free
+    }
+    shy += (shyT - shy) * Math.min(1, dtF * 7);
+    const vis = fade * shy;
+    if (vis < 0.999 || lastFade >= 0) {
+      if (lastFade < 0) canvas.style.transition = "none";   // JS easing IS the smoothing — a CSS transition restarted every frame just lags
+      if (Math.abs(vis - lastFade) > 0.002) {
+        canvas.style.opacity = vis.toFixed(3);
+        lastFade = vis;
+      }
+      if (vis <= 0.01) { requestAnimationFrame(frame); return; }   // invisible = free
     }
     const dt = Math.min(0.05, (now - last) * 0.001); last = now;
     pulse.v = Math.max(0, pulse.v - 0.02);
