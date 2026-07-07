@@ -13,10 +13,10 @@ import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-liv
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-44";
 import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-44";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-44";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-44";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260707-44";
 import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-44";
 import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-44";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-44";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-45";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -179,7 +179,6 @@ const NAV = [
   { id: "sites",      label: "Site Creator", icon: "site",  ws: "sites" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
-  { id: "brand",      label: "Brand Memory", icon: "db",    ws: "brand" },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workers",      icon: "users", ws: "workforce" },
@@ -587,7 +586,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260707-44";
+const POSE_VERSION = "phantom-live-20260707-45";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1701,7 +1700,6 @@ const CUSTOM = {
   account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
-  brand: { title: "Brand Memory", kicker: "Private & local brand brain", custom: true, wide: true, render: (body) => renderBrandMemory(body, mediaOpts()) },
   automation: { title: "Automation", kicker: "User-created workflows", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
 };
 

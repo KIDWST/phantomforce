@@ -161,36 +161,38 @@ export function renderOperatorMiniSettings(el, opts = {}) {
     <div class="chat-mini-settings">
       <div class="chat-mini-heading">
         <b>Chat settings</b>
-        <span>Loop, model, backend</span>
+        <span>Operator brain</span>
       </div>
-      <div class="chat-mini-top">
-        <span><b>Brain</b><i>${esc(brainLabel)} · ${esc(activeProvider.name)}</i></span>
-        <span><b>Loop</b><i>${settings.phantomLoop ? esc(loopLabel) : "Off"}</i></span>
+      <div class="chat-mini-summary">
+        <span><b>${esc(brainLabel)}</b><i>${esc(activeProvider.name)} · ${esc(activeModel)}</i></span>
+        <span><b>${settings.phantomLoop ? "Loop ready" : "Loop off"}</b><i>${settings.phantomLoop ? esc(loopLabel) : "Manual chat only"}</i></span>
       </div>
-      <div class="chat-mini-controls">
-        <label><span>Backend</span>
+      <div class="chat-mini-fields">
+        <label class="chat-mini-field"><span>Backend</span>
           <select data-mini-brain>${optionList([
             { id: "local", label: "Local" },
             { id: "api", label: "Hermes/API" },
             { id: "subscription", label: "Subscription" },
           ], settings.brainMode)}</select>
         </label>
-        <label><span>Model</span>
+        <label class="chat-mini-field"><span>Model</span>
           <select data-mini-provider>${PROVIDERS.map((provider) => `<option value="${esc(provider.id)}" ${provider.id === settings.provider ? "selected" : ""}>${esc(provider.name)}</option>`).join("")}</select>
         </label>
-        <label><span>Default</span>
+        <label class="chat-mini-field chat-mini-wide"><span>Default model</span>
           <select data-mini-model>${activeProvider.models.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(model)}</option>`).join("")}</select>
         </label>
-        <label><span>Loop mode</span>
+        <label class="chat-mini-field chat-mini-wide"><span>Loop mode</span>
           <select data-mini-loop>${optionList([
             { id: "approval_or_autopilot", label: "Approval or autopilot" },
             { id: "approval_first", label: "Approval checkpoints" },
             { id: "draft_only", label: "Draft only" },
           ], settings.loopMode)}</select>
         </label>
-        <label class="chat-mini-toggle">
+      </div>
+      <div class="chat-mini-actions">
+        <label class="chat-mini-switch">
           <input type="checkbox" data-mini-loop-toggle ${settings.phantomLoop ? "checked" : ""}/>
-          <span>Phantom Loop</span>
+          <span><b>Phantom Loop</b><i>Arm guarded build packets from chat.</i></span>
         </label>
         <button class="chat-mini-full" type="button" data-mini-full-settings>Full settings</button>
       </div>
