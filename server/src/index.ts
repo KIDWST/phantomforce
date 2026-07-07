@@ -205,7 +205,7 @@ const falconBroker = createFalconBroker({
 });
 
 const HiggsfieldDraftSchema = z.object({
-  prompt: z.string().trim().min(1).max(1600),
+  prompt: z.string().trim().min(1).max(3000),
   media_path: z.string().trim().max(600).optional().default(""),
   mode: z.enum(["video", "image", "marketing", "analyze"]).optional().default("video"),
   model: z.string().trim().max(80).optional().default("seedance_2_0"),

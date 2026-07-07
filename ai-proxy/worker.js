@@ -119,15 +119,15 @@ async function handleGenerate(request, env, headers) {
   if (!key) return json({ error: "unconfigured", provider: payload.provider }, 200, headers);
   const req = {
     modality: payload.modality === "video" ? "video" : "image", model: String(payload.model || ""),
-    prompt: String(payload.prompt || "").slice(0, 2000), negative: String(payload.negative || "").slice(0, 500),
+    prompt: String(payload.prompt || "").slice(0, 3000), negative: String(payload.negative || "").slice(0, 500),
     style: String(payload.style || ""), ref: typeof payload.ref === "string" ? payload.ref : null,
     params: { aspect: String((payload.params || {}).aspect || "1:1"), count: Math.min(4, Math.max(1, (payload.params || {}).count || 1)), duration: Math.min(12, Math.max(2, (payload.params || {}).duration || 6)) },
   };
   if (!req.prompt) return json({ error: "empty" }, 400, headers);
   try {
-    const assets = await prov.gen(req, key, env);
+    const assets = (await prov.gen(req, key, env)).filter((asset) => asset && asset.url);
     if (!assets || !assets.length) return json({ error: "upstream" }, 200, headers);
-    return json({ assets, provider: payload.provider, model: req.model }, 200, headers);
+    return json({ assets, provider: payload.provider, model: req.model, generation_spec: payload.generation_spec || null }, 200, headers);
   } catch (e) {
     return json({ error: "upstream", message: String((e && e.message) || "").slice(0, 120) }, 200, headers);
   }

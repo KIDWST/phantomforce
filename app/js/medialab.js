@@ -12,7 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-39";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-42";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-42";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -26,9 +27,9 @@ export const DEFAULT_PROVIDERS = [
     brand: "#8b7bff", keyEnv: "HIGGSFIELD_API_KEY", enabled: true,
     modalities: ["image", "video", "edit"],
     models: {
-      image: ["higgsfield-soul", "higgsfield-turbo"],
-      video: ["higgsfield-dop", "higgsfield-motion"],
-      edit: ["higgsfield-soul-edit"],
+      image: ["gpt_image_2", "nano_banana_2"],
+      video: ["seedance_2_0", "kling3_0", "marketing_studio_video"],
+      edit: ["nano_banana_2", "gpt_image_2"],
     },
   },
   {
@@ -120,6 +121,12 @@ const LANE_LABELS = {
   "higgsfield-dop": "Cinema motion",
   "higgsfield-motion": "Motion loop",
   "higgsfield-soul-edit": "Signature retouch",
+  "gpt_image_2": "GPT Image 2",
+  "nano_banana_2": "Nano Banana 2",
+  "marketing_studio_image": "Marketing Studio image",
+  "seedance_2_0": "Seedance 2.0",
+  "kling3_0": "Kling 3.0",
+  "marketing_studio_video": "Marketing Studio video",
   "gpt-image-1": "Studio stills",
   "sora-2": "Story motion",
   "gen-4": "Feature motion",
@@ -441,30 +448,150 @@ function genBase(cfg) {
 }
 
 /* ---------------- generation client ---------------- */
+function cleanBrief(value = "", limit = 2200) {
+  return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
+}
+function normalizeHiggsfieldModel(req = {}) {
+  if (req.provider !== "higgsfield") return req.model || "";
+  if (req.modality === "image") {
+    return ["gpt_image_2", "nano_banana_2"].includes(req.model) ? req.model : "gpt_image_2";
+  }
+  return ["seedance_2_0", "kling3_0", "marketing_studio_video"].includes(req.model) ? req.model : "seedance_2_0";
+}
+function buildGenerationSpec(req = {}) {
+  const params = req.params || {};
+  const rawPrompt = cleanBrief(req.prompt);
+  const negative = cleanBrief(req.negative, 700);
+  const model = normalizeHiggsfieldModel(req) || req.model || "";
+  const brief = [
+    `Primary request: ${rawPrompt}`,
+    `Output: ${req.modality === "video" ? "video" : "image"}`,
+    `Frame: ${params.aspect || "1:1"}${req.modality === "video" ? `, ${params.duration || 6}s` : `, ${params.count || 1} take${(params.count || 1) > 1 ? "s" : ""}`}`,
+    req.preset && req.preset !== "Custom" ? `Format preset: ${req.preset}` : "",
+    req.style && req.style !== "None" ? `Visual style: ${req.style}` : "",
+    req.ref ? "Use the attached/reference image for continuity." : "",
+    negative ? `Avoid: ${negative}` : "",
+    "Honor the primary request literally. Do not replace the subject, business, product, setting, aspect ratio, or requested format with generic brand art.",
+  ].filter(Boolean).join(". ");
+  return {
+    original_prompt: rawPrompt,
+    provider_prompt: cleanBrief(brief, 2600),
+    negative_prompt: negative,
+    modality: req.modality === "video" ? "video" : "image",
+    provider: req.provider || "",
+    model,
+    preset: req.preset || "Custom",
+    style: req.style || "None",
+    aspect: params.aspect || "1:1",
+    count: Math.max(1, Math.min(4, Number(params.count || 1))),
+    duration: Math.max(2, Math.min(30, Number(params.duration || 6))),
+    quality: params.quality || "standard",
+    reference_attached: !!req.ref,
+  };
+}
+function normalizeGeneratedAssets(list = [], req = {}, spec = {}) {
+  return (Array.isArray(list) ? list : [])
+    .map((asset) => ({
+      type: asset?.type || spec.modality || req.modality,
+      url: asset?.url || asset?.image_url || asset?.video_url || asset?.src || "",
+      meta: {
+        ...(asset?.meta || {}),
+        prompt: spec.original_prompt || req.prompt,
+        provider_prompt: spec.provider_prompt,
+        generation_spec: spec,
+      },
+    }))
+    .filter((asset) => asset.url);
+}
+function higgsfieldDraftMode(req = {}, spec = {}) {
+  const model = spec.model || normalizeHiggsfieldModel(req);
+  if (model === "marketing_studio_video") return "marketing";
+  return spec.modality === "image" ? "image" : "video";
+}
+function higgsfieldResolution(spec = {}) {
+  if (spec.quality === "high") return spec.modality === "image" ? "2k" : "1080p";
+  return spec.modality === "image" ? "1080p" : "720p";
+}
+async function draftHiggsfieldRequest(req = {}, spec = {}) {
+  const token = accessSession.token();
+  if (!token || req.provider !== "higgsfield") return null;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 12000);
+  try {
+    const response = await fetch("/phantom-ai/media-lab/higgsfield/draft", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({
+        prompt: spec.provider_prompt,
+        mode: higgsfieldDraftMode(req, spec),
+        model: spec.model,
+        duration: String(spec.duration),
+        aspect_ratio: spec.aspect,
+        resolution: higgsfieldResolution(spec),
+        media_role: req.ref ? "start-image" : "image",
+        product_url: "",
+        generate_audio: "",
+      }),
+      signal: ctrl.signal,
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok) return null;
+    return payload.draft || null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
 // Returns { assets:[{type,url,meta}], live:boolean } — never throws; falls back
 // to a procedural preview so the studio is always usable.
 async function generate(cfg, req) {
   const base = genBase(cfg);
   const p = provider(cfg, req.provider) || {};
   const url = (p.endpoint || `${base}/generate`);
+  const spec = buildGenerationSpec(req);
+  const providerReq = {
+    ...req,
+    model: spec.model,
+    prompt: spec.provider_prompt,
+    original_prompt: spec.original_prompt,
+    negative: spec.negative_prompt,
+    generation_spec: spec,
+    params: {
+      ...(req.params || {}),
+      aspect: spec.aspect,
+      count: spec.modality === "video" ? 1 : spec.count,
+      quality: spec.quality,
+      duration: spec.duration,
+    },
+  };
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 45000);
+  let fallbackReason = "provider_unavailable";
   try {
     const r = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...(p.localKey ? { "x-provider-key": p.localKey } : {}) },
-      body: JSON.stringify(req),
+      body: JSON.stringify(providerReq),
       signal: ctrl.signal,
     });
     const d = await r.json().catch(() => null);
     if (d && Array.isArray(d.assets) && d.assets.length) {
-      return { assets: d.assets.map((a) => ({ type: a.type || req.modality, url: a.url, meta: a.meta })), live: true };
+      const assets = normalizeGeneratedAssets(d.assets, req, spec);
+      if (assets.length) return { assets, live: true, spec, provider: d.provider || req.provider, model: d.model || spec.model };
     }
-  } catch { /* unreachable / unconfigured → preview */ }
+    fallbackReason = d?.error || `provider_http_${r.status}`;
+  } catch (err) {
+    fallbackReason = err?.name === "AbortError" ? "provider_timeout" : "provider_unreachable";
+  }
   finally { clearTimeout(timer); }
+  const draft = await draftHiggsfieldRequest(providerReq, spec);
   const assets = [];
-  for (let i = 0; i < (req.params.count || 1); i++) assets.push(previewAsset(req, i));
-  return { assets, live: false };
+  for (let i = 0; i < (providerReq.params.count || 1); i++) assets.push(previewAsset(providerReq, i, { spec, fallbackReason, draft }));
+  return { assets, live: false, spec, fallbackReason, draft };
 }
 
 async function enhancePrompt(cfg, prompt) {
@@ -480,18 +607,47 @@ async function enhancePrompt(cfg, prompt) {
   // local enrichment fallback
   const extras = ["cinematic lighting", "sharp focus", "high detail", "volumetric glow", "shallow depth of field", "8k"];
   const add = extras.filter((e) => !prompt.toLowerCase().includes(e.split(" ")[0])).slice(0, 3).join(", ");
-  return `${prompt.trim()}, ${add}, emerald neon accents, dark background`;
+  return `${prompt.trim()}, ${add}`;
 }
 
 /* ---------------- procedural preview (looks real, works offline) ---------------- */
 function hashStr(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return (h >>> 0); }
 function mulberry(seed) { return function () { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
-function previewAsset(req, i) {
+function roundRect(ctx, x, y, w, h, r) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+function drawWrappedText(ctx, text, x, y, maxWidth, lineHeight, maxLines = 4) {
+  const words = cleanBrief(text, 360).split(" ").filter(Boolean);
+  const lines = [];
+  let line = "";
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (ctx.measureText(next).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+      if (lines.length >= maxLines) break;
+    } else {
+      line = next;
+    }
+  }
+  if (line && lines.length < maxLines) lines.push(line);
+  lines.forEach((row, idx) => ctx.fillText(row, x, y + idx * lineHeight));
+  return y + lines.length * lineHeight;
+}
+function previewAsset(req, i, context = {}) {
+  const spec = context.spec || buildGenerationSpec(req);
   const [, ar] = (req.modality === "video" ? VID_ASPECTS : IMG_ASPECTS).find(([k]) => k === req.params.aspect) || ["1:1", 1];
   const W = 640, H = Math.round(W / ar);
   const c = document.createElement("canvas"); c.width = W; c.height = H;
   const g = c.getContext("2d");
-  const seed = hashStr((req.prompt || "phantom") + "|" + req.style + "|" + i);
+  const seed = hashStr((spec.original_prompt || req.prompt || "phantom") + "|" + req.style + "|" + i);
   const rng = mulberry(seed);
   // base gradient
   const hueBase = req.style === "Neon" ? 150 : req.style === "Analog film" ? 40 : req.style === "Portrait" ? 160 : 155;
@@ -532,10 +688,48 @@ function previewAsset(req, i) {
     g.fillStyle = "rgba(120,255,190,0.95)"; g.beginPath();
     g.moveTo(W / 2 - 10, H / 2 - 15); g.lineTo(W / 2 + 18, H / 2); g.lineTo(W / 2 - 10, H / 2 + 15); g.closePath(); g.fill();
   }
-  // watermark
-  g.fillStyle = "rgba(180,255,220,0.5)"; g.font = "600 11px 'DM Mono', monospace";
-  g.fillText("PHANTOM · PREVIEW", 14, H - 14);
-  return { type: req.modality, url: c.toDataURL("image/webp", 0.85), meta: { preview: true, prompt: req.prompt, style: req.style, preset: req.preset || "Custom" } };
+  // spec plate: the fallback should prove what was requested instead of posing
+  // as a finished provider render.
+  const plateW = Math.min(W - 32, Math.max(300, W * 0.74));
+  const plateH = Math.min(H - 36, Math.max(118, H * 0.28));
+  const px = 16;
+  const py = Math.max(16, H - plateH - 18);
+  g.fillStyle = "rgba(3, 12, 10, 0.72)";
+  roundRect(g, px, py, plateW, plateH, 18);
+  g.fill();
+  g.strokeStyle = "rgba(120,255,190,0.36)";
+  g.lineWidth = 1;
+  roundRect(g, px, py, plateW, plateH, 18);
+  g.stroke();
+  g.fillStyle = "rgba(120,255,190,0.88)";
+  g.font = "800 10px 'DM Mono', monospace";
+  g.fillText(`PROVIDER ${context.fallbackReason ? "FALLBACK" : "PREVIEW"} · ${String(spec.aspect || "").toUpperCase()}`, px + 16, py + 25);
+  g.fillStyle = "rgba(236,255,246,0.95)";
+  g.font = "700 18px 'Space Grotesk', sans-serif";
+  drawWrappedText(g, spec.original_prompt || req.prompt || "Untitled media request", px + 16, py + 52, plateW - 32, 22, 3);
+  g.fillStyle = "rgba(180,210,205,0.86)";
+  g.font = "600 11px 'DM Mono', monospace";
+  const tail = [
+    spec.modality,
+    spec.model ? laneLabel(spec.model) : "",
+    spec.style && spec.style !== "None" ? spec.style : "",
+    spec.duration && spec.modality === "video" ? `${spec.duration}s` : "",
+  ].filter(Boolean).join(" · ");
+  g.fillText(tail.slice(0, 78), px + 16, py + plateH - 18);
+  return {
+    type: req.modality,
+    url: c.toDataURL("image/webp", 0.85),
+    meta: {
+      preview: true,
+      prompt: spec.original_prompt || req.prompt,
+      provider_prompt: spec.provider_prompt,
+      generation_spec: spec,
+      fallback_reason: context.fallbackReason || "",
+      draft: context.draft || null,
+      style: req.style,
+      preset: req.preset || "Custom",
+    },
+  };
 }
 
 /* =========================================================================
@@ -926,9 +1120,9 @@ async function runGenerate(body, cfg, opts, root, esc) {
       session.assets.unshift(asset);
       captureForContentHub(asset, {
         title: `${genState.modality === "video" ? "Generated video" : "Generated image"} · ${genState.style}`,
-        prompt: genState.prompt,
+        prompt: out.spec?.original_prompt || genState.prompt,
         provider: genState.provider,
-        model: genState.model,
+        model: out.spec?.model || genState.model,
         style: genState.style,
         aspect: genState.aspect,
         duration: genState.duration,
@@ -938,9 +1132,15 @@ async function runGenerate(body, cfg, opts, root, esc) {
     });
     session.assets = session.assets.slice(0, 60);
     refreshGeneratePanel(body, cfg, opts, root);
-    if (opts.notify) opts.notify("Media Factory", `generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}${out.live ? "" : " (preview)"} - "${genState.prompt.slice(0, 40)}".`);
-    // spend credits (client-side demo accounting)
-    cfg.credits = Math.max(0, cfg.credits - estCredits()); saveCfg(cfg);
+    if (opts.notify) {
+      const status = out.live ? "generated" : `prepared preview (${out.fallbackReason || "provider offline"})`;
+      opts.notify("Media Factory", `${status} ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""} - "${genState.prompt.slice(0, 40)}".`);
+    }
+    // spend credits only after a live provider asset returns; previews are free.
+    if (out.live) {
+      cfg.credits = Math.max(0, cfg.credits - estCredits());
+      saveCfg(cfg);
+    }
   } finally {
     if (genState.busy) refreshGeneratePanel(body, cfg, opts, root);
   }

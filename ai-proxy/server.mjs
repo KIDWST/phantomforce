@@ -269,16 +269,16 @@ function handleGenerate(req, res, send) {
     if (!key) return send({ error: "unconfigured", provider: providerId }, 200);
     const reqOut = {
       modality: payload.modality === "video" ? "video" : "image",
-      model: String(payload.model || ""), prompt: String(payload.prompt || "").slice(0, 2000),
+      model: String(payload.model || ""), prompt: String(payload.prompt || "").slice(0, 3000),
       negative: String(payload.negative || "").slice(0, 500), style: String(payload.style || ""),
       ref: typeof payload.ref === "string" ? payload.ref.slice(0, 5_000_000) : null,
       params: { aspect: String((payload.params || {}).aspect || "1:1"), count: Math.min(4, Math.max(1, (payload.params || {}).count || 1)), quality: (payload.params || {}).quality || "standard", duration: Math.min(12, Math.max(2, (payload.params || {}).duration || 6)) },
     };
     if (!reqOut.prompt) return send({ error: "empty" }, 400);
     try {
-      const assets = await prov.gen(reqOut, key);
+      const assets = (await prov.gen(reqOut, key)).filter((asset) => asset && asset.url);
       if (!assets || !assets.length) return send({ error: "upstream" }, 200);
-      send({ assets, provider: providerId, model: reqOut.model });
+      send({ assets, provider: providerId, model: reqOut.model, generation_spec: payload.generation_spec || null });
     } catch (e) {
       send({ error: "upstream", message: String(e && e.message || "").slice(0, 120) }, 200);
     }
