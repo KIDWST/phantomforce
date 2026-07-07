@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-66";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-66";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-67";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-67";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -447,6 +447,35 @@ function genBase(cfg) {
     ? "http://127.0.0.1:8788" : "https://ai.phantomforce.online";
 }
 
+/* ---------------- engine health (shared by doctor + generate) ----------------
+   Two legit render lanes:
+   - API lane: the ai-proxy with a provider key (HIGGSFIELD_API_KEY)
+   - SUBSCRIPTION lane: the desktop bridge (Hermes) drives the owner's
+     logged-in Higgsfield account — no API key involved.               */
+let engineHealth = { at: 0, proxy: false, media: {}, bridge: false };
+async function checkEngineHealth(cfg, force = false) {
+  const now = Date.now();
+  if (!force && now - engineHealth.at < 60000) return engineHealth;
+  const next = { at: now, proxy: false, media: {}, bridge: false };
+  const probe = async (url, ms) => {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), ms);
+    try { return await fetch(url, { signal: ctrl.signal }); }
+    finally { clearTimeout(t); }
+  };
+  try {
+    const r = await probe(`${genBase(cfg)}/health`, 5000);
+    const d = await r.json().catch(() => null);
+    if (d && d.ok) { next.proxy = true; next.media = d.media || {}; }
+  } catch { }
+  try {
+    const r = await probe("/phantom-ai/health", 3000);
+    if (r.ok) next.bridge = true;
+  } catch { }
+  engineHealth = next;
+  return next;
+}
+
 /* ---------------- generation client ---------------- */
 function cleanBrief(value = "", limit = 2200) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
@@ -523,7 +552,7 @@ function higgsfieldResolution(spec = {}) {
 }
 async function draftHiggsfieldRequest(req = {}, spec = {}) {
   const token = accessSession.token();
-  if (!token || req.provider !== "higgsfield") return null;
+  if (req.provider !== "higgsfield") return null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
   try {
@@ -531,7 +560,7 @@ async function draftHiggsfieldRequest(req = {}, spec = {}) {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
         prompt: spec.provider_prompt,
@@ -562,6 +591,20 @@ async function generate(cfg, req) {
   const p = provider(cfg, req.provider) || {};
   const url = (p.endpoint || `${base}/generate`);
   const spec = buildGenerationSpec(req);
+  /* SUBSCRIPTION LANE: no API key on the proxy but the desktop bridge is
+     up -> queue the render straight into the owner's Higgsfield account.
+     prompt > higgsfield > done, no key required. */
+  const health = await checkEngineHealth(cfg).catch(() => engineHealth);
+  if (req.provider === "higgsfield" && !health.media.higgsfield && health.bridge) {
+    const draft = await draftHiggsfieldRequest({ ...req, prompt: spec.provider_prompt, model: spec.model }, spec);
+    if (draft) {
+      const assets = [];
+      for (let i = 0; i < (req.modality === "video" ? 1 : spec.count); i++) {
+        assets.push(previewAsset({ ...req, prompt: spec.provider_prompt, params: { ...req.params } }, i, { spec, queued: true, draft }));
+      }
+      return { assets, live: false, queued: true, spec, draft };
+    }
+  }
   const providerReq = {
     ...req,
     model: spec.model,
@@ -812,7 +855,12 @@ function previewAsset(req, i, context = {}) {
   g.stroke();
   g.fillStyle = "rgba(120,255,190,0.88)";
   g.font = "800 10px 'DM Mono', monospace";
-  g.fillText(`${context.fallbackReason ? "OFFLINE SKETCH · " + String(context.fallbackReason).replace(/^provider_/i, "").replace(/_/g, " ").toUpperCase().slice(0, 26) : "PREVIEW"} · ${String(spec.aspect || "").toUpperCase()}`, px + 16, py + 25);
+  const plateTag = context.queued
+    ? "RENDERING IN YOUR HIGGSFIELD STUDIO"
+    : context.fallbackReason
+      ? "OFFLINE SKETCH · " + String(context.fallbackReason).replace(/^provider_/i, "").replace(/_/g, " ").toUpperCase().slice(0, 26)
+      : "PREVIEW";
+  g.fillText(`${plateTag} · ${String(spec.aspect || "").toUpperCase()}`, px + 16, py + 25);
   g.fillStyle = "rgba(236,255,246,0.95)";
   g.font = "700 18px 'Space Grotesk', sans-serif";
   drawWrappedText(g, spec.original_prompt || req.prompt || "Untitled media generation", px + 16, py + 52, plateW - 32, 22, 3);
@@ -1226,37 +1274,35 @@ function wireGenerate(body, cfg, opts, root, esc) {
   /* Engine Doctor: silent fallbacks looked like a dumb brain. Say EXACTLY
      what state the pipeline is in and what fixes it. */
   const doctor = body.querySelector("[data-ml-doctor]");
-  const runDoctor = async () => {
+  const runDoctor = async (force = false) => {
     if (!doctor) return;
     const title = doctor.querySelector("[data-ml-doctor-title]");
     const msg = doctor.querySelector("[data-ml-doctor-msg]");
     doctor.dataset.state = "checking";
     title.textContent = "Checking the media engine…"; msg.textContent = "";
-    const base = genBase(cfg);
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), 5000);
-      const r = await fetch(`${base}/health`, { signal: ctrl.signal });
-      clearTimeout(t);
-      const d = await r.json().catch(() => null);
-      if (!d || !d.ok) throw new Error("bad health");
-      const media = d.media || {};
-      if (media[genState.provider || "higgsfield"]) {
-        doctor.dataset.state = "ok";
-        title.textContent = "Media engine connected";
-        msg.textContent = `${base.replace(/^https?:\/\//, "")} · ${genState.provider || "higgsfield"} key loaded — real renders will run.`;
-      } else {
-        doctor.dataset.state = "warn";
-        title.textContent = "Proxy reachable — provider key missing";
-        msg.textContent = `The proxy at ${base.replace(/^https?:\/\//, "")} answered, but HIGGSFIELD_API_KEY isn't set in ai-proxy/.env (or the proxy is running old code). Until then you get offline sketches.`;
-      }
-    } catch {
+    const base = genBase(cfg).replace(/^https?:\/\//, "");
+    const h = await checkEngineHealth(cfg, force).catch(() => engineHealth);
+    if (!doctor.isConnected) return;
+    const prov = genState.provider || "higgsfield";
+    if (h.media[prov]) {
+      doctor.dataset.state = "ok";
+      title.textContent = "Media engine connected (API)";
+      msg.textContent = `${base} · ${prov} key loaded — real renders will run.`;
+    } else if (h.bridge) {
+      doctor.dataset.state = "ok";
+      title.textContent = "Higgsfield subscription bridge ready";
+      msg.textContent = "No API key needed — prompts queue straight into your Higgsfield account through the desktop bridge, and finished renders land in Content Hub.";
+    } else if (h.proxy) {
+      doctor.dataset.state = "warn";
+      title.textContent = "No render lane yet";
+      msg.textContent = `The proxy at ${base} answered, but there's no HIGGSFIELD_API_KEY in ai-proxy/.env and the desktop bridge isn't running. Start the desktop bridge (subscription) or add a key — until then you get offline sketches.`;
+    } else {
       doctor.dataset.state = "down";
       title.textContent = "Media engine unreachable";
-      msg.textContent = `Nothing answered at ${base.replace(/^https?:\/\//, "")}. The ai-proxy isn't running (or the route is down) — start it with bash ai-proxy/run.sh on the always-on box. Prompts will render as offline sketches until it's back.`;
+      msg.textContent = `Nothing answered at ${base} and the desktop bridge is down. Start the bridge on the always-on box (or bash ai-proxy/run.sh for the API lane). Prompts render as offline sketches until then.`;
     }
   };
-  doctor?.querySelector("[data-ml-doctor-retry]")?.addEventListener("click", runDoctor);
+  doctor?.querySelector("[data-ml-doctor-retry]")?.addEventListener("click", () => runDoctor(true));
   runDoctor();
 
   body.querySelectorAll("[data-tile-act]").forEach((b) => b.onclick = () => tileAction(b.dataset.tileAct, b.dataset.id, cfg, opts, root, esc, body));
@@ -1295,7 +1341,9 @@ async function runGenerate(body, cfg, opts, root, esc) {
     if (opts.notify) {
       const status = out.live
         ? "generated"
-        : `media backend didn't respond (${out.fallbackReason || "unreachable"}) — sketched the request locally instead; hit Regenerate once the provider is back for`;
+        : out.queued
+          ? "queued in your Higgsfield Studio — the desktop bridge renders it with your subscription; finished cuts land in Content Hub for"
+          : `media backend didn't respond (${out.fallbackReason || "unreachable"}) — sketched the request locally instead; hit Regenerate once the provider is back for`;
       opts.notify("Media Factory", `${status} ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""} - "${genState.prompt.slice(0, 40)}".`);
     }
     // spend credits only after a live provider asset returns; previews are free.
