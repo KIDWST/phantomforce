@@ -303,7 +303,7 @@ function handleGenerate(req, res, send) {
       model: String(payload.model || ""), prompt: String(payload.prompt || "").slice(0, 3000),
       negative: String(payload.negative || "").slice(0, 500), style: String(payload.style || ""),
       ref: typeof payload.ref === "string" ? payload.ref.slice(0, 5_000_000) : null,
-      params: { aspect: String((payload.params || {}).aspect || "1:1"), count: Math.min(4, Math.max(1, (payload.params || {}).count || 1)), quality: (payload.params || {}).quality || "standard", duration: Math.min(12, Math.max(2, (payload.params || {}).duration || 6)) },
+      params: { aspect: String((payload.params || {}).aspect || "1:1"), count: Math.min(4, Math.max(1, (payload.params || {}).count || 1)), quality: (payload.params || {}).quality || "standard", duration: Math.min(30, Math.max(2, (payload.params || {}).duration || 6)) },
     };
     if (!reqOut.prompt) return send({ error: "empty" }, 400);
     try {

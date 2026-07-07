@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-64";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-64";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-65";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-65";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -463,16 +463,25 @@ function buildGenerationSpec(req = {}) {
   const rawPrompt = cleanBrief(req.prompt);
   const negative = cleanBrief(req.negative, 700);
   const model = normalizeHiggsfieldModel(req) || req.model || "";
-  const providerPromptParts = [
-    `Primary request: ${rawPrompt}`,
-    `Output: ${req.modality === "video" ? "video" : "image"}`,
-    `Frame: ${params.aspect || "1:1"}${req.modality === "video" ? `, ${params.duration || 6}s` : `, ${params.count || 1} take${(params.count || 1) > 1 ? "s" : ""}`}`,
-    req.preset && req.preset !== "Custom" ? `Format preset: ${req.preset}` : "",
-    req.style && req.style !== "None" ? `Visual style: ${req.style}` : "",
-    req.ref ? "Use the attached/reference image for continuity." : "",
-    negative ? `Avoid: ${negative}` : "",
-    "Honor the primary request literally. Do not replace the subject, business, product, setting, aspect ratio, or requested format with generic brand art.",
-  ].filter(Boolean).join(". ");
+  /* THE PROMPT IS THE PROMPT. Diffusion models are caption-matchers, not
+     instruction-followers: meta-text like "Output: image. Frame: 1:1.
+     Honor the request literally" gets DRAWN, not obeyed — it was actively
+     destroying prompt fidelity. Aspect, count, duration, negative, and the
+     reference image all travel as structured API fields; the only thing we
+     may append is a short photography-language style tag. */
+  const STYLE_TAGS = {
+    "Cinematic": "cinematic lighting, film still",
+    "Product": "clean product photography, studio lighting",
+    "Portrait": "portrait photography, shallow depth of field",
+    "Neon": "neon glow, night, vibrant colors",
+    "Editorial": "editorial photography, magazine quality",
+    "3D render": "polished 3d render",
+    "Analog film": "analog film photo, natural grain",
+  };
+  const styleTag = req.style && req.style !== "None" && !rawPrompt.toLowerCase().includes(String(req.style).toLowerCase())
+    ? (STYLE_TAGS[req.style] || String(req.style).toLowerCase())
+    : "";
+  const providerPromptParts = styleTag ? `${rawPrompt}, ${styleTag}` : rawPrompt;
   return {
     original_prompt: rawPrompt,
     provider_prompt: cleanBrief(providerPromptParts, 2600),
