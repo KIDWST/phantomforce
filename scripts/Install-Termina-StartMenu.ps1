@@ -23,7 +23,11 @@ if ($Uninstall) {
 }
 
 $iconPath = Join-Path $appRoot "assets\termina.ico"
-if (-not (Test-Path $iconPath)) {
+$iconSource = Join-Path $appRoot "assets\termina-source.png"
+if (Test-Path $iconSource) {
+    Write-Host "Building app icon from source image ..."
+    & (Join-Path $PSScriptRoot "Set-TerminaIcon.ps1") -Source $iconSource
+} elseif (-not (Test-Path $iconPath)) {
     Write-Host "Generating app icon ..."
     & (Join-Path $PSScriptRoot "New-TerminaIcon.ps1")
 }

@@ -114,9 +114,16 @@ function addCard(init = {}, { save = true, start = false } = {}) {
   };
   cards.push(card);
   document.getElementById("wall").insertBefore(buildCard(card), document.getElementById("add-card"));
+  updateWallEmptyState();
   if (save) saveWorkspace();
   if (start && card.profileId) startTerminal(card);
   return card;
+}
+
+// When there are no terminals, present just a friendly centered + instead of a
+// full-size empty tile.
+function updateWallEmptyState() {
+  document.getElementById("wall").classList.toggle("wall-empty", cards.length === 0);
 }
 
 function removeCard(card) {
@@ -125,6 +132,7 @@ function removeCard(card) {
   const idx = cards.indexOf(card);
   if (idx >= 0) cards.splice(idx, 1);
   document.querySelector(`.tile[data-uid="${card.uid}"]`)?.remove();
+  updateWallEmptyState();
   saveWorkspace();
 }
 
@@ -493,6 +501,7 @@ function closeOverlay() {
 function setColumns(n) {
   columns = n;
   document.getElementById("wall").className = `wall cols-${n}`;
+  updateWallEmptyState();
   document.querySelectorAll(".cols-switch button").forEach((b) => b.classList.toggle("active", Number(b.dataset.cols) === n));
   // Re-fit visible terminals.
   for (const card of cards) {
@@ -518,7 +527,7 @@ function ensureAddCard() {
     add.type = "button";
     add.setAttribute("aria-label", "New terminal");
     add.title = "New terminal";
-    add.innerHTML = `<span class="plus">+</span>`;
+    add.innerHTML = `<span class="plus">+</span><span class="add-hint">Open a terminal · Ctrl N</span>`;
     add.addEventListener("click", (e) => {
       // First time (empty wall): offer to create several at once, right where
       // you clicked. After that, a quick single add.
@@ -606,7 +615,7 @@ document.getElementById("new-term").addEventListener("click", (e) => {
   }
 });
 
-document.getElementById("new-menu-add").addEventListener("click", () => {
+function submitNewMenu() {
   const type = document.getElementById("new-menu-type").value || null;
   let count = parseInt(document.getElementById("new-menu-count").value, 10);
   if (!Number.isFinite(count) || count < 1) count = 1;
@@ -620,7 +629,17 @@ document.getElementById("new-menu-add").addEventListener("click", () => {
     }
   }
   saveWorkspace();
-  toggleNewMenu(false);
+  closeNewMenu();
+}
+
+document.getElementById("new-menu-add").addEventListener("click", submitNewMenu);
+
+// Enter anywhere in the add panel creates the terminal(s).
+document.getElementById("new-menu").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    submitNewMenu();
+  }
 });
 
 document.addEventListener("click", (e) => {
