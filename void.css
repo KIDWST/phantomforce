@@ -500,19 +500,6 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
   .cta-block .ops-line { position: static; top: auto; left: auto; transform: none; }
 }
 .creed { margin-top: auto; }
-/* scroll invitation */
-.hero-more {
-  position: absolute; left: 50%; bottom: 10px; transform: translateX(-50%);
-  width: 30px; height: 46px; border-radius: 999px; border: 1px solid rgba(77, 255, 171, 0.22);
-  display: grid; justify-items: center; padding-top: 9px; opacity: 0.65; transition: opacity 0.25s;
-}
-.hero-more:hover { opacity: 1; }
-/* keyboard up = the pill would float mid-screen; hide it while typing, and on phones entirely */
-.hero-void:focus-within .hero-more { opacity: 0; pointer-events: none; }
-@media (max-width: 760px), (pointer: coarse) { .hero-more { display: none; } }
-.hero-more span { width: 4px; height: 9px; border-radius: 4px; background: var(--neon); box-shadow: 0 0 8px var(--neon); animation: moreDrop 1.8s ease-in-out infinite; }
-@keyframes moreDrop { 0% { transform: translateY(0); opacity: 1; } 70% { transform: translateY(14px); opacity: 0; } 100% { transform: translateY(0); opacity: 0; } }
-
 /* ============ shared section scaffolding ============ */
 .sect { position: relative; max-width: 1080px; margin: 0 auto; padding: clamp(56px, 9vh, 110px) clamp(18px, 4vw, 32px); }
 .sect-alt::before {
@@ -654,7 +641,7 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
   .final-btns .download-cta, .final-btns .ghost-btn { width: 100%; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .hero-more span, .sdot { animation: none !important; }
+  .sdot { animation: none !important; }
   [data-reveal] { opacity: 1; transform: none; transition: none; }
 }
 
