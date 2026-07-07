@@ -66,9 +66,6 @@ function truncate(s, n) {
 
 // Every dropdown lists terminals AND each open program on this PC.
 function tileOptionsHtml(selectedId) {
-  const profOpts = profiles
-    .map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`)
-    .join("");
   const winOpts = openWindows
     .map(
       (w) =>
@@ -77,7 +74,6 @@ function tileOptionsHtml(selectedId) {
     .join("");
   return (
     `<option value="">Choose source…</option>` +
-    `<optgroup label="Terminals">${profOpts}</optgroup>` +
     (winOpts ? `<optgroup label="Open programs (${openWindows.length})">${winOpts}</optgroup>` : "")
   );
 }
