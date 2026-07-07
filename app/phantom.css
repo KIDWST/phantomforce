@@ -2534,11 +2534,55 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-section { border: 1px solid var(--line); border-radius: 18px; padding: 20px; background: var(--glass); }
 .set-section h3 { margin: 0 0 6px; font-size: 16px; }
 .set-note { margin: 0 0 16px; font-size: 12.5px; line-height: 1.55; color: var(--dim); max-width: 720px; }
+.settings-operator { gap: 18px; }
+.set-eyebrow {
+  margin: 0 0 6px; font: 700 9.5px "DM Mono", monospace; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--neon);
+}
+.set-ai-hero {
+  display: grid; grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr); gap: 18px;
+  background: radial-gradient(circle at 0 0, rgba(65,255,161,0.11), transparent 44%), var(--glass);
+}
+.set-status-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.set-status-grid span {
+  min-width: 0; border: 1px solid rgba(65,255,161,0.15); border-radius: 13px; padding: 11px 12px;
+  background: rgba(2,10,8,0.42);
+}
+.set-status-grid b {
+  display: block; margin-bottom: 4px; font: 700 9px "DM Mono", monospace; letter-spacing: 0.12em;
+  text-transform: uppercase; color: var(--dim);
+}
+.set-status-grid i { display: block; color: #e9fff1; font-style: normal; font-size: 12.5px; line-height: 1.3; }
 .set-sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .set-sec-head .set-note { margin: 4px 0 0; }
 .set-add { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(65,255,161,0.06); color: var(--neon); cursor: pointer; font: 600 12px "Space Grotesk"; }
 .set-add:hover { background: rgba(65,255,161,0.14); }
 .set-add .ic { width: 14px; height: 14px; }
+.set-model-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.set-model-card {
+  min-width: 0; text-align: left; border: 1px solid var(--line); border-radius: 15px; padding: 13px;
+  background: rgba(2,10,8,0.42); color: var(--ink); cursor: pointer; transition: border-color 0.2s, background 0.2s, transform 0.2s;
+}
+.set-model-card:hover, .set-model-card.is-active {
+  border-color: rgba(65,255,161,0.42); background: rgba(65,255,161,0.08); transform: translateY(-1px);
+}
+.set-model-orb {
+  display: block; width: 13px; height: 13px; margin-bottom: 9px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #eafff4, var(--neon) 42%, rgba(65,255,161,0.24) 70%);
+  box-shadow: 0 0 18px rgba(65,255,161,0.38);
+}
+.set-model-card b { display: block; font-size: 14px; color: #f4fff8; }
+.set-model-card i { display: block; margin-top: 4px; color: var(--dim); font-style: normal; font-size: 11.5px; line-height: 1.35; }
+.set-control-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.set-control { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.set-control span {
+  font: 700 9.5px "DM Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase; color: var(--dim);
+}
+.set-control select {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px;
+  background: rgba(0,0,0,0.3); color: var(--ink); font-size: 13px; outline: none;
+}
+.set-control select:focus { border-color: var(--neon); }
 .set-routes { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 12px; margin-bottom: 14px; }
 .set-route { display: flex; flex-direction: column; gap: 6px; }
 .set-route span { font: 600 9.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
@@ -2546,6 +2590,12 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-route select:focus, .set-field input:focus { border-color: var(--neon); }
 .set-inline { display: flex; align-items: center; gap: 9px; font-size: 13px; color: #cfeeda; margin-bottom: 14px; cursor: pointer; }
 .set-inline input { accent-color: var(--neon); width: 16px; height: 16px; }
+.set-inline-tight { margin: 14px 0; }
+.set-rule-list { display: flex; flex-wrap: wrap; gap: 8px; margin: 10px 0 14px; }
+.set-rule-list span {
+  border: 1px solid rgba(65,255,161,0.17); border-radius: 999px; padding: 6px 10px;
+  color: #cfeeda; background: rgba(65,255,161,0.06); font-size: 11.5px;
+}
 .set-field { display: flex; flex-direction: column; gap: 6px; }
 .set-field span { font: 600 9.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
 .set-field em { font-size: 11px; color: var(--dim-2); font-style: normal; }
@@ -2564,6 +2614,9 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-switch span::before { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: #cfeeda; transition: transform 0.2s; }
 .set-switch input:checked + span { background: var(--neon); }
 .set-switch input:checked + span::before { transform: translateX(16px); background: #04160d; }
+.set-switch.set-switch-large { width: 48px; height: 28px; }
+.set-switch.set-switch-large span::before { width: 22px; height: 22px; }
+.set-switch.set-switch-large input:checked + span::before { transform: translateX(20px); }
 .set-prov-mods { display: flex; flex-wrap: wrap; gap: 5px; margin: 11px 0; }
 .set-mod { font: 500 9.5px "DM Mono", monospace; letter-spacing: 0.06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: var(--dim); }
 .set-prov-body { display: flex; flex-direction: column; gap: 10px; }
@@ -2867,6 +2920,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .account-hero { grid-template-columns: auto minmax(0, 1fr); }
   .account-plan-chip { grid-column: 1 / -1; text-align: left; }
   .account-cancel { align-items: stretch; flex-direction: column; }
+  .set-ai-hero, .set-model-grid, .set-control-grid { grid-template-columns: 1fr; }
+  .set-status-grid { grid-template-columns: 1fr; }
   .set-connect-model { grid-template-columns: 1fr; }
   .set-hermes-connect { grid-template-columns: auto minmax(0, 1fr); }
   .set-hermes-status, .set-hermes-actions { grid-column: 1 / -1; justify-items: start; justify-content: flex-start; }

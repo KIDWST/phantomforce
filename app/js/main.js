@@ -4,18 +4,19 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260707-39";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-39";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-39";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-39";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260707-39";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-39";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-39";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-39";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-39";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-39";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-39";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-39";
+} from "./store.js?v=phantom-live-20260707-41";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-41";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-41";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-41";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-41";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-41";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-41";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-41";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-41";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-41";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-41";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-41";
+import { renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-41";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -582,7 +583,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260707-39";
+const POSE_VERSION = "phantom-live-20260707-41";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1678,7 +1679,7 @@ const CUSTOM = {
   analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
-  settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderMediaSettings(body, mediaOpts()) },
+  settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
   brand: { title: "Brand Memory", kicker: "Private & local brand brain", custom: true, wide: true, render: (body) => renderBrandMemory(body, mediaOpts()) },
   automation: { title: "Automation", kicker: "User-created workflows", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
 };
