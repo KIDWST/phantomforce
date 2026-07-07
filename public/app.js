@@ -418,7 +418,9 @@ function ensureAddCard() {
     add.id = "add-card";
     add.className = "add-card";
     add.type = "button";
-    add.innerHTML = `<span class="plus">+</span><span>New terminal</span>`;
+    add.setAttribute("aria-label", "New terminal");
+    add.title = "New terminal";
+    add.innerHTML = `<span class="plus">+</span>`;
     add.addEventListener("click", () => addCard({}, { start: false }));
     wall.appendChild(add);
   }
