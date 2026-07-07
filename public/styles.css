@@ -639,3 +639,203 @@ input {
   display: none;
 }
 
+
+/* ============================================================= */
+/* Product UX: named windows, unlimited grid, add-card           */
+/* ============================================================= */
+
+.brand-text span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.engine {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 14px;
+  padding-left: 14px;
+  border-left: 1px solid var(--line);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.engine .dot {
+  width: 8px;
+  height: 8px;
+}
+
+.controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.primary {
+  padding: 9px 16px;
+  border-radius: 10px;
+  border: 1px solid rgba(89, 208, 133, 0.55);
+  background: rgba(89, 208, 133, 0.14);
+  color: var(--green-bright);
+  font-weight: 600;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.primary:hover {
+  background: rgba(89, 208, 133, 0.24);
+  border-color: rgba(89, 208, 133, 0.8);
+}
+
+.cols-switch {
+  display: inline-flex;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+
+.cols-switch button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  width: 34px;
+  padding: 6px 0;
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.cols-switch button.active {
+  background: var(--panel-3);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px rgba(89, 208, 133, 0.4);
+}
+
+/* ---- grid ---- */
+
+.wall {
+  display: grid;
+  gap: 12px;
+  padding: 16px 20px 28px;
+  align-content: start;
+  grid-auto-rows: minmax(300px, 40vh);
+}
+
+.wall.cols-2 {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+.wall.cols-3 {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.wall.cols-4 {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+}
+
+@media (max-width: 1024px) {
+  .wall.cols-3,
+  .wall.cols-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .wall {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+/* ---- tile header with editable name ---- */
+
+.tile-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.tile-name {
+  flex: 1;
+  min-width: 0;
+  padding: 5px 9px;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.tile-name:hover {
+  border-color: var(--line);
+}
+
+.tile-name:focus {
+  outline: none;
+  border-color: rgba(89, 208, 133, 0.6);
+  background: var(--panel-3);
+}
+
+.tile-name::placeholder {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+.instance-select {
+  flex: none;
+  max-width: 150px;
+}
+
+.tile-remove {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 19px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tile-remove:hover {
+  border-color: rgba(236, 47, 69, 0.5);
+  color: #ff8a99;
+}
+
+/* ---- add-card ghost tile ---- */
+
+.add-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px dashed var(--line);
+  border-radius: 13px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, color 0.15s ease;
+}
+
+.add-card:hover {
+  border-color: rgba(89, 208, 133, 0.55);
+  color: var(--text);
+  background: rgba(89, 208, 133, 0.04);
+}
+
+.add-card .plus {
+  font-size: 34px;
+  line-height: 1;
+  color: var(--green);
+}
+

@@ -1,50 +1,37 @@
 {
-  "_comment": "Copy this to termina.config.json (next to server.js) to replace the built-in profiles with your own. Each profile is a predefined local terminal. Commands are always fixed argv arrays run on your own machine. Do not put secrets or offensive tooling here. cwd supports ~ for your home directory.",
+  "_comment": "Copy this to termina.config.json (next to server.js) to define your own terminal types. Each becomes an option in every window's dropdown. Commands run on your machine as you; cwd supports ~ for your home directory.",
   "profiles": [
     {
-      "id": "control",
-      "label": "CONTROL",
-      "type": "control",
-      "description": "Main shell in my dev folder",
-      "cwd": "~/Documents",
-      "command": "powershell.exe",
+      "id": "pwsh",
+      "label": "PowerShell",
+      "command": "pwsh.exe",
       "args": ["-NoLogo"],
-      "interactive": true,
-      "note": "Primary shell."
+      "cwd": "~",
+      "note": "A PowerShell shell."
     },
     {
-      "id": "project-web",
-      "label": "WEB DEV",
-      "type": "service",
-      "description": "Frontend dev server",
+      "id": "codex",
+      "label": "Codex CLI",
+      "command": "pwsh.exe",
+      "args": ["-NoLogo", "-NoExit", "-Command", "codex"],
+      "cwd": "~",
+      "note": "Launches the Codex CLI."
+    },
+    {
+      "id": "my-project",
+      "label": "My Project (dev)",
+      "command": "pwsh.exe",
+      "args": ["-NoLogo", "-NoExit", "-Command", "npm run dev"],
       "cwd": "~/Documents/my-project",
-      "command": "cmd.exe",
-      "args": ["/d", "/s", "/c", "npm run dev"],
-      "interactive": false,
-      "note": "Runs the web dev server."
+      "note": "Starts the dev server in my project."
     },
     {
-      "id": "python",
-      "label": "PYTHON",
-      "type": "shell",
-      "description": "Python REPL",
+      "id": "wsl",
+      "label": "WSL / bash",
+      "command": "wsl.exe",
+      "args": [],
       "cwd": "~",
-      "command": "python.exe",
-      "args": ["-i"],
-      "interactive": true,
-      "note": "Live Python REPL."
-    },
-    {
-      "id": "lab-ssh",
-      "label": "LAB SSH",
-      "type": "lab",
-      "description": "Authorized lab box (my own)",
-      "cwd": "~",
-      "command": "ssh.exe",
-      "args": ["labuser@10.0.0.5"],
-      "interactive": true,
-      "blocked": true,
-      "note": "Set blocked=false only for machines you own/control. Nothing offensive auto-runs."
+      "note": "A Linux shell via WSL."
     }
   ]
 }

@@ -17,29 +17,22 @@
         <span class="brand-mark">&gt;_</span>
         <div class="brand-text">
           <strong>TERMINA</strong>
-          <span>Terminal wall · local command center</span>
+          <span>Your whole terminal workflow, one wall.</span>
         </div>
+        <span class="engine" id="engine" title="Engine status"><i class="dot amber"></i><span id="engine-text">connecting…</span></span>
       </div>
       <div class="controls">
-        <div class="layout-switch" role="group" aria-label="Wall layout">
-          <button type="button" data-layout="2x2">2×2</button>
-          <button type="button" data-layout="3x2">3×2</button>
-          <button type="button" data-layout="3x3" class="active">3×3</button>
+        <button id="new-term" class="primary" type="button">+ New terminal</button>
+        <div class="cols-switch" role="group" aria-label="Columns">
+          <button type="button" data-cols="2">2</button>
+          <button type="button" data-cols="3" class="active">3</button>
+          <button type="button" data-cols="4">4</button>
         </div>
-        <button type="button" id="rescan" class="ghost">Re-scan</button>
+        <button id="rescan" class="ghost" type="button" title="Rescan available terminal types">Re-scan</button>
       </div>
     </header>
 
-    <div class="banner" id="banner">
-      <span class="dot amber"></span>
-      <p id="banner-text">Connecting to the local Termina engine…</p>
-      <small
-        >Local only (127.0.0.1) · single-machine. Each tile is its own real terminal — run Codex CLIs,
-        shells, builds, and more, side by side.</small
-      >
-    </div>
-
-    <main id="wall" class="wall layout-3x3"></main>
+    <main id="wall" class="wall cols-3"></main>
 
     <div id="overlay" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Expanded terminal">
       <div class="overlay-panel">
