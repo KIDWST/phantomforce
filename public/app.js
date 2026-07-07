@@ -21,8 +21,10 @@ const TERM_THEME = {
 
 let profiles = [];
 let profilesById = new Map();
+let openWindows = []; // live list of open programs on this PC (for every dropdown)
 let currentLayout = "3x3";
-// Default tile → profile assignment (by index). Filled once profiles load.
+// Default tile → source assignment (by index). A source is a profile id or
+// "win:<pid>" for one of your open programs. Filled once profiles load.
 let tileAssignments = [];
 
 const tiles = new Map(); // tileIndex -> { term, fit, ws, profileId, disposed }
@@ -43,10 +45,14 @@ async function loadProfiles() {
     if (!data.ok) throw new Error(data.error || "profiles unavailable");
     profiles = data.profiles;
     profilesById = new Map(profiles.map((p) => [p.id, p]));
+    openWindows = await fetchWindows();
     dot.className = "dot green";
-    text.textContent = `Engine live · ${profiles.length} terminal profiles ready.`;
+    text.textContent = `Engine live · ${profiles.length} terminals · ${openWindows.length} open programs. Pick any source per tile.`;
     if (tileAssignments.length === 0) {
-      tileAssignments = profiles.map((p) => p.id);
+      // Default first tiles to open programs (what you most want to watch),
+      // then fall back to terminal profiles.
+      const winIds = openWindows.map((w) => `win:${w.pid}`);
+      tileAssignments = [...winIds, ...profiles.map((p) => p.id)].slice(0, 9);
     }
     renderWall();
   } catch (err) {
@@ -55,10 +61,33 @@ async function loadProfiles() {
   }
 }
 
+function truncate(s, n) {
+  s = String(s || "");
+  return s.length > n ? s.slice(0, n - 1) + "…" : s;
+}
+
+// Every dropdown lists terminals AND each open program on this PC.
+function tileOptionsHtml(selectedId) {
+  const profOpts = profiles
+    .map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`)
+    .join("");
+  const winOpts = openWindows
+    .map(
+      (w) =>
+        `<option value="win:${w.pid}">${escapeHtml(truncate(w.title, 42))} — ${escapeHtml(w.name)}</option>`,
+    )
+    .join("");
+  return (
+    `<option value="">Choose source…</option>` +
+    `<optgroup label="Terminals">${profOpts}</optgroup>` +
+    (winOpts ? `<optgroup label="Open programs (${openWindows.length})">${winOpts}</optgroup>` : "")
+  );
+}
+
 function statusTone(status) {
-  if (status === "running") return "green";
+  if (status === "running" || status === "live") return "green";
   if (status === "idle") return "amber";
-  if (status === "blocked" || status === "exited" || status === "error") return "red";
+  if (status === "blocked" || status === "exited" || status === "error" || status === "closed") return "red";
   return "gray";
 }
 
@@ -80,7 +109,13 @@ function renderWall() {
   }
   // Re-attach live tiles after a (re)render.
   for (let i = 0; i < count; i += 1) {
-    const profile = profilesById.get(tileAssignments[i]);
+    const sel = tileAssignments[i];
+    if (!sel) continue;
+    if (sel.startsWith("win:")) {
+      attachProgram(i, Number(sel.slice(4)));
+      continue;
+    }
+    const profile = profilesById.get(sel);
     if (!profile) continue;
     if (profile.monitor) {
       attachMonitor(i);
@@ -96,38 +131,64 @@ function buildTile(index) {
   el.dataset.index = String(index);
 
   const selectedId = tileAssignments[index] ?? "";
-  const profile = profilesById.get(selectedId) || null;
+  const isProgram = typeof selectedId === "string" && selectedId.startsWith("win:");
+  const winPid = isProgram ? Number(selectedId.slice(4)) : null;
+  const profile = !isProgram ? profilesById.get(selectedId) || null : null;
+  const winInfo = isProgram ? openWindows.find((w) => w.pid === winPid) : null;
 
   const head = document.createElement("div");
   head.className = "tile-head";
 
   const select = document.createElement("select");
   select.className = "instance-select";
-  select.setAttribute("aria-label", `Tile ${index + 1} terminal`);
-  select.innerHTML =
-    `<option value="">Choose terminal…</option>` +
-    profiles.map((p) => `<option value="${p.id}">${p.label}</option>`).join("");
+  select.setAttribute("aria-label", `Tile ${index + 1} source`);
+  select.innerHTML = tileOptionsHtml(selectedId);
   select.value = selectedId;
   select.addEventListener("change", () => selectProfile(index, select.value));
 
   const status = document.createElement("span");
-  status.className = `status ${profile ? statusTone(profile.status) : "gray"}`;
-  status.innerHTML = `<i></i>${profile ? profile.status : "empty"}`;
+  const chipLabel = isProgram ? (winInfo ? "program" : "closed") : profile ? profile.status : "empty";
+  status.className = `status ${isProgram ? (winInfo ? "green" : "red") : profile ? statusTone(profile.status) : "gray"}`;
+  status.innerHTML = `<i></i>${chipLabel}`;
 
   head.append(select, status);
 
   const meta = document.createElement("div");
   meta.className = "tile-meta";
-  meta.innerHTML = profile
-    ? `<span class="cam">CAM ${String(index + 1).padStart(2, "0")}</span>
+  if (isProgram) {
+    meta.innerHTML = `<span class="cam">CAM ${String(index + 1).padStart(2, "0")}</span>
+       <span class="src" title="${escapeHtml(winInfo ? winInfo.title : "")}">${escapeHtml(winInfo ? winInfo.title : "program closed")}</span>
+       <span class="ttype">${escapeHtml(winInfo ? winInfo.name : "")}</span>`;
+  } else {
+    meta.innerHTML = profile
+      ? `<span class="cam">CAM ${String(index + 1).padStart(2, "0")}</span>
        <span class="src" title="${profile.description}">${profile.cwd}</span>
        <span class="ttype">${profile.type}</span>`
-    : `<span class="cam">CAM ${String(index + 1).padStart(2, "0")}</span><span class="src">no source</span>`;
+      : `<span class="cam">CAM ${String(index + 1).padStart(2, "0")}</span><span class="src">no source</span>`;
+  }
 
   const screen = document.createElement("div");
   screen.className = "screen";
   const actions = document.createElement("div");
   actions.className = "tile-actions";
+
+  if (isProgram) {
+    // Live camera of one open program.
+    const shot = document.createElement("div");
+    shot.className = "cam-shot";
+    shot.id = `shot-${index}`;
+    shot.innerHTML = `<img class="cam-img" id="shotimg-${index}" alt="live view of ${escapeHtml(winInfo ? winInfo.title : "program")}" />
+      <div class="cam-none" id="shotnone-${index}">Connecting…</div>`;
+    screen.append(shot);
+    actions.appendChild(button("Focus", "", () => programAction(index, "focus")));
+    actions.appendChild(button("Min", "", () => programAction(index, "minimize")));
+    actions.appendChild(button("Restore", "", () => programAction(index, "restore")));
+    actions.appendChild(button("Max", "", () => programAction(index, "maximize")));
+    actions.appendChild(button("Close", "danger", () => programAction(index, "close")));
+    actions.appendChild(button("Expand", "", () => expandTile(index)));
+    el.append(head, meta, screen, actions);
+    return el;
+  }
 
   if (profile && profile.monitor) {
     // Live open-programs monitor instead of a terminal.
@@ -242,6 +303,75 @@ function attachMonitor(index) {
   tile.timer = setInterval(refresh, 4000);
 }
 
+// ---- single-program camera tile --------------------------------------------
+
+async function fetchThumb(pid) {
+  try {
+    const res = await api(`/api/windows/${pid}/thumbnail`);
+    return await res.json();
+  } catch {
+    return { ok: false, error: "unreachable" };
+  }
+}
+
+function renderShot(index, data) {
+  const img = document.getElementById(`shotimg-${index}`);
+  const none = document.getElementById(`shotnone-${index}`);
+  if (!img || !none) return;
+  if (data && data.ok && data.png) {
+    img.src = `data:image/png;base64,${data.png}`;
+    img.style.display = "block";
+    none.style.display = "none";
+  } else {
+    img.style.display = "none";
+    none.style.display = "flex";
+    none.textContent =
+      data && data.minimized
+        ? "Program is minimized — click Restore to view it live."
+        : data && data.error === "gone"
+          ? "Program has closed."
+          : "No preview available for this program.";
+  }
+  // Keep the header/meta title fresh from the capture meta.
+  if (data && data.title) {
+    const tileEl = document.querySelector(`.tile[data-index="${index}"]`);
+    const src = tileEl?.querySelector(".tile-meta .src");
+    if (src) {
+      src.textContent = data.title;
+      src.title = data.title;
+    }
+  }
+}
+
+function attachProgram(index, pid) {
+  const shot = document.getElementById(`shot-${index}`);
+  if (!shot) return;
+  if (tiles.get(index)) disposeTile(index);
+
+  const tileEl = shot.closest(".tile");
+  if (tileEl) tileEl.classList.add("live");
+
+  const tile = { program: true, pid, timer: null, refresh: null };
+  const refresh = async () => {
+    if (tile.disposed) return;
+    const data = await fetchThumb(pid);
+    renderShot(index, data);
+  };
+  tile.refresh = refresh;
+  tiles.set(index, tile);
+  refresh();
+  tile.timer = setInterval(refresh, 2200);
+}
+
+async function programAction(index, action) {
+  const tile = tiles.get(index);
+  const pid = tile?.pid ?? (String(tileAssignments[index]).startsWith("win:") ? Number(String(tileAssignments[index]).slice(4)) : null);
+  if (!pid) return;
+  await api(`/api/windows/${pid}/${action}`, { method: "POST" }).catch(() => {});
+  // Give the window a beat to change, then refresh the view.
+  setTimeout(() => tile?.refresh?.(), 400);
+}
+
 function button(label, cls, onClick, disabled = false) {
   const b = document.createElement("button");
   b.type = "button";
@@ -252,16 +382,20 @@ function button(label, cls, onClick, disabled = false) {
   return b;
 }
 
-function selectProfile(index, profileId) {
+function selectProfile(index, value) {
   disposeTile(index);
-  tileAssignments[index] = profileId || null;
+  tileAssignments[index] = value || null;
   refreshTile(index);
-  const profile = profilesById.get(profileId);
+  if (typeof value === "string" && value.startsWith("win:")) {
+    attachProgram(index, Number(value.slice(4)));
+    return;
+  }
+  const profile = profilesById.get(value);
   if (profile && profile.monitor) {
     attachMonitor(index);
   } else if (profile && profile.status === "running") {
     // Attach immediately if the chosen session is already running.
-    attachTerminal(index, profileId);
+    attachTerminal(index, value);
   }
 }
 
@@ -412,14 +546,43 @@ function flashTile(index, message) {
 // Expand: open a large terminal (or programs list) in the overlay.
 let overlayTile = null;
 function expandTile(index) {
-  const profileId = tileAssignments[index];
-  if (!profileId) return;
+  const selectedId = tileAssignments[index];
+  if (!selectedId) return;
   const overlay = document.getElementById("overlay");
   const host = document.getElementById("overlay-term");
-  const profile = profilesById.get(profileId);
-  document.getElementById("overlay-title").textContent = profile ? profile.label : "Terminal";
+  const isProgram = typeof selectedId === "string" && selectedId.startsWith("win:");
+  const profile = !isProgram ? profilesById.get(selectedId) : null;
   overlay.classList.remove("hidden");
   host.innerHTML = "";
+
+  if (isProgram) {
+    const pid = Number(selectedId.slice(4));
+    const info = openWindows.find((w) => w.pid === pid);
+    document.getElementById("overlay-title").textContent = info ? info.title : "Program";
+    host.className = "overlay-term overlay-cam";
+    host.innerHTML = `<img class="cam-img-lg" id="overlay-cam-img" alt="live program view" /><div class="cam-none" id="overlay-cam-none">Connecting…</div>`;
+    const refresh = async () => {
+      if (overlay.classList.contains("hidden")) return;
+      const data = await fetchThumb(pid);
+      const img = document.getElementById("overlay-cam-img");
+      const none = document.getElementById("overlay-cam-none");
+      if (!img || !none) return;
+      if (data.ok && data.png) {
+        img.src = `data:image/png;base64,${data.png}`;
+        img.style.display = "block";
+        none.style.display = "none";
+      } else {
+        img.style.display = "none";
+        none.style.display = "flex";
+        none.textContent = data.minimized ? "Program is minimized." : "No preview available.";
+      }
+    };
+    refresh();
+    overlayTile = { timer: setInterval(refresh, 1500), program: true };
+    return;
+  }
+
+  document.getElementById("overlay-title").textContent = profile ? profile.label : "Terminal";
 
   if (profile && profile.monitor) {
     host.className = "overlay-term programs overlay-programs";
@@ -498,7 +661,8 @@ async function loadProfilesQuiet() {
     if (data.ok) {
       profiles = data.profiles;
       profilesById = new Map(profiles.map((p) => [p.id, p]));
-      // Update only status chips + action buttons without tearing down live terms.
+      openWindows = await fetchWindows(); // keep dropdowns' program list fresh
+      // Update only status chips without tearing down live tiles.
       for (let i = 0; i < LAYOUT_TILES[currentLayout]; i += 1) {
         const live = tiles.get(i);
         if (!live) refreshTile(i);
@@ -511,10 +675,12 @@ async function loadProfilesQuiet() {
 }
 
 function updateTileChrome(index) {
+  const sel = tileAssignments[index];
+  if (typeof sel === "string" && sel.startsWith("win:")) return; // program cameras self-manage
   const wall = document.getElementById("wall");
   const tileEl = wall.querySelector(`.tile[data-index="${index}"]`);
   if (!tileEl) return;
-  const profile = profilesById.get(tileAssignments[index]);
+  const profile = profilesById.get(sel);
   const status = tileEl.querySelector(".status");
   if (status && profile) {
     status.className = `status ${statusTone(profile.status)}`;

@@ -1,7 +1,8 @@
 # Start-Termina.ps1
-# Launches Termina as a local desktop app: starts the Node engine (127.0.0.1),
-# waits for its tokened URL, and opens it in an app-mode Edge/Chrome window.
-# Closing the app window shuts the engine down.
+# Launches Termina as a local desktop app: ensures the Node engine is running on
+# 127.0.0.1, then opens the wall in an app-mode Edge/Chrome window. If an engine
+# is already running it is reused (no port conflict). Closing the app window
+# stops an engine this launcher started.
 
 param(
     [int]$Port = 7420
@@ -10,45 +11,49 @@ param(
 $ErrorActionPreference = "Stop"
 $appRoot = Split-Path -Parent $PSScriptRoot
 $env:TERMINA_PORT = "$Port"
+# The page injects its own token server-side, so the plain base URL is enough.
+$baseUrl = "http://127.0.0.1:$Port/"
 
-# Locate node.
-$nodeCmd = Get-Command node -ErrorAction SilentlyContinue
-if (-not $nodeCmd) {
-    [System.Windows.Forms.MessageBox]::Show("Node.js is required but was not found on PATH.") | Out-Null
-    throw "node not found"
+function Test-Port([int]$p) {
+    return [bool](Get-NetTCPConnection -LocalPort $p -State Listen -ErrorAction SilentlyContinue)
 }
 
 Write-Host "=== Termina - Terminal Wall ===" -ForegroundColor Green
-Write-Host "App: $appRoot"
 
-$outFile = Join-Path $env:TEMP "termina-engine.out.log"
-$errFile = Join-Path $env:TEMP "termina-engine.err.log"
-if (Test-Path $outFile) { Remove-Item $outFile -Force -ErrorAction SilentlyContinue }
+$engine = $null
+$startedEngine = $false
 
-$engine = Start-Process -FilePath $nodeCmd.Source -ArgumentList "server.js" `
-    -WorkingDirectory $appRoot -WindowStyle Hidden -PassThru `
-    -RedirectStandardOutput $outFile -RedirectStandardError $errFile
-
-# Wait for the engine to print its tokened URL.
-$url = $null
-$deadline = (Get-Date).AddSeconds(25)
-while ((Get-Date) -lt $deadline) {
-    if (Test-Path $outFile) {
-        $line = Select-String -Path $outFile -Pattern "TERMINA_URL=(.+)$" -ErrorAction SilentlyContinue | Select-Object -First 1
-        if ($line) { $url = $line.Matches[0].Groups[1].Value.Trim(); break }
+if (Test-Port $Port) {
+    Write-Host "Engine already running on :$Port - reusing it."
+} else {
+    $nodeCmd = Get-Command node -ErrorAction SilentlyContinue
+    if (-not $nodeCmd) {
+        Write-Warning "Node.js was not found on PATH. Install Node 20+ and try again."
+        Start-Sleep -Seconds 6
+        return
     }
-    if ($engine.HasExited) { break }
-    Start-Sleep -Milliseconds 300
+    Write-Host "Starting Termina engine on :$Port ..."
+    $engine = Start-Process -FilePath $nodeCmd.Source -ArgumentList "server.js" `
+        -WorkingDirectory $appRoot -WindowStyle Hidden -PassThru
+    $startedEngine = $true
+
+    $deadline = (Get-Date).AddSeconds(25)
+    while ((Get-Date) -lt $deadline -and -not (Test-Port $Port)) {
+        if ($engine.HasExited) {
+            Write-Warning "Engine exited during startup (port $Port may be in use)."
+            Start-Sleep -Seconds 5
+            return
+        }
+        Start-Sleep -Milliseconds 300
+    }
+    if (-not (Test-Port $Port)) {
+        Write-Warning "Engine did not start listening on :$Port in time."
+        if (-not $engine.HasExited) { Stop-Process -Id $engine.Id -Force -ErrorAction SilentlyContinue }
+        return
+    }
 }
 
-if (-not $url) {
-    Write-Warning "Engine did not report a URL. Check $errFile"
-    if (Test-Path $errFile) { Get-Content $errFile -Tail 15 }
-    if (-not $engine.HasExited) { Stop-Process -Id $engine.Id -Force -ErrorAction SilentlyContinue }
-    return
-}
-
-Write-Host "Engine ready: $url" -ForegroundColor Green
+Write-Host "Engine ready at $baseUrl" -ForegroundColor Green
 
 $profileDir = Join-Path $env:LOCALAPPDATA "Termina\browser"
 $edge = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
@@ -58,11 +63,17 @@ $browser = if (Test-Path $edge) { $edge } elseif (Test-Path $chrome) { $chrome }
 $app = $null
 if ($browser) {
     Write-Host "Opening Termina app window ..." -ForegroundColor Green
-    $app = Start-Process -FilePath $browser `
-        -ArgumentList "--app=$url", "--user-data-dir=`"$profileDir`"", "--no-first-run", "--window-size=1500,950" `
-        -PassThru
+    # No embedded quotes: Start-Process quotes args as needed. The profile dir
+    # has no spaces, so this passes clean to the browser.
+    $app = Start-Process -FilePath $browser -PassThru -ArgumentList @(
+        "--app=$baseUrl",
+        "--user-data-dir=$profileDir",
+        "--no-first-run",
+        "--no-default-browser-check",
+        "--window-size=1500,950"
+    )
 } else {
-    Start-Process $url
+    Start-Process $baseUrl
 }
 
 if ($app) {
@@ -70,11 +81,10 @@ if ($app) {
     try {
         Wait-Process -Id $app.Id
     } finally {
-        if (-not $engine.HasExited) { Stop-Process -Id $engine.Id -Force -ErrorAction SilentlyContinue }
+        # Only stop an engine this launcher actually started.
+        if ($startedEngine -and $engine -and -not $engine.HasExited) {
+            Stop-Process -Id $engine.Id -Force -ErrorAction SilentlyContinue
+        }
         Write-Host "Termina stopped."
     }
-} else {
-    Write-Host "Termina engine is running at $url" -ForegroundColor Yellow
-    Write-Host "Close this window (or Ctrl+C) to stop it."
-    try { Wait-Process -Id $engine.Id } catch {}
 }

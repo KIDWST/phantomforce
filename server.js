@@ -183,6 +183,13 @@ async function actOnWindow(pid, action) {
   return runPwsh(path.join(winDir, "window-action.ps1"), ["-Action", action, "-ProcessId", String(pid)]);
 }
 
+async function captureWindow(pid) {
+  if (process.platform !== "win32") {
+    return { ok: false, error: "windows_only" };
+  }
+  return runPwsh(path.join(winDir, "capture-window.ps1"), ["-ProcessId", String(pid)]);
+}
+
 // ---- auth helpers -----------------------------------------------------------
 
 function tokenFromRequest(req, url) {
@@ -269,6 +276,13 @@ const server = http.createServer((req, res) => {
   // Live list of open application windows on this PC.
   if (pathName === "/api/windows" && req.method === "GET") {
     listOpenWindows().then((data) => sendJson(res, 200, data));
+    return;
+  }
+
+  // Live thumbnail of one window (JSON with base64 PNG + meta).
+  const thumbMatch = pathName.match(/^\/api\/windows\/(\d+)\/thumbnail$/);
+  if (thumbMatch && req.method === "GET") {
+    captureWindow(Number(thumbMatch[1])).then((data) => sendJson(res, 200, data));
     return;
   }
 
