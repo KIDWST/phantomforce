@@ -21,7 +21,6 @@
         </div>
       </div>
       <div class="controls">
-        <button id="palette-open" class="ghost kbd-hint" type="button" title="New terminal / commands (Ctrl+N)"><span>Ctrl N</span></button>
         <button id="broadcast" class="ghost" type="button" aria-pressed="false" title="Link terminals so typing in one goes to all linked ones">⇄ Link</button>
         <div class="cols-switch" role="group" aria-label="Columns">
           <button type="button" data-cols="2">2</button>
@@ -29,7 +28,9 @@
           <button type="button" data-cols="4">4</button>
         </div>
         <button id="rescan" class="ghost" type="button" title="Rescan available terminal types">Re-scan</button>
-        <button id="new-term" class="primary icon-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="New terminal" title="New terminal">+</button>
+        <button id="new-term" class="primary new-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="New terminal (Ctrl+N)" title="New terminal (Ctrl+N)">
+          <span class="new-plus">+</span><span class="kbd">Ctrl N</span>
+        </button>
       </div>
     </header>
 
@@ -58,13 +59,6 @@
           <button type="button" id="overlay-close" class="ghost">Close</button>
         </div>
         <div id="overlay-term" class="overlay-term"></div>
-      </div>
-    </div>
-
-    <div id="palette" class="palette hidden" role="dialog" aria-label="Command palette">
-      <div class="palette-box">
-        <input id="palette-input" type="text" autocomplete="off" spellcheck="false" placeholder="New terminal or command…  (new codex, link, columns, focus…)" />
-        <ul id="palette-list"></ul>
       </div>
     </div>
 

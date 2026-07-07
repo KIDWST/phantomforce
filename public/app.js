@@ -520,11 +520,11 @@ function ensureAddCard() {
     add.title = "New terminal";
     add.innerHTML = `<span class="plus">+</span>`;
     add.addEventListener("click", (e) => {
-      // First time (empty wall): offer to create several at once.
-      // After that, a quick single add.
+      // First time (empty wall): offer to create several at once, right where
+      // you clicked. After that, a quick single add.
       if (cards.length === 0) {
         e.stopPropagation();
-        toggleNewMenu(true);
+        openNewMenuAt(e.clientX - 132, e.clientY - 16);
       } else {
         addCard({}, { start: false });
       }
@@ -552,87 +552,6 @@ async function boot() {
   setColumns(saved && saved.columns ? saved.columns : 3);
 }
 
-// ---- command palette --------------------------------------------------------
-
-let paletteItems = [];
-let paletteIndex = 0;
-
-function paletteActions() {
-  const acts = [];
-  for (const p of profiles) {
-    acts.push({
-      label: `New ${p.label}`,
-      hint: "terminal",
-      run: () => {
-        const c = addCard({ profileId: p.id }, { save: false });
-        startTerminal(c);
-        saveWorkspace();
-      },
-    });
-  }
-  acts.push({ label: "New empty window", hint: "terminal", run: () => addCard({}, { start: false }) });
-  acts.push({ label: broadcastOn ? "Link: turn OFF" : "Link: turn ON", hint: "action", run: () => toggleBroadcast() });
-  for (const n of [2, 3, 4]) acts.push({ label: `Columns: ${n}`, hint: "layout", run: () => setColumns(n) });
-  acts.push({ label: "Clear all terminals", hint: "action", run: () => cards.forEach((c) => c.term?.clear()) });
-  acts.push({ label: "Restart all terminals", hint: "action", run: () => cards.forEach((c) => c.profileId && restartCard(c)) });
-  acts.push({ label: "Kill all terminals", hint: "action", run: () => [...cards].forEach(removeCard) });
-  cards.forEach((c, i) => {
-    const label = c.name || profileLabel(c.profileId) || `Window ${i + 1}`;
-    if (c.sessionId) acts.push({ label: `Focus: ${label}`, hint: "jump", run: () => c.term?.focus() });
-  });
-  return acts;
-}
-
-function fuzzy(q, s) {
-  q = q.toLowerCase();
-  s = s.toLowerCase();
-  if (!q) return true;
-  let i = 0;
-  for (const ch of s) if (ch === q[i]) i += 1;
-  return i === q.length;
-}
-
-function renderPalette() {
-  const q = document.getElementById("palette-input").value.trim();
-  const all = paletteActions();
-  paletteItems = all.filter((a) => fuzzy(q, a.label));
-  paletteIndex = 0;
-  const list = document.getElementById("palette-list");
-  list.innerHTML = paletteItems
-    .map(
-      (a, i) =>
-        `<li class="${i === 0 ? "sel" : ""}" data-i="${i}"><span>${escapeHtml(a.label)}</span><em>${a.hint}</em></li>`,
-    )
-    .join("");
-  list.querySelectorAll("li").forEach((li) => {
-    li.addEventListener("mouseenter", () => setPaletteIndex(Number(li.dataset.i)));
-    li.addEventListener("click", () => runPalette());
-  });
-}
-
-function setPaletteIndex(i) {
-  paletteIndex = Math.max(0, Math.min(i, paletteItems.length - 1));
-  document.querySelectorAll("#palette-list li").forEach((li, idx) => li.classList.toggle("sel", idx === paletteIndex));
-}
-
-function runPalette() {
-  const item = paletteItems[paletteIndex];
-  togglePalette(false);
-  if (item) item.run();
-}
-
-function togglePalette(show) {
-  const pal = document.getElementById("palette");
-  const open = show ?? pal.classList.contains("hidden");
-  pal.classList.toggle("hidden", !open);
-  if (open) {
-    const input = document.getElementById("palette-input");
-    input.value = "";
-    renderPalette();
-    input.focus();
-  }
-}
-
 // ---- new-terminal popover (add one or many at once) ------------------------
 
 function populateNewMenu() {
@@ -643,18 +562,48 @@ function populateNewMenu() {
     profiles.map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join("");
 }
 
+// Open the add panel anchored to where the user acted (a click point or an
+// element), so it shows up right where they clicked — not off in a corner.
+function openNewMenuAt(x, y) {
+  const menu = document.getElementById("new-menu");
+  const mw = 264;
+  const mh = 210;
+  const left = Math.min(Math.max(12, x), window.innerWidth - mw - 12);
+  const top = Math.min(Math.max(64, y), window.innerHeight - mh - 12);
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  menu.style.right = "auto";
+  menu.classList.remove("hidden");
+  document.getElementById("new-term").setAttribute("aria-expanded", "true");
+  populateNewMenu();
+  setTimeout(() => document.getElementById("new-menu-count")?.focus(), 0);
+}
+
+function closeNewMenu() {
+  document.getElementById("new-menu").classList.add("hidden");
+  document.getElementById("new-term").setAttribute("aria-expanded", "false");
+}
+
 function toggleNewMenu(show) {
   const menu = document.getElementById("new-menu");
-  const btn = document.getElementById("new-term");
-  const open = show ?? menu.classList.contains("hidden");
-  menu.classList.toggle("hidden", !open);
-  btn.setAttribute("aria-expanded", String(open));
-  if (open) populateNewMenu();
+  const isHidden = menu.classList.contains("hidden");
+  const open = show ?? isHidden;
+  if (!open) {
+    closeNewMenu();
+    return;
+  }
+  // Default position: just under the top-right + button.
+  const r = document.getElementById("new-term").getBoundingClientRect();
+  openNewMenuAt(r.left - 200, r.bottom + 8);
 }
 
 document.getElementById("new-term").addEventListener("click", (e) => {
   e.stopPropagation();
-  toggleNewMenu();
+  if (document.getElementById("new-menu").classList.contains("hidden")) {
+    openNewMenuAt(e.clientX - 130, e.clientY + 10);
+  } else {
+    closeNewMenu();
+  }
 });
 
 document.getElementById("new-menu-add").addEventListener("click", () => {
@@ -676,8 +625,9 @@ document.getElementById("new-menu-add").addEventListener("click", () => {
 
 document.addEventListener("click", (e) => {
   const menu = document.getElementById("new-menu");
-  if (!menu.classList.contains("hidden") && !menu.contains(e.target) && e.target.id !== "new-term") {
-    toggleNewMenu(false);
+  const btn = document.getElementById("new-term");
+  if (!menu.classList.contains("hidden") && !menu.contains(e.target) && !btn.contains(e.target)) {
+    closeNewMenu();
   }
 });
 
@@ -691,34 +641,15 @@ document.getElementById("overlay").addEventListener("click", (e) => {
   if (e.target.id === "overlay") closeOverlay();
 });
 
-// Command palette
-document.getElementById("palette-open").addEventListener("click", () => togglePalette(true));
-document.getElementById("palette").addEventListener("click", (e) => {
-  if (e.target.id === "palette") togglePalette(false);
-});
-document.getElementById("palette-input").addEventListener("input", renderPalette);
-document.getElementById("palette-input").addEventListener("keydown", (e) => {
-  if (e.key === "ArrowDown") {
-    e.preventDefault();
-    setPaletteIndex(paletteIndex + 1);
-  } else if (e.key === "ArrowUp") {
-    e.preventDefault();
-    setPaletteIndex(paletteIndex - 1);
-  } else if (e.key === "Enter") {
-    e.preventDefault();
-    runPalette();
-  }
-});
-
-// Capture phase so Ctrl/Cmd+N works even while a terminal has focus (xterm
-// would otherwise consume the keystroke).
+// Ctrl/Cmd+N opens the same add panel as the + button. Capture phase so it
+// works even while a terminal has focus (xterm would otherwise eat the key).
 document.addEventListener(
   "keydown",
   (e) => {
     if ((e.ctrlKey || e.metaKey) && (e.key === "n" || e.key === "N")) {
       e.preventDefault();
       e.stopPropagation();
-      togglePalette();
+      toggleNewMenu();
     }
   },
   true,
@@ -726,9 +657,8 @@ document.addEventListener(
 
 document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
-  if (!document.getElementById("palette").classList.contains("hidden")) togglePalette(false);
-  else if (!document.getElementById("overlay").classList.contains("hidden")) closeOverlay();
-  else if (!document.getElementById("new-menu").classList.contains("hidden")) toggleNewMenu(false);
+  if (!document.getElementById("overlay").classList.contains("hidden")) closeOverlay();
+  else if (!document.getElementById("new-menu").classList.contains("hidden")) closeNewMenu();
 });
 window.addEventListener("beforeunload", () => {
   for (const card of cards) {
