@@ -4,7 +4,7 @@
    memory notes) and renders Automation honestly from user-created automation
    records only. No internal lanes or fabricated records are shown. */
 
-import { store, visible, pushActivity, ago, currentWs } from "./store.js?v=phantom-live-20260707-37";
+import { store, visible, pushActivity, ago, currentWs } from "./store.js?v=phantom-live-20260707-38";
 
 const BRAND_KEY = "pf.brand.v1";
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
