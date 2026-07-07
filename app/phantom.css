@@ -4316,7 +4316,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .chatbox:focus-within { border-color: rgba(65, 255, 161, 0.55); box-shadow: var(--edge-hi), 0 18px 50px -18px rgba(0, 0, 0, 0.7), 0 0 46px rgba(65, 255, 161, 0.12); }
 .chatbox-head {
-  position: relative; display: flex; align-items: center; gap: 12px; padding: 9px 14px;
+  /* explicit stacking context: chat messages keep animation-fill stacking
+     contexts alive, and iOS paints them over a z-auto header — the settings
+     popover must always sit above the log */
+  position: relative; z-index: 40; display: flex; align-items: center; gap: 12px; padding: 9px 14px;
   border-bottom: 1px solid var(--line); background: rgba(65, 255, 161, 0.028);
 }
 .chatbox-brand { display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto; font: 700 9px "DM Mono", monospace; letter-spacing: 0.22em; color: var(--neon); }
@@ -4480,9 +4483,11 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   color: #eafff4;
 }
 .pc-menu {
-  position: absolute; top: calc(100% + 10px); right: 0; z-index: 8;
+  position: absolute; top: calc(100% + 10px); right: 0; z-index: 60;
   width: min(430px, calc(100vw - 42px)); padding: 13px; border: 1px solid rgba(65, 255, 161, 0.28);
-  border-radius: 16px; background: linear-gradient(180deg, rgba(8, 22, 16, 0.98), rgba(2, 8, 9, 0.98));
+  border-radius: 16px;
+  background-color: #05100b;   /* solid floor — the panel is NEVER see-through */
+  background-image: linear-gradient(180deg, rgba(8, 22, 16, 0.98), rgba(2, 8, 9, 0.98));
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58), 0 0 36px rgba(65, 255, 161, 0.12);
 }
 .pc-menu[hidden] { display: none; }
@@ -4528,7 +4533,18 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .pc-caption { display: none; }
   .pc-mode { padding: 5px 10px; }
   .pc-settings { width: 34px; height: 34px; min-height: 34px; font-size: 15px; }
-  .pc-actions { gap: 6px; }
+  .pc-actions { gap: 6px; position: static; }
+  /* the status label truncates instead of running under the Loop chip */
+  .pc-title { overflow: hidden; }
+  .pc-title b { white-space: nowrap; }
+  .pc-label { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; letter-spacing: 0.1em; }
+  /* settings popover becomes a full-width sheet anchored under the header —
+     never right-clipped, never taller than the screen, always opaque */
+  .pc-menu {
+    left: 8px; right: 8px; top: calc(100% + 8px); width: auto;
+    max-height: min(62vh, 520px); overflow-y: auto; overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+  }
   .chat-mini-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
   .chat-mini-summary, .chat-mini-fields, .chat-mini-actions { grid-template-columns: 1fr; }
   .chat-mini-switch, .chat-mini-full { width: 100%; }
@@ -4595,6 +4611,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .console .chatbox-head {
   padding: 14px 18px;
+  z-index: 40;   /* above the log/composer siblings so the gear popover can never be painted over */
 }
 .console .chatbox-log {
   flex: 1 1 auto;
