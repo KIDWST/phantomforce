@@ -139,7 +139,7 @@ function resize(id, cols, rows) {
 
 // ---- open-windows monitor ---------------------------------------------------
 
-const WINDOW_ACTIONS = new Set(["focus", "minimize", "restore", "maximize", "close"]);
+const WINDOW_ACTIONS = new Set(["focus", "minimize", "restore", "maximize", "close", "reveal"]);
 
 // Run one of our predefined PowerShell helpers (no shell, fixed script path).
 function runPwsh(scriptPath, args = []) {

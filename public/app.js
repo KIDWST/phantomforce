@@ -47,7 +47,7 @@ async function loadProfiles() {
     profilesById = new Map(profiles.map((p) => [p.id, p]));
     openWindows = await fetchWindows();
     dot.className = "dot green";
-    text.textContent = `Engine live · ${profiles.length} terminals · ${openWindows.length} open programs. Pick any source per tile.`;
+    text.textContent = `Engine live · ${openWindows.length} open programs on this PC. Pick one per tile.`;
     if (tileAssignments.length === 0) {
       // Start blank — every tile is chosen manually from its dropdown.
       tileAssignments = new Array(9).fill(null);
@@ -201,7 +201,7 @@ function buildTile(index) {
     placeholder.className = "placeholder";
     placeholder.innerHTML = profile
       ? `<p class="big">${profile.blocked ? "BLOCKED" : "READY"}</p><p>${profile.note}</p>`
-      : `<p class="big">UNASSIGNED</p><p>Pick a terminal above to put it on this monitor.</p>`;
+      : `<p class="big">UNASSIGNED</p><p>Pick a program above to put it on this monitor.</p>`;
     screen.append(term, placeholder);
 
     if (profile && !profile.blocked) {
@@ -353,8 +353,13 @@ function attachProgram(index, pid) {
   };
   tile.refresh = refresh;
   tiles.set(index, tile);
-  refresh();
-  tile.timer = setInterval(refresh, 2200);
+  // Un-minimize (without stealing focus) so the tile shows it live right away.
+  api(`/api/windows/${pid}/reveal`, { method: "POST" }).catch(() => {});
+  // Click the live view to bring the real program to the front and use it.
+  shot.onclick = () => programAction(index, "focus");
+  shot.title = "Click to bring this program to the front";
+  setTimeout(refresh, 250);
+  tile.timer = setInterval(refresh, 2000);
 }
 
 async function programAction(index, action) {
