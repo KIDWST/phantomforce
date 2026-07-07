@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-65";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-65";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-66";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-66";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -957,6 +957,12 @@ function renderGenerate(body, cfg, opts, root) {
   const visiblePresets = MEDIA_PRESETS.filter((preset) => preset.modality === genState.modality);
 
   body.innerHTML = `
+    <div class="ml-doctor" data-ml-doctor>
+      <i class="ml-doctor-dot"></i>
+      <b data-ml-doctor-title>Checking the media engine…</b>
+      <span data-ml-doctor-msg></span>
+      <button class="ml-doctor-retry" data-ml-doctor-retry type="button">Re-check</button>
+    </div>
     <div class="ml-studio">
       <aside class="ml-panel ml-builder" aria-label="Shot Builder">
         <div class="ml-card-head"><b>Shot Builder</b><i>Pick a format, then roll</i></div>
@@ -1216,6 +1222,42 @@ function wireGenerate(body, cfg, opts, root, esc) {
 
   const genBtn = body.querySelector("[data-ml-generate]");
   if (genBtn) genBtn.onclick = () => runGenerate(body, cfg, opts, root, esc);
+
+  /* Engine Doctor: silent fallbacks looked like a dumb brain. Say EXACTLY
+     what state the pipeline is in and what fixes it. */
+  const doctor = body.querySelector("[data-ml-doctor]");
+  const runDoctor = async () => {
+    if (!doctor) return;
+    const title = doctor.querySelector("[data-ml-doctor-title]");
+    const msg = doctor.querySelector("[data-ml-doctor-msg]");
+    doctor.dataset.state = "checking";
+    title.textContent = "Checking the media engine…"; msg.textContent = "";
+    const base = genBase(cfg);
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 5000);
+      const r = await fetch(`${base}/health`, { signal: ctrl.signal });
+      clearTimeout(t);
+      const d = await r.json().catch(() => null);
+      if (!d || !d.ok) throw new Error("bad health");
+      const media = d.media || {};
+      if (media[genState.provider || "higgsfield"]) {
+        doctor.dataset.state = "ok";
+        title.textContent = "Media engine connected";
+        msg.textContent = `${base.replace(/^https?:\/\//, "")} · ${genState.provider || "higgsfield"} key loaded — real renders will run.`;
+      } else {
+        doctor.dataset.state = "warn";
+        title.textContent = "Proxy reachable — provider key missing";
+        msg.textContent = `The proxy at ${base.replace(/^https?:\/\//, "")} answered, but HIGGSFIELD_API_KEY isn't set in ai-proxy/.env (or the proxy is running old code). Until then you get offline sketches.`;
+      }
+    } catch {
+      doctor.dataset.state = "down";
+      title.textContent = "Media engine unreachable";
+      msg.textContent = `Nothing answered at ${base.replace(/^https?:\/\//, "")}. The ai-proxy isn't running (or the route is down) — start it with bash ai-proxy/run.sh on the always-on box. Prompts will render as offline sketches until it's back.`;
+    }
+  };
+  doctor?.querySelector("[data-ml-doctor-retry]")?.addEventListener("click", runDoctor);
+  runDoctor();
 
   body.querySelectorAll("[data-tile-act]").forEach((b) => b.onclick = () => tileAction(b.dataset.tileAct, b.dataset.id, cfg, opts, root, esc, body));
 }

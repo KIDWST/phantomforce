@@ -421,7 +421,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-65")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-66")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;

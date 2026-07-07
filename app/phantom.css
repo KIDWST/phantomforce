@@ -4784,3 +4784,27 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 /* saved confirmation inside the chat mini settings panel */
 .chat-mini-saved { display: block; margin-top: 4px; font: 500 10px "DM Mono", monospace; letter-spacing: 0.08em; color: #41ffa1; }
 .chat-mini-saved[hidden] { display: none; }
+
+/* Media Lab engine doctor: the pipeline states its own truth */
+.ml-doctor {
+  display: flex; align-items: center; gap: 10px; margin: 0 0 12px;
+  padding: 9px 13px; border-radius: 12px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.02);
+  font-size: 12px; color: var(--dim);
+}
+.ml-doctor b { color: var(--ink); font-size: 12px; white-space: nowrap; }
+.ml-doctor span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1 1 auto; }
+.ml-doctor-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; background: #8ba39a; }
+.ml-doctor[data-state="ok"] { border-color: rgba(65, 255, 161, 0.3); }
+.ml-doctor[data-state="ok"] .ml-doctor-dot { background: var(--neon); box-shadow: 0 0 8px var(--neon); }
+.ml-doctor[data-state="warn"] { border-color: rgba(255, 196, 0, 0.35); }
+.ml-doctor[data-state="warn"] .ml-doctor-dot { background: #ffc400; box-shadow: 0 0 8px rgba(255, 196, 0, 0.6); }
+.ml-doctor[data-state="down"] { border-color: rgba(255, 84, 104, 0.4); }
+.ml-doctor[data-state="down"] .ml-doctor-dot { background: var(--risk); box-shadow: 0 0 8px var(--risk); }
+.ml-doctor[data-state="down"] span, .ml-doctor[data-state="warn"] span { white-space: normal; }
+.ml-doctor-retry {
+  flex: 0 0 auto; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); color: var(--dim);
+  font: 600 10px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.ml-doctor-retry:hover { border-color: var(--line-strong); color: var(--ink); }
