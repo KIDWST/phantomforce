@@ -413,7 +413,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-58")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-59")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -442,7 +442,7 @@ async function initEntity() {
     tx = r.left + r.width / 2;
     // document coords: address-bar resizes mid-scroll must never re-glide him
     ty = r.top + (window.scrollY || 0) + r.height * 0.5;
-    ts = Math.max(42, Math.min(smallScreen ? 126 : 152, (r.height * 0.9) / CHAR_H));
+    ts = Math.max(42, Math.min(smallScreen ? 126 : 170, (r.height * (smallScreen ? 0.9 : 1.0)) / CHAR_H));   // desktop: he fills his stage — present, not distant
   };
   measureZone();
   let gx = tx, gy = ty + 56, gs = ts * 0.82;           // wakes low + small, drifts into place
@@ -493,7 +493,7 @@ async function initEntity() {
       const sr = sayEl.getBoundingClientRect();
       if (sr.height > 4) {
         const sTop = sr.top + (window.scrollY || 0);
-        if (sTop < gy + gs * 2.0 && sTop + sr.height > gy - gs * 2.6) shyT = 0.04;
+        if (sTop < gy + gs * 1.5 && sTop + sr.height > gy - gs * 2.6) shyT = 0.04;   // his torso, not the space under his disc — the resting headline must never trigger this
       }
     }
     if (shyT === 1 && shyPrev < 1) {
@@ -581,22 +581,22 @@ function initRiskRadar() {
   // real portraits + diverse names so the flood feels like actual people
   const rmu = (g, i) => `https://randomuser.me/api/portraits/${g}/${i}.jpg`;
   const stream = [
-    { name: "Aaliyah Johnson", photo: rmu("women", 68), app: "Instagram", msg: "how much for a shoot?" },
-    { name: "Diego Martínez", photo: rmu("men", 32), app: "Messenger", msg: "you free Saturday?" },
-    { name: "Mei Chen", photo: rmu("women", 79), app: "Email", msg: "Re: your quote" },
+    { name: "Jasmine Carter", photo: rmu("women", 68), app: "Instagram", msg: "how much for a shoot?" },
+    { name: "Mike Sullivan", photo: rmu("men", 32), app: "Messenger", msg: "you free Saturday?" },
+    { name: "Grace Kim", photo: rmu("women", 79), app: "Email", msg: "Re: your quote" },
     { name: "Liam O'Brien", photo: rmu("men", 45), app: "WhatsApp", msg: "can you call me back?" },
-    { name: "Priya Patel", photo: rmu("women", 12), app: "Text", msg: "still on for 3pm?" },
+    { name: "Emily Harper", photo: rmu("women", 12), app: "Text", msg: "still on for 3pm?" },
     { name: "Marcus Williams", photo: rmu("men", 11), app: "Facebook", msg: "do you do weddings?" },
-    { name: "Sofia Rossi", photo: rmu("women", 90), app: "Missed call", msg: "called twice" },
-    { name: "Omar Hassan", photo: rmu("men", 64), app: "New lead", msg: "wants a callback today" },
-    { name: "Nia Okafor", photo: rmu("women", 87), app: "TikTok", msg: "commented on your post" },
+    { name: "Sarah Mitchell", photo: rmu("women", 90), app: "Missed call", msg: "called twice" },
+    { name: "Tyrone Jackson", photo: rmu("men", 64), app: "New lead", msg: "wants a callback today" },
+    { name: "Destiny Brooks", photo: rmu("women", 87), app: "TikTok", msg: "commented on your post" },
     { name: "Kenji Tanaka", photo: rmu("men", 76), app: "Voicemail", msg: "left you a message" },
-    { name: "Chloe Dubois", photo: rmu("women", 54), app: "New review", msg: "left you 5 stars" },
-    { name: "Rajesh Kumar", photo: rmu("men", 83), app: "Invoice", msg: "payment is overdue" },
-    { name: "Fatima Al-Sayed", photo: rmu("women", 33), app: "Booking", msg: "needs to reschedule" },
-    { name: "Lucas Silva", photo: rmu("men", 9), app: "Email", msg: "where's my order?" },
-    { name: "Zara Ahmed", photo: rmu("women", 41), app: "Comment", msg: "is this available?" },
-    { name: "Andre Thompson", photo: rmu("men", 51), app: "New DM", msg: "sent you the details" },
+    { name: "Megan Foster", photo: rmu("women", 54), app: "New review", msg: "left you 5 stars" },
+    { name: "James Whitfield", photo: rmu("men", 83), app: "Invoice", msg: "payment is overdue" },
+    { name: "Leilani Akana", photo: rmu("women", 33), app: "Booking", msg: "needs to reschedule" },
+    { name: "Carlos Rivera", photo: rmu("men", 9), app: "Email", msg: "where's my order?" },
+    { name: "Amy Nguyen", photo: rmu("women", 41), app: "Comment", msg: "is this available?" },
+    { name: "Keanu Kealoha", photo: rmu("men", 51), app: "New DM", msg: "sent you the details" },
   ];
   // keep pings from overlapping each other OR the text UI in the middle
   const active = [];

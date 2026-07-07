@@ -165,7 +165,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   /* grows into tall viewports so the hero never strands empty space above
      the creed — the entity scales up with it (ts cap in void.js) */
   flex: 1 1 clamp(132px, 25vh, 216px);
-  max-height: min(52vh, 560px);
+  max-height: min(55vh, 610px);
   width: 100%;
   pointer-events: none;
 }
