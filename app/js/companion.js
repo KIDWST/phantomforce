@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-42";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-43";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -38,6 +38,7 @@ let mode = "chat";
 let onModeChange = null;
 let canUseLoop = () => true;
 let onLoopUnavailable = null;
+let renderSettingsPanel = null;
 
 export function setCompanionState(state, caption) {
   const def = PRESENCE_STATES[state] || PRESENCE_STATES.idle;
@@ -176,6 +177,7 @@ export function mountCompanion(headEl, opts = {}) {
   onModeChange = opts.onMode || null;
   canUseLoop = typeof opts.canLoop === "function" ? opts.canLoop : () => true;
   onLoopUnavailable = typeof opts.onLoopUnavailable === "function" ? opts.onLoopUnavailable : null;
+  renderSettingsPanel = typeof opts.renderSettings === "function" ? opts.renderSettings : null;
 
   headEl.innerHTML = `
     <div class="pc" data-pc>
@@ -195,11 +197,7 @@ export function mountCompanion(headEl, opts = {}) {
         </button>
         <button class="pc-settings" data-pc-settings type="button" aria-haspopup="dialog" aria-expanded="false">Settings</button>
         <div class="pc-menu" data-pc-menu hidden>
-          <b>Phantom settings</b>
-          <p>Phantom Loop turns the next prompt into an Elite, approval-safe build packet.</p>
-          <button type="button" data-pc-menu-loop aria-pressed="false">
-            <span>Phantom Loop</span><em>Elite</em>
-          </button>
+          <div data-pc-settings-panel></div>
         </div>
       </div>
     </div>`;
@@ -214,8 +212,20 @@ export function mountCompanion(headEl, opts = {}) {
     modeChip: root.querySelector("[data-pc-mode]"),
     settingsBtn: root.querySelector("[data-pc-settings]"),
     settingsPanel: root.querySelector("[data-pc-menu]"),
+    settingsPanelBody: root.querySelector("[data-pc-settings-panel]"),
     menuLoop: root.querySelector("[data-pc-menu-loop]"),
   };
+  if (renderSettingsPanel) {
+    renderSettingsPanel(el.settingsPanelBody);
+  } else {
+    el.settingsPanelBody.innerHTML = `
+      <b>Phantom settings</b>
+      <p>Phantom Loop turns the next prompt into an Elite, approval-safe build packet.</p>
+      <button type="button" data-pc-menu-loop aria-pressed="false">
+        <span>Phantom Loop</span><em>Elite</em>
+      </button>`;
+    el.menuLoop = root.querySelector("[data-pc-menu-loop]");
+  }
 
   dpr = Math.min(window.devicePixelRatio || 1, 2);
   el.canvas.width = SIZE * dpr;
@@ -231,7 +241,7 @@ export function mountCompanion(headEl, opts = {}) {
     event.stopPropagation();
     toggleSettings();
   });
-  el.menuLoop.addEventListener("click", () => {
+  el.menuLoop?.addEventListener("click", () => {
     requestLoopMode(mode === "loop" ? "chat" : "loop");
     closeSettings();
   });

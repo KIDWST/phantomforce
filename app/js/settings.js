@@ -159,6 +159,10 @@ export function renderOperatorMiniSettings(el, opts = {}) {
 
   el.innerHTML = `
     <div class="chat-mini-settings">
+      <div class="chat-mini-heading">
+        <b>Chat settings</b>
+        <span>Loop, model, backend</span>
+      </div>
       <div class="chat-mini-top">
         <span><b>Brain</b><i>${esc(brainLabel)} · ${esc(activeProvider.name)}</i></span>
         <span><b>Loop</b><i>${settings.phantomLoop ? esc(loopLabel) : "Off"}</i></span>

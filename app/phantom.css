@@ -4368,11 +4368,18 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .chatbox-composer .cmd-send { width: 38px; height: 38px; border-radius: 11px; }
 .chatbox-tools { display: flex; gap: 16px; padding: 8px 15px 11px; }
 .chatbox-tools .cmd-tool { font-size: 12px; }
-.chat-mini-settings-shell { padding: 0 15px 11px; }
 .chat-mini-settings {
   border: 1px solid rgba(65, 255, 161, 0.13); border-radius: 14px;
   background: rgba(2, 10, 8, 0.34); overflow: hidden;
 }
+.chat-mini-heading {
+  padding: 0 0 10px; display: flex; align-items: baseline; justify-content: space-between; gap: 10px;
+  border-bottom: 1px solid rgba(65, 255, 161, 0.1);
+}
+.chat-mini-heading b {
+  color: var(--ink); font: 700 12px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase;
+}
+.chat-mini-heading span { color: var(--dim); font-size: 11px; white-space: nowrap; }
 .chat-mini-top {
   display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px;
   border-bottom: 1px solid rgba(65, 255, 161, 0.1); background: rgba(65, 255, 161, 0.035);
@@ -4459,7 +4466,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .pc-menu {
   position: absolute; top: calc(100% + 10px); right: 0; z-index: 8;
-  width: min(320px, calc(100vw - 42px)); padding: 13px; border: 1px solid rgba(65, 255, 161, 0.28);
+  width: min(430px, calc(100vw - 42px)); padding: 13px; border: 1px solid rgba(65, 255, 161, 0.28);
   border-radius: 16px; background: linear-gradient(180deg, rgba(8, 22, 16, 0.98), rgba(2, 8, 9, 0.98));
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.58), 0 0 36px rgba(65, 255, 161, 0.12);
 }
@@ -4474,6 +4481,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .pc-menu button[aria-pressed="true"] { border-color: rgba(65, 255, 161, 0.55); box-shadow: 0 0 20px rgba(65, 255, 161, 0.1); }
 .pc-menu em { padding: 3px 7px; border-radius: 999px; color: #04160d; background: var(--neon); font: 800 8px "DM Mono", monospace; font-style: normal; letter-spacing: 0.12em; text-transform: uppercase; }
+.pc-menu .chat-mini-settings { border: 0; border-radius: 0; background: transparent; overflow: visible; }
+.pc-menu .chat-mini-top { border: 1px solid rgba(65, 255, 161, 0.12); border-radius: 11px; overflow: hidden; }
+.pc-menu .chat-mini-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 10px 0 0; }
+.pc-menu .chat-mini-full {
+  width: 100%; min-height: 34px; justify-content: center; grid-column: 1 / -1;
+  display: inline-flex; align-items: center; padding: 0 10px; font: 700 10px "DM Mono", monospace;
+}
+.pc-menu .chat-mini-toggle { justify-content: center; }
 .chat-start { padding: 6px 4px 10px; animation: msgIn 0.4s cubic-bezier(0.22, 1, 0.36, 1) both; }
 .chat-start-t { margin: 0 0 3px; font: 600 16px "Space Grotesk", sans-serif; letter-spacing: 0; color: var(--ink); }
 .chat-start-s { margin: 0 0 12px; font-size: 12.5px; line-height: 1.5; color: var(--dim); max-width: 460px; }

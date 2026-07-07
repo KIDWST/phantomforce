@@ -14,9 +14,9 @@ import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-43
 import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-43";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-43";
 import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-43";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-43";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-44";
 import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-43";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-43";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-44";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -587,7 +587,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260707-43";
+const POSE_VERSION = "phantom-live-20260707-44";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1213,8 +1213,8 @@ function renderConsole() {
     onMode: applyCompanionMode,
     canLoop: canUsePhantomLoop,
     onLoopUnavailable: () => speak(phantomLoopUnavailableMessage(), "", "alert"),
+    renderSettings: renderChatSettingsPanel,
   });
-  renderChatMiniSettings();
   renderChatLog();
 }
 
@@ -1254,10 +1254,11 @@ function applyCompanionMode(mode) {
     : "Ask PhantomForce anything...";
 }
 
-function renderChatMiniSettings() {
-  renderOperatorMiniSettings($("[data-chat-settings]"), {
+function renderChatSettingsPanel(target) {
+  renderOperatorMiniSettings(target, {
     openSettings: () => routeWorkspace("settings"),
     onChange: () => {
+      if (!getOperatorSettings().phantomLoop && companionMode() === "loop") setCompanionMode("chat");
       applyCompanionMode(companionMode());
       renderChatLog();
     },
