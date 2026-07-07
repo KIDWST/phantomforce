@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-38";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-39";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -36,6 +36,8 @@ let pulse = 0;
 let pointer = { x: -9999, y: -9999 };
 let mode = "chat";
 let onModeChange = null;
+let canUseLoop = () => true;
+let onLoopUnavailable = null;
 
 export function setCompanionState(state, caption) {
   const def = PRESENCE_STATES[state] || PRESENCE_STATES.idle;
@@ -66,16 +68,41 @@ export function setCompanionState(state, caption) {
 export function setCompanionMode(next) {
   mode = (next === "loop" || next === "build") ? "loop" : "chat";
   if (el?.modeChip) {
-    el.modeChip.textContent = mode === "loop" ? "Loop" : "Chat";
+    const label = el.modeChip.querySelector("[data-pc-mode-state]");
+    if (label) label.textContent = mode === "loop" ? "On" : "Off";
     el.modeChip.classList.toggle("is-build", mode === "loop");
     el.modeChip.classList.toggle("is-loop", mode === "loop");
     el.modeChip.setAttribute("aria-pressed", mode === "loop" ? "true" : "false");
   }
+  if (el?.root) el.root.dataset.mode = mode;
+  if (el?.menuLoop) el.menuLoop.setAttribute("aria-pressed", mode === "loop" ? "true" : "false");
   setCompanionState(mode === "loop" ? "building" : "idle");
   if (onModeChange) onModeChange(mode);
 }
 
 export const companionMode = () => mode;
+
+function closeSettings() {
+  if (!el?.settingsPanel || !el?.settingsBtn) return;
+  el.settingsPanel.hidden = true;
+  el.settingsBtn.setAttribute("aria-expanded", "false");
+}
+
+function toggleSettings() {
+  if (!el?.settingsPanel || !el?.settingsBtn) return;
+  const nextOpen = el.settingsPanel.hidden;
+  el.settingsPanel.hidden = !nextOpen;
+  el.settingsBtn.setAttribute("aria-expanded", nextOpen ? "true" : "false");
+}
+
+function requestLoopMode(nextMode) {
+  if (nextMode === "loop" && !canUseLoop()) {
+    closeSettings();
+    if (onLoopUnavailable) onLoopUnavailable();
+    return;
+  }
+  setCompanionMode(nextMode);
+}
 
 function paintOnce() {
   if (!ctx2 || !character) return;
@@ -147,6 +174,8 @@ export function mountCompanion(headEl, opts = {}) {
   if (headEl.dataset.pcMounted) return;
   headEl.dataset.pcMounted = "1";
   onModeChange = opts.onMode || null;
+  canUseLoop = typeof opts.canLoop === "function" ? opts.canLoop : () => true;
+  onLoopUnavailable = typeof opts.onLoopUnavailable === "function" ? opts.onLoopUnavailable : null;
 
   headEl.innerHTML = `
     <div class="pc" data-pc>
@@ -160,7 +189,19 @@ export function mountCompanion(headEl, opts = {}) {
         </div>
         <p class="pc-caption" data-pc-caption aria-live="polite">Ready when you are.</p>
       </div>
-      <button class="pc-mode" data-pc-mode type="button" aria-pressed="false" title="Toggle Phantom Loop">Chat</button>
+      <div class="pc-actions">
+        <button class="pc-mode" data-pc-mode type="button" aria-pressed="false" title="Toggle Phantom Loop">
+          <span>Loop</span><b data-pc-mode-state>Off</b>
+        </button>
+        <button class="pc-settings" data-pc-settings type="button" aria-haspopup="dialog" aria-expanded="false">Settings</button>
+        <div class="pc-menu" data-pc-menu hidden>
+          <b>Phantom settings</b>
+          <p>Phantom Loop turns the next prompt into an Elite, approval-safe build packet.</p>
+          <button type="button" data-pc-menu-loop aria-pressed="false">
+            <span>Phantom Loop</span><em>Elite</em>
+          </button>
+        </div>
+      </div>
     </div>`;
 
   const root = headEl.querySelector("[data-pc]");
@@ -171,6 +212,9 @@ export function mountCompanion(headEl, opts = {}) {
     label: root.querySelector("[data-pc-label]"),
     caption: root.querySelector("[data-pc-caption]"),
     modeChip: root.querySelector("[data-pc-mode]"),
+    settingsBtn: root.querySelector("[data-pc-settings]"),
+    settingsPanel: root.querySelector("[data-pc-menu]"),
+    menuLoop: root.querySelector("[data-pc-menu-loop]"),
   };
 
   dpr = Math.min(window.devicePixelRatio || 1, 2);
@@ -182,9 +226,23 @@ export function mountCompanion(headEl, opts = {}) {
   character = createPhantomCharacter({ small: true });
 
   window.addEventListener("pointermove", (e) => { pointer = { x: e.clientX, y: e.clientY }; }, { passive: true });
-  el.modeChip.addEventListener("click", () => setCompanionMode(mode === "loop" ? "chat" : "loop"));
+  el.modeChip.addEventListener("click", () => requestLoopMode(mode === "loop" ? "chat" : "loop"));
+  el.settingsBtn.addEventListener("click", (event) => {
+    event.stopPropagation();
+    toggleSettings();
+  });
+  el.menuLoop.addEventListener("click", () => {
+    requestLoopMode(mode === "loop" ? "chat" : "loop");
+    closeSettings();
+  });
+  document.addEventListener("click", (event) => {
+    if (!root.contains(event.target)) closeSettings();
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") closeSettings();
+  });
 
-  setCompanionState("idle");
+  setCompanionMode(mode);
   if (reduceMotion) paintOnce();
   else loop();
 }
