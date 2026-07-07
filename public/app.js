@@ -103,7 +103,7 @@ function addCard(init = {}, { save = true, start = false } = {}) {
     uid: uid(),
     name: init.name ?? "",
     profileId: init.profileId ?? null,
-    linked: init.linked !== false,
+    linked: Boolean(init.linked),
     sessionId: null,
     term: null,
     fit: null,
@@ -152,19 +152,6 @@ function buildCard(card) {
   select.innerHTML = optionHtml(card.profileId);
   select.addEventListener("change", () => setCardProfile(card, select.value));
 
-  const link = document.createElement("button");
-  link.className = `tile-link${card.linked ? " on" : ""}`;
-  link.type = "button";
-  link.title = "Link this terminal (typing goes to all linked terminals)";
-  link.setAttribute("aria-label", "Link this terminal");
-  link.textContent = "⇉";
-  link.addEventListener("click", () => {
-    card.linked = !card.linked;
-    link.classList.toggle("on", card.linked);
-    document.querySelector(`.tile[data-uid="${card.uid}"]`)?.classList.toggle("linked", card.linked);
-    saveWorkspace();
-  });
-
   const remove = document.createElement("button");
   remove.className = "tile-remove";
   remove.type = "button";
@@ -173,13 +160,28 @@ function buildCard(card) {
   remove.textContent = "×";
   remove.addEventListener("click", () => removeCard(card));
 
-  head.append(name, select, link, remove);
+  head.append(name, select, remove);
 
   const alert = document.createElement("span");
   alert.className = "tile-alert";
   alert.title = "New activity";
   el.appendChild(alert);
   if (card.linked) el.classList.add("linked");
+
+  // In Link mode, Shift+click a terminal to link/unlink it. Capture phase so
+  // the terminal underneath doesn't swallow the gesture.
+  el.addEventListener(
+    "mousedown",
+    (e) => {
+      if (broadcastOn && e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        card.linked = !card.linked;
+        el.classList.toggle("linked", card.linked);
+      }
+    },
+    true,
+  );
 
   const screen = document.createElement("div");
   screen.className = "screen";
