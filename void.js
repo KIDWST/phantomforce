@@ -326,7 +326,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-56")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-57")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -389,7 +389,7 @@ async function initEntity() {
   const t0 = performance.now();
   let last = t0, running = true;
   document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
-  let lastFade = -1, shy = 1;
+  let lastFade = -1, shy = 1, shyPrev = 1;
   const sayEl = document.querySelector("[data-say]");
   const frame = (now) => {
     if (!running) return;
@@ -406,9 +406,15 @@ async function initEntity() {
       const sr = sayEl.getBoundingClientRect();
       if (sr.height > 4) {
         const sTop = sr.top + (window.scrollY || 0);
-        if (sTop < gy + gs * 2.0 && sTop + sr.height > gy - gs * 2.6) shyT = 0.12;
+        if (sTop < gy + gs * 2.0 && sTop + sr.height > gy - gs * 2.6) shyT = 0.04;
       }
     }
+    if (shyT === 1 && shyPrev < 1) {
+      // the words cleared — he comes back to LIFE, not just back to visible
+      flare(); happy = 1.2;
+      setCharMood("talking", "excited", 1500);
+    }
+    shyPrev = shyT;
     shy += (shyT - shy) * Math.min(1, dtF * 7);
     const vis = fade * shy;
     if (vis < 0.999 || lastFade >= 0) {
