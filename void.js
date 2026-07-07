@@ -413,7 +413,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-61")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-62")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -595,8 +595,11 @@ async function initEntity() {
       if (!faviconSet && mt > 3.6) {
         faviconSet = true;
         try {
+          const dataUrl = markCanvas.toDataURL("image/png");
           const link = document.querySelector("link[rel='icon']");
-          if (link) { link.type = "image/png"; link.href = markCanvas.toDataURL("image/png"); }
+          if (link) { link.type = "image/png"; link.href = dataUrl; }
+          // the same living capture becomes the notification icon
+          document.documentElement.style.setProperty("--pf-mark-icon", `url(${dataUrl})`);
         } catch { }
       }
       requestAnimationFrame(mFrame);
@@ -648,7 +651,7 @@ function initRiskRadar() {
   const uiSel = "[data-wordmark], [data-phantom-zone], [data-say], [data-hero-sub], [data-powers], [data-speak], [data-cta-block], [data-ops], [data-download-modal]";
   /* slot grid: 6 vertical slots per side band. A ping takes a FREE slot, so
      they spread evenly down both edges instead of huddling in the corners. */
-  const SLOTS = 12;                                          // 0-5 left, 6-11 right
+  const SLOTS = 10;                                          // 0-4 left, 5-9 right — the bottom third stays clean
   const slotOwner = new Array(SLOTS).fill(null);
   const place = (ping) => {
     const W = innerWidth, H = innerHeight;
@@ -658,8 +661,8 @@ function initRiskRadar() {
     for (let i = 0; i < SLOTS; i++) if (!slotOwner[i]) free.push(i);
     for (let i = free.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [free[i], free[j]] = [free[j], free[i]]; }
     for (const slot of free) {
-      const rightSide = slot >= 6;
-      const row = slot % 6;
+      const rightSide = slot >= 5;
+      const row = slot % 5;
       const lp = rightSide ? 78 + Math.random() * 15 : 4 + Math.random() * 15;
       const tp = 9 + row * 13.5 + Math.random() * 5;
       ping.style.left = lp + "%"; ping.style.top = tp + "%";
