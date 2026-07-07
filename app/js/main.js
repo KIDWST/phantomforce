@@ -4,17 +4,17 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-32";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-32";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-32";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-32";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-32";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-32";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-32";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-32";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260706-32";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-32";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260706-32";
+} from "./store.js?v=phantom-live-20260707-36";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-36";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-36";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-36";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260707-36";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260707-36";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-36";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-36";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-36";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260707-36";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-36";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -558,7 +558,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-32";
+const POSE_VERSION = "phantom-live-20260707-36";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

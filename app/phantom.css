@@ -4532,3 +4532,13 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     font-size: 15px;
   }
 }
+
+/* companion portrait: squash-and-stretch pop on every mood change */
+.pc-avatar.pc-pop { animation: pcPop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes pcPop {
+  0% { transform: scale(1); }
+  35% { transform: scale(0.94, 1.07); }
+  65% { transform: scale(1.08, 0.95); }
+  100% { transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) { .pc-avatar.pc-pop { animation: none !important; } }

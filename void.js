@@ -318,7 +318,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260706-34")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-36")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -553,12 +553,12 @@ function initPromptExamples() {
 
 /* the AI workforce — centralized seed data; swap for a backend feed later */
 const WORKFORCE = [
-  { name: "Maya Brooks",  role: "Client Success",         status: "Preparing reply",       tone: "on" },
-  { name: "Leo Grant",    role: "Lead Research",          status: "Organizing new leads",  tone: "on" },
-  { name: "Nina Cross",   role: "Content Producer",       status: "Building content plan", tone: "on" },
-  { name: "Marcus Vale",  role: "Website Technician",     status: "Reviewing page update", tone: "idle" },
-  { name: "Ava Monroe",   role: "Scheduling Coordinator", status: "Checking schedule",     tone: "on" },
-  { name: "Eli Rhodes",   role: "Finance Assistant",      status: "Waiting approval",      tone: "warn" },
+  { name: "Danielle Carter", role: "Client Success",         status: "Preparing reply",       tone: "on" },
+  { name: "Marcus Reed",     role: "Lead Research",          status: "Organizing new leads",  tone: "on" },
+  { name: "Sofia Ramirez",   role: "Content Producer",       status: "Building content plan", tone: "on" },
+  { name: "James O'Neal",    role: "Website Technician",     status: "Reviewing page update", tone: "idle" },
+  { name: "Priya Shah",      role: "Scheduling Coordinator", status: "Checking schedule",     tone: "on" },
+  { name: "David Kim",       role: "Finance Assistant",      status: "Waiting approval",      tone: "warn" },
 ];
 function initWorkforce() {
   const grid = document.querySelector("[data-workforce-grid]");
@@ -570,7 +570,11 @@ function initWorkforce() {
       <span class="wf-main"><b>${w.name}</b><i>${w.role}</i></span>
       <span class="wf-status wf-${w.tone}"><em></em>${w.status}</span>
     </article>`;
-  }).join("");
+  }).join("") + `<article class="wf-card wf-more">
+      <span class="wf-avatar wf-plus">1K+</span>
+      <span class="wf-main"><b>…and over a thousand more</b><i>Specialists spin up the moment work needs them — the possibilities are endless.</i></span>
+      <span class="wf-status wf-on"><em></em>On call</span>
+    </article>`;
 }
 
 function initReveal() {

@@ -131,12 +131,33 @@ button:focus-visible, input:focus-visible, a:focus-visible {
   border: 1px solid rgba(77, 255, 171, 0.14); background: rgba(77, 255, 171, 0.04);
   font: 500 9px "DM Mono", monospace; letter-spacing: 0.3em; text-indent: 0.3em; text-transform: uppercase; color: var(--dim);
 }
-.status-dot {
-  width: 5px; height: 5px; border-radius: 50%; background: var(--neon);
+/* live signal: pinging core + equalizer bars, no words needed */
+.status-ping { position: relative; width: 6px; height: 6px; }
+.status-ping i {
+  position: absolute; inset: 0; border-radius: 50%; background: var(--neon);
   box-shadow: 0 0 8px var(--neon), 0 0 16px rgba(77, 255, 171, 0.6);
-  animation: heartbeat 2.4s ease-in-out infinite;
 }
-@keyframes heartbeat { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+.status-ping::after {
+  content: ""; position: absolute; inset: -3px; border-radius: 50%;
+  border: 1px solid var(--neon); opacity: 0;
+  animation: statusPing 2.2s cubic-bezier(0.2, 0.6, 0.35, 1) infinite;
+}
+@keyframes statusPing {
+  0% { transform: scale(0.4); opacity: 0.9; }
+  70%, 100% { transform: scale(2.4); opacity: 0; }
+}
+.status-bars { display: inline-flex; align-items: flex-end; gap: 2.5px; height: 10px; }
+.status-bars i {
+  width: 2.5px; border-radius: 2px; background: linear-gradient(180deg, #41ffa1, #19d9ff);
+  box-shadow: 0 0 5px rgba(65, 255, 161, 0.55);
+  animation: statusEq 1.6s ease-in-out infinite;
+}
+.status-bars i:nth-child(1) { height: 4px; animation-delay: 0s; }
+.status-bars i:nth-child(2) { height: 8px; animation-delay: 0.22s; }
+.status-bars i:nth-child(3) { height: 6px; animation-delay: 0.44s; }
+.status-bars i:nth-child(4) { height: 9px; animation-delay: 0.66s; }
+@keyframes statusEq { 0%, 100% { transform: scaleY(0.45); } 50% { transform: scaleY(1); } }
+.status-txt { color: var(--neon); }
 
 /* the phantom (3D entity in void.js) renders itself into this reserved space */
 .phantom-zone { flex: 1 1 auto; width: 100%; min-height: 120px; max-height: 46vh; pointer-events: none; }
@@ -258,7 +279,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .hint.gone { opacity: 0; }
 
 @media (prefers-reduced-motion: reduce) {
-  .void-fallback, .wordmark, .status-dot, .powers button, .speak-caret, .say-line, .risk-dot, .riskfield::before, .summon, .download-cta { animation: none !important; }
+  .void-fallback, .wordmark, .status-ping::after, .status-bars i, .powers button, .speak-caret, .say-line, .risk-dot, .riskfield::before, .summon, .download-cta { animation: none !important; }
   .void-canvas { display: none; }
 }
 
@@ -431,8 +452,11 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 /* ============================================================================ */
 
 /* ---- unlock the page: hero contained, document scrolls ---- */
-html, body { overflow: auto; overflow-x: hidden; height: auto; min-height: 100%; overscroll-behavior-y: auto; }
-body { position: static; inset: auto; background: #020609; }
+html { overflow-y: auto; overflow-x: hidden; height: auto; min-height: 100%; overscroll-behavior-y: auto; }
+body { position: static; inset: auto; overflow: visible; height: auto; min-height: 100%; background: #020609; }
+/* no visible scrollbars anywhere — the page scrolls, the chrome stays invisible */
+html, body { scrollbar-width: none; -ms-overflow-style: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display: none; }
 .hero-void { position: relative; height: 100svh; min-height: 560px; overflow: hidden; }
 .hero-void .void-canvas,
 .hero-void .void-fallback,
@@ -483,6 +507,9 @@ body { position: static; inset: auto; background: #020609; }
   display: grid; justify-items: center; padding-top: 9px; opacity: 0.65; transition: opacity 0.25s;
 }
 .hero-more:hover { opacity: 1; }
+/* keyboard up = the pill would float mid-screen; hide it while typing, and on phones entirely */
+.hero-void:focus-within .hero-more { opacity: 0; pointer-events: none; }
+@media (max-width: 760px), (pointer: coarse) { .hero-more { display: none; } }
 .hero-more span { width: 4px; height: 9px; border-radius: 4px; background: var(--neon); box-shadow: 0 0 8px var(--neon); animation: moreDrop 1.8s ease-in-out infinite; }
 @keyframes moreDrop { 0% { transform: translateY(0); opacity: 1; } 70% { transform: translateY(14px); opacity: 0; } 100% { transform: translateY(0); opacity: 0; } }
 
@@ -623,3 +650,8 @@ body { position: static; inset: auto; background: #020609; }
   .hero-more span, .sdot { animation: none !important; }
   [data-reveal] { opacity: 1; transform: none; transition: none; }
 }
+
+/* the workforce scales: the thousand-specialists card */
+.wf-more { border-style: dashed; border-color: rgba(77, 255, 171, 0.28); background: rgba(77, 255, 171, 0.03); }
+.wf-avatar.wf-plus { background: rgba(77, 255, 171, 0.08); color: var(--neon); box-shadow: inset 0 0 0 1px rgba(77, 255, 171, 0.4), 0 0 18px rgba(77, 255, 171, 0.2); font-size: 12.5px; letter-spacing: 0.02em; }
+.wf-more .wf-main i { white-space: normal; }

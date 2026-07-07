@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-32";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-36";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -25,6 +25,9 @@ let ctx2 = null;
 let dpr = 1;
 const SIZE = 48;
 let current = "idle";
+let prevDef = null;             // previous state's look, for crossfading
+let stateChangedAt = 0;         // performance.now() of the last state switch
+const FADE_MS = 420;            // crossfade window — smooth, never a hard cut
 let decayTimer = 0;
 let rafOn = false;
 let pulse = 0;
@@ -34,7 +37,18 @@ let onModeChange = null;
 
 export function setCompanionState(state, caption) {
   const def = PRESENCE_STATES[state] || PRESENCE_STATES.idle;
-  current = PRESENCE_STATES[state] ? state : "idle";
+  const nextKey = PRESENCE_STATES[state] ? state : "idle";
+  if (nextKey !== current) {
+    prevDef = PRESENCE_STATES[current] || PRESENCE_STATES.idle;
+    stateChangedAt = performance.now();
+    // squash-and-stretch: a small anticipatory pop on every mood change
+    if (!reduceMotion && el?.canvas) {
+      el.canvas.classList.remove("pc-pop");
+      void el.canvas.offsetWidth;
+      el.canvas.classList.add("pc-pop");
+    }
+  }
+  current = nextKey;
   if (!el) return;
   el.dot.className = `pc-dot pc-dot-${def.dot}`;
   el.label.textContent = def.label;
@@ -76,6 +90,8 @@ function paintOnce() {
     pulse: 0,
     px: 0,
     py: 0,
+    startupOnly: false,
+    moodAge: 2,
   });
 }
 
@@ -101,20 +117,23 @@ function loop() {
     const r = el.canvas.getBoundingClientRect();
     const px = Math.max(-0.5, Math.min(0.5, (pointer.x - (r.left + r.width / 2)) / 520));
     const py = Math.max(-0.5, Math.min(0.5, (pointer.y - (r.top + r.height / 2)) / 520));
+    const sinceSwitch = now - stateChangedAt;
+    const moodAge = Math.max(0.05, sinceSwitch * 0.001);
+    const base = { t, dt, cx: SIZE / 2, cy: SIZE * 0.58, scale: SIZE * 0.31, pulse, px, py, startupOnly: false, moodAge };
     ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx2.clearRect(0, 0, SIZE, SIZE);
-    character.draw(ctx2, {
-      t,
-      dt,
-      cx: SIZE / 2,
-      cy: SIZE * 0.58,
-      scale: SIZE * 0.31,
-      mood: def.mood,
-      emotion: def.emotion,
-      pulse,
-      px,
-      py,
-    });
+    if (prevDef && sinceSwitch < FADE_MS) {
+      // crossfade: the old expression melts into the new one — no vanish frame
+      const k = sinceSwitch / FADE_MS;
+      const ease = 1 - Math.pow(1 - k, 3);
+      ctx2.globalAlpha = 1 - ease;
+      character.draw(ctx2, { ...base, mood: prevDef.mood, emotion: prevDef.emotion, moodAge: 2 });
+      ctx2.globalAlpha = ease;
+      character.draw(ctx2, { ...base, mood: def.mood, emotion: def.emotion });
+      ctx2.globalAlpha = 1;
+    } else {
+      character.draw(ctx2, { ...base, mood: def.mood, emotion: def.emotion });
+    }
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);
