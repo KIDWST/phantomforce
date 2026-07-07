@@ -448,7 +448,54 @@ async function boot() {
   }
 }
 
-document.getElementById("new-term").addEventListener("click", () => addCard({}, { start: false }));
+// ---- new-terminal popover (add one or many at once) ------------------------
+
+function populateNewMenu() {
+  const sel = document.getElementById("new-menu-type");
+  if (!sel) return;
+  sel.innerHTML =
+    `<option value="">Empty (choose later)</option>` +
+    profiles.map((p) => `<option value="${p.id}">${escapeHtml(p.label)}</option>`).join("");
+}
+
+function toggleNewMenu(show) {
+  const menu = document.getElementById("new-menu");
+  const btn = document.getElementById("new-term");
+  const open = show ?? menu.classList.contains("hidden");
+  menu.classList.toggle("hidden", !open);
+  btn.setAttribute("aria-expanded", String(open));
+  if (open) populateNewMenu();
+}
+
+document.getElementById("new-term").addEventListener("click", (e) => {
+  e.stopPropagation();
+  toggleNewMenu();
+});
+
+document.getElementById("new-menu-add").addEventListener("click", () => {
+  const type = document.getElementById("new-menu-type").value || null;
+  let count = parseInt(document.getElementById("new-menu-count").value, 10);
+  if (!Number.isFinite(count) || count < 1) count = 1;
+  count = Math.min(count, 24);
+  let delay = 0;
+  for (let i = 0; i < count; i += 1) {
+    const card = addCard({ profileId: type }, { save: false });
+    if (type) {
+      setTimeout(() => startTerminal(card), delay);
+      delay += 160;
+    }
+  }
+  saveWorkspace();
+  toggleNewMenu(false);
+});
+
+document.addEventListener("click", (e) => {
+  const menu = document.getElementById("new-menu");
+  if (!menu.classList.contains("hidden") && !menu.contains(e.target) && e.target.id !== "new-term") {
+    toggleNewMenu(false);
+  }
+});
+
 document.getElementById("rescan").addEventListener("click", loadProfiles);
 document.querySelectorAll(".cols-switch button").forEach((btn) => {
   btn.addEventListener("click", () => setColumns(Number(btn.dataset.cols)));
@@ -458,7 +505,9 @@ document.getElementById("overlay").addEventListener("click", (e) => {
   if (e.target.id === "overlay") closeOverlay();
 });
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape" && !document.getElementById("overlay").classList.contains("hidden")) closeOverlay();
+  if (e.key !== "Escape") return;
+  if (!document.getElementById("overlay").classList.contains("hidden")) closeOverlay();
+  if (!document.getElementById("new-menu").classList.contains("hidden")) toggleNewMenu(false);
 });
 window.addEventListener("beforeunload", () => {
   for (const card of cards) {

@@ -35,6 +35,7 @@ const BUILT_IN = isWin
         command: PWSH,
         args: ["-NoLogo", "-NoExit", "-Command", "codex"],
         cwd: HOME,
+        autoTrust: true,
         note: "Launches the Codex CLI in a shell. Drops to a prompt when Codex exits.",
       },
       {
@@ -43,6 +44,7 @@ const BUILT_IN = isWin
         command: PWSH,
         args: ["-NoLogo", "-NoExit", "-Command", "claude"],
         cwd: HOME,
+        autoTrust: true,
         note: "Launches the Claude CLI in a shell.",
       },
       {
@@ -141,6 +143,7 @@ export function loadProfiles() {
       command: String(p.command ?? PWSH),
       args: Array.isArray(p.args) ? p.args.map(String) : [],
       cwd: p.cwd ? path.resolve(String(p.cwd).replace(/^~/, HOME)) : HOME,
+      autoTrust: Boolean(p.autoTrust),
       note: String(p.note ?? ""),
     }));
   } catch (error) {

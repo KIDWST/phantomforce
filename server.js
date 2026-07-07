@@ -36,12 +36,43 @@ const MAX_BUFFER_BYTES = 256 * 1024;
 /** @type {Map<string, {proc:any,profileId:string,status:string,buffer:string,sockets:Set<any>,startedAt:number,exitCode:number|null}>} */
 const sessions = new Map();
 
+// Auto-trust: strip ANSI so we can scan a CLI's rendered text for its
+// "do you trust this folder/directory?" prompt, then confirm it once.
+const ANSI_CSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
+const ANSI_OSC = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
+function stripAnsi(s) {
+  return s
+    .replace(ANSI_OSC, "")
+    .replace(ANSI_CSI, "")
+    .replace(/\x1b[=>()][0-9A-Za-z]?/g, "")
+    .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, " ");
+}
+const TRUST_RE = /(do you trust|trust this folder|trust the contents of this|allow this folder)/i;
+
 function broadcast(session, frame) {
   session.buffer = (session.buffer + frame).slice(-MAX_BUFFER_BYTES);
   for (const socket of session.sockets) {
     if (socket.readyState === socket.OPEN) {
       socket.send(JSON.stringify({ type: "output", data: frame }));
     }
+  }
+}
+
+// If a CLI shows its folder-trust prompt, confirm it automatically (once).
+// These prompts default to the "Yes, trust" option, so pressing Enter accepts.
+function maybeAutoTrust(session, data) {
+  if (!session.autoTrust || session.trustSent || !session.proc) return;
+  session.trustScan = (session.trustScan + stripAnsi(data)).slice(-4000);
+  if (TRUST_RE.test(session.trustScan)) {
+    session.trustSent = true;
+    // Small delay so the prompt is fully interactive before we answer.
+    setTimeout(() => {
+      try {
+        session.proc.write("\r");
+      } catch {
+        /* pty gone */
+      }
+    }, 350);
   }
 }
 
@@ -65,6 +96,9 @@ function startSession(sessionId, profile, opts = {}) {
     sockets: new Set(),
     startedAt: Date.now(),
     exitCode: null,
+    autoTrust: Boolean(profile.autoTrust),
+    trustScan: "",
+    trustSent: false,
   };
   sessions.set(sessionId, session);
 
@@ -77,7 +111,10 @@ function startSession(sessionId, profile, opts = {}) {
       env: terminalEnv(),
     });
     session.status = "running";
-    session.proc.onData((data) => broadcast(session, data));
+    session.proc.onData((data) => {
+      broadcast(session, data);
+      maybeAutoTrust(session, data);
+    });
     session.proc.onExit(({ exitCode }) => {
       session.status = "exited";
       session.exitCode = exitCode;

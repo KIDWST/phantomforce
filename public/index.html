@@ -27,9 +27,21 @@
           <button type="button" data-cols="4">4</button>
         </div>
         <button id="rescan" class="ghost" type="button" title="Rescan available terminal types">Re-scan</button>
-        <button id="new-term" class="primary" type="button">+ New terminal</button>
+        <button id="new-term" class="primary" type="button" aria-haspopup="true" aria-expanded="false">+ New terminal</button>
       </div>
     </header>
+
+    <div id="new-menu" class="popover hidden" role="dialog" aria-label="Add terminals">
+      <div class="popover-row">
+        <label for="new-menu-type">Type</label>
+        <select id="new-menu-type"></select>
+      </div>
+      <div class="popover-row">
+        <label for="new-menu-count">How many</label>
+        <input id="new-menu-count" type="number" min="1" max="24" value="1" />
+      </div>
+      <button id="new-menu-add" class="primary" type="button">Add terminals</button>
+    </div>
 
     <main id="wall" class="wall cols-3"></main>
 
