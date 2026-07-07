@@ -195,7 +195,7 @@ export function mountCompanion(headEl, opts = {}) {
         <button class="pc-mode" data-pc-mode type="button" aria-pressed="false" title="Toggle Phantom Loop">
           <span>Loop</span><b data-pc-mode-state>Off</b>
         </button>
-        <button class="pc-settings" data-pc-settings type="button" aria-haspopup="dialog" aria-expanded="false">Settings</button>
+        <button class="pc-settings" data-pc-settings type="button" aria-label="Chat settings" title="Chat settings" aria-haspopup="dialog" aria-expanded="false"><span aria-hidden="true">&#9881;</span></button>
         <div class="pc-menu" data-pc-menu hidden>
           <div data-pc-settings-panel></div>
         </div>
