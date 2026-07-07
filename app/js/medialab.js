@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-67";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-67";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-68";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-68";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -448,30 +448,50 @@ function genBase(cfg) {
 }
 
 /* ---------------- engine health (shared by doctor + generate) ----------------
-   Two legit render lanes:
-   - API lane: the ai-proxy with a provider key (HIGGSFIELD_API_KEY)
-   - SUBSCRIPTION lane: the desktop bridge (Hermes) drives the owner's
-     logged-in Higgsfield account — no API key involved.               */
-let engineHealth = { at: 0, proxy: false, media: {}, bridge: false };
+   Three legit render lanes, best first:
+   - STUDIO lane: the admin box itself serves same-origin /generate, which runs
+     the `higgsfield` CLI with the owner's logged-in subscription — REAL renders,
+     no API key. Its static server answers /health as "phantomforce-admin-static".
+   - API lane: the ai-proxy with a provider key (HIGGSFIELD_API_KEY).
+   - BRIDGE lane: Hermes behind same-origin /phantom-ai/* queues drafts into the
+     owner's Higgsfield account. Hermes has NO /phantom-ai/health — the real
+     route is GET /phantom-ai/media-lab/higgsfield/status, and the static proxy
+     answers 502 {"error":"Admin API unavailable."} when Hermes is down.      */
+let engineHealth = { at: 0, studio: false, proxy: false, media: {}, bridge: false, bridgeAuth: false };
 async function checkEngineHealth(cfg, force = false) {
   const now = Date.now();
   if (!force && now - engineHealth.at < 60000) return engineHealth;
-  const next = { at: now, proxy: false, media: {}, bridge: false };
-  const probe = async (url, ms) => {
+  const next = { at: now, studio: false, proxy: false, media: {}, bridge: false, bridgeAuth: false };
+  const probe = async (url, ms, headers) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), ms);
-    try { return await fetch(url, { signal: ctrl.signal }); }
+    try { return await fetch(url, { signal: ctrl.signal, headers }); }
     finally { clearTimeout(t); }
   };
-  try {
-    const r = await probe(`${genBase(cfg)}/health`, 5000);
-    const d = await r.json().catch(() => null);
-    if (d && d.ok) { next.proxy = true; next.media = d.media || {}; }
-  } catch { }
-  try {
-    const r = await probe("/phantom-ai/health", 3000);
-    if (r.ok) next.bridge = true;
-  } catch { }
+  const token = accessSession.token();
+  const auth = token ? { Authorization: `Bearer ${token}` } : undefined;
+  const jobs = [
+    (async () => {   // studio lane: this very origin runs the higgsfield CLI
+      const r = await probe("/health", 3000);
+      const d = await r.json().catch(() => null);
+      if (r.ok && d && d.ok && /admin-static/i.test(String(d.service || ""))) next.studio = true;
+    })(),
+    (async () => {   // bridge lane: probe the route Hermes ACTUALLY serves
+      const r = await probe("/phantom-ai/media-lab/higgsfield/status", 4000, auth);
+      const d = await r.json().catch(() => null);
+      if (!d) return;                                    // static 404 → no bridge
+      if (r.ok && d.ok) { next.bridge = true; next.bridgeAuth = true; return; }
+      // 401/403 JSON = Hermes answered, session just isn't authorized;
+      // the proxy's 502 "Admin API unavailable." = Hermes is truly down.
+      if ((r.status === 401 || r.status === 403) && !/unavailable/i.test(String(d.error || ""))) next.bridge = true;
+    })(),
+    (async () => {   // API lane: remote ai-proxy
+      const r = await probe(`${genBase(cfg)}/health`, 5000);
+      const d = await r.json().catch(() => null);
+      if (d && d.ok) { next.proxy = true; next.media = d.media || {}; }
+    })(),
+  ];
+  await Promise.allSettled(jobs);
   engineHealth = next;
   return next;
 }
@@ -589,13 +609,16 @@ async function draftHiggsfieldRequest(req = {}, spec = {}) {
 async function generate(cfg, req) {
   const base = genBase(cfg);
   const p = provider(cfg, req.provider) || {};
-  const url = (p.endpoint || `${base}/generate`);
   const spec = buildGenerationSpec(req);
-  /* SUBSCRIPTION LANE: no API key on the proxy but the desktop bridge is
-     up -> queue the render straight into the owner's Higgsfield account.
-     prompt > higgsfield > done, no key required. */
   const health = await checkEngineHealth(cfg).catch(() => engineHealth);
-  if (req.provider === "higgsfield" && !health.media.higgsfield && health.bridge) {
+  /* STUDIO LANE FIRST: on the admin box, same-origin /generate runs the
+     higgsfield CLI with the owner's logged-in subscription — a REAL render,
+     no API key. prompt > higgsfield > done. */
+  const studioLane = req.provider === "higgsfield" && health.studio && !p.endpoint;
+  const url = p.endpoint || (studioLane ? "/generate" : `${base}/generate`);
+  /* SUBSCRIPTION QUEUE: no studio lane and no API key, but Hermes is up ->
+     queue the render straight into the owner's Higgsfield account. */
+  if (req.provider === "higgsfield" && !studioLane && !health.media.higgsfield && health.bridge) {
     const draft = await draftHiggsfieldRequest({ ...req, prompt: spec.provider_prompt, model: spec.model }, spec);
     if (draft) {
       const assets = [];
@@ -1284,10 +1307,18 @@ function wireGenerate(body, cfg, opts, root, esc) {
     const h = await checkEngineHealth(cfg, force).catch(() => engineHealth);
     if (!doctor.isConnected) return;
     const prov = genState.provider || "higgsfield";
-    if (h.media[prov]) {
+    if (h.studio && prov === "higgsfield") {
+      doctor.dataset.state = "ok";
+      title.textContent = "Higgsfield studio connected";
+      msg.textContent = "Renders run right on this box with your Higgsfield subscription — no API key involved. If a render errors, make sure the higgsfield CLI is installed and signed in on this machine.";
+    } else if (h.media[prov]) {
       doctor.dataset.state = "ok";
       title.textContent = "Media engine connected (API)";
       msg.textContent = `${base} · ${prov} key loaded — real renders will run.`;
+    } else if (h.bridge && !h.bridgeAuth) {
+      doctor.dataset.state = "warn";
+      title.textContent = "Bridge is up, but this session can't use it";
+      msg.textContent = "Hermes answered but rejected this session — sign in with your admin account, then hit Re-check.";
     } else if (h.bridge) {
       doctor.dataset.state = "ok";
       title.textContent = "Higgsfield subscription bridge ready";
@@ -1299,7 +1330,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
     } else {
       doctor.dataset.state = "down";
       title.textContent = "Media engine unreachable";
-      msg.textContent = `Nothing answered at ${base} and the desktop bridge is down. Start the bridge on the always-on box (or bash ai-proxy/run.sh for the API lane). Prompts render as offline sketches until then.`;
+      msg.textContent = `Nothing is answering: no Hermes at /phantom-ai on this origin, and no proxy at ${base}. On the admin box, start Hermes (the desktop bridge) — or bash ai-proxy/run.sh for the API lane. Prompts render as offline sketches until then.`;
     }
   };
   doctor?.querySelector("[data-ml-doctor-retry]")?.addEventListener("click", () => runDoctor(true));
