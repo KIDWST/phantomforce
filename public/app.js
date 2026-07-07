@@ -49,10 +49,8 @@ async function loadProfiles() {
     dot.className = "dot green";
     text.textContent = `Engine live · ${profiles.length} terminals · ${openWindows.length} open programs. Pick any source per tile.`;
     if (tileAssignments.length === 0) {
-      // Default first tiles to open programs (what you most want to watch),
-      // then fall back to terminal profiles.
-      const winIds = openWindows.map((w) => `win:${w.pid}`);
-      tileAssignments = [...winIds, ...profiles.map((p) => p.id)].slice(0, 9);
+      // Start blank — every tile is chosen manually from its dropdown.
+      tileAssignments = new Array(9).fill(null);
     }
     renderWall();
   } catch (err) {
