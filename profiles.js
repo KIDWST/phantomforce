@@ -1,11 +1,10 @@
-// Termina terminal profile registry.
+// Termina terminal templates.
 //
-// Each profile is a predefined local terminal you can put on a wall tile. Every
-// command is a fixed argv defined here (never assembled from client input), and
-// everything runs on this one machine as the user who launched Termina.
+// Each template is a kind of terminal you can drop onto a wall tile. Every tile
+// gets its OWN independent session, so you can run several Codex CLIs and shells
+// at the same time. Commands are predefined here and run on this machine as you.
 //
-// You can override or extend this list with a termina.config.json file next to
-// server.js (see loadProfiles below). Keep it to shells and tools you own.
+// Override or extend with a termina.config.json next to server.js (see below).
 
 import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
@@ -14,160 +13,84 @@ import { fileURLToPath } from "node:url";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const HOME = os.homedir();
+const isWin = process.platform === "win32";
 
-// Resolve a usable interactive shell for this OS.
-function defaultShell() {
-  if (process.platform === "win32") {
-    return { command: "powershell.exe", args: ["-NoLogo"] };
-  }
-  return { command: process.env.SHELL || "/bin/bash", args: ["-i"] };
-}
+// Prefer PowerShell 7 (pwsh) if present, else Windows PowerShell.
+const PWSH = "pwsh.exe";
 
-const shell = defaultShell();
+/** @type {Array<{id:string,label:string,command:string,args:string[],cwd:string,note:string}>} */
+const BUILT_IN = isWin
+  ? [
+      {
+        id: "pwsh",
+        label: "PowerShell",
+        command: PWSH,
+        args: ["-NoLogo"],
+        cwd: HOME,
+        note: "A PowerShell shell.",
+      },
+      {
+        id: "codex",
+        label: "Codex CLI",
+        command: PWSH,
+        args: ["-NoLogo", "-NoExit", "-Command", "codex"],
+        cwd: HOME,
+        note: "Launches the Codex CLI in a shell. Drops to a prompt when Codex exits.",
+      },
+      {
+        id: "claude",
+        label: "Claude CLI",
+        command: PWSH,
+        args: ["-NoLogo", "-NoExit", "-Command", "claude"],
+        cwd: HOME,
+        note: "Launches the Claude CLI in a shell.",
+      },
+      {
+        id: "cmd",
+        label: "Command Prompt",
+        command: "cmd.exe",
+        args: [],
+        cwd: HOME,
+        note: "A classic cmd.exe shell.",
+      },
+      {
+        id: "wsl",
+        label: "WSL / bash",
+        command: "wsl.exe",
+        args: [],
+        cwd: HOME,
+        note: "A Linux shell via WSL.",
+      },
+      {
+        id: "python",
+        label: "Python",
+        command: "python.exe",
+        args: ["-i"],
+        cwd: HOME,
+        note: "A Python REPL.",
+      },
+      {
+        id: "node",
+        label: "Node",
+        command: "node.exe",
+        args: [],
+        cwd: HOME,
+        note: "A Node.js REPL.",
+      },
+    ]
+  : [
+      {
+        id: "shell",
+        label: "Shell",
+        command: process.env.SHELL || "/bin/bash",
+        args: ["-i"],
+        cwd: HOME,
+        note: "An interactive shell.",
+      },
+    ];
 
-/**
- * @typedef {Object} Profile
- * @property {string} id
- * @property {string} label
- * @property {string} type      control|shell|service|ops|ai|lab|logs|custom
- * @property {string} description
- * @property {string} cwd       absolute working directory
- * @property {string} command   executable (predefined)
- * @property {string[]} args     predefined argv
- * @property {boolean} interactive  accepts keystrokes
- * @property {string} note      honest status/placeholder text
- * @property {boolean} [blocked]    true = never launches until you configure it
- */
-
-/** @type {Profile[]} */
-const BUILT_IN = [
-  {
-    id: "programs",
-    label: "PROGRAMS",
-    type: "monitor",
-    description: "Live list of the open programs / windows on this PC.",
-    cwd: HOME,
-    command: "",
-    args: [],
-    interactive: false,
-    monitor: true,
-    note: "Your open windows. Focus, minimize, restore, maximize, or close them from here.",
-  },
-  {
-    id: "control",
-    label: "CONTROL",
-    type: "control",
-    description: "Primary shell in your home directory.",
-    cwd: HOME,
-    command: shell.command,
-    args: shell.args,
-    interactive: true,
-    note: "Your main interactive shell.",
-  },
-  {
-    id: "shell-a",
-    label: "SHELL A",
-    type: "shell",
-    description: "A second working shell.",
-    cwd: HOME,
-    command: shell.command,
-    args: shell.args,
-    interactive: true,
-    note: "A spare interactive shell.",
-  },
-  {
-    id: "shell-b",
-    label: "SHELL B",
-    type: "shell",
-    description: "A third working shell.",
-    cwd: HOME,
-    command: shell.command,
-    args: shell.args,
-    interactive: true,
-    note: "A spare interactive shell.",
-  },
-  {
-    id: "git",
-    label: "GIT",
-    type: "shell",
-    description: "Shell for git work.",
-    cwd: HOME,
-    command: shell.command,
-    args: shell.args,
-    interactive: true,
-    note: "Interactive shell — run git commands here.",
-  },
-  {
-    id: "node",
-    label: "NODE",
-    type: "shell",
-    description: "Node.js REPL.",
-    cwd: HOME,
-    command: process.platform === "win32" ? "node.exe" : "node",
-    args: [],
-    interactive: true,
-    note: "Live Node REPL.",
-  },
-  {
-    id: "python",
-    label: "PYTHON",
-    type: "shell",
-    description: "Python REPL.",
-    cwd: HOME,
-    command: process.platform === "win32" ? "python.exe" : "python3",
-    args: ["-i"],
-    interactive: true,
-    note: "Live Python REPL (needs Python on PATH).",
-  },
-  {
-    id: "ops-docker",
-    label: "OPS / DOCKER",
-    type: "ops",
-    description: "Shell for docker / ops commands.",
-    cwd: HOME,
-    command: shell.command,
-    args: shell.args,
-    interactive: true,
-    note: "Interactive ops shell. Try: docker ps",
-  },
-  {
-    id: "codex",
-    label: "CODEX",
-    type: "ai",
-    description: "Shell for the Codex CLI.",
-    cwd: HOME,
-    command: shell.command,
-    args: shell.args,
-    interactive: true,
-    note: "Opens a shell. Nothing auto-runs — start your agent when you want.",
-  },
-  {
-    id: "claude",
-    label: "CLAUDE / FABLE",
-    type: "ai",
-    description: "Shell for the Claude / Fable CLI.",
-    cwd: HOME,
-    command: shell.command,
-    args: shell.args,
-    interactive: true,
-    note: "Opens a shell. Nothing auto-runs — start your agent when you want.",
-  },
-  {
-    id: "kali-lab",
-    label: "KALI LAB",
-    type: "lab",
-    description: "Authorized lab profile — owned machines only.",
-    cwd: HOME,
-    command: shell.command,
-    args: shell.args,
-    interactive: true,
-    blocked: true,
-    note: "Blocked until you configure an authorized lab profile in termina.config.json. Nothing offensive auto-runs.",
-  },
-];
-
-// A minimal environment for spawned terminals — do not inherit the parent's full
-// env (which may hold Termina's own token). Keep what a shell needs to work.
+// A minimal environment for spawned terminals — don't inherit Termina's own env
+// (which holds the launch token). Keep what a shell needs to work.
 export function terminalEnv() {
   const keep = [
     "PATH",
@@ -212,18 +135,12 @@ export function loadProfiles() {
     if (!Array.isArray(parsed.profiles)) {
       return BUILT_IN;
     }
-    // Config profiles replace built-ins entirely so you have full control.
     return parsed.profiles.map((p, index) => ({
       id: String(p.id ?? `custom-${index}`),
-      label: String(p.label ?? p.id ?? `CUSTOM ${index}`),
-      type: String(p.type ?? "custom"),
-      description: String(p.description ?? ""),
-      cwd: p.cwd ? path.resolve(p.cwd.replace(/^~/, HOME)) : HOME,
-      command: String(p.command ?? shell.command),
-      args: Array.isArray(p.args) ? p.args.map(String) : shell.args,
-      interactive: p.interactive !== false,
-      blocked: Boolean(p.blocked),
-      monitor: Boolean(p.monitor),
+      label: String(p.label ?? p.id ?? `Custom ${index}`),
+      command: String(p.command ?? PWSH),
+      args: Array.isArray(p.args) ? p.args.map(String) : [],
+      cwd: p.cwd ? path.resolve(String(p.cwd).replace(/^~/, HOME)) : HOME,
       note: String(p.note ?? ""),
     }));
   } catch (error) {
