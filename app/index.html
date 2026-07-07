@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260707-63";
+      window.PHANTOM_BUILD = "phantom-live-20260707-64";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260707-63" />
+    <meta name="phantom-build" content="phantom-live-20260707-64" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -55,164 +55,32 @@
           #02060a;
       }
 
-      .boot-holo-loop {
-        position: relative;
-        width: min(72vw, 300px);
-        height: min(72vw, 300px);
+      .boot-fallback { align-content: center; justify-items: center; row-gap: 18px; }
+
+      .boot-mark-wrap {
+        width: min(56vw, 210px);
+        height: min(56vw, 210px);
         display: grid;
         place-items: center;
         border-radius: 50%;
-        background:
-          radial-gradient(circle at 50% 54%, rgba(65, 255, 161, 0.16), transparent 45%),
-          radial-gradient(circle at 50% 54%, rgba(16, 189, 119, 0.08), transparent 70%);
+        border: 1px solid rgba(77, 255, 171, 0.32);
+        background: radial-gradient(circle at 50% 42%, rgba(18, 97, 60, 0.5), rgba(3, 19, 13, 0.92));
         box-shadow:
-          0 24px 80px rgba(0, 0, 0, 0.45),
-          0 0 54px rgba(65, 255, 161, 0.16);
-        overflow: visible;
+          0 0 44px rgba(65, 255, 161, 0.28),
+          inset 0 0 24px rgba(65, 255, 161, 0.1),
+          0 24px 80px rgba(0, 0, 0, 0.45);
+        overflow: hidden;
       }
 
-      .boot-holo-loop::before,
-      .boot-holo-loop::after {
-        content: "";
-        position: absolute;
-        pointer-events: none;
-      }
+      .boot-mark { width: 100%; height: 100%; display: block; }
 
-      .boot-holo-loop::before {
-        inset: 18%;
-        border-radius: 50%;
-        background:
-          linear-gradient(rgba(65, 255, 161, 0.08) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(65, 255, 161, 0.06) 1px, transparent 1px);
-        background-size: 100% 13px, 16px 100%;
-        border: 1px solid rgba(65, 255, 161, 0.18);
-        box-shadow: inset 0 0 34px rgba(65, 255, 161, 0.08);
-        mask-image: radial-gradient(circle, black 0 62%, transparent 73%);
-      }
-
-      .boot-holo-loop::after {
-        left: 18%;
-        right: 18%;
-        bottom: 16%;
-        height: 2px;
-        background: linear-gradient(90deg, transparent, rgba(163, 255, 206, 0.95), transparent);
-        box-shadow: 0 0 18px rgba(65, 255, 161, 0.9);
-        animation: bootHoloScan 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-      }
-
-      .boot-holo-grid {
-        position: absolute;
-        left: 4%;
-        right: 4%;
-        bottom: 9%;
-        height: 30%;
-        border: 1px solid rgba(65, 255, 161, 0.18);
-        border-radius: 50%;
-        background:
-          linear-gradient(rgba(65, 255, 161, 0.15) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(65, 255, 161, 0.12) 1px, transparent 1px);
-        background-size: 24px 14px;
-        box-shadow: 0 0 34px rgba(65, 255, 161, 0.12);
-        transform: perspective(520px) rotateX(66deg);
-        transform-origin: center bottom;
-      }
-
-      .boot-holo-base {
-        position: absolute;
-        bottom: 19%;
-        width: 54%;
-        height: 18%;
-        border: 1px solid rgba(65, 255, 161, 0.38);
-        border-radius: 50%;
-        box-shadow:
-          0 0 22px rgba(65, 255, 161, 0.24),
-          inset 0 0 18px rgba(65, 255, 161, 0.12);
-        animation: bootHoloPulse 1.9s ease-in-out infinite;
-      }
-
-      .boot-holo-core {
-        position: relative;
-        width: 47%;
-        height: 56%;
-        display: block;
-        border-radius: 48% 48% 28% 28%;
-        filter: drop-shadow(0 0 18px rgba(65, 255, 161, 0.74));
-        clip-path: inset(100% 0 0 0);
-        animation: bootHoloBuild 2.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
-      }
-
-      .boot-holo-head,
-      .boot-holo-body,
-      .boot-holo-shoulders,
-      .boot-holo-particle {
-        position: absolute;
-        display: block;
-      }
-
-      .boot-holo-head {
-        width: 32%;
-        height: 24%;
-        left: 34%;
-        top: 6%;
-        border-radius: 50%;
-        background:
-          radial-gradient(circle at 44% 34%, rgba(225, 255, 238, 0.95), rgba(65, 255, 161, 0.58) 38%, rgba(9, 85, 52, 0.46) 70%, transparent 72%);
-      }
-
-      .boot-holo-body {
-        width: 38%;
-        height: 40%;
-        left: 31%;
-        top: 34%;
-        border-radius: 44% 44% 20% 20%;
-        background: radial-gradient(ellipse at 50% 20%, rgba(65, 255, 161, 0.78), rgba(9, 85, 52, 0.28) 58%, transparent 74%);
-      }
-
-      .boot-holo-shoulders {
-        width: 82%;
-        height: 31%;
-        left: 9%;
-        bottom: 3%;
-        border-radius: 60% 60% 18% 18%;
-        background: radial-gradient(ellipse at 50% 22%, rgba(65, 255, 161, 0.5), rgba(9, 85, 52, 0.2) 58%, transparent 72%);
-      }
-
-      .boot-holo-particle {
-        width: 4px;
-        height: 4px;
-        border-radius: 50%;
-        background: #a3ffce;
-        box-shadow: 0 0 12px rgba(65, 255, 161, 0.9);
-        animation: bootHoloParticle 2.8s ease-in-out infinite;
-      }
-
-      .boot-holo-particle.p1 { left: 18%; bottom: 20%; animation-delay: 0.06s; }
-      .boot-holo-particle.p2 { left: 30%; bottom: 54%; animation-delay: 0.22s; }
-      .boot-holo-particle.p3 { left: 66%; bottom: 26%; animation-delay: 0.16s; }
-      .boot-holo-particle.p4 { left: 78%; bottom: 62%; animation-delay: 0.38s; }
-      .boot-holo-particle.p5 { left: 48%; bottom: 10%; animation-delay: 0.52s; }
-
-      @keyframes bootHoloScan {
-        0%, 10% { transform: translateY(84px); opacity: 0; }
-        22% { opacity: 1; }
-        68%, 82% { transform: translateY(-112px); opacity: 0.92; }
-        100% { transform: translateY(84px); opacity: 0; }
-      }
-
-      @keyframes bootHoloPulse {
-        0%, 100% { opacity: 0.38; transform: scale(0.88); }
-        48% { opacity: 0.95; transform: scale(1.06); }
-      }
-
-      @keyframes bootHoloBuild {
-        0%, 13% { clip-path: inset(100% 0 0 0); opacity: 0.28; transform: translateY(12px); }
-        55%, 82% { clip-path: inset(0 0 0 0); opacity: 1; transform: translateY(0); }
-        100% { clip-path: inset(100% 0 0 0); opacity: 0.35; transform: translateY(10px); }
-      }
-
-      @keyframes bootHoloParticle {
-        0%, 100% { opacity: 0; transform: translateY(18px) scale(0.6); }
-        28%, 74% { opacity: 1; transform: translateY(-10px) scale(1); }
+      .boot-word {
+        margin: 0;
+        font: 500 12px "DM Mono", ui-monospace, monospace;
+        letter-spacing: 0.46em;
+        text-indent: 0.46em;
+        color: #a9cbb9;
+        text-shadow: 0 0 22px rgba(77, 255, 171, 0.35);
       }
 
       .gate:not([hidden]) ~ .boot-fallback,
@@ -232,26 +100,13 @@
         }
       }
 
-      @media (prefers-reduced-motion: reduce) {
-        .boot-holo-loop::after,
-        .boot-holo-base,
-        .boot-holo-core,
-        .boot-holo-particle {
-          animation: none !important;
-        }
 
-        .boot-holo-core {
-          clip-path: inset(0 0 0 0);
-          opacity: 1;
-          transform: none;
-        }
-      }
     </style>
-    <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=phantom-live-20260707-63" />
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg?v=phantom-live-20260707-64" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260707-63" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260707-64" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -391,7 +246,7 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260707-63"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260707-64"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
@@ -463,21 +318,42 @@
     </div>
 
     <div class="boot-fallback" data-boot-fallback role="status" aria-label="Booting Phantom AI">
-      <div class="boot-holo-loop" aria-hidden="true">
-        <span class="boot-holo-grid"></span>
-        <span class="boot-holo-base"></span>
-        <span class="boot-holo-core">
-          <span class="boot-holo-head"></span>
-          <span class="boot-holo-body"></span>
-          <span class="boot-holo-shoulders"></span>
-          <span class="boot-holo-particle p1"></span>
-          <span class="boot-holo-particle p2"></span>
-          <span class="boot-holo-particle p3"></span>
-          <span class="boot-holo-particle p4"></span>
-          <span class="boot-holo-particle p5"></span>
-        </span>
+      <div class="boot-mark-wrap" aria-hidden="true">
+        <canvas class="boot-mark" data-boot-mark width="360" height="360"></canvas>
       </div>
+      <p class="boot-word" aria-hidden="true">PHANTOMFORCE</p>
     </div>
+    <script type="module">
+      // the boot logo is the phantom HIMSELF, materializing with the same
+      // glow-up the public site uses — one brand, one being, everywhere
+      (async () => {
+        const canvas = document.querySelector("[data-boot-mark]");
+        const wrap = canvas && canvas.closest(".boot-fallback");
+        if (!canvas || !wrap) return;
+        try {
+          const { createPhantomCharacter } = await import("./js/character.js?v=phantom-live-20260707-64");
+          const chr = createPhantomCharacter({ small: true });
+          const ctx = canvas.getContext("2d");
+          const S = canvas.width;
+          const t0 = performance.now();
+          const frame = (now) => {
+            if (!canvas.isConnected || getComputedStyle(wrap).display === "none") return;   // app is up — stop
+            const t = (now - t0) * 0.001;
+            ctx.setTransform(1, 0, 0, 1, 0, 0);
+            ctx.clearRect(0, 0, S, S);
+            chr.draw(ctx, {
+              t, dt: 0.016,
+              cx: S / 2, cy: S * 0.56, scale: S * 0.27,
+              mood: "idle", emotion: "content",
+              startupOnly: t < 2.4,
+              pulse: 0, px: 0, py: 0, moodAge: 2,
+            });
+            requestAnimationFrame(frame);
+          };
+          requestAnimationFrame(frame);
+        } catch { /* engine unavailable — the glowing ring alone still reads as boot */ }
+      })();
+    </script>
 
     <!-- ⌘K command palette -->
     <div class="cmdk" data-cmdk hidden>
@@ -501,6 +377,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260707-63"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260707-64"></script>
   </body>
 </html>
