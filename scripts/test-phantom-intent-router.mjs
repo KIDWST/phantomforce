@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { classifyPhantomIntent } from "../app/js/intent-router.js";
-import { handleCommand } from "../app/js/command.js?v=phantom-live-20260706-36";
-import { store } from "../app/js/store.js?v=phantom-live-20260706-36";
+import { handleCommand } from "../app/js/command.js?v=phantom-live-20260707-36";
+import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-36";
+
+ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 
 const cases = {
   noTask: [
@@ -30,11 +32,12 @@ const cases = {
     "someone should update billing",
     "make the profile card better",
   ],
-  looper: [
+  phantomLoop: [
     "build me a landing page",
     "create a campaign",
     "make an intake form",
-    "start looper for my website",
+    "start Phantom Loop for my website",
+    "start loopus for my website",
     "turn this into a build plan",
   ],
   automation: [
@@ -64,10 +67,10 @@ for (const text of cases.confirm) {
   assert.equal(r.shouldCreateTask, false, `${text} should not create task yet`);
 }
 
-for (const text of cases.looper) {
+for (const text of cases.phantomLoop) {
   const r = classifyPhantomIntent(text);
   assert.equal(r.primaryIntent, "looper_build", `${text} should be looper_build`);
-  assert.equal(r.shouldStartLooper, true, `${text} should start looper`);
+  assert.equal(r.shouldStartLooper, true, `${text} should start Phantom Loop`);
   assert.equal(r.shouldCreateTask, false, `${text} should not create generic task`);
 }
 
@@ -99,10 +102,15 @@ const task = handleCommand("create a task to fix the chat box spacing");
 assert.equal(task.intent.primaryIntent, "create_task");
 assert.equal(store.state.tasks.length, 1, "explicit task requests should create one task");
 
-const looper = handleCommand("build me a landing page");
-assert.equal(looper.intent.primaryIntent, "looper_build");
-assert.equal(store.state.tasks.length, 1, "Looper requests should not create generic tasks");
-assert.equal(store.state.sites.length, 0, "Looper planning should not create site artifacts directly");
-assert.equal(store.state.looperPlans.length, 1, "Looper requests should create a guarded build packet");
+const phantomLoop = handleCommand("build me a landing page");
+assert.equal(phantomLoop.intent.primaryIntent, "looper_build");
+assert.equal(store.state.tasks.length, 1, "Phantom Loop requests should not create generic tasks");
+assert.equal(store.state.sites.length, 0, "Phantom Loop planning should not create site artifacts directly");
+assert.equal(store.state.looperPlans.length, 1, "Phantom Loop requests should create a guarded build packet");
+
+ctx.session = { role: "employee", name: "Employee", ws: "phantomforce" };
+const blockedLoop = handleCommand("start Phantom Loop for a booking page");
+assert.equal(blockedLoop.intent.primaryIntent, "looper_build");
+assert.equal(store.state.looperPlans.length, 1, "non-admin Phantom Loop requests should be gated");
 
 console.log("phantom intent router tests passed");

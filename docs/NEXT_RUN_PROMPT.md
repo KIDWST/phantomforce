@@ -15,7 +15,7 @@ Current state:
 1. Phantom AI intent router is implemented and tested.
 2. Chat companion is contained in the chat header and documented.
 3. Account/profile/plan module has identity, safe billing controls, tiers, cancellation guardrails, and billing-history scaffolding.
-4. Looper creates local guarded build packets and surfaces them in Site Creator.
+4. Phantom Loop creates local guarded build packets and surfaces them in Site Creator.
 5. Build, typecheck, intent test, syntax checks, diff check, and scans passed in the previous run.
 
 Start by running:

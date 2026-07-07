@@ -376,10 +376,10 @@ function signOut() {
 
 /* ============================ account + plan ============================ */
 const ACCOUNT_PLAN = {
-  name: "Pro Plan",
-  price: "$2,500/mo",
+  name: "Elite Plan",
+  price: "Best plan",
   renewalOffsetDays: 30,
-  paymentState: "Manual billing ready",
+  paymentState: "Owner billing ready",
   workspaceLimit: "Owner workspace",
 };
 const ACCOUNT_TIERS = [
@@ -395,18 +395,18 @@ const ACCOUNT_TIERS = [
     id: "pro",
     name: "Pro Plan",
     price: "$2,500/mo",
-    badge: "Current",
-    current: true,
+    badge: "Growth",
     copy: "Managed Phantom AI operations, content workflow, Media Lab, and owner controls.",
     features: ["Phantom AI cockpit", "Content and Media Lab", "Approval-safe ops"],
   },
   {
-    id: "scale",
-    name: "Scale",
+    id: "elite",
+    name: "Elite Plan",
     price: "Custom",
-    badge: "Operator",
-    copy: "Expanded workspaces, deeper automations, and managed launch support.",
-    features: ["Multi-workspace ops", "Automation planning", "Launch support"],
+    badge: "Current",
+    current: true,
+    copy: "The full operating suite: Phantom Loop, multi-workspace ops, advanced automations, and launch support.",
+    features: ["Phantom Loop", "Multi-workspace ops", "Advanced automation planning", "Launch support"],
   },
 ];
 let accountNotice = "";
@@ -423,6 +423,9 @@ function accountRoleLabel() {
 }
 function accountIdentityLine() {
   return ctx.session?.email || ctx.session?.label || `${accountRoleLabel()} - ${wsName(currentWs())}`;
+}
+function canUsePhantomLoop() {
+  return isAdmin();
 }
 function accountRenewalLabel() {
   return new Date(Date.now() + ACCOUNT_PLAN.renewalOffsetDays * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
@@ -1236,8 +1239,8 @@ function renderChatLog() {
 function applyCompanionMode(mode) {
   const input = $("[data-command-input]");
   if (!input) return;
-  input.placeholder = mode === "build"
-    ? "Describe what you want built - I'll turn it into a plan and drafts..."
+  input.placeholder = mode === "loop"
+    ? "Phantom Loop is armed - send the outcome you want built..."
     : "Ask PhantomForce anything...";
 }
 
@@ -1247,14 +1250,14 @@ const CHAT_STARTERS = [
   { label: "Plan a campaign", run: "Draft a media brief for a new campaign" },
   { label: "Make an intake form", run: "Build a client intake form page" },
   { label: "Review my business", run: "What's my pipeline?" },
-  { label: "Start Build Mode", build: true },
+  { label: "Start Phantom Loop", loop: true, elite: true },
 ];
 
 function starterHtml() {
   return `<div class="chat-start" data-chat-start>
     <p class="chat-start-t">Build with Phantom.</p>
-    <p class="chat-start-s">Tell me what you want to create. I'll turn it into a plan, draft, and approval-ready next step.</p>
-    <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn ${st.build ? "is-build" : ""}" data-starter="${i}">${esc(st.label)}</button>`).join("")}</div>
+    <p class="chat-start-s">Ask normally, or arm Phantom Loop for bigger builds. Loop turns your next prompt into an approval-safe build packet.</p>
+    <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn ${st.loop ? "is-build is-loop" : ""}" data-starter="${i}">${esc(st.label)}${st.elite ? `<span>Elite</span>` : ""}</button>`).join("")}</div>
   </div>`;
 }
 
@@ -1263,8 +1266,13 @@ function bindStarters(log) {
     button.onclick = () => {
       const starter = CHAT_STARTERS[Number(button.dataset.starter)];
       if (!starter) return;
-      if (starter.build) {
-        setCompanionMode("build");
+      if (starter.loop) {
+        if (!canUsePhantomLoop()) {
+          speak("Phantom Loop is an Elite feature. Open Account & Plan to upgrade before using it.", "", "alert");
+          return;
+        }
+        setCompanionMode("loop");
+        speak("Phantom Loop is armed. Send me the outcome and I’ll turn it into a guarded build packet.", "", "bright");
         const input = $("[data-command-input]");
         input?.focus();
         return;
@@ -1403,25 +1411,32 @@ function bindCardRemovers(root, onRemove) {
 }
 function runCommand(raw) {
   phantomHasActed = true;
+  const loopArmed = companionMode() === "loop";
   const inferredMode = inferModeFromText(raw);
-  if (inferredMode !== activeMode && MODES[inferredMode]) {
+  if (!loopArmed && inferredMode !== activeMode && MODES[inferredMode]) {
     activeMode = inferredMode;
     renderChips();
     renderModePose(inferredMode);
   }
   const mode = MODES[activeMode] || MODES.ask;
-  const text = mode.prefix && !/\b(draft|create|build|make|write|new)\b/i.test(raw) ? mode.prefix + raw : raw;
+  const text = loopArmed
+    ? (/phantom loop|loopus|looper|build me|build a|create a campaign|make an intake form|turn this into a build plan/i.test(raw)
+      ? raw
+      : `start phantom loop for ${raw}`)
+    : mode.prefix && !/\b(draft|create|build|make|write|new)\b/i.test(raw) ? mode.prefix + raw : raw;
   speak(raw, "user");
   ghostFlare("listening");
   stageReact("listen", 620);
   setTimeout(() => {
     speak("· · ·", "thinking");
+    if (loopArmed) setCompanionState("looping");
     stageReact("think", 780);
     setTimeout(() => {
       const r = handleCommand(text);
       speak(r.say);
       if (r.cards?.length) chatAttachCards(r.cards);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
+      if (loopArmed) setTimeout(() => setCompanionMode("chat"), reduceMotion ? 600 : 2600);
       renderConsole();
       stageReact("answer", 1100);
       if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
@@ -1466,7 +1481,7 @@ function bindCommandForm() {
     setCommandFocusState(false);
     if (!input.value.trim()) {
       setGhostMood("idle", { emotion: "happy", ms: 1200 });
-      setCompanionState(companionMode() === "build" ? "building" : "idle");
+      setCompanionState(companionMode() === "loop" ? "building" : "idle");
     }
   });
   form.addEventListener("submit", (e) => {

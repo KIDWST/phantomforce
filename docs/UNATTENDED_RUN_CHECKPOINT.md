@@ -42,7 +42,7 @@
 1. Phantom AI intent router: default no task creation, classify intent before actions.
 2. Phantom AI chat companion: contained premium chat presence, stateful captions, no blocking content.
 3. Account/profile/plan module: make the existing dropdown/panel feel more like a real profile/status/billing module.
-4. Phantom AI Looper foundation: guarded build-mode planning scaffolding only, no external execution.
+4. Phantom Loop foundation: guarded Elite build-mode planning scaffolding only, no external execution.
 5. Product polish/audit: copy, empty states, accessibility, docs, verification.
 
 ## Current Phase
@@ -57,7 +57,7 @@
   - Added deterministic `classifyPhantomIntent` in `app/js/intent-router.js`.
   - Routed `app/js/command.js` through the intent classifier before artifact creation.
   - Added local `tasks` storage for explicit task requests only.
-  - Added guarded Looper planning response for build requests without creating site/media/task artifacts.
+  - Added guarded Phantom Loop planning response for build requests without creating site/media/task artifacts.
   - Added `docs/PHANTOM_AI_INTENT_ROUTER.md`.
   - Added `npm run test:intent`.
   - Normalized app module cache keys to build `phantom-live-20260706-36` so command/store/workspace modules share one browser state instance.
@@ -71,12 +71,12 @@
   - Confirmed Account & Plan workspace includes current plan, plan tiers, payment-safe actions, and cancellation-safe owner review.
   - Added identity metadata under the account hero.
   - Added honest billing-history scaffolding: no invoices loaded, payment connector not wired, request invoice prepares owner review only.
-- Priority 4 guarded Looper foundation completed at 2026-07-06T18:48:14.3884567-05:00.
+- Priority 4 guarded Phantom Loop foundation completed at 2026-07-06T18:48:14.3884567-05:00.
   - Added local `looperPlans` records to the store.
-  - Explicit build-language now creates a guarded Looper build packet, not a generic task or site/media artifact.
-  - Site Creator now surfaces Looper build packets with steps, safeguards, and user-clicked local draft conversion.
-  - Added `docs/PHANTOM_AI_LOOPER.md`.
-  - Added prompt templates under `docs/looper/prompts/`.
+  - Explicit build-language now creates a guarded Phantom Loop build packet, not a generic task or site/media artifact.
+  - Site Creator now surfaces Phantom Loop build packets with steps, safeguards, and user-clicked local draft conversion.
+  - Added `docs/PHANTOM_LOOP.md`.
+  - Added prompt templates under `docs/phantom-loop/prompts/`.
 - Priority 5 polish/audit and full verification completed at 2026-07-06T18:50:50.0563992-05:00.
   - Ran stale cache-key scan; no `phantom-live-20260706-35` or older app import keys remain in `app/`.
   - Ran fake/placeholder claim scan; remaining matches are honest placeholders, input placeholder attributes, or safety docs.
@@ -99,7 +99,7 @@
 - `node --check app\js\companion.js` passed.
 - `node --check app\js\main.js` passed.
 - `node --check app\js\workspaces.js` passed.
-- `npm run test:intent` passed again after Looper packet persistence.
+- `npm run test:intent` passed again after Phantom Loop packet persistence.
 - `npm run build` passed.
 - `npm run typecheck` passed.
 - `git diff --check` passed with line-ending warnings only.

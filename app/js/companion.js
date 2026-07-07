@@ -13,7 +13,8 @@ export const PRESENCE_STATES = {
   listening: { label: "Listening", caption: "I'm listening.", dot: "ok", mood: "listening", emotion: "calm", hold: 2400 },
   thinking: { label: "Thinking", caption: "Thinking through the best move...", dot: "ok", mood: "thinking", emotion: "bright", hold: 12000 },
   speaking: { label: "Responding", caption: "Here's what I'd do.", dot: "ok", mood: "talking", emotion: "bright", hold: 3200 },
-  building: { label: "Build mode", caption: "Building the plan...", dot: "ok", mood: "thinking", emotion: "bright", hold: 6000 },
+  building: { label: "Phantom Loop", caption: "Loop mode armed.", dot: "ok", mood: "thinking", emotion: "bright", hold: 6000 },
+  looping: { label: "Phantom Loop", caption: "Building the loop packet...", dot: "ok", mood: "thinking", emotion: "bright", hold: 6000 },
   success: { label: "Done", caption: "Done. Ready for approval.", dot: "ok", mood: "talking", emotion: "happy", hold: 3000 },
   warning: { label: "Needs approval", caption: "This needs approval first.", dot: "warn", mood: "talking", emotion: "alert", hold: 4200 },
   error: { label: "Blocked", caption: "Blocked. Here's what needs fixing.", dot: "err", mood: "talking", emotion: "alert", hold: 4200 },
@@ -58,18 +59,19 @@ export function setCompanionState(state, caption) {
   if (current === "success" || current === "speaking") pulse = Math.max(pulse, 0.7);
   if (current === "warning" || current === "error") pulse = 1;
   clearTimeout(decayTimer);
-  if (def.hold) decayTimer = setTimeout(() => setCompanionState(mode === "build" ? "building" : "idle"), def.hold);
+  if (def.hold) decayTimer = setTimeout(() => setCompanionState(mode === "loop" ? "building" : "idle"), def.hold);
   if (reduceMotion) paintOnce();
 }
 
 export function setCompanionMode(next) {
-  mode = next === "build" ? "build" : "chat";
+  mode = (next === "loop" || next === "build") ? "loop" : "chat";
   if (el?.modeChip) {
-    el.modeChip.textContent = mode === "build" ? "Build" : "Chat";
-    el.modeChip.classList.toggle("is-build", mode === "build");
-    el.modeChip.setAttribute("aria-pressed", mode === "build" ? "true" : "false");
+    el.modeChip.textContent = mode === "loop" ? "Loop" : "Chat";
+    el.modeChip.classList.toggle("is-build", mode === "loop");
+    el.modeChip.classList.toggle("is-loop", mode === "loop");
+    el.modeChip.setAttribute("aria-pressed", mode === "loop" ? "true" : "false");
   }
-  setCompanionState(mode === "build" ? "building" : "idle");
+  setCompanionState(mode === "loop" ? "building" : "idle");
   if (onModeChange) onModeChange(mode);
 }
 
@@ -158,7 +160,7 @@ export function mountCompanion(headEl, opts = {}) {
         </div>
         <p class="pc-caption" data-pc-caption aria-live="polite">Ready when you are.</p>
       </div>
-      <button class="pc-mode" data-pc-mode type="button" aria-pressed="false" title="Toggle Build mode">Chat</button>
+      <button class="pc-mode" data-pc-mode type="button" aria-pressed="false" title="Toggle Phantom Loop">Chat</button>
     </div>`;
 
   const root = headEl.querySelector("[data-pc]");
@@ -180,7 +182,7 @@ export function mountCompanion(headEl, opts = {}) {
   character = createPhantomCharacter({ small: true });
 
   window.addEventListener("pointermove", (e) => { pointer = { x: e.clientX, y: e.clientY }; }, { passive: true });
-  el.modeChip.addEventListener("click", () => setCompanionMode(mode === "build" ? "chat" : "build"));
+  el.modeChip.addEventListener("click", () => setCompanionMode(mode === "loop" ? "chat" : "loop"));
 
   setCompanionState("idle");
   if (reduceMotion) paintOnce();

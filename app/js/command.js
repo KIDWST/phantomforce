@@ -191,7 +191,7 @@ function createLooperBuildPacket(plan, draft) {
   };
   store.state.looperPlans = Array.isArray(store.state.looperPlans) ? store.state.looperPlans : [];
   store.state.looperPlans.unshift(packet);
-  pushActivity("Looper", `drafted build packet "${packet.title}".`, ws);
+  pushActivity("Phantom Loop", `drafted build packet "${packet.title}".`, ws);
   store.save();
   return packet;
 }
@@ -199,7 +199,7 @@ function createLooperBuildPacket(plan, draft) {
 function intentResponse(intent, text) {
   if (intent.primaryIntent === "question") {
     return {
-      say: "Good question. I’ll answer first instead of creating work. If you want this turned into a task or Looper run, say that directly.",
+      say: "Good question. I’ll answer first instead of creating work. If you want this turned into a task or Phantom Loop run, say that directly.",
       cards: [card("No task created", "Answer mode", "Questions stay conversational until you ask me to create, track, assign, schedule, or build something.", [])],
       open: null,
     };
@@ -207,7 +207,7 @@ function intentResponse(intent, text) {
   if (intent.primaryIntent === "brainstorm") {
     return {
       say: "That sounds like a direction, not a task yet. I can brainstorm it, turn it into a plan, or create a task if you tell me which path you want.",
-      cards: [card("Idea captured safely", "No task created", "Say 'make this a task', 'make me a plan', or 'start Looper' when you want it converted.", [])],
+      cards: [card("Idea captured safely", "No task created", "Say 'make this a task', 'make me a plan', or 'start Phantom Loop' when you want it converted.", [])],
       open: null,
     };
   }
@@ -263,11 +263,18 @@ function intentResponse(intent, text) {
     };
   }
   if (intent.primaryIntent === "looper_build") {
+    if (!isAdmin()) {
+      return {
+        say: "Phantom Loop is an Elite feature. Ask the workspace owner to enable Elite access before starting a loop.",
+        cards: [card("Elite feature", "Phantom Loop", "Loop mode creates guarded build packets from bigger goals. It stays locked unless this workspace has Elite/admin access.", [openAction("Open Account", "account")], "Elite only")],
+        open: null,
+      };
+    }
     const plan = looperPlan(intent.looperDraft);
     const packet = createLooperBuildPacket(plan, intent.looperDraft);
     return {
-      say: `Looper drafted a guarded build packet for "${plan.goal}". I’ll keep it in review mode until approval.`,
-      cards: [card("Looper build packet", packet.title, plan.steps.join(" "), [openAction("Open Site Creator", "sites")], "Guarded build mode")],
+      say: `Phantom Loop drafted a guarded build packet for "${plan.goal}". I’ll keep it in review mode until approval.`,
+      cards: [card("Phantom Loop packet", packet.title, plan.steps.join(" "), [openAction("Open Site Creator", "sites")], "Elite guarded mode")],
       open: null,
     };
   }

@@ -4357,6 +4357,11 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .chat-start-btn:hover { border-color: var(--line-strong); background: rgba(65, 255, 161, 0.06); transform: translateY(-1px); }
 .chat-start-btn.is-build { border-color: rgba(65, 255, 161, 0.4); color: var(--neon); background: rgba(65, 255, 161, 0.06); }
+.chat-start-btn span {
+  display: inline-flex; margin-left: 8px; padding: 2px 6px; border-radius: 999px;
+  background: rgba(65, 255, 161, 0.12); color: #cffff0;
+  font: 700 8px "DM Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase;
+}
 .chatbox-trust {
   margin: 0; padding: 0 15px 11px; display: flex; align-items: center; gap: 7px;
   font: 400 10.5px "DM Mono", monospace; letter-spacing: 0.02em; color: var(--dim-2);

@@ -74,19 +74,19 @@ Never create a task from:
 - `this needs to feel more premium`
 - `I want Phantom to feel alive`
 
-## Looper Routing
+## Phantom Loop Routing
 
-Build-language routes to guarded Looper planning, not generic task creation.
+Build-language routes to guarded Phantom Loop planning, not generic task creation.
 
 Examples:
 
 - `build me a landing page`
 - `create a campaign`
 - `make an intake form`
-- `start looper for my website`
+- `start Phantom Loop for my website`
 - `turn this into a build plan`
 
-Looper plans can draft structure, copy, specs, and approval packets. They must not publish, deploy, send, charge, connect accounts, run arbitrary code, expose secrets, or write production data without a separate approved execution lane.
+Phantom Loop plans can draft structure, copy, specs, and approval packets. They must not publish, deploy, send, charge, connect accounts, run arbitrary code, expose secrets, or write production data without a separate approved execution lane.
 
 ## Automation And Reminder Routing
 

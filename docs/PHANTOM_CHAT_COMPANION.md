@@ -7,7 +7,7 @@ clear, mobile-safe, and honest about approval gates.
 ## Files
 
 - `app/js/companion.js` mounts the portrait and owns the state machine.
-- `app/js/main.js` drives companion states from chat, typing, and Build mode.
+- `app/js/main.js` drives companion states from chat, typing, and Phantom Loop mode.
 - `app/phantom.css` styles the portrait, status labels, starter actions, and trust line.
 
 ## States
@@ -19,7 +19,8 @@ clear, mobile-safe, and honest about approval gates.
 | `listening` | green | User is focused or typing. |
 | `thinking` | green | Phantom is preparing the local response. |
 | `speaking` | green | Phantom is answering. |
-| `building` | green | Build mode is on, planning only. |
+| `building` | green | Phantom Loop is armed, planning only. |
+| `looping` | green | Phantom Loop is preparing a guarded build packet. |
 | `success` | green | A draft or recommendation is ready. |
 | `warning` | amber | Approval is needed. |
 | `error` / `paused` | red | Work is blocked or paused. |
@@ -34,7 +35,7 @@ Every colored dot has a text label. The companion must never rely on color alone
   `Phantom never publishes, sends, deploys, or charges without your approval.`
 - Respect `prefers-reduced-motion`.
 - Do not claim voice, autonomous deploys, paid actions, sends, or provider calls unless they are actually wired and approval-gated.
-- Build mode is planning-only until a separate approved patch adds execution.
+- Phantom Loop is planning-only until a separate approved patch adds execution.
 
 ## Future Pose Assets
 

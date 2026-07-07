@@ -581,7 +581,7 @@ function renderSites(el, rerender) {
             <div data-site-preview-mount>${renderWebsitePreview(active, products)}</div>
           </div>
         </div>`}
-      <h3 class="ws-subhead">Looper build packets</h3>
+      <h3 class="ws-subhead">Phantom Loop packets</h3>
       <div class="card-grid">
         ${looperPlans.map((plan) => `
           <article class="record looper-packet">
@@ -596,7 +596,7 @@ function renderSites(el, rerender) {
               <button class="btn btn-primary" data-act="looper-site-draft" data-id="${plan.id}">Start site draft</button>
               <button class="btn btn-quiet" data-act="looper-review" data-id="${plan.id}">Mark reviewed</button>
             </div>
-          </article>`).join("") || empty("No Looper packets yet. Ask Phantom to build a landing page, intake form, campaign, or website copy.")}
+          </article>`).join("") || empty("No Phantom Loop packets yet. Start Phantom Loop in chat, then send a landing page, intake form, campaign, or website-copy goal.")}
       </div>
       <h3 class="ws-subhead">Drafts</h3>
       <div class="card-grid">
@@ -661,7 +661,7 @@ function renderSites(el, rerender) {
       store.state.sites.unshift(draft);
       plan.status = "reviewed";
       plan.updatedAt = new Date().toISOString();
-      pushActivity("Looper", `turned "${plan.title}" into a local ${kind.toLowerCase()} draft.`, plan.ws);
+      pushActivity("Phantom Loop", `turned "${plan.title}" into a local ${kind.toLowerCase()} draft.`, plan.ws);
       store.save(); rerender();
     },
     "looper-review": (id) => {
@@ -669,7 +669,7 @@ function renderSites(el, rerender) {
       if (!plan) return;
       plan.status = "reviewed";
       plan.updatedAt = new Date().toISOString();
-      pushActivity("Looper", `marked "${plan.title}" reviewed.`, plan.ws);
+      pushActivity("Phantom Loop", `marked "${plan.title}" reviewed.`, plan.ws);
       store.save(); rerender();
     },
     "ask-service": () => { if (active) { applyWebsitePrompt(active, "make this a simple service business site with services, reviews, quote request, and clear contact button"); store.save(); rerender(); } },

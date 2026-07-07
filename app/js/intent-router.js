@@ -15,12 +15,12 @@ const AUTOMATION = /\b(automation|automate|workflow|autopilot|recurring|auto[- ]
 const APPROVAL = /\b(approve|approval|sign off|waiting on me|pending|review queue|needs my call)\b/i;
 const MEMORY = /\b(remember|save this memory|make sure you remember|from now on|always remember|forget this)\b/i;
 const STATUS = /\b(status|catch me up|what's next|what is next|today|pipeline|queue|summary|report)\b/i;
-const LOOPER = /\b(start\s+looper|looper|build me|build a|create a campaign|make an intake form|create an intake form|turn this into a build plan|build plan|landing page|website build|site build|proposal|campaign|crm workflow|booking flow|dashboard idea|website copy)\b/i;
+const LOOPER = /\b(start\s+(phantom\s+loop|loopus|looper)|phantom\s+loop|loopus|looper|build me|build a|create a campaign|make an intake form|create an intake form|turn this into a build plan|build plan|landing page|website build|site build|proposal|campaign|crm workflow|booking flow|dashboard idea|website copy)\b/i;
 const EXPLICIT_ARTIFACT = /\b(create|draft|build|make|prepare|write|new)\b/i;
 
 function confidenceFor(kind, text) {
   if (kind === "unknown") return 0.35;
-  if (EXPLICIT_TASK.test(text) || /start\s+looper|remind me|check this every/i.test(text)) return 0.92;
+  if (EXPLICIT_TASK.test(text) || /start\s+(phantom\s+loop|loopus|looper)|remind me|check this every/i.test(text)) return 0.92;
   if (TASK_CANDIDATE.test(text) || BRAINSTORM.test(text)) return 0.74;
   return 0.82;
 }
@@ -120,7 +120,7 @@ export function classifyPhantomIntent(raw = "") {
       automationDraft: automationDraft(text),
     };
   }
-  if (LOOPER.test(text) && (EXPLICIT_ARTIFACT.test(text) || /\bstart\s+looper\b/i.test(text)) && !QUESTION.test(text)) {
+  if (LOOPER.test(text) && (EXPLICIT_ARTIFACT.test(text) || /\b(start\s+(phantom\s+loop|loopus|looper)|phantom\s+loop|loopus)\b/i.test(text)) && !QUESTION.test(text)) {
     return {
       ...result,
       primaryIntent: "looper_build",

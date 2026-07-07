@@ -1,16 +1,16 @@
-# Phantom AI Looper
+# Phantom Loop
 
-Phantom AI Looper is the guarded build mode behind Phantom chat. It turns a user goal into a local build packet, then waits for review before anything becomes a draft, publish action, send, deployment, or connector call.
+Phantom Loop is the Elite guarded build mode inside Phantom chat. It turns a user goal into a local build packet, then waits for review before anything becomes a draft, publish action, send, deployment, or connector call.
 
 ## Current Implementation
 
 - Intent detection lives in `app/js/intent-router.js`.
 - Build requests route through `app/js/command.js`.
-- Explicit Looper requests create local `store.state.looperPlans` records.
+- Explicit Phantom Loop requests create local `store.state.looperPlans` records.
 - Site Creator renders those packets in `app/js/workspaces.js`.
 - A packet can be turned into a local website draft only after the user clicks `Start site draft`.
 
-## What Looper Can Do Safely
+## What Phantom Loop Can Do Safely
 
 - Normalize a goal.
 - Choose an output type such as page build packet, intake form spec, campaign plan, proposal draft, workflow spec, or general build plan.
@@ -18,7 +18,7 @@ Phantom AI Looper is the guarded build mode behind Phantom chat. It turns a user
 - Store a local review packet.
 - Prepare a local Site Creator draft after user action.
 
-## What Looper Must Not Do Without Approval
+## What Phantom Loop Must Not Do Without Approval
 
 - Publish.
 - Deploy.
@@ -46,7 +46,7 @@ Phantom AI Looper is the guarded build mode behind Phantom chat. It turns a user
 
 ## UX Rules
 
-- Build-language should create a Looper packet, not a generic task.
+- Build-language should create a Phantom Loop packet, not a generic task.
 - Questions and brainstorming must stay conversational.
 - Site Creator is the review surface for website/page/store packets.
 - External actions remain approval-gated and connector-gated.
@@ -62,4 +62,3 @@ node --check app\js\command.js
 node --check app\js\workspaces.js
 node --check app\js\store.js
 ```
-
