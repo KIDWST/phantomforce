@@ -326,7 +326,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-52")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-53")); character = createPhantomCharacter({ small: smallScreen }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -353,7 +353,8 @@ async function initEntity() {
     const r = zone.getBoundingClientRect();
     if (r.height < 60) return;
     tx = r.left + r.width / 2;
-    ty = r.top + r.height * 0.5;
+    // document coords: address-bar resizes mid-scroll must never re-glide him
+    ty = r.top + (window.scrollY || 0) + r.height * 0.5;
     ts = Math.max(42, Math.min(126, (r.height * 0.9) / CHAR_H));
   };
   measureZone();
@@ -371,14 +372,31 @@ async function initEntity() {
     pointerX = e.clientX; pointerY = e.clientY;
     if (menace <= 0) happy = 1.2;
   }, { passive: true });
-  canvas.addEventListener("pointerdown", () => { if (menace <= 0) { menace = 1.1; flare(); } });
+  // canvas is click-transparent (fixed overlay) — the hero stage takes the poke,
+  // but buttons/inputs inside it keep their clicks to themselves
+  const stage = document.querySelector(".hero-void") || canvas;
+  stage.addEventListener("pointerdown", (e) => {
+    if (e.target.closest("button, input, a, form, [data-download-modal]")) return;
+    if (menace <= 0) { menace = 1.1; flare(); }
+  });
 
   const t0 = performance.now();
   let last = t0, running = true;
   document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
+  let lastFade = -1;
   const frame = (now) => {
     if (!running) return;
     const t = ((now || performance.now()) - t0) * 0.001;
+    // planted, not pasted: he holds his spot and dissolves with scroll
+    if (t > 3) {
+      const fade = Math.max(0, Math.min(1, 1 - (window.scrollY || 0) / (innerHeight * 0.55)));
+      if (Math.abs(fade - lastFade) > 0.002) {
+        if (lastFade < 0) canvas.style.transition = "opacity 0.25s ease";
+        canvas.style.opacity = fade.toFixed(3);
+        lastFade = fade;
+      }
+      if (fade <= 0.01) { requestAnimationFrame(frame); return; }   // invisible = free
+    }
     const dt = Math.min(0.05, (now - last) * 0.001); last = now;
     pulse.v = Math.max(0, pulse.v - 0.02);
     happy = Math.max(0, happy - dt * 1.1);
@@ -539,6 +557,14 @@ function initOpsFeed() {
   };
   paint();
   if (!reduceMotion) window.setInterval(() => { if (!document.hidden) paint(); }, 4400);
+  // the mobile card is fixed to the viewport — it belongs to the hero scene,
+  // so it slips away once the visitor scrolls into the selling sections
+  const hero = document.querySelector(".hero-void");
+  if (hero && window.IntersectionObserver) {
+    new IntersectionObserver(([entry]) => {
+      el.classList.toggle("ops-away", !entry.isIntersecting);
+    }, { threshold: 0.12 }).observe(hero);
+  }
 }
 
 function initPromptExamples() {
