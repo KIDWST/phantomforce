@@ -42,6 +42,18 @@ const shell = defaultShell();
 /** @type {Profile[]} */
 const BUILT_IN = [
   {
+    id: "programs",
+    label: "PROGRAMS",
+    type: "monitor",
+    description: "Live list of the open programs / windows on this PC.",
+    cwd: HOME,
+    command: "",
+    args: [],
+    interactive: false,
+    monitor: true,
+    note: "Your open windows. Focus, minimize, restore, maximize, or close them from here.",
+  },
+  {
     id: "control",
     label: "CONTROL",
     type: "control",
@@ -211,6 +223,7 @@ export function loadProfiles() {
       args: Array.isArray(p.args) ? p.args.map(String) : shell.args,
       interactive: p.interactive !== false,
       blocked: Boolean(p.blocked),
+      monitor: Boolean(p.monitor),
       note: String(p.note ?? ""),
     }));
   } catch (error) {

@@ -6,7 +6,7 @@
 // by a per-launch token, so nothing off this machine (and no random web page)
 // can reach your shells.
 
-import { spawn as childSpawn } from "node:child_process";
+import { execFile } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import http from "node:http";
@@ -20,6 +20,7 @@ import { loadProfiles, terminalEnv } from "./profiles.js";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(appDir, "public");
+const winDir = path.join(appDir, "win");
 
 const HOST = process.env.TERMINA_HOST ?? "127.0.0.1";
 const PORT = Number(process.env.TERMINA_PORT ?? 7420);
@@ -47,8 +48,17 @@ function publicProfile(p) {
     cwd: p.cwd,
     interactive: p.interactive !== false,
     blocked: Boolean(p.blocked),
+    monitor: Boolean(p.monitor),
     note: p.note,
-    status: running ? "running" : live && live.status === "exited" ? "exited" : p.blocked ? "blocked" : "idle",
+    status: p.monitor
+      ? "live"
+      : running
+        ? "running"
+        : live && live.status === "exited"
+          ? "exited"
+          : p.blocked
+            ? "blocked"
+            : "idle",
     exitCode: live?.exitCode ?? null,
   };
 }
@@ -125,6 +135,52 @@ function resize(id, cols, rows) {
       /* dead pty */
     }
   }
+}
+
+// ---- open-windows monitor ---------------------------------------------------
+
+const WINDOW_ACTIONS = new Set(["focus", "minimize", "restore", "maximize", "close"]);
+
+// Run one of our predefined PowerShell helpers (no shell, fixed script path).
+function runPwsh(scriptPath, args = []) {
+  return new Promise((resolve) => {
+    execFile(
+      "powershell.exe",
+      ["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", scriptPath, ...args],
+      { timeout: 8000, windowsHide: true, maxBuffer: 4 * 1024 * 1024 },
+      (error, stdout) => {
+        if (error && !stdout) {
+          resolve({ ok: false, error: "helper_failed", detail: error.message.split("\n")[0] });
+          return;
+        }
+        try {
+          resolve(JSON.parse(stdout.trim() || "{}"));
+        } catch {
+          resolve({ ok: false, error: "bad_helper_output" });
+        }
+      },
+    );
+  });
+}
+
+async function listOpenWindows() {
+  if (process.platform !== "win32") {
+    return { ok: false, error: "windows_only", windows: [] };
+  }
+  const result = await runPwsh(path.join(winDir, "list-windows.ps1"));
+  // PowerShell serializes a single-element array as an object; normalize it.
+  if (result.windows && !Array.isArray(result.windows)) {
+    result.windows = [result.windows];
+  }
+  if (!result.windows) result.windows = [];
+  return result;
+}
+
+async function actOnWindow(pid, action) {
+  if (process.platform !== "win32") {
+    return { ok: false, error: "windows_only" };
+  }
+  return runPwsh(path.join(winDir, "window-action.ps1"), ["-Action", action, "-ProcessId", String(pid)]);
 }
 
 // ---- auth helpers -----------------------------------------------------------
@@ -210,11 +266,32 @@ const server = http.createServer((req, res) => {
     return sendJson(res, 200, { ok: true, profiles: profiles.map(publicProfile) });
   }
 
+  // Live list of open application windows on this PC.
+  if (pathName === "/api/windows" && req.method === "GET") {
+    listOpenWindows().then((data) => sendJson(res, 200, data));
+    return;
+  }
+
+  // Act on one open window: focus / minimize / restore / maximize / close.
+  const winMatch = pathName.match(/^\/api\/windows\/(\d+)\/([a-z]+)$/);
+  if (winMatch && req.method === "POST") {
+    const pid = Number(winMatch[1]);
+    const action = winMatch[2];
+    if (!WINDOW_ACTIONS.has(action)) {
+      return sendJson(res, 400, { ok: false, error: "bad_action" });
+    }
+    actOnWindow(pid, action).then((data) => sendJson(res, data.ok ? 200 : 409, data));
+    return;
+  }
+
   const startMatch = pathName.match(/^\/api\/sessions\/([\w.-]+)\/(start|stop)$/);
   if (startMatch && req.method === "POST") {
     const [, id, action] = startMatch;
     const profile = profileById.get(id);
     if (!profile) return sendJson(res, 404, { ok: false, error: "unknown_profile" });
+    if (profile.monitor) {
+      return sendJson(res, 400, { ok: false, error: "not_a_session", detail: "This is a monitor tile, not a terminal." });
+    }
     if (action === "start") {
       if (profile.blocked) {
         return sendJson(res, 409, { ok: false, error: "profile_blocked", detail: profile.note });

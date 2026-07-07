@@ -206,17 +206,17 @@ input {
 
 .wall.layout-2x2 {
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  grid-auto-rows: minmax(300px, 42vh);
+  grid-auto-rows: minmax(440px, 62vh);
 }
 
 .wall.layout-3x2 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: minmax(260px, 40vh);
+  grid-auto-rows: minmax(400px, 58vh);
 }
 
 .wall.layout-3x3 {
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-auto-rows: minmax(230px, 30vh);
+  grid-auto-rows: minmax(360px, 46vh);
 }
 
 .tile {
@@ -468,3 +468,109 @@ input {
     max-width: 150px;
   }
 }
+
+/* ---- open-programs monitor panel ---- */
+
+.programs {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  background: #05070a;
+  font-size: 12px;
+}
+
+.prog-loading {
+  padding: 18px;
+  color: var(--muted);
+  text-align: center;
+}
+
+.prog-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 11px;
+  background: #0a0f15;
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 10px;
+}
+
+.prog-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  padding: 7px 11px;
+  border-bottom: 1px solid rgba(38, 49, 64, 0.55);
+}
+
+.prog-row:hover {
+  background: rgba(89, 208, 133, 0.06);
+}
+
+.prog-info {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.prog-title {
+  color: var(--green-bright);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prog-sub {
+  color: var(--muted);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.prog-sub .warn {
+  color: var(--gold);
+}
+
+.prog-actions {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+
+.prog-actions button {
+  padding: 3px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--soft);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.prog-actions button:hover:not(:disabled) {
+  border-color: rgba(89, 208, 133, 0.5);
+  color: var(--text);
+}
+
+.prog-actions button.danger {
+  border-color: rgba(236, 47, 69, 0.4);
+  color: #ff8a99;
+}
+
+.prog-actions button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.overlay-programs {
+  position: relative;
+  overflow-y: auto;
+}
+

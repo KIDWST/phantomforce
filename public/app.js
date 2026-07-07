@@ -78,14 +78,14 @@ function renderWall() {
   for (let i = 0; i < count; i += 1) {
     wall.appendChild(buildTile(i));
   }
-  // Re-open terminals that were live before a layout change.
+  // Re-attach live tiles after a (re)render.
   for (let i = 0; i < count; i += 1) {
-    const tile = tiles.get(i);
-    if (tile && tile.profileId) {
-      const profile = profilesById.get(tile.profileId);
-      if (profile && profile.status === "running") {
-        attachTerminal(i, tile.profileId);
-      }
+    const profile = profilesById.get(tileAssignments[i]);
+    if (!profile) continue;
+    if (profile.monitor) {
+      attachMonitor(i);
+    } else if (profile.status === "running") {
+      attachTerminal(i, profile.id);
     }
   }
 }
@@ -126,34 +126,120 @@ function buildTile(index) {
 
   const screen = document.createElement("div");
   screen.className = "screen";
-  const term = document.createElement("div");
-  term.className = "term-host";
-  term.id = `term-${index}`;
-  const placeholder = document.createElement("div");
-  placeholder.className = "placeholder";
-  placeholder.innerHTML = profile
-    ? `<p class="big">${profile.blocked ? "BLOCKED" : "READY"}</p><p>${profile.note}</p>`
-    : `<p class="big">UNASSIGNED</p><p>Pick a terminal above to put it on this monitor.</p>`;
-  screen.append(term, placeholder);
-
   const actions = document.createElement("div");
   actions.className = "tile-actions";
-  if (profile && !profile.blocked) {
-    const running = profile.status === "running";
-    actions.appendChild(
-      button(running ? "Stop" : "Start", running ? "danger" : "", () =>
-        running ? stopProfile(index) : startProfile(index),
-      ),
-    );
-  } else if (profile && profile.blocked) {
-    actions.appendChild(button("Blocked", "disabled", () => {}, true));
+
+  if (profile && profile.monitor) {
+    // Live open-programs monitor instead of a terminal.
+    const programs = document.createElement("div");
+    programs.className = "programs";
+    programs.id = `programs-${index}`;
+    programs.innerHTML = `<div class="prog-loading">Scanning open programs…</div>`;
+    screen.append(programs);
+    actions.appendChild(button("Refresh", "", () => tiles.get(index)?.refresh?.()));
+    actions.appendChild(button("Expand", "", () => expandTile(index)));
+  } else {
+    const term = document.createElement("div");
+    term.className = "term-host";
+    term.id = `term-${index}`;
+    const placeholder = document.createElement("div");
+    placeholder.className = "placeholder";
+    placeholder.innerHTML = profile
+      ? `<p class="big">${profile.blocked ? "BLOCKED" : "READY"}</p><p>${profile.note}</p>`
+      : `<p class="big">UNASSIGNED</p><p>Pick a terminal above to put it on this monitor.</p>`;
+    screen.append(term, placeholder);
+
+    if (profile && !profile.blocked) {
+      const running = profile.status === "running";
+      actions.appendChild(
+        button(running ? "Stop" : "Start", running ? "danger" : "", () =>
+          running ? stopProfile(index) : startProfile(index),
+        ),
+      );
+    } else if (profile && profile.blocked) {
+      actions.appendChild(button("Blocked", "disabled", () => {}, true));
+    }
+    actions.appendChild(button("Clear", "", () => tiles.get(index)?.term?.clear()));
+    actions.appendChild(button("Expand", "", () => expandTile(index)));
+    actions.appendChild(button("Focus", "", () => tiles.get(index)?.term?.focus()));
   }
-  actions.appendChild(button("Clear", "", () => tiles.get(index)?.term?.clear()));
-  actions.appendChild(button("Expand", "", () => expandTile(index)));
-  actions.appendChild(button("Focus", "", () => tiles.get(index)?.term?.focus()));
 
   el.append(head, meta, screen, actions);
   return el;
+}
+
+// ---- open-programs monitor tile --------------------------------------------
+
+function windowRowsHtml(windows) {
+  if (!windows.length) return `<div class="prog-loading">No open windows found.</div>`;
+  return windows
+    .map(
+      (w) => `
+    <div class="prog-row" data-pid="${w.pid}">
+      <div class="prog-info">
+        <span class="prog-title" title="${escapeHtml(w.title)}">${escapeHtml(w.title)}</span>
+        <span class="prog-sub">${escapeHtml(w.name)} · pid ${w.pid} · ${w.memMB} MB${w.responding ? "" : " · <b class='warn'>not responding</b>"}</span>
+      </div>
+      <div class="prog-actions">
+        <button type="button" data-act="focus" title="Bring to front">Focus</button>
+        <button type="button" data-act="minimize" title="Minimize">Min</button>
+        <button type="button" data-act="restore" title="Restore">Restore</button>
+        <button type="button" data-act="close" class="danger" title="Close window">Close</button>
+      </div>
+    </div>`,
+    )
+    .join("");
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+async function fetchWindows() {
+  try {
+    const res = await api("/api/windows");
+    const data = await res.json();
+    return data.ok ? data.windows : [];
+  } catch {
+    return [];
+  }
+}
+
+function wireProgramRows(container, onDone) {
+  container.querySelectorAll(".prog-row").forEach((row) => {
+    const pid = row.dataset.pid;
+    row.querySelectorAll("button[data-act]").forEach((btn) => {
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        await api(`/api/windows/${pid}/${btn.dataset.act}`, { method: "POST" }).catch(() => {});
+        setTimeout(onDone, 350);
+      });
+    });
+  });
+}
+
+function attachMonitor(index) {
+  const container = document.getElementById(`programs-${index}`);
+  if (!container) return;
+  const prev = tiles.get(index);
+  if (prev) disposeTile(index);
+
+  const profileId = tileAssignments[index];
+  const tile = { monitor: true, profileId, timer: null, refresh: null };
+
+  const refresh = async () => {
+    const windows = await fetchWindows();
+    const live = document.getElementById(`programs-${index}`);
+    if (!live) return;
+    live.innerHTML =
+      `<div class="prog-head">${windows.length} open ${windows.length === 1 ? "window" : "windows"}</div>` +
+      windowRowsHtml(windows);
+    wireProgramRows(live, refresh);
+  };
+  tile.refresh = refresh;
+  tiles.set(index, tile);
+  refresh();
+  tile.timer = setInterval(refresh, 4000);
 }
 
 function button(label, cls, onClick, disabled = false) {
@@ -170,9 +256,11 @@ function selectProfile(index, profileId) {
   disposeTile(index);
   tileAssignments[index] = profileId || null;
   refreshTile(index);
-  // If the chosen session is already running, attach immediately.
   const profile = profilesById.get(profileId);
-  if (profile && profile.status === "running") {
+  if (profile && profile.monitor) {
+    attachMonitor(index);
+  } else if (profile && profile.status === "running") {
+    // Attach immediately if the chosen session is already running.
     attachTerminal(index, profileId);
   }
 }
@@ -278,6 +366,10 @@ function disposeTile(index) {
   const tile = tiles.get(index);
   if (!tile) return;
   tile.disposed = true;
+  if (tile.timer) {
+    clearInterval(tile.timer);
+    tile.timer = null;
+  }
   try {
     tile.ro?.disconnect();
   } catch {
@@ -317,7 +409,7 @@ function flashTile(index, message) {
   }
 }
 
-// Expand: open a large terminal bound to the same session in the overlay.
+// Expand: open a large terminal (or programs list) in the overlay.
 let overlayTile = null;
 function expandTile(index) {
   const profileId = tileAssignments[index];
@@ -328,6 +420,22 @@ function expandTile(index) {
   document.getElementById("overlay-title").textContent = profile ? profile.label : "Terminal";
   overlay.classList.remove("hidden");
   host.innerHTML = "";
+
+  if (profile && profile.monitor) {
+    host.className = "overlay-term programs overlay-programs";
+    const refresh = async () => {
+      const windows = await fetchWindows();
+      if (overlay.classList.contains("hidden")) return;
+      host.innerHTML =
+        `<div class="prog-head">${windows.length} open ${windows.length === 1 ? "window" : "windows"}</div>` +
+        windowRowsHtml(windows);
+      wireProgramRows(host, refresh);
+    };
+    refresh();
+    overlayTile = { timer: setInterval(refresh, 4000), monitor: true };
+    return;
+  }
+  host.className = "overlay-term";
 
   const term = new Terminal({
     cursorBlink: true,
@@ -368,13 +476,14 @@ function closeOverlay() {
   const overlay = document.getElementById("overlay");
   overlay.classList.add("hidden");
   if (overlayTile) {
+    if (overlayTile.timer) clearInterval(overlayTile.timer);
     try {
-      overlayTile.ws.close();
+      overlayTile.ws?.close();
     } catch {
       /* ignore */
     }
     try {
-      overlayTile.term.dispose();
+      overlayTile.term?.dispose();
     } catch {
       /* ignore */
     }
@@ -411,6 +520,7 @@ function updateTileChrome(index) {
     status.className = `status ${statusTone(profile.status)}`;
     status.innerHTML = `<i></i>${profile.status}`;
   }
+  if (profile && profile.monitor) return; // monitor tiles manage their own chrome
   const actions = tileEl.querySelector(".tile-actions");
   if (actions && profile && !profile.blocked) {
     const running = profile.status === "running";
