@@ -9,10 +9,30 @@ let createPhantomCharacter;                     // loaded from ./app/js/characte
 const TAU_STAR = Math.PI * 2;
 /* the character's conversational mood — speak() drives it, initEntity reads it */
 const REST_EMOTION = "content";
-const charState = { mood: "idle", emotion: REST_EMOTION, until: 0 };
-const setCharMood = (mood, emotion, ms) => {
+/* EMOTION DIRECTOR — every stance change needs a cause the viewer just saw.
+   Hard beats are user-caused and land immediately; soft beats are timer-caused
+   and defer to whatever the human is doing. */
+const MIN_HOLD_MS = 4500;   // a stance is a statement — hold it like a person would
+const LINGER_MS = 6000;     // the body settles late after a mood ends, not instantly
+const LAUGH_MS = 2300;      // a laugh is a burst, never a held grimace
+const charState = { mood: "idle", emotion: REST_EMOTION, until: 0, pose: null, poseUntil: 0, holdUntil: 0, lastBeatPose: null, typing: false };
+let beatSeq = 0;
+const setCharMood = (mood, emotion, ms, pose = null) => {          // HARD beat
+  const now = performance.now();
+  beatSeq += 1;
   charState.mood = mood; charState.emotion = emotion;
-  charState.until = ms ? performance.now() + ms : 0;
+  charState.until = ms ? now + ms : 0;
+  charState.pose = pose;
+  charState.poseUntil = pose ? (pose === "laugh" ? now + LAUGH_MS : now + Math.max(ms || 0, MIN_HOLD_MS) + LINGER_MS) : 0;
+  charState.holdUntil = now + MIN_HOLD_MS;
+  if (pose) charState.lastBeatPose = pose;
+  return beatSeq;
+};
+const setCharBeat = (mood, emotion, ms, pose = null) => {          // SOFT beat
+  if (charState.typing || performance.now() < charState.holdUntil) return false;
+  if (pose && pose === charState.lastBeatPose) return false;       // never the same bit twice in a row
+  setCharMood(mood, emotion, ms, pose);
+  return true;
 };
 
 /* Live brain: the public ai-proxy (server-side key only; per-visitor daily cap
@@ -112,32 +132,47 @@ function initConversation() {
   if (!say) return;
 
   let typeTimer = 0;
-  const speak = (text, cls = "") => {
+  const speak = (text, cls = "", pose = null) => {
     window.clearTimeout(typeTimer);
+    charState.typing = false;
     const p = document.createElement("p");
     p.className = `say-line ${cls}`.trim();
     say.replaceChildren(p);
     if (cls === "user" || cls === "thinking" || reduceMotion) {
       p.textContent = text;
     } else {
-      // typewriter: the entity speaks
+      // typewriter: the entity speaks — and holds his stance until he's done
       let i = 0;
       const step = text.length > 44 ? 2 : 1;
+      charState.typing = true;
       const tick = () => {
         p.textContent = text.slice(0, i);
         if (i < text.length) { i += step; typeTimer = window.setTimeout(tick, 14 + Math.random() * 20); }
-        else p.textContent = text;
+        else { p.textContent = text; charState.typing = false; }
       };
       tick();
     }
-    if (cls === "user") setCharMood("listening", "calm", 1600);
-    else if (cls === "thinking") setCharMood("thinking", "bright", 5000);
+    if (cls === "user") {
+      // he warms up when YOU do
+      if (/thanks|thank you|haha|lol|love|nice|cool|awesome/i.test(text)) setCharMood("listening", "happy", 2200);
+      else setCharMood("listening", "calm", 1600);
+    }
+    else if (cls === "thinking") setCharMood("thinking", "bright", 6000, pose);
     else {
-      const emo =
-        /couldn'?t|limit|try again|that'?s your free|sorry/i.test(text) ? "sad" :
-        /never sleeps|24\/7|worth every|handled|watch it (go|disappear)|stopped losing/i.test(text) ? "excited" :
-        "calm";
-      setCharMood("talking", emo, Math.max(1600, text.length * 42));
+      const hold = Math.max(1600, text.length * 42);
+      if (/couldn'?t|limit|try again|that'?s your free|sorry/i.test(text)) {
+        setCharMood("talking", "sad", hold, pose || "sheepish");           // caught out -> sheepish
+      } else if (/\bhehe\b|vacation|take me with you/i.test(text)) {
+        // delight: a laugh BURST, then he keeps talking with the mouth visible
+        const myBeat = setCharMood("happy", "happy", Math.min(hold, LAUGH_MS), pose || "laugh");
+        if (hold > LAUGH_MS + 200) window.setTimeout(() => {
+          if (beatSeq === myBeat) setCharMood("talking", "happy", hold - LAUGH_MS);
+        }, LAUGH_MS);
+      } else if (/never sleeps|24\/7|worth every|handled|watch it (go|disappear)|stopped losing/i.test(text)) {
+        setCharMood("talking", "excited", hold, pose);                     // boast -> assert
+      } else {
+        setCharMood("talking", "calm", hold, pose || (text.length < 45 ? "point" : null));
+      }
     }
     if (cls !== "user") flare();
   };
@@ -157,16 +192,24 @@ function initConversation() {
   ];
   // after a full lap, the coda: every chip lit at once, the ask made plainly
   const codaLine = "Run it yourself, or take the vacation while your agents keep working.";
-  let powerTimer = 0, powerIdx = -1, touring = true, beckonTimer = 0;
+  /* each chip topic gets a stance that MEANS it — same order as the chips */
+  const POWER_POSES = ["point", "chin", "present", "assert", "conjure", "welcome", "coy", "cross"];
+  const TOUR_STEP_MS = 9000, TOUR_CODA_MS = 12000, TOUR_BOOT_MS = 6000, TOUR_RESUME_MS = 30000;
+  let powerTimer = 0, powerIdx = -1, touring = true, beckonTimer = 0, lapN = 0;
   const showPower = (i) => {
     powerIdx = i;
     powerEls.forEach((el, j) => el.classList.toggle("on", j === i));
-    speak(powerLines[i]);
+    speak(powerLines[i], "", POWER_POSES[i]);
+    charState.poseUntil = performance.now() + TOUR_STEP_MS;   // the stance holds through the whole beat
   };
   const showCoda = () => {
     powerIdx = -1;                                  // next tour step starts the lap over
     powerEls.forEach((el) => el.classList.add("on"));
-    speak(codaLine);
+    // the punchline: a real laugh the first time, charm variations after —
+    // an identical reaction every lap is the #1 tell of a robot
+    speak(codaLine, "", lapN === 0 ? "laugh" : (lapN % 2 ? "coy" : "welcome"));
+    if (lapN > 0) charState.poseUntil = performance.now() + TOUR_CODA_MS;
+    lapN += 1;
     downloadCta?.classList.add("beckon");
     window.clearTimeout(beckonTimer);
     beckonTimer = window.setTimeout(() => downloadCta?.classList.remove("beckon"), 6200);
@@ -175,8 +218,10 @@ function initConversation() {
     window.clearTimeout(powerTimer);
     powerTimer = window.setTimeout(() => {
       if (!touring) return;
-      if (powerIdx === powerLines.length - 1) { showCoda(); scheduleTour(6600); }
-      else { showPower(powerIdx + 1); scheduleTour(4600); }
+      // never barge in mid-sentence or mid-beat — try again shortly
+      if (charState.typing || performance.now() < charState.holdUntil) { scheduleTour(1500); return; }
+      if (powerIdx === powerLines.length - 1) { showCoda(); scheduleTour(TOUR_CODA_MS); }
+      else { showPower(powerIdx + 1); scheduleTour(TOUR_STEP_MS); }
     }, ms);
   };
   const stopTour = () => {
@@ -188,9 +233,10 @@ function initConversation() {
   };
   // a chip click jumps the tour straight to that power — a real answer, not a quiz step
   powerEls.forEach((el, i) => el.addEventListener("click", () => {
+    if (touring && powerIdx === i) { scheduleTour(TOUR_RESUME_MS); return; }   // already on it — just hold
     touring = true;
     showPower(i);
-    scheduleTour(7200);
+    scheduleTour(TOUR_RESUME_MS);   // a click means engagement: the tour yields for a good while
   }));
 
   const openDownload = () => {
@@ -246,6 +292,9 @@ function initConversation() {
       downloadStatus.textContent = "Sending your PhantomForce download link...";
     }
     registerForDemo(name, email).then((ok) => {
+      // the highest-emotion moment on the page gets a real reaction
+      if (ok) setCharMood("happy", "happy", 2200, "laugh");
+      else setCharMood("talking", "sad", 3000, "sheepish");
       if (!downloadStatus) return;
       downloadStatus.hidden = false;
       downloadStatus.className = `download-status ${ok ? "ok" : "err"}`;
@@ -260,14 +309,15 @@ function initConversation() {
 
   // He reacts to YOU: keystrokes get his ear, hovering a power gets his eye.
   input?.addEventListener("input", () => {
-    if (input.value.trim()) setCharMood("listening", "calm", 1500);
+    if (input.value.trim()) setCharMood("listening", "calm", 4000);
   });
   powerEls.forEach((el) => el.addEventListener("pointerenter", () => {
-    if (charState.mood === "idle") setCharMood("listening", "bright", 1200);
+    // face perks up, body stays — a glance, not a lunge
+    if (charState.mood === "idle") setCharMood("listening", "content", 1500, charState.pose);
   }));
 
   // Typed input = general live assistant (GLM 5.2 when configured; local responder otherwise).
-  let typed = 0;
+  let typed = 0, askN = 0;
   const FREE_LIMIT = 5; // feel the power, then crave the full thing
   form?.addEventListener("submit", (e) => {
     e.preventDefault();
@@ -279,43 +329,80 @@ function initConversation() {
     speak(v, "user");
     typed += 1;
     window.setTimeout(() => {
-      speak("· · ·", "thinking");
+      askN += 1;
+      // his beloved hand-on-chin "reading" pose alternates with the scheme stance
+      speak("· · ·", "thinking", askN % 2 ? "chin" : null);
       flare();
+      const thinkingAt = performance.now();
+      // a pensive beat under a second never registers — let the thought land,
+      // then a flare of "got it" a breath before he answers
+      const deliver = (fn) => {
+        const minThink = reduceMotion ? 120 : 1500;
+        const wait = Math.max(0, minThink - (performance.now() - thinkingAt));
+        window.setTimeout(() => {
+          flare();
+          window.setTimeout(fn, reduceMotion ? 0 : 350);
+        }, wait);
+      };
       askPhantom(v).then((ai) => {
         // live brain enforces its own per-day cap
         if (ai && ai.limited) {
-          speak(ai.message || "That's your free questions for now — download PhantomForce to go deeper.");
-          showDownload();
+          deliver(() => {
+            speak(ai.message || "That's your free questions for now — download PhantomForce to go deeper.");
+            showDownload();
+          });
           return;
         }
         if (ai && ai.reply) {
-          window.setTimeout(() => {
+          deliver(() => {
             speak(ai.reply);
             if (ai.remaining != null && input) {
               input.placeholder = ai.remaining > 0 ? `ask phantomforce… ${ai.remaining} left today` : "ask phantomforce…";
             }
-          }, reduceMotion ? 120 : 540);
+          });
           return;
         }
         // free local responder: reactive, then capped to pull them in
-        window.setTimeout(() => {
+        deliver(() => {
           if (typed > FREE_LIMIT) {
             speak("That's a taste. The full version runs 24/7, privately, for your whole business — download PhantomForce to go deeper.");
             showDownload();
           } else {
             speak(localReply(v));
           }
-        }, reduceMotion ? 120 : 540);
+        });
       });
     }, reduceMotion ? 80 : 320);
   });
 
-  // boot: the entity wakes, introduces itself, then tours its powers on its own
+  // boot: the entity wakes, GREETS you (warm, not a sales face), then tours
   say.replaceChildren();
   window.setTimeout(() => {
     speak("Every lead captured. Every reply handled. Every job moving.");
-    scheduleTour(4300);
+    setCharMood("talking", "content", 4200, "welcome");   // a greeting is warmth — override the boast routing
+    scheduleTour(TOUR_BOOT_MS);
   }, 650);
+
+  // long-idle life: once the tour has yielded, rare gentle in-character bits —
+  // he catches up on his reading, glances your way, plays with the flame.
+  // Never while you're typing, never twice in a row, never sooner than 40s idle.
+  let lastInteraction = performance.now();
+  const noticeYou = () => { lastInteraction = performance.now(); };
+  input?.addEventListener("input", noticeYou);
+  form?.addEventListener("submit", noticeYou);
+  window.addEventListener("pointerdown", noticeYou, { passive: true });
+  const IDLE_BITS = [
+    ["idle", "content", 5200, "chin"],
+    ["idle", "content", 4800, "coy"],
+    ["idle", "bright", 4600, "conjure"],
+  ];
+  let idleN = 0;
+  window.setInterval(() => {
+    if (touring || document.hidden || charState.typing) return;
+    if (performance.now() - lastInteraction < 40000) return;
+    const bit = IDLE_BITS[idleN++ % IDLE_BITS.length];
+    setCharBeat(bit[0], bit[1], bit[2], bit[3]);
+  }, 52000);
 }
 
 /* ---------------- the phantom (animated character, 2D canvas) ---------------- */
@@ -326,7 +413,7 @@ async function initEntity() {
   const ctx2 = canvas.getContext("2d");
   if (!ctx2) return;
   let character;
-  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-57")); character = createPhantomCharacter({ small: smallScreen }); }
+  try { ({ createPhantomCharacter } = await import("./app/js/character.js?v=phantom-live-20260707-58")); character = createPhantomCharacter({ small: smallScreen, preload: ["chin", "laugh", "point", "present"] }); }
   catch { return; }
 
   let w = 0, h = 0, dpr = 1;
@@ -389,7 +476,7 @@ async function initEntity() {
   const t0 = performance.now();
   let last = t0, running = true;
   document.addEventListener("visibilitychange", () => { running = !document.hidden; if (running) requestAnimationFrame(frame); });
-  let lastFade = -1, shy = 1, shyPrev = 1;
+  let lastFade = -1, shy = 1, shyPrev = 1, lastTele = null;
   const sayEl = document.querySelector("[data-say]");
   const frame = (now) => {
     if (!running) return;
@@ -410,9 +497,10 @@ async function initEntity() {
       }
     }
     if (shyT === 1 && shyPrev < 1) {
-      // the words cleared — he comes back to LIFE, not just back to visible
+      // the words cleared — a flare of light welcomes him back; no pose beat
+      // (speak() empties the bubble for a frame, so a mood here would misfire
+      // between every two lines — the exact "random pose" the owner hated)
       flare(); happy = 1.2;
-      setCharMood("talking", "excited", 1500);
     }
     shyPrev = shyT;
     shy += (shyT - shy) * Math.min(1, dtF * 7);
@@ -450,20 +538,33 @@ async function initEntity() {
 
     // mood: the conversation drives it; a click overrides with menace;
     // a close visitor gets his full attention
-    if (charState.until && performance.now() > charState.until) { charState.mood = "idle"; charState.emotion = REST_EMOTION; charState.until = 0; }
+    const nowMs = performance.now();
+    if (charState.until && nowMs > charState.until && !charState.typing) {
+      charState.mood = "idle"; charState.emotion = REST_EMOTION; charState.until = 0;
+      // a person doesn't reset their whole posture the instant they stop
+      // talking: the body lingers in its stance, then one gentle settle.
+      // Transients are excluded — never freeze a bridge flicker or a laugh.
+      if (!charState.pose && lastTele && !lastTele.bridge && lastTele.pose && lastTele.pose !== "conjure" && lastTele.pose !== "laugh") {
+        charState.pose = lastTele.pose;
+        charState.poseUntil = nowMs + LINGER_MS;
+      }
+    }
+    if (charState.pose && nowMs > charState.poseUntil) { charState.pose = null; charState.poseUntil = 0; }
     const booting = t < 2.65;
     const restingEmotion = !booting && charState.mood === "idle" ? REST_EMOTION : charState.emotion;
     const mood = menace > 0 ? "menace" : (attentive && charState.mood === "idle" ? "listening" : charState.mood);
     const emotion = menace > 0 ? "alert" : (happy > 0 && charState.mood === "idle" && !attentive ? REST_EMOTION : restingEmotion);
 
-    character.draw(ctx2, {
+    lastTele = character.draw(ctx2, {
       t, dt,
       cx: gx, cy: gy, scale: gs,
       mood, emotion,
+      pose: menace > 0 ? null : charState.pose,   // a provoked flash is a hard cause — it beats any pin
       startupOnly: booting,
       pulse: pulse.v + (menace > 0 ? 0.4 * (menace / 1.1) : 0),
       px: cpx, py: cpy,
     });
+    if (lastTele && lastTele.pose !== canvas.dataset.pose) canvas.dataset.pose = lastTele.pose;
     requestAnimationFrame(frame);
   };
   requestAnimationFrame(frame);

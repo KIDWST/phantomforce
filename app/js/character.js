@@ -299,7 +299,7 @@ function drawFaceFeatures(ctx2, s, F) {
   ctx2.shadowBlur = 0;
 }
 
-export function createPhantomCharacter({ small = false } = {}) {
+export function createPhantomCharacter({ small = false, preload = [] } = {}) {
   /* ---- the pose library: the artwork in six real stances.
      Files are preprocessed offline (black -> true alpha, webp), so loading
      is cheap. Landmarks are fractions of each image: figure axis (cx),
@@ -345,6 +345,7 @@ export function createPhantomCharacter({ small = false } = {}) {
   };
   loadPose("conjure");
   loadPose("welcome");
+  try { preload.forEach(loadPose); } catch { }
   try { setTimeout(() => { for (const n in POSES) loadPose(n); }, 1200); } catch { }
   let curPose = "conjure", prevPose = null, poseBlend = 1;
 
@@ -474,6 +475,10 @@ export function createPhantomCharacter({ small = false } = {}) {
         (emo === "content" || emo === "happy") ? "welcome" :
         startupOnly ? "conjure" : "present";
     }
+    /* host-directed beat: the page can pin a stance for a story reason
+       (a chip topic, a punchline, a greeting). Ignored until the art is
+       loaded so a pin can never fall back to the startup pose. */
+    if (settled && !startupOnly && o.pose && POSES[o.pose] && POSES[o.pose].art) poseName = o.pose;
 
     const T = applyEmotion(FACE[mood] || FACE.idle, emo, mood);
     if (mood === "talking") T.open = 0.1 + talkBeat * 0.42;
