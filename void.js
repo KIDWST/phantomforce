@@ -553,12 +553,26 @@ function initPromptExamples() {
 
 /* the AI workforce — centralized seed data; swap for a backend feed later */
 const WORKFORCE = [
-  { name: "Danielle Carter", role: "Client Success",         status: "Preparing reply",       tone: "on" },
-  { name: "Marcus Reed",     role: "Lead Research",          status: "Organizing new leads",  tone: "on" },
-  { name: "Sofia Ramirez",   role: "Content Producer",       status: "Building content plan", tone: "on" },
-  { name: "James O'Neal",    role: "Website Technician",     status: "Reviewing page update", tone: "idle" },
-  { name: "Priya Shah",      role: "Scheduling Coordinator", status: "Checking schedule",     tone: "on" },
-  { name: "David Kim",       role: "Finance Assistant",      status: "Waiting approval",      tone: "warn" },
+  { name: "Danielle Carter", role: "Client Success",         status: "Preparing reply",       tone: "on",   photo: "https://randomuser.me/api/portraits/women/44.jpg" },
+  { name: "Marcus Reed",     role: "Lead Research",          status: "Organizing new leads",  tone: "on",   photo: "https://randomuser.me/api/portraits/men/32.jpg" },
+  { name: "Sofia Ramirez",   role: "Content Producer",       status: "Building content plan", tone: "on",   photo: "https://randomuser.me/api/portraits/women/68.jpg" },
+  { name: "James O'Neal",    role: "Website Technician",     status: "Reviewing page update", tone: "idle", photo: "https://randomuser.me/api/portraits/men/76.jpg" },
+  { name: "Priya Shah",      role: "Scheduling Coordinator", status: "Checking schedule",     tone: "on",   photo: "https://randomuser.me/api/portraits/women/65.jpg" },
+  { name: "David Kim",       role: "Finance Assistant",      status: "Waiting approval",      tone: "warn", photo: "https://randomuser.me/api/portraits/men/52.jpg" },
+];
+const WORKFORCE_POOL_FACES = [
+  "https://randomuser.me/api/portraits/women/12.jpg",
+  "https://randomuser.me/api/portraits/men/12.jpg",
+  "https://randomuser.me/api/portraits/women/28.jpg",
+  "https://randomuser.me/api/portraits/men/24.jpg",
+  "https://randomuser.me/api/portraits/women/36.jpg",
+  "https://randomuser.me/api/portraits/men/36.jpg",
+  "https://randomuser.me/api/portraits/women/49.jpg",
+  "https://randomuser.me/api/portraits/men/48.jpg",
+  "https://randomuser.me/api/portraits/women/58.jpg",
+  "https://randomuser.me/api/portraits/men/62.jpg",
+  "https://randomuser.me/api/portraits/women/73.jpg",
+  "https://randomuser.me/api/portraits/men/71.jpg",
 ];
 function initWorkforce() {
   const grid = document.querySelector("[data-workforce-grid]");
@@ -566,12 +580,18 @@ function initWorkforce() {
   grid.innerHTML = WORKFORCE.map((w, i) => {
     const initials = w.name.split(" ").map((p) => p[0]).join("");
     return `<article class="wf-card">
-      <span class="wf-avatar wf-hue-${i % 6}">${initials}</span>
+      <span class="wf-avatar wf-photo wf-hue-${i % 6}">
+        <img src="${w.photo}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none';this.nextElementSibling.style.display='grid';" />
+        <i>${initials}</i>
+      </span>
       <span class="wf-main"><b>${w.name}</b><i>${w.role}</i></span>
       <span class="wf-status wf-${w.tone}"><em></em>${w.status}</span>
     </article>`;
   }).join("") + `<article class="wf-card wf-more">
-      <span class="wf-avatar wf-plus">1K+</span>
+      <span class="wf-face-cloud" aria-label="Over one thousand routed AI specialist personas">
+        ${WORKFORCE_POOL_FACES.map((src) => `<img src="${src}" alt="" loading="lazy" decoding="async" />`).join("")}
+        <b>1K+</b>
+      </span>
       <span class="wf-main"><b>…and over a thousand more</b><i>Specialists spin up the moment work needs them — the possibilities are endless.</i></span>
       <span class="wf-status wf-on"><em></em>On call</span>
     </article>`;
