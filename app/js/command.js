@@ -7,8 +7,8 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session,
-} from "./store.js?v=phantom-live-20260707-45";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-45";
+} from "./store.js?v=phantom-live-20260707-46";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260707-46";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -164,17 +164,17 @@ function createProposal(subject) {
   return p;
 }
 
-function createMediaBrief(subject) {
+function createPendingMedia(subject) {
   const t = subject ? title(subject) : "New creative";
   const m = {
     id: uid("med"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(),
-    title: `${t} — video request`, type: "Reel (vertical, 30s)", status: "draft",
+    title: `${t} — pending video`, type: "Video generation", status: "pending",
     angle: "Hook in 2 seconds, one idea, end on the offer.",
     shots: ["Opening hook shot", "Detail pass", "People / reaction", "Offer card", "Logo sting"],
-    caption: `${t} — draft caption. Punch it up before approval.`, proof: null, updated: new Date().toISOString(),
+    caption: `${t} — caption starter. Punch it up before approval.`, proof: null, updated: new Date().toISOString(),
   };
   store.state.media.unshift(m);
-  pushActivity("Media Factory", `created a video request: ${m.title}.`, m.ws);
+  pushActivity("Media Factory", `added pending media: ${m.title}.`, m.ws);
   store.save();
   return m;
 }
@@ -304,11 +304,125 @@ function createLooperBuildPacket(plan, draft) {
   return packet;
 }
 
+function approvalCount() {
+  return visible(store.state.approvals).filter((a) => a.status === "pending").length;
+}
+
+function operatorSnapshot() {
+  const m = moneyView();
+  const plan = todaysPlan();
+  return {
+    pipeline: m.pipeline,
+    openProposals: m.open.length,
+    wonValue: m.wonValue,
+    retainerMonthly: m.retainerMonthly,
+    approvals: approvalCount(),
+    today: plan.length,
+    topPlan: plan[0] || null,
+  };
+}
+
+function readinessLine() {
+  const snap = operatorSnapshot();
+  const pieces = [
+    `${fmtMoney(snap.pipeline)} open pipeline`,
+    `${snap.openProposals} open proposal${snap.openProposals === 1 ? "" : "s"}`,
+    `${snap.approvals} approval${snap.approvals === 1 ? "" : "s"}`,
+    `${snap.today} item${snap.today === 1 ? "" : "s"} on today's board`,
+  ];
+  return `Ready, Jordan. ${pieces.join(" · ")}. Ask, draft, build, track, recall, approve, or route anything.`;
+}
+
+function currentInfoAnswer(text) {
+  const s = text.toLowerCase();
+  if (!/\b(weather|forecast|temperature|rain|snow|news|latest|current|today's score|stock price|crypto price|exchange rate)\b/.test(s)) {
+    return null;
+  }
+  return {
+    say: "That needs live/current data. In Local brain mode I won’t fake it or create a task. Switch Chat settings to Hermes/API or Subscription brain, then ask again and I’ll route it through the backend.",
+    cards: [
+      card("Live data needed", "Use Hermes/API or Subscription", "Local mode can reason over the admin workspace, memory, and saved business data. Weather, news, prices, scores, and other current facts need a live backend.", [openAction("Open Settings", "settings")], "No record created"),
+    ],
+    open: null,
+  };
+}
+
+function localQuestionAnswer(text) {
+  const s = text.toLowerCase();
+  const live = currentInfoAnswer(text);
+  if (live) return live;
+
+  if (/\b(proposals?|quotes?|pricing|estimates?|deals?)\b/.test(s)) {
+    const m = moneyView();
+    const top = m.open[0];
+    return {
+      say: top
+        ? `${m.open.length} proposal${m.open.length === 1 ? "" : "s"} are open. Top open deal: ${top.client} at ${fmtMoney(top.price)}. Nothing was created.`
+        : "No open proposals are loaded right now. I can draft one if you say who it is for.",
+      cards: [card("Proposal answer", "Open pipeline", `${fmtMoney(m.pipeline)} open · ${fmtMoney(m.wonValue)} won · ${fmtMoney(m.retainerMonthly)}/mo retainers.`, [openAction("Open Proposal Forge", "proposals"), openAction("Open Money", "money")], "No record created")],
+      open: null,
+    };
+  }
+
+  if (/\b(lead|prospect|inquir|follow.?up|crm)\b/.test(s)) {
+    const leads = visible(store.state.leads || []);
+    const due = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
+    return {
+      say: due.length
+        ? `${due.length} lead${due.length === 1 ? " needs" : "s need"} attention now. I can open Leads, draft a follow-up, or create a task if you ask.`
+        : `${leads.length} lead${leads.length === 1 ? "" : "s"} are loaded and nothing is overdue from the local due dates.`,
+      cards: due.slice(0, 3).map((l) => card("Lead due", l.name, l.next, [openAction("Open Leads", "leads")], l.company)),
+      open: null,
+    };
+  }
+
+  if (/\b(approval|approve|pending|waiting on me|review queue)\b/.test(s)) {
+    const pend = visible(store.state.approvals || []).filter((a) => a.status === "pending");
+    return {
+      say: pend.length ? `${pend.length} approval${pend.length === 1 ? "" : "s"} are waiting on you. I won’t approve anything from chat unless you explicitly choose it.` : "Approval queue is clear.",
+      cards: pend.slice(0, 3).map((a) => card("Pending approval", a.title, a.detail, [openAction("Open Approvals", "approvals")], a.requestedBy || "PhantomForce")),
+      open: null,
+    };
+  }
+
+  if (/\b(website|site|landing|page|store|shop|checkout)\b/.test(s)) {
+    return {
+      say: "My read: treat the site/store as the money path, not decoration. Lead with the offer, show proof fast, make the CTA obvious, and keep publishing approval-gated. If you want action, say “draft/build/create” and I’ll make a local work packet.",
+      cards: [card("Site answer", "No build created", "Strategy answer only. Explicit build verbs create guarded drafts; questions stay in answer mode.", [openAction("Open Site Creator", "sites")])],
+      open: null,
+    };
+  }
+
+  if (/\b(content|video|reel|shoot|caption|post|media)\b/.test(s)) {
+    const media = visible(store.state.media || []);
+    return {
+      say: `Media lane is ready. ${media.length} local media item${media.length === 1 ? "" : "s"} loaded. Ask for an angle, shot list, caption, or draft-only brief and I’ll route it without sending or posting.`,
+      cards: [card("Media answer", "Draft-only by default", "ChicagoShots/Media Lab work stays local until you approve an external action.", [openAction("Open Media Lab", "media")])],
+      open: null,
+    };
+  }
+
+  if (/\b(how do i|how should i|what should i|what do you think|why is|why are|explain|compare)\b/.test(s)) {
+    return {
+      say: "My take: answer the real question first, then decide if it becomes work. If this is strategy, I’ll reason it out. If this is execution, use an action verb and I’ll draft, build, track, or route it with approvals intact.",
+      cards: [card("Operator answer", "Principle applied", "Question answered without creating records. Add draft/build/create/track/schedule if you want a local artifact.", [])],
+      open: null,
+    };
+  }
+
+  const snap = operatorSnapshot();
+  return {
+    say: `I can answer this from the local admin context or route it to Hermes/API when enabled. Current local context: ${fmtMoney(snap.pipeline)} pipeline, ${snap.approvals} approval${snap.approvals === 1 ? "" : "s"}, ${snap.today} board item${snap.today === 1 ? "" : "s"}. No record created.`,
+    cards: [card("Everything router", "Answer lane", "Questions answer. Commands create. Live/current knowledge uses Hermes/API or Subscription brain when enabled.", [openAction("Open Settings", "settings"), openAction("Open Memory", "memory")])],
+    open: null,
+  };
+}
+
 function intentResponse(intent, text) {
   if (intent.primaryIntent === "greeting") {
     return {
       say: isAdmin()
-        ? "Ready, Jordan. Give me a command, question, file/context, or objective."
+        ? readinessLine()
         : "Ready. Ask for status, approvals, deliverables, or the next action.",
       cards: [],
       open: null,
@@ -339,16 +453,12 @@ function intentResponse(intent, text) {
     };
   }
   if (intent.primaryIntent === "question") {
-    return {
-      say: "Question received. I won’t create records from a question alone. Add an action verb if you want it drafted, tracked, assigned, scheduled, or built.",
-      cards: [card("No record created", "Question route", "This stayed in the answer/reasoning lane because it was phrased as a question.", [])],
-      open: null,
-    };
+    return localQuestionAnswer(text);
   }
   if (intent.primaryIntent === "brainstorm") {
     return {
-      say: "That sounds like a direction, not a task yet. I can brainstorm it, turn it into a plan, or create a task if you tell me which path you want.",
-      cards: [card("Idea captured safely", "No task created", "Say 'make this a task', 'make me a plan', or 'start Phantom Loop' when you want it converted.", [])],
+      say: "That is an idea lane, not a task yet. I’ll reason with it, pressure-test it, or turn it into a plan. I only create records when you explicitly ask.",
+      cards: [card("Idea lane", "No task created", "Say 'make this a task', 'make me a plan', or 'start Phantom Loop' when you want it converted.", [])],
       open: null,
     };
   }
@@ -361,8 +471,8 @@ function intentResponse(intent, text) {
   }
   if (intent.primaryIntent === "plan") {
     return {
-      say: "I’ll keep this as a plan, not a task list. Here’s the clean path: define the outcome, choose the owner, break it into approval-safe steps, then decide what should become tasks.",
-      cards: [card("Plan mode", "Draft plan only", "No tasks were created. Ask 'create tasks from this plan' when you want records added.", [])],
+      say: "Plan lane. Define the outcome, list the constraints, choose the owner, break it into approval-safe steps, then decide which steps become records. No tasks were created.",
+      cards: [card("Plan mode", "Draft plan only", "Ask for a proposal, task list, build packet, or approval queue when you want the plan converted.", [])],
       open: null,
     };
   }
@@ -481,14 +591,14 @@ export function handleCommand(raw) {
   /* --- media / content / video --- */
   if (/(video|reel|content|post|caption|shoot|media|creative|tiktok|short)/.test(s)) {
     if (/(brief|plan|draft|create|make|new|idea)/.test(s) || subject) {
-      const m = createMediaBrief(subject);
+      const m = createPendingMedia(subject);
       return {
-        say: `Media Factory created "${m.title}" — angle, five-shot list, and a starter caption. Generation stays approval-gated.`,
-        cards: [card("Video request", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
+        say: `Media Lab added "${m.title}" as pending. Generate it when you're ready; paid runs stay approval-gated.`,
+        cards: [card("Pending media", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
         open: "media",
       };
     }
-    return { say: "Media Lab is open — video requests, shot lists, and what's ready to produce.", cards: [], open: "media" };
+    return { say: "Media Lab is open — pending generations and generated outputs.", cards: [], open: "media" };
   }
 
   /* --- store --- */
@@ -621,7 +731,7 @@ export function handleCommand(raw) {
   if (/(today|plan|what('| i)s next|priorit|status|morning|catch me up|summary)/.test(s)) {
     const plan = todaysPlan();
     return {
-      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "No real tasks are loaded yet. Start by adding a lead, drafting a proposal, or creating a video request.",
+      say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "No real tasks are loaded yet. Start by adding a lead, drafting a proposal, or generating media.",
       cards: plan.slice(0, 3).map((p) => card("Today", p.text, "", [openAction("Open", p.open)])),
       open: null,
     };
@@ -632,7 +742,7 @@ export function handleCommand(raw) {
     return {
       say: "Ask in plain business language. I route it to the right desk and hand you something real — a draft, a plan, or the workspace it lives in.",
       cards: [card("Try one of these", "Commands that create things",
-        "Draft a proposal · Create a video request · Build a store · Run a security check · What's my pipeline?", [])],
+        "Draft a proposal · Generate media · Build a store · Run a security check · What's my pipeline?", [])],
       open: null,
     };
   }
@@ -641,11 +751,11 @@ export function handleCommand(raw) {
   const plan = todaysPlan();
   return {
     say: subject
-      ? `Intent unclear for “${text}.” Tell me the lane: answer, lead, proposal, media brief, page, booking, task, automation, memory, or approval.`
-      : "Intent unclear. Give me a command, question, objective, or target lane.",
+      ? `Intent unclear for “${text}.” Tell me the lane: answer, lead, proposal, media, page, booking, task, automation, memory, or approval.`
+      : "I need a little more signal. Ask a question, give me an objective, or name the lane: answer, lead, proposal, media, page, booking, task, automation, memory, approval.",
     cards: [
       card("Quick routes", "Where this usually goes",
-        "Answer · Check pipeline · Draft proposal · Create media brief · Build page or store · Review approvals",
+        "Answer · Check pipeline · Draft proposal · Generate media · Build page or store · Review approvals",
         [openAction("Leads", "leads"), openAction("Proposal Forge", "proposals"), openAction("Media Lab", "media")]),
       ...(plan.length ? [card("Meanwhile — today", plan[0].text, "", [openAction("Open", plan[0].open)])] : []),
     ],
@@ -669,6 +779,6 @@ export async function handleSmartCommand(raw) {
 /* Suggestion chips under the command input. */
 export function commandSuggestions() {
   return isAdmin()
-    ? ["Catch me up", "What do you remember?", "Stage Protect Sweep", "Reputation Radar", "Social Trend Lab", "Create a video request"]
+    ? ["Catch me up", "What do you remember?", "Stage Protect Sweep", "Reputation Radar", "Social Trend Lab", "Generate a video"]
     : ["What's happening on my account?", "Show my deliverables", "Draft a review request", "Book a call with my team", "Run a security check"];
 }

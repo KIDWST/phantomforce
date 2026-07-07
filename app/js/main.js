@@ -5,7 +5,7 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
 } from "./store.js?v=phantom-live-20260707-45";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-45";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260707-46";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260707-45";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260707-45";
 import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260707-45";
@@ -14,7 +14,7 @@ import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260707-45
 import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260707-45";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260707-45";
 import { renderAutomation } from "./brandops.js?v=phantom-live-20260707-45";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-46";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260707-45";
 import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260707-45";
 import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260707-45";
 
@@ -586,7 +586,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260707-46";
+const POSE_VERSION = "phantom-live-20260707-45";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1270,12 +1270,13 @@ const CHAT_STARTERS = [
   { label: "Plan a campaign", run: "Draft a media brief for a new campaign" },
   { label: "Make an intake form", run: "Build a client intake form page" },
   { label: "Review my business", run: "What's my pipeline?" },
+  { label: "Start Phantom Loop", loop: true, elite: true },
 ];
 
 function starterHtml() {
   return `<div class="chat-start" data-chat-start>
     <p class="chat-start-t">Build with Phantom.</p>
-    <p class="chat-start-s">Ask normally. Use the gear for Loop, model, and backend settings.</p>
+    <p class="chat-start-s">Ask normally, or arm Phantom Loop for bigger builds. Loop turns your next prompt into an approval-safe build packet.</p>
     <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn ${st.loop ? "is-build is-loop" : ""}" data-starter="${i}">${esc(st.label)}${st.elite ? `<span>Elite</span>` : ""}</button>`).join("")}</div>
   </div>`;
 }
@@ -1862,7 +1863,7 @@ function wirePhantomConsole(body) {
         <p class="phantom-user">› ${esc(h.q)}</p>
         <p class="phantom-reply">${esc(h.say)}</p>
         ${(h.cards || []).map((c, cardIndex) => cardHtml(c, cardIndex, entryIndex)).join("")}
-      </div>`).join("") || `<p class="phantom-hello">This is the full command console. Everything you ask lands as real work — drafts, requests, and pipelines, never just chat.</p>`;
+      </div>`).join("") || `<p class="phantom-hello">This is the full command console. Everything you ask is classified first: answers stay answers, commands become guarded work, and external actions stay approval-gated.</p>`;
     bindCardRemovers(log, (entryIndex, cardIndex) => {
       const cards = phantomHistory[entryIndex]?.cards;
       if (!cards) return;

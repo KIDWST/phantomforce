@@ -1,5 +1,6 @@
 /* PhantomForce intent router.
-   Default posture: talk first, create records only when the user clearly asks. */
+   Everything router: classify first, then answer, route, draft, create, recall,
+   or ask for the missing lane. Records are created only on explicit action. */
 
 const clean = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
 const lower = (value = "") => clean(value).toLowerCase();

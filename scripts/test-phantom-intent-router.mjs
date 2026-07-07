@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { classifyPhantomIntent } from "../app/js/intent-router.js";
-import { handleCommand, handleSmartCommand } from "../app/js/command.js?v=phantom-live-20260707-45";
-import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-45";
+import { handleCommand, handleSmartCommand } from "../app/js/command.js?v=phantom-live-20260707-46";
+import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-46";
 
 ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 
@@ -122,12 +122,29 @@ assert.equal(store.state.media.length, 0, "questions should not create media");
 const greeting = handleCommand("hello");
 assert.equal(greeting.intent.primaryIntent, "greeting");
 assert.match(greeting.say, /Ready/i);
+assert.match(greeting.say, /pipeline|approval|board/i);
 assert.equal(store.state.tasks.length, 0, "greetings should not create tasks");
 
 const smartGreeting = await handleSmartCommand("hello");
 assert.equal(smartGreeting.intent.primaryIntent, "greeting");
 assert.equal(smartGreeting.hermes || null, null, "greetings should stay local readiness pings");
 assert.equal(store.state.tasks.length, 0, "smart greetings should not create tasks");
+
+const weather = handleCommand("what's the weather?");
+assert.equal(weather.intent.primaryIntent, "question");
+assert.match(weather.say, /live|Hermes|Subscription/i);
+assert.equal(store.state.tasks.length, 0, "live-info questions should not create tasks");
+
+const siteOpinion = handleCommand("what do you think about making the website better?");
+assert.equal(siteOpinion.intent.primaryIntent, "question");
+assert.match(siteOpinion.say, /offer|proof|CTA|build/i);
+assert.doesNotMatch(siteOpinion.say, /Question received/i);
+assert.equal(store.state.tasks.length, 0, "strategy questions should not create tasks");
+
+const proposalsQuestion = handleCommand("what proposals are open?");
+assert.equal(proposalsQuestion.intent.primaryIntent, "question");
+assert.match(proposalsQuestion.say, /proposal|draft/i);
+assert.equal(store.state.tasks.length, 0, "proposal questions should not create tasks");
 
 const candidate = handleCommand("the chat box needs better spacing");
 assert.equal(candidate.intent.primaryIntent, "task_candidate");
