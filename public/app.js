@@ -46,14 +46,8 @@ function escapeHtml(s) {
 
 function saveWorkspace() {
   try {
-    localStorage.setItem(
-      STORAGE_KEY,
-      JSON.stringify({
-        columns,
-        broadcastOn,
-        cards: cards.map((c) => ({ name: c.name, profileId: c.profileId, linked: c.linked })),
-      }),
-    );
+    // Only the column preference is remembered — terminals start fresh each launch.
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ columns }));
   } catch {
     /* storage unavailable */
   }
@@ -541,25 +535,10 @@ async function boot() {
     }
   }
 
+  // Launch clean — no terminals open, just the + tile. We remember your
+  // column choice, but you open the terminals you want each session.
   const saved = loadWorkspace();
-  if (saved && Array.isArray(saved.cards) && saved.cards.length) {
-    setColumns(saved.columns || 3);
-    if (saved.broadcastOn) toggleBroadcast(true);
-    let delay = 0;
-    for (const c of saved.cards) {
-      const card = addCard({ name: c.name, profileId: c.profileId, linked: c.linked }, { save: false });
-      if (card.profileId) {
-        // Stagger starts so a big workspace doesn't spawn everything at once.
-        setTimeout(() => startTerminal(card), delay);
-        delay += 180;
-      }
-    }
-  } else {
-    setColumns(3);
-    addCard({}, { save: false });
-    addCard({}, { save: false });
-    saveWorkspace();
-  }
+  setColumns(saved && saved.columns ? saved.columns : 3);
 }
 
 // ---- command palette --------------------------------------------------------
