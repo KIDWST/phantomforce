@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-68";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-68";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-69";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-69";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -458,10 +458,11 @@ function genBase(cfg) {
      route is GET /phantom-ai/media-lab/higgsfield/status, and the static proxy
      answers 502 {"error":"Admin API unavailable."} when Hermes is down.      */
 let engineHealth = { at: 0, studio: false, proxy: false, media: {}, bridge: false, bridgeAuth: false };
+let lastRenderIssue = null;   // most recent failed render — the doctor reports it over a rosy probe
 async function checkEngineHealth(cfg, force = false) {
   const now = Date.now();
   if (!force && now - engineHealth.at < 60000) return engineHealth;
-  const next = { at: now, studio: false, proxy: false, media: {}, bridge: false, bridgeAuth: false };
+  const next = { at: now, studio: false, studioCli: null, studioCliDetail: "", proxy: false, media: {}, bridge: false, bridgeAuth: false };
   const probe = async (url, ms, headers) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), ms);
@@ -474,7 +475,12 @@ async function checkEngineHealth(cfg, force = false) {
     (async () => {   // studio lane: this very origin runs the higgsfield CLI
       const r = await probe("/health", 3000);
       const d = await r.json().catch(() => null);
-      if (r.ok && d && d.ok && /admin-static/i.test(String(d.service || ""))) next.studio = true;
+      if (r.ok && d && d.ok && /admin-static/i.test(String(d.service || ""))) {
+        next.studio = true;
+        // present:false = CLI confirmed missing; absent field (older server) = unknown
+        next.studioCli = d.higgsfield_cli ? d.higgsfield_cli.present !== false : null;
+        next.studioCliDetail = d.higgsfield_cli?.detail || "";
+      }
     })(),
     (async () => {   // bridge lane: probe the route Hermes ACTUALLY serves
       const r = await probe("/phantom-ai/media-lab/higgsfield/status", 4000, auth);
@@ -614,7 +620,7 @@ async function generate(cfg, req) {
   /* STUDIO LANE FIRST: on the admin box, same-origin /generate runs the
      higgsfield CLI with the owner's logged-in subscription — a REAL render,
      no API key. prompt > higgsfield > done. */
-  const studioLane = req.provider === "higgsfield" && health.studio && !p.endpoint;
+  const studioLane = req.provider === "higgsfield" && health.studio && health.studioCli !== false && !p.endpoint;
   const url = p.endpoint || (studioLane ? "/generate" : `${base}/generate`);
   /* SUBSCRIPTION QUEUE: no studio lane and no API key, but Hermes is up ->
      queue the render straight into the owner's Higgsfield account. */
@@ -646,6 +652,7 @@ async function generate(cfg, req) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), spec.modality === "video" ? 31 * 60_000 : 16 * 60_000);
   let fallbackReason = "provider_unavailable";
+  let fallbackDetail = "";
   try {
     const token = accessSession.token();
     const headers = {
@@ -665,6 +672,7 @@ async function generate(cfg, req) {
       if (assets.length) return { assets, live: true, spec, provider: d.provider || req.provider, model: d.model || spec.model };
     }
     fallbackReason = d?.error || `provider_http_${r.status}`;
+    fallbackDetail = cleanBrief(d?.message || "", 220);
   } catch (err) {
     fallbackReason = err?.name === "AbortError" ? "provider_timeout" : "provider_unreachable";
   }
@@ -672,7 +680,25 @@ async function generate(cfg, req) {
   const draft = await draftHiggsfieldRequest(providerReq, spec);
   const assets = [];
   for (let i = 0; i < (providerReq.params.count || 1); i++) assets.push(previewAsset(providerReq, i, { spec, fallbackReason, draft }));
-  return { assets, live: false, spec, fallbackReason, draft };
+  return { assets, live: false, spec, fallbackReason, fallbackDetail, draft };
+}
+
+/* Turn a raw studio/CLI failure into the exact next move for the owner. */
+function explainMediaFailure(reason = "", detail = "") {
+  const text = `${reason} ${detail}`.toLowerCase();
+  if (/enoent|not recognized|command not found|no such file/.test(text))
+    return "the higgsfield CLI isn't installed on the admin box — install it and sign in (higgsfield login), then Re-check";
+  if (/login|logged|sign[ -]?in|auth|unauthoriz|credential|expired|forbidden/.test(text))
+    return "the higgsfield CLI is signed out — run `higgsfield login` on the admin box, then Re-check";
+  if (/quota|credit|insufficient|billing|payment|limit reached/.test(text))
+    return "Higgsfield says the plan is out of renders — check your Higgsfield account";
+  if (/timeout/.test(text))
+    return "Higgsfield took too long — run it again or drop the quality a notch";
+  if (/admin_session_required/.test(text))
+    return "this session isn't signed in as admin — sign in and try again";
+  if (/no_assets/.test(text))
+    return "Higgsfield finished but handed back no files — run it again or simplify the prompt";
+  return detail ? `the studio said: ${detail}` : "";
 }
 
 async function enhancePrompt(cfg, prompt) {
@@ -1307,7 +1333,21 @@ function wireGenerate(body, cfg, opts, root, esc) {
     const h = await checkEngineHealth(cfg, force).catch(() => engineHealth);
     if (!doctor.isConnected) return;
     const prov = genState.provider || "higgsfield";
-    if (h.studio && prov === "higgsfield") {
+    if (force) lastRenderIssue = null;
+    if (lastRenderIssue) {
+      // a green "connected" banner must never contradict a failing render —
+      // the most recent failure is THE state until it's cleared or fixed
+      doctor.dataset.state = "warn";
+      title.textContent = "Engine reachable, but the last render failed";
+      msg.textContent = explainMediaFailure(lastRenderIssue.reason, lastRenderIssue.detail)
+        || `${String(lastRenderIssue.reason || "unknown error")} — fix it on the admin box, then hit Re-check.`;
+      return;
+    }
+    if (h.studio && prov === "higgsfield" && h.studioCli === false) {
+      doctor.dataset.state = "warn";
+      title.textContent = "Studio box found, but the higgsfield CLI is missing";
+      msg.textContent = "This box can render with your subscription the moment the CLI exists: install the higgsfield CLI on the admin box, run `higgsfield login`, then hit Re-check.";
+    } else if (h.studio && prov === "higgsfield") {
       doctor.dataset.state = "ok";
       title.textContent = "Higgsfield studio connected";
       msg.textContent = "Renders run right on this box with your Higgsfield subscription — no API key involved. If a render errors, make sure the higgsfield CLI is installed and signed in on this machine.";
@@ -1368,13 +1408,17 @@ async function runGenerate(body, cfg, opts, root, esc) {
       });
     });
     session.assets = session.assets.slice(0, 60);
+    lastRenderIssue = out.live || out.queued
+      ? null
+      : { reason: out.fallbackReason || "unreachable", detail: out.fallbackDetail || "", at: Date.now() };
     refreshGeneratePanel(body, cfg, opts, root);
     if (opts.notify) {
+      const why = out.live || out.queued ? "" : explainMediaFailure(out.fallbackReason, out.fallbackDetail);
       const status = out.live
         ? "generated"
         : out.queued
           ? "queued in your Higgsfield Studio — the desktop bridge renders it with your subscription; finished cuts land in Content Hub for"
-          : `media backend didn't respond (${out.fallbackReason || "unreachable"}) — sketched the request locally instead; hit Regenerate once the provider is back for`;
+          : `render failed (${out.fallbackReason || "unreachable"})${why ? ` — ${why};` : " —"} sketched the request locally for`;
       opts.notify("Media Factory", `${status} ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""} - "${genState.prompt.slice(0, 40)}".`);
     }
     // spend credits only after a live provider asset returns; previews are free.

@@ -221,6 +221,26 @@ function runHiggsfield(args, timeoutMs = 30 * 60 * 1000) {
   });
 }
 
+/* CLI preflight, cached: /health reports whether the higgsfield CLI is even
+   present so the console can say "install it" BEFORE a render burns a wait. */
+let cliStatus = { at: 0, present: null, detail: "" };
+async function refreshCliStatus() {
+  if (Date.now() - cliStatus.at < 10 * 60 * 1000 && cliStatus.present !== null) return cliStatus;
+  try {
+    const result = await runHiggsfield(["--version"], 15000);
+    cliStatus = { at: Date.now(), present: true, detail: clampText(result.stdout || result.stderr, 80) };
+  } catch (error) {
+    const message = String(error?.message || error);
+    cliStatus = {
+      at: Date.now(),
+      // a usage error still proves the binary exists; only ENOENT-style misses mean "not installed"
+      present: !/enoent|not recognized|command not found|no such file/i.test(message),
+      detail: clampText(message, 200),
+    };
+  }
+  return cliStatus;
+}
+
 async function handleMediaGenerate(req, res) {
   if (req.method !== "POST") {
     sendJson(res, 405, { error: "method_not_allowed" });
@@ -307,8 +327,14 @@ async function handleMediaGenerate(req, res) {
 }
 
 createServer(async (req, res) => {
-  if (req.url === "/health") {
-    send(res, 200, JSON.stringify({ ok: true, service: "phantomforce-admin-static", root: repoRoot }), "application/json; charset=utf-8");
+  if ((req.url || "").split("?")[0] === "/health") {
+    const cli = await refreshCliStatus().catch(() => cliStatus);
+    send(res, 200, JSON.stringify({
+      ok: true,
+      service: "phantomforce-admin-static",
+      root: repoRoot,
+      higgsfield_cli: { present: cli.present, detail: cli.detail },
+    }), "application/json; charset=utf-8");
     return;
   }
 
