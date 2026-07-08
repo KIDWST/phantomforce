@@ -2745,6 +2745,59 @@ app.get("/phantom-ai/media-lab/higgsfield/status", async (request, reply) => {
   };
 });
 
+app.get("/phantom-ai/creative-engine/tools", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  // Safe tool discovery for the Creative Engine: reports which creative
+  // tools Hermes can broker (via the PhantomCut bridge that owns the
+  // Higgsfield MCP/tool session). NEVER generates anything and NEVER
+  // spends credits — this is a read-only preflight.
+  const [health, providerStatus] = await Promise.all([
+    callPhantomCut("/api/health"),
+    callPhantomCut("/api/providers/higgsfield/status"),
+  ]);
+
+  const bridgeReachable = health.ok;
+
+  return {
+    ok: true,
+    transport: "hermes_mcp",
+    broker: {
+      name: "phantomcut",
+      base_url: phantomCutBaseUrl(),
+      reachable: bridgeReachable,
+      provider_status: providerStatus.ok ? providerStatus.data : null,
+      provider_status_error: providerStatus.ok ? null : providerStatus.error,
+    },
+    tools: [
+      {
+        name: "higgsfield.draft",
+        available: bridgeReachable && hasMediaLabAccess(session),
+        credit_spend: false,
+        route: "POST /phantom-ai/media-lab/higgsfield/draft",
+        note: "Creates a draft in the owner's Higgsfield studio. Draft-only — the paid render is approved separately.",
+      },
+      {
+        name: "higgsfield.render",
+        available: false,
+        credit_spend: true,
+        route: null,
+        note: "Not exposed. PhantomCut gates paid renders behind the explicit RUN_HIGGSFIELD_PAID_JOB confirmation; Hermes intentionally has no auto-spend route.",
+      },
+    ],
+    approval_required: true,
+    safety: {
+      generated_during_preflight: false,
+      paid_job_called: false,
+      upload_performed: false,
+    },
+  };
+});
+
 app.get("/phantom-ai/media-lab/image-toolchain/status", async (request, reply) => {
   const session = requireAccessSession(request, reply);
 

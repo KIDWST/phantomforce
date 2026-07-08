@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-70";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-70";
+import { session as accessSession } from "./store.js?v=phantom-live-20260708-71";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-71";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -448,21 +448,21 @@ function genBase(cfg) {
 }
 
 /* ---------------- engine health (shared by doctor + generate) ----------------
-   Three legit render lanes, best first:
-   - STUDIO lane: the admin box itself serves same-origin /generate, which runs
-     the `higgsfield` CLI with the owner's logged-in subscription — REAL renders,
-     no API key. Its static server answers /health as "phantomforce-admin-static".
+   Lanes, best first:
+   - CREATIVE ENGINE (primary): same-origin /api/creative-engine/status — the
+     transport-aware backend that brokers UI -> backend -> Hermes -> Higgsfield
+     MCP/tools. The higgsfield CLI is only an explicit admin/dev fallback.
    - API lane: the ai-proxy with a provider key (HIGGSFIELD_API_KEY).
-   - BRIDGE lane: Hermes behind same-origin /phantom-ai/* queues drafts into the
-     owner's Higgsfield account. Hermes has NO /phantom-ai/health — the real
-     route is GET /phantom-ai/media-lab/higgsfield/status, and the static proxy
-     answers 502 {"error":"Admin API unavailable."} when Hermes is down.      */
-let engineHealth = { at: 0, studio: false, proxy: false, media: {}, bridge: false, bridgeAuth: false };
+   - Legacy BRIDGE lane: direct Hermes draft via /phantom-ai/* (older backends
+     without the Creative Engine route). Hermes has NO /phantom-ai/health — the
+     real route is GET /phantom-ai/media-lab/higgsfield/status, and the static
+     proxy answers 502 {"error":"Admin API unavailable."} when Hermes is down. */
+let engineHealth = { at: 0, engine: null, studio: false, proxy: false, media: {}, bridge: false, bridgeAuth: false };
 let lastRenderIssue = null;   // most recent failed render — the doctor reports it over a rosy probe
 async function checkEngineHealth(cfg, force = false) {
   const now = Date.now();
   if (!force && now - engineHealth.at < 60000) return engineHealth;
-  const next = { at: now, studio: false, studioCli: null, studioCliDetail: "", proxy: false, media: {}, bridge: false, bridgeAuth: false };
+  const next = { at: now, engine: null, studio: false, studioCli: null, studioCliDetail: "", proxy: false, media: {}, bridge: false, bridgeAuth: false };
   const probe = async (url, ms, headers) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), ms);
@@ -472,7 +472,12 @@ async function checkEngineHealth(cfg, force = false) {
   const token = accessSession.token();
   const auth = token ? { Authorization: `Bearer ${token}` } : undefined;
   const jobs = [
-    (async () => {   // studio lane: this very origin runs the higgsfield CLI
+    (async () => {   // PRIMARY: transport-aware Creative Engine (Hermes/MCP)
+      const r = await probe("/api/creative-engine/status", 9000, auth);
+      const d = await r.json().catch(() => null);
+      if (r.ok && d && d.transport) next.engine = d;
+    })(),
+    (async () => {   // legacy studio backend on this origin
       const r = await probe("/health", 3000);
       const d = await r.json().catch(() => null);
       if (r.ok && d && d.ok && /admin-static/i.test(String(d.service || ""))) {
@@ -617,14 +622,15 @@ async function generate(cfg, req) {
   const p = provider(cfg, req.provider) || {};
   const spec = buildGenerationSpec(req);
   const health = await checkEngineHealth(cfg).catch(() => engineHealth);
-  /* STUDIO LANE FIRST: on the admin box, same-origin /generate runs the
-     higgsfield CLI with the owner's logged-in subscription — a REAL render,
-     no API key. prompt > higgsfield > done. */
-  const studioLane = req.provider === "higgsfield" && health.studio && health.studioCli !== false && !p.endpoint;
-  const url = p.endpoint || (studioLane ? "/generate" : `${base}/generate`);
-  /* SUBSCRIPTION QUEUE: no studio lane and no API key, but Hermes is up ->
-     queue the render straight into the owner's Higgsfield account. */
-  if (req.provider === "higgsfield" && !studioLane && !health.media.higgsfield && health.bridge) {
+  /* BACKEND LANE FIRST: the same-origin transport-aware backend brokers the
+     brief PhantomForce -> Hermes -> Higgsfield MCP/tools (primary). The CLI
+     exists only behind an explicit admin fallback flag on the backend. */
+  const backendLane = req.provider === "higgsfield" && !p.endpoint
+    && (!!health.engine || (health.studio && health.studioCli !== false));
+  const url = p.endpoint || (backendLane ? "/generate" : `${base}/generate`);
+  /* LEGACY DIRECT QUEUE: no transport-aware backend on this origin, no API
+     key, but Hermes answers -> draft straight into the owner's account. */
+  if (req.provider === "higgsfield" && !backendLane && !health.media.higgsfield && health.bridge) {
     const draft = await draftHiggsfieldRequest({ ...req, prompt: spec.provider_prompt, model: spec.model }, spec);
     if (draft) {
       const assets = [];
@@ -663,18 +669,31 @@ async function generate(cfg, req) {
     const r = await fetch(url, {
       method: "POST",
       headers,
-      // async on the studio lane: the box returns a job id instantly and we
-      // poll — a tunnel that cuts long requests at ~100s can't kill the render
-      body: JSON.stringify(studioLane ? { ...providerReq, async: true } : providerReq),
+      // async on the backend lane: the box answers instantly (Hermes draft or
+      // a CLI job id we poll) — a tunnel that cuts long requests can't kill it
+      body: JSON.stringify(backendLane
+        ? { ...providerReq, async: true, approved: req.approved === true, credit_warning_shown: req.creditWarningShown === true }
+        : providerReq),
       signal: ctrl.signal,
     });
     let d = await r.json().catch(() => null);
+    // Hermes/MCP transport: the brief is queued as a draft — no credits spent
+    if (d && d.queued && d.transport === "hermes_mcp") {
+      const assets = [];
+      for (let i = 0; i < (req.modality === "video" ? 1 : spec.count); i++) {
+        assets.push(previewAsset({ ...req, prompt: spec.provider_prompt, params: { ...req.params } }, i, { spec, queued: true, draft: d.draft, via: "hermes" }));
+      }
+      return { assets, live: false, queued: true, transport: "hermes_mcp", spec, draft: d.draft };
+    }
+    if (d && d.error === "approval_required") {
+      return { assets: [], live: false, approvalRequired: true, transport: d.transport || "cli_fallback", spec, message: d.message || "" };
+    }
     if (d && d.job && !Array.isArray(d.assets)) d = await pollStudioJob(d.job, spec, headers);
     if (d && Array.isArray(d.assets) && d.assets.length) {
       const assets = normalizeGeneratedAssets(d.assets, req, spec);
       if (assets.length) return { assets, live: true, spec, provider: d.provider || req.provider, model: d.model || spec.model };
     }
-    fallbackReason = d?.error || `provider_http_${r.status}`;
+    fallbackReason = d?.blocked ? "blocked" : (d?.error || `provider_http_${r.status}`);
     fallbackDetail = cleanBrief(d?.message || "", 220);
   } catch (err) {
     fallbackReason = err?.name === "AbortError" ? "provider_timeout" : "provider_unreachable";
@@ -711,6 +730,8 @@ async function pollStudioJob(jobId, spec, headers) {
 function explainMediaFailure(reason = "", detail = "", lane = "") {
   const text = `${reason} ${detail}`.toLowerCase();
   const studioLane = lane.startsWith("/");
+  if (reason === "blocked")
+    return detail || "the Creative Engine reported a blocked state — open the banner above for the exact reason";
   if (/enoent|not recognized|command not found|no such file/.test(text))
     return "the higgsfield CLI isn't installed on the admin box — install it and sign in (higgsfield login), then Re-check";
   if (/login|logged|sign[ -]?in|auth|unauthoriz|credential|expired|forbidden/.test(text))
@@ -936,7 +957,7 @@ function previewAsset(req, i, context = {}) {
   g.fillStyle = "rgba(120,255,190,0.88)";
   g.font = "800 10px 'DM Mono', monospace";
   const plateTag = context.queued
-    ? "RENDERING IN YOUR HIGGSFIELD STUDIO"
+    ? (context.via === "hermes" ? "QUEUED VIA HERMES · APPROVE IN HIGGSFIELD" : "RENDERING IN YOUR HIGGSFIELD STUDIO")
     : context.fallbackReason
       ? "OFFLINE SKETCH · " + String(context.fallbackReason).replace(/^provider_/i, "").replace(/_/g, " ").toUpperCase().slice(0, 26)
       : "PREVIEW";
@@ -1374,14 +1395,31 @@ function wireGenerate(body, cfg, opts, root, esc) {
         || `${String(lastRenderIssue.reason || "unknown error")} — fix it on the admin box, then hit Re-check.`;
       return;
     }
-    if (h.studio && prov === "higgsfield" && h.studioCli === false) {
-      doctor.dataset.state = "warn";
-      title.textContent = "Studio box found, but the higgsfield CLI is missing";
-      msg.textContent = "This box can render with your subscription the moment the CLI exists: install the higgsfield CLI on the admin box, run `higgsfield login`, then hit Re-check.";
+    if (h.engine && prov === "higgsfield") {
+      // transport-aware Creative Engine: Hermes/MCP is the primary route.
+      // Customer-facing copy stays provider-simple; admin detail rides along
+      // only when the CLI fallback is explicitly enabled.
+      const e = h.engine;
+      const adminTail = e.cliFallbackEnabled
+        ? " · Admin: transport Hermes/MCP, CLI fallback ENABLED."
+        : "";
+      if (e.status === "connected") {
+        doctor.dataset.state = "ok";
+        title.textContent = "Creative Engine connected through Hermes";
+        msg.textContent = `Briefs route PhantomForce → Hermes → Higgsfield tools. Render approval required — nothing spends credits without you.${adminTail}`;
+      } else if (e.status === "not_configured") {
+        doctor.dataset.state = "warn";
+        title.textContent = "Creative Engine needs Hermes connection";
+        msg.textContent = `${e.message || "Hermes isn't answering on this box."}${adminTail}`;
+      } else {
+        doctor.dataset.state = "warn";
+        title.textContent = "Creative Engine blocked";
+        msg.textContent = `${e.message || "Hermes answered but the creative tools aren't available."}${adminTail}`;
+      }
     } else if (h.studio && prov === "higgsfield") {
       doctor.dataset.state = "ok";
-      title.textContent = "Higgsfield studio connected";
-      msg.textContent = "Renders run right on this box with your Higgsfield subscription — no API key involved. If a render errors, make sure the higgsfield CLI is installed and signed in on this machine.";
+      title.textContent = "Studio render backend connected";
+      msg.textContent = "This box accepts render briefs on its own backend. Render approval required — nothing spends credits without you.";
     } else if (h.media[prov]) {
       doctor.dataset.state = "ok";
       title.textContent = "Media engine connected (API)";
@@ -1412,6 +1450,19 @@ function wireGenerate(body, cfg, opts, root, esc) {
 
 async function runGenerate(body, cfg, opts, root, esc) {
   if (!genState.prompt.trim()) { const t = body.querySelector("[data-ml-prompt]"); if (t) { t.focus(); t.classList.add("shake"); setTimeout(() => t.classList.remove("shake"), 500); } return; }
+  /* APPROVAL-FIRST: any lane that can spend credits (provider API key, or the
+     admin CLI fallback) asks the owner before rendering. The Hermes draft
+     lane never spends — its paid approval happens inside Higgsfield itself. */
+  const health = await checkEngineHealth(cfg).catch(() => engineHealth);
+  const spendLane = !!(health.media?.[genState.provider] || health.engine?.cliFallbackEnabled);
+  let approved = false;
+  if (spendLane) {
+    approved = window.confirm("This will use your connected creative engine credits. Approve render?");
+    if (!approved) {
+      if (opts.notify) opts.notify("Media Factory", "Render cancelled — nothing was charged.");
+      return;
+    }
+  }
   genState.busy = true;
   renderGenerate(body, cfg, opts, root);
   try {
@@ -1419,9 +1470,17 @@ async function runGenerate(body, cfg, opts, root, esc) {
       modality: genState.modality, provider: genState.provider, model: genState.model,
       prompt: genState.prompt, negative: genState.negative, style: genState.style,
       preset: activePreset()?.label || "Custom",
+      approved, creditWarningShown: spendLane,
       ref: genState.ref, params: { aspect: genState.aspect, count: genState.modality === "video" ? 1 : genState.count, quality: genState.quality, duration: genState.duration },
     };
     const out = await generate(cfg, req);
+    if (out.approvalRequired) {
+      // the backend refused to render without an explicit approval — honor it
+      if (opts.notify) opts.notify("Media Factory", out.message || "This render needs your approval before it can use credits.");
+      genState.busy = false;
+      renderGenerate(body, cfg, opts, root);
+      return;
+    }
     const stamp = Date.now();
     const created = out.assets.map((a, i) => ({ id: `gen-${stamp}-${i}`, ...a, fromGen: true, at: stamp }));
     created.forEach((asset) => {
@@ -1448,7 +1507,9 @@ async function runGenerate(body, cfg, opts, root, esc) {
       const status = out.live
         ? "generated"
         : out.queued
-          ? "queued in your Higgsfield Studio — the desktop bridge renders it with your subscription; finished cuts land in Content Hub for"
+          ? out.transport === "hermes_mcp"
+            ? "queued through Hermes into your Higgsfield studio — approve the render there (no credits spent yet) for"
+            : "queued in your Higgsfield Studio — the desktop bridge renders it with your subscription; finished cuts land in Content Hub for"
           : `render failed (${out.fallbackReason || "unreachable"})${why ? ` — ${why};` : " —"} sketched the request locally for`;
       opts.notify("Media Factory", `${status} ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""} - "${genState.prompt.slice(0, 40)}".`);
     }

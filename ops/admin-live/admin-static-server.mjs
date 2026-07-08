@@ -28,6 +28,47 @@ const port = Number(argValue("--port", process.env.PF_ADMIN_PORT || "5177"));
 const host = argValue("--host", process.env.PF_ADMIN_HOST || "127.0.0.1");
 const apiOrigin = argValue("--api", process.env.PF_ADMIN_API_ORIGIN || "http://127.0.0.1:5190").replace(/\/$/, "");
 
+/* ---------------- Creative Engine transport ----------------
+   PRIMARY route: PhantomForce UI -> this backend -> Hermes -> Higgsfield
+   MCP/tools (via Hermes's PhantomCut bridge). The higgsfield CLI is an
+   OPTIONAL admin/dev fallback, disabled unless explicitly enabled — it is
+   never required for normal Media Lab operation and never used silently. */
+const CREATIVE_TRANSPORTS = new Set(["hermes_mcp", "cli_fallback", "disabled"]);
+const creativeEngine = {
+  transport: (() => {
+    const raw = String(process.env.CREATIVE_ENGINE_TRANSPORT || "hermes_mcp").trim().toLowerCase();
+    return CREATIVE_TRANSPORTS.has(raw) ? raw : "hermes_mcp";
+  })(),
+  hermesBaseUrl: String(process.env.HERMES_BASE_URL || apiOrigin).replace(/\/+$/, ""),
+  hermesToken: String(process.env.HERMES_API_TOKEN || ""),
+  hermesHiggsfieldEnabled: String(process.env.HERMES_HIGGSFIELD_ENABLED ?? "true").toLowerCase() !== "false",
+  cliFallbackEnabled: String(process.env.HIGGSFIELD_CLI_FALLBACK_ENABLED || "false").toLowerCase() === "true",
+};
+
+function hermesAuthHeader(req) {
+  if (creativeEngine.hermesToken) return { Authorization: `Bearer ${creativeEngine.hermesToken}` };
+  const caller = String(req?.headers?.authorization || "");
+  return caller ? { Authorization: caller } : {};
+}
+
+async function hermesFetch(pathname, req, init = {}, timeoutMs = 6500) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${creativeEngine.hermesBaseUrl}${pathname}`, {
+      ...init,
+      headers: { ...(init.headers || {}), ...hermesAuthHeader(req) },
+      signal: controller.signal,
+    });
+    const data = await response.json().catch(() => null);
+    return { reached: true, status: response.status, ok: response.ok, data };
+  } catch (error) {
+    return { reached: false, status: 0, ok: false, data: null, error: String(error?.message || error) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 const mime = new Map([
   [".css", "text/css; charset=utf-8"],
   [".html", "text/html; charset=utf-8"],
@@ -257,6 +298,115 @@ async function probeCliStatus() {
   return cliStatus;
 }
 
+/* ---------------- Creative Engine status (safe preflight) ----------------
+   Answers, WITHOUT generating anything or spending any credits:
+   - can PhantomForce reach Hermes?
+   - can Hermes see Higgsfield/MCP tools (via its PhantomCut bridge)?
+   - which creative tools are available?
+   - is auth missing? is CLI fallback enabled?                              */
+async function handleCreativeEngineStatus(req, res) {
+  const out = {
+    status: "not_configured",
+    transport: creativeEngine.transport,
+    hermes: { reachable: false, toolsAvailable: false, authOk: false, baseUrl: creativeEngine.hermesBaseUrl },
+    higgsfield: { availableThroughHermes: false },
+    approvalRequired: true,
+    cliFallbackEnabled: creativeEngine.cliFallbackEnabled,
+    tools: [],
+    message: "",
+  };
+
+  if (creativeEngine.transport === "disabled") {
+    out.message = "Creative Engine transport is disabled (CREATIVE_ENGINE_TRANSPORT=disabled).";
+    sendJson(res, 200, out);
+    return;
+  }
+
+  const probe = await hermesFetch("/phantom-ai/media-lab/higgsfield/status", req, {}, 6500);
+  if (!probe.reached) {
+    out.status = "not_configured";
+    out.message = `Blocked: Hermes endpoint is not configured or not answering at ${creativeEngine.hermesBaseUrl}. Start Hermes on this box (or set HERMES_BASE_URL).`;
+    sendJson(res, 200, out);
+    return;
+  }
+  out.hermes.reachable = true;
+
+  if (probe.status === 401 || probe.status === 403) {
+    out.status = "error";
+    out.message = "Hermes is reachable but rejected this session — sign in with an admin account (or set HERMES_API_TOKEN).";
+    sendJson(res, 200, out);
+    return;
+  }
+
+  const body = probe.data || {};
+  out.hermes.authOk = true;
+  const phantomcut = body.phantomcut || {};
+  const bridgeUp = probe.ok && body.ok !== false && phantomcut.reachable === true;
+  out.hermes.toolsAvailable = bridgeUp && creativeEngine.hermesHiggsfieldEnabled;
+  out.higgsfield.availableThroughHermes = out.hermes.toolsAvailable;
+
+  // optional richer discovery route (newer Hermes builds); absence is fine
+  const tools = await hermesFetch("/phantom-ai/creative-engine/tools", req, {}, 5000);
+  if (tools.reached && tools.ok && Array.isArray(tools.data?.tools)) {
+    out.tools = tools.data.tools;
+  } else if (out.hermes.toolsAvailable) {
+    out.tools = [
+      { name: "higgsfield.draft", available: true, credit_spend: false, note: "creates a draft in your Higgsfield studio; the paid render is approved there" },
+      { name: "higgsfield.render", available: false, credit_spend: true, note: "Hermes does not expose a paid render tool route yet (PhantomCut gates it behind RUN_HIGGSFIELD_PAID_JOB)" },
+    ];
+  }
+
+  if (!creativeEngine.hermesHiggsfieldEnabled) {
+    out.status = "error";
+    out.message = "Blocked: Higgsfield through Hermes is disabled (HERMES_HIGGSFIELD_ENABLED=false).";
+  } else if (out.hermes.toolsAvailable) {
+    out.status = "connected";
+    out.message = "Creative Engine is connected through Hermes.";
+  } else {
+    out.status = "error";
+    out.message = `Blocked: Hermes is reachable, but Higgsfield MCP tools are not available (PhantomCut bridge at ${phantomcut.base_url || "127.0.0.1:8787"} isn't answering Hermes).`;
+  }
+  sendJson(res, 200, out);
+}
+
+/* Broker a Media Lab brief to Hermes -> Higgsfield tools. Draft-only: this
+   NEVER spends credits — the paid render is approved by the owner inside
+   Higgsfield/PhantomCut, which is exactly the approval-first contract. */
+const HERMES_ASPECTS = new Set(["9:16", "16:9", "1:1", "4:5"]);
+async function hermesDraftFromPlan(plan, req) {
+  const aspect = HERMES_ASPECTS.has(plan.aspect) ? plan.aspect : (plan.modality === "video" ? "16:9" : "1:1");
+  const result = await hermesFetch("/phantom-ai/media-lab/higgsfield/draft", req, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      prompt: plan.prompt,
+      mode: plan.model === "marketing_studio_video" ? "marketing" : plan.modality,
+      model: plan.model,
+      duration: String(plan.duration),
+      aspect_ratio: aspect,
+      resolution: plan.resolution === "2k" && plan.modality === "video" ? "1080p" : plan.resolution,
+      media_role: plan.modality === "video" ? "video" : "image",
+      product_url: "",
+      generate_audio: "",
+    }),
+  }, 15000);
+
+  if (!result.reached) {
+    return { ok: false, message: `Blocked: Hermes endpoint is not configured or not answering at ${creativeEngine.hermesBaseUrl}.` };
+  }
+  if (result.status === 404) {
+    return { ok: false, message: "Blocked: Hermes does not expose a render tool route yet (missing POST /phantom-ai/media-lab/higgsfield/draft)." };
+  }
+  if (result.status === 401 || result.status === 403) {
+    return { ok: false, message: "Blocked: Hermes rejected this session — sign in with an admin account (or set HERMES_API_TOKEN)." };
+  }
+  if (!result.ok || result.data?.ok !== true) {
+    const detail = typeof result.data?.error === "string" ? result.data.error : "";
+    return { ok: false, message: `Blocked: Hermes is reachable, but Higgsfield MCP tools are not available${detail ? ` — ${detail.slice(0, 160)}` : "."}` };
+  }
+  return { ok: true, draft: result.data.draft || null, safety: result.data.safety || null };
+}
+
 /* Renders run as BACKGROUND JOBS: tunnels (Cloudflare et al.) cut a blocking
    request at ~100s, and a Higgsfield render takes minutes. POST /generate with
    async:true returns a job id instantly; the client polls /generate/job/<id>.
@@ -318,11 +468,12 @@ async function handleMediaJobStatus(req, res, urlPath) {
     ok: true,
     job: job.id,
     status: job.status,
+    transport: job.transport || "cli_fallback",
     assets: job.assets,
     error: job.error || undefined,
     message: job.message || undefined,
-    live: true,
-    provider: "higgsfield-cli",
+    live: job.transport !== "hermes_mcp",
+    provider: job.transport === "hermes_mcp" ? "higgsfield-via-hermes" : "higgsfield-cli",
     model: job.model,
     generation_spec: job.generation_spec,
   });
@@ -367,11 +518,80 @@ async function handleMediaGenerate(req, res) {
     generation_spec: payload.generation_spec || null,
     sessionId: session.id || "",
   };
+  const now = Date.now();
+
+  if (creativeEngine.transport === "disabled") {
+    sendJson(res, 200, {
+      error: "blocked", blocked: true, status: "blocked", transport: "disabled", live: false,
+      message: "Blocked: Creative Engine transport is disabled (CREATIVE_ENGINE_TRANSPORT=disabled).",
+    });
+    return;
+  }
+
+  /* PRIMARY: Hermes/MCP. Draft-only — never spends credits, never touches
+     the CLI. The paid render is approved by the owner in Higgsfield. */
+  if (creativeEngine.transport === "hermes_mcp") {
+    const viaHermes = await hermesDraftFromPlan(plan, req);
+    if (viaHermes.ok) {
+      const id = `job-${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+      const job = {
+        id, at: now, createdAt: now, updatedAt: now,
+        status: "queued", transport: "hermes_mcp",
+        brief: prompt, prompt, type: modality,
+        approvalRequired: true, approvedAt: null,
+        creditWarningShown: payload.credit_warning_shown === true,
+        errorMessage: "", assets: [], artifactRefs: [],
+        model: plan.model, generation_spec: plan.generation_spec,
+        error: "", message: "",
+      };
+      mediaJobs.set(id, job);
+      pruneMediaJobs();
+      sendJson(res, 200, {
+        ok: true, transport: "hermes_mcp", status: "queued", queued: true, live: false,
+        job: id, draft: viaHermes.draft, approvalRequired: true,
+        safety: viaHermes.safety || { paid_job_called: false, upload_performed: false },
+        message: "Brief queued through Hermes — approve the render in your Higgsfield studio. No credits were spent.",
+      });
+      return;
+    }
+    if (!creativeEngine.cliFallbackEnabled) {
+      // honest blocked state — NEVER silently fall back to the CLI
+      sendJson(res, 200, {
+        error: "blocked", blocked: true, status: "blocked", transport: "hermes_mcp", live: false,
+        message: viaHermes.message,
+      });
+      return;
+    }
+    // fallback explicitly enabled by the admin — continue into the CLI lane below
+  }
+
+  /* CLI lane: optional admin/dev fallback only. Requires the explicit env
+     flag AND an explicit approval on the request — CLI renders spend the
+     owner's Higgsfield credits directly. */
+  if (!creativeEngine.cliFallbackEnabled) {
+    sendJson(res, 200, {
+      error: "blocked", blocked: true, status: "blocked", transport: creativeEngine.transport, live: false,
+      message: "Blocked: the CLI fallback is disabled (set HIGGSFIELD_CLI_FALLBACK_ENABLED=true to allow it for admin/dev use).",
+    });
+    return;
+  }
+  if (payload.approved !== true) {
+    sendJson(res, 200, {
+      error: "approval_required", status: "awaiting_approval", transport: "cli_fallback", live: false,
+      message: "This will use your connected creative engine credits. Approve render?",
+    });
+    return;
+  }
 
   if (payload.async === true || /[?&]async=1/.test(req.url || "")) {
     const id = `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
     const job = {
-      id, at: Date.now(), status: "running", assets: [],
+      id, at: Date.now(), createdAt: Date.now(), updatedAt: Date.now(),
+      status: "running", transport: "cli_fallback",
+      brief: plan.prompt, prompt: plan.prompt, type: plan.modality,
+      approvalRequired: true, approvedAt: Date.now(),
+      creditWarningShown: payload.credit_warning_shown === true,
+      errorMessage: "", assets: [], artifactRefs: [],
       error: "", message: "", model: plan.model, generation_spec: plan.generation_spec,
     };
     mediaJobs.set(id, job);
@@ -380,11 +600,14 @@ async function handleMediaGenerate(req, res) {
       try {
         const assets = await renderMedia(plan);
         if (!assets.length) { job.status = "failed"; job.error = "no_assets"; }
-        else { job.status = "done"; job.assets = assets; }
+        else { job.status = "done"; job.assets = assets; job.artifactRefs = assets.map((a) => a.url); }
+        job.updatedAt = Date.now();
       } catch (error) {
         job.status = "failed";
         job.error = "higgsfield_cli_failed";
         job.message = String(error?.message || error).slice(0, 220);
+        job.errorMessage = job.message;
+        job.updatedAt = Date.now();
       }
     })();
     sendJson(res, 200, { ok: true, job: id, status: "running", provider: "higgsfield-cli", model: plan.model });
@@ -417,9 +640,10 @@ createServer(async (req, res) => {
   const urlPath = (req.url || "/").split("?")[0];
 
   if (urlPath === "/health") {
-    // answer INSTANTLY from cache — the console probes with a short timeout,
-    // and a slow CLI check must never make the whole studio lane look dead
-    if (cliStatus.present === null || Date.now() - cliStatus.at > 10 * 60 * 1000) {
+    // answer INSTANTLY from cache — the console probes with a short timeout.
+    // The CLI is only preflighted when the admin fallback is explicitly on;
+    // normal operation routes through Hermes and never needs the CLI.
+    if (creativeEngine.cliFallbackEnabled && (cliStatus.present === null || Date.now() - cliStatus.at > 10 * 60 * 1000)) {
       refreshCliStatus().catch(() => {});
     }
     let jobsRunning = 0;
@@ -430,8 +654,17 @@ createServer(async (req, res) => {
       root: repoRoot,
       source_hash: sourceHash,
       jobs_running: jobsRunning,
-      higgsfield_cli: { present: cliStatus.present, detail: cliStatus.detail },
+      creative_transport: creativeEngine.transport,
+      cli_fallback_enabled: creativeEngine.cliFallbackEnabled,
+      ...(creativeEngine.cliFallbackEnabled
+        ? { higgsfield_cli: { present: cliStatus.present, detail: cliStatus.detail } }
+        : {}),
     }), "application/json; charset=utf-8");
+    return;
+  }
+
+  if (urlPath === "/api/creative-engine/status") {
+    await handleCreativeEngineStatus(req, res);
     return;
   }
 
