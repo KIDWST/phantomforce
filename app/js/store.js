@@ -500,14 +500,27 @@ export function resolveSession() {
 }
 
 export async function ownerLogin(ownerKey) {
-  const response = await fetch("/auth/owner-login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ sessionId: "owner-admin", ownerKey }),
-  });
+  let response;
+  try {
+    response = await fetch("/auth/owner-login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ sessionId: "owner-admin", ownerKey }),
+    });
+  } catch {
+    throw new Error("Your key is probably fine — the backend on the admin PC isn't answering at all. Start Hermes (open PowerShell in the phantomforce\\server folder, run: npm run dev), wait ~20 seconds, then sign in again.");
+  }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.token || !payload?.session) {
-    throw new Error(payload?.error || "Owner login failed.");
+    const raw = String(payload?.error || "");
+    // a down backend must never read as "wrong password"
+    if (response.status === 502 || /unavailable|ECONNREFUSED|fetch failed/i.test(raw)) {
+      throw new Error("Your key is probably fine — the backend (Hermes) on the admin PC is stopped. Start it: open PowerShell in the phantomforce\\server folder, run: npm run dev — wait ~20 seconds, then sign in again.");
+    }
+    if (response.status === 401 || response.status === 403) {
+      throw new Error("That key was rejected by the backend. If you're sure it's right, the server may have started without its .env file — restart Hermes from the phantomforce\\server folder so it loads PHANTOMFORCE_OWNER_LOGIN_KEY.");
+    }
+    throw new Error(raw || "Owner login failed.");
   }
   const sessionId = payload.session.id || OWNER_SESSION_ID;
   const isOwnerSession = sessionId === OWNER_SESSION_ID;
