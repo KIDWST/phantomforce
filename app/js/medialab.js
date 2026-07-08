@@ -579,7 +579,7 @@ function higgsfieldDraftMode(req = {}, spec = {}) {
 }
 function higgsfieldResolution(spec = {}) {
   if (spec.quality === "high") return spec.modality === "image" ? "2k" : "1080p";
-  return spec.modality === "image" ? "1080p" : "720p";
+  return spec.modality === "image" ? "1k" : "720p";
 }
 async function draftHiggsfieldRequest(req = {}, spec = {}) {
   const token = accessSession.token();

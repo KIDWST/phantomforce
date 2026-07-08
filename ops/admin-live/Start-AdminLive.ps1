@@ -41,7 +41,28 @@ if ($existing.Count -gt 0) {
 $stdout = Join-Path $stateDir "admin-static.out.log"
 $stderr = Join-Path $stateDir "admin-static.err.log"
 $args = @($server, "--root", $repo, "--port", [string]$Port, "--host", "127.0.0.1")
-$proc = Start-Process -FilePath $node -ArgumentList $args -WorkingDirectory $repo -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+
+# Admin live is the owner workstation surface. Keep Hermes as the primary
+# broker, but allow the owner-approved Higgsfield CLI fallback so Media Lab can
+# produce real renders when the Hermes/MCP draft lane is unavailable. The
+# server still requires an admin bearer session and an explicit approved:true
+# render request before any credits can be spent.
+$oldFallback = $env:HIGGSFIELD_CLI_FALLBACK_ENABLED
+$oldPath = $env:PATH
+if ([string]::IsNullOrWhiteSpace($env:HIGGSFIELD_CLI_FALLBACK_ENABLED)) {
+  $env:HIGGSFIELD_CLI_FALLBACK_ENABLED = "true"
+}
+$hermesNode = Join-Path $env:LOCALAPPDATA "hermes\node"
+if ((Test-Path -LiteralPath $hermesNode) -and ($env:PATH -notlike "*$hermesNode*")) {
+  $env:PATH = "$hermesNode;$env:PATH"
+}
+
+try {
+  $proc = Start-Process -FilePath $node -ArgumentList $args -WorkingDirectory $repo -WindowStyle Hidden -RedirectStandardOutput $stdout -RedirectStandardError $stderr -PassThru
+} finally {
+  $env:HIGGSFIELD_CLI_FALLBACK_ENABLED = $oldFallback
+  $env:PATH = $oldPath
+}
 $pidFile = Join-Path $stateDir "admin-static.pid"
 Set-Content -LiteralPath $pidFile -Value ([string]$proc.Id) -Encoding ascii
 

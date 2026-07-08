@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createReadStream, readFileSync } from "node:fs";
+import { createReadStream, existsSync, readFileSync } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
@@ -194,7 +194,7 @@ function mediaAspect(payload) {
 function mediaResolution(payload) {
   const quality = clampText(payload?.params?.quality || payload?.generation_spec?.quality || "", 32);
   if (payload.modality === "video") return quality === "high" ? "1080p" : "720p";
-  return quality === "high" ? "2k" : "1080p";
+  return quality === "high" ? "2k" : "1k";
 }
 
 function mediaCount(payload) {
@@ -247,11 +247,52 @@ function collectHiggsfieldAssets(value, type, assets = []) {
   return assets;
 }
 
+function resolveOnPath(commandName) {
+  if (commandName.includes("\\") || commandName.includes("/")) {
+    return existsSync(commandName) ? commandName : null;
+  }
+  const pathDirs = String(process.env.PATH || "").split(path.delimiter).filter(Boolean);
+  const suffixes = process.platform === "win32"
+    ? [".cmd", ".exe", ".bat", ".ps1", ""]
+    : [""];
+  for (const dir of pathDirs) {
+    for (const suffix of suffixes) {
+      const candidate = path.join(dir, `${commandName}${suffix}`);
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return null;
+}
+
+function higgsfieldInvocation(args) {
+  const resolved = resolveOnPath("higgsfield");
+  if (process.platform !== "win32") {
+    return { command: resolved || "higgsfield", args };
+  }
+  if (!resolved) {
+    return { command: process.env.ComSpec || "cmd.exe", args: ["/d", "/s", "/c", "higgsfield", ...args] };
+  }
+  const lower = resolved.toLowerCase();
+  if (lower.endsWith(".ps1")) {
+    return { command: "powershell.exe", args: ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", resolved, ...args] };
+  }
+  if (lower.endsWith(".cmd") || lower.endsWith(".bat")) {
+    return { command: process.env.ComSpec || "cmd.exe", args: ["/d", "/s", "/c", resolved, ...args] };
+  }
+  if (/\.(exe|com)$/i.test(lower)) {
+    return { command: resolved, args };
+  }
+  const bash = resolveOnPath("bash");
+  if (bash) {
+    return { command: bash, args: [resolved, ...args] };
+  }
+  return { command: process.env.ComSpec || "cmd.exe", args: ["/d", "/s", "/c", resolved, ...args] };
+}
+
 function runHiggsfield(args, timeoutMs = 30 * 60 * 1000) {
   return new Promise((resolve, reject) => {
-    const command = process.platform === "win32" ? (process.env.ComSpec || "cmd.exe") : "higgsfield";
-    const commandArgs = process.platform === "win32" ? ["/d", "/s", "/c", "higgsfield", ...args] : args;
-    const child = spawn(command, commandArgs, { windowsHide: true });
+    const invocation = higgsfieldInvocation(args);
+    const child = spawn(invocation.command, invocation.args, { windowsHide: true });
     let stdout = "";
     let stderr = "";
     const timer = setTimeout(() => {
@@ -363,12 +404,33 @@ async function handleCreativeEngineStatus(req, res) {
     ];
   }
 
+  if (creativeEngine.cliFallbackEnabled) {
+    const cli = await refreshCliStatus();
+    out.higgsfield.cli = { present: cli.present, detail: cli.detail };
+    const existingRender = out.tools.find((tool) => tool?.name === "higgsfield.render");
+    if (existingRender) {
+      existingRender.available = cli.present !== false;
+      existingRender.route = "POST /generate";
+      existingRender.note = "Owner-approved local CLI render lane. The UI must send approved:true before credits can be spent.";
+    } else {
+      out.tools.push({
+        name: "higgsfield.render",
+        available: cli.present !== false,
+        credit_spend: true,
+        route: "POST /generate",
+        note: "Owner-approved local CLI render lane. The UI must send approved:true before credits can be spent.",
+      });
+    }
+  }
+
   if (!creativeEngine.hermesHiggsfieldEnabled) {
     out.status = "error";
     out.message = "Blocked: Higgsfield through Hermes is disabled (HERMES_HIGGSFIELD_ENABLED=false).";
   } else if (out.hermes.toolsAvailable) {
     out.status = "connected";
-    out.message = "Creative Engine is connected through Hermes.";
+    out.message = creativeEngine.cliFallbackEnabled
+      ? "Creative Engine is connected through Hermes; approved owner renders use the local Higgsfield CLI lane."
+      : "Creative Engine is connected through Hermes.";
   } else {
     out.status = "error";
     out.message = lanes
@@ -549,9 +611,13 @@ async function handleMediaGenerate(req, res) {
     return;
   }
 
-  /* PRIMARY: Hermes/MCP. Draft-only — never spends credits, never touches
-     the CLI. The paid render is approved by the owner in Higgsfield. */
-  if (creativeEngine.transport === "hermes_mcp") {
+  /* PRIMARY: Hermes/MCP for draft/no-spend requests. If the owner already
+     approved this request and the admin CLI fallback is enabled, skip the
+     fragile draft lane and continue directly to the local CLI render below.
+     That keeps normal requests safe while making the explicit Generate button
+     actually generate. */
+  const ownerApprovedCliRender = creativeEngine.cliFallbackEnabled && payload.approved === true;
+  if (creativeEngine.transport === "hermes_mcp" && !ownerApprovedCliRender) {
     const makeHermesJob = () => {
       const id = `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
       const job = {

@@ -23,12 +23,19 @@ const ok = (name, pass, note = "") => {
 /* canary CLI: writes a marker file if ANY test path ever executes it */
 const binDir = mkdtempSync(path.join(tmpdir(), "pf-ce-bin-"));
 const marker = path.join(binDir, "cli-was-called");
-writeFileSync(path.join(binDir, "higgsfield"), `#!/usr/bin/env bash
+const posixShim = path.join(binDir, "higgsfield");
+writeFileSync(posixShim, `#!/usr/bin/env bash
 echo "called: $@" >> "${marker}"
 if [ "$1" = "--version" ]; then echo "higgsfield test-shim"; exit 0; fi
 echo '{"id":"cli-job","status":"completed","result_url":"https://cdn.example/cli-render.png"}'
 `);
-chmodSync(path.join(binDir, "higgsfield"), 0o755);
+chmodSync(posixShim, 0o755);
+if (process.platform === "win32") {
+  writeFileSync(path.join(binDir, "higgsfield.cmd"), `@echo off\r\n` +
+    `echo called: %*>> "${marker}"\r\n` +
+    `if "%1"=="--version" echo higgsfield test-shim& exit /b 0\r\n` +
+    `echo {"id":"cli-job","status":"completed","result_url":"https://cdn.example/cli-render.png"}\r\n`);
+}
 /* count RENDER invocations only — `--version` preflights are read-only and allowed */
 const cliCalls = () => (existsSync(marker)
   ? readFileSync(marker, "utf8").split("\n").filter((line) => line.includes("generate create")).length
@@ -61,7 +68,7 @@ async function startBackend(env = {}) {
     path.join(__dirname, "admin-static-server.mjs"),
     "--port", String(port), "--host", "127.0.0.1",
     "--api", `http://127.0.0.1:${hermesPort}`,
-  ], { env: { ...process.env, PATH: `${binDir}:${process.env.PATH}`, ...env }, stdio: "ignore" });
+  ], { env: { ...process.env, PATH: `${binDir}${path.delimiter}${process.env.PATH}`, ...env }, stdio: "ignore" });
   servers.push(child);
   for (let i = 0; i < 40; i++) {
     await new Promise((r) => setTimeout(r, 150));
@@ -118,7 +125,7 @@ async function followJob(port, first, tries = 30) {
   ok("CLI lane demands approval", noApproval.error === "approval_required" && /Approve render\?/.test(noApproval.message), (noApproval.message || "").slice(0, 80));
   ok("no render happened without approval", cliCalls() === 0);
   const approvedRes = await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify({ ...brief, async: false, approved: true }) }));
-  ok("approved CLI fallback renders", Array.isArray(approvedRes.assets) && approvedRes.assets.length === 1 && approvedRes.live === true, JSON.stringify(approvedRes.assets?.[0]?.url || ""));
+  ok("approved CLI fallback renders", Array.isArray(approvedRes.assets) && approvedRes.assets.length === 1 && approvedRes.live === true, JSON.stringify(approvedRes.assets?.[0]?.url || approvedRes));
   ok("CLI ran exactly for the approved render", cliCalls() >= 1);
 }
 
