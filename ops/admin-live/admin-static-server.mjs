@@ -341,9 +341,16 @@ async function handleCreativeEngineStatus(req, res) {
   const body = probe.data || {};
   out.hermes.authOk = true;
   const phantomcut = body.phantomcut || {};
-  const bridgeUp = probe.ok && body.ok !== false && phantomcut.reachable === true;
+  const lanes = body.higgsfield_tool_lanes || null;
+  // Tool lanes: the operator-MCP lane (current) or the legacy PhantomCut
+  // bridge. Older Hermes builds only report phantomcut.
+  const laneUp = lanes
+    ? lanes.mcp_cli?.enabled === true || (lanes.phantomcut?.enabled === true && phantomcut.reachable === true)
+    : phantomcut.reachable === true;
+  const bridgeUp = probe.ok && body.ok !== false && laneUp;
   out.hermes.toolsAvailable = bridgeUp && creativeEngine.hermesHiggsfieldEnabled;
   out.higgsfield.availableThroughHermes = out.hermes.toolsAvailable;
+  out.higgsfield.toolLane = lanes ? (lanes.mcp_cli?.enabled ? "mcp_cli" : "phantomcut") : (phantomcut.reachable ? "phantomcut" : "none");
 
   // optional richer discovery route (newer Hermes builds); absence is fine
   const tools = await hermesFetch("/phantom-ai/creative-engine/tools", req, {}, 5000);
@@ -364,7 +371,9 @@ async function handleCreativeEngineStatus(req, res) {
     out.message = "Creative Engine is connected through Hermes.";
   } else {
     out.status = "error";
-    out.message = `Blocked: Hermes is reachable, but Higgsfield MCP tools are not available — the PhantomCut bridge at ${phantomcut.base_url || "127.0.0.1:8787"} isn't answering. Start PhantomCut on the admin box (or set PHANTOMCUT_BASE_URL to where it runs), then Re-check.`;
+    out.message = lanes
+      ? "Blocked: Hermes has no working Higgsfield tool lane. Check that the operator CLI on the admin box has the Higgsfield MCP registered (PHANTOM_HIGGSFIELD_TOOL_MODE=auto), then Re-check."
+      : `Blocked: this Hermes build only knows the legacy PhantomCut bridge (${phantomcut.base_url || "127.0.0.1:8787"}), which isn't answering. Pull + restart Hermes to get the operator-MCP lane, then Re-check.`;
   }
   sendJson(res, 200, out);
 }
@@ -389,7 +398,7 @@ async function hermesDraftFromPlan(plan, req) {
       product_url: "",
       generate_audio: "",
     }),
-  }, 15000);
+  }, 300000);   // the MCP-CLI lane can take minutes; callers run this in a background job
 
   if (!result.reached) {
     return { ok: false, message: `Blocked: Hermes endpoint is not configured or not answering at ${creativeEngine.hermesBaseUrl}.` };
@@ -402,14 +411,17 @@ async function hermesDraftFromPlan(plan, req) {
   }
   if (!result.ok || result.data?.ok !== true) {
     const detail = typeof result.data?.error === "string" ? result.data.error : "";
-    // Hermes's own bridge to the Higgsfield tools is down — name the exact
-    // process and fix instead of leaking a raw "fetch failed"
+    if (Array.isArray(result.data?.lanes_tried)) {
+      // new Hermes: it tried every Higgsfield tool lane and reports each failure
+      return { ok: false, message: `Blocked: Hermes tried its Higgsfield tool lanes and none worked — ${detail.slice(0, 240)}. If the MCP lane failed, check that the operator CLI on the admin box has the Higgsfield MCP registered.` };
+    }
+    // legacy Hermes (PhantomCut-only build): name the old bridge honestly
     if (result.status === 503 || result.data?.phantomcut_reachable === false || /fetch failed|did not respond|econnrefused/i.test(detail)) {
-      return { ok: false, message: "Blocked: Hermes is up, but its Higgsfield tools bridge (PhantomCut) isn't running on this box. Start the PhantomCut app — or point PHANTOMCUT_BASE_URL in Hermes's env at where it runs — then hit Re-check." };
+      return { ok: false, message: "Blocked: this Hermes build still routes Higgsfield through the retired PhantomCut bridge, which isn't running. Pull + restart Hermes to switch it to the operator-MCP lane, then hit Re-check." };
     }
     return { ok: false, message: `Blocked: Hermes is reachable, but Higgsfield MCP tools are not available${detail ? ` — ${detail.slice(0, 160)}` : "."}` };
   }
-  return { ok: true, draft: result.data.draft || null, safety: result.data.safety || null };
+  return { ok: true, draft: result.data.draft || null, safety: result.data.safety || null, toolLane: result.data.tool_lane || "" };
 }
 
 /* Renders run as BACKGROUND JOBS: tunnels (Cloudflare et al.) cut a blocking
@@ -475,6 +487,10 @@ async function handleMediaJobStatus(req, res, urlPath) {
     status: job.status,
     transport: job.transport || "cli_fallback",
     assets: job.assets,
+    queued: job.queued === true || undefined,
+    draft: job.draft || undefined,
+    safety: job.safety || undefined,
+    blocked: job.status === "blocked" || undefined,
     error: job.error || undefined,
     message: job.message || undefined,
     live: job.transport !== "hermes_mcp",
@@ -536,9 +552,8 @@ async function handleMediaGenerate(req, res) {
   /* PRIMARY: Hermes/MCP. Draft-only — never spends credits, never touches
      the CLI. The paid render is approved by the owner in Higgsfield. */
   if (creativeEngine.transport === "hermes_mcp") {
-    const viaHermes = await hermesDraftFromPlan(plan, req);
-    if (viaHermes.ok) {
-      const id = `job-${now.toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const makeHermesJob = () => {
+      const id = `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
       const job = {
         id, at: now, createdAt: now, updatedAt: now,
         status: "queued", transport: "hermes_mcp",
@@ -547,13 +562,57 @@ async function handleMediaGenerate(req, res) {
         creditWarningShown: payload.credit_warning_shown === true,
         errorMessage: "", assets: [], artifactRefs: [],
         model: plan.model, generation_spec: plan.generation_spec,
-        error: "", message: "",
+        error: "", message: "", queued: false, draft: null, safety: null,
       };
       mediaJobs.set(id, job);
       pruneMediaJobs();
+      return job;
+    };
+
+    /* ASYNC (default from the UI): the MCP draft can take minutes through the
+       operator CLI — answer with a job id instantly so no tunnel can cut it,
+       and let the client poll. Sync mode stays for direct/localhost use. */
+    if (payload.async === true || /[?&]async=1/.test(req.url || "")) {
+      const job = makeHermesJob();
+      job.status = "running";
+      (async () => {
+        const viaHermes = await hermesDraftFromPlan(plan, req).catch((e) => ({ ok: false, message: `Blocked: ${String(e?.message || e).slice(0, 160)}` }));
+        if (viaHermes.ok) {
+          job.status = "done"; job.queued = true; job.draft = viaHermes.draft; job.safety = viaHermes.safety || { paid_job_called: false };
+          job.message = "Brief queued through Hermes — approve the render in your Higgsfield studio. No credits were spent.";
+        } else if (!creativeEngine.cliFallbackEnabled) {
+          job.status = "blocked"; job.error = "blocked"; job.message = viaHermes.message; job.errorMessage = viaHermes.message;
+        } else if (payload.approved === true) {
+          // the request carried an explicit approval — run the admin CLI fallback
+          try {
+            const assets = await renderMedia(plan);
+            if (!assets.length) { job.status = "failed"; job.error = "no_assets"; }
+            else {
+              job.status = "done"; job.transport = "cli_fallback"; job.assets = assets;
+              job.artifactRefs = assets.map((a) => a.url); job.approvedAt = Date.now();
+            }
+          } catch (error) {
+            job.status = "failed"; job.error = "higgsfield_cli_failed";
+            job.message = String(error?.message || error).slice(0, 220); job.errorMessage = job.message;
+          }
+        } else {
+          job.status = "blocked"; job.error = "approval_required";
+          job.message = `${viaHermes.message} The CLI fallback is enabled — approve the render and run it again. This will use your connected creative engine credits. Approve render?`;
+          job.errorMessage = job.message;
+        }
+        job.updatedAt = Date.now();
+      })();
+      sendJson(res, 200, { ok: true, transport: "hermes_mcp", status: "running", job: job.id, live: false, approvalRequired: true });
+      return;
+    }
+
+    const viaHermes = await hermesDraftFromPlan(plan, req);
+    if (viaHermes.ok) {
+      const job = makeHermesJob();
+      job.queued = true; job.draft = viaHermes.draft;
       sendJson(res, 200, {
         ok: true, transport: "hermes_mcp", status: "queued", queued: true, live: false,
-        job: id, draft: viaHermes.draft, approvalRequired: true,
+        job: job.id, draft: viaHermes.draft, approvalRequired: true,
         safety: viaHermes.safety || { paid_job_called: false, upload_performed: false },
         message: "Brief queued through Hermes — approve the render in your Higgsfield studio. No credits were spent.",
       });

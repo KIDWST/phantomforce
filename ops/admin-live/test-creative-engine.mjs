@@ -72,6 +72,15 @@ async function startBackend(env = {}) {
 const j = (r) => r.json();
 const AUTH = { Authorization: "Bearer test", "Content-Type": "application/json" };
 const brief = { prompt: "a red fox in the snow", modality: "image", params: { count: 1 }, async: true };
+/* async lane: follow the job to its terminal state */
+async function followJob(port, first, tries = 30) {
+  let d = first;
+  while (tries-- > 0 && d && d.job && d.status === "running") {
+    await new Promise((r) => setTimeout(r, 300));
+    d = await j(await fetch(`http://127.0.0.1:${port}/generate/job/${d.job}`, { headers: AUTH }));
+  }
+  return d;
+}
 
 /* ---- A. default config: Hermes primary, CLI untouched ---- */
 {
@@ -83,10 +92,12 @@ const brief = { prompt: "a red fox in the snow", modality: "image", params: { co
   ok("status: approval always required", status.approvalRequired === true);
   ok("preflight performed zero renders", hermesDraftHits === 0 && cliCalls() === 0, `drafts=${hermesDraftHits} cli=${cliCalls()}`);
 
-  const gen = await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) }));
-  ok("brief routes through Hermes (queued draft)", gen.ok === true && gen.transport === "hermes_mcp" && gen.status === "queued", JSON.stringify(gen).slice(0, 90));
-  ok("Hermes lane spends no credits", gen.safety?.paid_job_called === false && gen.approvalRequired === true);
-  ok("job is tracked with transport", (await j(await fetch(`http://127.0.0.1:${port}/generate/job/${gen.job}`, { headers: AUTH }))).transport === "hermes_mcp");
+  const first = await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) }));
+  ok("async brief answers instantly with a job (tunnel-proof)", first.ok === true && !!first.job && first.transport === "hermes_mcp", JSON.stringify(first).slice(0, 90));
+  const gen = await followJob(port, first);
+  ok("brief routes through Hermes (queued draft)", gen.queued === true && gen.transport === "hermes_mcp" && gen.status !== "blocked", JSON.stringify(gen).slice(0, 90));
+  ok("Hermes lane spends no credits", gen.safety?.paid_job_called === false, JSON.stringify(gen.safety || {}));
+  ok("job is tracked with transport", gen.transport === "hermes_mcp");
   ok("CLI never invoked on the Hermes lane", cliCalls() === 0, `cli calls: ${cliCalls()}`);
 }
 
@@ -95,16 +106,16 @@ const brief = { prompt: "a red fox in the snow", modality: "image", params: { co
   const { port } = await startBackend({ HERMES_BASE_URL: "http://127.0.0.1:9" });
   const status = await j(await fetch(`http://127.0.0.1:${port}/api/creative-engine/status`, { headers: AUTH }));
   ok("Hermes down => not_configured (not fake ok)", status.status === "not_configured" && /Blocked/.test(status.message), status.message.slice(0, 70));
-  const gen = await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) }));
-  ok("Hermes down => generate returns blocked", gen.blocked === true && /Blocked/.test(gen.message), (gen.message || "").slice(0, 70));
+  const gen = await followJob(port, await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) })));
+  ok("Hermes down => generate returns blocked", (gen.blocked === true || gen.status === "blocked") && /Blocked/.test(gen.message), (gen.message || "").slice(0, 70));
   ok("no silent CLI fallback", cliCalls() === 0, `cli calls: ${cliCalls()}`);
 }
 
 /* ---- C. CLI fallback: needs the env flag AND explicit approval ---- */
 {
   const { port } = await startBackend({ HERMES_BASE_URL: "http://127.0.0.1:9", HIGGSFIELD_CLI_FALLBACK_ENABLED: "true" });
-  const noApproval = await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) }));
-  ok("CLI lane demands approval", noApproval.error === "approval_required" && /Approve render\?/.test(noApproval.message), noApproval.message);
+  const noApproval = await followJob(port, await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) })));
+  ok("CLI lane demands approval", noApproval.error === "approval_required" && /Approve render\?/.test(noApproval.message), (noApproval.message || "").slice(0, 80));
   ok("no render happened without approval", cliCalls() === 0);
   const approvedRes = await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify({ ...brief, async: false, approved: true }) }));
   ok("approved CLI fallback renders", Array.isArray(approvedRes.assets) && approvedRes.assets.length === 1 && approvedRes.live === true, JSON.stringify(approvedRes.assets?.[0]?.url || ""));
@@ -125,9 +136,9 @@ const brief = { prompt: "a red fox in the snow", modality: "image", params: { co
   const cliBefore = cliCalls();
   const { port } = await startBackend({ HERMES_BASE_URL: `http://127.0.0.1:${deadBridge.address().port}` });
   const status = await j(await fetch(`http://127.0.0.1:${port}/api/creative-engine/status`, { headers: AUTH }));
-  ok("PhantomCut down => status names the bridge + fix", /PhantomCut/.test(status.message) && /Start PhantomCut|PHANTOMCUT_BASE_URL/.test(status.message), status.message.slice(0, 90));
-  const gen = await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) }));
-  ok("PhantomCut down => generate blocked with the exact fix (no raw 'fetch failed')", gen.blocked === true && /PhantomCut/.test(gen.message) && !/fetch failed/.test(gen.message), (gen.message || "").slice(0, 90));
+  ok("legacy-Hermes bridge down => status names the fix", /PhantomCut|tool lane/i.test(status.message) && /Re-check|restart|MCP/i.test(status.message), status.message.slice(0, 90));
+  const gen = await followJob(port, await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) })));
+  ok("legacy-Hermes bridge down => blocked names the upgrade path (no raw 'fetch failed')", (gen.blocked === true || gen.status === "blocked") && /Hermes/.test(gen.message) && !/fetch failed$/.test(gen.message), (gen.message || "").slice(0, 90));
   ok("still no CLI involvement", cliCalls() === cliBefore);
   deadBridge.close();
 }

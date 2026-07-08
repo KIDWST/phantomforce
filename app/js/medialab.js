@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260708-74";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-74";
+import { session as accessSession } from "./store.js?v=phantom-live-20260708-75";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-75";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -677,6 +677,11 @@ async function generate(cfg, req) {
       signal: ctrl.signal,
     });
     let d = await r.json().catch(() => null);
+    if (d && d.error === "approval_required") {
+      return { assets: [], live: false, approvalRequired: true, transport: d.transport || "cli_fallback", spec, message: d.message || "" };
+    }
+    // background job (hermes MCP draft or CLI render): poll until it lands
+    if (d && d.job && !d.queued && !(Array.isArray(d.assets) && d.assets.length)) d = await pollStudioJob(d.job, spec, headers);
     // Hermes/MCP transport: the brief is queued as a draft — no credits spent
     if (d && d.queued && d.transport === "hermes_mcp") {
       const assets = [];
@@ -685,10 +690,6 @@ async function generate(cfg, req) {
       }
       return { assets, live: false, queued: true, transport: "hermes_mcp", spec, draft: d.draft };
     }
-    if (d && d.error === "approval_required") {
-      return { assets: [], live: false, approvalRequired: true, transport: d.transport || "cli_fallback", spec, message: d.message || "" };
-    }
-    if (d && d.job && !Array.isArray(d.assets)) d = await pollStudioJob(d.job, spec, headers);
     if (d && Array.isArray(d.assets) && d.assets.length) {
       const assets = normalizeGeneratedAssets(d.assets, req, spec);
       if (assets.length) return { assets, live: true, spec, provider: d.provider || req.provider, model: d.model || spec.model };
@@ -718,7 +719,7 @@ async function pollStudioJob(jobId, spec, headers) {
       if (r.status === 404) return { error: "job_lost", message: d?.message || "the studio server restarted mid-render" };
       if (!d) continue;
       misses = 0;
-      if (d.status === "done" || d.status === "failed") return d;
+      if (d.status === "done" || d.status === "failed" || d.status === "blocked") return d;
     } catch {
       if (++misses >= 24) return { error: "provider_unreachable", message: "lost contact with the studio box for 2 minutes" };
     }

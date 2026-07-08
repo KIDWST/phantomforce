@@ -248,6 +248,63 @@ function hasMediaLabAccess(session: AccessSession | undefined) {
   );
 }
 
+/* ---- Higgsfield MCP through the operator brain ----
+   The Higgsfield MCP is registered with the operator CLI (codex) on this
+   box — PhantomCut is retired. Drafts run as a strict machine task through
+   the operator: draft/queue only, never a paid render, JSON receipt only. */
+let lastHiggsfieldMcpDraftAt: string | null = null;
+
+function extractFirstJsonObject(text: string): Record<string, unknown> | null {
+  const raw = String(text || "").trim();
+  const start = raw.indexOf("{");
+  if (start < 0) return null;
+  for (let end = raw.length; end > start; end -= 1) {
+    const candidate = raw.slice(start, end);
+    if (!candidate.endsWith("}")) continue;
+    try { return JSON.parse(candidate) as Record<string, unknown>; } catch { /* keep shrinking */ }
+  }
+  return null;
+}
+
+async function runHiggsfieldMcpDraft(params: Record<string, unknown>): Promise<
+  { ok: true; draft: Record<string, unknown> } | { ok: false; error: string }
+> {
+  const instruction = [
+    "MEDIA DRAFT REQUEST — machine task, not conversation.",
+    "Use your available Higgsfield MCP tools to create a DRAFT generation only.",
+    "HARD RULES: draft/queue only. Do NOT run a paid render. Do NOT spend credits. Do NOT publish, post, or upload anything.",
+    `Draft parameters JSON: ${JSON.stringify(params)}`,
+    "After the tool call, respond with ONLY one JSON object and no other text:",
+    '{"ok":true,"draft":{"id":"<draft id or name>","status":"queued","tool":"<mcp tool used>","notes":"<one short line>"}}',
+    'If no Higgsfield MCP tools are available to you, respond ONLY with: {"ok":false,"error":"no_higgsfield_mcp_tools"}',
+    'If the tool call fails, respond ONLY with: {"ok":false,"error":"<short reason>"}',
+  ].join("\n");
+
+  try {
+    const result = await callCodexCliChat({
+      requestId: `hf-mcp-draft-${Date.now().toString(36)}`,
+      businessName: "PhantomForce",
+      taskType: "media_draft",
+      userMessage: instruction,
+      compactContext: "",
+      approvalRequired: false,
+      executionMode: "approval",
+      cwd: process.cwd(),
+    });
+    const output = "output_text" in result ? String(result.output_text || "") : "";
+    const parsed = extractFirstJsonObject(output);
+    if (!parsed) {
+      return { ok: false, error: `operator returned no JSON receipt (${output.replace(/\s+/g, " ").slice(0, 120) || "empty output"})` };
+    }
+    if (parsed.ok === true && parsed.draft && typeof parsed.draft === "object") {
+      return { ok: true, draft: parsed.draft as Record<string, unknown> };
+    }
+    return { ok: false, error: String(parsed.error || "mcp draft failed").slice(0, 200) };
+  } catch (error) {
+    return { ok: false, error: `operator lane error: ${String(error instanceof Error ? error.message : error).slice(0, 160)}` };
+  }
+}
+
 async function callPhantomCut(pathname: string, init?: RequestInit): Promise<PhantomCutBridgeResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 4500);
@@ -2719,6 +2776,7 @@ app.get("/phantom-ai/media-lab/higgsfield/status", async (request, reply) => {
     callPhantomCut("/api/providers/higgsfield/status"),
   ]);
 
+  const statusToolMode = (process.env.PHANTOM_HIGGSFIELD_TOOL_MODE ?? "auto").trim().toLowerCase();
   return {
     ok: true,
     session,
@@ -2728,6 +2786,15 @@ app.get("/phantom-ai/media-lab/higgsfield/status", async (request, reply) => {
     subscribed_access: entitled,
     admin_access: session.canManageAccess,
     client_visible_name: "Generate Video",
+    higgsfield_tool_lanes: {
+      mode: statusToolMode,
+      mcp_cli: {
+        enabled: statusToolMode !== "phantomcut",
+        last_success_at: lastHiggsfieldMcpDraftAt,
+        note: "Higgsfield MCP via the operator brain (codex CLI) — verified on first successful draft.",
+      },
+      phantomcut: { enabled: statusToolMode !== "mcp_cli", reachable: health.ok, legacy: true },
+    },
     phantomcut: {
       base_url: phantomCutBaseUrl(),
       reachable: health.ok,
@@ -2764,12 +2831,16 @@ app.get("/phantom-ai/creative-engine/tools", async (request, reply) => {
   ]);
 
   const bridgeReachable = health.ok;
+  const toolsToolMode = (process.env.PHANTOM_HIGGSFIELD_TOOL_MODE ?? "auto").trim().toLowerCase();
+  const mcpLaneEnabled = toolsToolMode !== "phantomcut";
 
   return {
     ok: true,
     transport: "hermes_mcp",
     broker: {
-      name: "phantomcut",
+      name: mcpLaneEnabled ? "operator-mcp" : "phantomcut",
+      mode: toolsToolMode,
+      mcp_last_success_at: lastHiggsfieldMcpDraftAt,
       base_url: phantomCutBaseUrl(),
       reachable: bridgeReachable,
       provider_status: providerStatus.ok ? providerStatus.data : null,
@@ -2778,10 +2849,12 @@ app.get("/phantom-ai/creative-engine/tools", async (request, reply) => {
     tools: [
       {
         name: "higgsfield.draft",
-        available: bridgeReachable && hasMediaLabAccess(session),
+        available: (mcpLaneEnabled || bridgeReachable) && hasMediaLabAccess(session),
         credit_spend: false,
         route: "POST /phantom-ai/media-lab/higgsfield/draft",
-        note: "Creates a draft in the owner's Higgsfield studio. Draft-only — the paid render is approved separately.",
+        note: mcpLaneEnabled
+          ? "Creates a draft through the operator's Higgsfield MCP tools (legacy PhantomCut as fallback). Draft-only — the paid render is approved separately."
+          : "Creates a draft in the owner's Higgsfield studio. Draft-only — the paid render is approved separately.",
       },
       {
         name: "higgsfield.render",
@@ -2855,43 +2928,78 @@ app.post("/phantom-ai/media-lab/higgsfield/draft", async (request, reply) => {
     });
   }
 
-  const draft = await callPhantomCut("/api/jobs/higgsfield/draft", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      ...parsed.data,
-      explicit_confirmation: "",
-    }),
-  });
+  /* Higgsfield tool lanes, tried in order:
+     1. mcp_cli — the Higgsfield MCP incorporated into the operator brain
+        (codex CLI on this box). This is the CURRENT primary lane.
+     2. phantomcut — the legacy local bridge, kept only for boxes that still
+        run it. PHANTOM_HIGGSFIELD_TOOL_MODE=phantomcut|mcp_cli|auto (default
+        auto = MCP first, PhantomCut as legacy fallback).                    */
+  const toolMode = (process.env.PHANTOM_HIGGSFIELD_TOOL_MODE ?? "auto").trim().toLowerCase();
+  const lanesTried: Array<{ lane: string; error: string }> = [];
 
-  if (!draft.ok) {
-    return reply.code(draft.status).send({
-      ok: false,
-      error: draft.error,
-      provider: "higgsfield",
-      phantomcut_reachable: draft.status !== 503,
-      provider_called: false,
-      paid_job_called: false,
-      upload_performed: false,
-    });
+  if (toolMode !== "phantomcut") {
+    const mcp = await runHiggsfieldMcpDraft(parsed.data);
+    if (mcp.ok) {
+      lastHiggsfieldMcpDraftAt = new Date().toISOString();
+      return {
+        ok: true,
+        provider: "higgsfield",
+        commercial_provider: true,
+        action: "draft_only",
+        tool_lane: "mcp_cli",
+        draft: mcp.draft,
+        safety: {
+          paid_job_called: false,
+          upload_performed: false,
+          run_endpoint_exposed: false,
+          explicit_confirmation_required: "RUN_HIGGSFIELD_PAID_JOB",
+          note: "Draft created through the operator's Higgsfield MCP tools. Paid renders remain separately approved.",
+        },
+      };
+    }
+    lanesTried.push({ lane: "mcp_cli", error: mcp.error });
   }
 
-  return {
-    ok: true,
+  if (toolMode !== "mcp_cli") {
+    const draft = await callPhantomCut("/api/jobs/higgsfield/draft", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        ...parsed.data,
+        explicit_confirmation: "",
+      }),
+    });
+    if (draft.ok) {
+      return {
+        ok: true,
+        provider: "higgsfield",
+        commercial_provider: true,
+        action: "draft_only",
+        tool_lane: "phantomcut",
+        draft: draft.data,
+        safety: {
+          paid_job_called: false,
+          upload_performed: false,
+          run_endpoint_exposed: false,
+          explicit_confirmation_required: "RUN_HIGGSFIELD_PAID_JOB",
+          note: "This dashboard creates the Higgsfield draft only. Running a paid/upload generation remains separately gated.",
+        },
+      };
+    }
+    lanesTried.push({ lane: "phantomcut (legacy)", error: draft.error });
+  }
+
+  return reply.code(502).send({
+    ok: false,
+    error: lanesTried.map((l) => `${l.lane}: ${l.error}`).join(" · "),
+    lanes_tried: lanesTried,
     provider: "higgsfield",
-    commercial_provider: true,
-    action: "draft_only",
-    draft: draft.data,
-    safety: {
-      paid_job_called: false,
-      upload_performed: false,
-      run_endpoint_exposed: false,
-      explicit_confirmation_required: "RUN_HIGGSFIELD_PAID_JOB",
-      note: "This dashboard creates the Higgsfield draft only. Running a paid/upload generation remains separately gated inside PhantomCut.",
-    },
-  };
+    provider_called: false,
+    paid_job_called: false,
+    upload_performed: false,
+  });
 });
 
 app.post("/phantom-ai/security/scan/preview", async (request, reply) => {
