@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260708-83";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-83";
+import { session as accessSession } from "./store.js?v=phantom-live-20260708-84";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-84";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -1027,10 +1027,10 @@ function consumeEditIntent(opts = {}) {
 }
 
 const NAV_TABS = [
-  ["generate", "Cockpit", "target"],
-  ["library", "Media Pool", "grid"],
-  ["pending", "Pending", "clock"],
-  ["edit", "Edit", "edit"],
+  ["generate", "Cockpit"],
+  ["library", "Media Pool"],
+  ["pending", "Pending"],
+  ["edit", "Edit"],
 ];
 const NAV_DRAWERS = [
   ["templates", "Templates", "layout"],
@@ -1047,29 +1047,21 @@ export function renderMediaStudio(el, opts = {}) {
   const engineReady = providersFor(cfg, "image").length + providersFor(cfg, "video").length > 0;
   el.innerHTML = `
     <div class="ml">
-      <aside class="ml-rail-nav" aria-label="Media Lab navigation">
-        <div class="ml-rail-nav-head"><b>Media Lab</b><i>Creative Engine</i></div>
-        <nav class="ml-rail-nav-list" role="tablist" aria-label="Media Lab views">
-          ${NAV_TABS.map(([id, label, ic]) => `<button class="${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${svgIc(ic)}<span>${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</span></button>`).join("")}
+      <div class="ml-topbar">
+        <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
+          ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
         </nav>
-        <hr class="ml-rail-nav-sep" />
-        <nav class="ml-rail-nav-list" aria-label="Media Lab tools">
-          ${NAV_DRAWERS.map(([id, label, ic]) => `<button class="${activeDrawer === id ? "is-active" : ""}" data-ml-drawer-open="${id}">${svgIc(ic)}<span>${label}</span></button>`).join("")}
-          <button data-ml-open-settings-rail>${svgIc("gear")}<span>Settings</span></button>
-        </nav>
-        <div class="ml-rail-nav-foot">
-          <div class="ml-rail-mini ${engineReady ? "is-ready" : ""}" title="${engineReady ? "Cinematic Engine ready" : "Cinematic Engine on standby — no engine enabled"}">
-            <span class="ml-rail-mini-dot" aria-hidden="true"></span>
-            <span>${engineReady ? "Engine ready" : "Engine standby"}</span>
-          </div>
-          <div class="ml-rail-mini ml-rail-credits" title="Production credits">
-            ${svgIc("bolt")}<span>${cfg.credits} credits</span>
-          </div>
+        <div class="ml-topbar-tools">
+          ${NAV_DRAWERS.map(([id, label, ic]) => `<button class="ml-topbar-ic ${activeDrawer === id ? "is-active" : ""}" data-ml-drawer-open="${id}" title="${label}" aria-label="${label}">${svgIc(ic)}</button>`).join("")}
+          <button class="ml-topbar-ic" data-ml-open-settings-rail title="Settings" aria-label="Settings">${svgIc("gear")}</button>
         </div>
-      </aside>
-      <div class="ml-main">
-        <div class="ml-body" data-ml-body></div>
+        <div class="ml-engine-mini ${engineReady ? "is-ready" : ""}" title="${engineReady ? "Cinematic Engine ready" : "Cinematic Engine on standby — no engine enabled"}">
+          <span class="ml-engine-mini-dot" aria-hidden="true"></span>
+          <span>${engineReady ? "Engine ready" : "Engine standby"}</span>
+          <b>${svgIc("bolt")}${cfg.credits}</b>
+        </div>
       </div>
+      <div class="ml-body" data-ml-body></div>
       ${activeDrawer ? drawerHtml(activeDrawer, cfg, esc, opts) : ""}
     </div>`;
   el.querySelectorAll("[data-ml-tab]").forEach((b) => b.onclick = () => { session.tab = b.dataset.mlTab; activeDrawer = null; renderMediaStudio(el, opts); });
@@ -1218,18 +1210,20 @@ function renderGenerate(body, cfg, opts, root) {
       <section class="ml-brief" aria-label="Shot Builder">
         <div class="ml-brief-head">
           <div class="ml-card-head"><b>Shot Builder</b><i>Picture · prompt · style · roll</i></div>
-        </div>
-        <div class="ml-brief-head-controls">
           <div class="ml-seg" data-ml-modality>
             <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
             <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
           </div>
-          <div class="ml-provs" data-ml-provs>
-            ${provs.map((pr) => `<button class="ml-prov ${genState.provider === pr.id ? "is-on" : ""}" data-v="${pr.id}" style="--pb:${pr.brand}">
-              <i style="background:${pr.brand}"></i>${esc(pr.name)}</button>`).join("") || `<span class="ml-hint">No engine enabled for ${genState.modality}. <b data-ml-open-settings>Configure →</b></span>`}
-          </div>
         </div>
-        ${models.length ? `<label class="ml-field"><select class="ml-select" data-ml-model title="Render lane">${models.map((m) => `<option value="${esc(m)}" ${genState.model === m ? "selected" : ""}>${esc(laneLabel(m))}</option>`).join("")}</select></label>` : ""}
+
+        <label class="ml-field"><span>Reference</span>
+          <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop>
+            ${genState.ref
+              ? `<img src="${genState.ref}" alt="reference"/><span class="ml-drop-copy"><b>Reference attached</b><i>Style, logo, or continuity frame</i></span><button class="ml-drop-x" data-ml-clearref aria-label="Remove reference image">${svgIc("close")}</button>`
+              : `<span class="ml-drop-ic">${svgIc("upload")}</span><span class="ml-drop-copy"><b>Add reference image</b><i>Style, logo, or continuity frame — optional</i></span><button class="ml-drop-browse" type="button">Browse files</button>`}
+            <input type="file" accept="image/*" data-ml-file hidden />
+          </div>
+        </label>
 
         <label class="ml-field ml-field-brief ml-field-hero"><span>Prompt</span>
           <div class="ml-prompt-wrap">
@@ -1266,14 +1260,15 @@ function renderGenerate(body, cfg, opts, root) {
           </div>
         </details>
 
-        <label class="ml-field"><span>Reference</span>
-          <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop>
-            ${genState.ref
-              ? `<img src="${genState.ref}" alt="reference"/><span class="ml-drop-copy"><b>Reference attached</b><i>Style, logo, or continuity frame</i></span><button class="ml-drop-x" data-ml-clearref aria-label="Remove reference image">${svgIc("close")}</button>`
-              : `<span class="ml-drop-ic">${svgIc("upload")}</span><span class="ml-drop-copy"><b>Drop reference image, logo, style frame, or continuity asset</b><i>JPG, PNG, WEBP</i></span><button class="ml-drop-browse" type="button">Browse files</button>`}
-            <input type="file" accept="image/*" data-ml-file hidden />
-          </div>
-        </label>
+        <div class="ml-brief-engine">
+          <label class="ml-field"><span>Engine</span>
+            <div class="ml-provs" data-ml-provs>
+              ${provs.map((pr) => `<button class="ml-prov ${genState.provider === pr.id ? "is-on" : ""}" data-v="${pr.id}" style="--pb:${pr.brand}">
+                <i style="background:${pr.brand}"></i>${esc(pr.name)}</button>`).join("") || `<span class="ml-hint">No engine enabled for ${genState.modality}. <b data-ml-open-settings>Configure →</b></span>`}
+            </div>
+          </label>
+          ${models.length ? `<label class="ml-field"><span>Lane</span><select class="ml-select" data-ml-model title="Render lane">${models.map((m) => `<option value="${esc(m)}" ${genState.model === m ? "selected" : ""}>${esc(laneLabel(m))}</option>`).join("")}</select></label>` : ""}
+        </div>
 
         <button class="ml-generate ml-hero" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
           <span class="ml-generate-glow" aria-hidden="true"></span>

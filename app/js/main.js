@@ -4,20 +4,20 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260708-83";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260708-83";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260708-83";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260708-83";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260708-83";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260708-83";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260708-83";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260708-83";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260708-83";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260708-83";
-import { renderVacationMode } from "./vacation.js?v=phantom-live-20260708-83";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260708-83";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260708-83";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260708-83";
+} from "./store.js?v=phantom-live-20260708-84";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260708-84";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260708-84";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260708-84";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260708-84";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260708-84";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260708-84";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260708-84";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260708-84";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260708-84";
+import { renderVacationMode } from "./vacation.js?v=phantom-live-20260708-84";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260708-84";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260708-84";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260708-84";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -317,13 +317,15 @@ function updateOperationsMapControls() {
 /* ============================ topbar ============================ */
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
+  const roster = buildWorkerRoster();
+  const activeWorkers = roster.filter((w) => w.status === "working" || w.status === "waiting-approval").length;
   const pills = [
     { label: "Phantom Status", value: "Online", tone: "ok", dot: true },
     { label: "System Status", value: attention ? "Attention needed" : "All Systems Operational", tone: attention ? "warn" : "ok", dot: true },
-    { label: "Memory", value: "Private & Local", tone: "ok", lock: true },
+    { label: "Active Workers", value: `${activeWorkers} of ${roster.length}`, tone: "ok", dot: true, open: "workforce" },
   ];
   $("[data-status-pills]").innerHTML = pills.map((p) => `
-    <div class="pill pill-${p.tone}">
+    <div class="pill pill-${p.tone} ${p.open ? "pill-link" : ""}" ${p.open ? `data-pill-open="${p.open}" role="button" tabindex="0"` : ""}>
       <span class="pill-k">${p.label}</span>
       <span class="pill-v">${p.dot ? `<i class="dot"></i>` : ""}${p.lock ? `<i class="lock" aria-hidden="true">🔒</i>` : ""}${esc(p.value)}</span>
     </div>`).join("")
@@ -333,6 +335,11 @@ function renderStatusPills() {
     </label>` : "");
   const sel = $("[data-org-select]");
   if (sel) sel.onchange = () => { setWorkspace(sel.value); renderConsole(); };
+  $$("[data-pill-open]").forEach((el) => {
+    const go = () => routeWorkspace(el.dataset.pillOpen);
+    el.onclick = go;
+    el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
+  });
 }
 
 let clockTimer = 0;
@@ -588,7 +595,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260708-83";
+const POSE_VERSION = "phantom-live-20260708-84";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

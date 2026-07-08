@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260708-83";
+} from "./store.js?v=phantom-live-20260708-84";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1180,7 +1180,7 @@ function workerStatusLabel(status) {
   })[status] || title(status);
 }
 
-function buildWorkerRoster() {
+export function buildWorkerRoster() {
   const activity = store.state.activity || [];
   const pendingApprovals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   return WORKFORCE_EMPLOYEES.map((employee) => {
