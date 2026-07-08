@@ -518,7 +518,16 @@ export async function ownerLogin(ownerKey) {
       throw new Error("Your key is probably fine — the backend (Hermes) on the admin PC is stopped. Start it: open PowerShell in the phantomforce\\server folder, run: npm run dev — wait ~20 seconds, then sign in again.");
     }
     if (response.status === 401 || response.status === 403) {
-      throw new Error("That key was rejected by the backend. If you're sure it's right, the server may have started without its .env file — restart Hermes from the phantomforce\\server folder so it loads PHANTOMFORCE_OWNER_LOGIN_KEY.");
+      // auto-diagnose: is the backend even holding an owner key right now?
+      let keyLoaded = null;
+      try {
+        const probe = await fetch("/sessions").then((r) => r.json());
+        if (typeof probe?.auth?.ownerLoginKeyConfigured === "boolean") keyLoaded = probe.auth.ownerLoginKeyConfigured;
+      } catch {}
+      if (keyLoaded === false) {
+        throw new Error("Your key is fine — the backend started WITHOUT its .env file, so no owner key is loaded. On the admin PC: stop the server (Ctrl+C), then run it from the phantomforce\\server folder (cd ...\\phantomforce\\server, then npm run dev) and sign in again.");
+      }
+      throw new Error("That key was rejected by the backend. If you're sure it's right, restart Hermes from the phantomforce\\server folder so it loads PHANTOMFORCE_OWNER_LOGIN_KEY from .env — see docs/ADMIN_RECOVERY.md.");
     }
     throw new Error(raw || "Owner login failed.");
   }
