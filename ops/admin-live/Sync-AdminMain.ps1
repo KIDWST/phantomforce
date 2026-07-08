@@ -45,7 +45,14 @@ $RepoRoot = (Resolve-Path $RepoRoot).Path
 $stateDir = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live"
 New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
 $lockPath = Join-Path $stateDir "sync.lock"
+$logPath = Join-Path $stateDir "sync.log"
 $lock = [System.IO.File]::Open($lockPath, [System.IO.FileMode]::OpenOrCreate, [System.IO.FileAccess]::ReadWrite, [System.IO.FileShare]::None)
+
+function Write-SyncLog {
+  param([string]$Line)
+  $stamp = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+  Add-Content -LiteralPath $logPath -Value "[$stamp] $Line"
+}
 
 try {
   $branch = (Invoke-Git rev-parse --abbrev-ref HEAD).Trim()
@@ -101,7 +108,12 @@ try {
     & (Join-Path $PSScriptRoot "Start-AdminLive.ps1") -RepoRoot $RepoRoot -Port $Port -StopExisting
   }
 
-  Write-Output "PhantomForce admin main synced at $($local.Substring(0, 7)); serving 127.0.0.1:$Port"
+  $summary = "synced at $($local.Substring(0, 7)); serving 127.0.0.1:$Port$(if ($needRestart) { ' (restarted)' } else { '' })"
+  Write-SyncLog $summary
+  Write-Output "PhantomForce admin main $summary"
+} catch {
+  Write-SyncLog "FAILED: $($_.Exception.Message)"
+  throw
 } finally {
   $lock.Dispose()
 }

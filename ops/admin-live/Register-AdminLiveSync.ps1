@@ -11,11 +11,35 @@ $ps = (Get-Command powershell.exe -ErrorAction Stop).Source
 $startScript = Join-Path $PSScriptRoot "Start-AdminLive.ps1"
 $syncScript = Join-Path $PSScriptRoot "Sync-AdminMain.ps1"
 
-$startArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$startScript`" -RepoRoot `"$repo`" -Port $Port -StopExisting"
-$syncArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$syncScript`" -RepoRoot `"$repo`" -Port $Port"
+$startArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$startScript`" -RepoRoot `"$repo`" -Port $Port -StopExisting"
+$syncArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$syncScript`" -RepoRoot `"$repo`" -Port $Port"
 
-$startAction = New-ScheduledTaskAction -Execute $ps -Argument $startArgs
-$syncAction = New-ScheduledTaskAction -Execute $ps -Argument $syncArgs
+# Task Scheduler's own "Hidden" task-setting only hides the task from the
+# Task Scheduler UI — it does NOT suppress the console window the launched
+# powershell.exe pops up. Route both actions through a wscript/VBS launcher
+# (WshShell.Run with window style 0) instead: that starts the process already
+# hidden, so nothing ever flashes on screen, even for the every-N-minutes sync.
+$stateDir = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live"
+New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
+
+function New-HiddenLauncher {
+  param([string]$VbsPath, [string]$Command)
+  $vbsCommand = $Command.Replace('"', '""')
+  $vbsBody = @"
+Set WshShell = CreateObject("WScript.Shell")
+WshShell.Run "$vbsCommand", 0, True
+"@
+  Set-Content -LiteralPath $VbsPath -Value $vbsBody -Encoding ascii
+}
+
+$startVbs = Join-Path $stateDir "run-admin-live-start.vbs"
+$syncVbs = Join-Path $stateDir "run-admin-live-sync.vbs"
+New-HiddenLauncher -VbsPath $startVbs -Command "$ps $startArgs"
+New-HiddenLauncher -VbsPath $syncVbs -Command "$ps $syncArgs"
+
+$wscript = (Get-Command wscript.exe -ErrorAction Stop).Source
+$startAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$startVbs`""
+$syncAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$syncVbs`""
 
 $startTrigger = New-ScheduledTaskTrigger -AtLogOn
 $syncTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
@@ -27,8 +51,6 @@ try {
   Register-ScheduledTask -TaskName "PhantomForce Admin Live Server" -Action $startAction -Trigger $startTrigger -Settings $settings -Principal $principal -Description "Starts the local static admin server for admin.phantomforce.online." -Force | Out-Null
   Register-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger $syncTrigger -Settings $settings -Principal $principal -Description "Fast-forwards PhantomForce main so the admin site follows GitHub." -Force | Out-Null
 } catch {
-  $stateDir = Join-Path $env:LOCALAPPDATA "PhantomForce\admin-live"
-  New-Item -ItemType Directory -Force -Path $stateDir | Out-Null
   $watchScript = Join-Path $PSScriptRoot "Watch-AdminMain.ps1"
   $vbs = Join-Path $stateDir "start-admin-live-watch.vbs"
   $watchArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$watchScript`" -RepoRoot `"$repo`" -Port $Port -EveryMinutes $EveryMinutes"
