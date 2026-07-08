@@ -224,8 +224,14 @@ function runHiggsfield(args, timeoutMs = 30 * 60 * 1000) {
 /* CLI preflight, cached: /health reports whether the higgsfield CLI is even
    present so the console can say "install it" BEFORE a render burns a wait. */
 let cliStatus = { at: 0, present: null, detail: "" };
+let cliProbeInFlight = null;
 async function refreshCliStatus() {
   if (Date.now() - cliStatus.at < 10 * 60 * 1000 && cliStatus.present !== null) return cliStatus;
+  if (cliProbeInFlight) return cliProbeInFlight;
+  cliProbeInFlight = probeCliStatus().finally(() => { cliProbeInFlight = null; });
+  return cliProbeInFlight;
+}
+async function probeCliStatus() {
   try {
     const result = await runHiggsfield(["--version"], 15000);
     cliStatus = { at: Date.now(), present: true, detail: clampText(result.stdout || result.stderr, 80) };
@@ -239,6 +245,77 @@ async function refreshCliStatus() {
     };
   }
   return cliStatus;
+}
+
+/* Renders run as BACKGROUND JOBS: tunnels (Cloudflare et al.) cut a blocking
+   request at ~100s, and a Higgsfield render takes minutes. POST /generate with
+   async:true returns a job id instantly; the client polls /generate/job/<id>.
+   The legacy blocking mode stays for direct/localhost use.                   */
+const mediaJobs = new Map();
+function pruneMediaJobs() {
+  const cutoff = Date.now() - 2 * 60 * 60 * 1000;
+  for (const [id, job] of mediaJobs) if (job.at < cutoff) mediaJobs.delete(id);
+  while (mediaJobs.size > 40) mediaJobs.delete(mediaJobs.keys().next().value);
+}
+
+async function renderMedia(plan) {
+  const assets = [];
+  for (let index = 0; index < plan.count; index += 1) {
+    const args = [
+      "generate", "create", plan.model,
+      "--prompt", plan.prompt,
+      "--aspect_ratio", plan.aspect,
+      "--resolution", plan.resolution,
+      "--wait",
+      "--wait-timeout", plan.modality === "video" ? "30m" : "15m",
+      "--json",
+      "--no-color",
+    ];
+    if (plan.modality === "video") args.splice(9, 0, "--duration", String(plan.duration));
+    const result = await runHiggsfield(args, plan.modality === "video" ? 31 * 60 * 1000 : 16 * 60 * 1000);
+    const parsed = parseHiggsfieldJson(result.stdout);
+    collectHiggsfieldAssets(parsed, plan.modality, assets);
+    if (!parsed) {
+      const urls = String(result.stdout || "").match(/https?:\/\/\S+/g) || [];
+      urls.forEach((url) => assets.push({ type: plan.modality, url: url.replace(/[),\]]+$/, ""), meta: {} }));
+    }
+  }
+  return assets.map((asset) => ({
+    ...asset,
+    meta: {
+      ...(asset.meta || {}),
+      generation_spec: plan.generation_spec,
+      model: plan.model,
+      aspect: plan.aspect,
+      resolution: plan.resolution,
+      session_id: plan.sessionId,
+    },
+  }));
+}
+
+async function handleMediaJobStatus(req, res, urlPath) {
+  const session = await validateAdminBearer(req);
+  if (!session) {
+    sendJson(res, 401, { error: "admin_session_required" });
+    return;
+  }
+  const job = mediaJobs.get(urlPath.slice("/generate/job/".length));
+  if (!job) {
+    sendJson(res, 404, { error: "job_not_found", message: "This render job is gone — the studio server probably restarted mid-render." });
+    return;
+  }
+  sendJson(res, 200, {
+    ok: true,
+    job: job.id,
+    status: job.status,
+    assets: job.assets,
+    error: job.error || undefined,
+    message: job.message || undefined,
+    live: true,
+    provider: "higgsfield-cli",
+    model: job.model,
+    generation_spec: job.generation_spec,
+  });
 }
 
 async function handleMediaGenerate(req, res) {
@@ -269,34 +346,44 @@ async function handleMediaGenerate(req, res) {
   }
 
   const modality = payload.modality === "video" ? "video" : "image";
-  const model = mediaModel({ ...payload, modality });
-  const aspect = mediaAspect(payload);
-  const resolution = mediaResolution({ ...payload, modality });
-  const duration = mediaDuration(payload);
-  const count = modality === "video" ? 1 : mediaCount(payload);
-  const assets = [];
+  const plan = {
+    prompt,
+    modality,
+    model: mediaModel({ ...payload, modality }),
+    aspect: mediaAspect(payload),
+    resolution: mediaResolution({ ...payload, modality }),
+    duration: mediaDuration(payload),
+    count: modality === "video" ? 1 : mediaCount(payload),
+    generation_spec: payload.generation_spec || null,
+    sessionId: session.id || "",
+  };
 
-  try {
-    for (let index = 0; index < count; index += 1) {
-      const args = [
-        "generate", "create", model,
-        "--prompt", prompt,
-        "--aspect_ratio", aspect,
-        "--resolution", resolution,
-        "--wait",
-        "--wait-timeout", modality === "video" ? "30m" : "15m",
-        "--json",
-        "--no-color",
-      ];
-      if (modality === "video") args.splice(9, 0, "--duration", String(duration));
-      const result = await runHiggsfield(args, modality === "video" ? 31 * 60 * 1000 : 16 * 60 * 1000);
-      const parsed = parseHiggsfieldJson(result.stdout);
-      collectHiggsfieldAssets(parsed, modality, assets);
-      if (!parsed) {
-        const urls = String(result.stdout || "").match(/https?:\/\/\S+/g) || [];
-        urls.forEach((url) => assets.push({ type: modality, url: url.replace(/[),\]]+$/, ""), meta: {} }));
+  if (payload.async === true || /[?&]async=1/.test(req.url || "")) {
+    const id = `job-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    const job = {
+      id, at: Date.now(), status: "running", assets: [],
+      error: "", message: "", model: plan.model, generation_spec: plan.generation_spec,
+    };
+    mediaJobs.set(id, job);
+    pruneMediaJobs();
+    (async () => {
+      try {
+        const assets = await renderMedia(plan);
+        if (!assets.length) { job.status = "failed"; job.error = "no_assets"; }
+        else { job.status = "done"; job.assets = assets; }
+      } catch (error) {
+        job.status = "failed";
+        job.error = "higgsfield_cli_failed";
+        job.message = String(error?.message || error).slice(0, 220);
       }
-    }
+    })();
+    sendJson(res, 200, { ok: true, job: id, status: "running", provider: "higgsfield-cli", model: plan.model });
+    return;
+  }
+
+  let assets;
+  try {
+    assets = await renderMedia(plan);
   } catch (error) {
     sendJson(res, 200, { error: "higgsfield_cli_failed", message: String(error?.message || error).slice(0, 220) });
     return;
@@ -308,40 +395,39 @@ async function handleMediaGenerate(req, res) {
   }
 
   sendJson(res, 200, {
-    assets: assets.map((asset) => ({
-      ...asset,
-      meta: {
-        ...(asset.meta || {}),
-        generation_spec: payload.generation_spec || null,
-        model,
-        aspect,
-        resolution,
-        session_id: session.id || "",
-      },
-    })),
+    assets,
     live: true,
     provider: "higgsfield-cli",
-    model,
-    generation_spec: payload.generation_spec || null,
+    model: plan.model,
+    generation_spec: plan.generation_spec,
   });
 }
 
 createServer(async (req, res) => {
-  if ((req.url || "").split("?")[0] === "/health") {
-    const cli = await refreshCliStatus().catch(() => cliStatus);
+  const urlPath = (req.url || "/").split("?")[0];
+
+  if (urlPath === "/health") {
+    // answer INSTANTLY from cache — the console probes with a short timeout,
+    // and a slow CLI check must never make the whole studio lane look dead
+    if (cliStatus.present === null || Date.now() - cliStatus.at > 10 * 60 * 1000) {
+      refreshCliStatus().catch(() => {});
+    }
     send(res, 200, JSON.stringify({
       ok: true,
       service: "phantomforce-admin-static",
       root: repoRoot,
-      higgsfield_cli: { present: cli.present, detail: cli.detail },
+      higgsfield_cli: { present: cliStatus.present, detail: cliStatus.detail },
     }), "application/json; charset=utf-8");
     return;
   }
 
-  const urlPath = (req.url || "/").split("?")[0];
-
   if (urlPath === "/generate") {
     await handleMediaGenerate(req, res);
+    return;
+  }
+
+  if (urlPath.startsWith("/generate/job/")) {
+    await handleMediaJobStatus(req, res, urlPath);
     return;
   }
 

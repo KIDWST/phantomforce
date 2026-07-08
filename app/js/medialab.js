@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260707-69";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-69";
+import { session as accessSession } from "./store.js?v=phantom-live-20260707-70";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260707-70";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -663,10 +663,13 @@ async function generate(cfg, req) {
     const r = await fetch(url, {
       method: "POST",
       headers,
-      body: JSON.stringify(providerReq),
+      // async on the studio lane: the box returns a job id instantly and we
+      // poll — a tunnel that cuts long requests at ~100s can't kill the render
+      body: JSON.stringify(studioLane ? { ...providerReq, async: true } : providerReq),
       signal: ctrl.signal,
     });
-    const d = await r.json().catch(() => null);
+    let d = await r.json().catch(() => null);
+    if (d && d.job && !Array.isArray(d.assets)) d = await pollStudioJob(d.job, spec, headers);
     if (d && Array.isArray(d.assets) && d.assets.length) {
       const assets = normalizeGeneratedAssets(d.assets, req, spec);
       if (assets.length) return { assets, live: true, spec, provider: d.provider || req.provider, model: d.model || spec.model };
@@ -680,18 +683,46 @@ async function generate(cfg, req) {
   const draft = await draftHiggsfieldRequest(providerReq, spec);
   const assets = [];
   for (let i = 0; i < (providerReq.params.count || 1); i++) assets.push(previewAsset(providerReq, i, { spec, fallbackReason, draft }));
-  return { assets, live: false, spec, fallbackReason, fallbackDetail, draft };
+  return { assets, live: false, spec, fallbackReason, fallbackDetail, fallbackLane: url, draft };
+}
+
+/* Poll a studio background job until it lands. Transient network blips while
+   polling must NOT kill a render that's still cooking on the box. */
+async function pollStudioJob(jobId, spec, headers) {
+  const deadline = Date.now() + (spec.modality === "video" ? 31 : 16) * 60_000;
+  let misses = 0;
+  while (Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 5000));
+    try {
+      const r = await fetch(`/generate/job/${encodeURIComponent(jobId)}`, { headers });
+      const d = await r.json().catch(() => null);
+      if (r.status === 404) return { error: "job_lost", message: d?.message || "the studio server restarted mid-render" };
+      if (!d) continue;
+      misses = 0;
+      if (d.status === "done" || d.status === "failed") return d;
+    } catch {
+      if (++misses >= 24) return { error: "provider_unreachable", message: "lost contact with the studio box for 2 minutes" };
+    }
+  }
+  return { error: "provider_timeout", message: "" };
 }
 
 /* Turn a raw studio/CLI failure into the exact next move for the owner. */
-function explainMediaFailure(reason = "", detail = "") {
+function explainMediaFailure(reason = "", detail = "", lane = "") {
   const text = `${reason} ${detail}`.toLowerCase();
+  const studioLane = lane.startsWith("/");
   if (/enoent|not recognized|command not found|no such file/.test(text))
     return "the higgsfield CLI isn't installed on the admin box — install it and sign in (higgsfield login), then Re-check";
   if (/login|logged|sign[ -]?in|auth|unauthoriz|credential|expired|forbidden/.test(text))
     return "the higgsfield CLI is signed out — run `higgsfield login` on the admin box, then Re-check";
   if (/quota|credit|insufficient|billing|payment|limit reached/.test(text))
     return "Higgsfield says the plan is out of renders — check your Higgsfield account";
+  if (/job_lost/.test(text))
+    return "the studio server restarted mid-render — run it again";
+  if (/unreachable/.test(text))
+    return studioLane
+      ? "the connection to the admin box dropped mid-render (tunnels cut long requests) — pull the latest build on the box and restart the static server once; renders then run as background jobs that survive any tunnel"
+      : `nothing answered at ${lane || "the render endpoint"} — start the studio box or bash ai-proxy/run.sh for the API lane`;
   if (/timeout/.test(text))
     return "Higgsfield took too long — run it again or drop the quality a notch";
   if (/admin_session_required/.test(text))
@@ -1338,8 +1369,8 @@ function wireGenerate(body, cfg, opts, root, esc) {
       // a green "connected" banner must never contradict a failing render —
       // the most recent failure is THE state until it's cleared or fixed
       doctor.dataset.state = "warn";
-      title.textContent = "Engine reachable, but the last render failed";
-      msg.textContent = explainMediaFailure(lastRenderIssue.reason, lastRenderIssue.detail)
+      title.textContent = "The last render didn't finish";
+      msg.textContent = explainMediaFailure(lastRenderIssue.reason, lastRenderIssue.detail, lastRenderIssue.lane)
         || `${String(lastRenderIssue.reason || "unknown error")} — fix it on the admin box, then hit Re-check.`;
       return;
     }
@@ -1410,10 +1441,10 @@ async function runGenerate(body, cfg, opts, root, esc) {
     session.assets = session.assets.slice(0, 60);
     lastRenderIssue = out.live || out.queued
       ? null
-      : { reason: out.fallbackReason || "unreachable", detail: out.fallbackDetail || "", at: Date.now() };
+      : { reason: out.fallbackReason || "unreachable", detail: out.fallbackDetail || "", lane: out.fallbackLane || "", at: Date.now() };
     refreshGeneratePanel(body, cfg, opts, root);
     if (opts.notify) {
-      const why = out.live || out.queued ? "" : explainMediaFailure(out.fallbackReason, out.fallbackDetail);
+      const why = out.live || out.queued ? "" : explainMediaFailure(out.fallbackReason, out.fallbackDetail, out.fallbackLane);
       const status = out.live
         ? "generated"
         : out.queued
