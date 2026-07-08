@@ -1,3 +1,5 @@
+import "./load-env.js";
+
 import cors from "@fastify/cors";
 import {
   ACTION_SCHEMAS,
@@ -5,7 +7,6 @@ import {
   FALCON_JOB_SCHEMAS,
   FalconJobSchema,
 } from "@phantomforce/contracts";
-import "dotenv/config";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 
