@@ -111,6 +111,27 @@ const brief = { prompt: "a red fox in the snow", modality: "image", params: { co
   ok("CLI ran exactly for the approved render", cliCalls() >= 1);
 }
 
+/* ---- D2. Hermes up but PhantomCut (tools bridge) down: name the fix ---- */
+{
+  // stub Hermes answers status ok but the draft tool 503s with "fetch failed"
+  const deadBridge = createServer((req, res) => {
+    res.setHeader("content-type", "application/json");
+    if (req.url === "/session") { res.end(JSON.stringify({ session: { canManageAccess: true, id: "s1" } })); return; }
+    if (req.url === "/phantom-ai/media-lab/higgsfield/status") { res.end(JSON.stringify({ ok: true, phantomcut: { reachable: false, base_url: "http://127.0.0.1:8787" } })); return; }
+    if (req.url === "/phantom-ai/media-lab/higgsfield/draft") { res.statusCode = 503; res.end(JSON.stringify({ ok: false, error: "fetch failed", phantomcut_reachable: false })); return; }
+    res.statusCode = 404; res.end("{}");
+  });
+  await new Promise((r) => deadBridge.listen(0, "127.0.0.1", r));
+  const cliBefore = cliCalls();
+  const { port } = await startBackend({ HERMES_BASE_URL: `http://127.0.0.1:${deadBridge.address().port}` });
+  const status = await j(await fetch(`http://127.0.0.1:${port}/api/creative-engine/status`, { headers: AUTH }));
+  ok("PhantomCut down => status names the bridge + fix", /PhantomCut/.test(status.message) && /Start PhantomCut|PHANTOMCUT_BASE_URL/.test(status.message), status.message.slice(0, 90));
+  const gen = await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) }));
+  ok("PhantomCut down => generate blocked with the exact fix (no raw 'fetch failed')", gen.blocked === true && /PhantomCut/.test(gen.message) && !/fetch failed/.test(gen.message), (gen.message || "").slice(0, 90));
+  ok("still no CLI involvement", cliCalls() === cliBefore);
+  deadBridge.close();
+}
+
 /* ---- D. transport disabled: everything blocked ---- */
 {
   const { port } = await startBackend({ CREATIVE_ENGINE_TRANSPORT: "disabled" });

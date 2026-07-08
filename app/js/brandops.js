@@ -3,7 +3,7 @@
    This file renders Automation honestly from user-created automation records
    only. No internal lanes or fabricated records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, VACATION_POLICY } from "./store.js?v=phantom-live-20260708-73";
+import { store, uid, visible, pushActivity, ago, currentWs, VACATION_POLICY } from "./store.js?v=phantom-live-20260708-74";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 

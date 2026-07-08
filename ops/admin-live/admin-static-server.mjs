@@ -364,7 +364,7 @@ async function handleCreativeEngineStatus(req, res) {
     out.message = "Creative Engine is connected through Hermes.";
   } else {
     out.status = "error";
-    out.message = `Blocked: Hermes is reachable, but Higgsfield MCP tools are not available (PhantomCut bridge at ${phantomcut.base_url || "127.0.0.1:8787"} isn't answering Hermes).`;
+    out.message = `Blocked: Hermes is reachable, but Higgsfield MCP tools are not available — the PhantomCut bridge at ${phantomcut.base_url || "127.0.0.1:8787"} isn't answering. Start PhantomCut on the admin box (or set PHANTOMCUT_BASE_URL to where it runs), then Re-check.`;
   }
   sendJson(res, 200, out);
 }
@@ -402,6 +402,11 @@ async function hermesDraftFromPlan(plan, req) {
   }
   if (!result.ok || result.data?.ok !== true) {
     const detail = typeof result.data?.error === "string" ? result.data.error : "";
+    // Hermes's own bridge to the Higgsfield tools is down — name the exact
+    // process and fix instead of leaking a raw "fetch failed"
+    if (result.status === 503 || result.data?.phantomcut_reachable === false || /fetch failed|did not respond|econnrefused/i.test(detail)) {
+      return { ok: false, message: "Blocked: Hermes is up, but its Higgsfield tools bridge (PhantomCut) isn't running on this box. Start the PhantomCut app — or point PHANTOMCUT_BASE_URL in Hermes's env at where it runs — then hit Re-check." };
+    }
     return { ok: false, message: `Blocked: Hermes is reachable, but Higgsfield MCP tools are not available${detail ? ` — ${detail.slice(0, 160)}` : "."}` };
   }
   return { ok: true, draft: result.data.draft || null, safety: result.data.safety || null };
