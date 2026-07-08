@@ -1,12 +1,22 @@
 #!/usr/bin/env node
-import { createReadStream } from "node:fs";
+import { createReadStream, readFileSync } from "node:fs";
 import { access, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const __selfPath = fileURLToPath(import.meta.url);
+
+/* Fingerprint of the code THIS process is running. Sync-AdminMain compares it
+   against the file on disk after every git pull and restarts the server when
+   they differ — push to main and the live box follows, no hands involved. */
+const sourceHash = (() => {
+  try { return createHash("sha256").update(readFileSync(__selfPath)).digest("hex").slice(0, 16); }
+  catch { return "unknown"; }
+})();
 
 function argValue(name, fallback) {
   const index = process.argv.indexOf(name);
@@ -412,10 +422,14 @@ createServer(async (req, res) => {
     if (cliStatus.present === null || Date.now() - cliStatus.at > 10 * 60 * 1000) {
       refreshCliStatus().catch(() => {});
     }
+    let jobsRunning = 0;
+    for (const job of mediaJobs.values()) if (job.status === "running") jobsRunning += 1;
     send(res, 200, JSON.stringify({
       ok: true,
       service: "phantomforce-admin-static",
       root: repoRoot,
+      source_hash: sourceHash,
+      jobs_running: jobsRunning,
       higgsfield_cli: { present: cliStatus.present, detail: cliStatus.detail },
     }), "application/json; charset=utf-8");
     return;
