@@ -117,6 +117,7 @@ function shouldProxy(urlPath) {
   return urlPath === "/session"
     || urlPath === "/sessions"
     || urlPath.startsWith("/auth/")
+    || urlPath.startsWith("/api/vacation-mode")
     || urlPath.startsWith("/phantom-ai/");
 }
 

@@ -228,6 +228,13 @@ assert.equal(store.state.tasks.length, 1, "Phantom Loop requests should not crea
 assert.equal(store.state.looperPlans.length, 1, "Phantom Loop requests should create a guarded build packet");
 assert.match(phantomLoop.say, /No render, publish, or send/i, "Looper proof should state nothing fired");
 
+const loopHelloIntent = classifyPhantomIntent("start phantom loop for hello");
+assert.notEqual(loopHelloIntent.primaryIntent, "looper_build", "Loop should ignore greeting-only targets");
+const loopHelloPlansBefore = store.state.looperPlans.length;
+const loopHello = handleCommand("start phantom loop for hello");
+assert.doesNotMatch(loopHello.say, /Looper draft|build packet/i, "Loop hello should stay normal chat");
+assert.equal(store.state.looperPlans.length, loopHelloPlansBefore, "Loop hello should not create a build packet");
+
 const termina = handleCommand("open this in Termina");
 assert.equal(termina.intent.primaryIntent, "termina_parallel");
 assert.equal(store.state.tasks.length, 1, "Termina routing should not create tasks");

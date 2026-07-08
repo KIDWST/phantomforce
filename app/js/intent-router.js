@@ -78,6 +78,19 @@ function looperDraft(text) {
   };
 }
 
+function looperTarget(text) {
+  return clean(text)
+    .replace(/\b(start|activate|enable|run|use|turn on)\s+(phantom\s+loop|loopus|looper)\s*(for|on|with|about)?\s*/i, "")
+    .replace(/\b(phantom\s+loop|loopus|looper)\s*(for|on|with|about)?\s*/i, "")
+    .trim();
+}
+
+function isNoopLooperTarget(text) {
+  if (!/\b(start\s+(phantom\s+loop|loopus|looper)|phantom\s+loop|loopus|looper)\b/i.test(text)) return false;
+  const target = looperTarget(text);
+  return !target || GREETING.test(target) || GRATITUDE.test(target);
+}
+
 export function classifyPhantomIntent(raw = "") {
   const text = clean(raw);
   const s = lower(text);
@@ -198,6 +211,9 @@ export function classifyPhantomIntent(raw = "") {
       reasonCode: "explicit_automation_request",
       automationDraft: automationDraft(text),
     };
+  }
+  if (isNoopLooperTarget(text)) {
+    return { ...result, primaryIntent: "chat", confidence: 0.9, reasonCode: "looper_armed_without_build_target" };
   }
   if (LOOPER.test(text) && (EXPLICIT_ARTIFACT.test(text) || /\b(start\s+(phantom\s+loop|loopus|looper)|phantom\s+loop|loopus)\b/i.test(text)) && !QUESTION.test(text)) {
     return {

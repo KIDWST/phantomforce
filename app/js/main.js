@@ -4,19 +4,20 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260708-77";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260708-77";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260708-77";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260708-77";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260708-77";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260708-77";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260708-77";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260708-77";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260708-77";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260708-77";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260708-77";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260708-77";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260708-77";
+} from "./store.js?v=phantom-live-20260708-80";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260708-80";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260708-80";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260708-80";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260708-80";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260708-80";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260708-80";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260708-80";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260708-80";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260708-80";
+import { renderVacationMode } from "./vacation.js?v=phantom-live-20260708-80";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260708-80";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260708-80";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260708-80";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -177,6 +178,7 @@ const NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "sites",      label: "Site Creator", icon: "site",  ws: "sites" },
+  { id: "vacation",   label: "Vacation Mode", icon: "auto", ws: "vacation", adminOnly: true },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "automation" },
@@ -191,7 +193,7 @@ const MOBILE_NAV = [
   { id: "content",   label: "Content",   icon: "doc",   route: "nav", target: "content" },
   { id: "media",     label: "Video",     icon: "media", route: "nav", target: "media" },
   { id: "sites",     label: "Site",      icon: "site",  route: "nav", target: "sites" },
-  { id: "workers",   label: "Workers",   icon: "users", route: "nav", target: "workers" },
+  { id: "vacation",  label: "Away",      icon: "auto",  route: "nav", target: "vacation", adminOnly: true },
   { id: "analytics", label: "Analytics", icon: "chart", route: "nav", target: "analytics" },
 ];
 let activeNav = "dashboard";
@@ -586,7 +588,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260708-77";
+const POSE_VERSION = "phantom-live-20260708-80";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1357,6 +1359,27 @@ let ghostMoodUntil = 0;
 let ghostMoodStartedAt = performance.now();
 let phantomHasActed = false;
 
+const LOOP_EXPLICIT_RE = /phantom loop|loopus|looper/i;
+const LOOP_ACTION_RE = /\b(build|create|make|draft|write|prepare|plan|design|generate|launch)\b/i;
+const LOOP_ARTIFACT_RE = /\b(site|website|landing page|page|campaign|proposal|intake|form|workflow|booking|dashboard|copy|store|funnel|automation|media kit|brand kit)\b/i;
+const LOOP_NOOP_RE = /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|ping|test|thanks|thank you|ok|okay|cool|nice)[\s.!?]*$/i;
+
+function loopTarget(raw = "") {
+  return String(raw || "")
+    .replace(/\b(start|activate|enable|run|use|turn on)\s+(phantom\s+loop|loopus|looper)\s*(for|on|with|about)?\s*/i, "")
+    .replace(/\b(phantom\s+loop|loopus|looper)\s*(for|on|with|about)?\s*/i, "")
+    .trim();
+}
+
+function shouldConsumeLoopPrompt(raw = "") {
+  const text = String(raw || "").trim();
+  if (!text || LOOP_NOOP_RE.test(text)) return false;
+  const target = loopTarget(text);
+  if (!target || LOOP_NOOP_RE.test(target)) return false;
+  if (looksLikeQuestion(text) && !LOOP_EXPLICIT_RE.test(text)) return false;
+  return (LOOP_ACTION_RE.test(text) && LOOP_ARTIFACT_RE.test(text)) || LOOP_ARTIFACT_RE.test(target);
+}
+
 function emotionForText(text = "") {
   const s = text.toLowerCase();
   if (/\bwon\b|closed|delivered|booked|launched|published|5 stars|celebrat/.test(s)) return "excited";
@@ -1461,6 +1484,7 @@ function bindCardRemovers(root, onRemove) {
 function runCommand(raw) {
   phantomHasActed = true;
   const loopArmed = companionMode() === "loop";
+  const loopConsumed = loopArmed && shouldConsumeLoopPrompt(raw);
   const inferredMode = inferModeFromText(raw);
   if (!loopArmed && inferredMode !== activeMode && MODES[inferredMode]) {
     activeMode = inferredMode;
@@ -1472,7 +1496,7 @@ function runCommand(raw) {
      request — a leftover sticky mode must never turn "whats the weather"
      into "Create a video for whats the weather" */
   const namedLane = modeNamedInText(raw);
-  const text = loopArmed
+  const text = loopConsumed
     ? (/phantom loop|loopus|looper|build me|build a|create a campaign|make an intake form|turn this into a build plan/i.test(raw)
       ? raw
       : `start phantom loop for ${raw}`)
@@ -1484,7 +1508,7 @@ function runCommand(raw) {
   stageReact("listen", 620);
   setTimeout(() => {
     speak("· · ·", "thinking");
-    if (loopArmed) setCompanionState("looping");
+    if (loopConsumed) setCompanionState("looping");
     stageReact("think", 780);
     setTimeout(async () => {
       let r;
@@ -1496,7 +1520,7 @@ function runCommand(raw) {
       speak(r.say);
       if (r.cards?.length) chatAttachCards(r.cards);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
-      if (loopArmed) setTimeout(() => setCompanionMode("chat"), reduceMotion ? 600 : 2600);
+      if (loopConsumed) setTimeout(() => setCompanionMode("chat"), reduceMotion ? 600 : 2600);
       renderConsole();
       stageReact("answer", 1100);
       if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);
@@ -1736,6 +1760,7 @@ const CUSTOM = {
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
   automation: { title: "Automation", kicker: "Workflows & Vacation Mode — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
+  vacation: { title: "Vacation Mode", kicker: "Your phantom workforce while you are away", custom: true, wide: true, adminOnly: true, render: (body) => renderVacationMode(body, mediaOpts()) },
 };
 
 let openId = null;

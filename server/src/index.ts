@@ -140,6 +140,15 @@ import {
   runExternalSecurityMonitor,
 } from "./phantom-ai/external-security-monitor.js";
 import {
+  activateVacationMode,
+  deactivateVacationMode,
+  decideVacationApproval,
+  getVacationModeActivity,
+  getVacationModeApprovals,
+  getVacationModeStatus,
+  updateVacationModeSettings,
+} from "./phantom-ai/vacation-mode.js";
+import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
 } from "./phantom-ai/security-scan-scheduler.js";
@@ -1908,6 +1917,153 @@ app.post("/phantom-ai/approvals/queue/:queueId/status", async (request, reply) =
     approval_execution_implemented: false,
     live_provider_called: false,
     ledger_written: false,
+  };
+});
+
+app.get("/api/vacation-mode/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    ...(await getVacationModeStatus(session)),
+  };
+});
+
+app.post("/api/vacation-mode/activate", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const result = await activateVacationMode(session, request.body ?? {});
+
+  return {
+    ok: true,
+    session,
+    ...result,
+    external_send_performed: false,
+    provider_call_performed: false,
+  };
+});
+
+app.post("/api/vacation-mode/deactivate", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const result = await deactivateVacationMode(session);
+
+  return {
+    ok: true,
+    session,
+    ...result,
+    external_send_performed: false,
+    provider_call_performed: false,
+  };
+});
+
+app.patch("/api/vacation-mode/settings", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const result = await updateVacationModeSettings(session, request.body ?? {});
+
+  return {
+    ok: true,
+    session,
+    ...result,
+    external_send_performed: false,
+    provider_call_performed: false,
+  };
+});
+
+app.get("/api/vacation-mode/activity", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { limit?: string } | undefined;
+  const limit = Number(query?.limit ?? 30);
+
+  return {
+    ok: true,
+    session,
+    activity: await getVacationModeActivity(session, limit),
+  };
+});
+
+app.get("/api/vacation-mode/approvals", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { limit?: string } | undefined;
+  const limit = Number(query?.limit ?? 30);
+
+  return {
+    ok: true,
+    session,
+    approvals: await getVacationModeApprovals(session, limit),
+    execution_disabled: true,
+  };
+});
+
+app.post("/api/vacation-mode/approvals/:id/decision", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const params = request.params as { id?: string };
+  const body = (request.body ?? {}) as { decision?: unknown; note?: unknown };
+  const decision = body.decision === "approve" || body.decision === "reject" || body.decision === "snooze"
+    ? body.decision
+    : null;
+
+  if (!params.id || !decision) {
+    return reply.code(400).send({
+      ok: false,
+      error: "Missing vacation approval id or valid decision.",
+      allowed_decisions: ["approve", "reject", "snooze"],
+    });
+  }
+
+  const result = await decideVacationApproval(
+    session,
+    params.id.slice(0, 160),
+    decision,
+    typeof body.note === "string" ? body.note : "",
+  );
+
+  if (!result) {
+    return reply.code(404).send({
+      ok: false,
+      error: "Vacation approval was not found.",
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    ...result,
+    external_send_performed: false,
+    provider_call_performed: false,
   };
 });
 
