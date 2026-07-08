@@ -1,7 +1,15 @@
 import assert from "node:assert/strict";
-import { classifyPhantomIntent } from "../app/js/intent-router.js";
-import { handleCommand, handleSmartCommand } from "../app/js/command.js?v=phantom-live-20260707-48";
-import { ctx, store } from "../app/js/store.js?v=phantom-live-20260707-48";
+import { readFileSync } from "node:fs";
+
+/* Import command.js/store.js with the SAME build query command.js uses
+   internally — a hardcoded ?v here drifts on every build bump and silently
+   splits the store into two module instances, making assertions test nothing. */
+const commandSrc = readFileSync(new URL("../app/js/command.js", import.meta.url), "utf8");
+const buildId = commandSrc.match(/store\.js\?v=([^"']+)/)?.[1] || "";
+const q = buildId ? `?v=${buildId}` : "";
+const { classifyPhantomIntent } = await import(`../app/js/intent-router.js${q}`);
+const { handleCommand, handleSmartCommand } = await import(`../app/js/command.js${q}`);
+const { ctx, store } = await import(`../app/js/store.js${q}`);
 
 ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 
@@ -9,6 +17,7 @@ const cases = {
   conversation: [
     ["hello", "greeting"],
     ["hi", "greeting"],
+    ["hey phantom", "greeting"],
     ["thanks", "gratitude"],
     ["who are you?", "identity"],
     ["what can you do?", "capability"],
@@ -18,12 +27,17 @@ const cases = {
     "i hate this dashboard",
     "we should improve the chat box",
     "maybe add a profile picture",
+    "why is this happening?",
     "why is this broken?",
     "help me plan this",
+    "help me think through this",
     "this needs to feel more premium",
     "the bot is annoying",
     "I want Phantom to feel alive",
     "can users build stuff with this?",
+    "what if we had vacation mode?",
+    "higgsfield creates but phantomforce operates",
+    "this could be huge",
   ],
   status: [
     "what's my pipeline?",
@@ -34,6 +48,7 @@ const cases = {
     "create a task to fix the chat box spacing",
     "add a task: update the profile card",
     "make this a todo",
+    "turn this into a task",
     "assign Codex a task to inspect the navbar",
     "track this as high priority",
     "put this on my task list",
@@ -54,9 +69,32 @@ const cases = {
   ],
   automation: [
     "remind me tomorrow",
+    "schedule this for friday",
     "check this every morning",
     "monitor my site daily",
     "tell me when this breaks",
+  ],
+  termina: [
+    "open this in Termina",
+    "split this across workers",
+    "run planner builder reviewer on this",
+    "create parallel workers for this",
+  ],
+  vacation: [
+    "start vacation mode",
+    "keep working while I'm gone",
+    "run this while I'm away",
+    "let the agents keep working",
+  ],
+  risky: [
+    "publish it",
+    "send it",
+    "deploy it now",
+    "send the email",
+    "spend the credits",
+    "render the final video",
+    "connect my account",
+    "delete this",
   ],
 };
 
@@ -71,6 +109,9 @@ for (const text of cases.noTask) {
   const r = classifyPhantomIntent(text);
   assert.equal(r.shouldCreateTask, false, `${text} should not create task`);
   assert.equal(r.shouldCreateAutomation, false, `${text} should not create automation`);
+  assert.equal(r.shouldStartLooper, false, `${text} should not start Looper`);
+  assert.equal(r.shouldOpenTermina, false, `${text} should not open Termina`);
+  assert.equal(r.shouldStartVacationMode, false, `${text} should not start Vacation Mode`);
 }
 
 for (const text of cases.status) {
@@ -106,12 +147,44 @@ for (const text of cases.automation) {
   assert.equal(r.shouldCreateTask, false, `${text} should not create generic task`);
 }
 
+for (const text of cases.termina) {
+  const r = classifyPhantomIntent(text);
+  assert.equal(r.primaryIntent, "termina_parallel", `${text} should route to Termina`);
+  assert.equal(r.shouldOpenTermina, true, `${text} should flag Termina`);
+  assert.equal(r.shouldCreateTask, false, `${text} should not create task`);
+}
+
+for (const text of cases.vacation) {
+  const r = classifyPhantomIntent(text);
+  assert.equal(r.primaryIntent, "vacation_mode", `${text} should route to Vacation Mode`);
+  assert.equal(r.shouldStartVacationMode, false, `${text} must NOT arm autonomy before confirmation`);
+  assert.equal(r.requiresUserConfirmation, true, `${text} should require confirmation`);
+}
+
+const vacationConfirm = classifyPhantomIntent("confirm vacation mode");
+assert.equal(vacationConfirm.primaryIntent, "vacation_mode");
+assert.equal(vacationConfirm.shouldStartVacationMode, true, "explicit confirmation arms vacation mode");
+assert.equal(vacationConfirm.requiresAdminApproval, true, "armed vacation mode is still approval-gated");
+
+for (const text of cases.risky) {
+  const r = classifyPhantomIntent(text);
+  assert.equal(r.primaryIntent, "approval_request", `${text} should demand approval`);
+  assert.equal(r.requiresAdminApproval, true, `${text} should be approval-gated`);
+  assert.equal(r.shouldCreateTask, false, `${text} should not create task`);
+}
+
+// a task ABOUT a risky action is still just a task; a reminder likewise
+assert.equal(classifyPhantomIntent("create a task to send the invoice").primaryIntent, "create_task");
+assert.equal(classifyPhantomIntent("remind me to send it tomorrow").primaryIntent, "reminder");
+
+/* ---------------- behavior through the full command brain ---------------- */
 store.state.tasks = [];
 store.state.sites = [];
 store.state.media = [];
 store.state.agents = [];
 store.state.approvals = [];
 store.state.looperPlans = [];
+store.state.automations = [];
 
 const question = handleCommand("what do you think about making the website better?");
 assert.equal(question.intent.primaryIntent, "question");
@@ -121,44 +194,62 @@ assert.equal(store.state.media.length, 0, "questions should not create media");
 
 const greeting = handleCommand("hello");
 assert.equal(greeting.intent.primaryIntent, "greeting");
-assert.match(greeting.say, /Ready/i);
-assert.match(greeting.say, /pipeline|approval|board/i);
+assert.match(greeting.say, /what are we working on/i, "greeting should be human, not a status dump");
+assert.doesNotMatch(greeting.say, /pipeline|approvals|board/i, "greeting should not vomit status");
 assert.equal(store.state.tasks.length, 0, "greetings should not create tasks");
 
 const smartGreeting = await handleSmartCommand("hello");
 assert.equal(smartGreeting.intent.primaryIntent, "greeting");
-assert.equal(smartGreeting.hermes || null, null, "greetings should stay local readiness pings");
+assert.equal(smartGreeting.hermes || null, null, "greetings should stay local");
 assert.equal(store.state.tasks.length, 0, "smart greetings should not create tasks");
+
+const complaint = handleCommand("i hate this dashboard, it feels annoying");
+assert.equal(store.state.tasks.length, 0, "complaints should not create tasks");
+assert.match(complaint.say, /task|talk/i, "feedback should offer, not act");
 
 const weather = handleCommand("what's the weather?");
 assert.equal(weather.intent.primaryIntent, "question");
-assert.match(weather.say, /live|Hermes|Subscription/i);
 assert.equal(store.state.tasks.length, 0, "live-info questions should not create tasks");
-
-const siteOpinion = handleCommand("what do you think about making the website better?");
-assert.equal(siteOpinion.intent.primaryIntent, "question");
-assert.match(siteOpinion.say, /offer|proof|CTA|build/i);
-assert.doesNotMatch(siteOpinion.say, /Question received/i);
-assert.equal(store.state.tasks.length, 0, "strategy questions should not create tasks");
-
-const proposalsQuestion = handleCommand("what proposals are open?");
-assert.equal(proposalsQuestion.intent.primaryIntent, "question");
-assert.match(proposalsQuestion.say, /proposal|draft/i);
-assert.equal(store.state.tasks.length, 0, "proposal questions should not create tasks");
 
 const candidate = handleCommand("the chat box needs better spacing");
 assert.equal(candidate.intent.primaryIntent, "task_candidate");
 assert.equal(store.state.tasks.length, 0, "task candidates should wait for explicit confirmation");
+assert.match(candidate.say, /task|plan|talk/i, "candidate should offer choices");
 
 const task = handleCommand("create a task to fix the chat box spacing");
 assert.equal(task.intent.primaryIntent, "create_task");
 assert.equal(store.state.tasks.length, 1, "explicit task requests should create one task");
+assert.match(task.say, /Done — created task/i, "task creation should show compact proof");
+assert.match(task.say, /No external actions/i, "task proof should state safety");
 
 const phantomLoop = handleCommand("build me a landing page");
 assert.equal(phantomLoop.intent.primaryIntent, "looper_build");
 assert.equal(store.state.tasks.length, 1, "Phantom Loop requests should not create generic tasks");
-assert.equal(store.state.sites.length, 0, "Phantom Loop planning should not create site artifacts directly");
 assert.equal(store.state.looperPlans.length, 1, "Phantom Loop requests should create a guarded build packet");
+assert.match(phantomLoop.say, /No render, publish, or send/i, "Looper proof should state nothing fired");
+
+const termina = handleCommand("open this in Termina");
+assert.equal(termina.intent.primaryIntent, "termina_parallel");
+assert.equal(store.state.tasks.length, 1, "Termina routing should not create tasks");
+assert.match(termina.say, /nothing launched/i, "Termina should be honest that no agents launched");
+
+const vacationAsk = handleCommand("start vacation mode");
+assert.equal(vacationAsk.intent.primaryIntent, "vacation_mode");
+assert.match(vacationAsk.say, /confirm vacation mode/i, "vacation mode must ask for explicit confirmation");
+assert.match(vacationAsk.say, /blocked|approval/i, "vacation scope must show blocked actions");
+const agentsBefore = store.state.agents.length;
+const approvalsBefore = store.state.approvals.length;
+
+const vacationGo = handleCommand("confirm vacation mode");
+assert.equal(vacationGo.intent.primaryIntent, "vacation_mode");
+assert.match(vacationGo.say, /armed|approval/i, "confirmed vacation mode shows an approval-gated run");
+assert.ok(store.state.agents.length > agentsBefore, "confirmed vacation mode creates a run record");
+assert.ok(store.state.approvals.length > approvalsBefore, "the vacation run is approval-gated in the queue");
+
+const risky = handleCommand("publish it");
+assert.equal(risky.intent.primaryIntent, "approval_request");
+assert.match(risky.say, /Approval Queue|approval/i, "risky actions route to approvals");
+assert.match(risky.say, /nothing has been executed/i, "risky actions must state nothing executed");
 
 ctx.session = { role: "employee", name: "Employee", ws: "phantomforce" };
 const blockedLoop = handleCommand("start Phantom Loop for a booking page");

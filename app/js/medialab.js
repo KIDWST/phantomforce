@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260708-71";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-71";
+import { session as accessSession } from "./store.js?v=phantom-live-20260708-72";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-72";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";

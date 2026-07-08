@@ -5,17 +5,17 @@
 const clean = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
 const lower = (value = "") => clean(value).toLowerCase();
 
-const EXPLICIT_TASK = /\b(create|add|make|assign|track|put|save|log)\s+(a\s+)?(task|todo|to-do|work item)\b|\b(make|add|put|save|track)\s+(this|that|it).{0,30}\b(task list|todo|to-do|tasks?)\b|\bmake\s+(this|that|it)\s+a\s+(todo|to-do|task)\b|\bassign\s+codex\s+a\s+task\b|\btrack this as\b/i;
+const EXPLICIT_TASK = /\b(create|add|make|assign|track|put|save|log)\s+(a\s+)?(task|todo|to-do|work item)\b|\b(make|add|put|save|track)\s+(this|that|it).{0,30}\b(task list|todo|to-do|tasks?)\b|\bmake\s+(this|that|it)\s+a\s+(todo|to-do|task)\b|\bturn\s+(this|that|it)\s+into\s+a\s+(task|todo|to-do)\b|\bassign\s+codex\s+a\s+task\b|\btrack this as\b/i;
 const TASK_CANDIDATE = /\b(needs?|should|someone should|we need to|have to|must)\s+(to\s+)?(fix|fixing|update|change|improve|make|clean|polish|repair|redo|adjust|better)\b|\bneeds?\s+(better|fixing|spacing|polish|cleanup|work)\b|\bmake\s+.{2,80}\s+better\b|\b(is|looks|feels)\s+(broken|off|bad|ugly|wrong|annoying|confusing)\b/i;
 const BRAINSTORM = /\b(we should|maybe|what if|it would be cool|i think|i want|could we|should we)\b/i;
 const QUESTION = /\?|\b(what|why|how|when|where|who|can|could|should|would|is|are|do|does|did)\b/i;
-const GREETING = /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there|ping|test)[\s.!?]*$/i;
+const GREETING = /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there|ping|test)(\s+there)?([,\s]+(phantom(force)?|ghost|buddy|man|dude))?[\s.!?]*$/i;
 const GRATITUDE = /^(thanks|thank you|appreciate it|bet|cool|nice|ok|okay|got it|perfect)[\s.!?]*$/i;
 const IDENTITY = /\b(who are you|what are you|are you phantom|what is phantom|what is phantomforce ai|what's your job)\b/i;
 const CAPABILITY = /\b(what can you do|how can you help|what are you able to do|what can phantom do|what can phantomforce do)\b/i;
 const FEEDBACK = /\b(i hate|i don't like|this sucks|looks awful|looks bad|annoying|frustrating|disappointed|not what i wanted|too robotic|too cluttered)\b/i;
 const PLAN = /\b(make|create|give|draft|build)\s+(me\s+)?(a\s+)?(plan|roadmap|breakdown|strategy)|\b(break this down|roadmap this|plan this|help me plan)\b/i;
-const REMINDER = /\b(remind me|reminder|check this every|every morning|every day|daily|weekly|monitor|tell me when|watch this)\b/i;
+const REMINDER = /\b(remind me|reminder|schedule (this|that|it)\b|check this every|every morning|every day|daily|weekly|monitor|tell me when|watch this)\b/i;
 const AUTOMATION = /\b(automation|automate|workflow|autopilot|recurring|auto[- ]?follow|auto[- ]?post)\b/i;
 const APPROVAL = /\b(approve|approval|sign off|waiting on me|pending|review queue|needs my call)\b/i;
 const MEMORY = /\b(remember|save this memory|make sure you remember|from now on|always remember|forget this)\b/i;
@@ -26,6 +26,16 @@ const STATUS = /\b(status|catch me up|what's next|what is next|today|pipeline|qu
 const CURRENT_INFO = /\b(weather|forecast|temperature|rain|snow|humidity|news|headlines?|stock|crypto|bitcoin|price of|exchange rate|score|game (last night|today|tonight)|traffic|time (is it|in)\b|what day is|sports)\b/i;
 const LOOPER = /\b(start\s+(phantom\s+loop|loopus|looper)|phantom\s+loop|loopus|looper|build me|build a|create a campaign|make an intake form|create an intake form|turn this into a build plan|build plan|landing page|website build|site build|proposal|campaign|crm workflow|booking flow|dashboard idea|website copy)\b/i;
 const EXPLICIT_ARTIFACT = /\b(create|draft|build|make|prepare|write|new)\b/i;
+/* Termina (multi-agent command wall) — EXPLICIT phrasing only. A bare mention
+   of "termina" in a question stays conversation. */
+const TERMINA = /\b(open (this |that |it )?in termina|send (this|that|it) to termina|split (this|that|it) across (multiple )?(agents|workers)|run planner[\s,\/&-]*builder[\s,\/&-]*reviewer|create parallel workers?\b)/i;
+/* Vacation Mode (bounded autonomous work) — EXPLICIT phrasing only. "what if
+   we had vacation mode?" is a brainstorm, never a launch. */
+const VACATION = /\b(start vacation mode|enable vacation mode|keep working while i'?m (gone|away|out)|run (this|these|it) while i'?m (gone|away)|let the agents (keep working|continue|keep going)|work autonomously on (this|these|the|my)|continue (this|working) for .{1,24}(hours?|minutes?) and report)\b/i;
+const VACATION_CONFIRM = /^(confirm|yes[, ]+confirm|arm) vacation mode[\s.!]*$/i;
+/* Risky/external execution verbs — these NEVER execute from chat. They go to
+   the Approval Queue: publish, send, deploy, spend, final render, delete. */
+const RISKY_ACTION = /\b(publish|post|deploy|ship|send)\s+(it|this|that|them|the\b|now)\b|\bsend the (email|invoice|proposal|campaign)\b|\bspend (the |my )?credits?\b|\brender (the )?final\b|\bconnect (the |my )?(account|bank|stripe|instagram|google)\b|\bchange (the )?billing\b|\bdelete (this|that|it|the|my)\b|\bcharge (the|my|his|her|their)\b/i;
 
 function confidenceFor(kind, text) {
   if (kind === "unknown") return 0.35;
@@ -74,9 +84,13 @@ export function classifyPhantomIntent(raw = "") {
   const result = {
     primaryIntent: "unknown",
     confidence: 0.35,
+    /* conservative defaults: NOTHING autonomous happens unless the user
+       explicitly asked for it — normal chat must stay normal */
     shouldCreateTask: false,
     shouldCreateAutomation: false,
     shouldStartLooper: false,
+    shouldOpenTermina: false,
+    shouldStartVacationMode: false,
     needsLiveData: false,
     shouldAskClarifyingQuestion: false,
     requiresUserConfirmation: false,
@@ -104,8 +118,51 @@ export function classifyPhantomIntent(raw = "") {
   if (MEMORY.test(text)) {
     return { ...result, primaryIntent: "memory_update", confidence: confidenceFor("memory_update", text), reasonCode: "memory_keyword" };
   }
+  if (RISKY_ACTION.test(text) && !EXPLICIT_TASK.test(text) && !REMINDER.test(text)) {
+    /* direct execution commands with external consequences never run from
+       chat — but "create a task to send the invoice" is still just a task */
+    return {
+      ...result,
+      primaryIntent: "approval_request",
+      confidence: 0.9,
+      requiresAdminApproval: true,
+      requiresUserConfirmation: true,
+      reasonCode: "risky_action_requires_approval",
+    };
+  }
   if (APPROVAL.test(text)) {
     return { ...result, primaryIntent: "approval_request", confidence: confidenceFor("approval_request", text), reasonCode: "approval_keyword" };
+  }
+  if (VACATION_CONFIRM.test(text)) {
+    return {
+      ...result,
+      primaryIntent: "vacation_mode",
+      confidence: 0.95,
+      shouldStartVacationMode: true,
+      requiresUserConfirmation: false,
+      requiresAdminApproval: true,
+      reasonCode: "vacation_mode_confirmed",
+    };
+  }
+  if (VACATION.test(text) && !QUESTION.test(text) && !BRAINSTORM.test(text)) {
+    return {
+      ...result,
+      primaryIntent: "vacation_mode",
+      confidence: 0.88,
+      shouldStartVacationMode: false,      // armed only after explicit confirmation
+      requiresUserConfirmation: true,
+      requiresAdminApproval: true,
+      reasonCode: "vacation_mode_requested_needs_confirmation",
+    };
+  }
+  if (TERMINA.test(text)) {
+    return {
+      ...result,
+      primaryIntent: "termina_parallel",
+      confidence: 0.88,
+      shouldOpenTermina: true,
+      reasonCode: "explicit_termina_request",
+    };
   }
   if (EXPLICIT_TASK.test(text)) {
     return {

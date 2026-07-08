@@ -1121,10 +1121,13 @@ function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string)
   const business = businessName.trim() || "PhantomForce";
 
   if (/^(hi|hello|hey|yo|phantom)\b/.test(lower.trim())) {
+    return `Hey — what are we working on for ${business}?`;
+  }
+
+  if (/\b(annoying|frustrating|hate|sucks|weird|robotic|feels off|feels wrong|not what i wanted|disappointed)\b/.test(lower)) {
     return [
-      `I'm here for ${business}.`,
-      "Tell me what you want moved: leads, quote, schedule, content, ChicagoShots media, PhantomCut proof, website/app work, or backend ops.",
-      "If it needs to leave the dashboard, I will draft it first and hold it for approval.",
+      "Yeah, that shouldn't feel like that — thanks for calling it out.",
+      "Want me to turn this into a fix task, or just talk through what feels wrong? Nothing gets created unless you say so.",
     ].join("\n\n");
   }
 
@@ -1160,9 +1163,8 @@ function buildPhantomAiWorkspaceReply(userRequest: string, businessName: string)
   }
 
   return [
-    `Got it. For ${business}, I would turn that into a concrete next step instead of leaving it as a vague note.`,
-    "I can draft the reply, outline the quote, prepare a booking step, organize the proposal status, or summarize the next three revenue actions.",
-    "Give me the tone you want: direct, premium, casual, aggressive, short, or client-ready.",
+    "Got it — happy to talk that through. Nothing was turned into a task.",
+    `When you want action for ${business}, say the word — "make it a task", "plan it", or "start a build" — and I'll run it properly with proof.`,
   ].join("\n\n");
 }
 

@@ -7,8 +7,8 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session,
-} from "./store.js?v=phantom-live-20260708-71";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260708-71";
+} from "./store.js?v=phantom-live-20260708-72";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260708-72";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -432,17 +432,18 @@ function localQuestionAnswer(text, settings = null) {
 
 function intentResponse(intent, text, settings = null) {
   if (intent.primaryIntent === "greeting") {
+    /* a greeting is a greeting — no status dump, no task, no cards */
     return {
       say: isAdmin()
-        ? readinessLine()
-        : "Ready. Ask for status, approvals, deliverables, or the next action.",
+        ? "Hey Jordan — what are we working on?"
+        : "Hey — what can I get moving for you?",
       cards: [],
       open: null,
     };
   }
   if (intent.primaryIntent === "gratitude") {
     return {
-      say: "Standing by.",
+      say: "Anytime. What's next?",
       cards: [],
       open: null,
     };
@@ -469,15 +470,15 @@ function intentResponse(intent, text, settings = null) {
   }
   if (intent.primaryIntent === "brainstorm") {
     return {
-      say: "That is an idea lane, not a task yet. I’ll reason with it, pressure-test it, or turn it into a plan. I only create records when you explicitly ask.",
-      cards: [card("Idea lane", "No task created", "Say 'make this a task', 'make me a plan', or 'start Phantom Loop' when you want it converted.", [])],
+      say: "Let's think it through — I'm not turning this into work unless you ask. What's the version of this that would actually matter?",
+      cards: [],
       open: null,
     };
   }
   if (intent.primaryIntent === "feedback") {
     return {
-      say: "Heard. I’m treating that as feedback, not a task. If you want it tracked, say 'create a task to fix this' and I’ll put it on the list.",
-      cards: [card("Feedback", "No task created", text, [])],
+      say: "Yeah, that shouldn't happen. Want me to turn this into a fix task, or just talk through what feels wrong?",
+      cards: [],
       open: null,
     };
   }
@@ -490,8 +491,37 @@ function intentResponse(intent, text, settings = null) {
   }
   if (intent.primaryIntent === "task_candidate") {
     return {
-      say: "That sounds task-worthy, but I won’t create it from wording alone. Say 'create a task for this' if you want it tracked.",
-      cards: [card("Task candidate", intent.taskDraft?.title || "Possible task", "Needs explicit confirmation before it becomes a task.", [])],
+      say: "I can make that a task, turn it into a plan, or just talk it through. What do you want?",
+      cards: [card("If you want it tracked", intent.taskDraft?.title || "Possible task", "Say 'create a task for this' and it goes on the list — otherwise we're just talking.", [])],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "approval_request" && intent.reasonCode === "risky_action_requires_approval") {
+    return {
+      say: "That's an external action — publish/send/deploy/spend/delete never fire from chat. It goes to the Approval Queue first, and nothing has been executed.",
+      cards: [card("Approval required", "External action held", "Review and approve it in the queue when you're ready. No credits spent, nothing sent.", [openAction("Open Approvals", "approvals")], "Nothing executed")],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "termina_parallel") {
+    return {
+      say: "Termina lane: I'd split this across planner, builder, and reviewer workers. The multi-agent wall isn't wired on this box yet, so nothing launched — I can stage it as a guarded plan in Workers instead.",
+      cards: [card("Termina", "Parallel split staged, not launched", "Planner → Builder → Reviewer. Say 'stage it in Workers' to keep it as a guarded plan until Termina is connected.", [openAction("Open Workers", "workforce")], "No agents launched")],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "vacation_mode") {
+    if (intent.shouldStartVacationMode) {
+      const a = createAutomation("Vacation Mode run", `Vacation Mode: continue approved work autonomously. Allowed: draft, plan, summarize, organize, prepare assets, reports, queue approvals. Blocked without approval: publish, send, deploy, spend, delete, external actions. Source: "${text}"`);
+      return {
+        say: `Vacation Mode armed as an approval-gated run: "${a.name}". It can draft, plan, organize, and prepare — anything external stays queued for your approval. Nothing risky runs on its own.`,
+        cards: [card("Vacation Mode", "Run record created — approval-gated", "Allowed: drafts, plans, summaries, briefs, reports, approval prep. Blocked: publish, send, deploy, spend, delete, external actions.", [openAction("Review approval", "approvals"), openAction("Open Automation", "automation")], "Approval required")],
+        open: null,
+      };
+    }
+    return {
+      say: "Vacation Mode is real autonomy, so I want an explicit go. Scope: it drafts, plans, organizes, preps assets, and writes reports while you're away — publish/send/deploy/spend/delete stay blocked and queue for approval. Say 'confirm vacation mode' to arm it.",
+      cards: [card("Vacation Mode — awaiting confirmation", "Go live your life. Phantom keeps the work moving.", "Allowed: draft · plan · summarize · organize · prepare · report · queue approvals. Requires approval: publish · send · deploy · spend · delete · external.", [], "Not started")],
       open: null,
     };
   }
@@ -505,7 +535,7 @@ function intentResponse(intent, text, settings = null) {
   if (intent.primaryIntent === "create_task") {
     const t = createTaskDraft(intent.taskDraft);
     return {
-      say: `Task created: "${t.title}". It is local and ready for owner review.`,
+      say: `Done — created task "${t.title}". Priority: ${t.priority === "high" ? "High" : "Normal"}. Source: explicit request. No external actions.`,
       cards: [card("Task", t.title, t.detail, [openAction("Open Workers", "workforce")], `Priority: ${t.priority}`)],
       open: null,
     };
@@ -536,7 +566,7 @@ function intentResponse(intent, text, settings = null) {
     const plan = looperPlan(intent.looperDraft);
     const packet = createLooperBuildPacket(plan, intent.looperDraft);
     return {
-      say: `Phantom Loop drafted a guarded build packet for "${plan.goal}". I’ll keep it in review mode until approval.`,
+      say: `Looper draft created for "${plan.goal}". No render, publish, or send happened — approval required before anything generates.`,
       cards: [card("Phantom Loop packet", packet.title, plan.steps.join(" "), [openAction("Open Site Creator", "sites")], "Elite guarded mode")],
       open: null,
     };
