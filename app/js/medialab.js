@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260708-81";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-81";
+import { session as accessSession } from "./store.js?v=phantom-live-20260708-82";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-82";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -1124,16 +1124,54 @@ function renderGenerate(body, cfg, opts, root) {
       <span class="ml-doctor-copy"><b data-ml-doctor-title>Checking the media engine…</b><span data-ml-doctor-msg></span></span>
       <button class="ml-doctor-retry" data-ml-doctor-retry type="button">${svgIc("spark")}Re-check</button>
     </div>
-    <div class="ml-studio">
-      <aside class="ml-panel ml-builder" aria-label="Shot Builder">
-        <div class="ml-card-head"><b>Shot Builder</b><i>Pick a format, then roll</i></div>
-        <div class="ml-seg" data-ml-modality>
-          <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
-          <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
+    <div class="ml-cockpit">
+      <section class="ml-brief" aria-label="Shot Builder">
+        <div class="ml-brief-head">
+          <div class="ml-card-head"><b>Shot Builder</b><i>Pick a format, then roll</i></div>
+          <div class="ml-brief-head-controls">
+            <div class="ml-seg" data-ml-modality>
+              <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
+              <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
+            </div>
+            <div class="ml-provs" data-ml-provs>
+              ${provs.map((pr) => `<button class="ml-prov ${genState.provider === pr.id ? "is-on" : ""}" data-v="${pr.id}" style="--pb:${pr.brand}">
+                <i style="background:${pr.brand}"></i>${esc(pr.name)}</button>`).join("") || `<span class="ml-hint">No engine enabled for ${genState.modality}. <b data-ml-open-settings>Configure →</b></span>`}
+            </div>
+            ${models.length ? `<select class="ml-select ml-select-compact" data-ml-model title="Render lane">${models.map((m) => `<option value="${esc(m)}" ${genState.model === m ? "selected" : ""}>${esc(laneLabel(m))}</option>`).join("")}</select>` : ""}
+          </div>
+        </div>
+
+        <label class="ml-field ml-field-brief ml-field-hero"><span>Prompt</span>
+          <div class="ml-prompt-wrap">
+            <textarea class="ml-prompt" data-ml-prompt rows="3" placeholder="Describe the shot — subject, setting, light, mood…">${esc(genState.prompt)}</textarea>
+            <button class="ml-enhance" data-ml-enhance title="Improve prompt">${svgIc("spark")} Enhance</button>
+          </div>
+        </label>
+        <button class="ml-link" data-ml-toggleneg>${genState.showNeg ? "− Hide" : "+ Add"} negative prompt</button>
+        ${genState.showNeg ? `<label class="ml-field"><textarea class="ml-prompt" data-ml-neg rows="2" placeholder="What to avoid…">${esc(genState.negative)}</textarea></label>` : ""}
+
+        <div class="ml-brief-row">
+          <label class="ml-field"><span>Frame</span>
+            <div class="ml-chips" data-ml-aspect>${aspects.map(([k]) => `<button class="${genState.aspect === k ? "is-on" : ""}" data-v="${k}">${k}</button>`).join("")}</div>
+          </label>
+          ${genState.modality === "video" ? `<label class="ml-field"><span>Duration</span>
+            <div class="ml-chips" data-ml-dur>${DURATIONS.map((d) => `<button class="${genState.duration === d ? "is-on" : ""}" data-v="${d}">${d}s</button>`).join("")}</div></label>`
+          : `<label class="ml-field"><span>Takes</span>
+            <div class="ml-chips" data-ml-count>${[1, 2, 3, 4].map((n) => `<button class="${genState.count === n ? "is-on" : ""}" data-v="${n}">${n}</button>`).join("")}</div></label>`}
+          <label class="ml-field ml-grow"><span>Style</span>
+            <div class="ml-chips ml-chips-wrap" data-ml-style>${STYLES.map((s) => `<button class="${genState.style === s ? "is-on" : ""}" data-v="${s}">${s}</button>`).join("")}</div>
+          </label>
+          <label class="ml-field ml-field-ref"><span>Reference</span>
+            <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop>
+              ${genState.ref ? `<img src="${genState.ref}" alt="reference"/><button class="ml-drop-x" data-ml-clearref aria-label="Remove reference image">✕</button>`
+              : `<span>${svgIc("upload")} Drop or click — img→${genState.modality}, style, continuity</span>`}
+              <input type="file" accept="image/*" data-ml-file hidden />
+            </div>
+          </label>
         </div>
 
         <label class="ml-field ml-field-presets"><span class="ml-preset-heading"><b>${presetDeckLabel()}</b><i>${visiblePresets.length} pro formats</i></span>
-          <div class="ml-presets" data-ml-presets>
+          <div class="ml-presets ml-presets-strip" data-ml-presets>
             ${visiblePresets.map((p) => `<button class="ml-preset is-${p.modality} ${genState.preset === p.id ? "is-on" : ""}" data-v="${p.id}" title="${esc(p.prompt)}">
               <span class="ml-preset-kicker">${svgIc(p.modality === "video" ? "film" : "image")} ${esc(p.use)}</span>
               <b>${esc(p.label)}</b>
@@ -1142,54 +1180,13 @@ function renderGenerate(body, cfg, opts, root) {
             </button>`).join("")}
           </div>
         </label>
+      </section>
 
-        <label class="ml-field"><span>Engine</span>
-          <div class="ml-provs" data-ml-provs>
-            ${provs.map((pr) => `<button class="ml-prov ${genState.provider === pr.id ? "is-on" : ""}" data-v="${pr.id}" style="--pb:${pr.brand}">
-              <i style="background:${pr.brand}"></i>${esc(pr.name)}</button>`).join("") || `<span class="ml-hint">No engine enabled for ${genState.modality}. <b data-ml-open-settings>Configure →</b></span>`}
-          </div>
-        </label>
-
-        ${models.length ? `<label class="ml-field"><span>Render lane</span>
-          <select class="ml-select" data-ml-model>${models.map((m) => `<option value="${esc(m)}" ${genState.model === m ? "selected" : ""}>${esc(laneLabel(m))}</option>`).join("")}</select></label>` : ""}
-
-        <label class="ml-field ml-field-brief"><span>Prompt</span>
-          <div class="ml-prompt-wrap">
-            <textarea class="ml-prompt" data-ml-prompt rows="4" placeholder="Describe the shot — subject, setting, light, mood…">${esc(genState.prompt)}</textarea>
-            <button class="ml-enhance" data-ml-enhance title="Improve prompt">${svgIc("spark")} Enhance</button>
-          </div>
-        </label>
-        <button class="ml-link" data-ml-toggleneg>${genState.showNeg ? "− Hide" : "+ Add"} negative prompt</button>
-        ${genState.showNeg ? `<label class="ml-field"><textarea class="ml-prompt" data-ml-neg rows="2" placeholder="What to avoid…">${esc(genState.negative)}</textarea></label>` : ""}
-
-        <div class="ml-row">
-          <label class="ml-field ml-grow"><span>Frame</span>
-            <div class="ml-chips" data-ml-aspect>${aspects.map(([k]) => `<button class="${genState.aspect === k ? "is-on" : ""}" data-v="${k}">${k}</button>`).join("")}</div>
-          </label>
-          ${genState.modality === "video" ? `<label class="ml-field"><span>Duration</span>
-            <div class="ml-chips" data-ml-dur>${DURATIONS.map((d) => `<button class="${genState.duration === d ? "is-on" : ""}" data-v="${d}">${d}s</button>`).join("")}</div></label>`
-          : `<label class="ml-field"><span>Takes</span>
-            <div class="ml-chips" data-ml-count>${[1, 2, 3, 4].map((n) => `<button class="${genState.count === n ? "is-on" : ""}" data-v="${n}">${n}</button>`).join("")}</div></label>`}
-        </div>
-
-        <label class="ml-field"><span>Style</span>
-          <div class="ml-chips ml-chips-wrap" data-ml-style>${STYLES.map((s) => `<button class="${genState.style === s ? "is-on" : ""}" data-v="${s}">${s}</button>`).join("")}</div>
-        </label>
-
-        <label class="ml-field"><span>Reference (optional)</span>
-          <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop>
-            ${genState.ref ? `<img src="${genState.ref}" alt="reference"/><button class="ml-drop-x" data-ml-clearref aria-label="Remove reference image">✕</button>`
-            : `<span>${svgIc("upload")} Drop an image or click to upload — for img→${genState.modality}, style, or continuity</span>`}
-            <input type="file" accept="image/*" data-ml-file hidden />
-          </div>
-        </label>
-
-        <button class="ml-generate ml-hero" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
-          <span class="ml-generate-glow" aria-hidden="true"></span>
-          <span class="ml-generate-main">${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality}`}</span>
-          <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : `~${estCredits()} credits · Phantom handles the rest`}</i>
-        </button>
-      </aside>
+      <button class="ml-generate ml-hero ml-hero-standalone" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
+        <span class="ml-generate-glow" aria-hidden="true"></span>
+        <span class="ml-generate-main">${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality}`}</span>
+        <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : `~${estCredits()} credits · Phantom handles the rest`}</i>
+      </button>
 
       <section class="ml-stage" data-ml-results aria-label="Preview Stage">
         <div class="ml-stage-frame ${genState.busy ? "is-busy" : ""} ${genState.stageFull ? "is-full" : ""}">
