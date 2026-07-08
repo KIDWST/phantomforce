@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260708-72";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-72";
+import { session as accessSession } from "./store.js?v=phantom-live-20260708-73";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-73";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -1294,14 +1294,19 @@ function refreshGeneratePanel(body, cfg, opts, root) {
   }, 0);
 }
 function skeletons(n) { return `<div class="ml-grid ml-stage-grid">${Array.from({ length: n }, () => `<div class="ml-skel"><div class="ml-skel-shim"></div></div>`).join("")}</div>`; }
-const IDLE_HINTS = ["Neon product hero on wet asphalt", "Founder portrait, window light", "Emerald smoke logo reveal"];
+const IDLE_HINTS = [
+  "Game trailer teaser: neon dusk city",
+  "Landing page hero for an indie game launch",
+  "Social kit: three posts for a product drop",
+  "Emerald smoke logo reveal",
+];
 function resultsHtml(esc) {
   const recent = session.assets.filter((a) => a.fromGen);
   if (!recent.length) return `
     <div class="ml-idle">
       <div class="ml-idle-orb" aria-hidden="true"><span></span><span></span><span></span></div>
-      <b>The stage is lit and waiting</b>
-      <i>Write a prompt and generate. Finished images and videos land here.</i>
+      <b>Create with context</b>
+      <i>Phantom preps the brief, routes it to your creative engine, reviews the output, and turns it into campaigns, sites, and follow-ups. Finished media lands here — and in Content Hub.</i>
       <div class="ml-board" aria-hidden="true">
         ${["1:1", "4:5", "16:9", "9:16", "3:2"].map((r, i) => `<span class="ml-board-cell" style="--d:${(i * 0.4).toFixed(1)}s" data-ratio="${r}"></span>`).join("")}
       </div>

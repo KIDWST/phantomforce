@@ -4,19 +4,19 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260708-72";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260708-72";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260708-72";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260708-72";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260708-72";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260708-72";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260708-72";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260708-72";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260708-72";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260708-72";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260708-72";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260708-72";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260708-72";
+} from "./store.js?v=phantom-live-20260708-73";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260708-73";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260708-73";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260708-73";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260708-73";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260708-73";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260708-73";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260708-73";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260708-73";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260708-73";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260708-73";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260708-73";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260708-73";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -586,7 +586,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260708-72";
+const POSE_VERSION = "phantom-live-20260708-73";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1729,13 +1729,13 @@ function renderDeveloperPage(body) {
 }
 
 const CUSTOM = {
-  media: { title: "Media Lab", kicker: "AI studio", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
+  media: { title: "Media Lab", kicker: "Creative Engine — create with context", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
-  automation: { title: "Automation", kicker: "User-created workflows", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
+  automation: { title: "Automation", kicker: "Workflows & Vacation Mode — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
 };
 
 let openId = null;

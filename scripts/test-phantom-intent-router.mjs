@@ -9,7 +9,7 @@ const buildId = commandSrc.match(/store\.js\?v=([^"']+)/)?.[1] || "";
 const q = buildId ? `?v=${buildId}` : "";
 const { classifyPhantomIntent } = await import(`../app/js/intent-router.js${q}`);
 const { handleCommand, handleSmartCommand } = await import(`../app/js/command.js${q}`);
-const { ctx, store } = await import(`../app/js/store.js${q}`);
+const { ctx, store, VACATION_POLICY } = await import(`../app/js/store.js${q}`);
 
 ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
 
@@ -255,5 +255,17 @@ ctx.session = { role: "employee", name: "Employee", ws: "phantomforce" };
 const blockedLoop = handleCommand("start Phantom Loop for a booking page");
 assert.equal(blockedLoop.intent.primaryIntent, "looper_build");
 assert.equal(store.state.looperPlans.length, 1, "non-admin Phantom Loop requests should be gated");
+
+/* ---------------- Vacation Mode policy: the hard autonomy boundary ---------------- */
+assert.equal(VACATION_POLICY.allowRendering, false, "vacation policy must not allow renders (credits)");
+assert.equal(VACATION_POLICY.allowPublishing, false, "vacation policy must not allow publishing");
+assert.equal(VACATION_POLICY.allowSending, false, "vacation policy must not allow sending");
+assert.equal(VACATION_POLICY.allowDeploying, false, "vacation policy must not allow deploys");
+assert.equal(VACATION_POLICY.allowDeleting, false, "vacation policy must not allow deletes");
+assert.equal(VACATION_POLICY.requireApprovalForCredits, true, "credits always require approval");
+assert.equal(VACATION_POLICY.requireApprovalForExternalActions, true, "external actions always require approval");
+assert.ok(VACATION_POLICY.allowDrafting && VACATION_POLICY.allowTaskCreation && VACATION_POLICY.allowMediaBriefs, "safe drafting work is allowed");
+assert.ok(VACATION_POLICY.maxRunMinutes <= 480, "runs are time-bounded");
+assert.ok(Array.isArray(store.state.vacationRuns), "vacationRuns state exists");
 
 console.log("phantom intent router tests passed");
