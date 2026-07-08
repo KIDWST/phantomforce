@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260708-80";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-80";
+import { session as accessSession } from "./store.js?v=phantom-live-20260708-81";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-81";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -1039,10 +1039,11 @@ export function renderMediaStudio(el, opts = {}) {
         <div class="ml-tabs" role="tablist" aria-label="Media Lab views">
           ${tabs.map(([id, label]) => `<button class="ml-tab ${session.tab === id ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id}" data-ml-tab="${id}">${label}</button>`).join("")}
         </div>
-        <div class="ml-deck-status">
-          <span class="ml-chip ${engineReady ? "is-ready" : ""}"><i aria-hidden="true"></i>Cinematic Engine · ${engineReady ? "ready" : "standby"}</span>
-          <span class="ml-chip"><i aria-hidden="true"></i>Queue · ${session.assets.length}</span>
-          <span class="ml-credits" title="Production credits">${svgIc("bolt")} ${cfg.credits} credits</span>
+        <div class="ml-engine-badge ${engineReady ? "is-ready" : ""}" title="${engineReady ? "Cinematic Engine ready" : "Cinematic Engine on standby — no engine enabled"}">
+          <span class="ml-engine-orb" aria-hidden="true"></span>
+          <span class="ml-engine-info"><b>Cinematic Engine</b><i>${engineReady ? "Ready" : "Standby"}</i></span>
+          <span class="ml-engine-wave" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span>
+          <span class="ml-engine-credits" title="Production credits">${svgIc("bolt")}${cfg.credits}</span>
         </div>
       </div>
       <div class="ml-body" data-ml-body></div>
@@ -1064,7 +1065,7 @@ function renderPending(body) {
 }
 
 /* ---- Generate ---- */
-const genState = { modality: "image", provider: "higgsfield", model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, busy: false, showNeg: false, preset: "custom" };
+const genState = { modality: "image", provider: "higgsfield", model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, busy: false, showNeg: false, preset: "custom", stageFull: false };
 
 function activePreset() {
   return MEDIA_PRESETS.find((p) => p.id === genState.preset) || null;
@@ -1119,10 +1120,9 @@ function renderGenerate(body, cfg, opts, root) {
 
   body.innerHTML = `
     <div class="ml-doctor" data-ml-doctor>
-      <i class="ml-doctor-dot"></i>
-      <b data-ml-doctor-title>Checking the media engine…</b>
-      <span data-ml-doctor-msg></span>
-      <button class="ml-doctor-retry" data-ml-doctor-retry type="button">Re-check</button>
+      <span class="ml-doctor-badge" aria-hidden="true"><i class="ml-doctor-dot"></i></span>
+      <span class="ml-doctor-copy"><b data-ml-doctor-title>Checking the media engine…</b><span data-ml-doctor-msg></span></span>
+      <button class="ml-doctor-retry" data-ml-doctor-retry type="button">${svgIc("spark")}Re-check</button>
     </div>
     <div class="ml-studio">
       <aside class="ml-panel ml-builder" aria-label="Shot Builder">
@@ -1184,29 +1184,76 @@ function renderGenerate(body, cfg, opts, root) {
           </div>
         </label>
 
-        <button class="ml-generate" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
-          ${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality} · ~${estCredits()} credits`}
+        <button class="ml-generate ml-hero" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
+          <span class="ml-generate-glow" aria-hidden="true"></span>
+          <span class="ml-generate-main">${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality}`}</span>
+          <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : `~${estCredits()} credits · Phantom handles the rest`}</i>
         </button>
       </aside>
 
       <section class="ml-stage" data-ml-results aria-label="Preview Stage">
-        <div class="ml-stage-frame ${genState.busy ? "is-busy" : ""}">
+        <div class="ml-stage-frame ${genState.busy ? "is-busy" : ""} ${genState.stageFull ? "is-full" : ""}">
           <header class="ml-stage-top">
             <span class="ml-rec ${genState.busy ? "is-live" : ""}"><i aria-hidden="true"></i><span data-ml-busy-stage>${genState.busy ? "Rendering" : "Stage ready"}</span></span>
             <b>Preview Stage</b>
-            <span class="ml-stage-chip">${genState.aspect}${genState.modality === "video" ? ` · ${genState.duration}s` : ""}</span>
+            <span class="ml-stage-tools">
+              <span class="ml-stage-chip">${genState.aspect}${genState.modality === "video" ? ` · ${genState.duration}s` : ""}</span>
+              <button class="ml-stage-ic" data-ml-fullscreen title="${genState.stageFull ? "Exit fullscreen" : "Fullscreen"}" aria-label="Toggle fullscreen preview">${svgIc(genState.stageFull ? "collapse" : "expand")}</button>
+            </span>
           </header>
           <div class="ml-stage-view">
             ${genState.busy ? skeletons(genState.modality === "video" ? 1 : genState.count) : resultsHtml(esc)}
           </div>
           <footer class="ml-stage-meta">${settingsChips(esc)}</footer>
+          ${nextStepsHtml(esc)}
         </div>
       </section>
 
       ${railHtml(cfg, esc)}
-    </div>`;
+    </div>
+    ${jobLogHtml(esc)}`;
 
   wireGenerate(body, cfg, opts, root, esc);
+}
+
+/* ---- Next steps: what to do with the latest cut, once one exists ---- */
+function nextStepsHtml(esc) {
+  const recent = session.assets.filter((a) => a.fromGen);
+  if (genState.busy || !recent.length) return "";
+  const unsavedCount = recent.filter((a) => !a.saved).length;
+  return `
+    <div class="ml-next" aria-label="Next steps">
+      <div class="ml-next-head">${svgIc("spark")}<b>Next steps</b><span>Choose what happens to this cut</span></div>
+      <div class="ml-next-grid">
+        <button class="ml-next-card is-neon" data-ml-next="save" ${unsavedCount ? "" : "disabled"}>
+          ${svgIc("check")}<b>Save to library</b><span>${unsavedCount ? `${unsavedCount} unsaved` : "All saved"}</span>
+        </button>
+        <button class="ml-next-card is-cyan" data-ml-next="hub">
+          ${svgIc("hub")}<b>Open in Content Hub</b><span>Auto-captured already</span>
+        </button>
+        <button class="ml-next-card is-gold" data-ml-next="ref">
+          ${svgIc("image")}<b>Use as reference</b><span>Continuity for the next take</span>
+        </button>
+        <button class="ml-next-card is-ghost" data-ml-next="download">
+          ${svgIc("download")}<b>Download</b><span>Save the file locally</span>
+        </button>
+      </div>
+    </div>`;
+}
+
+/* ---- Job log: a slim, honest trail of what actually just happened ---- */
+let jobLog = [];
+function logJob(kind, text) {
+  jobLog.unshift({ kind, text, at: Date.now() });
+  jobLog = jobLog.slice(0, 6);
+}
+function jobLogHtml(esc) {
+  if (!jobLog.length) return "";
+  return `<div class="ml-joblog" aria-label="Recent activity">
+    <span class="ml-joblog-label">${svgIc("play")}Job log</span>
+    <div class="ml-joblog-rows">${jobLog.map((e) => `<span class="ml-joblog-row is-${e.kind}"><i></i>${esc(e.text)}</span>`).join("")}</div>
+    <button class="ml-joblog-clear" data-ml-joblog-clear type="button">Clear</button>
+  </div>`;
 }
 
 function settingsChips(esc) {
@@ -1228,14 +1275,14 @@ function railHtml(cfg, esc) {
   const meterPct = Math.max(4, Math.min(100, Math.round((cfg.credits / 480) * 100)));
   return `
       <aside class="ml-rail" aria-label="Production rail">
-        <section class="ml-rail-card">
-          <h4>Production credits</h4>
+        <section class="ml-rail-card is-credits">
+          <h4>${svgIc("bolt")}Production credits</h4>
           <div class="ml-rail-credit"><b>${cfg.credits}</b><span>available</span></div>
           <div class="ml-meter" role="img" aria-label="${cfg.credits} production credits available"><i style="width:${meterPct}%"></i></div>
           <p>Next run ≈ ${estCredits()} credits · owner-controlled spend</p>
         </section>
         <section class="ml-rail-card">
-          <h4>Render mode</h4>
+          <h4>${svgIc("film")}Render mode</h4>
           <div class="ml-rail-rows">
             <span><b>Preset</b><i>${esc(activePreset()?.label || "Custom")}</i></span>
             <span><b>Mode</b><i>${genState.modality === "video" ? "Video" : "Image"}</i></span>
@@ -1245,16 +1292,16 @@ function railHtml(cfg, esc) {
           </div>
         </section>
         <section class="ml-rail-card">
-          <h4>Content Hub routing</h4>
+          <h4>${svgIc("hub")}Content Hub routing</h4>
           <p>Every finished render is captured to your Content Hub automatically.</p>
           <span class="ml-chip is-ready"><i aria-hidden="true"></i>Auto-capture on</span>
         </section>
         <section class="ml-rail-card ml-rail-guard">
-          <h4>Safeguards</h4>
+          <h4>${svgIc("lock")}Safeguards</h4>
           <p>${cfg.requireApproval ? "Approval is required before paid renders." : "Paid renders stay owner-approved."} Nothing posts externally without you.</p>
         </section>
         <section class="ml-rail-card">
-          <h4>Production queue</h4>
+          <h4>${svgIc("play")}Production queue</h4>
           ${queue.length
             ? `<div class="ml-queue">${queue.map((a) => queueRow(a, esc)).join("")}</div>`
             : `<p class="ml-rail-empty">Queue clear — the stage is yours.</p>`}
@@ -1459,10 +1506,53 @@ function wireGenerate(body, cfg, opts, root, esc) {
       msg.textContent = `Nothing is answering: no Hermes at /phantom-ai on this origin, and no proxy at ${base}. On the admin box, start Hermes (the desktop bridge) — or bash ai-proxy/run.sh for the API lane. Prompts render as offline sketches until then.`;
     }
   };
-  doctor?.querySelector("[data-ml-doctor-retry]")?.addEventListener("click", () => runDoctor(true));
-  runDoctor();
+  const runDoctorAndLog = async (force = false) => {
+    await runDoctor(force);
+    if (!doctor?.isConnected) return;
+    const state = doctor.dataset.state;
+    if (state === "checking" || (state === lastLoggedDoctorState && !force)) return;
+    lastLoggedDoctorState = state;
+    logJob(state === "ok" ? "ok" : state === "down" ? "down" : "warn", doctor.querySelector("[data-ml-doctor-title]")?.textContent || "Engine check");
+    paintJobLog(body, esc);
+  };
+  doctor?.querySelector("[data-ml-doctor-retry]")?.addEventListener("click", () => runDoctorAndLog(true));
+  runDoctorAndLog();
 
   body.querySelectorAll("[data-tile-act]").forEach((b) => b.onclick = () => tileAction(b.dataset.tileAct, b.dataset.id, cfg, opts, root, esc, body));
+
+  /* stage fullscreen toggle — a real, self-contained UI state, not decoration */
+  body.querySelector("[data-ml-fullscreen]")?.addEventListener("click", () => {
+    genState.stageFull = !genState.stageFull;
+    renderGenerate(body, cfg, opts, root);
+  });
+
+  /* Next steps: act on the freshest batch of generations */
+  body.querySelector("[data-ml-next='save']")?.addEventListener("click", () => {
+    const recent = session.assets.filter((a) => a.fromGen && !a.saved);
+    recent.forEach((a) => { a.saved = true; captureForContentHub(a); });
+    if (opts.notify) opts.notify("Media Factory", `saved ${recent.length} generation${recent.length === 1 ? "" : "s"} to the library.`);
+    renderGenerate(body, cfg, opts, root);
+  });
+  body.querySelector("[data-ml-next='hub']")?.addEventListener("click", () => opts.openWorkspace && opts.openWorkspace("content"));
+  body.querySelector("[data-ml-next='ref']")?.addEventListener("click", () => {
+    const latest = session.assets.find((a) => a.fromGen);
+    if (!latest) return;
+    genState.ref = latest.url;
+    renderGenerate(body, cfg, opts, root);
+  });
+  body.querySelector("[data-ml-next='download']")?.addEventListener("click", () => {
+    const latest = session.assets.find((a) => a.fromGen);
+    if (latest) downloadAsset(latest);
+  });
+  body.querySelector("[data-ml-joblog-clear]")?.addEventListener("click", () => { jobLog = []; paintJobLog(body, esc); });
+}
+let lastLoggedDoctorState = null;
+function paintJobLog(body, esc) {
+  const existing = body.querySelector(".ml-joblog");
+  const html = jobLogHtml(esc);
+  if (!html) { existing?.remove(); return; }
+  if (existing) existing.outerHTML = html; else body.insertAdjacentHTML("beforeend", html);
+  body.querySelector("[data-ml-joblog-clear]")?.addEventListener("click", () => { jobLog = []; paintJobLog(body, esc); });
 }
 
 async function runGenerate(body, cfg, opts, root, esc) {
@@ -1508,6 +1598,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
     const out = await generate(cfg, req);
     if (out.approvalRequired) {
       // the backend refused to render without an explicit approval — honor it
+      logJob("warn", "Awaiting your approval before this render can use credits");
       if (opts.notify) opts.notify("Media Factory", out.message || "This render needs your approval before it can use credits.");
       genState.busy = false;
       renderGenerate(body, cfg, opts, root);
@@ -1533,6 +1624,10 @@ async function runGenerate(body, cfg, opts, root, esc) {
     lastRenderIssue = out.live || out.queued
       ? null
       : { reason: out.fallbackReason || "unreachable", detail: out.fallbackDetail || "", lane: out.fallbackLane || "", at: Date.now() };
+    logJob(out.live ? "ok" : out.queued ? "ok" : "warn",
+      out.live ? `Generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}`
+        : out.queued ? "Queued through Hermes — awaiting your approval in Higgsfield"
+        : `Render didn't complete — sketched locally (${out.fallbackReason || "unreachable"})`);
     refreshGeneratePanel(body, cfg, opts, root);
     if (opts.notify) {
       const why = out.live || out.queued ? "" : explainMediaFailure(out.fallbackReason, out.fallbackDetail, out.fallbackLane);
@@ -1894,6 +1989,10 @@ function svgIc(k) {
     lock: `<rect x="3.5" y="7" width="9" height="6" rx="1.4"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>`,
     undo: `<path d="M6 4L3 7l3 3M3 7h6a4 4 0 0 1 0 8H6"/>`,
     redo: `<path d="M10 4l3 3-3 3M13 7H7a4 4 0 0 0 0 8h3"/>`,
+    expand: `<path d="M3 6V3h3M13 6V3h-3M3 10v3h3M13 10v3h-3"/>`,
+    collapse: `<path d="M6 3v3H3M10 3v3h3M6 13v-3H3M10 13v-3h3"/>`,
+    hub: `<circle cx="8" cy="3.6" r="1.5"/><circle cx="3.6" cy="11.4" r="1.5"/><circle cx="12.4" cy="11.4" r="1.5"/><path d="M8 5.1v3.4M8 8.5l-3.7 2M8 8.5l3.7 2"/>`,
+    download: `<path d="M8 3v7.5M5.2 8l2.8 2.8L10.8 8M4 13.5h8"/>`,
   };
   return `<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k] || ""}</svg>`;
 }
