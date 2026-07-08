@@ -4,20 +4,20 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260708-82";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260708-82";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260708-82";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260708-82";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260708-82";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260708-82";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260708-82";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260708-82";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260708-82";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260708-82";
-import { renderVacationMode } from "./vacation.js?v=phantom-live-20260708-82";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260708-82";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260708-82";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260708-82";
+} from "./store.js?v=phantom-live-20260708-83";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260708-83";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260708-83";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260708-83";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260708-83";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260708-83";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260708-83";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260708-83";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260708-83";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260708-83";
+import { renderVacationMode } from "./vacation.js?v=phantom-live-20260708-83";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260708-83";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260708-83";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260708-83";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -588,7 +588,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260708-82";
+const POSE_VERSION = "phantom-live-20260708-83";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
