@@ -680,8 +680,13 @@ async function generate(cfg, req) {
     if (d && d.error === "approval_required") {
       return { assets: [], live: false, approvalRequired: true, transport: d.transport || "cli_fallback", spec, message: d.message || "" };
     }
-    // background job (hermes MCP draft or CLI render): poll until it lands
-    if (d && d.job && !d.queued && !(Array.isArray(d.assets) && d.assets.length)) d = await pollStudioJob(d.job, spec, headers);
+    // background job (hermes MCP draft or CLI render): poll until it lands.
+    // A draft (hermes_mcp) is a quick tool call, not a render — it gets a
+    // short leash so the UI never sits frozen for the render-length timeout.
+    if (d && d.job && !d.queued && !(Array.isArray(d.assets) && d.assets.length)) {
+      const jobKind = d.transport === "hermes_mcp" ? "draft" : "render";
+      d = await pollStudioJob(d.job, spec, headers, jobKind);
+    }
     // Hermes/MCP transport: the brief is queued as a draft — no credits spent
     if (d && d.queued && d.transport === "hermes_mcp") {
       const assets = [];
@@ -707,9 +712,14 @@ async function generate(cfg, req) {
 }
 
 /* Poll a studio background job until it lands. Transient network blips while
-   polling must NOT kill a render that's still cooking on the box. */
-async function pollStudioJob(jobId, spec, headers) {
-  const deadline = Date.now() + (spec.modality === "video" ? 31 : 16) * 60_000;
+   polling must NOT kill a render that's still cooking on the box.
+   A DRAFT (hermes_mcp tool call) is a quick request, not a render — it gets
+   a short leash (3 min) instead of the render-length timeout, so a slow/dead
+   MCP lane surfaces as an honest timeout instead of a silent, endless spinner.
+   Callers show their own elapsed-time feedback while this awaits. */
+async function pollStudioJob(jobId, spec, headers, kind = "render") {
+  const startedAt = Date.now();
+  const deadline = kind === "draft" ? startedAt + 3 * 60_000 : startedAt + (spec.modality === "video" ? 31 : 16) * 60_000;
   let misses = 0;
   while (Date.now() < deadline) {
     await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -724,6 +734,7 @@ async function pollStudioJob(jobId, spec, headers) {
       if (++misses >= 24) return { error: "provider_unreachable", message: "lost contact with the studio box for 2 minutes" };
     }
   }
+  if (kind === "draft") return { error: "provider_timeout", message: "the draft tool call took longer than 3 minutes — the operator lane may be stuck" };
   return { error: "provider_timeout", message: "" };
 }
 
@@ -1174,14 +1185,14 @@ function renderGenerate(body, cfg, opts, root) {
         </label>
 
         <button class="ml-generate" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
-          ${genState.busy ? `${svgIc("spark")} Rendering…` : `${svgIc("bolt")} Generate ${genState.modality} · ~${estCredits()} credits`}
+          ${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality} · ~${estCredits()} credits`}
         </button>
       </aside>
 
       <section class="ml-stage" data-ml-results aria-label="Preview Stage">
         <div class="ml-stage-frame ${genState.busy ? "is-busy" : ""}">
           <header class="ml-stage-top">
-            <span class="ml-rec ${genState.busy ? "is-live" : ""}"><i aria-hidden="true"></i>${genState.busy ? "Rendering" : "Stage ready"}</span>
+            <span class="ml-rec ${genState.busy ? "is-live" : ""}"><i aria-hidden="true"></i><span data-ml-busy-stage>${genState.busy ? "Rendering" : "Stage ready"}</span></span>
             <b>Preview Stage</b>
             <span class="ml-stage-chip">${genState.aspect}${genState.modality === "video" ? ` · ${genState.duration}s` : ""}</span>
           </header>
@@ -1471,6 +1482,21 @@ async function runGenerate(body, cfg, opts, root, esc) {
   }
   genState.busy = true;
   renderGenerate(body, cfg, opts, root);
+  /* A draft/render can legitimately take a while — a frozen "Rendering…"
+     button with no feedback reads as broken. Tick a live elapsed readout and
+     step through reassuring copy the longer it runs, updated in place so we
+     never disturb the mounted busy view with a full re-render. */
+  const busyStartedAt = Date.now();
+  const busyTick = () => {
+    const s = Math.round((Date.now() - busyStartedAt) / 1000);
+    const stageText = s < 15 ? "Rendering" : s < 45 ? "Still working" : s < 120 ? "Taking longer than usual — hang tight" : "Well past normal — checking Hermes/Higgsfield";
+    const label = s < 60 ? `Working… ${s}s` : `Working… ${Math.floor(s / 60)}m ${s % 60}s`;
+    const stageEl = body.querySelector("[data-ml-busy-stage]");
+    const labelEl = body.querySelector("[data-ml-busy-label]");
+    if (stageEl) stageEl.textContent = stageText;
+    if (labelEl) labelEl.textContent = label;
+  };
+  const busyTimer = setInterval(busyTick, 1000);
   try {
     const req = {
       modality: genState.modality, provider: genState.provider, model: genState.model,
@@ -1525,6 +1551,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
       saveCfg(cfg);
     }
   } finally {
+    clearInterval(busyTimer);
     if (genState.busy) refreshGeneratePanel(body, cfg, opts, root);
   }
 }
