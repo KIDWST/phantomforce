@@ -1,9 +1,13 @@
 /* PhantomForce — Vacation Mode.
-   Backend-backed admin surface for bounded autonomous work while an owner is
-   away. This page does not send email, post, spend credits, or execute
-   providers; it stores settings, records proof, and queues review decisions. */
+   Backend-backed admin surface for bounded, temporary away-coverage while an
+   owner is away — a separate system from Automation (app/js/brandops.js).
+   Vacation Mode may invoke existing automations as part of its coverage
+   plan, but it never starts, stops, or owns them: turning Vacation Mode on
+   or off only changes away-coverage, never whether normal automations run.
+   This page does not send email, post, spend credits, or execute providers;
+   it stores settings, records proof, and queues review decisions. */
 
-import { session as accessSession, ago } from "./store.js?v=phantom-live-20260709-113";
+import { session as accessSession, ago, store, visible } from "./store.js?v=phantom-live-20260709-114";
 
 const esc = (value = "") => String(value)
   .replace(/&/g, "&amp;")
@@ -195,7 +199,7 @@ function statusCard(status) {
       <div class="vm-status-actions">
         ${active
           ? `<button class="btn btn-primary vm-danger" data-vm-deactivate type="button">Turn off Vacation Mode</button>
-             <button class="btn btn-quiet" data-vm-kill type="button">Stop autonomous work immediately</button>`
+             <button class="btn btn-quiet" data-vm-kill type="button">Stop away-coverage immediately</button>`
           : `<button class="btn btn-primary" data-vm-activate type="button">Turn on Vacation Mode</button>`}
       </div>
     </div>
@@ -338,19 +342,25 @@ function notificationsCard(status) {
   </section>`;
 }
 
-function queuedActionsCard() {
+/* Vacation Mode may use existing automations for away-coverage, but it never
+   owns them — this card only reads real automation records (store.state.agents)
+   and their allowedDuringVacation flag; it never creates, starts, or stops one. */
+function automationsCoverageCard() {
+  const running = visible(store.state.agents || []).filter((a) => a.status === "active");
+  const allowed = running.filter((a) => a.allowedDuringVacation !== false);
   return `<section class="vm-card vm-queue-card">
     <div class="vm-card-head">
-      <span class="vm-kicker">Safe review queue</span>
-      <h3>Suggested actions before sending</h3>
+      <span class="vm-kicker">Automations, not Vacation Mode</span>
+      <h3>${allowed.length} automation${allowed.length === 1 ? "" : "s"} available for vacation coverage</h3>
     </div>
     <div class="vm-action-list">
-      <span>Draft lead reply</span>
-      <span>Prepare social caption</span>
-      <span>Update CRM task</span>
-      <span>Write daily summary</span>
+      ${running.length ? running.map((a) => {
+        const isAllowed = a.allowedDuringVacation !== false;
+        return `<span class="vm-automation-flag ${isAllowed ? "is-allowed" : "is-blocked"}">${esc(a.name)} — ${isAllowed ? "allowed during Vacation Mode" : "blocked during Vacation Mode"}${a.requiresApprovalDuringVacation !== false ? " · requires approval" : ""}</span>`;
+      }).join("") : `<span class="vm-empty-inline">No active automations yet — set one up on the Automation page.</span>`}
     </div>
-    <p>These are staged as drafts or internal updates. Anything customer-facing waits for approval.</p>
+    <p>Normal automations keep running whether Vacation Mode is on or off. Turning Vacation Mode off stops away-coverage only — it never pauses or deletes an automation.</p>
+    <div class="vm-save-row"><button class="btn btn-quiet" type="button" data-open-ws="automation">Open Automation</button></div>
   </section>`;
 }
 
@@ -383,7 +393,7 @@ function renderShell(el) {
       ${activityCard(state.activity)}
       ${outOfOfficeCard(status)}
       ${notificationsCard(status)}
-      ${queuedActionsCard()}
+      ${automationsCoverageCard()}
     </div>
   </div>`;
 }
@@ -423,12 +433,12 @@ export function renderVacationMode(el, opts = {}) {
         const payload = permissionPayload(el);
         payload.mode = el.querySelector("[data-vm-mode]")?.value || "approval_required";
         await postAndRefresh(el, "/api/vacation-mode/activate", payload);
-        notify("Vacation Mode", "Vacation Mode is active. Outbound actions still require approval.");
+        notify("Vacation Mode", "Vacation Mode enabled. Away-coverage is active. Outbound actions still require approval.");
         return;
       }
       if (target.matches("[data-vm-deactivate], [data-vm-kill]")) {
         await postAndRefresh(el, "/api/vacation-mode/deactivate", {});
-        notify("Vacation Mode", "Vacation Mode turned off. Autonomous work stopped.");
+        notify("Vacation Mode", "Vacation Mode disabled. Away-coverage stopped. Normal automations remain active.");
         return;
       }
       if (target.matches("[data-vm-save]")) {

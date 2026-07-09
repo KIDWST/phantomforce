@@ -8,7 +8,7 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs } from "./store.js?v=phantom-live-20260709-113";
+import { store, uid, visible, pushActivity, ago, currentWs } from "./store.js?v=phantom-live-20260709-114";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -45,14 +45,24 @@ let auTab = "active";
 function agentCard(a, opts) {
   const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
   const pendingApproval = (store.state.approvals || []).find((app) => app.ref === a.id && app.status === "pending");
+  /* Vacation Mode never controls whether this automation exists or runs
+     normally — allowedDuringVacation only decides whether away-coverage is
+     permitted to invoke it while the owner is away. */
+  const allowedDuringVacation = a.allowedDuringVacation !== false;
   return `<div class="au-item">
     <span class="aops-led aops-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}"><i></i></span>
-    <span class="au-item-main"><b>${esc(a.name)}</b><i>${esc(a.mission || a.role || "")}</i><em>Created ${esc(ago(a.createdAt))} · Updated ${esc(ago(a.updatedAt))} · ${esc(a.source || "Phantom dashboard")}</em></span>
+    <span class="au-item-main">
+      <b>${esc(a.name)}</b>
+      <i>${esc(a.mission || a.role || "")}</i>
+      <em>Created ${esc(ago(a.createdAt))} · Updated ${esc(ago(a.updatedAt))} · ${esc(a.source || "Phantom dashboard")}</em>
+      <em class="au-vacation-flag ${allowedDuringVacation ? "au-vacation-flag-on" : "au-vacation-flag-off"}">${allowedDuringVacation ? "Allowed during Vacation Mode" : "Blocked during Vacation Mode"} · requires approval to run</em>
+    </span>
     <span class="aops-agent-mode aops-m-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}">${st.label}</span>
     <span class="au-actions">
       ${pendingApproval ? `<button class="btn btn-quiet" data-open-ws="approvals">Review</button>` : ""}
       ${a.status === "active" ? `<button class="btn btn-quiet" data-au-pause="${a.id}">Pause</button>` : ""}
       ${a.status === "paused" || a.status === "waiting" ? `<button class="btn btn-quiet" data-au-resume="${a.id}">Resume</button>` : ""}
+      <button class="btn btn-quiet" data-au-vacation-toggle="${a.id}" title="Vacation Mode rules decide whether this can run while you are away.">${allowedDuringVacation ? "Block in Vacation Mode" : "Allow in Vacation Mode"}</button>
     </span>
     <button class="bm-x" data-au-del="${a.id}" aria-label="Remove automation">✕</button>
   </div>`;
@@ -90,7 +100,8 @@ function safetyTab() {
   const rules = [
     ["New automations start as drafts", "Nothing runs the moment it's created — every automation waits in Drafts until you approve it."],
     ["Outward-facing actions always gate", "Sending, publishing, spending, or deleting always queues to Approvals — automations can't skip that, regardless of status."],
-    ["Pause stops before the next run", "Pausing an active automation stops it cleanly; resuming picks back up from paused, not mid-action."],
+    ["Pause stops before the next run", "Pausing an active automation stops it cleanly; resuming picks back up from paused, not mid-action. Pausing this automation does not disable Vacation Mode."],
+    ["Vacation Mode is a separate system", "Vacation Mode rules decide whether this can run while you are away. Automations can be used during Vacation Mode if allowed, but turning Vacation Mode on or off never starts, stops, or deletes an automation."],
     ["Connected app scope", "No per-automation third-party app connections are tracked yet — automations run against your PhantomForce workspace only."],
   ];
   return `<div class="au-safety">${rules.map(([t, d]) => `<article class="au-safety-card"><b>${esc(t)}</b><p>${esc(d)}</p></article>`).join("")}</div>`;
@@ -113,7 +124,7 @@ export function renderAutomation(el, opts = {}) {
 
   el.innerHTML = `
     <div class="au">
-      <div class="bm-note au-note"><i></i>Automations appear here after Phantom drafts them from the dashboard chat, or you pick a recipe. Nothing runs until you approve it. Vacation Mode is its own page — automations you build here can run while it's active.</div>
+      <div class="bm-note au-note"><i></i>Automations help your team move faster — they appear here after Phantom drafts them from the dashboard chat, or you pick a recipe, and nothing runs until you approve it. Vacation Mode is a separate system with its own page: automations can be used during Vacation Mode if allowed, but Vacation Mode never turns your automations on or off.</div>
       <div class="au-summary" aria-label="Automation summary">
         <span><b>${count}</b><i>Total</i></span>
         <span><b>${pending}</b><i>Needs approval</i></span>
@@ -136,6 +147,7 @@ export function renderAutomation(el, opts = {}) {
       const a = {
         id: uid("agt"), ws, kind: "automation", source: "Recipe",
         name: recipe.name, mission: recipe.mission, status: "idle",
+        allowedDuringVacation: true, requiresApprovalDuringVacation: true,
         createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       };
       store.state.agents.unshift(a);
@@ -178,6 +190,19 @@ export function renderAutomation(el, opts = {}) {
       paint();
       store.save();
       notify("Automation", `resumed "${agent.name}".`);
+    };
+  });
+  el.querySelectorAll("[data-au-vacation-toggle]").forEach((btn) => {
+    btn.onclick = () => {
+      const agent = (store.state.agents || []).find((a) => a.id === btn.dataset.auVacationToggle);
+      if (!agent) return;
+      const nextAllowed = !(agent.allowedDuringVacation !== false);
+      agent.allowedDuringVacation = nextAllowed;
+      agent.updatedAt = new Date().toISOString();
+      pushActivity("Automation", `${nextAllowed ? "allowed" : "blocked"} "${agent.name}" during Vacation Mode.`, agent.ws || currentWs());
+      paint();
+      store.save();
+      notify("Automation", nextAllowed ? `"${agent.name}" is now allowed during Vacation Mode.` : `"${agent.name}" is now blocked during Vacation Mode.`);
     };
   });
   el.querySelectorAll("[data-au-del]").forEach((btn) => {

@@ -7,8 +7,8 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
-} from "./store.js?v=phantom-live-20260709-113";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-113";
+} from "./store.js?v=phantom-live-20260709-114";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-114";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -264,6 +264,7 @@ function createAutomation(subject, raw) {
   const a = {
     id: uid("agt"), ws, kind: "automation", source: "Phantom dashboard",
     name, mission: raw, status: "idle",
+    allowedDuringVacation: true, requiresApprovalDuringVacation: true,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
   };
   store.state.agents.unshift(a);
@@ -484,17 +485,21 @@ function intentResponse(intent, text, settings = null) {
     };
   }
   if (intent.primaryIntent === "vacation_mode") {
+    /* Vacation Mode is a separate system from Automation — it is real,
+       backend-tracked away-coverage (vacation.js, /api/vacation-mode/*),
+       not a chat-fabricated automation record. Chat never arms it directly;
+       it hands off to the real Vacation Mode page where activation, mode,
+       and permissions are actually set. */
     if (intent.shouldStartVacationMode) {
-      const a = createAutomation("Vacation Mode run", `Vacation Mode: continue approved work autonomously. Allowed: draft, plan, summarize, organize, prepare assets, reports, queue approvals. Blocked without approval: publish, send, deploy, spend, delete, external actions. Source: "${text}"`);
       return {
-        say: `Vacation Mode armed as an approval-gated run: "${a.name}". It can draft, plan, organize, and prepare — anything external stays queued for your approval. Nothing risky runs on its own.`,
-        cards: [card("Vacation Mode", "Run record created — approval-gated", "Allowed: drafts, plans, summaries, briefs, reports, approval prep. Blocked: publish, send, deploy, spend, delete, external actions.", [openAction("Review approval", "approvals"), openAction("Open Automation", "automation")], "Approval required")],
-        open: null,
+        say: "Vacation Mode is a separate system from your automations — I can't turn it on from chat, but I'll take you to the Vacation Mode page to switch on away-coverage. Your normal automations stay exactly as they are either way.",
+        cards: [card("Vacation Mode", "Head to the Vacation Mode page", "Away-coverage runs under its own permissions and approval rules. It can use your existing automations, but turning it on or off never changes whether those automations are active.", [openAction("Open Vacation Mode", "vacation")], "Not started here")],
+        open: "vacation",
       };
     }
     return {
-      say: "Vacation Mode is real autonomy, so I want an explicit go. Scope: it drafts, plans, organizes, preps assets, and writes reports while you're away — publish/send/deploy/spend/delete stay blocked and queue for approval. Say 'confirm vacation mode' to arm it.",
-      cards: [card("Vacation Mode — awaiting confirmation", "Go live your life. Phantom keeps the work moving.", "Allowed: draft · plan · summarize · organize · prepare · report · queue approvals. Requires approval: publish · send · deploy · spend · delete · external.", [], "Not started")],
+      say: "Vacation Mode is away-coverage, not the same thing as your automations — it drafts, plans, organizes, preps assets, and writes reports while you're away, with publish/send/deploy/spend/delete always queued for approval. Say 'confirm vacation mode' and I'll take you there to turn it on.",
+      cards: [card("Vacation Mode — awaiting confirmation", "Go live your life. Phantom keeps the work moving.", "Allowed: draft · plan · summarize · organize · prepare · report · queue approvals. Requires approval: publish · send · deploy · spend · delete · external. Your automations keep running independently of this.", [openAction("Open Vacation Mode", "vacation")], "Not started")],
       open: null,
     };
   }

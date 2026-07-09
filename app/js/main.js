@@ -4,23 +4,23 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-  loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS,
-} from "./store.js?v=phantom-live-20260709-113";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-113";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-113";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-113";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260709-113";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-113";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-113";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260709-113";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-113";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-113";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260709-113";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-113";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-113";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-113";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-113";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-113";
+  loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
+} from "./store.js?v=phantom-live-20260709-114";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-114";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-114";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-114";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260709-114";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-114";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-114";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260709-114";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-114";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-114";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260709-114";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-114";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-114";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-114";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-114";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-114";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -327,6 +327,27 @@ function updateOperationsMapControls() {
   $$("[data-map-open-label]").forEach((label) => { label.textContent = isOpen ? "Close map" : "Open map"; });
 }
 
+/* Default collapsed unless something urgent is active — applied once on the
+   first dashboard mount so it never fights a user's manual open/close. */
+let mapDefaultApplied = false;
+function renderFlowCompactSummary() {
+  const section = $("[data-map-section]");
+  if (!section) return;
+  const summary = flowSummary();
+  const textEl = $("[data-flow-compact-text]");
+  if (textEl) textEl.textContent = summary.text;
+  const dot = $("[data-flow-compact-dot]");
+  if (dot) dot.classList.toggle("is-urgent", summary.urgent);
+  if (!mapDefaultApplied) {
+    mapDefaultApplied = true;
+    if (summary.urgent) {
+      section.classList.remove("is-map-closed");
+      section.classList.add("is-map-open");
+    }
+  }
+  updateOperationsMapControls();
+}
+
 /* ============================ topbar ============================ */
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
@@ -607,7 +628,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260709-113";
+const POSE_VERSION = "phantom-live-20260709-114";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -884,15 +905,22 @@ function renderStatCards() {
   const media = visible(store.state.media);
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const workerTotal = Math.max(1, (store.state.toolSpine || []).length + 1);
+  const workersActiveNow = TOOL_SPINE.filter((t) => t.mode === "active").length;
+  const automationsActive = visible(store.state.agents || []).filter((a) => a.status === "active").length;
   const mem = memoryStats();
+  const vacation = cachedVacationStatus();
 
   const cards = [
     { icon: "brain", title: "Phantom AI", value: "ON", sub: "Protected", foot: "Tap to talk", open: "phantom", trend: "on" },
-    { icon: "users", title: "Workers", value: workerTotal, sub: "0 active now", foot: "Open roster", open: "workforce", trend: "ready" },
+    { icon: "users", title: "Workers", value: workerTotal, sub: `${workersActiveNow} active now`, foot: "Open roster", open: "workforce", trend: "ready" },
     { icon: "check", title: "Approvals", value: pending ? pending : "OK", sub: pending ? "Review" : "Clear", foot: pending ? "Needs owner call" : "All systems go", open: "approvals", alert: pending > 0, trend: pending ? "needs you" : "ready" },
+    { icon: "auto", title: "Automations", value: automationsActive ? automationsActive : "OK", sub: automationsActive ? "Running" : "None active", foot: "Normal automations — separate from Vacation Mode", open: "automation", trend: automationsActive ? "running" : "ready" },
     { icon: "db", title: "Memory", value: mem.total ? "ON" : "OK", sub: mem.total ? `${mem.total} notes` : "Ready", foot: mem.remembered ? `${mem.remembered} pinned` : "Private context", open: "memory", trend: "ready" },
     { icon: "media", title: "Media", value: media.length ? media.length : "OK", sub: media.length ? "Requests" : "Ready", foot: media.length ? "In pipeline" : "No blockers", open: "media", trend: "ready" },
   ];
+  if (isAdmin()) {
+    cards.push({ icon: "auto", title: "Vacation Mode", value: vacation ? (vacation.enabled ? "ON" : "OFF") : "—", sub: vacation ? (vacation.enabled ? "Away-coverage active" : "Away-coverage off") : "Not checked yet", foot: "Separate from automations", open: "vacation", trend: vacation?.enabled ? "active" : "ready" });
+  }
   $("[data-statcards]").innerHTML = cards.map((c) => `
     <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
       <span class="statcard-top">
@@ -919,7 +947,7 @@ const ACT_ICON = (text = "") => {
 };
 function renderActivity() {
   const base = visible(store.state.activity).map((a) => ({ who: a.who, text: a.text, at: a.at, icon: ACT_ICON(a.text), live: false }));
-  const items = [...liveFeed, ...base].slice(0, 4);
+  const items = [...liveFeed, ...base].slice(0, 3);
   const box = $("[data-activity]");
   if (!box) return;
   if (!items.length) { box.innerHTML = `<p class="empty-line">Quiet — nothing has run yet.</p>`; return; }
@@ -1237,6 +1265,7 @@ function renderConsole() {
   renderInsights();
   renderStatCards();
   renderFlowMap();
+  renderFlowCompactSummary();
   renderActivity();
   renderPlan();
   renderQueue();
@@ -1244,7 +1273,6 @@ function renderConsole() {
   bindCommandForm();
   const openIc = $("[data-cmdk-open-ic]"); if (openIc && !openIc.innerHTML) openIc.innerHTML = svg("search");
   mountPhantomWire($("[data-phantomwire]") || $("[data-agent-ticker]"));
-  mountAgentConsole($("[data-agentops]"));
   mountDesktopContextWidget($("[data-desktop-context]"), {
     notify: (who, text) => {
       pushActivity(who, text);
@@ -1791,6 +1819,10 @@ const CUSTOM = {
   automation: { title: "Automation", kicker: "Workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
   vacation: { title: "Vacation Mode", kicker: "Your phantom workforce while you are away", custom: true, wide: true, adminOnly: true, render: (body) => renderVacationMode(body, mediaOpts()) },
   promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
+  /* The full worker roster + telemetry + live tail log — kept out of the
+     dashboard's permanent layout (that only shows a compact summary) and
+     opened on demand from "View all activity". */
+  activity: { title: "Activity", kicker: "Full PhantomWire feed — workers, telemetry, and live log", custom: true, wide: true, render: (body) => { body.innerHTML = `<div class="agentops"></div>`; mountAgentConsole(body.firstElementChild); } },
 };
 
 let openId = null;
@@ -2086,7 +2118,7 @@ async function boot() {
     if (!phantom.hidden) {
       if (activePageId) { renderConsole(); return; }
       renderNav(); renderStatusPills(); renderNotifs(); renderInsights();
-      renderStatCards(); renderFlowMap(); renderActivity(); renderPlan(); renderQueue();
+      renderStatCards(); renderFlowMap(); renderFlowCompactSummary(); renderActivity(); renderPlan(); renderQueue();
     }
   });
   if (ctx.session) enterPhantom();

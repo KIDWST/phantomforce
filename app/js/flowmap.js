@@ -5,20 +5,40 @@
    the field. Live stats from the store; every node opens its workspace.
    Two layouts: wide wave spine and phone snake. Reduced motion → static. */
 
-import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260709-113";
+import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260709-114";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NARROW_AT = 620;
 const BEAT = 3.4; /* seconds — one packet run along an edge; everything syncs to this */
 let lastMode = "";
 
-function flowNodes() {
+/* Shared real counts for both the full map (flowNodes) and the collapsed
+   compact summary row — one source of truth, never fabricated. */
+function liveCounts() {
   const m = moneyView();
   const openLeads = visible(store.state.leads).filter((l) => !["won", "lost"].includes(l.status));
   const moving = visible(store.state.media).filter((x) => x.status !== "delivered");
   const builds = visible(store.state.sites);
   const sec = visible(store.state.security)[0];
   const secClean = !sec || sec.posture === "clean";
+  return { m, openLeads, moving, builds, secClean };
+}
+
+/* Collapsed-state summary: real counts plus whether anything is urgent
+   enough that the map should default to open instead of collapsed. */
+export function flowSummary() {
+  const { openLeads, moving, builds, secClean } = liveCounts();
+  return {
+    builds: builds.length,
+    openLeads: openLeads.length,
+    moving: moving.length,
+    urgent: !secClean,
+    text: `${builds.length} site build${builds.length === 1 ? "" : "s"} · ${openLeads.length} open lead${openLeads.length === 1 ? "" : "s"} · ${moving.length} moving deliver${moving.length === 1 ? "y" : "ies"}`,
+  };
+}
+
+function flowNodes() {
+  const { m, openLeads, moving, builds, secClean } = liveCounts();
   return [
     { id: "leads", ws: "leads", icon: "◉", label: "Leads", stat: `${openLeads.length} open` },
     { id: "quotes", ws: "proposals", icon: "◆", label: "Quotes", stat: `${m.open.length} live` },
