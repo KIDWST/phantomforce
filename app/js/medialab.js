@@ -12,12 +12,12 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-118";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-119";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260709-118";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-118";
-import { getRembgStatus, loadImageForEditing } from "./mediabackend.js?v=phantom-live-20260709-118";
+} from "./contenthub.js?v=phantom-live-20260709-119";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-119";
+import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260709-119";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1902,9 +1902,12 @@ function renderEdit(body, cfg, opts, root) {
   };
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; mlBokehPicking = false; renderMediaStudio(root, opts); };
-  body.querySelector("[data-ml-savedit]").onclick = () => {
+  const repaintWithImg = (img) => { canvas._img = img; paintEdit(canvas, img, editState); positionMarkers(); };
+  body.querySelector("[data-ml-savedit]").onclick = async () => {
+    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
+    if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't save this edit: ${exported.error}`); return; }
     const at = Date.now();
-    const asset = { id: `edit-${at}`, type: "image", url: canvas.toDataURL("image/webp", 0.9), saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
+    const asset = { id: `edit-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
     session.assets.unshift(asset);
     captureForContentHub(asset, { title: "Edited image", prompt: editState.text || "Edited image" });
     // switch tab (and its rerender) before notify(): notify() triggers a global store-change
@@ -1914,7 +1917,11 @@ function renderEdit(body, cfg, opts, root) {
     renderMediaStudio(root, opts);
     if (opts.notify) opts.notify("Media Factory", "saved an edited image to the library.");
   };
-  body.querySelector("[data-ml-dledit]").onclick = () => downloadAsset({ url: canvas.toDataURL("image/webp", 0.92), type: "image", id: "edit" });
+  body.querySelector("[data-ml-dledit]").onclick = async () => {
+    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.92);
+    if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't download this edit: ${exported.error}`); return; }
+    downloadAsset({ url: exported.url, type: "image", id: "edit" });
+  };
 }
 function slider(label, key, min, max, val) {
   return `<label class="ml-slider"><span>${label} <b data-out="${key}">${val}</b></span>

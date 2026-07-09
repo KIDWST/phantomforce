@@ -5,22 +5,22 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
-} from "./store.js?v=phantom-live-20260709-118";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-118";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-118";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-118";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260709-118";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-118";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-118";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260709-118";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-118";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-118";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260709-118";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-118";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-118";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-118";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-118";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-118";
+} from "./store.js?v=phantom-live-20260709-119";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-119";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-119";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-119";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260709-119";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-119";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-119";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260709-119";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-119";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-119";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260709-119";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-119";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-119";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-119";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-119";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-119";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -628,7 +628,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260709-118";
+const POSE_VERSION = "phantom-live-20260709-119";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -883,60 +883,6 @@ function setMode(id) {
 function renderHero() {
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
   $("[data-hero-name]").textContent = `${name}.`;
-  renderHeroWorkAlert();
-}
-
-function renderHeroWorkAlert() {
-  const alert = $("[data-phantomwire-alert]") || $("[data-hero-work-alert]");
-  if (!alert) return;
-  const latest = liveFeed[0] || visible(store.state.activity)[0] || null;
-  alert.innerHTML = `
-    <span class="phantomwire-alert-label">PhantomWire</span>
-    <span class="phantomwire-alert-ping" aria-hidden="true"></span>
-    <span class="phantomwire-alert-body">
-      <b>${esc(latest?.who || "System")}</b>
-      <em>${esc(latest?.text || "No recent activity yet. Worker and user activity will appear here.")}</em>
-    </span>
-    <span class="phantomwire-alert-time">${latest?.live ? "now" : latest?.at ? ago(latest.at) : "ready"}</span>`;
-}
-
-/* ============================ stat cards ============================ */
-function renderStatCards() {
-  const media = visible(store.state.media);
-  const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  const workerTotal = Math.max(1, (store.state.toolSpine || []).length + 1);
-  const workersActiveNow = TOOL_SPINE.filter((t) => t.mode === "active").length;
-  const automationsActive = visible(store.state.agents || []).filter((a) => a.status === "active").length;
-  const mem = memoryStats();
-  const vacation = cachedVacationStatus();
-
-  const cards = [
-    { icon: "brain", title: "Phantom AI", value: "ON", sub: "Protected", foot: "Tap to talk", open: "phantom", trend: "on" },
-    { icon: "users", title: "Workers", value: workerTotal, sub: `${workersActiveNow} active now`, foot: "Open roster", open: "workforce", trend: "ready" },
-    { icon: "check", title: "Approvals", value: pending ? pending : "OK", sub: pending ? "Review" : "Clear", foot: pending ? "Needs owner call" : "All systems go", open: "approvals", alert: pending > 0, trend: pending ? "needs you" : "ready" },
-    { icon: "auto", title: "Automations", value: automationsActive ? automationsActive : "OK", sub: automationsActive ? "Running" : "None active", foot: "Normal automations — separate from Vacation Mode", open: "automation", trend: automationsActive ? "running" : "ready" },
-    { icon: "db", title: "Memory", value: mem.total ? "ON" : "OK", sub: mem.total ? `${mem.total} notes` : "Ready", foot: mem.remembered ? `${mem.remembered} pinned` : "Private context", open: "memory", trend: "ready" },
-    { icon: "media", title: "Media", value: media.length ? media.length : "OK", sub: media.length ? "Requests" : "Ready", foot: media.length ? "In pipeline" : "No blockers", open: "media", trend: "ready" },
-  ];
-  if (isAdmin()) {
-    cards.push({ icon: "auto", title: "Vacation Mode", value: vacation ? (vacation.enabled ? "ON" : "OFF") : "—", sub: vacation ? (vacation.enabled ? "Away-coverage active" : "Away-coverage off") : "Not checked yet", foot: "Separate from automations", open: "vacation", trend: vacation?.enabled ? "active" : "ready" });
-  }
-  const box = $("[data-statcards]");
-  if (!box) return;
-  box.innerHTML = cards.map((c) => `
-    <button class="mini-chip ${c.alert ? "mini-chip-alert" : ""}" data-open-ws="${c.open}" title="${esc(c.sub)} — ${esc(c.foot)}">
-      <span class="mini-chip-ic">${svg(c.icon)}</span>
-      <span class="mini-chip-body"><b>${esc(c.title)}</b><i>${c.value}</i></span>
-    </button>`).join("");
-}
-
-/* ============================ recent activity ============================
-   Used to be its own card grid below the chat; that's now folded into the
-   single phantomwire-alert pill (renderHeroWorkAlert), so this just keeps
-   that pill fresh — kept as its own function since it's called from several
-   places (live-feed pulses, activity pushes, full re-renders). */
-function renderActivity() {
-  renderHeroWorkAlert();
 }
 
 /* ============================ today's plan (donut) ============================ */
@@ -1030,24 +976,6 @@ function attentionItems() {
     .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
   return items;
 }
-function renderInsights() {
-  const box = $("[data-insights]");
-  if (!box) return;
-  const items = attentionItems();
-  if (!items.length) {
-    box.innerHTML = `<button class="mini-chip mini-chip-clear" title="${esc(greeting())} — you're clear">
-      <span class="mini-chip-ic">${svg("check")}</span>
-      <span class="mini-chip-body"><b>Today</b><i>Clear</i></span>
-    </button>`;
-    return;
-  }
-  box.innerHTML = items.slice(0, 4).map((it) => `
-      <button class="mini-chip mini-chip-${it.tone}" data-open-ws="${it.open}" title="${esc(it.sub)}">
-        <span class="mini-chip-ic">${svg(it.icon)}</span>
-        <span class="mini-chip-body"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span>
-      </button>`).join("");
-}
-
 /* ============================ notifications ============================ */
 let notifOpen = false;
 function renderNotifs() {
@@ -1067,8 +995,6 @@ function renderNotifs() {
 }
 
 /* ============================ ⌘K command palette ============================ */
-const rnd = (n) => Math.floor(Math.random() * n);
-const pick = (a) => (a && a.length ? a[rnd(a.length)] : null);
 let cmdkOpen = false, cmdkIdx = 0, cmdkItems = [];
 function fuzzy(q, text) {
   if (!q) return 1;
@@ -1155,33 +1081,6 @@ function execPalette(i = cmdkIdx) {
   setTimeout(() => it.run(), 60);
 }
 
-/* ============================ live pulse ============================ */
-let liveFeed = [];
-let pulseTimer = 0;
-function pushLive() {
-  if (phantom.hidden || document.hidden) return;
-  const agents = store.state.agents || [];
-  const leads = visible(store.state.leads);
-  const media = visible(store.state.media);
-  const builders = [
-    () => { const a = pick(agents); return a && { who: a.name, text: ["is scanning channels.", "is drafting the next move.", "synced with the desks.", "is watching for signal."][rnd(4)], icon: "auto" }; },
-    () => { const l = pick(leads); return l && { who: "Lead Hunter", text: `re-scored ${l.name} — ${l.status}.`, icon: "users" }; },
-    () => { const m = pick(media); return m && { who: "Media Factory", text: `advanced "${m.title}".`, icon: "film" }; },
-  ];
-  let ev = null;
-  for (let k = 0; k < 6 && !ev; k++) ev = builders[rnd(builders.length)]();
-  if (!ev) return;
-  liveFeed.unshift({ ...ev, at: new Date().toISOString(), live: true });
-  liveFeed = liveFeed.slice(0, 6);
-  renderHeroWorkAlert();
-  if (!cmdkOpen) renderActivity();
-}
-function startPulse() {
-  clearInterval(pulseTimer);
-  if (reduceMotion) return;
-  pulseTimer = setInterval(pushLive, 7000);
-}
-
 /* ============================ spoken briefing ============================ */
 function briefingText() {
   const m = moneyView();
@@ -1240,11 +1139,8 @@ function renderConsole() {
   renderHero();
   renderChips();
   renderModePose(activeMode);
-  renderInsights();
-  renderStatCards();
   renderFlowMap();
   renderFlowCompactSummary();
-  renderActivity();
   renderPlan();
   renderQueue();
   renderQuick();
@@ -1255,7 +1151,6 @@ function renderConsole() {
     notify: (who, text) => {
       pushActivity(who, text);
       store.save();
-      renderActivity();
     },
   });
   mountCompanion($("[data-chatbox] .chatbox-head"), {
@@ -1293,7 +1188,11 @@ function renderChatLog() {
       renderChatLog();
     }
   });
-  log.scrollTop = log.scrollHeight;
+  // Only jump to the latest message once there's an actual back-and-forth —
+  // on first load (just the greeting + starter chips) that would scroll the
+  // greeting itself out of view for no reason, especially on shorter screens
+  // where the log doesn't have room to show everything at once.
+  log.scrollTop = chatHistory.length > 1 ? log.scrollHeight : 0;
 }
 function applyCompanionMode(mode) {
   const loop = loadPhantomLoop();
@@ -1439,7 +1338,9 @@ function speak(text, cls = "", emotionOverride = null) {
     const el = log?.querySelector(`[data-msg-i="${chatHistory.indexOf(entry)}"] .msg-text`);
     if (el) {
       el.textContent = entry.text;
-      log.scrollTop = log.scrollHeight;
+      // same reasoning as renderChatLog(): only chase the tail once there's
+      // an actual conversation, not while the first greeting is still typing.
+      log.scrollTop = chatHistory.length > 1 ? log.scrollHeight : 0;
     }
   };
   if (reduceMotion) {
@@ -2070,7 +1971,7 @@ let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); startClock(); startPulse(); }
+  if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); startClock(); }
   activeNav = "dashboard";
   renderConsole();
   requestAnimationFrame(() => phantom.classList.add("booted"));
@@ -2095,8 +1996,8 @@ async function boot() {
   store.onChange(() => {
     if (!phantom.hidden) {
       if (activePageId) { renderConsole(); return; }
-      renderNav(); renderStatusPills(); renderNotifs(); renderInsights();
-      renderStatCards(); renderFlowMap(); renderFlowCompactSummary(); renderActivity(); renderPlan(); renderQueue();
+      renderNav(); renderStatusPills(); renderNotifs();
+      renderFlowMap(); renderFlowCompactSummary(); renderPlan(); renderQueue();
     }
   });
   if (ctx.session) enterPhantom();

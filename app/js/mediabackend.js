@@ -14,7 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260709-118";
+import { session } from "./store.js?v=phantom-live-20260709-119";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260709-119";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -39,13 +40,28 @@ async function fetchWithTimeout(url, options = {}, ms = 6000) {
 
 /* ---------------- safe image loading for canvas editing ----------------
    A canvas that ever draws a cross-origin image without CORS gets "tainted"
-   by the browser — every later toDataURL()/getImageData() call throws, and
-   Save silently does nothing. data: URLs and same-origin URLs are always
-   safe and load directly. Anything else routes straight through our own
-   backend proxy (server-to-server has no CORS restriction) rather than
-   attempting a direct crossOrigin load first — a failed CORS attempt logs
-   an unsuppressable console error even when the code correctly falls back,
-   so going straight to the reliable path avoids that noise entirely. */
+   by the browser — every later toDataURL()/getImageData() call throws.
+   Images still always load directly for display: gating the image on a
+   backend proxy round-trip means a slow/unreachable proxy breaks viewing
+   entirely, which is worse than the taint problem it's meant to solve.
+   Instead, editing operations that actually need pixel data (Save, Download,
+   sending to a provider) go through imagefilters.js's safeCanvasDataUrl,
+   catch the taint there, and call rescueTaintedImage below to fetch a clean
+   same-origin copy through this proxy — only then does an unreachable proxy
+   become a real (clearly explained) error, and only for that one action. */
+export function loadImage(src) {
+  return new Promise((resolvePromise, reject) => {
+    const img = new Image();
+    img.onload = () => resolvePromise(img);
+    img.onerror = () => reject(new Error("image failed to load"));
+    img.src = src;
+  });
+}
+
+export async function loadImageForEditing(url) {
+  return loadImage(url);
+}
+
 async function proxyImageToDataUrl(url) {
   try {
     const r = await fetchWithTimeout(`/phantom-ai/media-lab/proxy-image?url=${encodeURIComponent(url)}`, { headers: authHeaders() }, 10000);
@@ -62,23 +78,29 @@ async function proxyImageToDataUrl(url) {
   return null;
 }
 
-export function loadImage(src) {
-  return new Promise((resolvePromise, reject) => {
-    const img = new Image();
-    img.onload = () => resolvePromise(img);
-    img.onerror = () => reject(new Error("image failed to load"));
-    img.src = src;
-  });
+/* Fetches a same-origin copy of a tainting image through the backend proxy
+   and loads it. Returns null (never throws) if both proxy lanes fail, so
+   callers can show one honest "couldn't recover" message. */
+export async function rescueTaintedImage(url) {
+  if (url.startsWith("data:") || url.startsWith("blob:")) return null; // already same-origin-safe; taint came from elsewhere
+  const proxied = await proxyImageToDataUrl(url);
+  if (!proxied) return null;
+  try { return await loadImage(proxied); }
+  catch { return null; }
 }
 
-export async function loadImageForEditing(url) {
-  const isSameOrigin = url.startsWith("data:") || url.startsWith("blob:") || new URL(url, location.href).origin === location.origin;
-  if (isSameOrigin) return loadImage(url);
-
-  const proxied = await proxyImageToDataUrl(url);
-  if (proxied) return loadImage(proxied);
-
-  throw new Error("Could not load this image for editing — the source is on another host and the backend proxy couldn't reach it either.");
+/* One call for every Save/Download/AI-send site: try to read the canvas,
+   and if it's tainted, rescue once through the proxy and retry before
+   giving up. repaintFn(img) must redraw the canvas with the rescued image
+   (and update canvas._img) — callers already have this as their repaint(). */
+export async function exportCanvas(canvas, repaintFn, format = "image/png", quality) {
+  const first = safeCanvasDataUrl(canvas, format, quality);
+  if (first.ok) return first;
+  const srcUrl = canvas._img?.src;
+  const rescued = srcUrl ? await rescueTaintedImage(srcUrl) : null;
+  if (!rescued) return first;
+  repaintFn(rescued);
+  return safeCanvasDataUrl(canvas, format, quality);
 }
 
 /* ---------------- background removal (rembg) ---------------- */

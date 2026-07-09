@@ -191,6 +191,28 @@ function drawFrame(ctx, img, state, extraFilter = "") {
   ctx.restore();
 }
 
+/* A canvas that ever drew a cross-origin image without CORS is "tainted" —
+   toDataURL() throws a SecurityError. There's no way to avoid loading such
+   images directly (many providers don't send CORS headers, and blocking
+   display until a backend proxy round-trip succeeds is worse: it breaks
+   viewing entirely if the proxy is unreachable). So images always load
+   directly for display, and this is the one place that can fail — every
+   Save/Download/AI-send call site should go through this instead of calling
+   canvas.toDataURL() directly, so a taint is a clear message, never a
+   silent no-op or an uncaught exception. */
+export function safeCanvasDataUrl(canvas, format = "image/png", quality) {
+  try {
+    return { ok: true, url: canvas.toDataURL(format, quality) };
+  } catch (e) {
+    return {
+      ok: false,
+      error: e && e.name === "SecurityError"
+        ? "This image's source doesn't allow secure cross-origin editing, so it can't be saved, downloaded, or sent from here."
+        : "Could not export this image.",
+    };
+  }
+}
+
 /* Full-resolution render of just the base frame (adjust/rotate/flip), no
    bokeh, no text overlay — what an AI subject-detection call should send,
    so the segmentation isn't confused by an overlay or a previous mask. */
