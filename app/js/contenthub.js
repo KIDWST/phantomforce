@@ -6,7 +6,7 @@
    clean data API — loadContent() / analyze() — so the Analytics view (and
    anything else) can fetch the same numbers with zero coupling. */
 
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit } from "./imagefilters.js?v=phantom-live-20260709-104";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit } from "./imagefilters.js?v=phantom-live-20260709-105";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -745,6 +745,9 @@ function contentAssetCard(asset, esc) {
 function chSlider(label, key, min, max, val) {
   return `<label class="ch-lb-slider"><span>${label} <b data-out="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-slider="${key}"/></label>`;
 }
+function chBSlider(label, key, min, max, val) {
+  return `<label class="ch-lb-slider"><span>${label} <b data-bout="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-bslider="${key}"/></label>`;
+}
 function lightboxMarkup(lb, esc) {
   const asset = lb.asset;
   if (lb.viewOnly) {
@@ -772,6 +775,8 @@ function lightboxMarkup(lb, esc) {
         <div class="ch-lb-body">
           <div class="ch-lb-canvas-wrap">
             <canvas class="ch-lb-canvas" data-ch-lb-canvas></canvas>
+            <div class="ch-lb-bokeh-marker" data-ch-lb-bokeh-marker hidden></div>
+            <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click the subject to focus on</div>
           </div>
           <aside class="ch-lb-tools">
             <div class="ch-lb-ai">
@@ -780,6 +785,18 @@ function lightboxMarkup(lb, esc) {
                 <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…"/>
                 <button class="btn btn-primary" type="button" data-ch-lb-ai-run>Generate</button>
               </div>
+            </div>
+            <div class="ch-lb-ai ch-lb-bokeh">
+              <p class="ch-lb-ai-label">${svgIc("spark")} Subject bokeh</p>
+              ${s.bokeh ? `
+                <p class="ch-lb-bokeh-note">Subject marked below — background blurred around it.</p>
+                ${chBSlider("Focus size", "r", 8, 45, Math.round(s.bokeh.r * 100))}
+                ${chBSlider("Background blur", "strength", 4, 32, s.bokeh.strength)}
+                <div class="ch-lb-chips">
+                  <button type="button" data-ch-lb-bokeh-pick>${svgIc("spark")} Re-pick subject</button>
+                  <button type="button" data-ch-lb-bokeh-off>Remove</button>
+                </div>` : `
+                <button class="btn btn-primary ch-lb-bokeh-cta" type="button" data-ch-lb-bokeh-pick>${svgIc("spark")} Click the subject in the photo</button>`}
             </div>
             <div class="ch-lb-section">
               <p>Adjust</p>
@@ -824,8 +841,10 @@ function wireLightbox(root, opts) {
   const lb = chLightbox;
   if (!lb) return;
   const rerender = () => renderContentHub(root, opts);
+  let onResize = null;
   const close = () => {
     if (chLbKeyHandler) { document.removeEventListener("keydown", chLbKeyHandler); chLbKeyHandler = null; }
+    if (onResize) { window.removeEventListener("resize", onResize); onResize = null; }
     chLightbox = null;
     rerender();
   };
@@ -838,10 +857,20 @@ function wireLightbox(root, opts) {
   const asset = lb.asset;
   const s = lb.state;
   const canvas = root.querySelector("[data-ch-lb-canvas]");
+  const marker = root.querySelector("[data-ch-lb-bokeh-marker]");
+  const positionMarker = () => {
+    if (!marker) return;
+    if (!s.bokeh) { marker.hidden = true; return; }
+    marker.hidden = false;
+    marker.style.left = `${canvas.offsetLeft + s.bokeh.x * canvas.offsetWidth}px`;
+    marker.style.top = `${canvas.offsetTop + s.bokeh.y * canvas.offsetHeight}px`;
+  };
   const img = new Image();
-  img.onload = () => paintEdit(canvas, img, s);
+  img.onload = () => { paintEdit(canvas, img, s); positionMarker(); };
   img.src = asset.url;
-  const repaint = () => { if (canvas._img) paintEdit(canvas, canvas._img, s); };
+  const repaint = () => { if (canvas._img) paintEdit(canvas, canvas._img, s); positionMarker(); };
+  onResize = () => positionMarker();
+  window.addEventListener("resize", onResize);
 
   root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => slider.oninput = () => {
     s[slider.dataset.chLbSlider] = +slider.value;
@@ -863,6 +892,31 @@ function wireLightbox(root, opts) {
   });
   const textInput = root.querySelector("[data-ch-lb-text]");
   if (textInput) textInput.oninput = () => { s.text = textInput.value; repaint(); };
+
+  const pickHint = root.querySelector("[data-ch-lb-pick-hint]");
+  const armPicking = () => { canvas.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; };
+  const disarmPicking = () => { canvas.classList.remove("is-picking"); if (pickHint) pickHint.hidden = true; };
+  root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = armPicking);
+  const bokehOff = root.querySelector("[data-ch-lb-bokeh-off]");
+  if (bokehOff) bokehOff.onclick = () => { s.bokeh = null; disarmPicking(); repaint(); rerender(); };
+  root.querySelectorAll("[data-ch-lb-bslider]").forEach((slider) => slider.oninput = () => {
+    if (!s.bokeh) return;
+    const key = slider.dataset.chLbBslider;
+    s.bokeh[key] = key === "r" ? +slider.value / 100 : +slider.value;
+    repaint();
+    const out = root.querySelector(`[data-bout="${key}"]`);
+    if (out) out.textContent = slider.value;
+  });
+  canvas.onclick = (event) => {
+    if (!canvas.classList.contains("is-picking")) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    s.bokeh = { x, y, r: s.bokeh?.r ?? 0.24, strength: s.bokeh?.strength ?? 20 };
+    disarmPicking();
+    repaint();
+    rerender();
+  };
 
   const aiRun = root.querySelector("[data-ch-lb-ai-run]");
   if (aiRun) aiRun.onclick = () => {

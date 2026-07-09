@@ -1,11 +1,12 @@
 /* PhantomForce — shared canvas image-filter engine: adjust/rotate/flip/text
-   overlay plus a local, honest "AI edit" heuristic that maps a text prompt
-   to filter presets. Pure functions, no network calls, no module-level
-   state — Media Lab's Edit tab and Content Hub's inline image editor both
-   import this so the actual pixel work only lives in one tested place. */
+   overlay, subject bokeh, plus a local, honest "AI edit" heuristic that maps
+   a text prompt to filter presets. Pure functions, no network calls, no
+   module-level state — Media Lab's Edit tab and Content Hub's inline image
+   editor both import this so the actual pixel work only lives in one tested
+   place. */
 
 export function freshEditState() {
-  return { brightness: 100, contrast: 100, saturate: 100, hue: 0, blur: 0, rotate: 0, flip: false, text: "" };
+  return { brightness: 100, contrast: 100, saturate: 100, hue: 0, blur: 0, rotate: 0, flip: false, text: "", bokeh: null };
 }
 
 export const FILTER_PRESETS = {
@@ -36,19 +37,51 @@ export function heuristicAiEdit(query, state) {
   return state;
 }
 
-export function paintEdit(canvas, img, state) {
-  canvas._img = img;
+/* ---------------- subject bokeh ----------------
+   state.bokeh = { x, y, r, strength } — x/y are 0..1 normalized focus point,
+   r is 0..1 radius relative to min(width,height), strength is the
+   background blur in px. Composited as a real edit (baked into export);
+   the on-canvas "pick your subject" marker is a separate DOM overlay drawn
+   by the caller, never part of the exported pixels. */
+export function freshBokeh() {
+  return { x: 0.5, y: 0.42, r: 0.24, strength: 20 };
+}
+
+function drawFrame(ctx, img, state, extraFilter = "") {
   const rot = state.rotate % 180 !== 0;
   const w = img.naturalWidth, h = img.naturalHeight;
-  canvas.width = rot ? h : w; canvas.height = rot ? w : h;
+  ctx.canvas.width = rot ? h : w; ctx.canvas.height = rot ? w : h;
+  ctx.save();
+  ctx.filter = `brightness(${state.brightness}%) contrast(${state.contrast}%) saturate(${state.saturate}%) hue-rotate(${state.hue}deg) blur(${state.blur}px)${extraFilter}`;
+  ctx.translate(ctx.canvas.width / 2, ctx.canvas.height / 2);
+  ctx.rotate(state.rotate * Math.PI / 180);
+  ctx.scale(state.flip ? -1 : 1, 1);
+  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.restore();
+}
+
+export function paintEdit(canvas, img, state) {
+  canvas._img = img;
   const g = canvas.getContext("2d");
-  g.save();
-  g.filter = `brightness(${state.brightness}%) contrast(${state.contrast}%) saturate(${state.saturate}%) hue-rotate(${state.hue}deg) blur(${state.blur}px)`;
-  g.translate(canvas.width / 2, canvas.height / 2);
-  g.rotate(state.rotate * Math.PI / 180);
-  g.scale(state.flip ? -1 : 1, 1);
-  g.drawImage(img, -w / 2, -h / 2, w, h);
-  g.restore();
+  drawFrame(g, img, state);
+
+  if (state.bokeh) {
+    const w = canvas.width, h = canvas.height;
+    const bg = document.createElement("canvas");
+    bg.width = w; bg.height = h;
+    const bgCtx = bg.getContext("2d");
+    drawFrame(bgCtx, img, state, ` blur(${state.bokeh.strength}px)`);
+    const cx = state.bokeh.x * w, cy = state.bokeh.y * h;
+    const r = Math.max(8, state.bokeh.r * Math.min(w, h));
+    bgCtx.globalCompositeOperation = "destination-out";
+    const grad = bgCtx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+    grad.addColorStop(0, "rgba(0,0,0,1)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    bgCtx.fillStyle = grad;
+    bgCtx.beginPath(); bgCtx.arc(cx, cy, r, 0, Math.PI * 2); bgCtx.fill();
+    g.drawImage(bg, 0, 0);
+  }
+
   if (state.text) {
     const fs = Math.max(18, canvas.width * 0.06);
     g.font = `700 ${fs}px "Space Grotesk", sans-serif`;

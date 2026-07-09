@@ -12,11 +12,11 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-104";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-105";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260709-104";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit } from "./imagefilters.js?v=phantom-live-20260709-104";
+} from "./contenthub.js?v=phantom-live-20260709-105";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit } from "./imagefilters.js?v=phantom-live-20260709-105";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1752,6 +1752,7 @@ function renderLibrary(body, opts, root) {
 
 /* ---- Edit (real client-side canvas editor) ---- */
 let editState = { ...freshEditState(), loadedUrl: null };
+let mlEditResizeHandler = null;
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
   if (!session.edit) {
@@ -1767,8 +1768,19 @@ function renderEdit(body, cfg, opts, root) {
   }
   body.innerHTML = `
     <div class="ml-editor">
-      <div class="ml-canvas-wrap"><canvas class="ml-canvas" data-ml-canvas></canvas></div>
+      <div class="ml-canvas-wrap">
+        <canvas class="ml-canvas" data-ml-canvas></canvas>
+        <div class="ch-lb-bokeh-marker" data-ml-bokeh-marker hidden></div>
+        <div class="ch-lb-pick-hint" data-ml-pick-hint hidden>${svgIc("spark")} Click the subject to focus on</div>
+      </div>
       <div class="ml-tools">
+        <div class="ml-tool-head">Subject bokeh ${svgIc("spark")}</div>
+        ${editState.bokeh ? `
+          <p class="ch-lb-bokeh-note">Subject marked below — background blurred around it.</p>
+          <label class="ml-slider"><span>Focus size <b data-bout="r">${Math.round(editState.bokeh.r * 100)}</b></span><input type="range" min="8" max="45" value="${Math.round(editState.bokeh.r * 100)}" data-ml-bslider="r"/></label>
+          <label class="ml-slider"><span>Background blur <b data-bout="strength">${editState.bokeh.strength}</b></span><input type="range" min="4" max="32" value="${editState.bokeh.strength}" data-ml-bslider="strength"/></label>
+          <div class="ml-chips"><button data-ml-bokeh-pick>${svgIc("spark")} Re-pick subject</button><button data-ml-bokeh-off>Remove</button></div>
+        ` : `<button class="ml-generate ml-inline" data-ml-bokeh-pick>${svgIc("spark")} Click the subject in the photo</button>`}
         <div class="ml-tool-head">Adjust</div>
         ${slider("Brightness", "brightness", 0, 200, editState.brightness)}
         ${slider("Contrast", "contrast", 0, 200, editState.contrast)}
@@ -1798,15 +1810,50 @@ function renderEdit(body, cfg, opts, root) {
       </div>
     </div>`;
   const canvas = body.querySelector("[data-ml-canvas]");
+  const marker = body.querySelector("[data-ml-bokeh-marker]");
+  const positionMarker = () => {
+    if (!marker) return;
+    if (!editState.bokeh) { marker.hidden = true; return; }
+    marker.hidden = false;
+    marker.style.left = `${canvas.offsetLeft + editState.bokeh.x * canvas.offsetWidth}px`;
+    marker.style.top = `${canvas.offsetTop + editState.bokeh.y * canvas.offsetHeight}px`;
+  };
   const img = new Image();
-  img.onload = () => { editState.loadedUrl = session.edit.url; paintEdit(canvas, img, editState); };
+  img.onload = () => { editState.loadedUrl = session.edit.url; paintEdit(canvas, img, editState); positionMarker(); };
   img.src = session.edit.url;
+  if (mlEditResizeHandler) window.removeEventListener("resize", mlEditResizeHandler);
+  mlEditResizeHandler = () => positionMarker();
+  window.addEventListener("resize", mlEditResizeHandler);
   // wire tools
-  body.querySelectorAll("[data-ml-slider]").forEach((s) => s.oninput = () => { editState[s.dataset.mlSlider] = +s.value; if (canvas._img) paintEdit(canvas, canvas._img, editState); const o = body.querySelector(`[data-out="${s.dataset.mlSlider}"]`); if (o) o.textContent = s.value; });
-  body.querySelectorAll("[data-ml-rot]").forEach((b) => b.onclick = () => { editState.rotate = (editState.rotate + (+b.dataset.mlRot) + 360) % 360; if (canvas._img) paintEdit(canvas, canvas._img, editState); });
-  const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { editState.flip = !editState.flip; flip.classList.toggle("is-on"); if (canvas._img) paintEdit(canvas, canvas._img, editState); };
-  body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { applyFilterPreset(b.dataset.v, editState); syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img, editState); });
+  body.querySelectorAll("[data-ml-slider]").forEach((s) => s.oninput = () => { editState[s.dataset.mlSlider] = +s.value; if (canvas._img) paintEdit(canvas, canvas._img, editState); positionMarker(); const o = body.querySelector(`[data-out="${s.dataset.mlSlider}"]`); if (o) o.textContent = s.value; });
+  body.querySelectorAll("[data-ml-rot]").forEach((b) => b.onclick = () => { editState.rotate = (editState.rotate + (+b.dataset.mlRot) + 360) % 360; if (canvas._img) paintEdit(canvas, canvas._img, editState); positionMarker(); });
+  const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { editState.flip = !editState.flip; flip.classList.toggle("is-on"); if (canvas._img) paintEdit(canvas, canvas._img, editState); positionMarker(); };
+  body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { applyFilterPreset(b.dataset.v, editState); syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img, editState); positionMarker(); });
   const tin = body.querySelector("[data-ml-text]"); if (tin) tin.oninput = () => { editState.text = tin.value; if (canvas._img) paintEdit(canvas, canvas._img, editState); };
+  const pickHint = body.querySelector("[data-ml-pick-hint]");
+  const armPicking = () => { canvas.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; };
+  const disarmPicking = () => { canvas.classList.remove("is-picking"); if (pickHint) pickHint.hidden = true; };
+  body.querySelectorAll("[data-ml-bokeh-pick]").forEach((b) => b.onclick = armPicking);
+  const bokehOff = body.querySelector("[data-ml-bokeh-off]");
+  if (bokehOff) bokehOff.onclick = () => { editState.bokeh = null; disarmPicking(); if (canvas._img) paintEdit(canvas, canvas._img, editState); renderMediaStudio(root, opts); };
+  body.querySelectorAll("[data-ml-bslider]").forEach((s) => s.oninput = () => {
+    if (!editState.bokeh) return;
+    const key = s.dataset.mlBslider;
+    editState.bokeh[key] = key === "r" ? +s.value / 100 : +s.value;
+    if (canvas._img) paintEdit(canvas, canvas._img, editState);
+    const o = body.querySelector(`[data-bout="${key}"]`);
+    if (o) o.textContent = s.value;
+  });
+  canvas.onclick = (event) => {
+    if (!canvas.classList.contains("is-picking")) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    editState.bokeh = { x, y, r: editState.bokeh?.r ?? 0.24, strength: editState.bokeh?.strength ?? 20 };
+    disarmPicking();
+    if (canvas._img) paintEdit(canvas, canvas._img, editState);
+    renderMediaStudio(root, opts);
+  };
   const runai = body.querySelector("[data-ml-runai]");
   if (runai) runai.onclick = async () => {
     const q = body.querySelector("[data-ml-aiedit]").value || "";

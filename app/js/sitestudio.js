@@ -6,11 +6,11 @@
 
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, ago, fmtMoney, statusLabel,
-} from "./store.js?v=phantom-live-20260709-104";
+} from "./store.js?v=phantom-live-20260709-105";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260709-104";
-import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260709-104";
+} from "./workspaces.js?v=phantom-live-20260709-105";
+import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260709-105";
 
 const cap = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 const firstSentence = (value) => String(value || "").split(/[.!?]/)[0].trim();
@@ -504,8 +504,10 @@ function shellMarkup(active, sites, products) {
     : activityTab(active);
   return `
     <div class="ss-shell">
-      ${header(active, sites)}
-      ${tabbar()}
+      <div class="ss-toolbar">
+        ${header(active, sites)}
+        ${tabbar()}
+      </div>
       <div class="ss-panel" data-ss-panel>${panel}</div>
     </div>
     ${ssUi.setup ? setupDrawerMarkup(ssUi.setup) : ""}
