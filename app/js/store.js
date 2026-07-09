@@ -25,25 +25,6 @@ export const ago = (iso) => {
 export const daysUntil = (iso) => Math.ceil((new Date(iso).getTime() - Date.now()) / DAY);
 
 /* ---------------- offer ladder ---------------- */
-/* Vacation Mode policy — the hard boundary for any autonomous run.
-   "Leave the work running without losing control." Drafting is free;
-   anything that touches the outside world waits in the Approval Queue. */
-export const VACATION_POLICY = {
-  maxRunMinutes: 480,
-  allowDrafting: true,
-  allowTaskCreation: true,
-  allowMediaBriefs: true,
-  allowRendering: false,          // credits — approval required
-  allowPublishing: false,
-  allowSending: false,
-  allowDeploying: false,
-  allowDeleting: false,
-  requireApprovalForCredits: true,
-  requireApprovalForExternalActions: true,
-  allowedActions: ["draft", "plan", "summarize", "organize", "create tasks", "create briefs", "prepare assets", "write copy", "review output", "prepare approvals", "report"],
-  blockedActions: ["publish", "deploy", "send email", "post social", "spend credits", "final renders", "charge money", "delete files", "share files", "connect accounts", "public links", "production changes"],
-};
-
 export const PACKAGES = [
   { id: "starter", name: "Starter", price: 750, blurb: "Landing page or content sprint. One clear outcome, fast." },
   { id: "core", name: "Core", price: 1500, blurb: "Site + lead capture + follow-up system. The working baseline." },
@@ -339,7 +320,6 @@ function seed() {
     bookings: [],
     media: [],
     looperPlans: [],
-    vacationRuns: [],
     sites: [],
     products: [],
     security: [],
@@ -363,7 +343,6 @@ function normalizeData(data) {
   d.bookings = Array.isArray(d.bookings) ? d.bookings : [];
   d.media = Array.isArray(d.media) ? d.media : [];
   d.looperPlans = Array.isArray(d.looperPlans) ? d.looperPlans : [];
-  d.vacationRuns = Array.isArray(d.vacationRuns) ? d.vacationRuns : [];
   d.sites = Array.isArray(d.sites) ? d.sites : [];
   d.products = Array.isArray(d.products) ? d.products : [];
   d.security = Array.isArray(d.security) ? d.security : [];

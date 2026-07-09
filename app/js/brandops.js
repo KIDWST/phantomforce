@@ -1,15 +1,17 @@
 /* PhantomForce — Automation workspace.
-   Customer and brand context belongs in the real Memory/Hermes notes layer.
-   This file renders Automation honestly from user-created automation records
-   only. No internal lanes or fabricated records are shown. */
+   A standalone system: automations are real user-created workflow records
+   that run independently of any other feature. Vacation Mode (its own
+   first-class page) can lean on automations while it's active, but this
+   page never renders vacation-specific UI — that would blur two different
+   products into one confusing surface. Customer/brand context belongs in
+   the real Memory/Hermes notes layer; this file renders only real,
+   user-created automation records. No internal lanes or fabricated
+   records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, VACATION_POLICY } from "./store.js?v=phantom-live-20260709-110";
+import { store, uid, visible, pushActivity, ago, currentWs } from "./store.js?v=phantom-live-20260709-112";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-/* ======================================================================
-   AUTOMATION — user-created workflows only
-   ====================================================================== */
 const AGENT_STATE = {
   active: { label: "RUNNING", cls: "on" },
   waiting: { label: "WAITING", cls: "gate" },
@@ -18,6 +20,81 @@ const AGENT_STATE = {
   paused: { label: "PAUSED", cls: "idle" },
   idle: { label: "DRAFT", cls: "idle" },
 };
+
+/* Starter recipes — real, honest starting points. Using one creates a real
+   draft automation record (same path as chat-created automations) that
+   waits in Drafts for approval; nothing runs on its own. */
+const RECIPES = [
+  { id: "lead-followup", name: "Follow up with new leads every morning", mission: "Each morning, review new leads from the last 24 hours and draft a personalized follow-up for each one. Drafts wait for approval before sending." },
+  { id: "weekly-analytics", name: "Send me a weekly analytics report", mission: "Every week, compile a summary of connected-account performance and post it as an activity update." },
+  { id: "comment-drafts", name: "Draft replies to comments, don't send", mission: "Watch connected social accounts for new comments and draft a reply for each — nothing sends without approval." },
+  { id: "lead-assign", name: "Assign a worker when a new lead comes in", mission: "When a new lead is captured, assign it to an available worker and draft an initial response for review." },
+  { id: "daily-digest", name: "Daily digest of what needs my attention", mission: "Each morning, summarize pending approvals, urgent items, and anything blocked so it's one glance instead of a hunt." },
+];
+
+const TABS = [
+  ["active", "Active"],
+  ["recipes", "Recipes"],
+  ["drafts", "Drafts"],
+  ["logs", "Logs"],
+  ["safety", "Safety rules"],
+];
+
+let auTab = "active";
+
+function agentCard(a, opts) {
+  const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
+  const pendingApproval = (store.state.approvals || []).find((app) => app.ref === a.id && app.status === "pending");
+  return `<div class="au-item">
+    <span class="aops-led aops-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}"><i></i></span>
+    <span class="au-item-main"><b>${esc(a.name)}</b><i>${esc(a.mission || a.role || "")}</i><em>Created ${esc(ago(a.createdAt))} · Updated ${esc(ago(a.updatedAt))} · ${esc(a.source || "Phantom dashboard")}</em></span>
+    <span class="aops-agent-mode aops-m-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}">${st.label}</span>
+    <span class="au-actions">
+      ${pendingApproval ? `<button class="btn btn-quiet" data-open-ws="approvals">Review</button>` : ""}
+      ${a.status === "active" ? `<button class="btn btn-quiet" data-au-pause="${a.id}">Pause</button>` : ""}
+      ${a.status === "paused" || a.status === "waiting" ? `<button class="btn btn-quiet" data-au-resume="${a.id}">Resume</button>` : ""}
+    </span>
+    <button class="bm-x" data-au-del="${a.id}" aria-label="Remove automation">✕</button>
+  </div>`;
+}
+
+function activeTab(agents) {
+  const active = agents.filter((a) => a.status === "active");
+  return `<div class="au-list">${active.length ? active.map((a) => agentCard(a)).join("") : `<div class="au-empty"><b>Nothing running right now.</b><span>Approve a draft below to start it, or use a recipe to create one.</span></div>`}</div>`;
+}
+
+function recipesTab() {
+  return `<div class="au-recipes">
+    <p class="bm-hint au-recipes-note">Using a recipe drafts a real automation and sends it to Drafts for your review — nothing runs until you approve it.</p>
+    <div class="au-recipe-grid">
+      ${RECIPES.map((r) => `<article class="au-recipe-card">
+        <b>${esc(r.name)}</b>
+        <p>${esc(r.mission)}</p>
+        <button class="btn btn-quiet" type="button" data-au-recipe="${esc(r.id)}">Use this recipe</button>
+      </article>`).join("")}
+    </div>
+  </div>`;
+}
+
+function draftsTab(agents) {
+  const drafts = agents.filter((a) => a.status === "idle" || a.status === "needs-approval");
+  return `<div class="au-list">${drafts.length ? drafts.map((a) => agentCard(a)).join("") : `<div class="au-empty"><b>No drafts waiting.</b><span>Ask Phantom on the dashboard to create a repeatable workflow, or use a recipe.</span><button class="btn" data-au-focus type="button">Ask Phantom</button></div>`}</div>`;
+}
+
+function logsTab() {
+  const rows = (store.state.activity || []).filter((a) => a.text && /automation/i.test(a.text)).slice(0, 40);
+  return `<div class="au-logs">${rows.length ? rows.map((a) => `<div class="au-log-row"><b>${esc(a.who)}</b><span>${esc(a.text)}</span><i>${ago(a.at)}</i></div>`).join("") : `<p class="au-empty-note">No automation history yet.</p>`}</div>`;
+}
+
+function safetyTab() {
+  const rules = [
+    ["New automations start as drafts", "Nothing runs the moment it's created — every automation waits in Drafts until you approve it."],
+    ["Outward-facing actions always gate", "Sending, publishing, spending, or deleting always queues to Approvals — automations can't skip that, regardless of status."],
+    ["Pause stops before the next run", "Pausing an active automation stops it cleanly; resuming picks back up from paused, not mid-action."],
+    ["Connected app scope", "No per-automation third-party app connections are tracked yet — automations run against your PhantomForce workspace only."],
+  ];
+  return `<div class="au-safety">${rules.map(([t, d]) => `<article class="au-safety-card"><b>${esc(t)}</b><p>${esc(d)}</p></article>`).join("")}</div>`;
+}
 
 export function renderAutomation(el, opts = {}) {
   const notify = opts.notify || (() => {});
@@ -28,162 +105,53 @@ export function renderAutomation(el, opts = {}) {
   const running = agents.filter((a) => a.status === "active").length;
   const paused = agents.filter((a) => a.status === "paused" || a.status === "waiting").length;
 
-  const vacationRuns = visible(store.state.vacationRuns || []);
-  const VAC_AGENTS = ["Planner", "Builder", "Creative", "Website", "Ops", "Reviewer", "Approval"];
-  const VAC_STATUS = {
-    draft: "DRAFT", awaiting_approval: "AWAITING APPROVAL", running: "RUNNING",
-    paused: "PAUSED", complete: "COMPLETE", blocked: "BLOCKED", failed: "FAILED",
-  };
+  const panel = auTab === "active" ? activeTab(agents)
+    : auTab === "recipes" ? recipesTab()
+    : auTab === "drafts" ? draftsTab(agents)
+    : auTab === "logs" ? logsTab()
+    : safetyTab();
 
   el.innerHTML = `
     <div class="au">
-      <div class="bm-note au-note"><i></i>Automations appear here after Phantom drafts them from the dashboard chat. Nothing runs until you approve it.</div>
-
-      <section class="bm-card au-card vac-card">
-        <div class="bm-card-h">
-          <h3>Vacation Mode</h3>
-          <span class="bm-hint">Planning scaffold — approved autonomous runs come next</span>
-        </div>
-        <p class="vac-tag">Leave the work running without losing control.</p>
-        <p class="vac-desc">Choose approved goals, limits, and actions. Phantom drafts, organizes, reviews, and reports while you're away — anything risky waits in the Approval Queue.</p>
-        <div class="vac-form">
-          <label class="vac-field vac-wide"><span>Goal while you're away</span>
-            <input type="text" data-vac-goal maxlength="220" placeholder="e.g. Continue the game trailer, draft the landing page, organize tasks, write the launch email" />
-          </label>
-          <label class="vac-field"><span>Time window</span>
-            <select data-vac-window>
-              <option value="120">2 hours</option>
-              <option value="240">4 hours</option>
-              <option value="360" selected>6 hours</option>
-              <option value="480">Overnight (8h max)</option>
-            </select>
-          </label>
-          <label class="vac-field"><span>Report cadence</span>
-            <select data-vac-cadence>
-              <option value="on-return" selected>One report when I'm back</option>
-              <option value="hourly">Hourly summaries</option>
-              <option value="on-complete">When everything's done</option>
-            </select>
-          </label>
-          <div class="vac-field vac-wide"><span>Agents on the run</span>
-            <div class="vac-chips" data-vac-agents>
-              ${VAC_AGENTS.map((a, i) => `<button type="button" class="vac-chip ${i < 4 ? "on" : ""}" data-vac-agent="${a}">${a}</button>`).join("")}
-            </div>
-          </div>
-          <div class="vac-bounds vac-wide">
-            <div><b>Allowed while away</b><i>${VACATION_POLICY.allowedActions.join(" · ")}</i></div>
-            <div><b>Waits for your approval</b><i>${VACATION_POLICY.blockedActions.join(" · ")}</i></div>
-          </div>
-        </div>
-        <div class="vac-actions">
-          <button class="btn" data-vac-draft type="button">Draft Vacation Plan</button>
-          <button class="btn btn-quiet" data-open-ws="approvals" type="button">View approvals</button>
-        </div>
-        ${vacationRuns.length ? `<div class="au-list vac-runs">
-          ${vacationRuns.map((r) => `<div class="au-item">
-            <span class="aops-led aops-${r.status === "awaiting_approval" ? "gate" : "idle"}"><i></i></span>
-            <span class="au-item-main"><b>${esc(r.title)}</b><i>${esc(r.goal)}</i><em>${Math.round((r.timeWindowMinutes || 360) / 60)}h window · ${esc((r.assignedAgents || []).join(", "))} · report: ${esc(r.reportCadence || "on-return")}</em></span>
-            <span class="aops-agent-mode aops-m-${r.status === "awaiting_approval" ? "gate" : "idle"}">${VAC_STATUS[r.status] || "DRAFT"}</span>
-            <span class="au-actions">
-              ${r.status === "draft" ? `<button class="btn btn-quiet" data-vac-submit="${r.id}">Start after approval</button>` : ""}
-              ${r.status === "awaiting_approval" ? `<button class="btn btn-quiet" data-open-ws="approvals">Review</button>` : ""}
-            </span>
-            <button class="bm-x" data-vac-del="${r.id}" aria-label="Remove vacation plan">✕</button>
-          </div>`).join("")}
-        </div>` : ""}
-      </section>
-
-      <section class="bm-card au-card">
-        <div class="bm-card-h"><h3>Your automations</h3><span class="bm-hint">${count} made</span></div>
-        <div class="au-summary" aria-label="Automation summary">
-          <span><b>${count}</b><i>Total</i></span>
-          <span><b>${pending}</b><i>Needs approval</i></span>
-          <span><b>${running}</b><i>Running</i></span>
-          <span><b>${paused}</b><i>Paused</i></span>
-        </div>
-        <div class="au-list">
-          ${agents.length ? agents.map((a) => {
-            const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
-            const pendingApproval = (store.state.approvals || []).find((app) => app.ref === a.id && app.status === "pending");
-            const created = a.createdAt ? ago(a.createdAt) : "created by Phantom";
-            return `<div class="au-item">
-              <span class="aops-led aops-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}"><i></i></span>
-              <span class="au-item-main"><b>${esc(a.name)}</b><i>${esc(a.mission || a.role || "")}</i><em>${esc(created)} · ${esc(a.source || "Phantom dashboard")}</em></span>
-              <span class="aops-agent-mode aops-m-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}">${st.label}</span>
-              <span class="au-actions">
-                ${pendingApproval ? `<button class="btn btn-quiet" data-open-ws="approvals">Review</button>` : ""}
-                ${a.status === "active" ? `<button class="btn btn-quiet" data-au-pause="${a.id}">Pause</button>` : ""}
-                ${a.status === "paused" || a.status === "waiting" ? `<button class="btn btn-quiet" data-au-resume="${a.id}">Resume</button>` : ""}
-              </span>
-              <button class="bm-x" data-au-del="${a.id}" aria-label="Remove automation">✕</button>
-            </div>`;
-          }).join("") : `<div class="au-empty"><b>No automations made yet.</b><span>Ask Phantom on the dashboard to create a repeatable workflow. It will land here as a draft and wait for approval.</span><button class="btn" data-au-focus type="button">Ask Phantom</button></div>`}
-        </div>
-      </section>
+      <div class="bm-note au-note"><i></i>Automations appear here after Phantom drafts them from the dashboard chat, or you pick a recipe. Nothing runs until you approve it. Vacation Mode is its own page — automations you build here can run while it's active.</div>
+      <div class="au-summary" aria-label="Automation summary">
+        <span><b>${count}</b><i>Total</i></span>
+        <span><b>${pending}</b><i>Needs approval</i></span>
+        <span><b>${running}</b><i>Running</i></span>
+        <span><b>${paused}</b><i>Paused</i></span>
+      </div>
+      <nav class="ml-tabs au-tabs" role="tablist">
+        ${TABS.map(([id, label]) => `<button class="ml-tab ${auTab === id ? "is-active" : ""}" type="button" role="tab" data-au-tab="${id}">${label}${id === "drafts" && pending ? ` <i class="ss-acc-count">${pending}</i>` : ""}</button>`).join("")}
+      </nav>
+      <section class="bm-card au-card">${panel}</section>
     </div>`;
 
-  /* ---- Vacation Mode scaffold: drafts a bounded run plan, never executes.
-     "Start after approval" queues it in Approvals; autonomy ships later. ---- */
-  el.querySelectorAll("[data-vac-agent]").forEach((chip) => {
-    chip.onclick = () => chip.classList.toggle("on");
-  });
-  el.querySelector("[data-vac-draft]")?.addEventListener("click", () => {
-    const goal = (el.querySelector("[data-vac-goal]")?.value || "").trim();
-    if (!goal) {
-      el.querySelector("[data-vac-goal]")?.focus();
-      notify("Vacation Mode", "Give the run a goal first — what should keep moving while you're away?");
-      return;
-    }
-    const agents = [...el.querySelectorAll("[data-vac-agent].on")].map((c) => c.dataset.vacAgent);
-    const run = {
-      id: uid("vac"),
-      ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(),
-      title: `Vacation run — ${goal.slice(0, 42)}${goal.length > 42 ? "…" : ""}`,
-      goal,
-      status: "draft",
-      timeWindowMinutes: Math.min(VACATION_POLICY.maxRunMinutes, Number(el.querySelector("[data-vac-window]")?.value || 360)),
-      reportCadence: el.querySelector("[data-vac-cadence]")?.value || "on-return",
-      allowedActions: [...VACATION_POLICY.allowedActions],
-      blockedActions: [...VACATION_POLICY.blockedActions],
-      assignedAgents: agents.length ? agents : ["Planner", "Builder", "Creative", "Website"],
-      approvalRequired: true,
-      startedAt: null,
-      completedAt: null,
-      report: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    store.state.vacationRuns.unshift(run);
-    pushActivity("Vacation Mode", `drafted run plan "${run.title}" — nothing runs until approval.`, run.ws);
-    store.save();
-    notify("Vacation Mode", `Plan drafted: "${goal.slice(0, 48)}". Nothing is running — review it, then send it to approval.`);
-    paint();
-  });
-  el.querySelectorAll("[data-vac-submit]").forEach((btn) => {
+  el.querySelectorAll("[data-au-tab]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auTab; paint(); });
+
+  el.querySelectorAll("[data-au-recipe]").forEach((btn) => {
     btn.onclick = () => {
-      const run = (store.state.vacationRuns || []).find((r) => r.id === btn.dataset.vacSubmit);
-      if (!run) return;
-      run.status = "awaiting_approval";
-      run.updatedAt = new Date().toISOString();
+      const recipe = RECIPES.find((r) => r.id === btn.dataset.auRecipe);
+      if (!recipe) return;
+      const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+      const a = {
+        id: uid("agt"), ws, kind: "automation", source: "Recipe",
+        name: recipe.name, mission: recipe.mission, status: "idle",
+        createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+      };
+      store.state.agents.unshift(a);
       store.state.approvals.unshift({
-        id: uid("app"), ws: run.ws, type: "vacation_mode",
-        title: `Start Vacation Mode: ${run.title}`,
-        detail: `${run.goal} · ${Math.round(run.timeWindowMinutes / 60)}h window · agents: ${run.assignedAgents.join(", ")}. Allowed: ${run.allowedActions.slice(0, 5).join(", ")}… Blocked without approval: ${run.blockedActions.slice(0, 5).join(", ")}…`,
-        ref: run.id, status: "pending", requestedBy: "Vacation Mode", at: new Date().toISOString(),
+        id: uid("app"), ws, type: "automation",
+        title: `Enable automation: ${a.name}`, detail: a.mission,
+        ref: a.id, status: "pending", requestedBy: "Recipe", at: new Date().toISOString(),
       });
-      pushActivity("Vacation Mode", `queued "${run.title}" for approval. Autonomous execution ships in a later build — approving records your go-ahead.`, run.ws);
-      store.save();
-      notify("Vacation Mode", "Run queued for your approval. Approved autonomous execution is the next build — nothing moves without you.");
+      pushActivity("Automation", `drafted automation "${a.name}" from a recipe — waiting on approval.`, ws);
+      // Switch tab and re-render on this closure's live element before store.save()/notify() —
+      // notify() triggers a global store-change listener that can fully remount this page,
+      // which would otherwise leave this call updating an already-detached DOM reference.
+      auTab = "drafts";
       paint();
-    };
-  });
-  el.querySelectorAll("[data-vac-del]").forEach((btn) => {
-    btn.onclick = () => {
-      const id = btn.dataset.vacDel;
-      store.state.vacationRuns = (store.state.vacationRuns || []).filter((r) => r.id !== id);
-      store.state.approvals = (store.state.approvals || []).filter((a) => a.ref !== id);
       store.save();
-      paint();
+      notify("Automation", `Drafted "${a.name}" from a recipe. It's waiting in Drafts for your approval.`);
     };
   });
 
@@ -195,9 +163,9 @@ export function renderAutomation(el, opts = {}) {
       agent.status = "paused";
       agent.updatedAt = new Date().toISOString();
       pushActivity("Automation", `paused automation "${agent.name}".`, agent.ws || currentWs());
+      paint();
       store.save();
       notify("Automation", `paused "${agent.name}".`);
-      paint();
     };
   });
   el.querySelectorAll("[data-au-resume]").forEach((btn) => {
@@ -207,9 +175,9 @@ export function renderAutomation(el, opts = {}) {
       agent.status = "active";
       agent.updatedAt = new Date().toISOString();
       pushActivity("Automation", `resumed automation "${agent.name}".`, agent.ws || currentWs());
+      paint();
       store.save();
       notify("Automation", `resumed "${agent.name}".`);
-      paint();
     };
   });
   el.querySelectorAll("[data-au-del]").forEach((btn) => {
@@ -219,8 +187,8 @@ export function renderAutomation(el, opts = {}) {
       store.state.agents = (store.state.agents || []).filter((a) => a.id !== id);
       store.state.approvals = (store.state.approvals || []).filter((a) => a.ref !== id);
       if (removed) pushActivity("Automation", `removed automation "${removed.name}".`, removed.ws);
-      store.save();
       paint();
+      store.save();
     };
   });
 }
