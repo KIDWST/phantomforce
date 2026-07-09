@@ -1701,6 +1701,24 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .console { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 330px); gap: clamp(10px, 1vw, 16px); padding: clamp(16px, 1.6vw, 22px); align-items: start; }
 .console-center { min-width: 0; display: flex; flex-direction: column; gap: clamp(16px, 1.8vw, 22px); }
 .console-rail { display: flex; flex-direction: column; gap: 16px; }
+
+/* Dashboard (chat + inline map) is a single screen, never a scrolling page —
+   it should end at the bottom of the map bar. Scoped to plain .console (not
+   .console-workspace, which other pages use and do scroll normally). Content
+   that can't fit a very short viewport scrolls inside .console itself, so the
+   sidebar/topbar/ticker stay put rather than the whole page moving. */
+.app-main:has(> .console:not(.console-workspace)) { height: 100dvh; overflow: hidden; }
+.app-main:has(> .console:not(.console-workspace)) .console { min-height: 0; overflow-y: auto; align-content: start; }
+/* The right rail's cards (plan/desktop-context/queue/quick-actions) don't
+   shrink with viewport height the way the chat does, so on shorter screens
+   they can end up taller than the chat+map column. Contain any overflow to
+   the rail itself rather than letting it push the console (and the map
+   underneath the chat) out of view. */
+.app-main:has(> .console:not(.console-workspace)) .console-rail {
+  max-height: calc(100vh - 157px);
+  overflow-y: auto;
+  overflow-x: hidden;
+}
 .console-workspace {
   display: block;
   padding: clamp(16px, 2vw, 26px);
@@ -1834,62 +1852,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   filter: blur(0.25px) brightness(1.2) contrast(1.12) drop-shadow(0 0 34px rgba(65, 255, 161, 0.26));
   transform: scale(0.9);
 }
-.phantomwire-alert {
-  appearance: none; font: inherit; text-align: left; cursor: pointer;
-}
-.phantomwire-alert,
-.forcewire-alert {
-  position: relative; z-index: 1;
-  display: grid; grid-template-columns: auto auto minmax(0, 1fr) auto; align-items: center; gap: 12px;
-  width: 100%; margin: -2px 0 14px; padding: 10px 13px;
-  border: 1px solid rgba(65, 255, 161, 0.28); border-radius: 999px;
-  background:
-    linear-gradient(90deg, rgba(65, 255, 161, 0.12), rgba(2, 10, 8, 0.72) 32%, rgba(30, 240, 255, 0.08)),
-    rgba(2, 9, 8, 0.7);
-  color: #dfffee; box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28), 0 0 28px rgba(65, 255, 161, 0.1), inset 0 0 22px rgba(65, 255, 161, 0.06);
-  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px);
-  overflow: hidden; animation: heroWorkIn 0.72s cubic-bezier(0.16, 1, 0.3, 1) both, heroWorkFloat 6s ease-in-out 0.8s infinite;
-}
-.phantomwire-alert::before,
-.forcewire-alert::before {
-  content: ""; position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(100deg, transparent 0 28%, rgba(159, 255, 210, 0.18) 44%, transparent 62% 100%);
-  transform: translateX(-120%); animation: heroWorkScan 4.8s ease-in-out 1.2s infinite;
-}
-.phantomwire-alert-label,
-.forcewire-alert-label {
-  color: rgba(65, 255, 161, 0.9); font: 800 10px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase;
-  white-space: nowrap;
-}
-.phantomwire-alert-ping,
-.forcewire-alert-ping {
-  position: relative; width: 9px; height: 9px; border-radius: 50%; background: var(--neon);
-  box-shadow: 0 0 11px var(--neon), 0 0 22px rgba(65, 255, 161, 0.45); animation: livePulse 2.1s ease-in-out infinite;
-}
-.phantomwire-alert-ping::after,
-.forcewire-alert-ping::after {
-  content: ""; position: absolute; inset: -8px; border: 1px solid rgba(65, 255, 161, 0.32); border-radius: 50%;
-  animation: heroWorkRing 2.1s ease-out infinite;
-}
-.phantomwire-alert-body,
-.forcewire-alert-body { display: flex; align-items: center; gap: 9px; min-width: 0; overflow: hidden; }
-.phantomwire-alert-body b,
-.forcewire-alert-body b {
-  flex: 0 0 auto; color: #effff6; font: 700 11px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase;
-}
-.phantomwire-alert-body em,
-.forcewire-alert-body em {
-  min-width: 0; max-width: 100%; color: rgba(201, 255, 223, 0.78);
-  font: 500 12px/1.35 "DM Mono", monospace; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.phantomwire-alert-time,
-.forcewire-alert-time {
-  color: rgba(30, 240, 255, 0.82); font: 700 9px "DM Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase;
-}
-@keyframes heroWorkIn { from { opacity: 0; transform: translateY(12px) scale(0.96); filter: blur(8px); } to { opacity: 1; transform: none; filter: blur(0); } }
-@keyframes heroWorkFloat { 50% { transform: translateY(-4px); } }
-@keyframes heroWorkScan { 0%, 58% { transform: translateX(-120%); } 78%, 100% { transform: translateX(120%); } }
-@keyframes heroWorkRing { from { opacity: 0.62; transform: scale(0.55); } to { opacity: 0; transform: scale(1.65); } }
 .phantom-mode-stage {
   position: relative; z-index: 2; isolation: isolate; width: min(100%, 470px); aspect-ratio: 1;
   display: grid; place-items: center; margin: 0; transform-style: preserve-3d;
@@ -2094,30 +2056,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   100% { transform: translate3d(0, 0, 0) rotate(0deg) scale(1); filter: blur(0) brightness(1.1) drop-shadow(0 0 34px rgba(65, 255, 161, 0.36)); opacity: 0.96; }
 }
 
-/* ---------------- stat cards ---------------- */
-/* ---------------- dash-mini: tiny status widgets under the chat ----------------
-   Replaces what used to be two big card grids (insights + statcards) with one
-   wrapping row of small chips — the chat stays the dominant element, this is
-   just a glanceable strip. Both data-insights and data-statcards render into
-   the same .mini-chip shape so they read as one unified row. */
-.dash-mini { margin-top: 14px; display: flex; flex-direction: column; gap: 8px; }
-.dash-mini-row { display: flex; flex-wrap: wrap; gap: 8px; }
-.mini-chip {
-  display: flex; align-items: center; gap: 8px; text-align: left; cursor: pointer;
-  padding: 7px 12px 7px 8px; border: 1px solid var(--line); border-radius: 999px; background: var(--glass);
-  transition: border-color 0.2s, transform 0.16s, box-shadow 0.22s;
-}
-.mini-chip:hover { border-color: var(--line-strong); transform: translateY(-1px); box-shadow: 0 8px 20px rgba(0, 0, 0, 0.32); }
-.mini-chip-ic { flex: 0 0 auto; width: 24px; height: 24px; border-radius: 8px; display: grid; place-items: center; color: var(--neon); background: rgba(65, 255, 161, 0.1); }
-.mini-chip-ic .ic { width: 13px; height: 13px; }
-.mini-chip-body { min-width: 0; max-width: 190px; display: flex; flex-direction: column; line-height: 1.2; }
-.mini-chip-body b, .mini-chip-body i { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mini-chip-body b { font: 500 9.5px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim); }
-.mini-chip-body i { font: 600 12.5px "Space Grotesk", sans-serif; font-style: normal; color: var(--ink); }
-.mini-chip-alert { border-color: rgba(255, 209, 102, 0.42); }
-.mini-chip-alert .mini-chip-ic { color: var(--warn); background: rgba(255, 209, 102, 0.12); }
-.mini-chip-alert .mini-chip-body i { color: var(--warn); }
-.mini-chip-clear { cursor: default; }
 
 /* ---------------- rail cards ---------------- */
 .plan-card, .queue-card, .quick-card { border: 1px solid var(--line); border-radius: 20px; padding: 18px; background: var(--glass); }
@@ -2175,17 +2113,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .phantom-webgl { min-height: 320px; inset: -7% -5% -5%; }
   .phantom-mode-stage { width: min(100%, 380px); }
   .phantom-mode-pose { max-height: 310px; }
-  .phantomwire-alert,
-  .forcewire-alert {
-    margin-top: 0; grid-template-columns: auto auto minmax(0, 1fr);
-    border-radius: 18px; padding: 9px 11px;
-  }
-  .phantomwire-alert-time,
-  .forcewire-alert-time { display: none; }
-  .phantomwire-alert-body,
-  .forcewire-alert-body { gap: 6px; }
-  .phantomwire-alert-body em,
-  .forcewire-alert-body em { max-width: 100%; }
   .site-builder-grid,
   .site-start-grid { grid-template-columns: 1fr; }
   .site-preview-hero { grid-template-columns: 1fr; }
@@ -2224,14 +2151,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .phantom-mode-stage { width: min(100%, 310px); }
   .phantom-mode-pose { width: min(88%, 270px); max-height: 240px; opacity: 0.9; }
   .phantom-mode-caption { bottom: 2%; padding: 5px 9px; font-size: 8px; letter-spacing: 0.16em; opacity: 0.82; }
-  .phantomwire-alert,
-  .forcewire-alert { padding: 8px 10px; }
-  .phantomwire-alert-label,
-  .forcewire-alert-label { display: none; }
-  .phantomwire-alert-body b,
-  .forcewire-alert-body b { font-size: 9.5px; }
-  .phantomwire-alert-body em,
-  .forcewire-alert-body em { font-size: 10.5px; }
   .cmd-chip { min-height: 42px; justify-content: center; padding: 10px 8px; }
   .cmd-chip span { font-size: 12px; }
   .site-builder-head { padding: 15px; border-radius: 18px; }
@@ -2441,15 +2360,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .phantom-mode-stage::before,
   .phantom-mode-stage::after,
   .phantom-mode-pose,
-  .phantom-mode-stage.is-swapping .phantom-mode-pose,
-  .phantomwire-alert,
-  .forcewire-alert,
-  .phantomwire-alert::before,
-  .forcewire-alert::before,
-  .phantomwire-alert-ping,
-  .forcewire-alert-ping,
-  .phantomwire-alert-ping::after,
-  .forcewire-alert-ping::after { animation: none !important; }
+  .phantom-mode-stage.is-swapping .phantom-mode-pose { animation: none !important; }
 }
 
 /* ============================================================= */
@@ -2486,12 +2397,6 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .notif-item-body b { font-size: 13px; font-weight: 600; line-height: 1.3; }
 .notif-item-body i { font-size: 11.5px; font-style: normal; color: var(--dim); }
 .notif-empty { padding: 16px 10px; text-align: center; color: var(--dim); font-size: 12.5px; }
-
-/* insights (needs-you) tone modifiers — share .mini-chip's base shape */
-.mini-chip-warn { border-color: rgba(255,209,102,0.34); }
-.mini-chip-warn:hover { border-color: var(--warn); }
-.mini-chip-warn .mini-chip-ic { color: var(--warn); background: rgba(255,209,102,0.12); }
-.mini-chip-ok:hover { border-color: var(--neon); }
 
 /* ⌘K command palette */
 .cmdk { position: fixed; inset: 0; z-index: 80; display: grid; place-items: start center; padding: clamp(40px, 12vh, 130px) 16px 16px; opacity: 0; transition: opacity 0.18s ease; }
@@ -3957,21 +3862,19 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .cmd-chip:hover { border-color: var(--line-strong); background: rgba(255, 255, 255, 0.04); }
 .cmd-input { border: 1px solid var(--line-strong); background: rgba(0, 0, 0, 0.28); box-shadow: var(--edge-hi); }
 
-.mini-chip, .plan-card, .queue-card, .quick-card, .desktop-context-card {
+.plan-card, .queue-card, .quick-card, .desktop-context-card {
   background: var(--card-grad);
   border: 1px solid var(--line);
   box-shadow: var(--edge-hi), var(--depth-1);
 }
-.mini-chip:hover { border-color: var(--line-strong); box-shadow: var(--edge-hi), var(--depth-2); }
-.mini-chip-ic, .queue-ic {
+.queue-ic {
   background: rgba(65, 255, 161, 0.08);
   box-shadow: inset 0 0 0 1px rgba(65, 255, 161, 0.12);
 }
-.mini-chip-body b, .section-head h2, .side-plan-kicker {
+.section-head h2, .side-plan-kicker {
   color: #9fb2b6;
   letter-spacing: 0.14em;
 }
-.mini-chip-body i { font-weight: 650; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
 
 .plan-card, .queue-card, .quick-card, .desktop-context-card { border-radius: 18px; }
 .desktop-context-card { padding: 15px; display: grid; gap: 11px; overflow: hidden; }
@@ -4031,7 +3934,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .aops-agent { background: rgba(255, 255, 255, 0.016); }
 .aops-agent:hover { background: rgba(255, 255, 255, 0.04); }
 
-.mini-chip, .cmd-chip, .queue-item, .quick-item, .nav-item, .aops-agent {
+.cmd-chip, .queue-item, .quick-item, .nav-item, .aops-agent {
   transition:
     transform 0.22s cubic-bezier(0.22, 1, 0.36, 1),
     border-color 0.22s ease,
@@ -4306,20 +4209,6 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     max-height: 252px !important;
   }
   .phantom-mode-caption { display: none; }
-  .phantomwire-alert,
-  .forcewire-alert {
-    grid-template-columns: auto minmax(0, 1fr); border-radius: 17px; padding: 8px 10px;
-  }
-  .phantomwire-alert-label,
-  .forcewire-alert-label,
-  .phantomwire-alert-time,
-  .forcewire-alert-time { display: none; }
-  .phantomwire-alert-body,
-  .forcewire-alert-body { gap: 6px; }
-  .phantomwire-alert-body b,
-  .forcewire-alert-body b { font-size: 9.5px; }
-  .phantomwire-alert-body em,
-  .forcewire-alert-body em { max-width: 100%; font-size: 10.5px; }
   .hero2-stage .ghost-canvas,
   .phantom.has-mode-poses .hero2-stage .ghost-canvas {
     min-height: 0 !important;
@@ -4328,18 +4217,6 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     max-width: 320px !important;
     left: 50%;
     transform: translateX(-50%) scale(0.9);
-  }
-
-  .dash-mini { margin: 0; }
-  .dash-mini-row {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    padding-bottom: 2px;
-    scroll-snap-type: x mandatory;
-  }
-  .mini-chip {
-    scroll-snap-align: start;
-    flex: 0 0 auto;
   }
 
   .mobile-bottom-nav {
@@ -5088,7 +4965,12 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .console .hero2 {
   container-type: inline-size;
   width: 100%;
-  min-height: clamp(680px, calc(100vh - 164px), 920px);
+  /* height (not min-height): this must be a hard ceiling too, so it leaves
+     room below for the collapsed operations-map bar and the dashboard never
+     needs a scroll to reach it — see .app-main:has(> .console…). The
+     chatbox's own flexible log area (flex:1, min-height:0) absorbs the
+     difference by shrinking, rather than the hero growing past its budget. */
+  height: clamp(360px, calc(100vh - 345px), 920px);
   position: relative;
   display: block;
   padding: clamp(14px, 1.4vw, 24px);
@@ -5104,14 +4986,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   max-width: none;
   width: 100%;
   min-width: 0;
-  min-height: 100%;
+  height: 100%;
 }
 .console .chatbox {
   position: relative;
   flex: 1 1 auto;
   width: 100%;
   max-width: none;
-  min-height: clamp(680px, calc(100vh - 196px), 900px);
+  min-height: 0;
   border-radius: 20px;
   background:
     radial-gradient(circle at 76% 48%, rgba(65, 255, 161, 0.18), rgba(65, 255, 161, 0.055) 27%, transparent 57%),
@@ -5169,6 +5051,19 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .console .chat-start-btn {
   min-height: 44px;
   padding: 11px 18px;
+}
+/* On shorter screens the chat column's height budget is tight (it shares the
+   viewport with the map bar below it — see .console .hero2's height calc).
+   Trim the welcome chrome so the greeting message is never the thing that
+   gets scrolled out of view by default. */
+@media (max-height: 900px) {
+  .console .chatbox-head { padding: 10px 16px; }
+  .console .chat-start { padding-top: 6px; }
+  .console .chat-start-t { font-size: 16px; margin-bottom: 1px; }
+  .console .chat-start-s { font-size: 12.5px; margin-bottom: 8px; }
+  .console .chat-start-btn { min-height: 36px; padding: 8px 14px; font-size: 12.5px; }
+  .console .chatbox-tools { padding: 7px 18px 8px; }
+  .console .chatbox-trust { display: none; }
 }
 .console .hero2-stage {
   position: absolute;

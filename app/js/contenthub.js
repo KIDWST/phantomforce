@@ -10,8 +10,8 @@ import {
   freshEditState, applyFilterPreset, paintEdit, renderBaseFrame, heuristicAiEdit,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260709-118";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage } from "./mediabackend.js?v=phantom-live-20260709-118";
+} from "./imagefilters.js?v=phantom-live-20260709-119";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260709-119";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -1204,7 +1204,15 @@ function wireLightbox(root, opts) {
     if (!q || lb.aiEdit.status === "unavailable") return;
     lb.aiEdit = { ...lb.aiEdit, status: "loading" };
     rerender();
-    const result = await requestAiEdit({ dataUrl: canvas.toDataURL("image/png"), prompt: q, provider: lb.aiEdit.provider || "higgsfield" });
+    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    if (chLightbox !== lb) return;
+    if (!exported.ok) {
+      lb.aiEdit = { ...lb.aiEdit, status: "error", message: exported.error };
+      rerender();
+      opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${exported.error}`);
+      return;
+    }
+    const result = await requestAiEdit({ dataUrl: exported.url, prompt: q, provider: lb.aiEdit.provider || "higgsfield" });
     if (chLightbox !== lb) return; // lightbox closed/reset while the request was in flight
     if (!result.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: result.message };
@@ -1250,7 +1258,15 @@ function wireLightbox(root, opts) {
     if (lb.bg.status === "unavailable") return;
     lb.bg = { ...lb.bg, status: "loading" };
     rerender();
-    const beforeUrl = canvas.toDataURL("image/png");
+    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    if (chLightbox !== lb) return;
+    if (!exported.ok) {
+      lb.bg = { status: "error", message: exported.error };
+      rerender();
+      opts.notify?.("Content Hub", `Background removal failed on "${asset.title}": ${exported.error}`);
+      return;
+    }
+    const beforeUrl = exported.url;
     const result = await requestRemoveBackground(beforeUrl);
     if (chLightbox !== lb) return;
     if (!result.ok) {
@@ -1284,6 +1300,17 @@ function wireLightbox(root, opts) {
     if (lb.bokehDetect.status === "unavailable") return;
     lb.bokehDetect = { status: "loading", message: "" };
     rerender();
+    // Confirms (and if needed, rescues) a readable canvas before building the
+    // base frame — renderBaseFrame draws the same canvas._img, so it would
+    // hit the same taint the main canvas would.
+    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    if (chLightbox !== lb) return;
+    if (!exported.ok) {
+      lb.bokehDetect = { status: "error", message: exported.error };
+      rerender();
+      opts.notify?.("Content Hub", `AI subject detection failed on "${asset.title}": ${exported.error}`);
+      return;
+    }
     // Send the clean base frame (adjust/rotate/flip only, no existing bokeh
     // or text) so the segmentation isn't confused by a prior mask/overlay.
     const baseUrl = renderBaseFrame(canvas._img, s).toDataURL("image/png");
@@ -1336,25 +1363,33 @@ function wireLightbox(root, opts) {
   root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = freshLightbox(asset, { showTutorial: lb.showTutorial }); rerender(); };
   const exportFormat = () => lb.hasTransparency ? "image/png" : "image/webp";
   const exportExt = () => lb.hasTransparency ? "png" : "webp";
-  root.querySelector("[data-ch-lb-download]").onclick = () => {
+  const repaintWithImg = (img) => { canvas._img = img; repaint(); };
+  root.querySelector("[data-ch-lb-download]").onclick = async () => {
+    const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.92);
+    if (chLightbox !== lb) return;
+    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't download "${asset.title}": ${exported.error}`); return; }
     const link = document.createElement("a");
-    link.href = canvas.toDataURL(exportFormat(), 0.92);
+    link.href = exported.url;
     link.download = `phantomforce-${asset.id}.${exportExt()}`;
     link.click();
   };
-  root.querySelector("[data-ch-lb-save]").onclick = () => {
-    const url = canvas.toDataURL(exportFormat(), 0.9);
-    registerContentAsset({ ...asset, url, prompt: s.text || asset.prompt, saved: true, updatedAt: Date.now() });
+  root.querySelector("[data-ch-lb-save]").onclick = async () => {
+    const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.9);
+    if (chLightbox !== lb) return;
+    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save "${asset.title}": ${exported.error}`); return; }
+    registerContentAsset({ ...asset, url: exported.url, prompt: s.text || asset.prompt, saved: true, updatedAt: Date.now() });
     // close (and its rerender) must run before notify(), since notify() triggers a global
     // store-change listener that can fully remount this page and invalidate this closure's
     // DOM references — closing first ensures the lightbox-closed state lands on live DOM.
     close();
     opts.notify?.("Content Hub", `saved your edit to "${asset.title}".`);
   };
-  root.querySelector("[data-ch-lb-save-copy]").onclick = () => {
-    const url = canvas.toDataURL(exportFormat(), 0.9);
+  root.querySelector("[data-ch-lb-save-copy]").onclick = async () => {
+    const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.9);
+    if (chLightbox !== lb) return;
+    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save a copy of "${asset.title}": ${exported.error}`); return; }
     const at = Date.now();
-    registerContentAsset({ ...asset, id: `edit-${at}-${Math.random().toString(36).slice(2, 6)}`, url, title: `${asset.title} (edit)`, prompt: s.text || asset.prompt, createdAt: at, saved: true });
+    registerContentAsset({ ...asset, id: `edit-${at}-${Math.random().toString(36).slice(2, 6)}`, url: exported.url, title: `${asset.title} (edit)`, prompt: s.text || asset.prompt, createdAt: at, saved: true });
     close();
     opts.notify?.("Content Hub", `saved a copy of "${asset.title}" with your edits.`);
   };
