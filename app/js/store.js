@@ -758,13 +758,28 @@ export const statusLabel = (s) => STATUS_LABEL[s] || s;
    It lives entirely as configuration/state — enabling it never creates a
    task, packet, approval item, or Site Studio action on its own. */
 const PHANTOM_LOOP_KEY = "pf.phantomloop.v1";
+/* Real backend routing keys (id, models) stay stable — they're sent to the
+   phantom-ai/chat route as-is. Display names are generic on purpose: the
+   real vendor/model identity only ever surfaces on the owner-only Developer
+   page, never in Settings, chat, or any other admin/employee-visible text. */
 export const LOOP_PROVIDERS = [
-  { id: "openai", name: "ChatGPT / OpenAI", models: ["gpt-4o", "gpt-4o-mini", "o3"] },
-  { id: "claude", name: "Claude", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
-  { id: "glm", name: "GLM / OpenRouter", models: ["glm-5", "openrouter-auto"] },
-  { id: "local", name: "Local / Ollama", models: ["llama3", "mistral", "custom-local"] },
+  { id: "openai", name: "Cloud Lane A", models: ["gpt-4o", "gpt-4o-mini", "o3"] },
+  { id: "claude", name: "Cloud Lane B", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
+  { id: "glm", name: "Cloud Router", models: ["glm-5", "openrouter-auto"] },
+  { id: "local", name: "Local Lane", models: ["llama3", "mistral", "custom-local"] },
   { id: "custom", name: "Custom endpoint", models: ["custom"] },
 ];
+export function loopProviderName(id) {
+  return LOOP_PROVIDERS.find((p) => p.id === id)?.name || id;
+}
+const MODEL_DISPLAY_LABELS = {
+  "gpt-4o": "Fast", "gpt-4o-mini": "Lightweight", "o3": "Deep reasoning",
+  "claude-sonnet-5": "Balanced", "claude-opus-4-8": "Deep", "claude-haiku-4-5": "Fast",
+  "glm-5": "Standard", "openrouter-auto": "Auto-routed",
+  "llama3": "Fast", "mistral": "Balanced", "custom-local": "Custom",
+  "custom": "Custom",
+};
+export const modelDisplayLabel = (id) => MODEL_DISPLAY_LABELS[id] || id;
 export const PHANTOM_LOOP_DEFAULTS = Object.freeze({
   enabled: false,
   targetProvider: "openai",

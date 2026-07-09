@@ -4,23 +4,23 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-  loadPhantomLoop, savePhantomLoop,
-} from "./store.js?v=phantom-live-20260709-112";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-112";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-112";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-112";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260709-112";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-112";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-112";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260709-112";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-112";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-112";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260709-112";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-112";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-112";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-112";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-112";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-112";
+  loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS,
+} from "./store.js?v=phantom-live-20260709-113";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-113";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-113";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-113";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260709-113";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-113";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-113";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260709-113";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-113";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-113";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260709-113";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-113";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-113";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-113";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-113";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-113";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -607,7 +607,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260709-112";
+const POSE_VERSION = "phantom-live-20260709-113";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1317,12 +1317,9 @@ function renderChatSettingsPanel(target) {
       else if (loop.enabled && companionMode() !== "loop") setCompanionMode("loop");
       applyCompanionMode(companionMode());
       const caption = document.querySelector("[data-pc-caption]");
-      if (caption) caption.textContent = loop.enabled ? `Phantom Loop on — routing through ${loopProviderNameFor(loop.targetProvider)}` : "Phantom Loop off";
+      if (caption) caption.textContent = loop.enabled ? `Phantom Loop on — routing through ${loopProviderName(loop.targetProvider)}` : "Phantom Loop off";
     },
   });
-}
-function loopProviderNameFor(id) {
-  return { openai: "ChatGPT / OpenAI", claude: "Claude", glm: "GLM / OpenRouter", local: "Local / Ollama", custom: "Custom endpoint" }[id] || id;
 }
 
 const CHAT_STARTERS = [
@@ -1506,7 +1503,7 @@ function runCommand(raw) {
   ghostFlare("listening");
   stageReact("listen", 620);
   setTimeout(() => {
-    speak(loopArmed ? `Looping through ${loopProviderNameFor(loop.targetProvider)}…` : "", "thinking");
+    speak(loopArmed ? `Looping through ${loopProviderName(loop.targetProvider)}…` : "", "thinking");
     if (loopArmed) setCompanionState("looping");
     stageReact("think", 780);
     setTimeout(async () => {
@@ -1668,6 +1665,15 @@ const mediaOpts = () => ({
   renderPending: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
 
+/* Real backend/vendor identity — the ONLY place these names may surface.
+   Every other view (Settings, chat, Media Lab) shows the generic lane/
+   engine name only; this owner-only page maps each lane back to what it
+   actually runs on. */
+const CHAT_LANES = [["Phantom Reasoning", "claude"], ["Phantom Code", "codex"], ["Phantom Router", "openrouter"], ["Phantom Local", "local"]];
+const BRAIN_LANE_IDENTITY = { claude: "Claude (Anthropic)", codex: "Codex (OpenAI)", openrouter: "OpenRouter", local: "Ollama / local runtime" };
+const LOOP_LANE_IDENTITY = { openai: "ChatGPT (OpenAI)", claude: "Claude (Anthropic)", glm: "GLM (OpenRouter)", local: "Local / Ollama", custom: "Custom endpoint" };
+const MEDIA_ENGINE_IDENTITY = { higgsfield: "Higgsfield", claude: "Claude (Anthropic)", openai: "OpenAI", runway: "Runway", flux: "Flux (Black Forest Labs)" };
+
 function renderDeveloperPage(body) {
   if (!isOwnerOperator()) {
     body.innerHTML = `
@@ -1739,6 +1745,26 @@ function renderDeveloperPage(body) {
           <div class="developer-list">${safety.map(([k, v]) => `<span><b>${esc(k)}</b><i>${esc(v)}</i></span>`).join("")}</div>
         </article>
       </div>
+
+      <section class="developer-card">
+        <p class="developer-kicker">Backend identity</p>
+        <h4>What each lane actually runs on</h4>
+        <p class="set-note">Every other screen — Settings, chat, Media Lab — shows only the generic lane or engine name. This is the one place the real backend behind each one is named.</p>
+        <div class="developer-lane-groups">
+          <div class="developer-lane-group">
+            <b>Chat brain</b>
+            <div class="developer-list">${CHAT_LANES.map(([name, id]) => `<span><b>${esc(name)}</b><i>${esc(BRAIN_LANE_IDENTITY[id] || id)}</i></span>`).join("")}</div>
+          </div>
+          <div class="developer-lane-group">
+            <b>Phantom Loop targets</b>
+            <div class="developer-list">${LOOP_PROVIDERS.map((p) => `<span><b>${esc(p.name)}</b><i>${esc(LOOP_LANE_IDENTITY[p.id] || p.id)}</i></span>`).join("")}</div>
+          </div>
+          <div class="developer-lane-group">
+            <b>Media engines</b>
+            <div class="developer-list">${DEFAULT_PROVIDERS.map((p) => `<span><b>${esc(p.name)}</b><i>${esc(MEDIA_ENGINE_IDENTITY[p.id] || p.id)}${p.enabled ? "" : " · coming soon"}</i></span>`).join("")}</div>
+          </div>
+        </div>
+      </section>
 
       <section class="developer-card">
         <p class="developer-kicker">Owner shortcuts</p>

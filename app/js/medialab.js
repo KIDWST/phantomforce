@@ -12,11 +12,11 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-112";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-113";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260709-112";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-112";
+} from "./contenthub.js?v=phantom-live-20260709-113";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-113";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -42,19 +42,19 @@ export const DEFAULT_PROVIDERS = [
     models: { enhance: ["claude-sonnet-5", "claude-opus-4-8"] },
   },
   {
-    id: "openai", name: "OpenAI", tagline: "GPT Image · Sora video",
+    id: "openai", name: "Studio Engine", tagline: "Stills, video, and inline edits",
     brand: "#10a37f", keyEnv: "OPENAI_API_KEY", enabled: false,
     modalities: ["image", "video", "edit"],
     models: { image: ["gpt-image-1"], video: ["sora-2"], edit: ["gpt-image-1"] },
   },
   {
-    id: "runway", name: "Runway", tagline: "Gen-4 video",
+    id: "runway", name: "Motion Engine", tagline: "Premium generated video",
     brand: "#ff5c00", keyEnv: "RUNWAY_API_KEY", enabled: false,
     modalities: ["video", "image"],
     models: { video: ["gen-4", "gen-3-alpha-turbo"], image: ["frames"] },
   },
   {
-    id: "flux", name: "Flux (BFL)", tagline: "Photoreal stills",
+    id: "flux", name: "Still Engine", tagline: "Photoreal stills",
     brand: "#4c8dff", keyEnv: "BFL_API_KEY", enabled: false,
     modalities: ["image", "edit"],
     models: { image: ["flux-1.1-pro", "flux-dev"], edit: ["flux-kontext"] },
@@ -2095,7 +2095,7 @@ function providerCard(p, esc) {
     <div class="set-prov-mods">${p.modalities.map((m) => `<span class="set-mod">${m}</span>`).join("")}</div>
     ${p.enabled ? `
     <div class="set-prov-body">
-      <div class="set-prov-key">${svgIc("lock")} Key: <code>${esc(p.keyEnv || "—")}</code> <span class="set-keystate ${p.localKey ? "local" : "server"}">${p.localKey ? "local override set" : "managed server-side"}</span></div>
+      <div class="set-prov-key">${svgIc("lock")} <span class="set-keystate ${p.localKey ? "local" : "server"}">${p.localKey ? "Local override key set" : "Server-managed API key"}</span></div>
       ${Object.keys(p.models || {}).filter((m) => (p.models[m] || []).length).map((m) => `
         <label class="set-mini"><span>Default ${m}</span>
           <select data-prov-defmodel="${m}">${p.models[m].map((mo) => `<option ${(p.defaultModel && p.defaultModel[m]) === mo ? "selected" : ""}>${esc(mo)}</option>`).join("")}</select></label>`).join("")}

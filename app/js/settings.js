@@ -1,35 +1,38 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260709-112";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS } from "./store.js?v=phantom-live-20260709-112";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260709-113";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel } from "./store.js?v=phantom-live-20260709-113";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 
+/* Display-only lane names — the real backend/vendor identity behind each
+   lane never surfaces outside the owner-only Developer page. The `id`
+   values are stable storage keys, not shown to the user. */
 const PROVIDERS = [
   {
     id: "claude",
-    name: "Claude",
+    name: "Phantom Reasoning",
     role: "Strategy, copy, review",
-    models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-fast"],
+    models: ["Fast", "Balanced", "Deep"],
   },
   {
     id: "codex",
-    name: "Codex",
+    name: "Phantom Code",
     role: "Code, repo work, implementation",
-    models: ["gpt-5-codex", "codex-local", "codex-review"],
+    models: ["Fast", "Balanced", "Deep"],
   },
   {
     id: "openrouter",
-    name: "OpenRouter",
+    name: "Phantom Router",
     role: "Flexible cloud routing",
-    models: ["openrouter/auto", "anthropic/claude-sonnet", "openai/gpt-4.1"],
+    models: ["Fast", "Balanced", "Deep"],
   },
   {
     id: "local",
-    name: "Local",
-    role: "Private Ollama/local lane",
-    models: ["ollama/llama3.1", "ollama/qwen-coder", "ollama/mistral"],
+    name: "Phantom Local",
+    role: "Private, on-device lane",
+    models: ["Fast", "Balanced", "Deep"],
   },
 ];
 
@@ -37,10 +40,10 @@ const DEFAULT_SETTINGS = {
   provider: "claude",
   brainMode: "local",
   models: {
-    claude: "claude-sonnet-5",
-    codex: "gpt-5-codex",
-    openrouter: "openrouter/auto",
-    local: "ollama/llama3.1",
+    claude: "Balanced",
+    codex: "Balanced",
+    openrouter: "Balanced",
+    local: "Balanced",
   },
   responseStyle: "operator",
   responseLength: "balanced",
@@ -195,7 +198,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
             <select data-mini-loop-provider>${LOOP_PROVIDERS.map((p) => `<option value="${esc(p.id)}" ${p.id === loop.targetProvider ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
           </label>
           <label class="chat-mini-field"><span>Model</span>
-            <select data-mini-loop-model>${loopModel.models.map((m) => `<option value="${esc(m)}" ${m === loop.targetModel ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>
+            <select data-mini-loop-model>${loopModel.models.map((m) => `<option value="${esc(m)}" ${m === loop.targetModel ? "selected" : ""}>${esc(modelDisplayLabel(m))}</option>`).join("")}</select>
           </label>
           <label class="chat-mini-field"><span>Depth</span>
             <select data-mini-loop-depth>${optionList([

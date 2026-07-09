@@ -6,9 +6,9 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
-  ctx, session, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS,
-} from "./store.js?v=phantom-live-20260709-112";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-112";
+  ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
+} from "./store.js?v=phantom-live-20260709-113";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-113";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -277,10 +277,6 @@ function createAutomation(subject, raw) {
   return a;
 }
 
-function loopProviderName(id) {
-  return LOOP_PROVIDERS.find((p) => p.id === id)?.name || id;
-}
-
 function approvalCount() {
   return visible(store.state.approvals).filter((a) => a.status === "pending").length;
 }
@@ -536,7 +532,7 @@ function intentResponse(intent, text, settings = null) {
     const loop = savePhantomLoop({ ...loadPhantomLoop(), enabled: true });
     pushActivity("Phantom Loop", `enabled — routing through ${loopProviderName(loop.targetProvider)}.`);
     return {
-      say: `Phantom Loop is on. Replies now route through ${loopProviderName(loop.targetProvider)} (${loop.targetModel}) and bring the answer back here. Adjust routing anytime from the chat composer or Settings.`,
+      say: `Phantom Loop is on. Replies now route through ${loopProviderName(loop.targetProvider)} (${modelDisplayLabel(loop.targetModel)}) and bring the answer back here. Adjust routing anytime from the chat composer or Settings.`,
       cards: [card("Phantom Loop", "Enabled", `${loopProviderName(loop.targetProvider)} · ${loop.depth === "one_pass" ? "1 pass" : loop.depth === "two_pass" ? "2 passes" : "Auto"} · ${loop.approvalMode === "manual" ? "Manual approval" : loop.approvalMode === "ask_external" ? "Ask before external calls" : "Auto for safe reads"}`, [openAction("Advanced routing", "settings")])],
       open: null,
     };
