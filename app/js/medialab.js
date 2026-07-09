@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-87";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260709-87";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-88";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260709-88";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -457,12 +457,12 @@ function genBase(cfg) {
      without the Creative Engine route). Hermes has NO /phantom-ai/health — the
      real route is GET /phantom-ai/media-lab/higgsfield/status, and the static
      proxy answers 502 {"error":"Admin API unavailable."} when Hermes is down. */
-let engineHealth = { at: 0, engine: null, studio: false, proxy: false, media: {}, bridge: false, bridgeAuth: false };
+let engineHealth = { at: 0, engine: null, studio: false, proxy: false, media: {}, bridge: false, bridgeAuth: false, hasToken: false };
 let lastRenderIssue = null;   // most recent failed render — the doctor reports it over a rosy probe
 async function checkEngineHealth(cfg, force = false) {
   const now = Date.now();
   if (!force && now - engineHealth.at < 60000) return engineHealth;
-  const next = { at: now, engine: null, studio: false, studioCli: null, studioCliDetail: "", proxy: false, media: {}, bridge: false, bridgeAuth: false };
+  const next = { at: now, engine: null, studio: false, studioCli: null, studioCliDetail: "", proxy: false, media: {}, bridge: false, bridgeAuth: false, hasToken: !!accessSession.token() };
   const probe = async (url, ms, headers) => {
     const ctrl = new AbortController();
     const t = setTimeout(() => ctrl.abort(), ms);
@@ -1548,7 +1548,15 @@ function wireGenerate(body, cfg, opts, root, esc) {
     if (h.engine && prov === "higgsfield") {
       const e = h.engine;
       const adminTail = e.cliFallbackEnabled ? "Transport: Hermes/MCP · CLI fallback ENABLED." : null;
-      if (e.status === "connected") {
+      // your session token lives in sessionStorage (tab-scoped) while "signed
+      // in" state lives in localStorage (persists) — a new tab or a browser
+      // restart can leave you looking signed in with no token to actually
+      // authenticate render requests. Say THAT precisely, not a relayed
+      // backend auth error that reads like a separate account is needed.
+      if (!h.hasToken && e.status !== "connected") {
+        setDoctor("warn", "Creative Engine — Sign-in expired", ["Sign out, sign back in, then re-check"],
+          "This tab's session token is missing (a new tab or a browser restart can drop it even though you still look signed in). Sign out, sign back in, and hit Re-check.");
+      } else if (e.status === "connected") {
         setDoctor("ok", "Creative Engine — Ready", ["Owner-approved spend", "Auto-captured to Content Hub"], adminTail);
       } else if (e.status === "not_configured") {
         setDoctor("warn", "Creative Engine — Offline", ["Nothing generates until reconnected"], e.message || adminTail);
