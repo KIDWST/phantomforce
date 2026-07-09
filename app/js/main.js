@@ -4,21 +4,22 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260709-98";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-98";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-98";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-98";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260709-98";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-98";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-98";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260709-98";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-98";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-98";
-import { renderVacationMode } from "./vacation.js?v=phantom-live-20260709-98";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-98";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-98";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-98";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-98";
+  loadPhantomLoop, savePhantomLoop,
+} from "./store.js?v=phantom-live-20260709-99";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-99";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-99";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-99";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260709-99";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-99";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-99";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260709-99";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-99";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-99";
+import { renderVacationMode } from "./vacation.js?v=phantom-live-20260709-99";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-99";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-99";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-99";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-99";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -415,8 +416,8 @@ const ACCOUNT_TIERS = [
     price: "Custom",
     badge: "Current",
     current: true,
-    copy: "The full operating suite: Phantom Loop, multi-workspace ops, advanced automations, and launch support.",
-    features: ["Phantom Loop", "Multi-workspace ops", "Advanced automation planning", "Launch support"],
+    copy: "The full operating suite: advanced loop routing, multi-workspace ops, advanced automations, and launch support.",
+    features: ["Advanced loop routing", "Multi-workspace ops", "Advanced automation planning", "Launch support"],
   },
 ];
 let accountNotice = "";
@@ -435,11 +436,10 @@ function accountIdentityLine() {
   return ctx.session?.email || ctx.session?.label || `${accountRoleLabel()} - ${wsName(currentWs())}`;
 }
 function canUsePhantomLoop() {
-  return isAdmin() && getOperatorSettings().phantomLoop;
+  return true;
 }
 function phantomLoopUnavailableMessage() {
-  if (!isAdmin()) return "Phantom Loop is an Elite feature. Open Account & Plan to upgrade before using it.";
-  return "Phantom Loop is off. Turn it on in the chat settings or full Settings.";
+  return "Phantom Loop needs a target model picked first — open chat settings to choose one.";
 }
 function accountRenewalLabel() {
   return new Date(Date.now() + ACCOUNT_PLAN.renewalOffsetDays * 864e5).toLocaleDateString([], { month: "long", day: "numeric", year: "numeric" });
@@ -596,7 +596,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260709-98";
+const POSE_VERSION = "phantom-live-20260709-99";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1279,10 +1279,12 @@ function renderChatLog() {
   log.scrollTop = log.scrollHeight;
 }
 function applyCompanionMode(mode) {
+  const loop = loadPhantomLoop();
+  if (mode === "loop" !== loop.enabled) savePhantomLoop({ ...loop, enabled: mode === "loop" });
   const input = $("[data-command-input]");
   if (!input) return;
   input.placeholder = mode === "loop"
-    ? "Phantom Loop is armed - send the outcome you want built..."
+    ? "Phantom Loop is on - this reply will route through another model..."
     : "Ask PhantomForce anything...";
 }
 
@@ -1290,18 +1292,26 @@ function renderChatSettingsPanel(target) {
   renderOperatorMiniSettings(target, {
     openSettings: () => routeWorkspace("settings"),
     onChange: (settings) => {
-      if (!getOperatorSettings().phantomLoop && companionMode() === "loop") setCompanionMode("chat");
-      applyCompanionMode(companionMode());
       renderChatLog();
       /* the change must be VISIBLE immediately, not just saved */
       const caption = document.querySelector("[data-pc-caption]");
       if (caption && settings) {
         const brain = settings.brainMode === "api" ? "Connected" : settings.brainMode === "subscription" ? "Subscription" : "Instant";
         const model = settings.models?.[settings.provider] || "";
-        caption.textContent = `Settings applied — ${brain} · ${model}${settings.phantomLoop ? " · Loop armed" : ""}`;
+        caption.textContent = `Settings applied — ${brain} · ${model}`;
       }
     },
+    onLoopChange: (loop) => {
+      if (!loop.enabled && companionMode() === "loop") setCompanionMode("chat");
+      else if (loop.enabled && companionMode() !== "loop") setCompanionMode("loop");
+      applyCompanionMode(companionMode());
+      const caption = document.querySelector("[data-pc-caption]");
+      if (caption) caption.textContent = loop.enabled ? `Phantom Loop on — routing through ${loopProviderNameFor(loop.targetProvider)}` : "Phantom Loop off";
+    },
   });
+}
+function loopProviderNameFor(id) {
+  return { openai: "ChatGPT / OpenAI", claude: "Claude", glm: "GLM / OpenRouter", local: "Local / Ollama", custom: "Custom endpoint" }[id] || id;
 }
 
 const CHAT_STARTERS = [
@@ -1316,7 +1326,7 @@ function starterHtml() {
   return `<div class="chat-start" data-chat-start>
     <p class="chat-start-t">Build with Phantom.</p>
     <p class="chat-start-s">Ask normally. Use the gear for Loop, model, and backend settings.</p>
-    <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn ${st.loop ? "is-build is-loop" : ""}" data-starter="${i}">${esc(st.label)}${st.elite ? `<span>Elite</span>` : ""}</button>`).join("")}</div>
+    <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn" data-starter="${i}">${esc(st.label)}</button>`).join("")}</div>
   </div>`;
 }
 
@@ -1325,26 +1335,21 @@ function bindStarters(log) {
     button.onclick = () => {
       const starter = CHAT_STARTERS[Number(button.dataset.starter)];
       if (!starter) return;
-      if (starter.loop) {
-        if (!canUsePhantomLoop()) {
-          speak(phantomLoopUnavailableMessage(), "", "alert");
-          return;
-        }
-        setCompanionMode("loop");
-        speak("Phantom Loop is armed. Send me the outcome and I’ll turn it into a guarded build packet.", "", "bright");
-        const input = $("[data-command-input]");
-        input?.focus();
-        return;
-      }
       runCommand(starter.run);
     };
   });
 }
 
-function chatTypingOn() {
+function chatTypingOn(label = "") {
   const log = chatLogEl();
-  if (!log || log.querySelector(".msg-typing")) return;
-  log.insertAdjacentHTML("beforeend", `<div class="msg msg-phantom msg-typing"><span class="msg-avatar" aria-hidden="true"></span><div class="msg-body"><p class="msg-text msg-dots"><i></i><i></i><i></i></p></div></div>`);
+  if (!log) return;
+  const existing = log.querySelector(".msg-typing");
+  if (existing) {
+    const lab = existing.querySelector("[data-typing-label]");
+    if (lab) lab.textContent = label;
+    return;
+  }
+  log.insertAdjacentHTML("beforeend", `<div class="msg msg-phantom msg-typing"><span class="msg-avatar" aria-hidden="true"></span><div class="msg-body">${label ? `<p class="msg-typing-label" data-typing-label>${esc(label)}</p>` : ""}<p class="msg-text msg-dots"><i></i><i></i><i></i></p></div></div>`);
   log.scrollTop = log.scrollHeight;
 }
 function chatTypingOff() {
@@ -1366,27 +1371,6 @@ let ghostEmotion = "calm";
 let ghostMoodUntil = 0;
 let ghostMoodStartedAt = performance.now();
 let phantomHasActed = false;
-
-const LOOP_EXPLICIT_RE = /phantom loop|loopus|looper/i;
-const LOOP_ACTION_RE = /\b(build|create|make|draft|write|prepare|plan|design|generate|launch)\b/i;
-const LOOP_ARTIFACT_RE = /\b(site|website|landing page|page|campaign|proposal|intake|form|workflow|booking|dashboard|copy|store|funnel|automation|media kit|brand kit)\b/i;
-const LOOP_NOOP_RE = /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|ping|test|thanks|thank you|ok|okay|cool|nice)[\s.!?]*$/i;
-
-function loopTarget(raw = "") {
-  return String(raw || "")
-    .replace(/\b(start|activate|enable|run|use|turn on)\s+(phantom\s+loop|loopus|looper)\s*(for|on|with|about)?\s*/i, "")
-    .replace(/\b(phantom\s+loop|loopus|looper)\s*(for|on|with|about)?\s*/i, "")
-    .trim();
-}
-
-function shouldConsumeLoopPrompt(raw = "") {
-  const text = String(raw || "").trim();
-  if (!text || LOOP_NOOP_RE.test(text)) return false;
-  const target = loopTarget(text);
-  if (!target || LOOP_NOOP_RE.test(target)) return false;
-  if (looksLikeQuestion(text) && !LOOP_EXPLICIT_RE.test(text)) return false;
-  return (LOOP_ACTION_RE.test(text) && LOOP_ARTIFACT_RE.test(text)) || LOOP_ARTIFACT_RE.test(target);
-}
 
 function emotionForText(text = "") {
   const s = text.toLowerCase();
@@ -1416,7 +1400,7 @@ function speak(text, cls = "", emotionOverride = null) {
     setGhostMood("thinking", { emotion: "bright" });
     renderEmotePose("think", 900);
     setCompanionState("thinking");
-    chatTypingOn();
+    chatTypingOn(text && text !== "· · ·" ? text : "");
     return;
   }
   if (cls === "user") {
@@ -1491,8 +1475,8 @@ function bindCardRemovers(root, onRemove) {
 }
 function runCommand(raw) {
   phantomHasActed = true;
-  const loopArmed = companionMode() === "loop";
-  const loopConsumed = loopArmed && shouldConsumeLoopPrompt(raw);
+  const loop = loadPhantomLoop();
+  const loopArmed = companionMode() === "loop" && loop.enabled;
   const inferredMode = inferModeFromText(raw);
   if (!loopArmed && inferredMode !== activeMode && MODES[inferredMode]) {
     activeMode = inferredMode;
@@ -1504,19 +1488,15 @@ function runCommand(raw) {
      request — a leftover sticky mode must never turn "whats the weather"
      into "Create a video for whats the weather" */
   const namedLane = modeNamedInText(raw);
-  const text = loopConsumed
-    ? (/phantom loop|loopus|looper|build me|build a|create a campaign|make an intake form|turn this into a build plan/i.test(raw)
-      ? raw
-      : `start phantom loop for ${raw}`)
-    : mode.prefix && namedLane === activeMode && !looksLikeQuestion(raw) && !/\b(draft|create|build|make|write|new)\b/i.test(raw)
-      ? mode.prefix + raw
-      : raw;
+  const text = mode.prefix && namedLane === activeMode && !looksLikeQuestion(raw) && !/\b(draft|create|build|make|write|new)\b/i.test(raw)
+    ? mode.prefix + raw
+    : raw;
   speak(raw, "user");
   ghostFlare("listening");
   stageReact("listen", 620);
   setTimeout(() => {
-    speak("· · ·", "thinking");
-    if (loopConsumed) setCompanionState("looping");
+    speak(loopArmed ? `Looping through ${loopProviderNameFor(loop.targetProvider)}…` : "", "thinking");
+    if (loopArmed) setCompanionState("looping");
     stageReact("think", 780);
     setTimeout(async () => {
       let r;
@@ -1525,10 +1505,13 @@ function runCommand(raw) {
       } catch {
         r = handleCommand(text);
       }
+      if (loopArmed) {
+        speak("Bringing the answer back to Phantom…", "thinking");
+        await new Promise((resolve) => setTimeout(resolve, reduceMotion ? 0 : 420));
+      }
       speak(r.say);
       if (r.cards?.length) chatAttachCards(r.cards);
       rememberConversation({ prompt: raw, reply: r.say, mode: activeMode, route: r.open || "" });
-      if (loopConsumed) setTimeout(() => setCompanionMode("chat"), reduceMotion ? 600 : 2600);
       renderConsole();
       stageReact("answer", 1100);
       if (r.open) setTimeout(() => routeWorkspace(r.open), reduceMotion ? 150 : 750);

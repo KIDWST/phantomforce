@@ -6,11 +6,11 @@
 
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, ago, fmtMoney, statusLabel,
-} from "./store.js?v=phantom-live-20260709-98";
+} from "./store.js?v=phantom-live-20260709-99";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260709-98";
-import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260709-98";
+} from "./workspaces.js?v=phantom-live-20260709-99";
+import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260709-99";
 
 const cap = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 const firstSentence = (value) => String(value || "").split(/[.!?]/)[0].trim();
@@ -95,7 +95,7 @@ function freshSetup() {
 }
 
 /* ---------------------------- small pieces ---------------------------- */
-function emptyState(ws) {
+function emptyState() {
   return `
     <div class="ss-empty">
       <p class="ss-empty-kicker">Site Studio</p>
@@ -105,8 +105,7 @@ function emptyState(ws) {
         <button class="btn btn-primary" type="button" data-act="ss-open-setup">Create with AI</button>
         <button class="btn btn-quiet" type="button" data-act="ss-start-blank">Start blank</button>
       </div>
-    </div>
-    ${loopPacketsDrop(ws)}`;
+    </div>`;
 }
 
 function header(active, sites) {
@@ -182,32 +181,12 @@ function inspectorPanel(active) {
     </div>`;
 }
 
-function loopPacketsDrop(ws) {
-  const pending = visible(store.state.looperPlans || []).filter((p) => p.status === "draft" && p.ws === ws);
-  if (!pending.length) return "";
-  return `
-    <details class="ss-loop-drop" open>
-      <summary>Phantom Loop packets awaiting review <span class="ss-loop-count">${pending.length}</span></summary>
-      <div class="ss-loop-list">
-        ${pending.map((plan) => `
-          <div class="ss-loop-row">
-            <div><b>${esc(plan.title)}</b><span>${esc(plan.goal)}</span></div>
-            <div class="ss-loop-actions">
-              <button class="btn btn-primary" type="button" data-act="ss-loop-start" data-id="${plan.id}">Start site draft</button>
-              <button class="btn btn-quiet" type="button" data-act="ss-loop-review" data-id="${plan.id}">Mark reviewed</button>
-            </div>
-          </div>`).join("")}
-      </div>
-    </details>`;
-}
-
 function buildTab(active, products) {
   const design = active.design;
   const home = active.pages.find((p) => p.home) || active.pages[0];
   return `
     <div class="ss-build">
       <div class="ss-col ss-col-command">
-        ${loopPacketsDrop(active.ws)}
         <form class="ss-command" data-ss-command>
           <label for="ssPrompt">Tell Phantom what to build, change, or fix</label>
           <textarea id="ssPrompt" data-ss-prompt rows="3" placeholder="Tell Phantom what to build, change, or fix…"></textarea>
@@ -524,7 +503,7 @@ export function renderSiteStudio(el, opts = {}) {
   if (active) { ensureSiteDesign(active); ensureSiteExtras(active); }
 
   if (!active) {
-    el.innerHTML = emptyState(currentWs()) + (ssUi.setup ? setupDrawerMarkup(ssUi.setup) : "");
+    el.innerHTML = emptyState() + (ssUi.setup ? setupDrawerMarkup(ssUi.setup) : "");
   } else {
     el.innerHTML = shellMarkup(active, sites, products);
   }
@@ -535,29 +514,6 @@ export function renderSiteStudio(el, opts = {}) {
     "ss-open-setup": () => { ssUi.setup = freshSetup(); rerender(); },
     "ss-close-setup": () => { ssUi.setup = null; rerender(); },
     "ss-start-blank": () => { createDraft("New site", "Website"); rerender(); },
-    "ss-loop-start": (id) => {
-      const plan = store.state.looperPlans.find((x) => x.id === id);
-      if (!plan) return;
-      const kind = /store|shop|e-?commerce/i.test(plan.goal || plan.output || "") ? "Store" : "Website";
-      const draft = baseSiteDraft(plan.title || "New site", kind);
-      draft.looperRef = plan.id;
-      applyWebsitePrompt(draft, plan.goal || plan.title || "");
-      ensureSiteExtras(draft);
-      store.state.sites.unshift(draft);
-      ssUi.activeSiteId = draft.id;
-      plan.status = "reviewed";
-      plan.updatedAt = new Date().toISOString();
-      pushActivity("Phantom Loop", `turned "${plan.title}" into a local ${kind.toLowerCase()} draft.`, plan.ws);
-      store.save(); rerender();
-    },
-    "ss-loop-review": (id) => {
-      const plan = store.state.looperPlans.find((x) => x.id === id);
-      if (!plan) return;
-      plan.status = "reviewed";
-      plan.updatedAt = new Date().toISOString();
-      pushActivity("Phantom Loop", `marked "${plan.title}" reviewed.`, plan.ws);
-      store.save(); rerender();
-    },
     "ss-setup-skip": () => { createDraft(setup.biz || "New site", setup.features["Store / checkout"] ? "Store" : "Website"); ssUi.setup = null; rerender(); },
     "ss-setup-back": () => { setup.step = Math.max(1, setup.step - 1); rerender(); },
     "ss-setup-next": () => { setup.step = Math.min(4, setup.step + 1); rerender(); },

@@ -3,7 +3,7 @@
    It uses the real character engine for blinking, eye tracking, and moods,
    respects reduced motion, and keeps every status dot paired with text. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-98";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-99";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
@@ -13,8 +13,8 @@ export const PRESENCE_STATES = {
   listening: { label: "Listening", caption: "I'm listening.", dot: "ok", mood: "listening", emotion: "calm", hold: 2400 },
   thinking: { label: "Thinking", caption: "Thinking through the best move...", dot: "ok", mood: "thinking", emotion: "bright", hold: 12000 },
   speaking: { label: "Responding", caption: "Here's what I'd do.", dot: "ok", mood: "talking", emotion: "bright", hold: 3200 },
-  building: { label: "Phantom Loop", caption: "Loop mode armed.", dot: "ok", mood: "thinking", emotion: "bright", hold: 6000 },
-  looping: { label: "Phantom Loop", caption: "Building the loop packet...", dot: "ok", mood: "thinking", emotion: "bright", hold: 6000 },
+  building: { label: "Phantom Loop", caption: "Loop is on.", dot: "ok", mood: "thinking", emotion: "bright", hold: 6000 },
+  looping: { label: "Phantom Loop", caption: "Routing through the loop...", dot: "ok", mood: "thinking", emotion: "bright", hold: 6000 },
   success: { label: "Done", caption: "Done. Ready for approval.", dot: "ok", mood: "talking", emotion: "happy", hold: 3000 },
   warning: { label: "Needs approval", caption: "This needs approval first.", dot: "warn", mood: "talking", emotion: "alert", hold: 4200 },
   error: { label: "Blocked", caption: "Blocked. Here's what needs fixing.", dot: "err", mood: "talking", emotion: "alert", hold: 4200 },
@@ -223,9 +223,9 @@ export function mountCompanion(headEl, opts = {}) {
   } else {
     el.settingsPanelBody.innerHTML = `
       <b>Phantom settings</b>
-      <p>Phantom Loop turns the next prompt into an Elite, approval-safe build packet.</p>
+      <p>Phantom Loop routes this chat through another model, then brings the answer back.</p>
       <button type="button" data-pc-menu-loop aria-pressed="false">
-        <span>Phantom Loop</span><em>Elite</em>
+        <span>Phantom Loop</span>
       </button>`;
     el.menuLoop = root.querySelector("[data-pc-menu-loop]");
   }

@@ -764,3 +764,50 @@ export const STATUS_LABEL = {
   "not-scheduled": "Not scheduled",
 };
 export const statusLabel = (s) => STATUS_LABEL[s] || s;
+
+/* ============================ Phantom Loop ============================
+   Phantom Loop is a CHAT-ROUTING preference, not a task/plan/build system:
+   "route this reply through another model, then bring the answer back."
+   It lives entirely as configuration/state — enabling it never creates a
+   task, packet, approval item, or Site Studio action on its own. */
+const PHANTOM_LOOP_KEY = "pf.phantomloop.v1";
+export const LOOP_PROVIDERS = [
+  { id: "openai", name: "ChatGPT / OpenAI", models: ["gpt-4o", "gpt-4o-mini", "o3"] },
+  { id: "claude", name: "Claude", models: ["claude-sonnet-5", "claude-opus-4-8", "claude-haiku-4-5"] },
+  { id: "glm", name: "GLM / OpenRouter", models: ["glm-5", "openrouter-auto"] },
+  { id: "local", name: "Local / Ollama", models: ["llama3", "mistral", "custom-local"] },
+  { id: "custom", name: "Custom endpoint", models: ["custom"] },
+];
+export const PHANTOM_LOOP_DEFAULTS = Object.freeze({
+  enabled: false,
+  targetProvider: "openai",
+  targetModel: "gpt-4o",
+  depth: "one_pass",           // one_pass | two_pass | auto
+  approvalMode: "safe_auto",   // safe_auto | ask_external | manual
+  maxCostPerResponse: null,
+  advanced: {
+    allowedProviders: ["openai", "claude", "glm", "local", "custom"],
+    routingMode: "phantom_to_external_to_phantom",
+    maxPasses: 2,
+    timeoutMs: 20000,
+    sharePrivateContext: false,
+    allowToolCalls: false,
+    proofLogging: true,
+  },
+});
+export function loadPhantomLoop() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PHANTOM_LOOP_KEY) || "{}");
+    return {
+      ...PHANTOM_LOOP_DEFAULTS,
+      ...saved,
+      advanced: { ...PHANTOM_LOOP_DEFAULTS.advanced, ...(saved.advanced || {}) },
+    };
+  } catch {
+    return { ...PHANTOM_LOOP_DEFAULTS };
+  }
+}
+export function savePhantomLoop(next) {
+  try { localStorage.setItem(PHANTOM_LOOP_KEY, JSON.stringify(next)); } catch {}
+  return next;
+}

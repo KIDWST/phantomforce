@@ -24,7 +24,11 @@ const STATUS = /\b(status|catch me up|what's next|what is next|today|pipeline|qu
    never tasks, plans, or board summaries — "what's the weather today" must
    not be hijacked by the \btoday\b status keyword */
 const CURRENT_INFO = /\b(weather|forecast|temperature|rain|snow|humidity|news|headlines?|stock|crypto|bitcoin|price of|exchange rate|score|game (last night|today|tonight)|traffic|time (is it|in)\b|what day is|sports)\b/i;
-const LOOPER = /\b(start\s+(phantom\s+loop|loopus|looper)|phantom\s+loop|loopus|looper|build me|build a|create a campaign|make an intake form|create an intake form|turn this into a build plan|build plan|landing page|website build|site build|proposal|campaign|crm workflow|booking flow|dashboard idea|website copy)\b/i;
+/* Phantom Loop — a CHAT ROUTING toggle only (route this reply through another
+   model, then bring the answer back). It is never a build packet, task, plan,
+   or Site Studio action — explicit enable/disable phrasing only. */
+const LOOP_ENABLE = /\b(start|enable|turn on|activate)\s+(phantom\s+loop|loopus|looper)\b|\bphantom\s+loop\s+on\b|\bloop\s+this\s+(through|with)\b|\broute\s+this\s+through\b/i;
+const LOOP_DISABLE = /\b(stop|disable|turn off|deactivate)\s+(phantom\s+loop|loopus|looper)\b|\bphantom\s+loop\s+off\b/i;
 const EXPLICIT_ARTIFACT = /\b(create|draft|build|make|prepare|write|new)\b/i;
 /* Termina (multi-agent command wall) — EXPLICIT phrasing only. A bare mention
    of "termina" in a question stays conversation. */
@@ -39,7 +43,7 @@ const RISKY_ACTION = /\b(publish|post|deploy|ship|send)\s+(it|this|that|them|the
 
 function confidenceFor(kind, text) {
   if (kind === "unknown") return 0.35;
-  if (EXPLICIT_TASK.test(text) || /start\s+(phantom\s+loop|loopus|looper)|remind me|check this every/i.test(text)) return 0.92;
+  if (EXPLICIT_TASK.test(text) || /remind me|check this every/i.test(text)) return 0.92;
   if (TASK_CANDIDATE.test(text) || BRAINSTORM.test(text)) return 0.74;
   return 0.82;
 }
@@ -65,31 +69,6 @@ function automationDraft(text) {
   };
 }
 
-function looperDraft(text) {
-  return {
-    goal: clean(text).slice(0, 220),
-    output: /proposal/i.test(text) ? "proposal draft" :
-      /campaign|content/i.test(text) ? "campaign plan" :
-      /intake|form/i.test(text) ? "intake form spec" :
-      /crm|workflow/i.test(text) ? "workflow spec" :
-      /landing|website|site|page/i.test(text) ? "page build packet" :
-      "build plan",
-    source: "phantom-intent-router",
-  };
-}
-
-function looperTarget(text) {
-  return clean(text)
-    .replace(/\b(start|activate|enable|run|use|turn on)\s+(phantom\s+loop|loopus|looper)\s*(for|on|with|about)?\s*/i, "")
-    .replace(/\b(phantom\s+loop|loopus|looper)\s*(for|on|with|about)?\s*/i, "")
-    .trim();
-}
-
-function isNoopLooperTarget(text) {
-  if (!/\b(start\s+(phantom\s+loop|loopus|looper)|phantom\s+loop|loopus|looper)\b/i.test(text)) return false;
-  const target = looperTarget(text);
-  return !target || GREETING.test(target) || GRATITUDE.test(target);
-}
 
 export function classifyPhantomIntent(raw = "") {
   const text = clean(raw);
@@ -101,7 +80,8 @@ export function classifyPhantomIntent(raw = "") {
        explicitly asked for it — normal chat must stay normal */
     shouldCreateTask: false,
     shouldCreateAutomation: false,
-    shouldStartLooper: false,
+    shouldEnableLoop: false,
+    shouldDisableLoop: false,
     shouldOpenTermina: false,
     shouldStartVacationMode: false,
     needsLiveData: false,
@@ -111,10 +91,19 @@ export function classifyPhantomIntent(raw = "") {
     reasonCode: "unknown",
     taskDraft: null,
     automationDraft: null,
-    looperDraft: null,
   };
 
   if (!text) return { ...result, primaryIntent: "chat", confidence: 0.9, reasonCode: "empty_chat" };
+
+  /* Phantom Loop is a chat-routing toggle, checked before greeting/gratitude
+     so "turn off phantom loop" isn't swallowed, but it never fires on plain
+     conversation — only this exact enable/disable phrasing. */
+  if (LOOP_ENABLE.test(text)) {
+    return { ...result, primaryIntent: "phantom_loop_on", confidence: 0.95, shouldEnableLoop: true, reasonCode: "explicit_loop_enable" };
+  }
+  if (LOOP_DISABLE.test(text)) {
+    return { ...result, primaryIntent: "phantom_loop_off", confidence: 0.95, shouldDisableLoop: true, reasonCode: "explicit_loop_disable" };
+  }
 
   if (GREETING.test(text)) {
     return { ...result, primaryIntent: "greeting", confidence: 0.96, reasonCode: "simple_greeting" };
@@ -210,19 +199,6 @@ export function classifyPhantomIntent(raw = "") {
       requiresAdminApproval: true,
       reasonCode: "explicit_automation_request",
       automationDraft: automationDraft(text),
-    };
-  }
-  if (isNoopLooperTarget(text)) {
-    return { ...result, primaryIntent: "chat", confidence: 0.9, reasonCode: "looper_armed_without_build_target" };
-  }
-  if (LOOPER.test(text) && (EXPLICIT_ARTIFACT.test(text) || /\b(start\s+(phantom\s+loop|loopus|looper)|phantom\s+loop|loopus)\b/i.test(text)) && !QUESTION.test(text)) {
-    return {
-      ...result,
-      primaryIntent: "looper_build",
-      confidence: confidenceFor("looper_build", text),
-      shouldStartLooper: true,
-      reasonCode: "explicit_build_request",
-      looperDraft: looperDraft(text),
     };
   }
   if (CURRENT_INFO.test(text)) {

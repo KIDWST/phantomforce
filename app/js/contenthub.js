@@ -664,13 +664,14 @@ function renderContentLibrary(body, data, esc, root, opts) {
           <i><b style="width:${stats.percent}%"></b></i>
         </div>
       </div>
-      <div class="ch-library-actions" data-ch-library-actions>
+      <div class="ch-library-actions ${chState.selectMode || chSelection.size ? "is-open" : ""}" data-ch-library-actions>
+        ${chState.selectMode || chSelection.size ? `
         <div class="ch-select-summary">
           <b>${chSelection.size ? `${chSelection.size} selected` : "Selection tools"}</b>
           <span>${selectedAssets} media · ${selectedPosts} posts · local/browser only</span>
         </div>
         <div class="ch-action-row">
-          <button class="ch-tool ${chState.selectMode ? "is-on" : ""}" data-ch-select-mode type="button">${chState.selectMode ? "Done selecting" : "Select"}</button>
+          <button class="ch-tool is-on" data-ch-select-mode type="button">Done selecting</button>
           <button class="ch-tool" data-ch-select-everything type="button" ${allItemsCount ? "" : "disabled"}>Select all</button>
           <button class="ch-tool" data-ch-select-all type="button" ${shownAssets.length || shownPosts.length ? "" : "disabled"}>Select visible</button>
           <button class="ch-tool" data-ch-clear-selected type="button" ${chSelection.size ? "" : "disabled"}>Clear</button>
@@ -684,7 +685,10 @@ function renderContentLibrary(body, data, esc, root, opts) {
           <button class="ch-tool" data-ch-upload-local type="button">Upload local</button>
           <button class="ch-tool ch-tool-danger" data-ch-delete-selected type="button" ${chSelection.size ? "" : "disabled"}>Delete</button>
           <input data-ch-upload-input type="file" accept="image/*,video/*" multiple hidden />
-        </div>
+        </div>` : `
+        <button class="ch-tool" data-ch-select-mode type="button">Select</button>
+        <input data-ch-upload-input type="file" accept="image/*,video/*" multiple hidden />
+        <button class="ch-tool" data-ch-upload-local type="button">Upload local</button>`}
       </div>
       ${shownAssets.length ? `<div class="ch-asset-grid">${shownAssets.map((asset) => contentAssetCard(asset, esc)).join("")}</div>`
       : `<p class="empty-line">No generated images or videos yet. Create media in Media Lab and it will land here automatically.</p>`}

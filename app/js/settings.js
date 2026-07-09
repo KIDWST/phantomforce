@@ -1,7 +1,8 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260709-98";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260709-99";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS } from "./store.js?v=phantom-live-20260709-99";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 
@@ -33,9 +34,6 @@ const PROVIDERS = [
 ];
 
 const DEFAULT_SETTINGS = {
-  phantomLoop: true,
-  loopMode: "approval_or_autopilot",
-  loopCadence: "on_demand",
   provider: "claude",
   brainMode: "local",
   models: {
@@ -110,12 +108,12 @@ function renderProviderCards(settings) {
     </button>`).join("");
 }
 
+function loopProviderName(id) {
+  return LOOP_PROVIDERS.find((p) => p.id === id)?.name || id;
+}
+
 function renderSafetySummary(settings) {
-  const loopLabel = {
-    approval_or_autopilot: "Approval or autopilot",
-    approval_first: "Approval checkpoints",
-    draft_only: "Draft only",
-  }[settings.loopMode] || "Approval or autopilot";
+  const loop = loadPhantomLoop();
   const externalLabel = {
     approval: "External actions ask first",
     blocked: "External actions blocked",
@@ -128,7 +126,7 @@ function renderSafetySummary(settings) {
   }[settings.brainMode] || "Instant brain (no backend)";
   return `
     <div class="set-status-grid">
-      <span><b>Loop</b><i>${esc(settings.phantomLoop ? loopLabel : "Off")}</i></span>
+      <span><b>Loop</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Off"}</i></span>
       <span><b>Brain</b><i>${esc(brainLabel)} · ${esc(providerFor(settings.provider).name)}</i></span>
       <span><b>Autopilot</b><i>${settings.autopilotScope === "safe_repeat" ? "Safe repeat work only" : "Manual only"}</i></span>
       <span><b>Boundary</b><i>${esc(externalLabel)}</i></span>
@@ -152,16 +150,13 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   const settings = loadOperatorSettings();
   const activeProvider = providerFor(settings.provider);
   const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
-  const loopLabel = {
-    approval_or_autopilot: "Approval/autopilot",
-    approval_first: "Approval",
-    draft_only: "Draft",
-  }[settings.loopMode] || "Approval/autopilot";
+  const loop = loadPhantomLoop();
   const brainLabel = {
     local: "Instant",
     api: "Connected",
     subscription: "Subscription",
   }[settings.brainMode] || "Instant";
+  const loopModel = LOOP_PROVIDERS.find((p) => p.id === loop.targetProvider) || LOOP_PROVIDERS[0];
 
   el.innerHTML = `
     <div class="chat-mini-settings">
@@ -172,7 +167,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
       </div>
       <div class="chat-mini-summary">
         <span><b>${esc(brainLabel)}</b><i>${esc(activeProvider.name)} · ${esc(activeModel)}</i></span>
-        <span><b>${settings.phantomLoop ? "Loop ready" : "Loop off"}</b><i>${settings.phantomLoop ? esc(loopLabel) : "Manual chat only"}</i></span>
+        <span><b>${loop.enabled ? "Loop on" : "Loop off"}</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Replies stay with Phantom"}</i></span>
       </div>
       <div class="chat-mini-fields">
         <label class="chat-mini-field"><span>Backend</span>
@@ -188,20 +183,38 @@ export function renderOperatorMiniSettings(el, opts = {}) {
         <label class="chat-mini-field chat-mini-wide"><span>Default model</span>
           <select data-mini-model>${activeProvider.models.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(model)}</option>`).join("")}</select>
         </label>
-        <label class="chat-mini-field chat-mini-wide"><span>Loop mode</span>
-          <select data-mini-loop>${optionList([
-            { id: "approval_or_autopilot", label: "Approval or autopilot" },
-            { id: "approval_first", label: "Approval checkpoints" },
-            { id: "draft_only", label: "Draft only" },
-          ], settings.loopMode)}</select>
+      </div>
+      <div class="chat-mini-loop">
+        <label class="chat-mini-switch">
+          <input type="checkbox" data-mini-loop-toggle ${loop.enabled ? "checked" : ""}/>
+          <span><b>Phantom Loop</b><i>Route this reply through another model, then bring the answer back.</i></span>
         </label>
+        ${loop.enabled ? `
+        <div class="chat-mini-fields">
+          <label class="chat-mini-field"><span>Loop through</span>
+            <select data-mini-loop-provider>${LOOP_PROVIDERS.map((p) => `<option value="${esc(p.id)}" ${p.id === loop.targetProvider ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select>
+          </label>
+          <label class="chat-mini-field"><span>Model</span>
+            <select data-mini-loop-model>${loopModel.models.map((m) => `<option value="${esc(m)}" ${m === loop.targetModel ? "selected" : ""}>${esc(m)}</option>`).join("")}</select>
+          </label>
+          <label class="chat-mini-field"><span>Depth</span>
+            <select data-mini-loop-depth>${optionList([
+              { id: "one_pass", label: "1 pass" },
+              { id: "two_pass", label: "2 passes" },
+              { id: "auto", label: "Auto" },
+            ], loop.depth)}</select>
+          </label>
+          <label class="chat-mini-field"><span>Approval</span>
+            <select data-mini-loop-approval>${optionList([
+              { id: "safe_auto", label: "Auto for safe reads" },
+              { id: "ask_external", label: "Ask before external calls" },
+              { id: "manual", label: "Manual every time" },
+            ], loop.approvalMode)}</select>
+          </label>
+        </div>` : ""}
       </div>
       <div class="chat-mini-actions">
-        <label class="chat-mini-switch">
-          <input type="checkbox" data-mini-loop-toggle ${settings.phantomLoop ? "checked" : ""}/>
-          <span><b>Phantom Loop</b><i>Arm guarded build packets from chat.</i></span>
-        </label>
-        <button class="chat-mini-full" type="button" data-mini-full-settings>Full settings</button>
+        <button class="chat-mini-full" type="button" data-mini-full-settings>Advanced loop routing</button>
       </div>
     </div>`;
 
@@ -223,22 +236,96 @@ export function renderOperatorMiniSettings(el, opts = {}) {
     saveMiniAndRender(el, opts, settings);
   };
 
-  const loopSelect = el.querySelector("[data-mini-loop]");
-  if (loopSelect) loopSelect.onchange = () => {
-    settings.loopMode = loopSelect.value;
-    saveMiniAndRender(el, opts, settings);
+  const saveLoop = (patch) => {
+    savePhantomLoop({ ...loop, ...patch });
+    renderOperatorMiniSettings(el, opts);
+    if (typeof opts.onLoopChange === "function") opts.onLoopChange(loadPhantomLoop());
   };
 
   const loopToggle = el.querySelector("[data-mini-loop-toggle]");
-  if (loopToggle) loopToggle.onchange = () => {
-    settings.phantomLoop = loopToggle.checked;
-    saveMiniAndRender(el, opts, settings);
+  if (loopToggle) loopToggle.onchange = () => saveLoop({ enabled: loopToggle.checked });
+
+  const loopProviderSelect = el.querySelector("[data-mini-loop-provider]");
+  if (loopProviderSelect) loopProviderSelect.onchange = () => {
+    const next = LOOP_PROVIDERS.find((p) => p.id === loopProviderSelect.value) || LOOP_PROVIDERS[0];
+    saveLoop({ targetProvider: next.id, targetModel: next.models[0] });
   };
+
+  const loopModelSelect = el.querySelector("[data-mini-loop-model]");
+  if (loopModelSelect) loopModelSelect.onchange = () => saveLoop({ targetModel: loopModelSelect.value });
+
+  const loopDepthSelect = el.querySelector("[data-mini-loop-depth]");
+  if (loopDepthSelect) loopDepthSelect.onchange = () => saveLoop({ depth: loopDepthSelect.value });
+
+  const loopApprovalSelect = el.querySelector("[data-mini-loop-approval]");
+  if (loopApprovalSelect) loopApprovalSelect.onchange = () => saveLoop({ approvalMode: loopApprovalSelect.value });
 
   const full = el.querySelector("[data-mini-full-settings]");
   if (full) full.onclick = () => {
     if (typeof opts.openSettings === "function") opts.openSettings();
   };
+}
+
+const ROUTING_MODES = [
+  { id: "phantom_to_external_to_phantom", label: "Phantom → external model → Phantom" },
+  { id: "phantom_to_a_to_b_to_phantom", label: "Phantom → model A → model B → Phantom" },
+  { id: "multi_model_compare", label: "Multi-model compare" },
+  { id: "critic_refiner", label: "Critic / refiner loop" },
+];
+
+function renderLoopAdvancedSection() {
+  const loop = loadPhantomLoop();
+  const adv = loop.advanced;
+  return `
+    <div class="set-section">
+      <div class="set-sec-head">
+        <div>
+          <h3>Phantom Loop — advanced routing</h3>
+          <p class="set-note">Route a chat reply through another model, then bring the answer back to Phantom. This is chat-only — it never creates a task, build plan, or Site Studio action on its own.</p>
+        </div>
+        <label class="set-switch set-switch-large">
+          <input type="checkbox" data-loop-toggle ${loop.enabled ? "checked" : ""}/><span></span>
+        </label>
+      </div>
+      <div class="set-control-grid">
+        <label class="set-control"><span>Default loop provider</span>
+          <select data-loop-field="targetProvider">${optionList(LOOP_PROVIDERS.map((p) => ({ id: p.id, label: p.name })), loop.targetProvider)}</select>
+        </label>
+        <label class="set-control"><span>Routing mode</span>
+          <select data-loop-adv-field="routingMode">${optionList(ROUTING_MODES, adv.routingMode)}</select>
+        </label>
+        <label class="set-control"><span>Max loop passes</span>
+          <select data-loop-adv-field="maxPasses">${optionList([1, 2, 3, 4].map((n) => ({ id: String(n), label: `${n}` })), String(adv.maxPasses))}</select>
+        </label>
+        <label class="set-control"><span>Timeout</span>
+          <select data-loop-adv-field="timeoutMs">${optionList([
+            { id: "10000", label: "10 seconds" },
+            { id: "20000", label: "20 seconds" },
+            { id: "45000", label: "45 seconds" },
+            { id: "90000", label: "90 seconds" },
+          ], String(adv.timeoutMs))}</select>
+        </label>
+        <label class="set-control"><span>Max cost per loop</span>
+          <select data-loop-cost>${optionList([
+            { id: "", label: "No cap set" },
+            { id: "0.25", label: "$0.25" },
+            { id: "1", label: "$1.00" },
+            { id: "5", label: "$5.00" },
+          ], loop.maxCostPerResponse == null ? "" : String(loop.maxCostPerResponse))}</select>
+        </label>
+      </div>
+      <p class="set-note" style="margin-top:10px">Allowed providers</p>
+      <div class="set-check-grid">
+        ${LOOP_PROVIDERS.map((p) => `<label class="set-inline set-inline-tight"><input type="checkbox" data-loop-allowed="${p.id}" ${adv.allowedProviders.includes(p.id) ? "checked" : ""}/> ${esc(p.name)}</label>`).join("")}
+      </div>
+      <label class="set-inline set-inline-tight"><input type="checkbox" data-loop-adv-toggle="sharePrivateContext" ${adv.sharePrivateContext ? "checked" : ""}/> Let external models see private business context</label>
+      <label class="set-inline set-inline-tight"><input type="checkbox" data-loop-adv-toggle="allowToolCalls" ${adv.allowToolCalls ? "checked" : ""}/> Allow tool calls inside the loop</label>
+      <label class="set-inline set-inline-tight"><input type="checkbox" data-loop-adv-toggle="proofLogging" ${adv.proofLogging ? "checked" : ""}/> Keep audit/proof logs for loop routing</label>
+      <div class="set-rule-list">
+        <span>External API calls, sends, publishes, and file/setting changes still always require approval</span>
+        <span>Loop never bypasses the existing approval queue</span>
+      </div>
+    </div>`;
 }
 
 export function renderOperatorSettings(el, opts = {}) {
@@ -295,39 +382,7 @@ export function renderOperatorSettings(el, opts = {}) {
         </div>
       </div>
 
-      <div class="set-section">
-        <div class="set-sec-head">
-          <div>
-            <h3>Phantom Loop</h3>
-            <p class="set-note">Turn on the loop that turns a request into a plan, worker handoff, review point, and next action.</p>
-          </div>
-          <label class="set-switch set-switch-large">
-            <input type="checkbox" data-ai-toggle="phantomLoop" ${settings.phantomLoop ? "checked" : ""}/><span></span>
-          </label>
-        </div>
-        <div class="set-control-grid">
-          <label class="set-control"><span>Loop mode</span>
-            <select data-ai-field="loopMode">${optionList([
-              { id: "approval_or_autopilot", label: "Approval or autopilot" },
-              { id: "approval_first", label: "Approval checkpoints" },
-              { id: "draft_only", label: "Draft only" },
-            ], settings.loopMode)}</select>
-          </label>
-          <label class="set-control"><span>Cadence</span>
-            <select data-ai-field="loopCadence">${optionList([
-              { id: "on_demand", label: "On demand" },
-              { id: "daily", label: "Daily operator brief" },
-              { id: "after_commands", label: "After each command" },
-            ], settings.loopCadence)}</select>
-          </label>
-          <label class="set-control"><span>Autopilot scope</span>
-            <select data-ai-field="autopilotScope">${optionList([
-              { id: "safe_repeat", label: "Safe repeat work only" },
-              { id: "manual_only", label: "Manual until approved" },
-            ], settings.autopilotScope)}</select>
-          </label>
-        </div>
-      </div>
+      ${renderLoopAdvancedSection()}
 
       <div class="set-section">
         <div class="set-sec-head">
@@ -357,6 +412,12 @@ export function renderOperatorSettings(el, opts = {}) {
               { id: "blocked", label: "Block external actions" },
               { id: "owner_rules", label: "Use owner rules" },
             ], settings.externalActionMode)}</select>
+          </label>
+          <label class="set-control"><span>Autopilot scope</span>
+            <select data-ai-field="autopilotScope">${optionList([
+              { id: "safe_repeat", label: "Safe repeat work only" },
+              { id: "manual_only", label: "Manual until approved" },
+            ], settings.autopilotScope)}</select>
           </label>
         </div>
         <label class="set-inline set-inline-tight"><input type="checkbox" data-ai-toggle="receipts" ${settings.receipts ? "checked" : ""}/> Keep receipts for important actions</label>
@@ -411,6 +472,43 @@ export function renderOperatorSettings(el, opts = {}) {
     saveOperatorSettings(DEFAULT_SETTINGS);
     renderOperatorSettings(el, opts);
   };
+
+  const loop = loadPhantomLoop();
+  const saveLoopAndRender = (patch, advPatch) => {
+    savePhantomLoop({ ...loop, ...patch, advanced: { ...loop.advanced, ...(advPatch || {}) } });
+    renderOperatorSettings(el, opts);
+  };
+
+  const loopToggle = el.querySelector("[data-loop-toggle]");
+  if (loopToggle) loopToggle.onchange = () => saveLoopAndRender({ enabled: loopToggle.checked });
+
+  el.querySelectorAll("[data-loop-field]").forEach((field) => {
+    field.onchange = () => saveLoopAndRender({ [field.dataset.loopField]: field.value });
+  });
+
+  const costSelect = el.querySelector("[data-loop-cost]");
+  if (costSelect) costSelect.onchange = () => saveLoopAndRender({ maxCostPerResponse: costSelect.value ? Number(costSelect.value) : null });
+
+  el.querySelectorAll("[data-loop-adv-field]").forEach((field) => {
+    field.onchange = () => {
+      const key = field.dataset.loopAdvField;
+      const value = key === "maxPasses" || key === "timeoutMs" ? Number(field.value) : field.value;
+      saveLoopAndRender(null, { [key]: value });
+    };
+  });
+
+  el.querySelectorAll("[data-loop-adv-toggle]").forEach((input) => {
+    input.onchange = () => saveLoopAndRender(null, { [input.dataset.loopAdvToggle]: input.checked });
+  });
+
+  el.querySelectorAll("[data-loop-allowed]").forEach((input) => {
+    input.onchange = () => {
+      const id = input.dataset.loopAllowed;
+      const set = new Set(loop.advanced.allowedProviders);
+      if (input.checked) set.add(id); else set.delete(id);
+      saveLoopAndRender(null, { allowedProviders: [...set] });
+    };
+  });
 
   const mediaMount = el.querySelector(`#${mediaMountId}`);
   if (mediaMount) renderMediaSettings(mediaMount, opts);

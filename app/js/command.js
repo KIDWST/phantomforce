@@ -6,9 +6,9 @@
 import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
-  ctx, session,
-} from "./store.js?v=phantom-live-20260709-98";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-98";
+  ctx, session, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS,
+} from "./store.js?v=phantom-live-20260709-99";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-99";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -65,8 +65,7 @@ function canAskHermes(intent, settings) {
     && settings.brainMode !== "local"
     && SAFE_BACKEND_INTENTS.has(intent.primaryIntent)
     && !intent.shouldCreateTask
-    && !intent.shouldCreateAutomation
-    && !intent.shouldStartLooper;
+    && !intent.shouldCreateAutomation;
 }
 
 async function askHermesBrain(raw, intent, settings) {
@@ -76,6 +75,7 @@ async function askHermesBrain(raw, intent, settings) {
   const token = typeof session?.token === "function" ? session.token() : "";
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
+  const loop = loadPhantomLoop();
   try {
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
@@ -105,6 +105,18 @@ async function askHermesBrain(raw, intent, settings) {
             context_depth: settings.contextDepth,
           },
         },
+        phantom_loop: loop.enabled ? {
+          target_provider: loop.targetProvider,
+          target_model: loop.targetModel,
+          depth: loop.depth,
+          approval_mode: loop.approvalMode,
+          max_cost_per_response: loop.maxCostPerResponse,
+          routing_mode: loop.advanced.routingMode,
+          max_passes: loop.advanced.maxPasses,
+          timeout_ms: loop.advanced.timeoutMs,
+          share_private_context: loop.advanced.sharePrivateContext,
+          allow_tool_calls: loop.advanced.allowToolCalls,
+        } : null,
       }),
     });
     const payload = await response.json().catch(() => ({}));
@@ -265,43 +277,8 @@ function createAutomation(subject, raw) {
   return a;
 }
 
-function looperPlan(draft) {
-  const steps = [
-    "Clarify the goal and audience.",
-    "Draft the structure, copy, and required inputs.",
-    "Review risk: publish/send/deploy/payment stays blocked.",
-    "Prepare the approval packet.",
-  ];
-  return {
-    title: draft?.output ? title(draft.output) : "Build Plan",
-    goal: draft?.goal || "New build request",
-    steps,
-  };
-}
-
-function createLooperBuildPacket(plan, draft) {
-  const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
-  const packet = {
-    id: uid("loop"),
-    ws,
-    title: plan.title || "Build Plan",
-    goal: plan.goal,
-    output: draft?.output || "build plan",
-    status: "draft",
-    risk: "approval-gated",
-    steps: plan.steps,
-    safeguards: [
-      "No publish, deploy, send, charge, account connection, or production write.",
-      "Owner reviews the packet before any outside-world action.",
-    ],
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-  };
-  store.state.looperPlans = Array.isArray(store.state.looperPlans) ? store.state.looperPlans : [];
-  store.state.looperPlans.unshift(packet);
-  pushActivity("Phantom Loop", `drafted build packet "${packet.title}".`, ws);
-  store.save();
-  return packet;
+function loopProviderName(id) {
+  return LOOP_PROVIDERS.find((p) => p.id === id)?.name || id;
 }
 
 function approvalCount() {
@@ -457,7 +434,7 @@ function intentResponse(intent, text, settings = null) {
   }
   if (intent.primaryIntent === "capability") {
     return {
-      say: "I can answer, route, draft, create, track, summarize, recall memory, prep approvals, build guarded Phantom Loop packets, and hand work to the right admin lane. External sends and live actions still need approval.",
+      say: "I can answer, route, draft, create, track, summarize, recall memory, prep approvals, loop a reply through another model, and hand work to the right admin lane. External sends and live actions still need approval.",
       cards: [
         card("Core modes", "Everything router", "Questions get answers. Commands create or route work. Explicit create/draft/build/schedule/track verbs make records.", [openAction("Open Settings", "settings")]),
         card("Memory", "Business context", "Local memory is active. A connected or subscription backend can add deeper context when enabled.", [openAction("Open Memory", "memory")]),
@@ -555,21 +532,19 @@ function intentResponse(intent, text, settings = null) {
       open: null,
     };
   }
-  if (intent.primaryIntent === "looper_build") {
-    if (!isAdmin()) {
-      return {
-        say: "Phantom Loop is an Elite feature. Ask the workspace owner to enable Elite access before starting a loop.",
-        cards: [card("Elite feature", "Phantom Loop", "Loop mode creates guarded build packets from bigger goals. It stays locked unless this workspace has Elite/admin access.", [openAction("Open Account", "account")], "Elite only")],
-        open: null,
-      };
-    }
-    const plan = looperPlan(intent.looperDraft);
-    const packet = createLooperBuildPacket(plan, intent.looperDraft);
+  if (intent.primaryIntent === "phantom_loop_on") {
+    const loop = savePhantomLoop({ ...loadPhantomLoop(), enabled: true });
+    pushActivity("Phantom Loop", `enabled — routing through ${loopProviderName(loop.targetProvider)}.`);
     return {
-      say: `Looper draft created for "${plan.goal}". No render, publish, or send happened — approval required before anything generates.`,
-      cards: [card("Phantom Loop packet", packet.title, plan.steps.join(" "), [openAction("Open Site Studio", "sites")], "Elite guarded mode")],
+      say: `Phantom Loop is on. Replies now route through ${loopProviderName(loop.targetProvider)} (${loop.targetModel}) and bring the answer back here. Adjust routing anytime from the chat composer or Settings.`,
+      cards: [card("Phantom Loop", "Enabled", `${loopProviderName(loop.targetProvider)} · ${loop.depth === "one_pass" ? "1 pass" : loop.depth === "two_pass" ? "2 passes" : "Auto"} · ${loop.approvalMode === "manual" ? "Manual approval" : loop.approvalMode === "ask_external" ? "Ask before external calls" : "Auto for safe reads"}`, [openAction("Advanced routing", "settings")])],
       open: null,
     };
+  }
+  if (intent.primaryIntent === "phantom_loop_off") {
+    savePhantomLoop({ ...loadPhantomLoop(), enabled: false });
+    pushActivity("Phantom Loop", "disabled.");
+    return { say: "Phantom Loop is off. Replies stay with Phantom only.", cards: [], open: null };
   }
   return null;
 }
