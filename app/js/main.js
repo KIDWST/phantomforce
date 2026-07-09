@@ -4,20 +4,21 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260709-94";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-94";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-94";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-94";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260709-94";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-94";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-94";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260709-94";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-94";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-94";
-import { renderVacationMode } from "./vacation.js?v=phantom-live-20260709-94";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-94";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-94";
-import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-94";
+} from "./store.js?v=phantom-live-20260709-96";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-96";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-96";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-96";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260709-96";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-96";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-96";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260709-96";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-96";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-96";
+import { renderVacationMode } from "./vacation.js?v=phantom-live-20260709-96";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-96";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-96";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-96";
+import { getOperatorSettings, renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-96";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -177,7 +178,7 @@ function showGate() {
 const NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
-  { id: "sites",      label: "Site Creator", icon: "site",  ws: "sites" },
+  { id: "sites",      label: "Site Studio",  icon: "site",  ws: "sites" },
   { id: "vacation",   label: "Vacation Mode", icon: "auto", ws: "vacation", adminOnly: true },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
@@ -595,7 +596,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260709-94";
+const POSE_VERSION = "phantom-live-20260709-96";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1761,6 +1762,7 @@ function renderDeveloperPage(body) {
 
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "Creative Engine — create with context", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
+  sites: { title: "Site Studio", kicker: "AI website & store builder", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
   content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },

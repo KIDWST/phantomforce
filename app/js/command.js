@@ -7,8 +7,8 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session,
-} from "./store.js?v=phantom-live-20260709-94";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-94";
+} from "./store.js?v=phantom-live-20260709-96";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-96";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -400,7 +400,7 @@ function localQuestionAnswer(text, settings = null) {
   if (/\b(website|site|landing|page|store|shop|checkout)\b/.test(s)) {
     return {
       say: "My read: treat the site/store as the money path, not decoration. Lead with the offer, show proof fast, make the CTA obvious, and keep publishing approval-gated. If you want action, say “draft/build/create” and I’ll make a local work packet.",
-      cards: [card("Site answer", "No build created", "Strategy answer only. Explicit build verbs create guarded drafts; questions stay in answer mode.", [openAction("Open Site Creator", "sites")])],
+      cards: [card("Site answer", "No build created", "Strategy answer only. Explicit build verbs create guarded drafts; questions stay in answer mode.", [openAction("Open Site Studio", "sites")])],
       open: null,
     };
   }
@@ -567,7 +567,7 @@ function intentResponse(intent, text, settings = null) {
     const packet = createLooperBuildPacket(plan, intent.looperDraft);
     return {
       say: `Looper draft created for "${plan.goal}". No render, publish, or send happened — approval required before anything generates.`,
-      cards: [card("Phantom Loop packet", packet.title, plan.steps.join(" "), [openAction("Open Site Creator", "sites")], "Elite guarded mode")],
+      cards: [card("Phantom Loop packet", packet.title, plan.steps.join(" "), [openAction("Open Site Studio", "sites")], "Elite guarded mode")],
       open: null,
     };
   }
@@ -675,11 +675,11 @@ function routeCommand(raw, settings) {
       const d = createPageDraft(subject, "Store");
       return {
         say: `Store Builder drafted "${d.title}" — storefront, product grid, and offer sections scaffolded. Checkout shows as not wired until a payment connector exists.`,
-        cards: [card("Store draft", d.title, d.sections.join(" · "), [openAction("Open in Site & Store Studio", "sites")])],
+        cards: [card("Store draft", d.title, d.sections.join(" · "), [openAction("Open in Site Studio", "sites")])],
         open: "sites",
       };
     }
-    return { say: "Site & Store Studio is open — drafts, products, and publish readiness.", cards: [], open: "sites" };
+    return { say: "Site Studio is open — drafts, products, and publish readiness.", cards: [], open: "sites" };
   }
 
   /* --- site / page --- */
@@ -688,11 +688,11 @@ function routeCommand(raw, settings) {
       const d = createPageDraft(subject, /landing/.test(s) ? "Landing page" : "Website");
       return {
         say: `Site Builder drafted "${d.title}". Publishing stays approval-gated.`,
-        cards: [card("Page draft", d.title, d.sections.join(" · "), [openAction("Open in Site & Store Studio", "sites")])],
+        cards: [card("Page draft", d.title, d.sections.join(" · "), [openAction("Open in Site Studio", "sites")])],
         open: "sites",
       };
     }
-    return { say: "Site & Store Studio is open.", cards: [], open: "sites" };
+    return { say: "Site Studio is open.", cards: [], open: "sites" };
   }
 
   /* --- security --- */

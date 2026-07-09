@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260709-94";
+} from "./store.js?v=phantom-live-20260709-96";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -353,7 +353,7 @@ function renderMedia(el, rerender) {
 }
 
 /* ========================= SITE + STORE STUDIO ========================= */
-function baseSiteDraft(title = "New website", kind = "Website") {
+export function baseSiteDraft(title = "New website", kind = "Website") {
   const cleanTitle = title.trim() || "New website";
   const isStore = kind === "Store";
   return {
@@ -381,7 +381,7 @@ function baseSiteDraft(title = "New website", kind = "Website") {
   };
 }
 
-function ensureSiteDesign(site) {
+export function ensureSiteDesign(site) {
   if (!site) return null;
   const brand = (site.title || "New website").replace(/\s+—\s+(website|landing page|store)$/i, "");
   site.sections = Array.isArray(site.sections) && site.sections.length ? site.sections : ["Hero", "Services", "Proof", "Offer", "Contact"];
@@ -404,7 +404,7 @@ function firstSentence(value) {
   return String(value || "").split(/[.!?]/)[0].trim();
 }
 
-function applyWebsitePrompt(site, promptText) {
+export function applyWebsitePrompt(site, promptText) {
   const prompt = String(promptText || "").trim();
   if (!site || !prompt) return "Tell Phantom what to change first.";
   const design = ensureSiteDesign(site);
@@ -478,7 +478,7 @@ function applyWebsitePrompt(site, promptText) {
   return changed || "I did not catch a site change yet. Try headline, store, color, premium, booking, product, or existing URL.";
 }
 
-function renderWebsitePreview(site, products) {
+export function renderWebsitePreview(site, products) {
   const design = ensureSiteDesign(site);
   const theme = design.theme || "neon";
   const showProducts = design.storeEnabled || site.kind === "Store";
@@ -1583,7 +1583,7 @@ export function missionWidgets() {
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
     { id: "media", icon: "▶", title: "Media Lab", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
-    { id: "sites", icon: "▦", title: "Site & Store Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
+    { id: "sites", icon: "▦", title: "Site Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
