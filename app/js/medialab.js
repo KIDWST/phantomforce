@@ -12,10 +12,11 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-102";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-104";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260709-102";
+} from "./contenthub.js?v=phantom-live-20260709-104";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit } from "./imagefilters.js?v=phantom-live-20260709-104";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1750,7 +1751,7 @@ function renderLibrary(body, opts, root) {
 }
 
 /* ---- Edit (real client-side canvas editor) ---- */
-const editState = { brightness: 100, contrast: 100, saturate: 100, hue: 0, blur: 0, rotate: 0, flip: false, text: "", loadedUrl: null };
+let editState = { ...freshEditState(), loadedUrl: null };
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
   if (!session.edit) {
@@ -1798,25 +1799,21 @@ function renderEdit(body, cfg, opts, root) {
     </div>`;
   const canvas = body.querySelector("[data-ml-canvas]");
   const img = new Image();
-  img.onload = () => { editState.loadedUrl = session.edit.url; paintEdit(canvas, img); };
+  img.onload = () => { editState.loadedUrl = session.edit.url; paintEdit(canvas, img, editState); };
   img.src = session.edit.url;
   // wire tools
-  body.querySelectorAll("[data-ml-slider]").forEach((s) => s.oninput = () => { editState[s.dataset.mlSlider] = +s.value; if (canvas._img) paintEdit(canvas, canvas._img); const o = body.querySelector(`[data-out="${s.dataset.mlSlider}"]`); if (o) o.textContent = s.value; });
-  body.querySelectorAll("[data-ml-rot]").forEach((b) => b.onclick = () => { editState.rotate = (editState.rotate + (+b.dataset.mlRot) + 360) % 360; if (canvas._img) paintEdit(canvas, canvas._img); });
-  const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { editState.flip = !editState.flip; flip.classList.toggle("is-on"); if (canvas._img) paintEdit(canvas, canvas._img); };
-  body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { applyFilterPreset(b.dataset.v); syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img); });
-  const tin = body.querySelector("[data-ml-text]"); if (tin) tin.oninput = () => { editState.text = tin.value; if (canvas._img) paintEdit(canvas, canvas._img); };
+  body.querySelectorAll("[data-ml-slider]").forEach((s) => s.oninput = () => { editState[s.dataset.mlSlider] = +s.value; if (canvas._img) paintEdit(canvas, canvas._img, editState); const o = body.querySelector(`[data-out="${s.dataset.mlSlider}"]`); if (o) o.textContent = s.value; });
+  body.querySelectorAll("[data-ml-rot]").forEach((b) => b.onclick = () => { editState.rotate = (editState.rotate + (+b.dataset.mlRot) + 360) % 360; if (canvas._img) paintEdit(canvas, canvas._img, editState); });
+  const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { editState.flip = !editState.flip; flip.classList.toggle("is-on"); if (canvas._img) paintEdit(canvas, canvas._img, editState); };
+  body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { applyFilterPreset(b.dataset.v, editState); syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img, editState); });
+  const tin = body.querySelector("[data-ml-text]"); if (tin) tin.oninput = () => { editState.text = tin.value; if (canvas._img) paintEdit(canvas, canvas._img, editState); };
   const runai = body.querySelector("[data-ml-runai]");
   if (runai) runai.onclick = async () => {
-    const q = (body.querySelector("[data-ml-aiedit]").value || "").toLowerCase();
+    const q = body.querySelector("[data-ml-aiedit]").value || "";
     runai.disabled = true; runai.textContent = "…";
     // local heuristic "AI edit" preview (real backend routes to provider edit)
-    if (/night|dark|noir/.test(q)) { editState.brightness = 70; editState.saturate = 80; editState.hue = 210; }
-    else if (/warm|sunset|golden/.test(q)) { editState.brightness = 108; editState.saturate = 140; editState.hue = 20; }
-    else if (/emerald|phantom|neon|green/.test(q)) { editState.saturate = 160; editState.hue = 130; }
-    else if (/vivid|pop|vibrant/.test(q)) { editState.saturate = 175; editState.contrast = 120; }
-    else { editState.contrast = 115; editState.saturate = 130; }
-    syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img);
+    heuristicAiEdit(q, editState);
+    syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img, editState);
     runai.disabled = false; runai.textContent = "Apply";
     if (opts.notify) opts.notify("Media Factory", `applied an AI edit: "${q.slice(0, 30)}".`);
   };
@@ -1827,9 +1824,12 @@ function renderEdit(body, cfg, opts, root) {
     const asset = { id: `edit-${at}`, type: "image", url: canvas.toDataURL("image/webp", 0.9), saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
     session.assets.unshift(asset);
     captureForContentHub(asset, { title: "Edited image", prompt: editState.text || "Edited image" });
-    if (opts.notify) opts.notify("Media Factory", "saved an edited image to the library.");
+    // switch tab (and its rerender) before notify(): notify() triggers a global store-change
+    // listener that can fully remount this page, invalidating this closure's stale DOM/root —
+    // landing the tab switch on live DOM first avoids it getting silently overwritten.
     session.tab = "library";
     renderMediaStudio(root, opts);
+    if (opts.notify) opts.notify("Media Factory", "saved an edited image to the library.");
   };
   body.querySelector("[data-ml-dledit]").onclick = () => downloadAsset({ url: canvas.toDataURL("image/webp", 0.92), type: "image", id: "edit" });
 }
@@ -1838,33 +1838,7 @@ function slider(label, key, min, max, val) {
     <input type="range" min="${min}" max="${max}" value="${val}" data-ml-slider="${key}"/></label>`;
 }
 function syncSliders(body) { ["brightness", "contrast", "saturate", "hue", "blur"].forEach((k) => { const s = body.querySelector(`[data-ml-slider="${k}"]`); if (s) s.value = editState[k]; const o = body.querySelector(`[data-out="${k}"]`); if (o) o.textContent = editState[k]; }); }
-function applyFilterPreset(v) {
-  const P = { none: [100, 100, 100, 0, 0], noir: [105, 120, 0, 0, 0], emerald: [100, 110, 150, 130, 0], warm: [108, 105, 135, 20, 0], cold: [98, 108, 90, 210, 0], vivid: [105, 125, 175, 0, 0] };
-  const [b, c, s, h, bl] = P[v] || P.none; Object.assign(editState, { brightness: b, contrast: c, saturate: s, hue: h, blur: bl });
-}
-function resetEdit() { Object.assign(editState, { brightness: 100, contrast: 100, saturate: 100, hue: 0, blur: 0, rotate: 0, flip: false, text: "" }); }
-function paintEdit(canvas, img) {
-  canvas._img = img;
-  const rot = editState.rotate % 180 !== 0;
-  const w = img.naturalWidth, h = img.naturalHeight;
-  canvas.width = rot ? h : w; canvas.height = rot ? w : h;
-  const g = canvas.getContext("2d");
-  g.save();
-  g.filter = `brightness(${editState.brightness}%) contrast(${editState.contrast}%) saturate(${editState.saturate}%) hue-rotate(${editState.hue}deg) blur(${editState.blur}px)`;
-  g.translate(canvas.width / 2, canvas.height / 2);
-  g.rotate(editState.rotate * Math.PI / 180);
-  g.scale(editState.flip ? -1 : 1, 1);
-  g.drawImage(img, -w / 2, -h / 2, w, h);
-  g.restore();
-  if (editState.text) {
-    const fs = Math.max(18, canvas.width * 0.06);
-    g.font = `700 ${fs}px "Space Grotesk", sans-serif`;
-    g.textAlign = "center"; g.lineWidth = fs * 0.14; g.strokeStyle = "rgba(0,0,0,0.55)";
-    g.fillStyle = "#eafff4";
-    g.strokeText(editState.text, canvas.width / 2, canvas.height - fs);
-    g.fillText(editState.text, canvas.width / 2, canvas.height - fs);
-  }
-}
+function resetEdit() { editState = { ...freshEditState(), loadedUrl: editState.loadedUrl }; }
 
 /* ---- helpers ---- */
 function readImage(fileObj, cb) { if (!fileObj) return; const r = new FileReader(); r.onload = () => cb(r.result); r.readAsDataURL(fileObj); }

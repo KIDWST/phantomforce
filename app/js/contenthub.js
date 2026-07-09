@@ -6,6 +6,8 @@
    clean data API — loadContent() / analyze() — so the Analytics view (and
    anything else) can fetch the same numbers with zero coupling. */
 
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit } from "./imagefilters.js?v=phantom-live-20260709-104";
+
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
 const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
@@ -491,7 +493,12 @@ function expiresText(asset) {
 }
 const PGLYPH = { instagram: "◉", tiktok: "♪", youtube: "▶", facebook: "f", x: "𝕏", linkedin: "in", pinterest: "P" };
 function svgIc(k) {
-  const P = { heart: `<path d="M8 13.5S2.5 10 2.5 6.2A2.7 2.7 0 0 1 8 5a2.7 2.7 0 0 1 5.5 1.2C13.5 10 8 13.5 8 13.5z"/>`, chat: `<path d="M3 4h10v7H7l-3 2v-2H3z"/>`, share: `<path d="M11 5.5a2 2 0 1 0-2-2M5 8a2 2 0 1 0 0 .1M11 12.5a2 2 0 1 0-2-2M9.2 4.6L6.8 6.9M6.8 9.1l2.4 2.3"/>`, save: `<path d="M4 3h8v10l-4-2.5L4 13z"/>`, eye: `<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>`, users: `<circle cx="6" cy="6" r="2.1"/><path d="M2.6 13c0-2 1.5-3.3 3.4-3.3S9.4 11 9.4 13"/>`, up: `<path d="M8 13V4M4.5 7.5L8 4l3.5 3.5"/>` };
+  const P = {
+    heart: `<path d="M8 13.5S2.5 10 2.5 6.2A2.7 2.7 0 0 1 8 5a2.7 2.7 0 0 1 5.5 1.2C13.5 10 8 13.5 8 13.5z"/>`, chat: `<path d="M3 4h10v7H7l-3 2v-2H3z"/>`, share: `<path d="M11 5.5a2 2 0 1 0-2-2M5 8a2 2 0 1 0 0 .1M11 12.5a2 2 0 1 0-2-2M9.2 4.6L6.8 6.9M6.8 9.1l2.4 2.3"/>`, save: `<path d="M4 3h8v10l-4-2.5L4 13z"/>`, eye: `<path d="M1.5 8S4 3.5 8 3.5 14.5 8 14.5 8 12 12.5 8 12.5 1.5 8 1.5 8z"/><circle cx="8" cy="8" r="2"/>`, users: `<circle cx="6" cy="6" r="2.1"/><path d="M2.6 13c0-2 1.5-3.3 3.4-3.3S9.4 11 9.4 13"/>`, up: `<path d="M8 13V4M4.5 7.5L8 4l3.5 3.5"/>`,
+    close: `<path d="M4 4l8 8M12 4l-8 8"/>`, spark: `<path d="M8 1.5l1.4 4.1 4.1 1.4-4.1 1.4L8 12.5l-1.4-4.1-4.1-1.4 4.1-1.4z"/>`,
+    check: `<path d="M3 8.5l3 3 7-7"/>`, undo: `<path d="M6 3.5L2.5 7 6 10.5M2.5 7h6a4.5 4.5 0 1 1 0 9H7"/>`,
+    redo: `<path d="M10 3.5L13.5 7 10 10.5M13.5 7h-6a4.5 4.5 0 1 0 0 9H9"/>`, download: `<path d="M8 2.5v7.5M4.8 7.3L8 10.5l3.2-3.2M3 12.5h10"/>`,
+  };
   return `<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k] || ""}</svg>`;
 }
 
@@ -500,6 +507,8 @@ function svgIc(k) {
    ========================================================================= */
 const chState = { tab: "library", platform: "all", ctype: "all", eng: "likes" };
 const chSelection = new Set();
+let chLightbox = null;
+let chLbKeyHandler = null;
 
 export function renderContentHub(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
@@ -524,7 +533,8 @@ export function renderContentHub(el, opts = {}) {
         <span class="ch-src">${ideas.length} ideas · ${scheduled} queued · ${mediaAssets.length} media · ${formatBytes(mediaStats.bytes)}/${formatBytes(mediaStats.budgetBytes)}</span>
       </div>
       <div class="ch-body" data-ch-body></div>
-    </div>`;
+    </div>
+    ${chLightbox ? lightboxMarkup(chLightbox, esc) : ""}`;
   el.querySelectorAll("[data-ch-tab]").forEach((b) => b.onclick = () => { chState.tab = b.dataset.chTab; renderContentHub(el, opts); });
   const body = el.querySelector("[data-ch-body]");
   const t = chState.tab;
@@ -533,6 +543,7 @@ export function renderContentHub(el, opts = {}) {
   else if (t === "calendar") renderContentCalendar(body, data, esc, el, opts);
   else if (t === "production") renderProductionBoard(body, data, esc, el, opts);
   else if (t === "library") renderContentLibrary(body, data, esc, el, opts);
+  if (chLightbox) wireLightbox(el, opts);
 }
 
 function kpi(label, value, sub, tone) {
@@ -710,7 +721,7 @@ function contentAssetCard(asset, esc) {
   const key = selectionKey("asset", asset.id);
   const selected = chSelection.has(key);
   const flags = [asset.saved ? "saved" : "", asset.batchLabel ? asset.batchLabel : "", asset.aiEditPlan ? "AI edit plan" : ""].filter(Boolean);
-  return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}">
+  return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}" data-ch-asset-id="${esc(asset.id)}" title="${hasUrl ? "Double-click to open" : ""}">
     <button class="ch-remove ch-asset-x" data-ch-delete-asset="${esc(asset.id)}" aria-label="Remove ${esc(asset.title)}" title="Remove ${esc(asset.title)}" type="button">x</button>
     <span class="ch-select-box" data-ch-select-hit aria-hidden="true">${selected ? "✓" : ""}</span>
     <span class="ch-asset-thumb" style="${hasUrl ? "" : assetBg(asset)}">
@@ -726,6 +737,166 @@ function contentAssetCard(asset, esc) {
       <span>${esc(prompt)}</span>
     </span>
   </article>`;
+}
+/* ---------------- inline lightbox: expand + AI-prompt image editor ----------------
+   Reuses the same tested canvas filter engine as Media Lab's Edit tab (see
+   imagefilters.js) but stays entirely local to Content Hub — its own isolated
+   edit state per open, mounted right over the grid instead of navigating away. */
+function chSlider(label, key, min, max, val) {
+  return `<label class="ch-lb-slider"><span>${label} <b data-out="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-slider="${key}"/></label>`;
+}
+function lightboxMarkup(lb, esc) {
+  const asset = lb.asset;
+  if (lb.viewOnly) {
+    return `
+      <div class="ch-lightbox" data-ch-lightbox>
+        <div class="ch-lb-backdrop" data-ch-lb-close></div>
+        <div class="ch-lb-shell ch-lb-view-only">
+          <header class="ch-lb-head">
+            <div><b>${esc(asset.title)}</b><span>${esc(asset.prompt || "No prompt saved.")}</span></div>
+            <button class="ch-lb-x" type="button" data-ch-lb-close aria-label="Close">${svgIc("close")}</button>
+          </header>
+          <div class="ch-lb-view-body"><video src="${esc(asset.url)}" controls autoplay muted playsinline></video></div>
+        </div>
+      </div>`;
+  }
+  const s = lb.state;
+  return `
+    <div class="ch-lightbox" data-ch-lightbox>
+      <div class="ch-lb-backdrop" data-ch-lb-close></div>
+      <div class="ch-lb-shell">
+        <header class="ch-lb-head">
+          <div><b>${esc(asset.title)}</b><span>${esc(asset.prompt || "No prompt saved.")}</span></div>
+          <button class="ch-lb-x" type="button" data-ch-lb-close aria-label="Close">${svgIc("close")}</button>
+        </header>
+        <div class="ch-lb-body">
+          <div class="ch-lb-canvas-wrap">
+            <canvas class="ch-lb-canvas" data-ch-lb-canvas></canvas>
+          </div>
+          <aside class="ch-lb-tools">
+            <div class="ch-lb-ai">
+              <p class="ch-lb-ai-label">${svgIc("spark")} Describe an edit</p>
+              <div class="ch-lb-ai-row">
+                <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…"/>
+                <button class="btn btn-primary" type="button" data-ch-lb-ai-run>Generate</button>
+              </div>
+            </div>
+            <div class="ch-lb-section">
+              <p>Adjust</p>
+              ${chSlider("Brightness", "brightness", 0, 200, s.brightness)}
+              ${chSlider("Contrast", "contrast", 0, 200, s.contrast)}
+              ${chSlider("Saturation", "saturate", 0, 250, s.saturate)}
+              ${chSlider("Hue", "hue", 0, 360, s.hue)}
+              ${chSlider("Blur", "blur", 0, 12, s.blur)}
+            </div>
+            <div class="ch-lb-section">
+              <p>Transform</p>
+              <div class="ch-lb-chips">
+                <button type="button" data-ch-lb-rot="-90">${svgIc("undo")} 90°</button>
+                <button type="button" data-ch-lb-rot="90">90° ${svgIc("redo")}</button>
+                <button type="button" data-ch-lb-flip class="${s.flip ? "is-on" : ""}">Flip</button>
+              </div>
+            </div>
+            <div class="ch-lb-section">
+              <p>Style presets</p>
+              <div class="ch-lb-chips ch-lb-chips-wrap" data-ch-lb-filter>
+                <button type="button" data-v="none">None</button><button type="button" data-v="noir">Noir</button>
+                <button type="button" data-v="emerald">Emerald</button><button type="button" data-v="warm">Warm</button>
+                <button type="button" data-v="cold">Cold</button><button type="button" data-v="vivid">Vivid</button>
+              </div>
+            </div>
+            <div class="ch-lb-section">
+              <p>Text overlay</p>
+              <input class="ch-lb-ai-input" data-ch-lb-text placeholder="Add a caption / headline…" value="${esc(s.text)}"/>
+            </div>
+            <div class="ch-lb-actions">
+              <button class="btn btn-primary" type="button" data-ch-lb-save>${svgIc("check")} Save</button>
+              <button class="btn btn-quiet" type="button" data-ch-lb-save-copy>Save as copy</button>
+              <button class="btn btn-quiet" type="button" data-ch-lb-download>${svgIc("download")} Download</button>
+              <button class="ml-link" type="button" data-ch-lb-reset>Reset</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </div>`;
+}
+function wireLightbox(root, opts) {
+  const lb = chLightbox;
+  if (!lb) return;
+  const rerender = () => renderContentHub(root, opts);
+  const close = () => {
+    if (chLbKeyHandler) { document.removeEventListener("keydown", chLbKeyHandler); chLbKeyHandler = null; }
+    chLightbox = null;
+    rerender();
+  };
+  root.querySelectorAll("[data-ch-lb-close]").forEach((b) => b.addEventListener("click", close));
+  if (chLbKeyHandler) document.removeEventListener("keydown", chLbKeyHandler);
+  chLbKeyHandler = (event) => { if (event.key === "Escape") close(); };
+  document.addEventListener("keydown", chLbKeyHandler);
+  if (lb.viewOnly) return;
+
+  const asset = lb.asset;
+  const s = lb.state;
+  const canvas = root.querySelector("[data-ch-lb-canvas]");
+  const img = new Image();
+  img.onload = () => paintEdit(canvas, img, s);
+  img.src = asset.url;
+  const repaint = () => { if (canvas._img) paintEdit(canvas, canvas._img, s); };
+
+  root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => slider.oninput = () => {
+    s[slider.dataset.chLbSlider] = +slider.value;
+    repaint();
+    const out = root.querySelector(`[data-out="${slider.dataset.chLbSlider}"]`);
+    if (out) out.textContent = slider.value;
+  });
+  root.querySelectorAll("[data-ch-lb-rot]").forEach((b) => b.onclick = () => { s.rotate = (s.rotate + (+b.dataset.chLbRot) + 360) % 360; repaint(); });
+  const flip = root.querySelector("[data-ch-lb-flip]");
+  if (flip) flip.onclick = () => { s.flip = !s.flip; flip.classList.toggle("is-on"); repaint(); };
+  root.querySelectorAll("[data-ch-lb-filter] button").forEach((b) => b.onclick = () => {
+    applyFilterPreset(b.dataset.v, s);
+    root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => {
+      slider.value = s[slider.dataset.chLbSlider];
+      const out = root.querySelector(`[data-out="${slider.dataset.chLbSlider}"]`);
+      if (out) out.textContent = slider.value;
+    });
+    repaint();
+  });
+  const textInput = root.querySelector("[data-ch-lb-text]");
+  if (textInput) textInput.oninput = () => { s.text = textInput.value; repaint(); };
+
+  const aiRun = root.querySelector("[data-ch-lb-ai-run]");
+  if (aiRun) aiRun.onclick = () => {
+    const q = root.querySelector("[data-ch-lb-ai]").value || "";
+    aiRun.disabled = true; aiRun.textContent = "…";
+    heuristicAiEdit(q, s);
+    repaint();
+    aiRun.disabled = false; aiRun.textContent = "Generate";
+    opts.notify?.("Content Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
+  };
+
+  root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = { asset, state: freshEditState() }; rerender(); };
+  root.querySelector("[data-ch-lb-download]").onclick = () => {
+    const link = document.createElement("a");
+    link.href = canvas.toDataURL("image/webp", 0.92);
+    link.download = `phantomforce-${asset.id}.webp`;
+    link.click();
+  };
+  root.querySelector("[data-ch-lb-save]").onclick = () => {
+    const url = canvas.toDataURL("image/webp", 0.9);
+    registerContentAsset({ ...asset, url, prompt: s.text || asset.prompt, saved: true, updatedAt: Date.now() });
+    // close (and its rerender) must run before notify(), since notify() triggers a global
+    // store-change listener that can fully remount this page and invalidate this closure's
+    // DOM references — closing first ensures the lightbox-closed state lands on live DOM.
+    close();
+    opts.notify?.("Content Hub", `saved your edit to "${asset.title}".`);
+  };
+  root.querySelector("[data-ch-lb-save-copy]").onclick = () => {
+    const url = canvas.toDataURL("image/webp", 0.9);
+    const at = Date.now();
+    registerContentAsset({ ...asset, id: `edit-${at}-${Math.random().toString(36).slice(2, 6)}`, url, title: `${asset.title} (edit)`, prompt: s.text || asset.prompt, createdAt: at, saved: true });
+    close();
+    opts.notify?.("Content Hub", `saved a copy of "${asset.title}" with your edits.`);
+  };
 }
 function visibleLibraryItems(shownAssets, shownPosts) {
   return [
@@ -754,6 +925,13 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     event.stopPropagation();
     toggleLibrarySelection(card.dataset.chSelectItem);
     chState.selectMode = true;
+    rerender();
+  }));
+  body.querySelectorAll("[data-ch-asset-id]").forEach((card) => card.addEventListener("dblclick", (event) => {
+    if (event.target.closest("button")) return;
+    const asset = assets.find((a) => a.id === card.dataset.chAssetId);
+    if (!asset || !asset.url) return;
+    chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : { asset, state: freshEditState() };
     rerender();
   }));
   body.querySelectorAll("[data-ch-delete-asset]").forEach((btn) => btn.addEventListener("click", (event) => {
