@@ -5846,3 +5846,109 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     min-height: 42px;
   }
 }
+
+/* ============================================================= */
+/* =====================  PROMPT LIBRARY  ======================= */
+/* ============================================================= */
+.pl { display: flex; flex-direction: column; gap: 16px; }
+.pl-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; flex-wrap: wrap;
+  border: 1px solid var(--line); border-radius: 18px; padding: 18px; background: var(--glass);
+}
+.pl-eyebrow { margin: 0; font: 700 9px "DM Mono", monospace; letter-spacing: .16em; text-transform: uppercase; color: var(--neon); }
+.pl-head h3 { margin: 6px 0 0; font-size: 22px; }
+.pl-sub { margin: 6px 0 0; max-width: 640px; color: var(--dim); font-size: 13px; line-height: 1.55; }
+.pl-sub b { color: var(--ink); }
+.pl-whats-new {
+  display: inline-flex; align-items: center; gap: 6px; flex: 0 0 auto; cursor: pointer; border: 1px solid var(--line);
+  border-radius: 10px; background: rgba(0,0,0,0.22); color: var(--dim); padding: 8px 12px; font: 600 12px "Space Grotesk";
+}
+.pl-whats-new:hover { color: var(--ink); border-color: var(--line-strong); }
+.pl-whats-new .ic { width: 14px; height: 14px; }
+.pl-updates { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 14px; padding: 12px 16px; background: rgba(0,0,0,0.16); }
+.pl-update-row { display: flex; flex-direction: column; gap: 2px; }
+.pl-update-row b { font-size: 12.5px; color: var(--neon); }
+.pl-update-row span { font-size: 12px; color: var(--dim); }
+
+.pl-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.pl-search { position: relative; flex: 1 1 260px; min-width: 200px; }
+.pl-search span { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); color: var(--dim); pointer-events: none; }
+.pl-search .ic { width: 14px; height: 14px; }
+.pl-search input {
+  width: 100%; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,0.3); color: var(--ink);
+  padding: 9px 12px 9px 32px; font-size: 12.5px; outline: none;
+}
+.pl-search input:focus { border-color: var(--neon); }
+.pl-filters { display: flex; gap: 6px; }
+.pl-filter {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer; border: 1px solid var(--line); border-radius: 10px;
+  background: rgba(0,0,0,0.22); color: var(--dim); padding: 8px 12px; font: 600 12px "Space Grotesk";
+}
+.pl-filter .ic { width: 13px; height: 13px; }
+.pl-filter:hover { color: var(--ink); }
+.pl-filter.is-on { color: #04160d; background: linear-gradient(120deg, var(--neon), #15d97f); border-color: transparent; }
+.pl-add-btn { flex: 0 0 auto; }
+
+.pl-cats { display: flex; gap: 6px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 12px; }
+.pl-cat {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; border: 1px solid transparent; border-radius: 10px;
+  background: none; color: var(--dim); padding: 8px 12px; font: 600 12.5px "Space Grotesk";
+}
+.pl-cat .ic { width: 14px; height: 14px; }
+.pl-cat i { font: 600 11px "DM Mono", monospace; color: var(--dim); font-style: normal; }
+.pl-cat:hover { color: var(--ink); background: rgba(65,255,161,.05); }
+.pl-cat.is-on { color: var(--neon); border-color: rgba(65,255,161,0.35); background: rgba(65,255,161,0.08); }
+.pl-cat.is-on i { color: var(--neon); }
+
+.pl-add-form {
+  display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px; background: var(--glass);
+}
+.pl-add-row { display: flex; gap: 10px; flex-wrap: wrap; }
+.pl-add-row input { flex: 1 1 220px; }
+.pl-add-form input, .pl-add-form select, .pl-add-form textarea {
+  border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,0.3); color: var(--ink);
+  padding: 9px 11px; font-size: 12.5px; outline: none; font-family: inherit;
+}
+.pl-add-form select { flex: 0 0 200px; }
+.pl-add-form textarea { resize: vertical; min-height: 64px; }
+.pl-add-form input:focus, .pl-add-form select:focus, .pl-add-form textarea:focus { border-color: var(--neon); }
+.pl-add-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+.pl-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
+.pl-empty { color: var(--dim); font-size: 13px; padding: 24px 0; }
+.pl-card {
+  display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--line); border-radius: 16px;
+  padding: 16px; background: var(--glass); min-width: 0;
+}
+.pl-card-top { display: flex; justify-content: space-between; align-items: center; }
+.pl-card-cat {
+  display: inline-flex; align-items: center; gap: 5px; font: 600 10px "DM Mono", monospace; letter-spacing: .06em;
+  text-transform: uppercase; color: var(--dim);
+}
+.pl-card-cat .ic { width: 12px; height: 12px; }
+.pl-star { border: 0; background: none; cursor: pointer; color: var(--dim); padding: 2px; }
+.pl-star .ic { width: 16px; height: 16px; }
+.pl-star:hover { color: var(--ink); }
+.pl-star.is-on { color: #ffd166; }
+.pl-card h4 { margin: 0; font-size: 14.5px; line-height: 1.3; }
+.pl-card-platform { margin: 0; font-size: 11px; color: var(--neon); }
+.pl-card-prompt {
+  margin: 0; font-size: 12.5px; line-height: 1.5; color: #cfeeda; max-height: 6.2em; overflow: hidden;
+  display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical;
+}
+.pl-card-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: auto; padding-top: 4px; }
+.pl-action {
+  display: inline-flex; align-items: center; gap: 5px; cursor: pointer; border: 1px solid var(--line); border-radius: 9px;
+  background: rgba(0,0,0,0.22); color: var(--dim); padding: 7px 10px; font: 600 11.5px "Space Grotesk";
+}
+.pl-action .ic { width: 13px; height: 13px; }
+.pl-action:hover { color: var(--ink); border-color: var(--line-strong); }
+.pl-action-danger:hover { color: #ff6b6b; border-color: rgba(255,107,107,0.4); }
+
+@media (max-width: 720px) {
+  .pl-head { flex-direction: column; align-items: stretch; }
+  .pl-toolbar { flex-direction: column; align-items: stretch; }
+  .pl-add-btn { width: 100%; justify-content: center; }
+  .pl-grid { grid-template-columns: 1fr; }
+}

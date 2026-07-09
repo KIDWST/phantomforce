@@ -12,13 +12,14 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-100";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-101";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260709-100";
+} from "./contenthub.js?v=phantom-live-20260709-101";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
+const PROMPT_INTENT_KEY = "pf.medialab.promptIntent.v1";
 const TAU = Math.PI * 2;
 
 /* ---------------- provider registry (pluggable defaults) ---------------- */
@@ -999,6 +1000,18 @@ function consumeEditIntent(opts = {}) {
   opts.notify?.("Media Factory", `loaded ${intent.title || "Content Hub asset"} for local edit.`);
 }
 
+function consumePromptIntent(opts = {}) {
+  let intent = null;
+  try { intent = JSON.parse(localStorage.getItem(PROMPT_INTENT_KEY) || "null"); } catch {}
+  if (!intent || !intent.prompt) return;
+  try { localStorage.removeItem(PROMPT_INTENT_KEY); } catch {}
+  genState.modality = intent.modality === "video" ? "video" : "image";
+  genState.prompt = intent.prompt;
+  genState.preset = "custom";
+  session.tab = "generate";
+  opts.notify?.("Prompt Library", "Prompt loaded into the Shot Builder.");
+}
+
 const NAV_TABS = [
   ["generate", "Cockpit"],
   ["library", "Media Pool"],
@@ -1014,6 +1027,7 @@ let activeDrawer = null;
 
 export function renderMediaStudio(el, opts = {}) {
   consumeEditIntent(opts);
+  consumePromptIntent(opts);
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   if (session.tab === "briefs") session.tab = "pending";

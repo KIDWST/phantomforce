@@ -5,21 +5,22 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop,
-} from "./store.js?v=phantom-live-20260709-100";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-100";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-100";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-100";
-import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260709-100";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-100";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-100";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260709-100";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-100";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-100";
-import { renderVacationMode } from "./vacation.js?v=phantom-live-20260709-100";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-100";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-100";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-100";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-100";
+} from "./store.js?v=phantom-live-20260709-101";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-101";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-101";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-101";
+import { renderMediaStudio } from "./medialab.js?v=phantom-live-20260709-101";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-101";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-101";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260709-101";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-101";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-101";
+import { renderVacationMode } from "./vacation.js?v=phantom-live-20260709-101";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-101";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-101";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-101";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-101";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-101";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -596,7 +597,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260709-100";
+const POSE_VERSION = "phantom-live-20260709-101";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1753,6 +1754,7 @@ const CUSTOM = {
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
   automation: { title: "Automation", kicker: "Workflows & Vacation Mode — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
   vacation: { title: "Vacation Mode", kicker: "Your phantom workforce while you are away", custom: true, wide: true, adminOnly: true, render: (body) => renderVacationMode(body, mediaOpts()) },
+  promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
 };
 
 let openId = null;
