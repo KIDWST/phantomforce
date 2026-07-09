@@ -12,11 +12,11 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-114";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-116";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260709-114";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-114";
+} from "./contenthub.js?v=phantom-live-20260709-116";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-116";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1802,9 +1802,10 @@ function renderEdit(body, cfg, opts, root) {
         </div>
         <div class="ml-tool-head">Text overlay</div>
         <input class="ml-text-in" data-ml-text placeholder="Add a caption / headline…" value="${esc(editState.text)}"/>
-        <div class="ml-tool-head">AI edit ${svgIc("spark")}</div>
+        <div class="ml-tool-head">Quick style pass ${svgIc("spark")}</div>
+        <p class="ml-hint">Local mood/color nudge only — not a full AI-generated edit. For prompt-guided AI editing and background removal, use Content Hub's editor (double-click an image in the library).</p>
         <div class="ml-prompt-wrap">
-          <input class="ml-text-in" data-ml-aiedit placeholder="e.g. remove background, make it night, add rain"/>
+          <input class="ml-text-in" data-ml-aiedit placeholder="e.g. brighter, cinematic teal, moody night"/>
           <button class="ml-enhance" data-ml-runai>Apply</button>
         </div>
         <div class="ml-editor-actions">

@@ -6108,11 +6108,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ch-lb-canvas { max-width: 100%; max-height: 100%; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
 .ch-lb-canvas.is-picking { cursor: crosshair; outline: 2px dashed rgba(65,255,161,0.65); outline-offset: 4px; border-radius: 14px; }
 .ch-lb-bokeh-marker {
-  position: absolute; width: 34px; height: 34px; margin: -17px 0 0 -17px; border-radius: 50%;
+  position: absolute; min-width: 24px; min-height: 24px; transform: translate(-50%, -50%); border-radius: 50%;
   border: 2px solid var(--neon); box-shadow: 0 0 0 4px rgba(65,255,161,0.16), 0 0 18px rgba(65,255,161,0.55);
-  pointer-events: none; display: grid; place-items: center; animation: chBokehPulse 2.2s ease-in-out infinite;
+  pointer-events: auto; cursor: grab; display: grid; place-items: center; animation: chBokehPulse 2.2s ease-in-out infinite;
+  touch-action: none;
 }
+.ch-lb-bokeh-marker:active { cursor: grabbing; }
+.ch-lb-bokeh-marker.is-selected { border-color: #ffd166; box-shadow: 0 0 0 4px rgba(255,209,102,0.2), 0 0 18px rgba(255,209,102,0.6); }
 .ch-lb-bokeh-marker::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--neon); box-shadow: 0 0 8px rgba(65,255,161,0.9); }
+.ch-lb-bokeh-marker.is-selected::before { background: #ffd166; box-shadow: 0 0 8px rgba(255,209,102,0.9); }
 @keyframes chBokehPulse { 0%, 100% { box-shadow: 0 0 0 4px rgba(65,255,161,0.16), 0 0 18px rgba(65,255,161,0.55); } 50% { box-shadow: 0 0 0 7px rgba(65,255,161,0.08), 0 0 22px rgba(65,255,161,0.4); } }
 .ch-lb-pick-hint {
   position: absolute; left: 50%; bottom: 16px; transform: translateX(-50%); display: inline-flex; align-items: center; gap: 6px;
@@ -6149,6 +6153,33 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   color: var(--ink); padding: 9px 11px; font-size: 12.5px; outline: none;
 }
 .ch-lb-ai-input:focus { border-color: var(--neon); }
+.ch-lb-ai-input:disabled { opacity: 0.5; cursor: not-allowed; }
+.ch-lb-ai-note { margin: 8px 0 0; font-size: 11px; line-height: 1.5; color: #cfeedd; }
+.ch-lb-ai-note-warn { color: var(--warn); }
+.ch-lb-ai-note-ok { color: var(--neon); }
+.ch-lb-check { display: flex; align-items: center; gap: 7px; margin: 8px 0; font-size: 11.5px; color: #cfeedd; }
+.ch-lb-check input { accent-color: var(--neon); }
+.ch-lb-bokeh-selected { margin-top: 10px; padding-top: 10px; border-top: 1px dashed rgba(65,255,161,0.22); }
+.ch-lb-bokeh-selected .ch-lb-ai-label { color: #ffd166; }
+.ch-lb-bg-preview-imgs { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
+.ch-lb-bg-preview-imgs figure { margin: 0; border-radius: 10px; overflow: hidden; border: 1px solid var(--line); background:
+  repeating-conic-gradient(rgba(255,255,255,0.06) 0% 25%, transparent 0% 50%) 0 0/12px 12px; }
+.ch-lb-bg-preview-imgs img { display: block; width: 100%; height: 88px; object-fit: cover; }
+.ch-lb-bg-preview-imgs figcaption { padding: 3px 6px; font: 700 9px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.ch-lb-text-presets { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+.ch-lb-preset-chip {
+  border: 1px solid var(--line); border-radius: 999px; padding: 5px 10px; background: rgba(255,255,255,0.02);
+  color: #cfeedd; font-size: 10.5px; text-transform: capitalize; cursor: pointer;
+}
+.ch-lb-preset-chip:hover { border-color: var(--neon); }
+.ch-lb-preset-chip.is-on { color: #04160d; background: linear-gradient(120deg, var(--neon), #15d97f); border-color: transparent; }
+.ch-lb-text-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 8px 0; }
+.ch-lb-mini { display: flex; flex-direction: column; gap: 4px; font-size: 10.5px; color: var(--dim); }
+.ch-lb-mini select, .ch-lb-mini input[type="color"] {
+  border: 1px solid var(--line); border-radius: 8px; background: rgba(0,0,0,0.32); color: var(--ink);
+  padding: 6px 8px; font-size: 12px;
+}
+.ch-lb-mini input[type="color"] { padding: 2px; height: 30px; cursor: pointer; }
 .ch-lb-section p { margin: 0 0 8px; font: 700 9.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
 details.ch-lb-section { border: 1px solid var(--line); border-radius: 12px; padding: 0 12px; background: rgba(0,0,0,0.14); }
 details.ch-lb-section[open] { padding-bottom: 12px; }

@@ -6,7 +6,12 @@
    clean data API — loadContent() / analyze() — so the Analytics view (and
    anything else) can fetch the same numbers with zero coupling. */
 
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-114";
+import {
+  freshEditState, applyFilterPreset, paintEdit,
+  addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
+  estimateSubjectPoint, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
+} from "./imagefilters.js?v=phantom-live-20260709-116";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit } from "./mediabackend.js?v=phantom-live-20260709-116";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -745,11 +750,132 @@ function contentAssetCard(asset, esc) {
    Reuses the same tested canvas filter engine as Media Lab's Edit tab (see
    imagefilters.js) but stays entirely local to Content Hub — its own isolated
    edit state per open, mounted right over the grid instead of navigating away. */
+function freshLightbox(asset, extra = {}) {
+  return {
+    asset, state: freshEditState(), bokehPicking: false, showTutorial: false,
+    selectedSpot: null, rememberBokehSize: true, _probed: false,
+    openSections: { adjust: true, transform: false, presets: false, text: false },
+    aiEdit: { status: "idle", message: "", provider: null },
+    bg: { status: "idle", message: "" },
+    text: { open: false },
+    ...extra,
+  };
+}
 function chSlider(label, key, min, max, val) {
   return `<label class="ch-lb-slider"><span>${label} <b data-out="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-slider="${key}"/></label>`;
 }
 function chBSlider(label, key, min, max, val) {
   return `<label class="ch-lb-slider"><span>${label} <b data-bout="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-bslider="${key}"/></label>`;
+}
+function chTSlider(label, key, min, max, val, esc) {
+  return `<label class="ch-lb-slider"><span>${esc(label)} <b data-tout="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-tslider="${key}"/></label>`;
+}
+
+function aiEditBody(lb, esc) {
+  const ai = lb.aiEdit || { status: "idle" };
+  const checking = ai.status === "checking";
+  const loading = ai.status === "loading";
+  const unavailable = ai.status === "unavailable";
+  const busy = checking || loading;
+  return `
+    <div class="ch-lb-ai-row">
+      <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…" ${unavailable ? "disabled" : ""}/>
+      <button class="btn btn-primary" type="button" data-ch-lb-ai-run ${busy || unavailable ? "disabled" : ""}>${loading ? "Generating…" : checking ? "Checking…" : "Generate"}</button>
+    </div>
+    ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">No AI edit provider is connected yet — set one up in Settings → Media Engines to enable real prompt-guided edits.</p>` : ""}
+    ${ai.status === "available" ? `<p class="ch-lb-ai-note">Connected — Generate sends this image and your prompt to the configured edit provider.</p>` : ""}
+    ${ai.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(ai.message || "Edit failed.")}</p>` : ""}
+    ${ai.status === "success" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Edit applied — use Reset to go back to the original.</p>` : ""}
+  `;
+}
+
+function removeBgBody(lb, esc) {
+  const bg = lb.bg || { status: "idle" };
+  const checking = bg.status === "checking";
+  const loading = bg.status === "loading";
+  const unavailable = bg.status === "unavailable";
+  if (bg.status === "preview") {
+    return `
+      <div class="ch-lb-bg-preview">
+        <div class="ch-lb-bg-preview-imgs">
+          <figure><img src="${esc(bg.beforeUrl)}" alt="Before"/><figcaption>Before</figcaption></figure>
+          <figure><img src="${esc(bg.afterUrl)}" alt="After"/><figcaption>After</figcaption></figure>
+        </div>
+        <div class="ch-lb-chips">
+          <button class="btn btn-primary" type="button" data-ch-lb-bg-apply>Apply</button>
+          <button class="btn btn-quiet" type="button" data-ch-lb-bg-cancel>Cancel</button>
+        </div>
+      </div>`;
+  }
+  return `
+    <div class="ch-lb-chips">
+      <button class="btn btn-quiet" type="button" data-ch-lb-bg-run ${checking || loading || unavailable ? "disabled" : ""}>${loading ? "Removing…" : checking ? "Checking…" : "Remove Background"}</button>
+    </div>
+    ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Background removal unavailable — rembg is not installed or not connected.</p>` : ""}
+    ${bg.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "Background removal failed.")}</p>` : ""}
+    ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed — Save/Download now export a transparent PNG.</p>` : ""}
+  `;
+}
+
+function bokehBody(lb, s, esc) {
+  const spots = s.bokeh?.spots || [];
+  const selected = lb.selectedSpot != null ? spots[lb.selectedSpot] : null;
+  return `
+    <p class="ch-lb-ai-label">${svgIc("spark")} Subject bokeh ${spots.length ? `<i class="ch-lb-bokeh-count">${spots.length} spot${spots.length === 1 ? "" : "s"}</i>` : ""}</p>
+    <p class="ch-lb-bokeh-note">${esc(lb.subjectHint || (spots.length ? "Click to add more focus, click a spot to select it, right-click to remove it." : "Turn on and click the subject. No automatic subject detection is available yet, so the first click drops an estimated focus point you can drag into place."))}</p>
+    ${chBSlider("Brush size", "r", 8, 45, s.bokehBrush || 24)}
+    ${spots.length ? chBSlider("Background blur", "strength", 4, 32, s.bokeh.strength) : ""}
+    ${spots.length ? chBSlider("Feather", "feather", 5, 90, Math.round((s.bokeh.feather ?? 0.45) * 100)) : ""}
+    <label class="ch-lb-check"><input type="checkbox" data-ch-lb-remember-size ${lb.rememberBokehSize ? "checked" : ""}/> Remember size for next point</label>
+    <div class="ch-lb-chips">
+      <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Adding focus… (click Done)" : "Add focus spots"}</button>
+      ${spots.length ? `<button type="button" data-ch-lb-bokeh-off>Clear all</button>` : ""}
+    </div>
+    ${selected ? `
+    <div class="ch-lb-bokeh-selected">
+      <p class="ch-lb-ai-label">Selected spot</p>
+      ${chBSlider("Radius", "spotR", 2, 90, Math.round(selected.r * 100))}
+      <button class="btn btn-quiet" type="button" data-ch-lb-bokeh-remove-selected>Remove this spot</button>
+    </div>` : ""}
+  `;
+}
+
+function textToolBody(s, esc) {
+  const st = { ...freshTextStyle(), ...(s.textStyle || {}) };
+  return `
+    <input class="ch-lb-ai-input" data-ch-lb-text placeholder="Add a caption / headline…" value="${esc(s.text)}"/>
+    <div class="ch-lb-text-presets">
+      ${Object.keys(TEXT_PRESETS).map((id) => `<button type="button" class="ch-lb-preset-chip ${st.preset === id ? "is-on" : ""}" data-ch-lb-text-preset="${id}">${esc(id.replace(/-/g, " "))}</button>`).join("")}
+    </div>
+    <div class="ch-lb-text-grid">
+      <label class="ch-lb-mini"><span>Font</span>
+        <select data-ch-lb-text-field="font">${TEXT_FONTS.map((f) => `<option value="${esc(f)}" ${st.font === f ? "selected" : ""}>${esc(f)}</option>`).join("")}</select>
+      </label>
+      <label class="ch-lb-mini"><span>Align</span>
+        <select data-ch-lb-text-field="align">
+          <option value="left" ${st.align === "left" ? "selected" : ""}>Left</option>
+          <option value="center" ${st.align === "center" ? "selected" : ""}>Center</option>
+          <option value="right" ${st.align === "right" ? "selected" : ""}>Right</option>
+        </select>
+      </label>
+    </div>
+    <div class="ch-lb-chips">
+      <button type="button" class="${st.bold ? "is-on" : ""}" data-ch-lb-text-toggle="bold"><b>B</b></button>
+      <button type="button" class="${st.italic ? "is-on" : ""}" data-ch-lb-text-toggle="italic"><i>I</i></button>
+      <button type="button" class="${st.outline ? "is-on" : ""}" data-ch-lb-text-toggle="outline">Outline</button>
+      <button type="button" class="${st.shadow ? "is-on" : ""}" data-ch-lb-text-toggle="shadow">Shadow</button>
+    </div>
+    <div class="ch-lb-text-grid">
+      <label class="ch-lb-mini"><span>Color</span><input type="color" data-ch-lb-text-field="color" value="${esc(st.color)}"/></label>
+      <label class="ch-lb-mini"><span>Outline color</span><input type="color" data-ch-lb-text-field="outlineColor" value="${esc(st.outlineColor)}"/></label>
+    </div>
+    ${chTSlider("Size", "size", 2, 16, st.size, esc)}
+    ${chTSlider("Box width", "width", 20, 100, st.width, esc)}
+    ${chTSlider("Position X", "x", 0, 100, st.x, esc)}
+    ${chTSlider("Position Y", "y", 0, 100, st.y, esc)}
+    ${chTSlider("Opacity", "opacity", 0, 100, st.opacity, esc)}
+    ${st.outline ? chTSlider("Outline width", "outlineWidth", 0, 40, st.outlineWidth, esc) : ""}
+  `;
 }
 function lightboxMarkup(lb, esc) {
   const asset = lb.asset;
@@ -767,7 +893,6 @@ function lightboxMarkup(lb, esc) {
       </div>`;
   }
   const s = lb.state;
-  const spots = s.bokeh?.spots || [];
   return `
     <div class="ch-lightbox" data-ch-lightbox>
       <div class="ch-lb-backdrop" data-ch-lb-close></div>
@@ -789,22 +914,16 @@ function lightboxMarkup(lb, esc) {
           <aside class="ch-lb-tools">
             <div class="ch-lb-ai">
               <p class="ch-lb-ai-label">${svgIc("spark")} Describe an edit</p>
-              <div class="ch-lb-ai-row">
-                <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…"/>
-                <button class="btn btn-primary" type="button" data-ch-lb-ai-run>Generate</button>
-              </div>
+              ${aiEditBody(lb, esc)}
+            </div>
+            <div class="ch-lb-ai">
+              <p class="ch-lb-ai-label">${svgIc("spark")} Remove background</p>
+              ${removeBgBody(lb, esc)}
             </div>
             <div class="ch-lb-ai ch-lb-bokeh">
-              <p class="ch-lb-ai-label">${svgIc("spark")} Subject bokeh ${spots.length ? `<i class="ch-lb-bokeh-count">${spots.length} spot${spots.length === 1 ? "" : "s"}</i>` : ""}</p>
-              <p class="ch-lb-bokeh-note">${spots.length ? "Click to add more focus, right-click a spot to remove it." : "Turn on and click the subject — click again to cover more of it (a tail, an ear, a whole body)."}</p>
-              ${chBSlider("Brush size", "r", 8, 45, s.bokehBrush || 24)}
-              ${spots.length ? chBSlider("Background blur", "strength", 4, 32, s.bokeh.strength) : ""}
-              <div class="ch-lb-chips">
-                <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Adding focus… (click Done)" : "Add focus spots"}</button>
-                ${spots.length ? `<button type="button" data-ch-lb-bokeh-off>Clear all</button>` : ""}
-              </div>
+              ${bokehBody(lb, s, esc)}
             </div>
-            <details class="ch-lb-section" open>
+            <details class="ch-lb-section" data-ch-lb-section="adjust" ${lb.openSections?.adjust !== false ? "open" : ""}>
               <summary>Adjust</summary>
               ${chSlider("Brightness", "brightness", 0, 200, s.brightness)}
               ${chSlider("Contrast", "contrast", 0, 200, s.contrast)}
@@ -812,7 +931,7 @@ function lightboxMarkup(lb, esc) {
               ${chSlider("Hue", "hue", 0, 360, s.hue)}
               ${chSlider("Blur", "blur", 0, 12, s.blur)}
             </details>
-            <details class="ch-lb-section">
+            <details class="ch-lb-section" data-ch-lb-section="transform" ${lb.openSections?.transform ? "open" : ""}>
               <summary>Transform</summary>
               <div class="ch-lb-chips">
                 <button type="button" data-ch-lb-rot="-90">${svgIc("undo")} 90°</button>
@@ -820,7 +939,7 @@ function lightboxMarkup(lb, esc) {
                 <button type="button" data-ch-lb-flip class="${s.flip ? "is-on" : ""}">Flip</button>
               </div>
             </details>
-            <details class="ch-lb-section">
+            <details class="ch-lb-section" data-ch-lb-section="presets" ${lb.openSections?.presets ? "open" : ""}>
               <summary>Style presets</summary>
               <div class="ch-lb-chips ch-lb-chips-wrap" data-ch-lb-filter>
                 <button type="button" data-v="none">None</button><button type="button" data-v="noir">Noir</button>
@@ -828,9 +947,9 @@ function lightboxMarkup(lb, esc) {
                 <button type="button" data-v="cold">Cold</button><button type="button" data-v="vivid">Vivid</button>
               </div>
             </details>
-            <details class="ch-lb-section">
+            <details class="ch-lb-section" data-ch-lb-section="text" ${lb.openSections?.text ? "open" : ""}>
               <summary>Text overlay</summary>
-              <input class="ch-lb-ai-input" data-ch-lb-text placeholder="Add a caption / headline…" value="${esc(s.text)}"/>
+              ${textToolBody(s, esc)}
             </details>
             <div class="ch-lb-actions">
               <button class="btn btn-primary" type="button" data-ch-lb-save>${svgIc("check")} Save</button>
@@ -846,9 +965,10 @@ function lightboxMarkup(lb, esc) {
 function tutorialMarkup() {
   const rows = [
     ["Open an image", "Double-click any image in the library to open it here."],
-    ["Describe an edit", "Type what you want in plain language and hit Generate for a quick style pass."],
-    ["Subject bokeh", "Turn on \"Add focus spots,\" click the subject (click again to cover more of it), right-click a spot to remove it, then adjust brush size and background blur."],
-    ["Adjust / Transform / Style presets / Text overlay", "Tucked into the sections below — click a heading to open it."],
+    ["Describe an edit", "Type what you want and hit Generate. This only works once a real edit provider is connected in Settings — otherwise the button is disabled and says so."],
+    ["Remove background", "Only enabled when rembg is installed and reachable. Runs for real, shows a before/after, then Apply or Cancel."],
+    ["Subject bokeh", "Turn on \"Add focus spots\" — the first click drops an estimated starting point you can drag; click again to add more, click a spot to select it and change its size, right-click to remove it."],
+    ["Adjust / Transform / Style presets / Text overlay", "Tucked into the sections below — click a heading to open it. Text overlay has fonts, color, outline, shadow, alignment, position, and layout presets."],
     ["Save vs. Save as copy", "Save updates this asset in place. Save as copy keeps the original and creates a new one."],
     ["In the library grid", "Shift+click selects a range, Ctrl+click adds one at a time, Ctrl+A selects everything visible, Ctrl+Z undoes your last delete."],
   ];
@@ -875,6 +995,13 @@ function wireLightbox(root, opts) {
   document.addEventListener("keydown", chLbKeyHandler);
   if (lb.viewOnly) return;
 
+  // rerender() fully rebuilds this DOM, which would otherwise silently
+  // re-collapse any <details> the user just opened — track state explicitly
+  // and sync silently on toggle (no rerender needed for this).
+  root.querySelectorAll("[data-ch-lb-section]").forEach((d) => {
+    d.addEventListener("toggle", () => { lb.openSections[d.dataset.chLbSection] = d.open; });
+  });
+
   const asset = lb.asset;
   const s = lb.state;
   const canvas = root.querySelector("[data-ch-lb-canvas]");
@@ -882,11 +1009,14 @@ function wireLightbox(root, opts) {
   const positionMarkers = () => {
     if (!markerLayer) return;
     const spots = s.bokeh?.spots || [];
-    markerLayer.innerHTML = spots.map(() => `<div class="ch-lb-bokeh-marker"></div>`).join("");
+    markerLayer.innerHTML = spots.map((_, i) => `<div class="ch-lb-bokeh-marker ${i === lb.selectedSpot ? "is-selected" : ""}" data-spot-index="${i}"></div>`).join("");
     [...markerLayer.children].forEach((el, i) => {
       const spot = spots[i];
+      const r = spot.r * Math.min(canvas.offsetWidth, canvas.offsetHeight);
       el.style.left = `${canvas.offsetLeft + spot.x * canvas.offsetWidth}px`;
       el.style.top = `${canvas.offsetTop + spot.y * canvas.offsetHeight}px`;
+      el.style.width = `${r * 2}px`;
+      el.style.height = `${r * 2}px`;
     });
   };
   const img = new Image();
@@ -916,27 +1046,82 @@ function wireLightbox(root, opts) {
   });
   const textInput = root.querySelector("[data-ch-lb-text]");
   if (textInput) textInput.oninput = () => { s.text = textInput.value; repaint(); };
+  root.querySelectorAll("[data-ch-lb-text-field]").forEach((field) => {
+    const apply = () => {
+      const key = field.dataset.chLbTextField;
+      s.textStyle = { ...freshTextStyle(), ...(s.textStyle || {}), [key]: field.value, preset: "custom" };
+      repaint();
+    };
+    field.addEventListener(field.type === "color" ? "input" : "change", apply);
+  });
+  root.querySelectorAll("[data-ch-lb-text-toggle]").forEach((btn) => btn.onclick = () => {
+    const key = btn.dataset.chLbTextToggle;
+    const st = { ...freshTextStyle(), ...(s.textStyle || {}) };
+    s.textStyle = { ...st, [key]: !st[key], preset: "custom" };
+    repaint();
+    rerender();
+  });
+  root.querySelectorAll("[data-ch-lb-tslider]").forEach((slider) => slider.oninput = () => {
+    const key = slider.dataset.chLbTslider;
+    s.textStyle = { ...freshTextStyle(), ...(s.textStyle || {}), [key]: +slider.value, preset: "custom" };
+    repaint();
+    const out = root.querySelector(`[data-tout="${key}"]`);
+    if (out) out.textContent = slider.value;
+  });
+  root.querySelectorAll("[data-ch-lb-text-preset]").forEach((btn) => btn.onclick = () => {
+    applyTextPreset(s, btn.dataset.chLbTextPreset);
+    repaint();
+    rerender();
+  });
 
   const pickHint = root.querySelector("[data-ch-lb-pick-hint]");
   if (lb.bokehPicking) { canvas.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; }
-  root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = () => { lb.bokehPicking = !lb.bokehPicking; rerender(); });
+  root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = () => {
+    lb.bokehPicking = !lb.bokehPicking;
+    if (lb.bokehPicking && !s.bokeh?.spots?.length && !lb.subjectEstimated) {
+      lb.subjectEstimated = true;
+      const guess = estimateSubjectPoint(canvas);
+      if (guess) {
+        const idx = addBokehSpot(s, guess.x, guess.y, (s.bokehBrush || 24) / 100);
+        lb.selectedSpot = idx;
+        lb.subjectHint = "Estimated focus point — drag it into place, or click elsewhere on the subject to add more.";
+        repaint();
+      }
+    }
+    rerender();
+  });
   const bokehOff = root.querySelector("[data-ch-lb-bokeh-off]");
-  if (bokehOff) bokehOff.onclick = () => { s.bokeh = null; repaint(); rerender(); };
+  if (bokehOff) bokehOff.onclick = () => { s.bokeh = null; lb.selectedSpot = null; repaint(); rerender(); };
   root.querySelectorAll("[data-ch-lb-bslider]").forEach((slider) => slider.oninput = () => {
     const key = slider.dataset.chLbBslider;
-    if (key === "r") { s.bokehBrush = +slider.value; }
+    if (key === "r") { s.bokehBrush = +slider.value; if (lb.selectedSpot != null) { resizeBokehSpot(s, lb.selectedSpot, +slider.value / 100); repaint(); } }
+    else if (key === "spotR") { if (lb.selectedSpot != null) { resizeBokehSpot(s, lb.selectedSpot, +slider.value / 100); repaint(); } }
+    else if (key === "feather") { if (s.bokeh) { s.bokeh.feather = +slider.value / 100; repaint(); } }
     else if (s.bokeh) { s.bokeh.strength = +slider.value; repaint(); }
     const out = root.querySelector(`[data-bout="${key}"]`);
     if (out) out.textContent = slider.value;
   });
+  const rememberSize = root.querySelector("[data-ch-lb-remember-size]");
+  if (rememberSize) rememberSize.onchange = () => { lb.rememberBokehSize = rememberSize.checked; };
+  const removeSelected = root.querySelector("[data-ch-lb-bokeh-remove-selected]");
+  if (removeSelected) removeSelected.onclick = () => {
+    if (lb.selectedSpot != null) { removeBokehSpotAt(s, lb.selectedSpot); lb.selectedSpot = null; repaint(); rerender(); }
+  };
   canvas.onclick = (event) => {
-    if (!lb.bokehPicking) return;
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
-    addBokehSpot(s, x, y, (s.bokehBrush || 24) / 100);
-    repaint();
-    rerender();
+    if (lb.bokehPicking) {
+      const brush = lb.rememberBokehSize ? (s.bokehBrush || 24) / 100 : 0.24;
+      const idx = addBokehSpot(s, x, y, brush);
+      lb.selectedSpot = idx;
+      repaint();
+      rerender();
+      return;
+    }
+    // not adding — a click near an existing spot selects it for resize/remove
+    const near = nearestBokehSpot(s, x, y, 0.12);
+    if (near !== lb.selectedSpot) { lb.selectedSpot = near === -1 ? null : near; rerender(); }
   };
   canvas.oncontextmenu = (event) => {
     if (!s.bokeh?.spots?.length) return;
@@ -944,28 +1129,126 @@ function wireLightbox(root, opts) {
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
-    if (removeBokehSpotNear(s, x, y)) { repaint(); rerender(); }
+    if (removeBokehSpotNear(s, x, y)) { lb.selectedSpot = null; repaint(); rerender(); }
+  };
+  // drag an existing marker to reposition its spot. repaint() is safe to call
+  // on every pointermove (it only repaints the canvas + repositions markers
+  // in place); rerender() fully rebuilds the DOM (including this canvas
+  // reference), so it's deferred to pointerup — calling it mid-drag would
+  // invalidate `canvas` for the rest of the gesture.
+  if (markerLayer) markerLayer.onpointerdown = (event) => {
+    const marker = event.target.closest("[data-spot-index]");
+    if (!marker) return;
+    const index = +marker.dataset.spotIndex;
+    event.preventDefault();
+    lb.selectedSpot = index;
+    const move = (e) => {
+      const rect = canvas.getBoundingClientRect();
+      moveBokehSpot(s, index, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
+      repaint();
+    };
+    const up = () => {
+      document.removeEventListener("pointermove", move);
+      document.removeEventListener("pointerup", up);
+      rerender();
+    };
+    document.addEventListener("pointermove", move);
+    document.addEventListener("pointerup", up);
   };
 
   const aiRun = root.querySelector("[data-ch-lb-ai-run]");
-  if (aiRun) aiRun.onclick = () => {
-    const q = root.querySelector("[data-ch-lb-ai]").value || "";
-    aiRun.disabled = true; aiRun.textContent = "…";
-    heuristicAiEdit(q, s);
-    repaint();
-    aiRun.disabled = false; aiRun.textContent = "Generate";
-    opts.notify?.("Content Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
+  if (aiRun) aiRun.onclick = async () => {
+    const q = (root.querySelector("[data-ch-lb-ai]")?.value || "").trim();
+    if (!q || lb.aiEdit.status === "unavailable") return;
+    lb.aiEdit = { ...lb.aiEdit, status: "loading" };
+    rerender();
+    const result = await requestAiEdit({ dataUrl: canvas.toDataURL("image/png"), prompt: q, provider: lb.aiEdit.provider || "higgsfield" });
+    if (chLightbox !== lb) return; // lightbox closed/reset while the request was in flight
+    if (!result.ok) {
+      lb.aiEdit = { ...lb.aiEdit, status: "error", message: result.message };
+      rerender();
+      opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${result.message}`);
+      return;
+    }
+    const editedImg = new Image();
+    editedImg.onload = () => {
+      if (chLightbox !== lb) return;
+      canvas._img = editedImg;
+      lb.aiEdit = { ...lb.aiEdit, status: "success", message: "" };
+      repaint();
+      rerender();
+      opts.notify?.("Content Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
+    };
+    editedImg.onerror = () => {
+      if (chLightbox !== lb) return;
+      lb.aiEdit = { ...lb.aiEdit, status: "error", message: "The edit provider returned an image that could not be loaded." };
+      rerender();
+    };
+    editedImg.src = result.url;
   };
 
-  root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = { asset, state: freshEditState(), bokehPicking: false, showTutorial: lb.showTutorial }; rerender(); };
+  const bgRun = root.querySelector("[data-ch-lb-bg-run]");
+  if (bgRun) bgRun.onclick = async () => {
+    if (lb.bg.status === "unavailable") return;
+    lb.bg = { ...lb.bg, status: "loading" };
+    rerender();
+    const beforeUrl = canvas.toDataURL("image/png");
+    const result = await requestRemoveBackground(beforeUrl);
+    if (chLightbox !== lb) return;
+    if (!result.ok) {
+      lb.bg = { status: "error", message: result.message };
+      rerender();
+      opts.notify?.("Content Hub", `Background removal failed on "${asset.title}": ${result.message}`);
+      return;
+    }
+    lb.bg = { status: "preview", beforeUrl, afterUrl: result.image };
+    rerender();
+  };
+  const bgApply = root.querySelector("[data-ch-lb-bg-apply]");
+  if (bgApply) bgApply.onclick = () => {
+    const afterImg = new Image();
+    afterImg.onload = () => {
+      if (chLightbox !== lb) return;
+      canvas._img = afterImg;
+      lb.bg = { status: "applied", message: "" };
+      lb.hasTransparency = true;
+      repaint();
+      rerender();
+      opts.notify?.("Content Hub", `removed the background on "${asset.title}".`);
+    };
+    afterImg.src = lb.bg.afterUrl;
+  };
+  const bgCancel = root.querySelector("[data-ch-lb-bg-cancel]");
+  if (bgCancel) bgCancel.onclick = () => { lb.bg = { status: "idle", message: "" }; rerender(); };
+
+  // Probe real backends exactly once per lightbox session — never on every
+  // keystroke/rerender. Both probes are honest: unreachable/unconfigured
+  // always resolves to "unavailable", never a fake "connected" state.
+  if (!lb._probed) {
+    lb._probed = true;
+    probeAiEditBackend().then((r) => {
+      if (chLightbox !== lb) return;
+      lb.aiEdit = { status: r.available ? "available" : "unavailable", message: "", provider: r.provider };
+      rerender();
+    });
+    probeRemoveBackground().then((available) => {
+      if (chLightbox !== lb) return;
+      lb.bg = { status: available ? "idle" : "unavailable", message: "" };
+      rerender();
+    });
+  }
+
+  root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = freshLightbox(asset, { showTutorial: lb.showTutorial }); rerender(); };
+  const exportFormat = () => lb.hasTransparency ? "image/png" : "image/webp";
+  const exportExt = () => lb.hasTransparency ? "png" : "webp";
   root.querySelector("[data-ch-lb-download]").onclick = () => {
     const link = document.createElement("a");
-    link.href = canvas.toDataURL("image/webp", 0.92);
-    link.download = `phantomforce-${asset.id}.webp`;
+    link.href = canvas.toDataURL(exportFormat(), 0.92);
+    link.download = `phantomforce-${asset.id}.${exportExt()}`;
     link.click();
   };
   root.querySelector("[data-ch-lb-save]").onclick = () => {
-    const url = canvas.toDataURL("image/webp", 0.9);
+    const url = canvas.toDataURL(exportFormat(), 0.9);
     registerContentAsset({ ...asset, url, prompt: s.text || asset.prompt, saved: true, updatedAt: Date.now() });
     // close (and its rerender) must run before notify(), since notify() triggers a global
     // store-change listener that can fully remount this page and invalidate this closure's
@@ -974,7 +1257,7 @@ function wireLightbox(root, opts) {
     opts.notify?.("Content Hub", `saved your edit to "${asset.title}".`);
   };
   root.querySelector("[data-ch-lb-save-copy]").onclick = () => {
-    const url = canvas.toDataURL("image/webp", 0.9);
+    const url = canvas.toDataURL(exportFormat(), 0.9);
     const at = Date.now();
     registerContentAsset({ ...asset, id: `edit-${at}-${Math.random().toString(36).slice(2, 6)}`, url, title: `${asset.title} (edit)`, prompt: s.text || asset.prompt, createdAt: at, saved: true });
     close();
@@ -1079,7 +1362,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     if (event.target.closest("button")) return;
     const asset = assets.find((a) => a.id === card.dataset.chAssetId);
     if (!asset || !asset.url) return;
-    chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : { asset, state: freshEditState(), bokehPicking: false, showTutorial: false };
+    chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : freshLightbox(asset);
     rerender();
   }));
   body.querySelectorAll("[data-ch-delete-asset]").forEach((btn) => btn.addEventListener("click", (event) => {

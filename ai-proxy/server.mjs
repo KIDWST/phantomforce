@@ -21,8 +21,11 @@
 
 import http from "node:http";
 import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import crypto from "node:crypto";
 import { fileURLToPath } from "node:url";
+import { spawn } from "node:child_process";
 
 // Minimal, zero-dependency .env loader so secrets (RESEND_API_KEY, etc.) live in
 // a gitignored ai-proxy/.env instead of the shell history or the code. A real
@@ -299,7 +302,7 @@ function handleGenerate(req, res, send) {
     const key = process.env[prov.keyEnv] || String(req.headers["x-provider-key"] || "");
     if (!key) return send({ error: "unconfigured", provider: providerId }, 200);
     const reqOut = {
-      modality: payload.modality === "video" ? "video" : "image",
+      modality: ["video", "edit"].includes(payload.modality) ? payload.modality : "image",
       model: String(payload.model || ""), prompt: String(payload.prompt || "").slice(0, 3000),
       negative: String(payload.negative || "").slice(0, 500), style: String(payload.style || ""),
       ref: typeof payload.ref === "string" ? payload.ref.slice(0, 5_000_000) : null,
@@ -312,6 +315,92 @@ function handleGenerate(req, res, send) {
       send({ assets, provider: providerId, model: reqOut.model, generation_spec: payload.generation_spec || null });
     } catch (e) {
       send({ error: "upstream", message: String(e && e.message || "").slice(0, 120) }, 200);
+    }
+  });
+}
+
+/* ============================================================================
+   BACKGROUND REMOVAL  —  GET /api/media/remove-background/status, POST /api/media/remove-background
+   Shells out to a local `rembg` install (pip install rembg) — no key, no
+   cloud call, no bundled model. If rembg genuinely isn't on this machine's
+   PATH, every caller gets an honest "unavailable" answer instead of a fake
+   success. Detection result is cached briefly so repeated status checks
+   don't spawn a process every time.
+   ========================================================================== */
+let rembgAvailableCache = null;
+let rembgAvailableCheckedAt = 0;
+function checkRembgAvailable() {
+  const now = Date.now();
+  if (rembgAvailableCache !== null && now - rembgAvailableCheckedAt < 60000) {
+    return Promise.resolve(rembgAvailableCache);
+  }
+  return new Promise((resolve) => {
+    let settled = false;
+    const finish = (ok) => {
+      if (settled) return;
+      settled = true;
+      rembgAvailableCache = ok;
+      rembgAvailableCheckedAt = Date.now();
+      resolve(ok);
+    };
+    let proc;
+    try { proc = spawn("rembg", ["--version"], { stdio: "ignore" }); }
+    catch { return finish(false); }
+    proc.on("error", () => finish(false));
+    proc.on("exit", (code) => finish(code === 0));
+    setTimeout(() => { finish(false); try { proc.kill(); } catch { } }, 4000);
+  });
+}
+
+function handleRemoveBackgroundStatus(req, res, send) {
+  checkRembgAvailable().then((available) => send({ available }));
+}
+
+function handleRemoveBackground(req, res, send) {
+  let chunks = [];
+  let size = 0;
+  let destroyed = false;
+  req.on("data", (c) => {
+    size += c.length;
+    if (size > 15_000_000) { destroyed = true; req.destroy(); return; }
+    chunks.push(c);
+  });
+  req.on("end", async () => {
+    if (destroyed) return;
+    let payload;
+    try { payload = JSON.parse(Buffer.concat(chunks).toString("utf8")) || {}; }
+    catch { return send({ error: "bad_request" }, 400); }
+    const m = String(payload.image || "").match(/^data:image\/(png|jpe?g|webp);base64,([a-z0-9+/=]+)$/i);
+    if (!m) return send({ error: "bad_image", message: "Expected a base64 PNG/JPEG/WebP data URL." }, 400);
+    const available = await checkRembgAvailable();
+    if (!available) {
+      return send({ error: "rembg_unavailable", message: "Background removal unavailable — rembg is not installed or not connected." }, 200);
+    }
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "pf-rembg-"));
+    const inPath = path.join(tmpDir, "in.png");
+    const outPath = path.join(tmpDir, "out.png");
+    try {
+      fs.writeFileSync(inPath, Buffer.from(m[2], "base64"));
+      await new Promise((resolve, reject) => {
+        let proc;
+        try { proc = spawn("rembg", ["i", inPath, outPath]); }
+        catch (e) { return reject(e); }
+        let stderr = "";
+        proc.stderr.on("data", (d) => { stderr += d; });
+        proc.on("error", reject);
+        const killTimer = setTimeout(() => { try { proc.kill(); } catch { } reject(new Error("rembg timed out")); }, 30000);
+        proc.on("exit", (code) => {
+          clearTimeout(killTimer);
+          if (code === 0) resolve(); else reject(new Error(stderr.trim().slice(0, 300) || `rembg exited with code ${code}`));
+        });
+      });
+      const outBuf = fs.readFileSync(outPath);
+      send({ ok: true, image: `data:image/png;base64,${outBuf.toString("base64")}` });
+    } catch (e) {
+      console.warn(`[remove-background] failed: ${e && e.message}`);
+      send({ error: "processing_failed", message: String(e && e.message || "rembg failed").slice(0, 200) }, 200);
+    } finally {
+      try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch { }
     }
   });
 }
@@ -475,7 +564,7 @@ function handleRequest(req, res) {
   const allow = ALLOWED.includes(origin) ? origin : ALLOWED[0];
   const base = {
     "Access-Control-Allow-Origin": allow,
-    "Access-Control-Allow-Methods": "POST, OPTIONS",
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
     "Access-Control-Allow-Headers": "Content-Type, x-admin-key, x-provider-key, x-pf-visitor",
     "Vary": "Origin",
     "Connection": "close",
@@ -489,9 +578,11 @@ function handleRequest(req, res) {
   if (req.method === "OPTIONS") { res.writeHead(204, { ...base, "Content-Length": 0 }); return res.end(); }
   const path = (req.url || "").split("?")[0];
   if (req.method === "GET" && path === "/health") return send({ ok: true, configured: !!KEY, provider: PROVIDER, model: MODEL, perUserDaily: PER_USER_DAILY, demoEmail: !!RESEND_API_KEY, media: mediaConfigured() });
+  if (req.method === "GET" && path === "/api/media/remove-background/status") return handleRemoveBackgroundStatus(req, res, send);
   if (req.method !== "POST") { res.writeHead(405, { ...base, "Content-Length": 0 }); return res.end(); }
   // Media generation for the admin studio (routes to real providers, key stays server-side).
   if (path === "/generate") return handleGenerate(req, res, send);
+  if (path === "/api/media/remove-background") return handleRemoveBackground(req, res, send);
   // Demo signup lives outside the AI proxy: it works even without an AI key.
   if (path === "/register") return handleRegister(req, res, send);
   if (path === "/upgrade") return handleUpgrade(req, res, send);
