@@ -10,8 +10,8 @@ import {
   freshEditState, applyFilterPreset, paintEdit,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260709-116";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit } from "./mediabackend.js?v=phantom-live-20260709-116";
+} from "./imagefilters.js?v=phantom-live-20260709-117";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit } from "./mediabackend.js?v=phantom-live-20260709-117";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -908,7 +908,7 @@ function lightboxMarkup(lb, esc) {
         <div class="ch-lb-body">
           <div class="ch-lb-canvas-wrap">
             <canvas class="ch-lb-canvas" data-ch-lb-canvas></canvas>
-            <div class="ch-lb-bokeh-markers" data-ch-lb-bokeh-markers></div>
+            <div class="ch-lb-bokeh-markers ${(lb.bokehPicking || lb.selectedSpot != null) ? "" : "is-hidden"}" data-ch-lb-bokeh-markers></div>
             <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
           </div>
           <aside class="ch-lb-tools">

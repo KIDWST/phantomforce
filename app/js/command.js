@@ -1,14 +1,18 @@
-/* PhantomForce Phantom — the Phantom AI command engine.
-   Everything router: classify each prompt, then answer, route, draft, create,
-   automate, recall memory, or hand off. Local mode never sends, uploads,
-   charges, or deploys. */
+/* PhantomForce Phantom — the operator brain behind the chat.
+   Classifies each message into a lane (conversation/answer/brainstorm/
+   command/workflow/approval/clarification), then replies like an operator
+   would: casual chat stays casual, questions get answered, commands start
+   real work, anything external/risky goes to approval first. Router/lane
+   language is internal — it never belongs in what the user reads. Local
+   mode never sends, uploads, charges, or deploys. */
 
 import {
-  store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
+  store, uid, visible, currentWs, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
-} from "./store.js?v=phantom-live-20260709-116";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-116";
+} from "./store.js?v=phantom-live-20260709-117";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260709-117";
+const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -52,12 +56,6 @@ function modelLaneForSettings(settings) {
   if (settings.provider === "local") return "glm_5_2";
   if (settings.provider === "claude") return "claude_cli";
   return "codex";
-}
-
-function backendLabel(settings) {
-  if (settings.brainMode === "api") return "Connected brain";
-  if (settings.brainMode === "subscription") return "Subscription brain";
-  return "Local brain";
 }
 
 function canAskHermes(intent, settings) {
@@ -125,15 +123,7 @@ async function askHermesBrain(raw, intent, settings) {
     if (!say) return null;
     return {
       say,
-      cards: [
-        card(
-          "Brain route",
-          `${backendLabel(settings)} answered`,
-          `Connected context ${payload.hermes?.context_used ? "was used" : "was not used"}; no sends, uploads, charges, deploys, or approvals were executed.`,
-          [openAction("Open Memory", "memory"), openAction("Open Settings", "settings")],
-          payload.live_provider_called ? "Live provider called" : "No live provider call reported",
-        ),
-      ],
+      cards: [],
       open: null,
       intent,
       hermes: payload.hermes || null,
@@ -315,20 +305,16 @@ function currentInfoAnswer(text, settings = null) {
   const cfg = settings || loadRuntimeAiSettings();
   if (cfg.brainMode === "local") {
     return {
-      say: "That's a live-world question — not a task, and I won't fake the answer. Instant mode answers from your business data only. Flip the chat gear to Connected mode and I'll pull real current info.",
-      cards: [
-        card("Live data question", "Instant mode is offline-only", "Weather, news, prices, and scores need the live backend. Open the gear on the chat header, set Backend to Connected, and ask again — no task or record was created.", [openAction("Open Settings", "settings")], "No record created"),
-      ],
+      say: "That's a live, real-time question, and I won't fake an answer. Connect a live backend in Settings and ask me again.",
+      cards: [card("Setup needed", "Live answers need a connected backend", "Weather, news, prices, and scores need real-time data, not just your workspace. Turn on Connected mode in Settings.", [openAction("Open Settings", "settings")])],
       open: null,
     };
   }
   /* backend mode was on but the live brain did not answer (we only reach
      here after the backend attempt) — be honest instead of re-lecturing */
   return {
-    say: `The ${backendLabel(cfg)} didn't respond just now, and I won't invent live data. Ask again in a moment — the question stays a question; no task was created.`,
-    cards: [
-      card("Live brain unreachable", backendLabel(cfg), "The backend call failed or timed out. Retry shortly, or check that the Phantom backend is running and reachable from this console.", [openAction("Open Settings", "settings")], "No record created"),
-    ],
+    say: "That didn't come back just now, and I won't invent an answer. Try again in a moment.",
+    cards: [],
     open: null,
   };
 }
@@ -343,9 +329,9 @@ function localQuestionAnswer(text, settings = null) {
     const top = m.open[0];
     return {
       say: top
-        ? `${m.open.length} proposal${m.open.length === 1 ? "" : "s"} are open. Top open deal: ${top.client} at ${fmtMoney(top.price)}. Nothing was created.`
-        : "No open proposals are loaded right now. I can draft one if you say who it is for.",
-      cards: [card("Proposal answer", "Open pipeline", `${fmtMoney(m.pipeline)} open · ${fmtMoney(m.wonValue)} won · ${fmtMoney(m.retainerMonthly)}/mo retainers.`, [openAction("Open Proposal Forge", "proposals"), openAction("Open Money", "money")], "No record created")],
+        ? `${m.open.length} proposal${m.open.length === 1 ? "" : "s"} open. Top one: ${top.client} at ${fmtMoney(top.price)}. Say "draft a proposal" if you want a new one started.`
+        : "No open proposals right now. Say who it's for and I'll draft one.",
+      cards: [],
       open: null,
     };
   }
@@ -355,9 +341,9 @@ function localQuestionAnswer(text, settings = null) {
     const due = leads.filter((l) => ["new", "follow-up"].includes(l.status) && daysUntil(l.due) <= 0);
     return {
       say: due.length
-        ? `${due.length} lead${due.length === 1 ? " needs" : "s need"} attention now. I can open Leads, draft a follow-up, or create a task if you ask.`
-        : `${leads.length} lead${leads.length === 1 ? "" : "s"} are loaded and nothing is overdue from the local due dates.`,
-      cards: due.slice(0, 3).map((l) => card("Lead due", l.name, l.next, [openAction("Open Leads", "leads")], l.company)),
+        ? `${due.length} lead${due.length === 1 ? " needs" : "s need"} attention now. Want me to open Leads, draft a follow-up, or track it as a task?`
+        : `${leads.length} lead${leads.length === 1 ? "" : "s"} loaded, nothing overdue.`,
+      cards: [],
       open: null,
     };
   }
@@ -365,16 +351,16 @@ function localQuestionAnswer(text, settings = null) {
   if (/\b(approval|approve|pending|waiting on me|review queue)\b/.test(s)) {
     const pend = visible(store.state.approvals || []).filter((a) => a.status === "pending");
     return {
-      say: pend.length ? `${pend.length} approval${pend.length === 1 ? "" : "s"} are waiting on you. I won’t approve anything from chat unless you explicitly choose it.` : "Approval queue is clear.",
-      cards: pend.slice(0, 3).map((a) => card("Pending approval", a.title, a.detail, [openAction("Open Approvals", "approvals")], a.requestedBy || "PhantomForce")),
+      say: pend.length ? `${pend.length} approval${pend.length === 1 ? "" : "s"} waiting on you. I won't approve anything from chat — that's your call, in the queue.` : "Approval queue is clear.",
+      cards: [],
       open: null,
     };
   }
 
   if (/\b(website|site|landing|page|store|shop|checkout)\b/.test(s)) {
     return {
-      say: "My read: treat the site/store as the money path, not decoration. Lead with the offer, show proof fast, make the CTA obvious, and keep publishing approval-gated. If you want action, say “draft/build/create” and I’ll make a local work packet.",
-      cards: [card("Site answer", "No build created", "Strategy answer only. Explicit build verbs create guarded drafts; questions stay in answer mode.", [openAction("Open Site Studio", "sites")])],
+      say: "Treat the site as the money path, not decoration — lead with the offer, show proof fast, make the CTA obvious. Say \"build\" and I'll start a draft; publishing still waits for your approval.",
+      cards: [],
       open: null,
     };
   }
@@ -382,24 +368,26 @@ function localQuestionAnswer(text, settings = null) {
   if (/\b(content|video|reel|shoot|caption|post|media)\b/.test(s)) {
     const media = visible(store.state.media || []);
     return {
-      say: `Media lane is ready. ${media.length} local media item${media.length === 1 ? "" : "s"} loaded. Ask for an image, video, caption, or edit and I’ll route it without sending or posting.`,
-      cards: [card("Media answer", "Draft-only by default", "ChicagoShots/Media Lab work stays local until you approve an external action.", [openAction("Open Media Lab", "media")])],
+      say: media.length
+        ? `${media.length} media item${media.length === 1 ? "" : "s"} loaded in Media Lab. Tell me what to create or edit and I'll get moving — nothing sends or posts without your OK.`
+        : "Media Lab is ready and empty. Tell me what to create and I'll get moving.",
+      cards: [],
       open: null,
     };
   }
 
   if (/\b(how do i|how should i|what should i|what do you think|why is|why are|explain|compare)\b/.test(s)) {
     return {
-      say: "My take: answer the real question first, then decide if it becomes work. If this is strategy, I’ll reason it out. If this is execution, use an action verb and I’ll draft, build, track, or route it with approvals intact.",
-      cards: [card("Operator answer", "Principle applied", "Question answered without creating records. Add draft/build/create/track/schedule if you want a local artifact.", [])],
+      say: "Here's my take on that — if you want it turned into real work after, just say build, draft, or track and I'll take it from there.",
+      cards: [],
       open: null,
     };
   }
 
   const snap = operatorSnapshot();
   return {
-    say: `I can answer this from the local admin context or route it to a connected backend when enabled. Current local context: ${fmtMoney(snap.pipeline)} pipeline, ${snap.approvals} approval${snap.approvals === 1 ? "" : "s"}, ${snap.today} board item${snap.today === 1 ? "" : "s"}. No record created.`,
-    cards: [card("Everything router", "Answer lane", "Questions answer. Commands create. Live/current knowledge uses a connected backend or Subscription brain when enabled.", [openAction("Open Settings", "settings"), openAction("Open Memory", "memory")])],
+    say: `Right now: ${fmtMoney(snap.pipeline)} in pipeline, ${snap.approvals} approval${snap.approvals === 1 ? "" : "s"} waiting, ${snap.today} thing${snap.today === 1 ? "" : "s"} on today's plan. Ask me anything, or tell me what to build, post, automate, or check.`,
+    cards: [],
     open: null,
   };
 }
@@ -409,12 +397,17 @@ function intentResponse(intent, text, settings = null) {
     /* a greeting is a greeting — no status dump, no task, no cards */
     return {
       say: isAdmin()
-        ? "Hey Jordan — what are we working on?"
-        : "Hey — what can I get moving for you?",
+        ? "I'm online. What are we doing — building, posting, editing, automating, or checking the business?"
+        : "I'm online. Tell me what you want to build, fix, post, automate, or check.",
       cards: [],
       open: null,
     };
   }
+  /* "chat" intent deliberately has no case here — it still needs a chance to
+     match routeCommand()'s business-keyword cascade below (e.g. "make a
+     thumbnail for this" classifies as generic "chat" but must still reach
+     the media branch). Genuinely unmatched chat lands on routeCommand()'s
+     own fallback, which is conversational, not a router prompt. */
   if (intent.primaryIntent === "gratitude") {
     return {
       say: "Anytime. What's next?",
@@ -424,18 +417,15 @@ function intentResponse(intent, text, settings = null) {
   }
   if (intent.primaryIntent === "identity") {
     return {
-      say: "I’m the PhantomForce admin brain: operator router, memory layer, draft engine, and approval gate. I classify the request, then route it to the right lane.",
-      cards: [card("Identity", "Phantom admin brain", "Local mode answers instantly. Connected and subscription modes can add backend reasoning and memory context when enabled in Settings.", [openAction("Open Settings", "settings"), openAction("Open Memory", "memory")])],
+      say: "I'm PhantomForce's operator, not just a chatbot. I run the workers, media, sites, automations, and approvals in this workspace — you tell me the outcome, I handle the work and bring anything risky back to you first.",
+      cards: [],
       open: null,
     };
   }
   if (intent.primaryIntent === "capability") {
     return {
-      say: "I can answer, route, draft, create, track, summarize, recall memory, prep approvals, loop a reply through another model, and hand work to the right admin lane. External sends and live actions still need approval.",
-      cards: [
-        card("Core modes", "Everything router", "Questions get answers. Commands create or route work. Explicit create/draft/build/schedule/track verbs make records.", [openAction("Open Settings", "settings")]),
-        card("Memory", "Business context", "Local memory is active. A connected or subscription backend can add deeper context when enabled.", [openAction("Open Memory", "memory")]),
-      ],
+      say: "I'm built to be your operator, not just a chatbot. I can answer questions, plan work, use your business memory, prepare media, route workers, build sites, create automations, and queue approvals. The more your accounts, assets, and memory are connected, the more I can actually do.",
+      cards: [],
       open: null,
     };
   }
@@ -565,8 +555,10 @@ function shapeResponse(response, settings) {
     say = `Here's the thinking: ${say}`;
   } else if (settings.responseStyle === "sales" && !/pipeline|money|revenue|\$/.test(say)) {
     say = `${say} Money angle: keep this pointed at revenue.`;
-  } else if (settings.responseStyle === "technical" && response.intent?.reasonCode) {
-    say = `${say} [route: ${response.intent.primaryIntent} · ${response.intent.reasonCode}]`;
+  } else if (settings.responseStyle === "technical" && response.intent?.reasonCode && isOwnerOperator()) {
+    /* raw intent/lane diagnostics are owner-only — everyone else picking
+       "Technical" style just gets a slightly more precise, less chatty tone */
+    say = `${say} [lane: ${response.intent.userVisibleMode || response.intent.primaryIntent} · ${response.intent.reasonCode}]`;
   }
   return { ...response, say };
 }
@@ -633,11 +625,11 @@ function routeCommand(raw, settings) {
   }
 
   /* --- media / content / video --- */
-  if (/(video|reel|content|post|caption|shoot|media|creative|tiktok|short)/.test(s)) {
-    if (/(plan|draft|create|make|new|idea)/.test(s) || subject) {
+  if (/(video|reel|content|post|caption|shoot|media|creative|tiktok|short|thumbnail|image|photo|graphic)/.test(s)) {
+    if (/(plan|draft|create|make|new|idea|fix|edit|cinematic|better)/.test(s) || subject) {
       const m = createPendingMedia(subject);
       return {
-        say: `Media Lab added "${m.title}" as pending. Generate it when you're ready; paid runs stay approval-gated.`,
+        say: `On it — starting a Media Lab edit for "${m.title}". I'll show a preview before anything's final.`,
         cards: [card("Pending media", m.title, m.angle, [openAction("Open in Media Lab", "media")], m.type)],
         open: "media",
       };
@@ -781,28 +773,29 @@ function routeCommand(raw, settings) {
     };
   }
 
+  /* --- developer diagnostics — owner-only, never leaked to anyone else --- */
+  if (/\b(developer logs?|dev logs?|backend logs?|system logs?|diagnostics|raw logs?|developer (mode|diagnostics|panel))\b/.test(s)) {
+    if (!isOwnerOperator()) {
+      return { say: "That's owner-only diagnostics — not something I can open for this account.", cards: [], open: null };
+    }
+    return { say: "Opening Developer.", cards: [], open: "developer" };
+  }
+
   /* --- help / what can you do --- */
   if (/(help|what can you|how do|what do you do|\?$)/.test(s) && s.length < 60) {
     return {
-      say: "Ask in plain business language. I route it to the right desk and hand you something real — a draft, a plan, or the workspace it lives in.",
-      cards: [card("Try one of these", "Commands that create things",
-        "Draft a proposal · Generate media · Build a store · Run a security check · What's my pipeline?", [])],
+      say: "Ask me anything, or tell me what to build, fix, post, automate, or check — leads, proposals, media, sites, security, whatever's real. I'll handle it or tell you what's missing.",
+      cards: [],
       open: null,
     };
   }
 
-  /* --- fallback: still useful --- */
-  const plan = todaysPlan();
+  /* --- fallback: a genuine clarifying question, not a router prompt --- */
   return {
     say: subject
-      ? `Intent unclear for “${text}.” Tell me the lane: answer, lead, proposal, media, page, booking, task, automation, memory, or approval.`
-      : "I need a little more signal. Ask a question, give me an objective, or name the lane: answer, lead, proposal, media, page, booking, task, automation, memory, approval.",
-    cards: [
-      card("Quick routes", "Where this usually goes",
-        "Answer · Check pipeline · Draft proposal · Generate media · Build page or store · Review approvals",
-        [openAction("Leads", "leads"), openAction("Proposal Forge", "proposals"), openAction("Media Lab", "media")]),
-      ...(plan.length ? [card("Meanwhile — today", plan[0].text, "", [openAction("Open", plan[0].open)])] : []),
-    ],
+      ? `Not sure what you want me to do with "${subject}" — want me to look into it, or turn it into something (a task, a draft, a build)?`
+      : "Say a bit more about what you want — or point me at leads, proposals, media, a site, or the business overall and I'll take it from there.",
+    cards: [],
     open: null,
   };
 }

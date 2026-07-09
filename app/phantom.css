@@ -6147,7 +6147,9 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .ch-lb-bokeh .ch-lb-slider { margin-bottom: 8px; }
 .ch-lb-bokeh .ch-lb-chips { margin-top: 4px; }
-.ch-lb-bokeh-markers { position: absolute; inset: 0; pointer-events: none; }
+.ch-lb-bokeh-markers { position: absolute; inset: 0; pointer-events: none; transition: opacity 0.15s ease; }
+.ch-lb-bokeh-markers.is-hidden { opacity: 0; pointer-events: none; }
+.ch-lb-bokeh-markers.is-hidden .ch-lb-bokeh-marker { pointer-events: none; }
 .ch-lb-ai-input, .ch-lb-tools input[type="text"] {
   flex: 1 1 auto; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,0.32);
   color: var(--ink); padding: 9px 11px; font-size: 12.5px; outline: none;

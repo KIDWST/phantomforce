@@ -1,6 +1,7 @@
 /* PhantomForce intent router.
-   Everything router: classify first, then answer, route, draft, create, recall,
-   or ask for the missing lane. Records are created only on explicit action. */
+   Classifies a message before Phantom answers it. Records (tasks,
+   automations, drafts) are only created on explicit action language —
+   casual chat and questions never create anything. */
 
 const clean = (value = "") => String(value || "").replace(/\s+/g, " ").trim();
 const lower = (value = "") => clean(value).toLowerCase();
@@ -12,7 +13,7 @@ const QUESTION = /\?|\b(what|why|how|when|where|who|can|could|should|would|is|ar
 const GREETING = /^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there|ping|test)(\s+there)?([,\s]+(phantom(force)?|ghost|buddy|man|dude))?[\s.!?]*$/i;
 const GRATITUDE = /^(thanks|thank you|appreciate it|bet|cool|nice|ok|okay|got it|perfect)[\s.!?]*$/i;
 const IDENTITY = /\b(who are you|what are you|are you phantom|what is phantom|what is phantomforce ai|what's your job)\b/i;
-const CAPABILITY = /\b(what can you do|how can you help|what are you able to do|what can phantom do|what can phantomforce do)\b/i;
+const CAPABILITY = /\b(what can you do|how can you help|what are you able to do|what can phantom do|what can phantomforce do|how smart are you|are you smart|how (good|capable|powerful) are you|what makes you (smart|good|different)|how do you compare)\b/i;
 const FEEDBACK = /\b(i hate|i don't like|this sucks|looks awful|looks bad|annoying|frustrating|disappointed|not what i wanted|too robotic|too cluttered)\b/i;
 const PLAN = /\b(make|create|give|draft|build)\s+(me\s+)?(a\s+)?(plan|roadmap|breakdown|strategy)|\b(break this down|roadmap this|plan this|help me plan)\b/i;
 const REMINDER = /\b(remind me|reminder|schedule (this|that|it)\b|check this every|every morning|every day|daily|weekly|monitor|tell me when|watch this)\b/i;
@@ -262,4 +263,45 @@ export function classifyPhantomIntent(raw = "") {
   }
 
   return { ...result, primaryIntent: "chat", confidence: 0.76, reasonCode: "default_chat" };
+}
+
+/* ============================================================================
+   ACTION CONTRACT — the shape every caller should actually use.
+   Phantom AI is an operator, not a debug router: casual chat/questions/
+   brainstorming stay conversational (no task, no card, no router language);
+   commands/workflows/approvals are the only lanes allowed to surface a card
+   or create a record. Wrap every classifyPhantomIntent() call site with
+   this before building a response. */
+const LANE_BY_INTENT = {
+  greeting: "conversation", gratitude: "conversation", chat: "conversation", unknown: "conversation",
+  feedback: "conversation",
+  identity: "answer", capability: "answer", question: "answer", status_check: "answer",
+  internal_operator_handoff: "answer",
+  brainstorm: "brainstorm", plan: "brainstorm",
+  task_candidate: "clarification", automation_candidate: "clarification",
+  create_task: "command", memory_update: "command", phantom_loop_on: "command", phantom_loop_off: "command",
+  create_automation: "workflow", reminder: "workflow", termina_parallel: "workflow", vacation_mode: "workflow",
+  approval_request: "approval",
+};
+const AREA_BY_INTENT = {
+  create_task: "workers", memory_update: "memory", create_automation: "automations", reminder: "automations",
+  termina_parallel: "workers", vacation_mode: "vacation", approval_request: "approvals",
+  phantom_loop_on: "settings", phantom_loop_off: "settings",
+};
+/* Only these lanes are allowed to show a card by default — conversation/
+   answer/brainstorm/clarification stay text-only unless a specific response
+   builder has a genuine reason to attach one (e.g. a record it just created). */
+const CARD_LANES = new Set(["command", "workflow", "approval"]);
+
+export function deriveActionContract(result) {
+  const userVisibleMode = LANE_BY_INTENT[result.primaryIntent] || "answer";
+  return {
+    ...result,
+    userVisibleMode,
+    shouldShowCard: CARD_LANES.has(userVisibleMode),
+    requiredArea: AREA_BY_INTENT[result.primaryIntent] || null,
+    requiresApproval: !!result.requiresAdminApproval,
+    backendNeeded: !!result.needsLiveData,
+    responseStyle: userVisibleMode,
+  };
 }
