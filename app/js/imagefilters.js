@@ -6,7 +6,7 @@
    place. */
 
 export function freshEditState() {
-  return { brightness: 100, contrast: 100, saturate: 100, hue: 0, blur: 0, rotate: 0, flip: false, text: "", bokeh: null };
+  return { brightness: 100, contrast: 100, saturate: 100, hue: 0, blur: 0, rotate: 0, flip: false, text: "", bokeh: null, bokehBrush: 24 };
 }
 
 export const FILTER_PRESETS = {
@@ -38,13 +38,31 @@ export function heuristicAiEdit(query, state) {
 }
 
 /* ---------------- subject bokeh ----------------
-   state.bokeh = { x, y, r, strength } — x/y are 0..1 normalized focus point,
-   r is 0..1 radius relative to min(width,height), strength is the
-   background blur in px. Composited as a real edit (baked into export);
-   the on-canvas "pick your subject" marker is a separate DOM overlay drawn
-   by the caller, never part of the exported pixels. */
+   state.bokeh = { spots: [{x, y, r}, ...], strength } — each spot is a
+   paintable focus circle (x/y 0..1 normalized, r 0..1 relative to
+   min(width,height)) so an irregular subject can be covered with several
+   clicks; strength is the shared background blur in px. Composited as a
+   real edit (baked into export); the on-canvas markers are a separate DOM
+   overlay drawn by the caller, never part of the exported pixels. */
 export function freshBokeh() {
-  return { x: 0.5, y: 0.42, r: 0.24, strength: 20 };
+  return { spots: [], strength: 20 };
+}
+export function addBokehSpot(state, x, y, r) {
+  if (!state.bokeh) state.bokeh = freshBokeh();
+  state.bokeh.spots.push({ x, y, r });
+  return state.bokeh;
+}
+export function removeBokehSpotNear(state, x, y) {
+  if (!state.bokeh || !state.bokeh.spots.length) return false;
+  let bestIdx = -1, bestDist = Infinity;
+  state.bokeh.spots.forEach((spot, i) => {
+    const d = Math.hypot(spot.x - x, spot.y - y);
+    if (d < bestDist) { bestDist = d; bestIdx = i; }
+  });
+  if (bestIdx === -1) return false;
+  state.bokeh.spots.splice(bestIdx, 1);
+  if (!state.bokeh.spots.length) state.bokeh = null;
+  return true;
 }
 
 function drawFrame(ctx, img, state, extraFilter = "") {
@@ -65,20 +83,22 @@ export function paintEdit(canvas, img, state) {
   const g = canvas.getContext("2d");
   drawFrame(g, img, state);
 
-  if (state.bokeh) {
+  if (state.bokeh && state.bokeh.spots && state.bokeh.spots.length) {
     const w = canvas.width, h = canvas.height;
     const bg = document.createElement("canvas");
     bg.width = w; bg.height = h;
     const bgCtx = bg.getContext("2d");
     drawFrame(bgCtx, img, state, ` blur(${state.bokeh.strength}px)`);
-    const cx = state.bokeh.x * w, cy = state.bokeh.y * h;
-    const r = Math.max(8, state.bokeh.r * Math.min(w, h));
     bgCtx.globalCompositeOperation = "destination-out";
-    const grad = bgCtx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
-    grad.addColorStop(0, "rgba(0,0,0,1)");
-    grad.addColorStop(1, "rgba(0,0,0,0)");
-    bgCtx.fillStyle = grad;
-    bgCtx.beginPath(); bgCtx.arc(cx, cy, r, 0, Math.PI * 2); bgCtx.fill();
+    state.bokeh.spots.forEach((spot) => {
+      const cx = spot.x * w, cy = spot.y * h;
+      const r = Math.max(8, spot.r * Math.min(w, h));
+      const grad = bgCtx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+      grad.addColorStop(0, "rgba(0,0,0,1)");
+      grad.addColorStop(1, "rgba(0,0,0,0)");
+      bgCtx.fillStyle = grad;
+      bgCtx.beginPath(); bgCtx.arc(cx, cy, r, 0, Math.PI * 2); bgCtx.fill();
+    });
     g.drawImage(bg, 0, 0);
   }
 

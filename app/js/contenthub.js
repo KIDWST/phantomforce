@@ -6,7 +6,7 @@
    clean data API — loadContent() / analyze() — so the Analytics view (and
    anything else) can fetch the same numbers with zero coupling. */
 
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit } from "./imagefilters.js?v=phantom-live-20260709-105";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-107";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -509,6 +509,9 @@ const chState = { tab: "library", platform: "all", ctype: "all", eng: "likes" };
 const chSelection = new Set();
 let chLightbox = null;
 let chLbKeyHandler = null;
+let chSelectAnchor = null;
+let chLibraryKeyHandler = null;
+let chLastDeleted = null;
 
 export function renderContentHub(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
@@ -679,12 +682,12 @@ function renderContentLibrary(body, data, esc, root, opts) {
         ${chState.selectMode || chSelection.size ? `
         <div class="ch-select-summary">
           <b>${chSelection.size ? `${chSelection.size} selected` : "Selection tools"}</b>
-          <span>${selectedAssets} media · ${selectedPosts} posts · local/browser only</span>
+          <span>${selectedAssets} media · ${selectedPosts} posts · Shift+click for a range, Ctrl+click for one at a time</span>
         </div>
         <div class="ch-action-row">
           <button class="ch-tool is-on" data-ch-select-mode type="button">Done selecting</button>
           <button class="ch-tool" data-ch-select-everything type="button" ${allItemsCount ? "" : "disabled"}>Select all</button>
-          <button class="ch-tool" data-ch-select-all type="button" ${shownAssets.length || shownPosts.length ? "" : "disabled"}>Select visible</button>
+          <button class="ch-tool" data-ch-select-all type="button" title="Ctrl+A" ${shownAssets.length || shownPosts.length ? "" : "disabled"}>Select visible <kbd class="ch-kbd">Ctrl+A</kbd></button>
           <button class="ch-tool" data-ch-clear-selected type="button" ${chSelection.size ? "" : "disabled"}>Clear</button>
           <button class="ch-tool" data-ch-download-selected type="button" ${chSelection.size ? "" : "disabled"}>Download selected</button>
           <button class="ch-tool" data-ch-download-all type="button" ${shownAssets.length || shownPosts.length ? "" : "disabled"}>Download all</button>
@@ -764,19 +767,24 @@ function lightboxMarkup(lb, esc) {
       </div>`;
   }
   const s = lb.state;
+  const spots = s.bokeh?.spots || [];
   return `
     <div class="ch-lightbox" data-ch-lightbox>
       <div class="ch-lb-backdrop" data-ch-lb-close></div>
       <div class="ch-lb-shell">
         <header class="ch-lb-head">
           <div><b>${esc(asset.title)}</b><span>${esc(asset.prompt || "No prompt saved.")}</span></div>
-          <button class="ch-lb-x" type="button" data-ch-lb-close aria-label="Close">${svgIc("close")}</button>
+          <div class="ch-lb-head-actions">
+            <button class="ch-lb-x" type="button" data-ch-lb-tutorial aria-label="How to use this editor" title="How to use this editor">?</button>
+            <button class="ch-lb-x" type="button" data-ch-lb-close aria-label="Close">${svgIc("close")}</button>
+          </div>
         </header>
+        ${lb.showTutorial ? tutorialMarkup() : ""}
         <div class="ch-lb-body">
           <div class="ch-lb-canvas-wrap">
             <canvas class="ch-lb-canvas" data-ch-lb-canvas></canvas>
-            <div class="ch-lb-bokeh-marker" data-ch-lb-bokeh-marker hidden></div>
-            <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click the subject to focus on</div>
+            <div class="ch-lb-bokeh-markers" data-ch-lb-bokeh-markers></div>
+            <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
           </div>
           <aside class="ch-lb-tools">
             <div class="ch-lb-ai">
@@ -787,45 +795,43 @@ function lightboxMarkup(lb, esc) {
               </div>
             </div>
             <div class="ch-lb-ai ch-lb-bokeh">
-              <p class="ch-lb-ai-label">${svgIc("spark")} Subject bokeh</p>
-              ${s.bokeh ? `
-                <p class="ch-lb-bokeh-note">Subject marked below — background blurred around it.</p>
-                ${chBSlider("Focus size", "r", 8, 45, Math.round(s.bokeh.r * 100))}
-                ${chBSlider("Background blur", "strength", 4, 32, s.bokeh.strength)}
-                <div class="ch-lb-chips">
-                  <button type="button" data-ch-lb-bokeh-pick>${svgIc("spark")} Re-pick subject</button>
-                  <button type="button" data-ch-lb-bokeh-off>Remove</button>
-                </div>` : `
-                <button class="btn btn-primary ch-lb-bokeh-cta" type="button" data-ch-lb-bokeh-pick>${svgIc("spark")} Click the subject in the photo</button>`}
+              <p class="ch-lb-ai-label">${svgIc("spark")} Subject bokeh ${spots.length ? `<i class="ch-lb-bokeh-count">${spots.length} spot${spots.length === 1 ? "" : "s"}</i>` : ""}</p>
+              <p class="ch-lb-bokeh-note">${spots.length ? "Click to add more focus, right-click a spot to remove it." : "Turn on and click the subject — click again to cover more of it (a tail, an ear, a whole body)."}</p>
+              ${chBSlider("Brush size", "r", 8, 45, s.bokehBrush || 24)}
+              ${spots.length ? chBSlider("Background blur", "strength", 4, 32, s.bokeh.strength) : ""}
+              <div class="ch-lb-chips">
+                <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Adding focus… (click Done)" : "Add focus spots"}</button>
+                ${spots.length ? `<button type="button" data-ch-lb-bokeh-off>Clear all</button>` : ""}
+              </div>
             </div>
-            <div class="ch-lb-section">
-              <p>Adjust</p>
+            <details class="ch-lb-section" open>
+              <summary>Adjust</summary>
               ${chSlider("Brightness", "brightness", 0, 200, s.brightness)}
               ${chSlider("Contrast", "contrast", 0, 200, s.contrast)}
               ${chSlider("Saturation", "saturate", 0, 250, s.saturate)}
               ${chSlider("Hue", "hue", 0, 360, s.hue)}
               ${chSlider("Blur", "blur", 0, 12, s.blur)}
-            </div>
-            <div class="ch-lb-section">
-              <p>Transform</p>
+            </details>
+            <details class="ch-lb-section">
+              <summary>Transform</summary>
               <div class="ch-lb-chips">
                 <button type="button" data-ch-lb-rot="-90">${svgIc("undo")} 90°</button>
                 <button type="button" data-ch-lb-rot="90">90° ${svgIc("redo")}</button>
                 <button type="button" data-ch-lb-flip class="${s.flip ? "is-on" : ""}">Flip</button>
               </div>
-            </div>
-            <div class="ch-lb-section">
-              <p>Style presets</p>
+            </details>
+            <details class="ch-lb-section">
+              <summary>Style presets</summary>
               <div class="ch-lb-chips ch-lb-chips-wrap" data-ch-lb-filter>
                 <button type="button" data-v="none">None</button><button type="button" data-v="noir">Noir</button>
                 <button type="button" data-v="emerald">Emerald</button><button type="button" data-v="warm">Warm</button>
                 <button type="button" data-v="cold">Cold</button><button type="button" data-v="vivid">Vivid</button>
               </div>
-            </div>
-            <div class="ch-lb-section">
-              <p>Text overlay</p>
+            </details>
+            <details class="ch-lb-section">
+              <summary>Text overlay</summary>
               <input class="ch-lb-ai-input" data-ch-lb-text placeholder="Add a caption / headline…" value="${esc(s.text)}"/>
-            </div>
+            </details>
             <div class="ch-lb-actions">
               <button class="btn btn-primary" type="button" data-ch-lb-save>${svgIc("check")} Save</button>
               <button class="btn btn-quiet" type="button" data-ch-lb-save-copy>Save as copy</button>
@@ -835,6 +841,20 @@ function lightboxMarkup(lb, esc) {
           </aside>
         </div>
       </div>
+    </div>`;
+}
+function tutorialMarkup() {
+  const rows = [
+    ["Open an image", "Double-click any image in the library to open it here."],
+    ["Describe an edit", "Type what you want in plain language and hit Generate for a quick style pass."],
+    ["Subject bokeh", "Turn on \"Add focus spots,\" click the subject (click again to cover more of it), right-click a spot to remove it, then adjust brush size and background blur."],
+    ["Adjust / Transform / Style presets / Text overlay", "Tucked into the sections below — click a heading to open it."],
+    ["Save vs. Save as copy", "Save updates this asset in place. Save as copy keeps the original and creates a new one."],
+    ["In the library grid", "Shift+click selects a range, Ctrl+click adds one at a time, Ctrl+A selects everything visible, Ctrl+Z undoes your last delete."],
+  ];
+  return `
+    <div class="ch-lb-tutorial">
+      ${rows.map(([t, d]) => `<div class="ch-lb-tutorial-row"><b>${t}</b><span>${d}</span></div>`).join("")}
     </div>`;
 }
 function wireLightbox(root, opts) {
@@ -849,6 +869,7 @@ function wireLightbox(root, opts) {
     rerender();
   };
   root.querySelectorAll("[data-ch-lb-close]").forEach((b) => b.addEventListener("click", close));
+  root.querySelector("[data-ch-lb-tutorial]")?.addEventListener("click", () => { lb.showTutorial = !lb.showTutorial; rerender(); });
   if (chLbKeyHandler) document.removeEventListener("keydown", chLbKeyHandler);
   chLbKeyHandler = (event) => { if (event.key === "Escape") close(); };
   document.addEventListener("keydown", chLbKeyHandler);
@@ -857,19 +878,22 @@ function wireLightbox(root, opts) {
   const asset = lb.asset;
   const s = lb.state;
   const canvas = root.querySelector("[data-ch-lb-canvas]");
-  const marker = root.querySelector("[data-ch-lb-bokeh-marker]");
-  const positionMarker = () => {
-    if (!marker) return;
-    if (!s.bokeh) { marker.hidden = true; return; }
-    marker.hidden = false;
-    marker.style.left = `${canvas.offsetLeft + s.bokeh.x * canvas.offsetWidth}px`;
-    marker.style.top = `${canvas.offsetTop + s.bokeh.y * canvas.offsetHeight}px`;
+  const markerLayer = root.querySelector("[data-ch-lb-bokeh-markers]");
+  const positionMarkers = () => {
+    if (!markerLayer) return;
+    const spots = s.bokeh?.spots || [];
+    markerLayer.innerHTML = spots.map(() => `<div class="ch-lb-bokeh-marker"></div>`).join("");
+    [...markerLayer.children].forEach((el, i) => {
+      const spot = spots[i];
+      el.style.left = `${canvas.offsetLeft + spot.x * canvas.offsetWidth}px`;
+      el.style.top = `${canvas.offsetTop + spot.y * canvas.offsetHeight}px`;
+    });
   };
   const img = new Image();
-  img.onload = () => { paintEdit(canvas, img, s); positionMarker(); };
+  img.onload = () => { paintEdit(canvas, img, s); positionMarkers(); };
   img.src = asset.url;
-  const repaint = () => { if (canvas._img) paintEdit(canvas, canvas._img, s); positionMarker(); };
-  onResize = () => positionMarker();
+  const repaint = () => { if (canvas._img) paintEdit(canvas, canvas._img, s); positionMarkers(); };
+  onResize = () => positionMarkers();
   window.addEventListener("resize", onResize);
 
   root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => slider.oninput = () => {
@@ -894,28 +918,33 @@ function wireLightbox(root, opts) {
   if (textInput) textInput.oninput = () => { s.text = textInput.value; repaint(); };
 
   const pickHint = root.querySelector("[data-ch-lb-pick-hint]");
-  const armPicking = () => { canvas.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; };
-  const disarmPicking = () => { canvas.classList.remove("is-picking"); if (pickHint) pickHint.hidden = true; };
-  root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = armPicking);
+  if (lb.bokehPicking) { canvas.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; }
+  root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = () => { lb.bokehPicking = !lb.bokehPicking; rerender(); });
   const bokehOff = root.querySelector("[data-ch-lb-bokeh-off]");
-  if (bokehOff) bokehOff.onclick = () => { s.bokeh = null; disarmPicking(); repaint(); rerender(); };
+  if (bokehOff) bokehOff.onclick = () => { s.bokeh = null; repaint(); rerender(); };
   root.querySelectorAll("[data-ch-lb-bslider]").forEach((slider) => slider.oninput = () => {
-    if (!s.bokeh) return;
     const key = slider.dataset.chLbBslider;
-    s.bokeh[key] = key === "r" ? +slider.value / 100 : +slider.value;
-    repaint();
+    if (key === "r") { s.bokehBrush = +slider.value; }
+    else if (s.bokeh) { s.bokeh.strength = +slider.value; repaint(); }
     const out = root.querySelector(`[data-bout="${key}"]`);
     if (out) out.textContent = slider.value;
   });
   canvas.onclick = (event) => {
-    if (!canvas.classList.contains("is-picking")) return;
+    if (!lb.bokehPicking) return;
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
-    s.bokeh = { x, y, r: s.bokeh?.r ?? 0.24, strength: s.bokeh?.strength ?? 20 };
-    disarmPicking();
+    addBokehSpot(s, x, y, (s.bokehBrush || 24) / 100);
     repaint();
     rerender();
+  };
+  canvas.oncontextmenu = (event) => {
+    if (!s.bokeh?.spots?.length) return;
+    event.preventDefault();
+    const rect = canvas.getBoundingClientRect();
+    const x = (event.clientX - rect.left) / rect.width;
+    const y = (event.clientY - rect.top) / rect.height;
+    if (removeBokehSpotNear(s, x, y)) { repaint(); rerender(); }
   };
 
   const aiRun = root.querySelector("[data-ch-lb-ai-run]");
@@ -928,7 +957,7 @@ function wireLightbox(root, opts) {
     opts.notify?.("Content Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
   };
 
-  root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = { asset, state: freshEditState() }; rerender(); };
+  root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = { asset, state: freshEditState(), bokehPicking: false, showTutorial: lb.showTutorial }; rerender(); };
   root.querySelector("[data-ch-lb-download]").onclick = () => {
     const link = document.createElement("a");
     link.href = canvas.toDataURL("image/webp", 0.92);
@@ -968,34 +997,103 @@ function toggleLibrarySelection(key) {
   if (chSelection.has(key)) chSelection.delete(key);
   else chSelection.add(key);
 }
+function captureDeleteForUndo(deletedAssets, deletedPostIds) {
+  if (!deletedAssets.length && !deletedPostIds.length) return;
+  chLastDeleted = { assets: deletedAssets, postIds: deletedPostIds, at: Date.now() };
+}
+function undoLastDelete(root, opts) {
+  if (!chLastDeleted) return;
+  const { assets: restoredAssets, postIds } = chLastDeleted;
+  if (restoredAssets.length) {
+    const current = loadContentAssets();
+    saveContentAssets([...restoredAssets, ...current.filter((a) => !restoredAssets.some((r) => r.id === a.id))]);
+  }
+  if (postIds.length) {
+    const removed = loadRemovedContent();
+    postIds.forEach((id) => removed.delete(`post:${id}`));
+    saveRemovedContent(removed);
+  }
+  const count = restoredAssets.length + postIds.length;
+  chLastDeleted = null;
+  renderContentHub(root, opts);
+  opts.notify?.("Content Hub", `Restored ${count} item${count === 1 ? "" : "s"}.`);
+}
 function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts) {
   const shownItems = visibleLibraryItems(shownAssets, shownPosts);
+  const orderedKeys = shownItems.map((item) => selectionKey(item.kind, item.id));
   const allItems = allLibraryItems(data, assets);
   const rerender = () => renderContentHub(root, opts);
+
+  // Standard OS selection conventions: click toggles/opens per the existing rules below,
+  // Shift+click range-selects from the last-clicked item, Ctrl/Cmd+click toggles one item
+  // without needing "select mode" first — both stop the event so the post-card open()
+  // handler (wired separately in wirePostCards, registered after this) doesn't also fire.
   body.querySelectorAll("[data-ch-select-item]").forEach((card) => card.addEventListener("click", (event) => {
     if (event.target.closest("button, a, input, select, textarea")) return;
-    if (!chState.selectMode && !event.target.closest("[data-ch-select-hit]")) return;
+    const key = card.dataset.chSelectItem;
+    const isRangeClick = event.shiftKey;
+    const isToggleClick = event.ctrlKey || event.metaKey;
+    const isHitBox = !!event.target.closest("[data-ch-select-hit]");
+    if (!chState.selectMode && !isHitBox && !isRangeClick && !isToggleClick) return;
     event.preventDefault();
-    event.stopPropagation();
-    toggleLibrarySelection(card.dataset.chSelectItem);
+    event.stopImmediatePropagation();
+    if (isRangeClick && chSelectAnchor && orderedKeys.includes(chSelectAnchor)) {
+      const from = orderedKeys.indexOf(chSelectAnchor);
+      const to = orderedKeys.indexOf(key);
+      if (from !== -1 && to !== -1) {
+        const [lo, hi] = from < to ? [from, to] : [to, from];
+        for (let i = lo; i <= hi; i++) chSelection.add(orderedKeys[i]);
+      } else {
+        toggleLibrarySelection(key);
+        chSelectAnchor = key;
+      }
+    } else {
+      toggleLibrarySelection(key);
+      chSelectAnchor = key;
+    }
     chState.selectMode = true;
     rerender();
   }));
+
+  // Ctrl/Cmd+A selects everything currently visible (the OS convention — "select all in
+  // this view"); Ctrl/Cmd+Z undoes the most recent delete. Self-removes once this render's
+  // body is no longer live, since there's no explicit "Content Hub unmounted" hook to hang
+  // cleanup off of.
+  if (chLibraryKeyHandler) document.removeEventListener("keydown", chLibraryKeyHandler);
+  chLibraryKeyHandler = (event) => {
+    if (!document.body.contains(body)) { document.removeEventListener("keydown", chLibraryKeyHandler); chLibraryKeyHandler = null; return; }
+    const typing = /^(input|textarea|select)$/i.test(event.target.tagName) || event.target.isContentEditable;
+    if (typing) return;
+    if ((event.ctrlKey || event.metaKey) && !event.shiftKey && (event.key === "a" || event.key === "A")) {
+      event.preventDefault();
+      shownItems.forEach((item) => chSelection.add(selectionKey(item.kind, item.id)));
+      chState.selectMode = true;
+      rerender();
+    } else if ((event.ctrlKey || event.metaKey) && !event.shiftKey && (event.key === "z" || event.key === "Z")) {
+      event.preventDefault();
+      undoLastDelete(root, opts);
+    }
+  };
+  document.addEventListener("keydown", chLibraryKeyHandler);
   body.querySelectorAll("[data-ch-asset-id]").forEach((card) => card.addEventListener("dblclick", (event) => {
     if (event.target.closest("button")) return;
     const asset = assets.find((a) => a.id === card.dataset.chAssetId);
     if (!asset || !asset.url) return;
-    chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : { asset, state: freshEditState() };
+    chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : { asset, state: freshEditState(), bokehPicking: false, showTutorial: false };
     rerender();
   }));
   body.querySelectorAll("[data-ch-delete-asset]").forEach((btn) => btn.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
     const id = btn.dataset.chDeleteAsset;
+    const deleted = loadContentAssets().filter((asset) => asset.id === id);
     saveContentAssets(loadContentAssets().filter((asset) => asset.id !== id));
     chSelection.delete(selectionKey("asset", id));
-    opts.notify?.("Content Hub", "Deleted the selected local media item. No external file or post was touched.");
+    captureDeleteForUndo(deleted, []);
+    // rerender before notify(): notify() triggers a global store-change listener that can
+    // fully remount this page and invalidate this closure's DOM references.
     rerender();
+    opts.notify?.("Content Hub", "Deleted the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
   }));
   body.querySelector("[data-ch-select-mode]")?.addEventListener("click", () => {
     chState.selectMode = !chState.selectMode;
@@ -1072,16 +1170,20 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     const selected = selectedLibraryItems(data, loadContentAssets());
     const assetIds = new Set(selected.filter((item) => item.kind === "asset").map((item) => item.id));
     const postIds = selected.filter((item) => item.kind === "post").map((item) => item.id);
+    const deletedAssets = loadContentAssets().filter((asset) => assetIds.has(asset.id));
     if (assetIds.size) saveContentAssets(loadContentAssets().filter((asset) => !assetIds.has(asset.id)));
     if (postIds.length) {
       const removed = loadRemovedContent();
       postIds.forEach((id) => removed.add(`post:${id}`));
       saveRemovedContent(removed);
     }
+    captureDeleteForUndo(deletedAssets, postIds);
     chSelection.clear();
     chState.selectMode = false;
-    opts.notify?.("Content Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"}. No external post or file was touched.`);
+    // rerender before notify(): notify() triggers a global store-change listener that can
+    // fully remount this page and invalidate this closure's DOM references.
     rerender();
+    opts.notify?.("Content Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
   });
   const uploadInput = body.querySelector("[data-ch-upload-input]");
   body.querySelector("[data-ch-upload-local]")?.addEventListener("click", () => uploadInput?.click());
