@@ -12,10 +12,10 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-99";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-100";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260709-99";
+} from "./contenthub.js?v=phantom-live-20260709-100";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1938,8 +1938,24 @@ export function renderMediaSettings(el, opts = {}) {
       window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
       account.connectMode = "browser-bridge";
       account.lastConnectAt = new Date().toISOString();
-      socialNotice = `${account.name} sign-in opened. PhantomForce will link it automatically when the browser bridge sees the signed-in public profile.`;
+      socialNotice = `${account.name} sign-in opened. Come back and confirm your handle below once you're signed in.`;
       startSocialBridgePolling(account.id);
+      saveAndRender();
+    };
+    const confirmForm = card.querySelector("[data-social-confirm-form]");
+    if (confirmForm) confirmForm.onsubmit = (event) => {
+      event.preventDefault();
+      const input = confirmForm.querySelector("[data-social-confirm-input]");
+      const value = input?.value.trim();
+      if (!value) return;
+      account.handle = cleanSocialHandle(value);
+      account.url = normalizeSocialUrl(value) || socialProfileFromHandle(account.id, account.handle);
+      account.enabled = true;
+      account.connectMode = "manual-confirmed";
+      account.lastConnectAt = new Date().toISOString();
+      delete account.hermesProof;
+      if (socialBridgePollTimer) { clearInterval(socialBridgePollTimer); socialBridgePollTimer = 0; }
+      socialNotice = `${account.name} connected. No cookies, passwords, tokens, or private messages were read.`;
       saveAndRender();
     };
   });
@@ -1975,7 +1991,7 @@ function socialCard(account, esc) {
   const lastConnect = status === "linked"
     ? (profile ? `Linked profile: ${profile}` : "Linked locally")
     : status === "pending"
-      ? "Waiting for browser bridge confirmation."
+      ? "Confirm your handle below once you're signed in, or clear this to start over."
       : "Password is never stored here";
   const hermesProof = account.hermesProof
     ? `<div class="set-social-hermes-proof">${svgIc("spark")} Linked profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
@@ -1995,6 +2011,14 @@ function socialCard(account, esc) {
       <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>
       <span>${esc(lastConnect)}</span>
     </div>
+    ${status === "pending" ? `
+    <form class="set-social-confirm" data-social-confirm-form>
+      <label>Handle or profile URL</label>
+      <div class="set-social-confirm-row">
+        <input type="text" data-social-confirm-input placeholder="@yourhandle or https://..." value="${esc(account.handle || account.url || "")}"/>
+        <button class="btn btn-primary" type="submit">I'm signed in — save</button>
+      </div>
+    </form>` : ""}
   </article>`;
 }
 

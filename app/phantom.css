@@ -3199,6 +3199,21 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   flex: 1 1 100%; min-width: 0; color: rgba(185,232,205,0.72); font-size: 11px; line-height: 1.25;
   text-align: right;
 }
+.set-social-confirm { margin-top: 10px; }
+.set-social-confirm label {
+  display: block; margin-bottom: 6px; font: 700 9.5px "DM Mono", monospace; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--dim);
+}
+.set-social-confirm-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.set-social-confirm-row input {
+  flex: 1 1 160px; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,0.3);
+  color: var(--ink); padding: 9px 11px; font-size: 12.5px; outline: none;
+}
+.set-social-confirm-row input:focus { border-color: var(--neon); }
+.set-social-confirm-row button {
+  flex: 0 0 auto; cursor: pointer; border: 0; border-radius: 10px; padding: 9px 14px;
+  font: 800 10.5px "DM Mono", monospace; letter-spacing: 0.04em;
+}
 .set-social-assist {
   display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-top: 14px;
   border: 1px dashed rgba(65,255,161,0.24); border-radius: 15px; padding: 14px;

@@ -7,8 +7,8 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS,
-} from "./store.js?v=phantom-live-20260709-99";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-99";
+} from "./store.js?v=phantom-live-20260709-100";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-100";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
