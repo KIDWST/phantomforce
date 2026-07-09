@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-88";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260709-88";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-92";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260709-92";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -1216,7 +1216,7 @@ function renderGenerate(body, cfg, opts, root) {
     <div class="ml-workspace">
       <section class="ml-brief" aria-label="Shot Builder">
         <div class="ml-brief-head">
-          <div class="ml-card-head"><b>Shot Builder</b><i>Picture · prompt · style · roll</i></div>
+          <div class="ml-card-head"><b>Shot Builder</b></div>
           <div class="ml-seg" data-ml-modality>
             <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
             <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
@@ -1226,8 +1226,8 @@ function renderGenerate(body, cfg, opts, root) {
         <label class="ml-field"><span>Reference</span>
           <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop>
             ${genState.ref
-              ? `<img src="${genState.ref}" alt="reference"/><span class="ml-drop-copy"><b>Reference attached</b><i>Style, logo, or continuity frame</i></span><button class="ml-drop-x" data-ml-clearref aria-label="Remove reference image">${svgIc("close")}</button>`
-              : `<span class="ml-drop-ic">${svgIc("upload")}</span><span class="ml-drop-copy"><b>Add reference image</b><i>Style, logo, or continuity frame — optional</i></span><button class="ml-drop-browse" type="button">Browse files</button>`}
+              ? `<img src="${genState.ref}" alt="reference"/><span class="ml-drop-copy"><b>Reference attached</b><i>Style, logo, continuity</i></span><button class="ml-drop-x" data-ml-clearref aria-label="Remove reference image">${svgIc("close")}</button>`
+              : `<span class="ml-drop-ic">${svgIc("upload")}</span><span class="ml-drop-copy"><b>Add reference image</b><i>Optional — style, logo, continuity</i></span><button class="ml-drop-browse" type="button">Browse files</button>`}
             <input type="file" accept="image/*" data-ml-file hidden />
           </div>
         </label>

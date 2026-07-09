@@ -2266,10 +2266,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .overlay-wide .overlay-panel { width: min(1360px, 100%); }
 
 /* Compact, denser page head just for the Media Lab workspace */
-.workspace-page[data-workspace-page="media"] .workspace-page-head { padding: 10px clamp(18px, 2vw, 34px) 8px; }
-.workspace-page[data-workspace-page="media"] .workspace-page-head h1 { font-size: clamp(19px, 2vw, 25px); }
-.workspace-page[data-workspace-page="media"] .workspace-page-kicker { margin-bottom: 2px; }
-.workspace-page[data-workspace-page="media"] .workspace-page-body { padding-top: 10px; }
+.workspace-page[data-workspace-page="media"] .workspace-page-head { padding: 7px clamp(18px, 2vw, 34px) 6px; }
+.workspace-page[data-workspace-page="media"] .workspace-page-head h1 { font-size: clamp(18px, 1.8vw, 22px); }
+.workspace-page[data-workspace-page="media"] .workspace-page-kicker { margin-bottom: 1px; }
+.workspace-page[data-workspace-page="media"] .workspace-page-body { padding-top: 8px; }
 /* Media Lab is a working cockpit, not a feed — the scrolling system ticker
    is dead weight here and costs real vertical space toward fitting the
    whole cockpit on screen without scrolling. */
@@ -2281,7 +2281,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-chip.is-ready i { background: var(--neon); box-shadow: 0 0 8px rgba(65,255,161,0.8); animation: mlPulse 2.6s ease-in-out infinite; }
 @keyframes mlPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
 
-.ml { display: flex; flex-direction: column; gap: 10px; }
+.ml { display: flex; flex-direction: column; gap: 6px; }
 /* topbar: view tabs + tool icons (Templates/History/Engine/Settings) +
    a compact engine/credits readout, all in one slim row */
 .ml-topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -2291,7 +2291,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-tab:hover { color: var(--ink); background: rgba(65,255,161,0.06); }
 .ml-tab.is-active { color: #04160d; background: linear-gradient(120deg, var(--neon), #15d97f); box-shadow: 0 4px 16px rgba(65,255,161,0.22); }
 .ml-topbar-tools { display: flex; align-items: center; gap: 6px; }
-.ml-topbar-ic { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0,0,0,0.22); color: var(--dim); cursor: pointer; }
+.ml-topbar-ic { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; border: 1px solid var(--line); background: rgba(0,0,0,0.22); color: var(--dim); cursor: pointer; }
 .ml-topbar-ic .ic { width: 15px; height: 15px; }
 .ml-topbar-ic:hover { color: var(--ink); border-color: var(--line-strong); }
 .ml-topbar-ic.is-active { color: var(--neon); border-color: rgba(65,255,161,0.4); background: rgba(65,255,161,0.08); }
@@ -2345,8 +2345,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
    background before the status strip below. */
 .ml-workspace { display: grid; grid-template-columns: minmax(300px, 360px) minmax(0, 1fr); gap: 12px; align-items: stretch; }
 .ml-brief {
-  display: flex; flex-direction: column; gap: 10px;
-  padding: 14px clamp(14px, 1.6vw, 20px); border: 1px solid var(--line); border-radius: 20px;
+  display: flex; flex-direction: column; gap: 7px;
+  padding: 10px clamp(14px, 1.6vw, 20px); border: 1px solid var(--line); border-radius: 20px;
   background: linear-gradient(172deg, rgba(10,28,19,0.78), rgba(3,10,8,0.62));
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.04), 0 20px 50px rgba(0,0,0,0.28);
 }
@@ -2365,7 +2365,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-advanced summary::-webkit-details-marker { display: none; }
 .ml-advanced summary .ic { width: 13px; height: 13px; }
 .ml-advanced[open] summary { color: var(--ink); }
-.ml-advanced-body { display: flex; flex-direction: column; gap: 8px; padding: 2px 0 12px; }
+.ml-advanced-body { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 8px; }
 .ml-seg-sm button { padding: 7px 10px; font-size: 12px; }
 .ml-advanced-note { margin: 0; font-size: 11px; color: var(--dim); }
 /* reference drop: a slim row, not a giant dead rectangle */
@@ -2384,7 +2384,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-card-head::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 1px; background: linear-gradient(90deg, rgba(65,255,161,0.32), transparent 75%); }
 .ml-card-head b { font-size: 16.5px; font-weight: 700; letter-spacing: -0.01em; }
 .ml-card-head i { font: 500 10px "DM Mono", monospace; font-style: normal; color: var(--dim); letter-spacing: 0.12em; text-transform: uppercase; }
-.ml-field { display: flex; flex-direction: column; gap: 7px; }
+.ml-field { display: flex; flex-direction: column; gap: 5px; }
 .ml-field > span { font: 600 9.5px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
 .ml-grow { flex: 1; }
 .ml-row { display: flex; gap: 12px; }
@@ -2452,7 +2452,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-prompt.shake { animation: mlShake 0.4s; border-color: var(--warn); }
 /* the shot brief is the star control — give it presence */
 .ml-field-brief > span { color: #9fe7c2; }
-.ml-field-brief .ml-prompt { min-height: 76px; font-size: 14.5px; line-height: 1.5; border-color: rgba(65,255,161,0.26); background: linear-gradient(180deg, rgba(4,16,11,0.85), rgba(0,0,0,0.35)); box-shadow: 0 0 0 1px rgba(65,255,161,0.05), 0 12px 30px rgba(0,0,0,0.22); }
+.ml-field-brief .ml-prompt { min-height: 60px; font-size: 14.5px; line-height: 1.5; border-color: rgba(65,255,161,0.26); background: linear-gradient(180deg, rgba(4,16,11,0.85), rgba(0,0,0,0.35)); box-shadow: 0 0 0 1px rgba(65,255,161,0.05), 0 12px 30px rgba(0,0,0,0.22); }
 .ml-field-brief .ml-prompt:focus { border-color: var(--neon); box-shadow: 0 0 0 1px var(--neon), 0 12px 34px rgba(65,255,161,0.12); }
 @keyframes mlShake { 0%,100%{transform:translateX(0)} 20%,60%{transform:translateX(-5px)} 40%,80%{transform:translateX(5px)} }
 .ml-enhance { position: absolute; right: 8px; bottom: 8px; display: inline-flex; align-items: center; gap: 5px; padding: 6px 11px; border: 1px solid var(--line-strong); border-radius: 9px; background: rgba(65,255,161,0.08); color: var(--neon); cursor: pointer; font: 600 11px "DM Mono", monospace; }
@@ -2476,8 +2476,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 /* the ONE hero CTA (Shot Builder's "Generate") gets the premium glow treatment;
    the smaller reused .ml-generate buttons (save/download/upload) stay simple rows */
 .ml-generate.ml-hero {
-  position: relative; overflow: hidden; flex-direction: column; gap: 3px;
-  padding: 16px 16px 13px; border-radius: 15px;
+  position: relative; overflow: hidden; flex-direction: column; gap: 2px;
+  padding: 12px 16px 10px; border-radius: 15px;
   box-shadow: 0 10px 30px rgba(65,255,161,0.3), inset 0 1px 0 rgba(255,255,255,0.35);
 }
 .ml-generate.ml-hero:hover { box-shadow: 0 14px 36px rgba(65,255,161,0.4), inset 0 1px 0 rgba(255,255,255,0.35); }
@@ -2579,7 +2579,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-next-card.is-ghost .ic { color: var(--dim); }
 
 /* ---- Job log: a slim, honest trail under the studio ---- */
-.ml-joblog { display: flex; align-items: center; gap: 12px; margin-top: 14px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,0.18); font-size: 11px; color: var(--dim); }
+.ml-joblog { display: flex; align-items: center; gap: 12px; margin-top: 8px; padding: 7px 14px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,0.18); font-size: 11px; color: var(--dim); }
 .ml-joblog-label { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; font: 700 10px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase; color: var(--dim-2); }
 .ml-joblog-label .ic { width: 11px; height: 11px; }
 .ml-joblog-rows { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; gap: 14px; overflow-x: auto; scrollbar-width: none; }
@@ -4985,8 +4985,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 
 /* Media Lab engine doctor: the pipeline states its own truth */
 .ml-doctor {
-  display: flex; align-items: center; gap: 12px; margin: 0 0 14px;
-  padding: 11px 14px; border-radius: 14px;
+  display: flex; align-items: center; gap: 12px; margin: 0 0 8px;
+  padding: 8px 12px; border-radius: 14px;
   border: 1px solid var(--line); background: linear-gradient(120deg, rgba(255,255,255,0.025), rgba(0,0,0,0.16));
   font-size: 12px; color: var(--dim); box-shadow: inset 0 1px 0 rgba(255,255,255,0.03);
 }
