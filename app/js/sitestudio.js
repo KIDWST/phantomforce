@@ -6,11 +6,11 @@
 
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, ago, fmtMoney, statusLabel,
-} from "./store.js?v=phantom-live-20260709-101";
+} from "./store.js?v=phantom-live-20260709-102";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260709-101";
-import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260709-101";
+} from "./workspaces.js?v=phantom-live-20260709-102";
+import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260709-102";
 
 const cap = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 const firstSentence = (value) => String(value || "").split(/[.!?]/)[0].trim();
@@ -64,6 +64,7 @@ function ssIcon(k) {
     mobile: `<rect x="5.2" y="1.6" width="5.6" height="12.8" rx="1.2"/><path d="M7.4 12.1h1.2"/>`,
     close: `<path d="M4 4l8 8M12 4l-8 8"/>`,
     globe: `<circle cx="8" cy="8" r="5.3"/><path d="M2.7 8h10.6M8 2.7c1.6 1.4 2.5 3.3 2.5 5.3s-.9 3.9-2.5 5.3c-1.6-1.4-2.5-3.3-2.5-5.3S6.4 4.1 8 2.7z"/>`,
+    check: `<path d="M3 8.5l3 3 7-7"/>`,
   };
   return `<svg class="ic" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[k] || ""}</svg>`;
 }
@@ -181,6 +182,43 @@ function inspectorPanel(active) {
     </div>`;
 }
 
+function readinessItems(active, products) {
+  const items = [
+    { label: "Hero image added", done: !!active.design.heroImage },
+    { label: "Offer & CTA written", done: !!(active.design.offer || "").trim() },
+    { label: "SEO title set", done: !!(active.seo.title || "").trim() },
+  ];
+  if (active.design.storeEnabled) items.push({ label: "At least 1 product added", done: products.length > 0 });
+  items.push({ label: "Domain connected", done: !!(active.design.existingUrl || active.url) });
+  return items;
+}
+
+function readinessCard(active, products) {
+  const items = readinessItems(active, products);
+  const done = items.filter((i) => i.done).length;
+  return `
+    <div class="ss-readiness">
+      <div class="ss-readiness-head"><p class="ss-suggest-label">Ready to publish</p><span class="ss-readiness-count">${done}/${items.length}</span></div>
+      <div class="ss-readiness-list">
+        ${items.map((i) => `<div class="ss-readiness-row ${i.done ? "is-done" : ""}"><span class="ss-readiness-dot">${i.done ? ssIcon("check") : ""}</span>${esc(i.label)}</div>`).join("")}
+      </div>
+      <button class="btn btn-quiet ss-readiness-btn" type="button" data-act="ss-goto-publish">Go to Publish</button>
+    </div>`;
+}
+
+function recentActivityMini(active) {
+  const brand = (active.title || "").split(" — ")[0];
+  const rows = (store.state.activity || []).filter((a) => a.text && brand && a.text.includes(brand)).slice(0, 5);
+  if (!rows.length) return "";
+  return `
+    <div class="ss-mini-activity">
+      <p class="ss-suggest-label">Recent activity</p>
+      <div class="ss-mini-activity-list">
+        ${rows.map((a) => `<div class="ss-mini-activity-row"><span>${esc(a.text)}</span><i>${ago(a.at)}</i></div>`).join("")}
+      </div>
+    </div>`;
+}
+
 function buildTab(active, products) {
   const design = active.design;
   const home = active.pages.find((p) => p.home) || active.pages[0];
@@ -201,6 +239,7 @@ function buildTab(active, products) {
             ${["Testimonials", "Pricing", "FAQ", "Gallery", "CTA", "Team"].map((s) => `<button class="ss-suggest" type="button" data-act="ss-add-section" data-id="${esc(s)}">+ ${esc(s)}</button>`).join("")}
           </div>
         </div>
+        ${recentActivityMini(active)}
       </div>
       <div class="ss-col ss-col-preview">
         <div class="ss-preview-top">
@@ -211,6 +250,7 @@ function buildTab(active, products) {
       </div>
       <div class="ss-col ss-col-inspector">
         ${inspectorPanel(active)}
+        ${readinessCard(active, products)}
       </div>
     </div>`;
 }

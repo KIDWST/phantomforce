@@ -12,10 +12,10 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-101";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-102";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260709-101";
+} from "./contenthub.js?v=phantom-live-20260709-102";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
