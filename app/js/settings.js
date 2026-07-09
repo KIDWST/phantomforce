@@ -1,7 +1,7 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260708-84";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260709-87";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 
@@ -123,7 +123,7 @@ function renderSafetySummary(settings) {
   }[settings.externalActionMode] || "External actions ask first";
   const brainLabel = {
     local: "Instant brain (no backend)",
-    api: "Hermes backend/API",
+    api: "Connected backend",
     subscription: "Subscription managed",
   }[settings.brainMode] || "Instant brain (no backend)";
   return `
@@ -159,7 +159,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   }[settings.loopMode] || "Approval/autopilot";
   const brainLabel = {
     local: "Instant",
-    api: "Hermes/API",
+    api: "Connected",
     subscription: "Subscription",
   }[settings.brainMode] || "Instant";
 
@@ -178,7 +178,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
         <label class="chat-mini-field"><span>Backend</span>
           <select data-mini-brain>${optionList([
             { id: "local", label: "Instant (no backend)" },
-            { id: "api", label: "Hermes/API" },
+            { id: "api", label: "Connected" },
             { id: "subscription", label: "Subscription" },
           ], settings.brainMode)}</select>
         </label>
@@ -270,7 +270,7 @@ export function renderOperatorSettings(el, opts = {}) {
           <label class="set-control"><span>Chat backend</span>
             <select data-ai-field="brainMode">${optionList([
               { id: "local", label: "Instant - answers now, no backend" },
-              { id: "api", label: "Hermes/API - backend brain" },
+              { id: "api", label: "Connected - backend brain" },
               { id: "subscription", label: "Subscription - managed brain" },
             ], settings.brainMode)}</select>
           </label>

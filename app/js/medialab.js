@@ -12,8 +12,8 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260708-84";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260708-84";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-87";
+import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260709-87";
 
 const CFG_KEY = "pf.medialab.v1";
 const SOCIAL_KEY = "pf.social.accounts.v1";
@@ -969,7 +969,7 @@ function previewAsset(req, i, context = {}) {
   g.fillStyle = "rgba(120,255,190,0.88)";
   g.font = "800 10px 'DM Mono', monospace";
   const plateTag = context.queued
-    ? (context.via === "hermes" ? "QUEUED VIA HERMES · APPROVE IN HIGGSFIELD" : "RENDERING IN YOUR HIGGSFIELD STUDIO")
+    ? (context.via === "hermes" ? "QUEUED · APPROVE IN YOUR STUDIO" : "RENDERING IN YOUR STUDIO")
     : context.fallbackReason
       ? "OFFLINE SKETCH · " + String(context.fallbackReason).replace(/^provider_/i, "").replace(/_/g, " ").toUpperCase().slice(0, 26)
       : "PREVIEW";
@@ -1203,7 +1203,14 @@ function renderGenerate(body, cfg, opts, root) {
   body.innerHTML = `
     <div class="ml-doctor" data-ml-doctor>
       <span class="ml-doctor-badge" aria-hidden="true"><i class="ml-doctor-dot"></i></span>
-      <span class="ml-doctor-copy"><b data-ml-doctor-title>Checking the media engine…</b><span data-ml-doctor-msg></span></span>
+      <span class="ml-doctor-copy">
+        <b data-ml-doctor-title>Checking the media engine…</b>
+        <span class="ml-doctor-stats" data-ml-doctor-msg></span>
+      </span>
+      <details class="ml-doctor-details" data-ml-doctor-details hidden>
+        <summary>Details</summary>
+        <p data-ml-doctor-raw></p>
+      </details>
       <button class="ml-doctor-retry" data-ml-doctor-retry type="button">${svgIc("spark")}Re-check</button>
     </div>
     <div class="ml-workspace">
@@ -1356,43 +1363,29 @@ function settingsChips(esc) {
   return `<div class="ml-brief-chips" aria-label="Current generation settings">${chips.map((c) => `<span>${esc(String(c))}</span>`).join("")}</div>`;
 }
 
+/* one slim status strip, not a wall of cards — render mode is already shown
+   in the stage's settings chips, and safeguards don't need their own card
+   for something as low-stakes as generating an image. Queue tucks into a
+   native <details> dropdown instead of always-on real estate. */
 function railHtml(cfg, esc) {
-  const queue = session.assets.slice(0, 4);
+  const queue = session.assets.slice(0, 6);
   const meterPct = Math.max(4, Math.min(100, Math.round((cfg.credits / 480) * 100)));
   return `
-      <aside class="ml-rail" aria-label="Production rail">
-        <section class="ml-rail-card is-credits">
-          <h4>${svgIc("bolt")}Production credits</h4>
-          <div class="ml-rail-credit"><b>${cfg.credits}</b><span>available</span></div>
-          <div class="ml-meter" role="img" aria-label="${cfg.credits} production credits available"><i style="width:${meterPct}%"></i></div>
-          <p>Next run ≈ ${estCredits()} credits · owner-controlled spend</p>
-        </section>
-        <section class="ml-rail-card">
-          <h4>${svgIc("film")}Render mode</h4>
-          <div class="ml-rail-rows">
-            <span><b>Preset</b><i>${esc(activePreset()?.label || "Custom")}</i></span>
-            <span><b>Mode</b><i>${genState.modality === "video" ? "Video" : "Image"}</i></span>
-            ${genState.model ? `<span><b>Lane</b><i>${esc(laneLabel(genState.model))}</i></span>` : ""}
-            <span><b>Look</b><i>${esc(genState.style)}</i></span>
-            <span><b>Frame</b><i>${esc(genState.aspect)}${genState.modality === "video" ? ` · ${genState.duration}s` : ""}</i></span>
+      <div class="ml-rail" aria-label="Production status">
+        <div class="ml-rail-credit" title="Production credits">
+          ${svgIc("bolt")}<b>${cfg.credits}</b><span>credits</span>
+          <span class="ml-rail-credit-meter"><i style="width:${meterPct}%"></i></span>
+        </div>
+        <span class="ml-chip is-ready" title="Every finished render is captured to your Content Hub automatically.">${svgIc("hub")} Auto-capture on</span>
+        <details class="ml-queue-drop">
+          <summary>${svgIc("play")} Queue <b>${queue.length}</b></summary>
+          <div class="ml-queue-pop">
+            ${queue.length
+              ? `<div class="ml-queue">${queue.map((a) => queueRow(a, esc)).join("")}</div>`
+              : `<p class="ml-rail-empty">Queue clear — the stage is yours.</p>`}
           </div>
-        </section>
-        <section class="ml-rail-card">
-          <h4>${svgIc("hub")}Content Hub routing</h4>
-          <p>Every finished render is captured to your Content Hub automatically.</p>
-          <span class="ml-chip is-ready"><i aria-hidden="true"></i>Auto-capture on</span>
-        </section>
-        <section class="ml-rail-card ml-rail-guard">
-          <h4>${svgIc("lock")}Safeguards</h4>
-          <p>${cfg.requireApproval ? "Approval is required before paid renders." : "Paid renders stay owner-approved."} Nothing posts externally without you.</p>
-        </section>
-        <section class="ml-rail-card">
-          <h4>${svgIc("play")}Production queue</h4>
-          ${queue.length
-            ? `<div class="ml-queue">${queue.map((a) => queueRow(a, esc)).join("")}</div>`
-            : `<p class="ml-rail-empty">Queue clear — the stage is yours.</p>`}
-        </section>
-      </aside>`;
+        </details>
+      </div>`;
 }
 
 function queueRow(a, esc) {
@@ -1523,12 +1516,22 @@ function wireGenerate(body, cfg, opts, root, esc) {
   /* Engine Doctor: silent fallbacks looked like a dumb brain. Say EXACTLY
      what state the pipeline is in and what fixes it. */
   const doctor = body.querySelector("[data-ml-doctor]");
+  /* the curtain stays down: the default view is a short state + a stats
+     list, never a transport/vendor name. Anything genuinely technical
+     (for whoever actually has to go fix it) lives behind the collapsed
+     Details toggle instead of always being on screen. */
+  const setDoctor = (state, titleText, stats, raw) => {
+    doctor.dataset.state = state;
+    doctor.querySelector("[data-ml-doctor-title]").textContent = titleText;
+    doctor.querySelector("[data-ml-doctor-msg]").textContent = stats.filter(Boolean).join(" · ");
+    const detailsEl = doctor.querySelector("[data-ml-doctor-details]");
+    const rawEl = doctor.querySelector("[data-ml-doctor-raw]");
+    if (raw) { rawEl.textContent = raw; detailsEl.hidden = false; }
+    else { detailsEl.hidden = true; detailsEl.open = false; }
+  };
   const runDoctor = async (force = false) => {
     if (!doctor) return;
-    const title = doctor.querySelector("[data-ml-doctor-title]");
-    const msg = doctor.querySelector("[data-ml-doctor-msg]");
-    doctor.dataset.state = "checking";
-    title.textContent = "Checking the media engine…"; msg.textContent = "";
+    setDoctor("checking", "Checking the media engine…", []);
     const base = genBase(cfg).replace(/^https?:\/\//, "");
     const h = await checkEngineHealth(cfg, force).catch(() => engineHealth);
     if (!doctor.isConnected) return;
@@ -1537,57 +1540,35 @@ function wireGenerate(body, cfg, opts, root, esc) {
     if (lastRenderIssue) {
       // a green "connected" banner must never contradict a failing render —
       // the most recent failure is THE state until it's cleared or fixed
-      doctor.dataset.state = "warn";
-      title.textContent = "The last render didn't finish";
-      msg.textContent = explainMediaFailure(lastRenderIssue.reason, lastRenderIssue.detail, lastRenderIssue.lane)
-        || `${String(lastRenderIssue.reason || "unknown error")} — fix it on the admin box, then hit Re-check.`;
+      setDoctor("warn", "The last render didn't finish", ["Check the details, then re-check"],
+        explainMediaFailure(lastRenderIssue.reason, lastRenderIssue.detail, lastRenderIssue.lane)
+          || `${String(lastRenderIssue.reason || "unknown error")} — fix it on the admin box, then hit Re-check.`);
       return;
     }
     if (h.engine && prov === "higgsfield") {
-      // transport-aware Creative Engine: Hermes/MCP is the primary route.
-      // Customer-facing copy stays provider-simple; admin detail rides along
-      // only when the CLI fallback is explicitly enabled.
       const e = h.engine;
-      const adminTail = e.cliFallbackEnabled
-        ? " · Admin: transport Hermes/MCP, CLI fallback ENABLED."
-        : "";
+      const adminTail = e.cliFallbackEnabled ? "Transport: Hermes/MCP · CLI fallback ENABLED." : null;
       if (e.status === "connected") {
-        doctor.dataset.state = "ok";
-        title.textContent = "Creative Engine connected through Hermes";
-        msg.textContent = `Briefs route through PhantomForce's approved Creative Engine, brokered by Hermes. Render approval required — nothing spends credits without you.${adminTail}`;
+        setDoctor("ok", "Creative Engine — Ready", ["Owner-approved spend", "Auto-captured to Content Hub"], adminTail);
       } else if (e.status === "not_configured") {
-        doctor.dataset.state = "warn";
-        title.textContent = "Creative Engine needs Hermes connection";
-        msg.textContent = `${e.message || "Hermes isn't answering on this box."}${adminTail}`;
+        setDoctor("warn", "Creative Engine — Offline", ["Nothing generates until reconnected"], e.message || adminTail);
       } else {
-        doctor.dataset.state = "warn";
-        title.textContent = "Creative Engine blocked";
-        msg.textContent = `${e.message || "Hermes answered but the creative tools aren't available."}${adminTail}`;
+        setDoctor("warn", "Creative Engine — Blocked", ["Some creative tools aren't available"], e.message || adminTail);
       }
     } else if (h.studio && prov === "higgsfield") {
-      doctor.dataset.state = "ok";
-      title.textContent = "Studio render backend connected";
-      msg.textContent = "This box accepts render briefs on its own backend. Render approval required — nothing spends credits without you.";
+      setDoctor("ok", "Creative Engine — Ready", ["Owner-approved spend"]);
     } else if (h.media[prov]) {
-      doctor.dataset.state = "ok";
-      title.textContent = "Media engine connected (API)";
-      msg.textContent = `${base} · ${prov} key loaded — real renders will run.`;
+      setDoctor("ok", "Creative Engine — Ready", ["Live renders enabled", `${prov} key loaded`]);
     } else if (h.bridge && !h.bridgeAuth) {
-      doctor.dataset.state = "warn";
-      title.textContent = "Bridge is up, but this session can't use it";
-      msg.textContent = "Hermes answered but rejected this session — sign in with your admin account, then hit Re-check.";
+      setDoctor("warn", "Creative Engine — Signed out", ["Sign in with your admin account, then re-check"]);
     } else if (h.bridge) {
-      doctor.dataset.state = "ok";
-      title.textContent = "Creative Engine ready — subscription bridge connected";
-      msg.textContent = "No API key needed — prompts queue straight into your connected creative engine through the desktop bridge, and finished renders land in Content Hub.";
+      setDoctor("ok", "Creative Engine — Ready", ["No key needed", "Auto-captured to Content Hub"]);
     } else if (h.proxy) {
-      doctor.dataset.state = "warn";
-      title.textContent = "No render lane yet";
-      msg.textContent = `The proxy at ${base} answered, but there's no HIGGSFIELD_API_KEY in ai-proxy/.env and the desktop bridge isn't running. Start the desktop bridge (subscription) or add a key — until then you get offline sketches.`;
+      setDoctor("warn", "Creative Engine — No render lane yet", ["Offline sketches only until connected"],
+        `Proxy reachable at ${base}, but no render key or desktop bridge is configured.`);
     } else {
-      doctor.dataset.state = "down";
-      title.textContent = "Media engine unreachable";
-      msg.textContent = `Nothing is answering: no Hermes at /phantom-ai on this origin, and no proxy at ${base}. On the admin box, start Hermes (the desktop bridge) — or bash ai-proxy/run.sh for the API lane. Prompts render as offline sketches until then.`;
+      setDoctor("down", "Creative Engine — Unreachable", ["Nothing generates until reconnected"],
+        `Nothing answered on this origin or at ${base}. Start the desktop bridge or the API lane on the admin box.`);
     }
   };
   const runDoctorAndLog = async (force = false) => {
@@ -1641,13 +1622,14 @@ function paintJobLog(body, esc) {
 
 async function runGenerate(body, cfg, opts, root, esc) {
   if (!genState.prompt.trim()) { const t = body.querySelector("[data-ml-prompt]"); if (t) { t.focus(); t.classList.add("shake"); setTimeout(() => t.classList.remove("shake"), 500); } return; }
-  /* APPROVAL-FIRST: any lane that can spend credits (provider API key, or the
-     admin CLI fallback) asks the owner before rendering. The Hermes draft
-     lane never spends — its paid approval happens inside Higgsfield itself. */
+  /* Approval is opt-in (Settings > "Require approval before paid generation",
+     off by default) — the owner already knows they're spending their own
+     credits on their own account, so don't ask every single time unless
+     they've explicitly turned that friction on for themselves or their team. */
   const health = await checkEngineHealth(cfg).catch(() => engineHealth);
   const spendLane = !!(health.media?.[genState.provider] || health.engine?.cliFallbackEnabled);
-  let approved = false;
-  if (spendLane) {
+  let approved = true;
+  if (spendLane && cfg.requireApproval) {
     approved = window.confirm("This will use your connected creative engine credits. Approve render?");
     if (!approved) {
       if (opts.notify) opts.notify("Media Factory", "Render cancelled — nothing was charged.");
@@ -1710,7 +1692,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
       : { reason: out.fallbackReason || "unreachable", detail: out.fallbackDetail || "", lane: out.fallbackLane || "", at: Date.now() };
     logJob(out.live ? "ok" : out.queued ? "ok" : "warn",
       out.live ? `Generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}`
-        : out.queued ? "Queued through Hermes — awaiting your approval in the creative engine"
+        : out.queued ? "Queued — awaiting your approval in the creative engine"
         : `Render didn't complete — sketched locally (${out.fallbackReason || "unreachable"})`);
     refreshGeneratePanel(body, cfg, opts, root);
     if (opts.notify) {
@@ -1719,7 +1701,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
         ? "generated"
         : out.queued
           ? out.transport === "hermes_mcp"
-            ? "queued through Hermes into your creative engine studio — approve the render there (no credits spent yet) for"
+            ? "queued into your creative engine studio — approve the render there (no credits spent yet) for"
             : "queued in your creative engine studio — the desktop bridge renders it with your subscription; finished cuts land in Content Hub for"
           : `render failed (${out.fallbackReason || "unreachable"})${why ? ` — ${why};` : " —"} sketched the request locally for`;
       opts.notify("Media Factory", `${status} ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""} - "${genState.prompt.slice(0, 40)}".`);

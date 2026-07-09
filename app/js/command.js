@@ -7,8 +7,8 @@ import {
   store, uid, visible, currentWs, isAdmin, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session,
-} from "./store.js?v=phantom-live-20260708-84";
-import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260708-84";
+} from "./store.js?v=phantom-live-20260709-87";
+import { classifyPhantomIntent } from "./intent-router.js?v=phantom-live-20260709-87";
 
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
@@ -55,7 +55,7 @@ function modelLaneForSettings(settings) {
 }
 
 function backendLabel(settings) {
-  if (settings.brainMode === "api") return "Hermes/API";
+  if (settings.brainMode === "api") return "Connected brain";
   if (settings.brainMode === "subscription") return "Subscription brain";
   return "Local brain";
 }
@@ -117,7 +117,7 @@ async function askHermesBrain(raw, intent, settings) {
         card(
           "Brain route",
           `${backendLabel(settings)} answered`,
-          `Hermes context ${payload.hermes?.context_used ? "was used" : "was not used"}; no sends, uploads, charges, deploys, or approvals were executed.`,
+          `Connected context ${payload.hermes?.context_used ? "was used" : "was not used"}; no sends, uploads, charges, deploys, or approvals were executed.`,
           [openAction("Open Memory", "memory"), openAction("Open Settings", "settings")],
           payload.live_provider_called ? "Live provider called" : "No live provider call reported",
         ),
@@ -341,9 +341,9 @@ function currentInfoAnswer(text, settings = null) {
   const cfg = settings || loadRuntimeAiSettings();
   if (cfg.brainMode === "local") {
     return {
-      say: "That's a live-world question — not a task, and I won't fake the answer. Instant mode answers from your business data only. Flip the chat gear to Hermes/API and I'll pull real current info.",
+      say: "That's a live-world question — not a task, and I won't fake the answer. Instant mode answers from your business data only. Flip the chat gear to Connected mode and I'll pull real current info.",
       cards: [
-        card("Live data question", "Instant mode is offline-only", "Weather, news, prices, and scores need the live backend. Open the gear on the chat header, set Backend to Hermes/API, and ask again — no task or record was created.", [openAction("Open Settings", "settings")], "No record created"),
+        card("Live data question", "Instant mode is offline-only", "Weather, news, prices, and scores need the live backend. Open the gear on the chat header, set Backend to Connected, and ask again — no task or record was created.", [openAction("Open Settings", "settings")], "No record created"),
       ],
       open: null,
     };
@@ -424,8 +424,8 @@ function localQuestionAnswer(text, settings = null) {
 
   const snap = operatorSnapshot();
   return {
-    say: `I can answer this from the local admin context or route it to Hermes/API when enabled. Current local context: ${fmtMoney(snap.pipeline)} pipeline, ${snap.approvals} approval${snap.approvals === 1 ? "" : "s"}, ${snap.today} board item${snap.today === 1 ? "" : "s"}. No record created.`,
-    cards: [card("Everything router", "Answer lane", "Questions answer. Commands create. Live/current knowledge uses Hermes/API or Subscription brain when enabled.", [openAction("Open Settings", "settings"), openAction("Open Memory", "memory")])],
+    say: `I can answer this from the local admin context or route it to a connected backend when enabled. Current local context: ${fmtMoney(snap.pipeline)} pipeline, ${snap.approvals} approval${snap.approvals === 1 ? "" : "s"}, ${snap.today} board item${snap.today === 1 ? "" : "s"}. No record created.`,
+    cards: [card("Everything router", "Answer lane", "Questions answer. Commands create. Live/current knowledge uses a connected backend or Subscription brain when enabled.", [openAction("Open Settings", "settings"), openAction("Open Memory", "memory")])],
     open: null,
   };
 }
@@ -451,7 +451,7 @@ function intentResponse(intent, text, settings = null) {
   if (intent.primaryIntent === "identity") {
     return {
       say: "I’m the PhantomForce admin brain: operator router, memory layer, draft engine, and approval gate. I classify the request, then route it to the right lane.",
-      cards: [card("Identity", "Phantom admin brain", "Local mode answers instantly. Hermes/API and subscription modes can add backend reasoning and memory context when enabled in Settings.", [openAction("Open Settings", "settings"), openAction("Open Memory", "memory")])],
+      cards: [card("Identity", "Phantom admin brain", "Local mode answers instantly. Connected and subscription modes can add backend reasoning and memory context when enabled in Settings.", [openAction("Open Settings", "settings"), openAction("Open Memory", "memory")])],
       open: null,
     };
   }
@@ -460,7 +460,7 @@ function intentResponse(intent, text, settings = null) {
       say: "I can answer, route, draft, create, track, summarize, recall memory, prep approvals, build guarded Phantom Loop packets, and hand work to the right admin lane. External sends and live actions still need approval.",
       cards: [
         card("Core modes", "Everything router", "Questions get answers. Commands create or route work. Explicit create/draft/build/schedule/track verbs make records.", [openAction("Open Settings", "settings")]),
-        card("Memory", "Business context", "Local memory is active. Hermes/API or subscription backend can add deeper context when enabled.", [openAction("Open Memory", "memory")]),
+        card("Memory", "Business context", "Local memory is active. A connected or subscription backend can add deeper context when enabled.", [openAction("Open Memory", "memory")]),
       ],
       open: null,
     };

@@ -216,28 +216,28 @@ export const TOOL_SPINE = [
     visibleToClients: false,
   },
   {
-    id: "n8n-worker",
-    name: "n8n Worker",
+    id: "flow-relay",
+    name: "Flow Relay",
     internal: "Workflow Runner",
-    worker: "n8n",
+    worker: "Relay Runner",
     mode: "setup-ready",
     status: "scaffolded",
     role: "Hosts local workflow drafts and repeatable automations after owner approval.",
     ownerControl: "Scaffolded as an internal worker lane. Workflow execution stays disabled until the owner connects and approves each run.",
-    activity: "n8n lane is scaffolded for workflow drafts; no live workflow execution is active here.",
+    activity: "workflow drafts are scaffolded; no live workflow execution is active here.",
     path: "Local workflow bay",
     visibleToClients: false,
   },
   {
-    id: "ruflo-loop",
-    name: "Ruflo",
+    id: "loop-planner",
+    name: "Loop Planner",
     internal: "Agent Loop Layer",
-    worker: "Ruflo",
+    worker: "Loop Planner",
     mode: "planning",
     status: "planned",
     role: "Plans repeatable agent loops, handoffs, and review gates across Phantom workers.",
     ownerControl: "Planning lane only until a real loop runner is connected. It can propose loops, not execute them.",
-    activity: "Ruflo is mapped as the loop-planning worker for future coordinated agent runs.",
+    activity: "mapped as the loop-planning worker for future coordinated agent runs.",
     path: "Agent loop planner",
     visibleToClients: false,
   },
@@ -508,14 +508,14 @@ export async function ownerLogin(ownerKey) {
       body: JSON.stringify({ sessionId: "owner-admin", ownerKey }),
     });
   } catch {
-    throw new Error("Your key is probably fine — the backend on the admin PC isn't answering at all. Start Hermes (open PowerShell in the phantomforce\\server folder, run: npm run dev), wait ~20 seconds, then sign in again.");
+    throw new Error("Your key is probably fine — the backend on the admin PC isn't answering at all. Start it (open PowerShell in the phantomforce\\server folder, run: npm run dev), wait ~20 seconds, then sign in again.");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.token || !payload?.session) {
     const raw = String(payload?.error || "");
     // a down backend must never read as "wrong password"
     if (response.status === 502 || /unavailable|ECONNREFUSED|fetch failed/i.test(raw)) {
-      throw new Error("Your key is probably fine — the backend (Hermes) on the admin PC is stopped. Start it: open PowerShell in the phantomforce\\server folder, run: npm run dev — wait ~20 seconds, then sign in again.");
+      throw new Error("Your key is probably fine — the backend on the admin PC is stopped. Start it: open PowerShell in the phantomforce\\server folder, run: npm run dev — wait ~20 seconds, then sign in again.");
     }
     if (response.status === 401 || response.status === 403) {
       // auto-diagnose: is the backend even holding an owner key right now?
@@ -527,7 +527,7 @@ export async function ownerLogin(ownerKey) {
       if (keyLoaded === false) {
         throw new Error("Your key is fine — the backend started WITHOUT its .env file, so no owner key is loaded. On the admin PC: stop the server (Ctrl+C), then run it from the phantomforce\\server folder (cd ...\\phantomforce\\server, then npm run dev) and sign in again.");
       }
-      throw new Error("That key was rejected by the backend. If you're sure it's right, restart Hermes from the phantomforce\\server folder so it loads PHANTOMFORCE_OWNER_LOGIN_KEY from .env — see docs/ADMIN_RECOVERY.md.");
+      throw new Error("That key was rejected by the backend. If you're sure it's right, restart the server from the phantomforce\\server folder so it loads PHANTOMFORCE_OWNER_LOGIN_KEY from .env — see docs/ADMIN_RECOVERY.md.");
     }
     throw new Error(raw || "Owner login failed.");
   }
