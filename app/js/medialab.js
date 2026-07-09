@@ -12,11 +12,12 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-117";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-118";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260709-117";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-117";
+} from "./contenthub.js?v=phantom-live-20260709-118";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260709-118";
+import { getRembgStatus, loadImageForEditing } from "./mediabackend.js?v=phantom-live-20260709-118";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1755,6 +1756,7 @@ let editState = { ...freshEditState(), loadedUrl: null };
 let mlEditResizeHandler = null;
 let mlBokehPicking = false;
 let mlShowTutorial = false;
+let mlEditLoadError = null;
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
   if (!session.edit) {
@@ -1772,6 +1774,7 @@ function renderEdit(body, cfg, opts, root) {
   body.innerHTML = `
     <div class="ml-editor">
       <div class="ml-canvas-wrap">
+        ${mlEditLoadError ? `<div class="ch-lb-load-error"><b>Couldn't load this image</b><span>${esc(mlEditLoadError)}</span></div>` : ""}
         <canvas class="ml-canvas" data-ml-canvas></canvas>
         <div class="ch-lb-bokeh-markers" data-ml-bokeh-markers></div>
         <div class="ch-lb-pick-hint" data-ml-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
@@ -1830,9 +1833,26 @@ function renderEdit(body, cfg, opts, root) {
   if (mlBokehPicking) canvas.classList.add("is-picking");
   const pickHint = body.querySelector("[data-ml-pick-hint]");
   if (pickHint) pickHint.hidden = !mlBokehPicking;
-  const img = new Image();
-  img.onload = () => { editState.loadedUrl = session.edit.url; paintEdit(canvas, img, editState); positionMarkers(); };
-  img.src = session.edit.url;
+  // loadImageForEditing (not a raw new Image()) — a cross-origin source drawn
+  // straight onto the canvas taints it, and every later toDataURL()/save then
+  // throws with no visible error. Routes anything not same-origin through our
+  // own backend proxy instead.
+  if (session.edit.url !== editState.loadedUrl) {
+    const targetUrl = session.edit.url;
+    loadImageForEditing(targetUrl)
+      .then((img) => {
+        if (session.edit?.url !== targetUrl) return; // user picked a different image while this was loading
+        mlEditLoadError = null;
+        editState.loadedUrl = targetUrl;
+        paintEdit(canvas, img, editState);
+        positionMarkers();
+      })
+      .catch((error) => {
+        if (session.edit?.url !== targetUrl) return;
+        mlEditLoadError = error.message || "Could not load this image for editing — the source is on another host and the backend proxy couldn't reach it either.";
+        renderMediaStudio(root, opts);
+      });
+  }
   if (mlEditResizeHandler) window.removeEventListener("resize", mlEditResizeHandler);
   mlEditResizeHandler = () => positionMarkers();
   window.addEventListener("resize", mlEditResizeHandler);
@@ -1913,7 +1933,7 @@ function tutorialMarkup() {
     </div>`;
 }
 function syncSliders(body) { ["brightness", "contrast", "saturate", "hue", "blur"].forEach((k) => { const s = body.querySelector(`[data-ml-slider="${k}"]`); if (s) s.value = editState[k]; const o = body.querySelector(`[data-out="${k}"]`); if (o) o.textContent = editState[k]; }); }
-function resetEdit() { editState = { ...freshEditState(), loadedUrl: editState.loadedUrl }; mlBokehPicking = false; }
+function resetEdit() { editState = { ...freshEditState(), loadedUrl: editState.loadedUrl }; mlBokehPicking = false; mlEditLoadError = null; }
 
 /* ---- helpers ---- */
 function readImage(fileObj, cb) { if (!fileObj) return; const r = new FileReader(); r.onload = () => cb(r.result); r.readAsDataURL(fileObj); }
@@ -1926,6 +1946,49 @@ function downloadAsset(a) {
 /* =========================================================================
    SETTINGS  (provider configuration)
    ========================================================================= */
+/* Local Background Removal (rembg) status — checked once per settings mount,
+   re-checked on demand. Never hardcoded: always the real result of
+   getRembgStatus()'s Python-import probe. */
+let rembgSettingsStatus = null;
+let rembgSettingsChecking = false;
+function rembgEngineSection(esc) {
+  const s = rembgSettingsStatus;
+  const checking = rembgSettingsChecking;
+  const connected = !checking && s?.available;
+  const stateLabel = checking ? "Checking…" : connected ? "Connected" : s ? "Not connected" : "Not checked yet";
+  return `
+    <div class="set-section">
+      <div class="set-sec-head">
+        <div>
+          <h3>Local Background Removal</h3>
+          <p class="set-note">Runs rembg on your own machine via the server — no image ever leaves your network for this. Used by Content Hub's Remove Background and AI subject bokeh.</p>
+        </div>
+        <span class="set-safe-pill ${connected ? "is-on" : "is-off"}">${esc(stateLabel)}</span>
+      </div>
+      <div class="set-rembg-rows">
+        <div class="set-rembg-row"><span>Python command</span><b>${esc(s?.pythonCommand || "—")}</b></div>
+        <div class="set-rembg-row"><span>rembg available</span><b>${checking ? "…" : String(!!s?.available)}</b></div>
+        <div class="set-rembg-row"><span>Last checked</span><b>${s?.checkedAt ? new Date(s.checkedAt).toLocaleString() : "Never"}</b></div>
+      </div>
+      ${!checking && s && !s.available ? `<p class="set-note set-note-warn">${esc(s.error || "rembg is not installed or not reachable.")} Install with: <code>pip install rembg pillow</code></p>` : ""}
+      <button class="set-add" data-set-rembg-recheck ${checking ? "disabled" : ""}>${svgIc("cpu")} ${checking ? "Checking…" : "Re-check"}</button>
+    </div>`;
+}
+function wireRembgEngineSection(el, opts) {
+  const kickCheck = (force) => {
+    rembgSettingsChecking = true;
+    rerenderMediaSettings();
+    getRembgStatus({ recheck: force }).then((status) => {
+      rembgSettingsStatus = status;
+      rembgSettingsChecking = false;
+      rerenderMediaSettings();
+    });
+  };
+  if (rembgSettingsStatus === null && !rembgSettingsChecking) kickCheck(false);
+  const btn = el.querySelector("[data-set-rembg-recheck]");
+  if (btn) btn.onclick = () => kickCheck(true);
+}
+
 export function renderMediaSettings(el, opts = {}) {
   mediaSettingsMount = el;
   mediaSettingsOpts = opts;
@@ -1955,6 +2018,8 @@ export function renderMediaSettings(el, opts = {}) {
           <em>Where /generate and /chat are served. Leave blank to auto-detect.</em></label>
       </div>
 
+      ${rembgEngineSection(esc)}
+
       <div class="set-section set-social-section">
         <div class="set-sec-head">
           <div>
@@ -1981,6 +2046,7 @@ export function renderMediaSettings(el, opts = {}) {
   el.querySelectorAll("[data-route]").forEach((s) => s.onchange = () => { cfg.routing[s.dataset.route] = s.value; saveCfg(cfg); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
   const base = el.querySelector("[data-set-base]"); base.onchange = () => { cfg.endpointBase = base.value.trim(); saveCfg(cfg); };
+  wireRembgEngineSection(el, opts);
 
   // social account linking stays local and never reads browser cookies/tokens
   el.querySelectorAll("[data-social-card]").forEach((card) => {

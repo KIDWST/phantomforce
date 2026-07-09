@@ -320,6 +320,38 @@ function handleGenerate(req, res, send) {
 }
 
 /* ============================================================================
+   IMAGE PROXY — GET /api/media/proxy-image?url=...
+   The media editor draws asset images onto a canvas to composite edits,
+   then calls canvas.toDataURL() to save. A cross-origin source image
+   without CORS headers silently taints that canvas and toDataURL() throws.
+   This fetches the image server-side (no browser CORS restriction between
+   servers) and hands back a data URL so the canvas never taints. Narrow
+   read-only proxy: http(s) only, image content-type only, size-capped.
+   ========================================================================== */
+const PROXY_IMAGE_MAX_BYTES = 20_000_000;
+function handleProxyImage(req, res, send, query) {
+  let target;
+  try { target = new URL(String(query.url || "")); }
+  catch { return send({ ok: false, error: "Missing or invalid url query parameter." }, 400); }
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    return send({ ok: false, error: "Only http/https URLs can be proxied." }, 400);
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  fetch(target.toString(), { signal: controller.signal })
+    .then(async (upstream) => {
+      if (!upstream.ok) return send({ ok: false, error: `Source returned HTTP ${upstream.status}.` });
+      const contentType = upstream.headers.get("content-type") || "";
+      if (!contentType.startsWith("image/")) return send({ ok: false, error: `Source did not return an image (got "${contentType || "unknown"}").` });
+      const buf = Buffer.from(await upstream.arrayBuffer());
+      if (buf.length > PROXY_IMAGE_MAX_BYTES) return send({ ok: false, error: `Image is too large to proxy (${Math.round(buf.length / 1_000_000)}MB).` });
+      send({ ok: true, image: `data:${contentType.split(";")[0]};base64,${buf.toString("base64")}` });
+    })
+    .catch((e) => send({ ok: false, error: `Could not fetch the source image: ${String(e && e.message || e).slice(0, 200)}` }))
+    .finally(() => clearTimeout(timeout));
+}
+
+/* ============================================================================
    BACKGROUND REMOVAL  —  GET /api/media/remove-background/status, POST /api/media/remove-background
    Shells out to a local `rembg` install (pip install rembg) — no key, no
    cloud call, no bundled model. If rembg genuinely isn't on this machine's
@@ -576,9 +608,11 @@ function handleRequest(req, res) {
   };
 
   if (req.method === "OPTIONS") { res.writeHead(204, { ...base, "Content-Length": 0 }); return res.end(); }
-  const path = (req.url || "").split("?")[0];
+  const [path, queryString = ""] = (req.url || "").split("?");
+  const query = Object.fromEntries(new URLSearchParams(queryString));
   if (req.method === "GET" && path === "/health") return send({ ok: true, configured: !!KEY, provider: PROVIDER, model: MODEL, perUserDaily: PER_USER_DAILY, demoEmail: !!RESEND_API_KEY, media: mediaConfigured() });
   if (req.method === "GET" && path === "/api/media/remove-background/status") return handleRemoveBackgroundStatus(req, res, send);
+  if (req.method === "GET" && path === "/api/media/proxy-image") return handleProxyImage(req, res, send, query);
   if (req.method !== "POST") { res.writeHead(405, { ...base, "Content-Length": 0 }); return res.end(); }
   // Media generation for the admin studio (routes to real providers, key stays server-side).
   if (path === "/generate") return handleGenerate(req, res, send);
