@@ -68,7 +68,10 @@ import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
-import { timingSafeEqual } from "node:crypto";
+import { randomUUID, timingSafeEqual } from "node:crypto";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
@@ -161,6 +164,7 @@ import {
   clientSafeMediaLabImageToolchainStatus,
   getMediaLabImageToolchainStatus,
 } from "./phantom-ai/media-lab-image-toolchain.js";
+import { detectRembg, runRembgRemoveBackground } from "./phantom-ai/rembg-bridge.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
 import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
@@ -3055,6 +3059,144 @@ app.get("/phantom-ai/media-lab/image-toolchain/status", async (request, reply) =
     image_toolchain: status,
   };
 });
+
+/* ---- Cross-origin image proxy for the media editor ----
+   The editor draws asset images onto a <canvas> to composite edits, then
+   calls canvas.toDataURL() to save/export. If the source image came from a
+   different origin without CORS headers, the browser silently "taints" the
+   canvas and toDataURL() throws — Save looks like it does nothing. This
+   route fetches the image server-side (no CORS restriction between
+   servers) and hands it back as a same-origin data URL so the canvas never
+   gets tainted. GET-only, admin/media-lab session required, http(s) only,
+   size-capped, short timeout — this is a narrow read-only fetch proxy, not
+   a general SSRF-open relay. */
+const PROXY_IMAGE_MAX_BYTES = 20_000_000;
+app.get("/phantom-ai/media-lab/proxy-image", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!hasMediaLabAccess(session)) {
+    return reply.code(403).send({ ok: false, error: "Media Lab is not enabled for this workspace." });
+  }
+
+  const rawUrl = String((request.query as Record<string, unknown> | undefined)?.url ?? "");
+  let target: URL;
+  try {
+    target = new URL(rawUrl);
+  } catch {
+    return reply.code(400).send({ ok: false, error: "Missing or invalid url query parameter." });
+  }
+  if (target.protocol !== "http:" && target.protocol !== "https:") {
+    return reply.code(400).send({ ok: false, error: "Only http/https URLs can be proxied." });
+  }
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 8000);
+  try {
+    const upstream = await fetch(target.toString(), { signal: controller.signal });
+    if (!upstream.ok) {
+      return reply.code(200).send({ ok: false, error: `Source returned HTTP ${upstream.status}.` });
+    }
+    const contentType = upstream.headers.get("content-type") || "";
+    if (!contentType.startsWith("image/")) {
+      return reply.code(200).send({ ok: false, error: `Source did not return an image (got "${contentType || "unknown"}").` });
+    }
+    const buffer = Buffer.from(await upstream.arrayBuffer());
+    if (buffer.length > PROXY_IMAGE_MAX_BYTES) {
+      return reply.code(200).send({ ok: false, error: `Image is too large to proxy (${Math.round(buffer.length / 1_000_000)}MB).` });
+    }
+    return { ok: true, image: `data:${contentType.split(";")[0]};base64,${buffer.toString("base64")}` };
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    return reply.code(200).send({ ok: false, error: `Could not fetch the source image: ${message}`.slice(0, 300) });
+  } finally {
+    clearTimeout(timeout);
+  }
+});
+
+/* ---- Local background removal (rembg) ----
+   A real local-process bridge, not a provider call: no key, no network, no
+   credit spend. Status is a genuine `import rembg` probe through whichever
+   Python interpreter has it installed — never a hardcoded guess either way.
+   Removal shells out to scripts/remove_background.py through that same
+   interpreter, using temp files only, cleaned up after every request. */
+app.get("/phantom-ai/media-lab/rembg/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const forceRecheck = String((request.query as Record<string, unknown> | undefined)?.recheck ?? "") === "true";
+  const status = await detectRembg(forceRecheck);
+  return { ok: true, session, ...status };
+});
+
+const RembgRemoveBackgroundSchema = z.object({
+  image: z.string().trim().min(1).max(24_000_000),
+});
+const REMBG_MAX_INPUT_BYTES = 15_000_000;
+
+app.post(
+  "/phantom-ai/media-lab/rembg/remove-background",
+  { bodyLimit: 24 * 1024 * 1024 },
+  async (request, reply) => {
+    const session = requireAccessSession(request, reply);
+    if (!session) return reply;
+
+    if (!hasMediaLabAccess(session)) {
+      return reply.code(403).send({
+        ok: false,
+        error: "Background removal is not enabled for this workspace.",
+      });
+    }
+
+    const parsed = RembgRemoveBackgroundSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+    }
+
+    const match = parsed.data.image.match(/^data:image\/(png|jpe?g|webp);base64,([a-z0-9+/=]+)$/i);
+    if (!match) {
+      return reply.code(400).send({ ok: false, error: "Expected a base64 PNG/JPEG/WebP data URL." });
+    }
+    const inputBuffer = Buffer.from(match[2], "base64");
+    if (inputBuffer.length > REMBG_MAX_INPUT_BYTES) {
+      return reply.code(413).send({ ok: false, error: `Image is too large (${Math.round(inputBuffer.length / 1_000_000)}MB). Max is ${REMBG_MAX_INPUT_BYTES / 1_000_000}MB.` });
+    }
+
+    const status = await detectRembg();
+    if (!status.available || !status.pythonCommand) {
+      return reply.code(200).send({
+        ok: false,
+        error: status.error || "Background removal unavailable — rembg is not installed or not connected.",
+      });
+    }
+
+    const jobId = randomUUID();
+    const tempDir = join(tmpdir(), `phantomforce-rembg-${jobId}`);
+    const inputPath = join(tempDir, `in.${match[1].toLowerCase().replace("jpg", "jpeg")}`);
+    const outputPath = join(tempDir, "out.png");
+
+    try {
+      await mkdir(tempDir, { recursive: true });
+      await writeFile(inputPath, inputBuffer);
+      const run = await runRembgRemoveBackground(status.pythonCommand, inputPath, outputPath);
+      if (!run.ok) {
+        request.log.warn({ err: run.error }, "rembg remove-background failed");
+        return reply.code(200).send({ ok: false, error: run.error });
+      }
+      const outputBuffer = await readFile(outputPath);
+      return {
+        ok: true,
+        image: `data:image/png;base64,${outputBuffer.toString("base64")}`,
+        pythonCommand: status.pythonCommand,
+      };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      request.log.warn({ err: message }, "rembg remove-background threw");
+      return reply.code(200).send({ ok: false, error: `Background removal failed: ${message}`.slice(0, 300) });
+    } finally {
+      await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    }
+  },
+);
 
 app.post("/phantom-ai/media-lab/higgsfield/draft", async (request, reply) => {
   const session = requireAccessSession(request, reply);

@@ -1,12 +1,27 @@
 /* PhantomForce — shared real-backend client for the media editor: background
-   removal (rembg) and AI Edit (the existing /generate route's "edit"
-   modality). Every call here is a real network request to the ai-proxy —
+   removal (rembg) and AI Edit. Every call here is a real network request —
    no fabricated success, no fake progress. Unreachable/unconfigured always
    resolves to an honest unavailable/error result, never a silent pretend
-   success. Content Hub's lightbox and Media Lab's Edit tab both use this so
-   the "is a real backend connected" story is answered the same way everywhere. */
+   success. Content Hub's lightbox, Media Lab's Edit tab, and Settings all
+   use this so "is a real backend connected" is answered the same way
+   everywhere.
 
-function backendBase() {
+   Two lanes, tried in order (same philosophy as Media Lab's own multi-lane
+   health check):
+   1. Same-origin Fastify server (server/src/index.ts) — the real admin
+      backend, authenticated with the session's bearer token. This is what
+      runs in production behind admin.phantomforce.online.
+   2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
+      for local/dev setups that don't run the full server. */
+
+import { session } from "./store.js?v=phantom-live-20260709-118";
+
+function authHeaders(extra = {}) {
+  const token = session.token();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+function aiProxyBase() {
   try {
     const cfg = JSON.parse(localStorage.getItem("pf.medialab.v1") || "{}");
     if (cfg.endpointBase) return String(cfg.endpointBase).replace(/\/+$/, "");
@@ -22,20 +37,97 @@ async function fetchWithTimeout(url, options = {}, ms = 6000) {
   finally { clearTimeout(t); }
 }
 
-/* ---------------- background removal (rembg) ---------------- */
-export async function probeRemoveBackground() {
+/* ---------------- safe image loading for canvas editing ----------------
+   A canvas that ever draws a cross-origin image without CORS gets "tainted"
+   by the browser — every later toDataURL()/getImageData() call throws, and
+   Save silently does nothing. data: URLs and same-origin URLs are always
+   safe and load directly. Anything else routes straight through our own
+   backend proxy (server-to-server has no CORS restriction) rather than
+   attempting a direct crossOrigin load first — a failed CORS attempt logs
+   an unsuppressable console error even when the code correctly falls back,
+   so going straight to the reliable path avoids that noise entirely. */
+async function proxyImageToDataUrl(url) {
   try {
-    const r = await fetchWithTimeout(`${backendBase()}/api/media/remove-background/status`, {}, 5000);
+    const r = await fetchWithTimeout(`/phantom-ai/media-lab/proxy-image?url=${encodeURIComponent(url)}`, { headers: authHeaders() }, 10000);
+    if (r.status !== 404) {
+      const d = await r.json().catch(() => null);
+      if (r.ok && d && d.ok && d.image) return d.image;
+    }
+  } catch { /* try the fallback lane */ }
+  try {
+    const r = await fetchWithTimeout(`${aiProxyBase()}/api/media/proxy-image?url=${encodeURIComponent(url)}`, {}, 10000);
     const d = await r.json().catch(() => null);
-    return !!(r.ok && d && d.available);
-  } catch {
-    return false;
-  }
+    if (r.ok && d && d.ok && d.image) return d.image;
+  } catch { /* both lanes unreachable */ }
+  return null;
+}
+
+export function loadImage(src) {
+  return new Promise((resolvePromise, reject) => {
+    const img = new Image();
+    img.onload = () => resolvePromise(img);
+    img.onerror = () => reject(new Error("image failed to load"));
+    img.src = src;
+  });
+}
+
+export async function loadImageForEditing(url) {
+  const isSameOrigin = url.startsWith("data:") || url.startsWith("blob:") || new URL(url, location.href).origin === location.origin;
+  if (isSameOrigin) return loadImage(url);
+
+  const proxied = await proxyImageToDataUrl(url);
+  if (proxied) return loadImage(proxied);
+
+  throw new Error("Could not load this image for editing — the source is on another host and the backend proxy couldn't reach it either.");
+}
+
+/* ---------------- background removal (rembg) ---------------- */
+
+/* Full status detail — used by the editor panel and Settings > Media
+   Engines. `lane` records which backend actually answered, or "unreachable"
+   if neither did (never guessed). */
+export async function getRembgStatus(opts = {}) {
+  const recheck = opts.recheck ? "?recheck=true" : "";
+  try {
+    const r = await fetchWithTimeout(`/phantom-ai/media-lab/rembg/status${recheck}`, { headers: authHeaders() }, 8000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && typeof d.available === "boolean") {
+      return { lane: "server", available: d.available, pythonCommand: d.pythonCommand || null, version: d.version || null, error: d.error || null, checkedAt: d.checkedAt || null };
+    }
+  } catch { /* try the fallback lane */ }
+
+  try {
+    const r = await fetchWithTimeout(`${aiProxyBase()}/api/media/remove-background/status`, {}, 5000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && typeof d.available === "boolean") {
+      return { lane: "ai-proxy", available: d.available, pythonCommand: null, version: null, error: d.available ? null : "rembg is not installed or not connected.", checkedAt: new Date().toISOString() };
+    }
+  } catch { /* both lanes unreachable */ }
+
+  return { lane: "unreachable", available: false, pythonCommand: null, version: null, error: "Could not reach a media backend to check rembg.", checkedAt: new Date().toISOString() };
+}
+
+/* Simple boolean check for the editor's mount-time probe. */
+export async function probeRemoveBackground() {
+  return (await getRembgStatus()).available;
 }
 
 export async function requestRemoveBackground(dataUrl) {
   try {
-    const r = await fetchWithTimeout(`${backendBase()}/api/media/remove-background`, {
+    const r = await fetchWithTimeout("/phantom-ai/media-lab/rembg/remove-background", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ image: dataUrl }),
+    }, 45000);
+    if (r.status !== 404) {
+      const d = await r.json().catch(() => null);
+      if (r.ok && d && d.ok && d.image) return { ok: true, image: d.image };
+      if (d) return { ok: false, message: (typeof d.error === "string" && d.error) || d.message || "Background removal unavailable — rembg is not installed or not connected." };
+    }
+  } catch { /* try the fallback lane */ }
+
+  try {
+    const r = await fetchWithTimeout(`${aiProxyBase()}/api/media/remove-background`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ image: dataUrl }),
@@ -49,12 +141,12 @@ export async function requestRemoveBackground(dataUrl) {
 }
 
 /* ---------------- AI edit (real /generate, modality "edit") ----------------
-   Reuses the same media-generation route Media Lab uses for creation, with
-   a reference image + modality "edit" so a connected provider (Higgsfield)
+   Reuses the media-generation route Media Lab uses for creation, with a
+   reference image + modality "edit" so a connected provider (Higgsfield)
    performs a real prompt-guided edit. No key ever touches the browser. */
 export async function probeAiEditBackend() {
   try {
-    const r = await fetchWithTimeout(`${backendBase()}/health`, {}, 5000);
+    const r = await fetchWithTimeout(`${aiProxyBase()}/health`, {}, 5000);
     const d = await r.json().catch(() => null);
     if (!r.ok || !d) return { available: false };
     const media = d.media || {};
@@ -67,7 +159,7 @@ export async function probeAiEditBackend() {
 
 export async function requestAiEdit({ dataUrl, prompt, provider = "higgsfield" }) {
   try {
-    const r = await fetchWithTimeout(`${backendBase()}/generate`, {
+    const r = await fetchWithTimeout(`${aiProxyBase()}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({

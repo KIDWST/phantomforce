@@ -7,11 +7,11 @@
    anything else) can fetch the same numbers with zero coupling. */
 
 import {
-  freshEditState, applyFilterPreset, paintEdit,
+  freshEditState, applyFilterPreset, paintEdit, renderBaseFrame, heuristicAiEdit,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
-  estimateSubjectPoint, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260709-117";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit } from "./mediabackend.js?v=phantom-live-20260709-117";
+  estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
+} from "./imagefilters.js?v=phantom-live-20260709-118";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage } from "./mediabackend.js?v=phantom-live-20260709-118";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -757,6 +757,7 @@ function freshLightbox(asset, extra = {}) {
     openSections: { adjust: true, transform: false, presets: false, text: false },
     aiEdit: { status: "idle", message: "", provider: null },
     bg: { status: "idle", message: "" },
+    bokehDetect: { status: "idle", message: "" },
     text: { open: false },
     ...extra,
   };
@@ -775,14 +776,31 @@ function aiEditBody(lb, esc) {
   const ai = lb.aiEdit || { status: "idle" };
   const checking = ai.status === "checking";
   const loading = ai.status === "loading";
-  const unavailable = ai.status === "unavailable";
+  const unavailable = ai.status === "unavailable" || ai.status === "local-applied";
   const busy = checking || loading;
+  if (unavailable) {
+    // No real edit provider connected — don't fake it. Offer the honest
+    // path (connect one in Settings) plus a clearly-labeled local fallback
+    // that reuses the existing adjustment sliders for simple asks, so the
+    // panel still does something useful with zero setup.
+    return `
+      <p class="ch-lb-ai-note ch-lb-ai-note-warn">No AI edit provider is connected yet — prompt-guided edits need a real provider.</p>
+      <div class="ch-lb-chips">
+        <button class="btn btn-primary" type="button" data-ch-lb-ai-connect>${svgIc("bolt")} Connect Media Engine</button>
+      </div>
+      <div class="ch-lb-ai-row">
+        <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, more contrast, cinematic…"/>
+        <button class="btn btn-quiet" type="button" data-ch-lb-ai-local>Apply as adjustment</button>
+      </div>
+      <p class="ch-lb-ai-note">"Apply as adjustment" is a local brightness/contrast/style nudge, not AI — it works for simple asks like brighter, warmer, more contrast, or cinematic, fully offline.</p>
+      ${ai.status === "local-applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Applied locally (not AI) — use Reset to go back to the original.</p>` : ""}
+    `;
+  }
   return `
     <div class="ch-lb-ai-row">
-      <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…" ${unavailable ? "disabled" : ""}/>
-      <button class="btn btn-primary" type="button" data-ch-lb-ai-run ${busy || unavailable ? "disabled" : ""}>${loading ? "Generating…" : checking ? "Checking…" : "Generate"}</button>
+      <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…"/>
+      <button class="btn btn-primary" type="button" data-ch-lb-ai-run ${busy ? "disabled" : ""}>${loading ? "Generating…" : checking ? "Checking…" : "Generate"}</button>
     </div>
-    ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">No AI edit provider is connected yet — set one up in Settings → Media Engines to enable real prompt-guided edits.</p>` : ""}
     ${ai.status === "available" ? `<p class="ch-lb-ai-note">Connected — Generate sends this image and your prompt to the configured edit provider.</p>` : ""}
     ${ai.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(ai.message || "Edit failed.")}</p>` : ""}
     ${ai.status === "success" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Edit applied — use Reset to go back to the original.</p>` : ""}
@@ -812,6 +830,7 @@ function removeBgBody(lb, esc) {
       <button class="btn btn-quiet" type="button" data-ch-lb-bg-run ${checking || loading || unavailable ? "disabled" : ""}>${loading ? "Removing…" : checking ? "Checking…" : "Remove Background"}</button>
     </div>
     ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Background removal unavailable — rembg is not installed or not connected.</p>` : ""}
+    ${bg.status === "idle" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Ready — rembg is connected.</p>` : ""}
     ${bg.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "Background removal failed.")}</p>` : ""}
     ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed — Save/Download now export a transparent PNG.</p>` : ""}
   `;
@@ -819,17 +838,27 @@ function removeBgBody(lb, esc) {
 
 function bokehBody(lb, s, esc) {
   const spots = s.bokeh?.spots || [];
+  const hasMask = !!s.bokeh?.maskImg;
   const selected = lb.selectedSpot != null ? spots[lb.selectedSpot] : null;
+  const detect = lb.bokehDetect || { status: "idle" };
+  const detecting = detect.status === "loading";
+  const detectUnavailable = detect.status === "unavailable";
   return `
-    <p class="ch-lb-ai-label">${svgIc("spark")} Subject bokeh ${spots.length ? `<i class="ch-lb-bokeh-count">${spots.length} spot${spots.length === 1 ? "" : "s"}</i>` : ""}</p>
-    <p class="ch-lb-bokeh-note">${esc(lb.subjectHint || (spots.length ? "Click to add more focus, click a spot to select it, right-click to remove it." : "Turn on and click the subject. No automatic subject detection is available yet, so the first click drops an estimated focus point you can drag into place."))}</p>
+    <p class="ch-lb-ai-label">${svgIc("spark")} Subject bokeh ${hasMask ? `<i class="ch-lb-bokeh-count">AI subject</i>` : ""}${spots.length ? `<i class="ch-lb-bokeh-count">+${spots.length} spot${spots.length === 1 ? "" : "s"}</i>` : ""}</p>
+    <div class="ch-lb-chips">
+      <button type="button" data-ch-lb-bokeh-detect ${detecting || detectUnavailable ? "disabled" : ""}>${svgIc("spark")} ${detecting ? "Detecting subject…" : hasMask ? "Re-detect subject" : "AI detect subject"}</button>
+    </div>
+    ${detectUnavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">AI subject detection needs Local Background Removal connected — set it up in Settings → Media Engines.</p>` : ""}
+    ${detect.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(detect.message || "Subject detection failed.")}</p>` : ""}
+    ${hasMask && detect.status !== "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">AI detected the subject — the background blurs around its real shape, gaps included (e.g. between a cat's ears). Add focus spots below to touch it up.</p>` : ""}
+    <p class="ch-lb-bokeh-note">${esc(lb.subjectHint || (hasMask ? "Use \"Add focus spots\" for anything the AI missed." : spots.length ? "Click to add more focus, click a spot to select it, right-click to remove it." : "No subject detected yet — try \"AI detect subject\" above, or turn on \"Add focus spots\" to drop a manual point."))}</p>
     ${chBSlider("Brush size", "r", 8, 45, s.bokehBrush || 24)}
-    ${spots.length ? chBSlider("Background blur", "strength", 4, 32, s.bokeh.strength) : ""}
-    ${spots.length ? chBSlider("Feather", "feather", 5, 90, Math.round((s.bokeh.feather ?? 0.45) * 100)) : ""}
+    ${s.bokeh ? chBSlider("Background blur", "strength", 4, 32, s.bokeh.strength) : ""}
+    ${s.bokeh ? chBSlider("Feather", "feather", 5, 90, Math.round((s.bokeh.feather ?? 0.45) * 100)) : ""}
     <label class="ch-lb-check"><input type="checkbox" data-ch-lb-remember-size ${lb.rememberBokehSize ? "checked" : ""}/> Remember size for next point</label>
     <div class="ch-lb-chips">
       <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Adding focus… (click Done)" : "Add focus spots"}</button>
-      ${spots.length ? `<button type="button" data-ch-lb-bokeh-off>Clear all</button>` : ""}
+      ${s.bokeh ? `<button type="button" data-ch-lb-bokeh-off>Clear all</button>` : ""}
     </div>
     ${selected ? `
     <div class="ch-lb-bokeh-selected">
@@ -907,6 +936,7 @@ function lightboxMarkup(lb, esc) {
         ${lb.showTutorial ? tutorialMarkup() : ""}
         <div class="ch-lb-body">
           <div class="ch-lb-canvas-wrap">
+            ${lb.loadError ? `<div class="ch-lb-load-error"><b>Couldn't load this image</b><span>${esc(lb.loadError)}</span></div>` : ""}
             <canvas class="ch-lb-canvas" data-ch-lb-canvas></canvas>
             <div class="ch-lb-bokeh-markers ${(lb.bokehPicking || lb.selectedSpot != null) ? "" : "is-hidden"}" data-ch-lb-bokeh-markers></div>
             <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
@@ -967,7 +997,7 @@ function tutorialMarkup() {
     ["Open an image", "Double-click any image in the library to open it here."],
     ["Describe an edit", "Type what you want and hit Generate. This only works once a real edit provider is connected in Settings — otherwise the button is disabled and says so."],
     ["Remove background", "Only enabled when rembg is installed and reachable. Runs for real, shows a before/after, then Apply or Cancel."],
-    ["Subject bokeh", "Turn on \"Add focus spots\" — the first click drops an estimated starting point you can drag; click again to add more, click a spot to select it and change its size, right-click to remove it."],
+    ["Subject bokeh", "Click \"AI detect subject\" — it uses your connected rembg backend to find the real subject shape, so gaps like the space between a cat's ears blur correctly. Then use \"Add focus spots\" to touch up anything it missed; drag a spot to move it, click to select and resize, right-click to remove it."],
     ["Adjust / Transform / Style presets / Text overlay", "Tucked into the sections below — click a heading to open it. Text overlay has fonts, color, outline, shadow, alignment, position, and layout presets."],
     ["Save vs. Save as copy", "Save updates this asset in place. Save as copy keeps the original and creates a new one."],
     ["In the library grid", "Shift+click selects a range, Ctrl+click adds one at a time, Ctrl+A selects everything visible, Ctrl+Z undoes your last delete."],
@@ -1019,9 +1049,17 @@ function wireLightbox(root, opts) {
       el.style.height = `${r * 2}px`;
     });
   };
-  const img = new Image();
-  img.onload = () => { paintEdit(canvas, img, s); positionMarkers(); };
-  img.src = asset.url;
+  // Cross-origin sources without CORS headers would otherwise silently
+  // taint the canvas — every later toDataURL() call (Save/Download) throws
+  // with no visible error. loadImageForEditing() requests CORS, then falls
+  // back to a same-origin backend proxy so this never happens silently.
+  loadImageForEditing(asset.url)
+    .then((img) => { paintEdit(canvas, img, s); positionMarkers(); })
+    .catch((error) => {
+      if (chLightbox !== lb) return;
+      lb.loadError = error.message || "Could not load this image.";
+      rerender();
+    });
   const repaint = () => { if (canvas._img) paintEdit(canvas, canvas._img, s); positionMarkers(); };
   onResize = () => positionMarkers();
   window.addEventListener("resize", onResize);
@@ -1091,7 +1129,11 @@ function wireLightbox(root, opts) {
     rerender();
   });
   const bokehOff = root.querySelector("[data-ch-lb-bokeh-off]");
-  if (bokehOff) bokehOff.onclick = () => { s.bokeh = null; lb.selectedSpot = null; repaint(); rerender(); };
+  if (bokehOff) bokehOff.onclick = () => {
+    s.bokeh = null; lb.selectedSpot = null; lb.subjectHint = null; lb.subjectEstimated = false;
+    lb.bokehDetect = { status: lb.bokehDetect.status === "unavailable" ? "unavailable" : "idle", message: "" };
+    repaint(); rerender();
+  };
   root.querySelectorAll("[data-ch-lb-bslider]").forEach((slider) => slider.oninput = () => {
     const key = slider.dataset.chLbBslider;
     if (key === "r") { s.bokehBrush = +slider.value; if (lb.selectedSpot != null) { resizeBokehSpot(s, lb.selectedSpot, +slider.value / 100); repaint(); } }
@@ -1170,21 +1212,37 @@ function wireLightbox(root, opts) {
       opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${result.message}`);
       return;
     }
-    const editedImg = new Image();
-    editedImg.onload = () => {
-      if (chLightbox !== lb) return;
-      canvas._img = editedImg;
-      lb.aiEdit = { ...lb.aiEdit, status: "success", message: "" };
-      repaint();
-      rerender();
-      opts.notify?.("Content Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
-    };
-    editedImg.onerror = () => {
-      if (chLightbox !== lb) return;
-      lb.aiEdit = { ...lb.aiEdit, status: "error", message: "The edit provider returned an image that could not be loaded." };
-      rerender();
-    };
-    editedImg.src = result.url;
+    // loadImageForEditing (not a raw new Image()) so a provider-hosted
+    // result without CORS headers doesn't silently taint the canvas —
+    // that would make every later Save/Download throw with no visible error.
+    loadImageForEditing(result.url)
+      .then((editedImg) => {
+        if (chLightbox !== lb) return;
+        canvas._img = editedImg;
+        lb.aiEdit = { ...lb.aiEdit, status: "success", message: "" };
+        repaint();
+        rerender();
+        opts.notify?.("Content Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
+      })
+      .catch(() => {
+        if (chLightbox !== lb) return;
+        lb.aiEdit = { ...lb.aiEdit, status: "error", message: "The edit provider returned an image that could not be loaded." };
+        rerender();
+      });
+  };
+
+  const aiConnect = root.querySelector("[data-ch-lb-ai-connect]");
+  if (aiConnect) aiConnect.onclick = () => { close(); opts.openWorkspace?.("settings"); };
+
+  const aiLocal = root.querySelector("[data-ch-lb-ai-local]");
+  if (aiLocal) aiLocal.onclick = () => {
+    const q = (root.querySelector("[data-ch-lb-ai]")?.value || "").trim();
+    if (!q) return;
+    heuristicAiEdit(q, s);
+    lb.aiEdit = { ...lb.aiEdit, status: "local-applied" };
+    repaint();
+    rerender();
+    opts.notify?.("Content Hub", `applied a local adjustment to "${asset.title}" (not AI): "${q.slice(0, 40)}".`);
   };
 
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
@@ -1221,6 +1279,37 @@ function wireLightbox(root, opts) {
   const bgCancel = root.querySelector("[data-ch-lb-bg-cancel]");
   if (bgCancel) bgCancel.onclick = () => { lb.bg = { status: "idle", message: "" }; rerender(); };
 
+  const bokehDetect = root.querySelector("[data-ch-lb-bokeh-detect]");
+  if (bokehDetect) bokehDetect.onclick = async () => {
+    if (lb.bokehDetect.status === "unavailable") return;
+    lb.bokehDetect = { status: "loading", message: "" };
+    rerender();
+    // Send the clean base frame (adjust/rotate/flip only, no existing bokeh
+    // or text) so the segmentation isn't confused by a prior mask/overlay.
+    const baseUrl = renderBaseFrame(canvas._img, s).toDataURL("image/png");
+    const result = await requestRemoveBackground(baseUrl);
+    if (chLightbox !== lb) return;
+    if (!result.ok) {
+      lb.bokehDetect = { status: "error", message: result.message };
+      rerender();
+      opts.notify?.("Content Hub", `AI subject detection failed on "${asset.title}": ${result.message}`);
+      return;
+    }
+    try {
+      const maskImg = await loadImage(result.image);
+      if (chLightbox !== lb) return;
+      setBokehMask(s, maskImg);
+      lb.bokehDetect = { status: "success", message: "" };
+      repaint();
+      rerender();
+      opts.notify?.("Content Hub", `AI-detected the subject on "${asset.title}" for bokeh.`);
+    } catch {
+      if (chLightbox !== lb) return;
+      lb.bokehDetect = { status: "error", message: "The detected subject image could not be loaded." };
+      rerender();
+    }
+  };
+
   // Probe real backends exactly once per lightbox session — never on every
   // keystroke/rerender. Both probes are honest: unreachable/unconfigured
   // always resolves to "unavailable", never a fake "connected" state.
@@ -1234,6 +1323,12 @@ function wireLightbox(root, opts) {
     probeRemoveBackground().then((available) => {
       if (chLightbox !== lb) return;
       lb.bg = { status: available ? "idle" : "unavailable", message: "" };
+      // AI subject detection reuses the same rembg backend, so it's honest
+      // about being unavailable together with Remove Background — never a
+      // fake "connected" state when the real check failed.
+      if (lb.bokehDetect.status === "idle" || lb.bokehDetect.status === "unavailable") {
+        lb.bokehDetect = { status: available ? "idle" : "unavailable", message: "" };
+      }
       rerender();
     });
   }

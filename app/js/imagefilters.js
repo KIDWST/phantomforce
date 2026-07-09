@@ -76,15 +76,28 @@ export function heuristicAiEdit(query, state) {
 }
 
 /* ---------------- subject bokeh ----------------
-   state.bokeh = { spots: [{x, y, r}, ...], strength, feather } — each spot
-   is a paintable focus circle (x/y 0..1 normalized, r 0..1 relative to
-   min(width,height)) so an irregular subject can be covered with several
-   clicks; strength is the shared background blur in px, feather (0..1)
-   softens the edge of each spot. Composited as a real edit (baked into
-   export); the on-canvas markers are a separate DOM overlay drawn by the
-   caller, never part of the exported pixels. */
+   state.bokeh = { spots: [{x, y, r}, ...], strength, feather, maskImg } —
+   maskImg (when set) is a decoded <img> of a real rembg segmentation cutout
+   for this photo: its alpha channel IS the subject silhouette, so it cuts
+   an exact hole in the blurred background layer — concave gaps (the space
+   between a cat's two ears, for example) fall outside the silhouette and
+   blur correctly, which no circle-based click ever could. Manual spots
+   layer on top as an additive refinement (nudge extra sharp regions in),
+   not a replacement. maskImg is a live in-memory <img>, never persisted —
+   state itself is never JSON-serialized (Save bakes pixels, not state), so
+   this is safe to hold directly. strength is the shared background blur in
+   px, feather (0..1) softens spot edges and the mask edge alike. Composited
+   as a real edit (baked into export); the on-canvas markers are a separate
+   DOM overlay drawn by the caller, never part of the exported pixels. */
 export function freshBokeh() {
-  return { spots: [], strength: 20, feather: 0.45 };
+  return { spots: [], strength: 20, feather: 0.45, maskImg: null };
+}
+/* Stores a decoded segmentation-mask <img> (its alpha = subject silhouette)
+   as the AI-detected cutout for this bokeh. */
+export function setBokehMask(state, maskImg) {
+  if (!state.bokeh) state.bokeh = freshBokeh();
+  state.bokeh.maskImg = maskImg;
+  return state.bokeh;
 }
 export function addBokehSpot(state, x, y, r) {
   if (!state.bokeh) state.bokeh = freshBokeh();
@@ -178,12 +191,23 @@ function drawFrame(ctx, img, state, extraFilter = "") {
   ctx.restore();
 }
 
+/* Full-resolution render of just the base frame (adjust/rotate/flip), no
+   bokeh, no text overlay — what an AI subject-detection call should send,
+   so the segmentation isn't confused by an overlay or a previous mask. */
+export function renderBaseFrame(img, state) {
+  const c = document.createElement("canvas");
+  drawFrame(c.getContext("2d"), img, state);
+  return c;
+}
+
 export function paintEdit(canvas, img, state) {
   canvas._img = img;
   const g = canvas.getContext("2d");
   drawFrame(g, img, state);
 
-  if (state.bokeh && state.bokeh.spots && state.bokeh.spots.length) {
+  const hasSpots = state.bokeh && state.bokeh.spots && state.bokeh.spots.length;
+  const hasMask = state.bokeh && state.bokeh.maskImg;
+  if (hasSpots || hasMask) {
     const w = canvas.width, h = canvas.height;
     const bg = document.createElement("canvas");
     bg.width = w; bg.height = h;
@@ -191,7 +215,14 @@ export function paintEdit(canvas, img, state) {
     drawFrame(bgCtx, img, state, ` blur(${state.bokeh.strength}px)`);
     bgCtx.globalCompositeOperation = "destination-out";
     const feather = state.bokeh.feather ?? 0.45;
-    state.bokeh.spots.forEach((spot) => {
+    if (hasMask) {
+      const featherPx = Math.max(0, feather * 14);
+      bgCtx.save();
+      bgCtx.filter = featherPx > 0.3 ? `blur(${featherPx}px)` : "none";
+      bgCtx.drawImage(state.bokeh.maskImg, 0, 0, w, h);
+      bgCtx.restore();
+    }
+    if (hasSpots) state.bokeh.spots.forEach((spot) => {
       const cx = spot.x * w, cy = spot.y * h;
       const r = Math.max(8, spot.r * Math.min(w, h));
       const grad = bgCtx.createRadialGradient(cx, cy, Math.max(0, r * (1 - feather)), cx, cy, r);

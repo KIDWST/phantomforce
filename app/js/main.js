@@ -5,22 +5,22 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
-} from "./store.js?v=phantom-live-20260709-117";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-117";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-117";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-117";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260709-117";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-117";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-117";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260709-117";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-117";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-117";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260709-117";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-117";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-117";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-117";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-117";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-117";
+} from "./store.js?v=phantom-live-20260709-118";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-118";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-118";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-118";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260709-118";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-118";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-118";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260709-118";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-118";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-118";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260709-118";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-118";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-118";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-118";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-118";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-118";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -628,7 +628,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260709-117";
+const POSE_VERSION = "phantom-live-20260709-118";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -921,45 +921,22 @@ function renderStatCards() {
   if (isAdmin()) {
     cards.push({ icon: "auto", title: "Vacation Mode", value: vacation ? (vacation.enabled ? "ON" : "OFF") : "—", sub: vacation ? (vacation.enabled ? "Away-coverage active" : "Away-coverage off") : "Not checked yet", foot: "Separate from automations", open: "vacation", trend: vacation?.enabled ? "active" : "ready" });
   }
-  $("[data-statcards]").innerHTML = cards.map((c) => `
-    <button class="statcard ${c.alert ? "statcard-alert" : ""}" data-open-ws="${c.open}">
-      <span class="statcard-top">
-        <span class="statcard-icon">${svg(c.icon)}</span>
-        <span class="statcard-trend ${c.alert ? "trend-alert" : ""}">${esc(c.trend)}</span>
-      </span>
-      <span class="statcard-k">${esc(c.title)}</span>
-      <b class="statcard-v">${c.value}</b>
-      <span class="statcard-sub">${esc(c.sub)}</span>
-      <span class="statcard-foot">${esc(c.foot)}</span>
+  const box = $("[data-statcards]");
+  if (!box) return;
+  box.innerHTML = cards.map((c) => `
+    <button class="mini-chip ${c.alert ? "mini-chip-alert" : ""}" data-open-ws="${c.open}" title="${esc(c.sub)} — ${esc(c.foot)}">
+      <span class="mini-chip-ic">${svg(c.icon)}</span>
+      <span class="mini-chip-body"><b>${esc(c.title)}</b><i>${c.value}</i></span>
     </button>`).join("");
 }
 
-/* ============================ recent activity ============================ */
-const ACT_ICON = (text = "") => {
-  const s = text.toLowerCase();
-  if (/video|reel|phantomcut|shoot/.test(s)) return "film";
-  if (/security|scan|breach|threat|protect/.test(s)) return "shield";
-  if (/image|photo|promo|creative/.test(s)) return "spark";
-  if (/site|page|website|store|checkout/.test(s)) return "grid";
-  if (/proposal|quote|invoice|paid|pipeline/.test(s)) return "chart";
-  if (/review|testimonial/.test(s)) return "check";
-  return "spark";
-};
+/* ============================ recent activity ============================
+   Used to be its own card grid below the chat; that's now folded into the
+   single phantomwire-alert pill (renderHeroWorkAlert), so this just keeps
+   that pill fresh — kept as its own function since it's called from several
+   places (live-feed pulses, activity pushes, full re-renders). */
 function renderActivity() {
-  const base = visible(store.state.activity).map((a) => ({ who: a.who, text: a.text, at: a.at, icon: ACT_ICON(a.text), live: false }));
-  const items = [...liveFeed, ...base].slice(0, 3);
-  const box = $("[data-activity]");
-  if (!box) return;
-  if (!items.length) { box.innerHTML = `<p class="empty-line">Quiet — nothing has run yet.</p>`; return; }
-  box.innerHTML = items.map((a) => `
-    <div class="act-card ${a.live ? "act-live" : ""}">
-      <span class="act-thumb">${svg(a.icon || ACT_ICON(a.text))}</span>
-      <span class="act-body">
-        <b>${esc(a.who)} ${esc(a.text)}</b>
-        <i>${a.live ? "just now" : ago(a.at)}</i>
-      </span>
-      <span class="act-dot" aria-hidden="true"></span>
-    </div>`).join("");
+  renderHeroWorkAlert();
 }
 
 /* ============================ today's plan (donut) ============================ */
@@ -1058,16 +1035,17 @@ function renderInsights() {
   if (!box) return;
   const items = attentionItems();
   if (!items.length) {
-    box.innerHTML = `<div class="insights-head"><span class="insights-k">${greeting()} — you're clear</span></div>
-      <div class="insights-row"><div class="insight-card insight-clear"><span class="insight-ic">${svg("check")}</span><span class="insight-body"><b>No real tasks are waiting.</b><i>This account starts clean. Add work when you're ready.</i></span></div></div>`;
+    box.innerHTML = `<button class="mini-chip mini-chip-clear" title="${esc(greeting())} — you're clear">
+      <span class="mini-chip-ic">${svg("check")}</span>
+      <span class="mini-chip-body"><b>Today</b><i>Clear</i></span>
+    </button>`;
     return;
   }
-  box.innerHTML = `<div class="insights-head"><span class="insights-k">${greeting()} — ${items.length} thing${items.length > 1 ? "s" : ""} need${items.length > 1 ? "" : "s"} you</span><button class="insights-all" data-open-ws="approvals">Review all</button></div>
-    <div class="insights-row">${items.slice(0, 4).map((it) => `
-      <button class="insight-card insight-${it.tone}" data-open-ws="${it.open}">
-        <span class="insight-ic">${svg(it.icon)}</span>
-        <span class="insight-body"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span>
-      </button>`).join("")}</div>`;
+  box.innerHTML = items.slice(0, 4).map((it) => `
+      <button class="mini-chip mini-chip-${it.tone}" data-open-ws="${it.open}" title="${esc(it.sub)}">
+        <span class="mini-chip-ic">${svg(it.icon)}</span>
+        <span class="mini-chip-body"><b>${esc(it.title)}</b><i>${esc(it.sub)}</i></span>
+      </button>`).join("");
 }
 
 /* ============================ notifications ============================ */
