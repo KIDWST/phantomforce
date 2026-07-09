@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260709-96";
+} from "./store.js?v=phantom-live-20260709-97";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -484,21 +484,30 @@ export function renderWebsitePreview(site, products) {
   const showProducts = design.storeEnabled || site.kind === "Store";
   const sections = site.sections.slice(0, 6);
   const listedProducts = products.slice(0, 3);
+  const gallery = Array.isArray(site.gallery) ? site.gallery.slice(0, 6) : [];
   return `
     <div class="site-live-preview theme-${esc(theme)}">
       <div class="site-browser-bar"><span></span><span></span><span></span><b>${esc(design.existingUrl || `${design.brand.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`)}</b><small>mockup preview</small></div>
-      <div class="site-preview-hero">
+      <div class="site-preview-hero ${design.heroImage ? "has-media" : ""}">
         <div>
           <p>${esc(design.brand)}</p>
           <h3>${esc(design.headline)}</h3>
           <span>${esc(design.subhead)}</span>
           <button type="button">${esc(design.cta)}</button>
         </div>
-        <div class="site-preview-orb" aria-hidden="true"><i></i></div>
+        ${design.heroImage
+          ? `<div class="site-preview-media"><img src="${esc(design.heroImage)}" alt=""/></div>`
+          : `<div class="site-preview-orb" aria-hidden="true"><i></i></div>`}
       </div>
       <div class="site-preview-sections">
         ${sections.map((section) => `<span>${esc(section)}</span>`).join("")}
       </div>
+      ${gallery.length ? `
+        <div class="site-preview-gallery">
+          ${gallery.map((g) => g.type === "video"
+            ? `<video src="${esc(g.url)}" muted loop></video>`
+            : `<img src="${esc(g.url)}" alt="${esc(g.title || "")}"/>`).join("")}
+        </div>` : ""}
       ${showProducts ? `
         <div class="site-preview-products">
           ${(listedProducts.length ? listedProducts : [
@@ -506,6 +515,7 @@ export function renderWebsitePreview(site, products) {
             { name: "Starter package", price: 199, desc: "Simple entry point" },
           ]).map((p) => `
             <article>
+              ${p.imageUrl ? `<div class="site-preview-product-media"><img src="${esc(p.imageUrl)}" alt=""/></div>` : ""}
               <b>${esc(p.name)}</b>
               <em>${fmtMoney(p.price)}</em>
               <small>${esc(p.desc || "Ready for your details.")}</small>

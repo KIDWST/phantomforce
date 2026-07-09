@@ -6,10 +6,11 @@
 
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, ago, fmtMoney, statusLabel,
-} from "./store.js?v=phantom-live-20260709-96";
+} from "./store.js?v=phantom-live-20260709-97";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260709-96";
+} from "./workspaces.js?v=phantom-live-20260709-97";
+import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260709-97";
 
 const cap = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 const firstSentence = (value) => String(value || "").split(/[.!?]/)[0].trim();
@@ -54,7 +55,7 @@ const PUBLISH_COPY = {
   "approved-to-publish": "Approved. Publish connector still has to run.",
 };
 
-const ssUi = { tab: "build", activeSiteId: null, device: "desktop", selected: "page", setup: null };
+const ssUi = { tab: "build", activeSiteId: null, device: "desktop", selected: "page", setup: null, picker: null };
 
 function ssIcon(k) {
   const P = {
@@ -77,7 +78,12 @@ function ensureSiteExtras(site) {
   INTEGRATION_DEFS.forEach((d) => {
     if (!site.integrations[d.id]) site.integrations[d.id] = { status: "not-connected", value: "" };
   });
+  site.gallery = Array.isArray(site.gallery) ? site.gallery : [];
   return site;
+}
+
+function pickableAssets() {
+  return loadContentAssets().filter((a) => a.url);
 }
 
 function freshSetup() {
@@ -146,7 +152,16 @@ function inspectorPanel(active) {
   } else if (sel === "hero") {
     body = `
       <label class="ss-field"><span>Headline</span><input data-ss-set="headline" value="${esc(design.headline)}"/></label>
-      <label class="ss-field"><span>Subhead</span><textarea data-ss-set="subhead" rows="3">${esc(design.subhead)}</textarea></label>`;
+      <label class="ss-field"><span>Subhead</span><textarea data-ss-set="subhead" rows="3">${esc(design.subhead)}</textarea></label>
+      <div class="ss-field"><span>Hero image</span>
+        ${design.heroImage ? `
+          <div class="ss-hero-thumb"><span class="ch-asset-thumb"><img src="${esc(design.heroImage)}" alt=""/></span>
+            <div class="ss-hero-thumb-actions">
+              <button class="btn btn-quiet" type="button" data-act="ss-pick-hero">Change</button>
+              <button class="btn btn-quiet" type="button" data-act="ss-remove-hero">Remove</button>
+            </div>
+          </div>` : `<button class="btn btn-primary" type="button" data-act="ss-pick-hero">Choose from Content Hub</button>`}
+      </div>`;
   } else if (sel === "offer") {
     body = `
       <label class="ss-field"><span>Offer</span><input data-ss-set="offer" value="${esc(design.offer)}"/></label>
@@ -281,11 +296,23 @@ function contentTab(active, products) {
         <div class="ss-product-list">
           ${products.map((p) => `
             <div class="ss-product-row">
+              ${p.imageUrl ? `<span class="ch-asset-thumb ss-product-thumb"><img src="${esc(p.imageUrl)}" alt=""/></span>` : ""}
               <b>${esc(p.name)}</b><i>${fmtMoney(p.price)}</i>
               <span class="chip chip-${esc(p.publish)}">${esc(statusLabel(p.publish))}</span>
+              <button class="btn btn-quiet" type="button" data-act="ss-pick-product" data-id="${p.id}">${p.imageUrl ? "Change image" : "Add image"}</button>
               ${p.publish === "draft" ? `<button class="btn btn-quiet" type="button" data-act="ss-product-ready" data-id="${p.id}">Mark ready</button>` : ""}
               <button class="ss-page-x" type="button" data-act="ss-remove-product" data-id="${p.id}" aria-label="Remove product">×</button>
             </div>`).join("") || `<p class="ss-empty-note">No products yet. Add one above.</p>`}
+        </div>
+      </div>
+      <div class="ss-card">
+        <div class="ss-card-head-row"><h3>Gallery</h3><button class="btn btn-primary" type="button" data-act="ss-pick-gallery">+ Add from Content Hub</button></div>
+        <div class="ss-gallery-grid">
+          ${active.gallery.map((g) => `
+            <div class="ss-gallery-item">
+              <span class="ch-asset-thumb">${g.type === "video" ? `<video src="${esc(g.url)}" muted></video>` : `<img src="${esc(g.url)}" alt="${esc(g.title || "")}"/>`}</span>
+              <button class="ss-page-x" type="button" data-act="ss-remove-gallery" data-id="${g.id}" aria-label="Remove from gallery">×</button>
+            </div>`).join("") || `<p class="ss-empty-note">No gallery images yet. Pull generated media straight from Content Hub.</p>`}
         </div>
       </div>
     </div>`;
@@ -423,6 +450,29 @@ function setupDrawerMarkup(setup) {
     </aside>`;
 }
 
+/* --------------------------- media picker drawer --------------------------- */
+function mediaPickerMarkup() {
+  const assets = pickableAssets();
+  return `
+    <div class="ml-drawer-backdrop" data-act="ss-media-close"></div>
+    <aside class="ml-drawer ss-media-drawer">
+      <div class="ml-drawer-head">
+        <b>Choose from Content Hub</b>
+        <button class="ml-drawer-x" type="button" data-act="ss-media-close">${ssIcon("close")}</button>
+      </div>
+      <div class="ml-drawer-body">
+        ${assets.length ? `
+          <div class="ss-media-grid">
+            ${assets.map((a) => `
+              <button class="ss-media-card" type="button" data-act="ss-media-pick" data-id="${esc(a.id)}" title="${esc(a.title)}">
+                <span class="ch-asset-thumb">${a.type === "video" ? `<video src="${esc(a.url)}" muted></video>` : `<img src="${esc(a.url)}" alt="${esc(a.title)}"/>`}<b>${a.type === "video" ? "Video" : "Image"}</b></span>
+                <i>${esc(a.title)}</i>
+              </button>`).join("")}
+          </div>` : `<p class="ml-drawer-note">No generated media yet. Create something in Media Lab, then come back to attach it here.</p>`}
+      </div>
+    </aside>`;
+}
+
 /* -------------------------------- shell -------------------------------- */
 function shellMarkup(active, sites, products) {
   const panel = ssUi.tab === "build" ? buildTab(active, products)
@@ -439,7 +489,8 @@ function shellMarkup(active, sites, products) {
       ${tabbar()}
       <div class="ss-panel" data-ss-panel>${panel}</div>
     </div>
-    ${ssUi.setup ? setupDrawerMarkup(ssUi.setup) : ""}`;
+    ${ssUi.setup ? setupDrawerMarkup(ssUi.setup) : ""}
+    ${ssUi.picker ? mediaPickerMarkup() : ""}`;
 }
 
 /* -------------------------------- actions -------------------------------- */
@@ -590,6 +641,30 @@ export function renderSiteStudio(el, opts = {}) {
       if (p) pushActivity("Site Studio", `removed product: ${p.name}.`, p.ws);
       store.save(); rerender();
     },
+    "ss-pick-hero": () => { ssUi.picker = { kind: "hero" }; rerender(); },
+    "ss-pick-product": (id) => { ssUi.picker = { kind: "product", id }; rerender(); },
+    "ss-pick-gallery": () => { ssUi.picker = { kind: "gallery" }; rerender(); },
+    "ss-media-close": () => { ssUi.picker = null; rerender(); },
+    "ss-media-pick": (assetId) => {
+      const asset = pickableAssets().find((a) => a.id === assetId);
+      const target = ssUi.picker;
+      if (!asset || !target || !active) { ssUi.picker = null; rerender(); return; }
+      if (target.kind === "hero") {
+        active.design.heroImage = asset.url;
+        pushActivity("Site Studio", `attached "${asset.title}" as the hero image for ${active.title}.`, active.ws);
+      } else if (target.kind === "product") {
+        const p = store.state.products.find((x) => x.id === target.id);
+        if (p) { p.imageUrl = asset.url; pushActivity("Site Studio", `attached "${asset.title}" to ${p.name}.`, active.ws); }
+      } else if (target.kind === "gallery") {
+        active.gallery.push({ id: asset.id, url: asset.url, type: asset.type, title: asset.title });
+        pushActivity("Site Studio", `added "${asset.title}" to the ${active.title} gallery.`, active.ws);
+      }
+      active.updated = new Date().toISOString();
+      ssUi.picker = null;
+      store.save(); rerender();
+    },
+    "ss-remove-hero": () => { if (active) { active.design.heroImage = ""; store.save(); rerender(); } },
+    "ss-remove-gallery": (id) => { if (active) { active.gallery = active.gallery.filter((g) => g.id !== id); store.save(); rerender(); } },
     "ss-seo-generate": () => {
       if (!active) return;
       active.seo.title = `${active.design.brand} — ${active.design.headline}`.slice(0, 60);
