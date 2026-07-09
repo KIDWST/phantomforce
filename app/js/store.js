@@ -728,12 +728,19 @@ export function todaysPlan() {
 }
 
 /* ---------------- approvals ---------------- */
-export function resolveApproval(id, approved) {
+/* opts.changesRequested keeps the underlying record untouched (it's not a
+   final decision — the worker/automation that prepared it should redo the
+   work) and routes the item to a distinct "changes requested" status
+   instead of approved/declined, carrying the owner's notes with it. */
+export function resolveApproval(id, approved, opts = {}) {
   const a = store.state.approvals.find((x) => x.id === id);
   if (!a || a.status !== "pending") return;
-  a.status = approved ? "approved" : "declined";
+  const { changesRequested = false, notes = "" } = opts;
+  a.status = changesRequested ? "changes-requested" : (approved ? "approved" : "declined");
   a.resolvedAt = new Date().toISOString();
-  if (approved) {
+  a.ownerNotes = notes || "";
+  a.decision = changesRequested ? (approved ? "approve-with-changes" : "disapprove-with-changes") : (approved ? "approve" : "disapprove");
+  if (approved && !changesRequested) {
     if (a.type === "publish-review") { const r = store.state.reviews.find((x) => x.id === a.ref); if (r) r.status = "published-ready"; }
     if (a.type === "send-message") { const l = store.state.leads.find((x) => x.id === a.ref); if (l) { l.status = "follow-up"; l.next = "Message approved — send-ready in your outbox"; } }
     if (a.type === "publish-page") { const s = store.state.sites.find((x) => x.id === a.ref); if (s) s.status = "approved-to-publish"; }
@@ -743,11 +750,12 @@ export function resolveApproval(id, approved) {
       const agent = store.state.agents.find((x) => x.id === a.ref);
       if (agent) { agent.status = "active"; agent.updatedAt = new Date().toISOString(); }
     }
-  } else if (a.type === "automation") {
+  } else if (!approved && !changesRequested && a.type === "automation") {
     const agent = store.state.agents.find((x) => x.id === a.ref);
     if (agent) { agent.status = "blocked"; agent.updatedAt = new Date().toISOString(); }
   }
-  pushActivity("Command Router", `${approved ? "approved" : "declined"}: ${a.title}`, a.ws);
+  const verb = changesRequested ? `requested changes on (${approved ? "approve" : "disapprove"} path)` : (approved ? "approved" : "declined");
+  pushActivity("Command Router", `${verb}: ${a.title}${notes ? ` — "${notes.slice(0, 80)}"` : ""}`, a.ws);
   store.save();
 }
 
@@ -756,7 +764,7 @@ export const STATUS_LABEL = {
   "draft": "Draft", "sent-ready": "Send-ready", "sent": "Sent", "approved": "Approved",
   "brief-ready": "Pending", "generation-approved": "Pending", "generated": "Generated", "delivered": "Generated",
   "publish-ready": "Publish-ready", "approved-to-publish": "Approved to publish", "published-ready": "Published-ready",
-  "received": "Received", "pending": "Pending", "declined": "Declined", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
+  "received": "Received", "pending": "Pending", "declined": "Declined", "changes-requested": "Changes requested", "not-wired": "Not wired", "invoice-ready": "Invoice-ready",
   "watching": "Watching", "online": "Online", "indexed": "Indexed", "scaffolded": "Scaffolded", "ready": "Ready", "enforcing": "Enforcing", "contained": "Contained", "routed": "Routed",
   "active": "Active", "standby": "Standby", "sandbox": "Sandbox", "gated": "Gated",
   "setup-ready": "Setup ready", "available": "Available", "planning": "Planning", "owner-controlled": "Owner-controlled",

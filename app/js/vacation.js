@@ -3,7 +3,7 @@
    away. This page does not send email, post, spend credits, or execute
    providers; it stores settings, records proof, and queues review decisions. */
 
-import { session as accessSession, ago } from "./store.js?v=phantom-live-20260709-107";
+import { session as accessSession, ago } from "./store.js?v=phantom-live-20260709-110";
 
 const esc = (value = "") => String(value)
   .replace(/&/g, "&amp;")
@@ -88,6 +88,21 @@ async function api(path, options = {}) {
   return data;
 }
 
+const STATUS_CACHE_KEY = "pf.vacation.statusCache.v1";
+function cacheStatusForNav(status) {
+  try { localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify({ enabled: !!status?.enabled, at: Date.now() })); } catch {}
+}
+/* Nav-badge helper for main.js — reads the last successfully fetched status
+   so the sidebar can show ON/OFF without re-fetching on every render or
+   fabricating a state that was never actually confirmed. */
+export function cachedVacationStatus() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STATUS_CACHE_KEY) || "null");
+    if (raw && typeof raw.enabled === "boolean") return raw;
+  } catch {}
+  return null;
+}
+
 async function loadVacationData() {
   const [status, activity, approvals] = await Promise.all([
     api("/api/vacation-mode/status"),
@@ -101,6 +116,7 @@ async function loadVacationData() {
     activity: activity.activity || [],
     approvals: approvals.approvals || [],
   };
+  cacheStatusForNav(status);
 }
 
 function fmtTime(value) {

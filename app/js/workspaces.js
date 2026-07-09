@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260709-107";
+} from "./store.js?v=phantom-live-20260709-110";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1459,36 +1459,65 @@ function renderWorkforce(el, rerender) {
 }
 
 /* ============================= APPROVALS ============================= */
+const approvalChangesFormOpen = new Set();
 function renderApprovals(el, rerender) {
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
   const done = visible(store.state.approvals).filter((a) => a.status !== "pending").slice(0, 6);
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, deploys. Drafting never waits on you.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, deploys. Drafting never waits on you. Workers prepare — you release, send back for changes, or say no.</p></div>
     ${pending.length ? `<div class="stack">
       ${pending.map((a) => `
         <article class="record record-wide approval-card">
           <button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval request">×</button>
           <div class="record-top">${wsTag(a.ws)}<h4>${esc(a.title)}</h4><i class="record-time">${ago(a.at)}</i></div>
           <p class="record-notes">${esc(a.detail)}</p>
-          <p class="record-sub">Requested by ${esc(a.requestedBy)} · type: ${esc(a.type)}</p>
+          <p class="record-sub">Prepared by ${esc(a.requestedBy)} · goes to: ${esc(a.ws)} · action: ${esc(a.type)}</p>
+          ${approvalChangesFormOpen.has(a.id) ? `
+          <form class="approval-changes-form" data-act-changes-form="${a.id}">
+            <label>What should change?</label>
+            <textarea data-changes-notes rows="2" placeholder="Tell the worker what to fix before this goes out…" required></textarea>
+            <div class="record-actions">
+              <button class="btn btn-primary" type="submit" data-changes-decision="approve">Send back — approve once fixed</button>
+              <button class="btn btn-quiet" type="submit" data-changes-decision="disapprove">Send back — no, needs rework</button>
+              <button class="btn btn-quiet" type="button" data-act="cancel-changes" data-id="${a.id}">Cancel</button>
+            </div>
+          </form>` : `
           <div class="record-actions">
             <button class="btn btn-good" data-act="approve" data-id="${a.id}">Approve</button>
-            <button class="btn btn-quiet" data-act="decline" data-id="${a.id}">Decline</button>
-          </div>
+            <button class="btn btn-quiet" data-act="approve-changes" data-id="${a.id}">Approve with changes</button>
+            <button class="btn btn-quiet" data-act="decline" data-id="${a.id}">Disapprove</button>
+            <button class="btn btn-quiet" data-act="decline-changes" data-id="${a.id}">Disapprove with changes</button>
+          </div>`}
         </article>`).join("")}
     </div>` : empty("Queue is clear. Nothing is waiting for approval.")}
     ${done.length ? `<h3 class="ws-subhead">Recent decisions</h3><div class="stack">
-      ${done.map((a) => `<article class="record record-row"><button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval record">×</button>${wsTag(a.ws)}<h4>${esc(a.title)}</h4>${chip(a.status)}</article>`).join("")}
+      ${done.map((a) => `<article class="record record-row"><button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval record">×</button>${wsTag(a.ws)}<h4>${esc(a.title)}</h4>${chip(a.status)}${a.ownerNotes ? `<p class="record-sub">Owner notes: ${esc(a.ownerNotes)}</p>` : ""}</article>`).join("")}
     </div>` : ""}`;
   bindActions(el, {
     approve: (id) => { resolveApproval(id, true); rerender(); },
     decline: (id) => { resolveApproval(id, false); rerender(); },
+    "approve-changes": (id) => { approvalChangesFormOpen.add(id); rerender(); },
+    "decline-changes": (id) => { approvalChangesFormOpen.add(id); rerender(); },
+    "cancel-changes": (id) => { approvalChangesFormOpen.delete(id); rerender(); },
     remove: (id) => {
       const a = store.state.approvals.find((item) => item.id === id);
       store.state.approvals = store.state.approvals.filter((item) => item.id !== id);
+      approvalChangesFormOpen.delete(id);
       if (a) pushActivity("Approval Desk", `removed approval request: ${a.title}.`, a.ws);
       store.save(); rerender();
     },
+  });
+  el.querySelectorAll("[data-act-changes-form]").forEach((form) => {
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      const id = form.dataset.actChangesForm;
+      const notes = form.querySelector("[data-changes-notes]")?.value.trim();
+      const approved = event.submitter?.dataset.changesDecision === "approve";
+      if (!notes) return;
+      resolveApproval(id, approved, { changesRequested: true, notes });
+      approvalChangesFormOpen.delete(id);
+      rerender();
+    };
   });
 }
 

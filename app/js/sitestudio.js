@@ -1,30 +1,19 @@
 /* PhantomForce Site Studio — AI website & store builder.
-   One command box drives websites, stores, landing pages, booking pages,
-   and everything between; mini-tabs (Build/Pages/Design/Content/SEO/
-   Integrations/Publish/Activity) hold the rest so the preview stays the
-   center of gravity instead of a wall of permanent panels. */
+   Webflow-style shell: the live preview is the dominant surface at all
+   times; every control (build prompt, page settings, pages, design,
+   content, SEO, integrations, publish, activity) lives in a single
+   collapsible left rail so nothing ever overlaps or replaces the canvas. */
 
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, ago, fmtMoney, statusLabel,
-} from "./store.js?v=phantom-live-20260709-107";
+} from "./store.js?v=phantom-live-20260709-110";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260709-107";
-import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260709-107";
+} from "./workspaces.js?v=phantom-live-20260709-110";
+import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260709-110";
 
 const cap = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 const firstSentence = (value) => String(value || "").split(/[.!?]/)[0].trim();
-
-const TABS = [
-  { id: "build", label: "Build" },
-  { id: "pages", label: "Pages" },
-  { id: "design", label: "Design" },
-  { id: "content", label: "Content" },
-  { id: "seo", label: "SEO" },
-  { id: "integrations", label: "Integrations" },
-  { id: "publish", label: "Publish" },
-  { id: "activity", label: "Activity" },
-];
 
 const THEME_PRESETS = [
   { id: "neon", name: "Phantom", note: "Signature green/black" },
@@ -55,7 +44,14 @@ const PUBLISH_COPY = {
   "approved-to-publish": "Approved. Publish connector still has to run.",
 };
 
-const ssUi = { tab: "build", activeSiteId: null, device: "desktop", selected: "page", setup: null, picker: null };
+/* Accordion open state — Build/Page settings start open, everything else
+   starts collapsed per the "more website, less UI" direction. Persisted in
+   module state (not the DOM) since every interaction re-renders the shell
+   and native <details> would otherwise forget what the user opened. */
+const ssUi = {
+  activeSiteId: null, device: "desktop", selected: "page", setup: null, picker: null,
+  open: { page: true, quick: false, templates: false, pages: false, design: false, content: false, seo: false, integrations: false, publish: false, activity: false },
+};
 
 function ssIcon(k) {
   const P = {
@@ -130,12 +126,8 @@ function header(active, sites) {
     </div>`;
 }
 
-function tabbar() {
-  return `<div class="ml-tabs" role="tablist">${TABS.map((t) => `<button class="ml-tab ${ssUi.tab === t.id ? "is-active" : ""}" type="button" role="tab" data-act="ss-tab" data-id="${t.id}">${t.label}</button>`).join("")}</div>`;
-}
-
-/* ------------------------------ Build tab ------------------------------ */
-function inspectorPanel(active) {
+/* ------------------------------ rail sections ------------------------------ */
+function pageSettingsBody(active) {
   const design = active.design;
   const sel = ssUi.selected || "page";
   const tabs = [["page", "Page"], ["hero", "Hero"], ["offer", "Offer / CTA"], ["sections", "Sections"]];
@@ -174,12 +166,10 @@ function inspectorPanel(active) {
       </div>`;
   }
   return `
-    <div class="ss-inspector">
-      <div class="ss-inspector-tabs">
-        ${tabs.map(([id, label]) => `<button class="ss-mini-tab ${sel === id ? "is-active" : ""}" type="button" data-act="ss-select" data-id="${id}">${label}</button>`).join("")}
-      </div>
-      ${body}
-    </div>`;
+    <div class="ss-inspector-tabs">
+      ${tabs.map(([id, label]) => `<button class="ss-mini-tab ${sel === id ? "is-active" : ""}" type="button" data-act="ss-select" data-id="${id}">${label}</button>`).join("")}
+    </div>
+    ${body}`;
 }
 
 function readinessItems(active, products) {
@@ -206,17 +196,152 @@ function readinessCard(active, products) {
     </div>`;
 }
 
-function recentActivityMini(active) {
-  const brand = (active.title || "").split(" — ")[0];
-  const rows = (store.state.activity || []).filter((a) => a.text && brand && a.text.includes(brand)).slice(0, 5);
-  if (!rows.length) return "";
+function pagesBody(active) {
   return `
-    <div class="ss-mini-activity">
-      <p class="ss-suggest-label">Recent activity</p>
-      <div class="ss-mini-activity-list">
-        ${rows.map((a) => `<div class="ss-mini-activity-row"><span>${esc(a.text)}</span><i>${ago(a.at)}</i></div>`).join("")}
+    <div class="ss-pages-head"><span class="ss-note">${active.pages.length} page${active.pages.length === 1 ? "" : "s"}</span><button class="btn btn-quiet" type="button" data-act="ss-add-page">+ Add page</button></div>
+    <div class="ss-pages-list">
+      ${active.pages.map((p) => `
+        <div class="ss-page-row ${p.home ? "is-home" : ""}">
+          <div class="ss-page-info"><b>${esc(p.name)}</b><i>${esc(p.slug)}</i></div>
+          <span class="chip chip-${esc(p.status)}">${esc(statusLabel(p.status))}</span>
+          ${p.home ? `<span class="ss-home-tag">Home</span>` : `<button class="btn btn-quiet" type="button" data-act="ss-set-home" data-id="${p.id}">Set home</button>`}
+          <button class="btn btn-quiet" type="button" data-act="ss-rename-page" data-id="${p.id}">Rename</button>
+          <button class="btn btn-quiet" type="button" data-act="ss-dup-page" data-id="${p.id}">Duplicate</button>
+          ${active.pages.length > 1 ? `<button class="ss-page-x" type="button" data-act="ss-del-page" data-id="${p.id}" aria-label="Delete page">×</button>` : ""}
+        </div>`).join("")}
+    </div>`;
+}
+
+function siteTemplatesBody(active) {
+  return `
+    <p class="ss-note">Swap the whole look in one click.</p>
+    <div class="ss-theme-grid">
+      ${THEME_PRESETS.map((t) => `<button class="ss-theme-card theme-${t.id} ${active.design.theme === t.id ? "is-active" : ""}" type="button" data-act="ss-theme" data-id="${t.id}"><b>${esc(t.name)}</b><span>${esc(t.note)}</span></button>`).join("")}
+    </div>`;
+}
+
+function designBody(active) {
+  const design = active.design;
+  return `
+    <label class="ss-field"><span>Style preset</span>
+      <select data-ss-set="style">${["premium local", "premium", "simple", "sports"].map((s) => `<option value="${s}" ${design.style === s ? "selected" : ""}>${cap(s)}</option>`).join("")}</select>
+    </label>
+    <label class="ss-toggle"><input type="checkbox" data-ss-set-bool="storeEnabled" ${design.storeEnabled ? "checked" : ""}/> Store mode (products + checkout)</label>`;
+}
+
+function contentBody(active, products) {
+  return `
+    <div class="ss-card">
+      <h3>Business info</h3>
+      <label class="ss-field"><span>Brand name</span><input data-ss-set="brand" value="${esc(active.design.brand)}"/></label>
+      <label class="ss-field"><span>Audience</span><input data-ss-meta="audience" value="${esc(active.audience || "")}"/></label>
+      <label class="ss-field"><span>Anything else Phantom should know</span><textarea data-ss-meta="notes" rows="3">${esc(active.notes || "")}</textarea></label>
+    </div>
+    <div class="ss-card">
+      <h3>Products / services</h3>
+      <div class="ss-mini-form">
+        <input data-prod-name placeholder="Name"/>
+        <input data-prod-price placeholder="Price" type="number" min="0"/>
+        <input data-prod-cat placeholder="Category"/>
+        <textarea data-prod-desc placeholder="Short description" rows="2"></textarea>
+        <button class="btn btn-primary" type="button" data-act="ss-add-product">Add</button>
+      </div>
+      <div class="ss-product-list">
+        ${products.map((p) => `
+          <div class="ss-product-row">
+            ${p.imageUrl ? `<span class="ch-asset-thumb ss-product-thumb"><img src="${esc(p.imageUrl)}" alt=""/></span>` : ""}
+            <b>${esc(p.name)}</b><i>${fmtMoney(p.price)}</i>
+            <span class="chip chip-${esc(p.publish)}">${esc(statusLabel(p.publish))}</span>
+            <button class="btn btn-quiet" type="button" data-act="ss-pick-product" data-id="${p.id}">${p.imageUrl ? "Change image" : "Add image"}</button>
+            ${p.publish === "draft" ? `<button class="btn btn-quiet" type="button" data-act="ss-product-ready" data-id="${p.id}">Mark ready</button>` : ""}
+            <button class="ss-page-x" type="button" data-act="ss-remove-product" data-id="${p.id}" aria-label="Remove product">×</button>
+          </div>`).join("") || `<p class="ss-empty-note">No products yet. Add one above.</p>`}
+      </div>
+    </div>
+    <div class="ss-card">
+      <div class="ss-card-head-row"><h3>Gallery</h3><button class="btn btn-primary" type="button" data-act="ss-pick-gallery">+ Add</button></div>
+      <div class="ss-gallery-grid">
+        ${active.gallery.map((g) => `
+          <div class="ss-gallery-item">
+            <span class="ch-asset-thumb">${g.type === "video" ? `<video src="${esc(g.url)}" muted></video>` : `<img src="${esc(g.url)}" alt="${esc(g.title || "")}"/>`}</span>
+            <button class="ss-page-x" type="button" data-act="ss-remove-gallery" data-id="${g.id}" aria-label="Remove from gallery">×</button>
+          </div>`).join("") || `<p class="ss-empty-note">No gallery images yet. Pull generated media straight from Content Hub.</p>`}
       </div>
     </div>`;
+}
+
+function seoBody(active) {
+  const seo = active.seo;
+  const home = active.pages.find((p) => p.home) || active.pages[0];
+  return `
+    <label class="ss-field"><span>Page title</span><input data-ss-seo="title" value="${esc(seo.title || active.design.headline)}"/></label>
+    <label class="ss-field"><span>Meta description</span><textarea data-ss-seo="description" rows="3">${esc(seo.description || active.design.subhead)}</textarea></label>
+    <label class="ss-field"><span>Keywords</span><input data-ss-seo="keywords" value="${esc(seo.keywords || "")}" placeholder="comma, separated, keywords"/></label>
+    <label class="ss-field"><span>Slug</span><input data-ss-seo="slug" value="${esc(seo.slug || home.slug)}"/></label>
+    <div class="ss-actions-row">
+      <button class="btn btn-primary" type="button" data-act="ss-seo-generate">AI rewrite from page content</button>
+      <button class="btn btn-quiet" type="button" data-act="ss-seo-save">Save SEO</button>
+    </div>
+    <p class="ss-note">Open-graph image generation and structured data aren't wired yet — everything else here saves for real.</p>`;
+}
+
+function integrationsBody(active) {
+  return `
+    <div class="ss-integration-grid">
+      ${INTEGRATION_DEFS.map((d) => {
+        const rec = active.integrations[d.id];
+        const connected = rec.status === "connected";
+        return `
+          <div class="ss-integration-card ${connected ? "is-on" : ""}">
+            <div class="ss-integration-top"><b>${esc(d.name)}</b><span class="chip chip-${connected ? "active" : "not-wired"}">${connected ? "Connected" : "Not connected"}</span></div>
+            <label class="ss-field"><span>${esc(d.field)}</span><input data-ss-integration="${d.id}" placeholder="${esc(d.placeholder)}" value="${esc(rec.value || "")}" ${connected ? "disabled" : ""}/></label>
+            <div class="ss-integration-actions">
+              ${connected
+                ? `<button class="btn btn-quiet" type="button" data-act="ss-integration-disconnect" data-id="${d.id}">Disconnect</button>`
+                : `<button class="btn btn-primary" type="button" data-act="ss-integration-connect" data-id="${d.id}">Connect</button>`}
+            </div>
+          </div>`;
+      }).join("")}
+    </div>
+    <p class="ss-note">Connecting saves the ID/URL locally and marks it live for Publish checks. PhantomForce never stores production secrets in the browser.</p>`;
+}
+
+function publishBody(active) {
+  const url = active.design.existingUrl || active.url;
+  return `
+    <div class="ss-publish-status">
+      <span class="chip chip-${esc(active.status)}">${esc(statusLabel(active.status))}</span>
+      <p>${PUBLISH_COPY[active.status] || ""}</p>
+    </div>
+    <div class="ss-publish-actions">
+      ${active.status === "draft" ? `<button class="btn btn-good" type="button" data-act="ss-ready">Mark ready to publish</button>` : ""}
+      ${active.status === "publish-ready" ? `<button class="btn btn-primary" type="button" data-act="ss-queue">Queue publish approval</button>` : ""}
+      ${url
+        ? `<button class="btn btn-primary" type="button" data-act="ss-open-live">${ssIcon("globe")} Open live site</button>`
+        : `<button class="btn btn-quiet" type="button" disabled title="Connect a domain in Integrations or link an existing site first">${ssIcon("globe")} Open live site</button>`}
+    </div>
+    <div class="ss-publish-meta">
+      <div class="kv"><span>Domain</span><b>${esc(url || "Not connected")}</b></div>
+      <div class="kv"><span>Last updated</span><b>${ago(active.updated)}</b></div>
+      <div class="kv"><span>Pages</span><b>${active.pages.length}</b></div>
+    </div>`;
+}
+
+function activityBody(active) {
+  const brand = (active.title || "").split(" — ")[0];
+  const rows = (store.state.activity || []).filter((a) => a.text && brand && a.text.includes(brand)).slice(0, 30);
+  return rows.length
+    ? `<div class="ss-activity">${rows.map((a) => `<div class="ss-activity-row"><b>${esc(a.who)}</b><span>${esc(a.text)}</span><i>${ago(a.at)}</i></div>`).join("")}</div>`
+    : `<p class="ss-empty-note">No activity yet for this site.</p>`;
+}
+
+/* ------------------------------ rail + canvas ------------------------------ */
+function accordion(id, label, bodyHtml, badge = "") {
+  return `
+    <details class="ss-accordion" data-ss-acc="${id}" ${ssUi.open[id] ? "open" : ""}>
+      <summary>${esc(label)}${badge}</summary>
+      <div class="ss-accordion-body">${bodyHtml}</div>
+    </details>`;
 }
 
 function buildTab(active, products) {
@@ -224,7 +349,7 @@ function buildTab(active, products) {
   const home = active.pages.find((p) => p.home) || active.pages[0];
   return `
     <div class="ss-build">
-      <div class="ss-col ss-col-command">
+      <div class="ss-col ss-rail">
         <form class="ss-command" data-ss-command>
           <label for="ssPrompt">Tell Phantom what to build, change, or fix</label>
           <textarea id="ssPrompt" data-ss-prompt rows="3" placeholder="Tell Phantom what to build, change, or fix…"></textarea>
@@ -233,13 +358,17 @@ function buildTab(active, products) {
           </div>
           <button class="btn btn-primary" type="submit">Update site</button>
         </form>
-        <div class="ss-suggestions">
-          <p class="ss-suggest-label">Quick sections</p>
-          <div class="ss-suggest-grid">
-            ${["Testimonials", "Pricing", "FAQ", "Gallery", "CTA", "Team"].map((s) => `<button class="ss-suggest" type="button" data-act="ss-add-section" data-id="${esc(s)}">+ ${esc(s)}</button>`).join("")}
-          </div>
-        </div>
-        ${recentActivityMini(active)}
+        ${accordion("page", "Page settings", pageSettingsBody(active))}
+        ${accordion("quick", "Quick sections", `<div class="ss-suggest-grid">${["Testimonials", "Pricing", "FAQ", "Gallery", "CTA", "Team"].map((s) => `<button class="ss-suggest" type="button" data-act="ss-add-section" data-id="${esc(s)}">+ ${esc(s)}</button>`).join("")}</div>`)}
+        ${accordion("templates", "Site templates", siteTemplatesBody(active))}
+        ${accordion("pages", "Pages", pagesBody(active), ` <i class="ss-acc-count">${active.pages.length}</i>`)}
+        ${accordion("design", "Design", designBody(active))}
+        ${accordion("content", "Content", contentBody(active, products))}
+        ${accordion("seo", "SEO", seoBody(active))}
+        ${accordion("integrations", "Integrations", integrationsBody(active))}
+        ${accordion("publish", "Publish", publishBody(active))}
+        ${accordion("activity", "Activity", activityBody(active))}
+        ${readinessCard(active, products)}
       </div>
       <div class="ss-col ss-col-preview">
         <div class="ss-preview-top">
@@ -248,170 +377,6 @@ function buildTab(active, products) {
         </div>
         <div class="ss-preview-frame ss-device-${ssUi.device}" data-ss-preview-mount>${renderWebsitePreview(active, products)}</div>
       </div>
-      <div class="ss-col ss-col-inspector">
-        ${inspectorPanel(active)}
-        ${readinessCard(active, products)}
-      </div>
-    </div>`;
-}
-
-/* ------------------------------ Pages tab ------------------------------ */
-function pagesTab(active) {
-  return `
-    <div class="ss-pages">
-      <div class="ss-pages-head"><h3>Pages</h3><button class="btn btn-primary" type="button" data-act="ss-add-page">+ Add page</button></div>
-      <div class="ss-pages-list">
-        ${active.pages.map((p) => `
-          <div class="ss-page-row ${p.home ? "is-home" : ""}">
-            <div class="ss-page-info"><b>${esc(p.name)}</b><i>${esc(p.slug)}</i></div>
-            <span class="chip chip-${esc(p.status)}">${esc(statusLabel(p.status))}</span>
-            ${p.home ? `<span class="ss-home-tag">Homepage</span>` : `<button class="btn btn-quiet" type="button" data-act="ss-set-home" data-id="${p.id}">Set homepage</button>`}
-            <button class="btn btn-quiet" type="button" data-act="ss-rename-page" data-id="${p.id}">Rename</button>
-            <button class="btn btn-quiet" type="button" data-act="ss-dup-page" data-id="${p.id}">Duplicate</button>
-            ${active.pages.length > 1 ? `<button class="ss-page-x" type="button" data-act="ss-del-page" data-id="${p.id}" aria-label="Delete page">×</button>` : ""}
-          </div>`).join("")}
-      </div>
-    </div>`;
-}
-
-/* ------------------------------ Design tab ------------------------------ */
-function designTab(active, products) {
-  const design = active.design;
-  return `
-    <div class="ss-design">
-      <div class="ss-design-controls">
-        <p class="ss-suggest-label">Theme</p>
-        <div class="ss-theme-grid">
-          ${THEME_PRESETS.map((t) => `<button class="ss-theme-card theme-${t.id} ${design.theme === t.id ? "is-active" : ""}" type="button" data-act="ss-theme" data-id="${t.id}"><b>${esc(t.name)}</b><span>${esc(t.note)}</span></button>`).join("")}
-        </div>
-        <label class="ss-field"><span>Style preset</span>
-          <select data-ss-set="style">${["premium local", "premium", "simple", "sports"].map((s) => `<option value="${s}" ${design.style === s ? "selected" : ""}>${cap(s)}</option>`).join("")}</select>
-        </label>
-        <label class="ss-toggle"><input type="checkbox" data-ss-set-bool="storeEnabled" ${design.storeEnabled ? "checked" : ""}/> Store mode (products + checkout)</label>
-      </div>
-      <div class="ss-design-preview" data-ss-preview-mount>${renderWebsitePreview(active, products)}</div>
-    </div>`;
-}
-
-/* ------------------------------ Content tab ------------------------------ */
-function contentTab(active, products) {
-  return `
-    <div class="ss-content">
-      <div class="ss-card">
-        <h3>Business info</h3>
-        <label class="ss-field"><span>Brand name</span><input data-ss-set="brand" value="${esc(active.design.brand)}"/></label>
-        <label class="ss-field"><span>Audience</span><input data-ss-meta="audience" value="${esc(active.audience || "")}"/></label>
-        <label class="ss-field"><span>Anything else Phantom should know</span><textarea data-ss-meta="notes" rows="3">${esc(active.notes || "")}</textarea></label>
-      </div>
-      <div class="ss-card">
-        <h3>Products / services</h3>
-        <div class="ss-mini-form">
-          <input data-prod-name placeholder="Name"/>
-          <input data-prod-price placeholder="Price" type="number" min="0"/>
-          <input data-prod-cat placeholder="Category"/>
-          <textarea data-prod-desc placeholder="Short description" rows="2"></textarea>
-          <button class="btn btn-primary" type="button" data-act="ss-add-product">Add</button>
-        </div>
-        <div class="ss-product-list">
-          ${products.map((p) => `
-            <div class="ss-product-row">
-              ${p.imageUrl ? `<span class="ch-asset-thumb ss-product-thumb"><img src="${esc(p.imageUrl)}" alt=""/></span>` : ""}
-              <b>${esc(p.name)}</b><i>${fmtMoney(p.price)}</i>
-              <span class="chip chip-${esc(p.publish)}">${esc(statusLabel(p.publish))}</span>
-              <button class="btn btn-quiet" type="button" data-act="ss-pick-product" data-id="${p.id}">${p.imageUrl ? "Change image" : "Add image"}</button>
-              ${p.publish === "draft" ? `<button class="btn btn-quiet" type="button" data-act="ss-product-ready" data-id="${p.id}">Mark ready</button>` : ""}
-              <button class="ss-page-x" type="button" data-act="ss-remove-product" data-id="${p.id}" aria-label="Remove product">×</button>
-            </div>`).join("") || `<p class="ss-empty-note">No products yet. Add one above.</p>`}
-        </div>
-      </div>
-      <div class="ss-card">
-        <div class="ss-card-head-row"><h3>Gallery</h3><button class="btn btn-primary" type="button" data-act="ss-pick-gallery">+ Add from Content Hub</button></div>
-        <div class="ss-gallery-grid">
-          ${active.gallery.map((g) => `
-            <div class="ss-gallery-item">
-              <span class="ch-asset-thumb">${g.type === "video" ? `<video src="${esc(g.url)}" muted></video>` : `<img src="${esc(g.url)}" alt="${esc(g.title || "")}"/>`}</span>
-              <button class="ss-page-x" type="button" data-act="ss-remove-gallery" data-id="${g.id}" aria-label="Remove from gallery">×</button>
-            </div>`).join("") || `<p class="ss-empty-note">No gallery images yet. Pull generated media straight from Content Hub.</p>`}
-        </div>
-      </div>
-    </div>`;
-}
-
-/* -------------------------------- SEO tab -------------------------------- */
-function seoTab(active) {
-  const seo = active.seo;
-  const home = active.pages.find((p) => p.home) || active.pages[0];
-  return `
-    <div class="ss-seo">
-      <label class="ss-field"><span>Page title</span><input data-ss-seo="title" value="${esc(seo.title || active.design.headline)}"/></label>
-      <label class="ss-field"><span>Meta description</span><textarea data-ss-seo="description" rows="3">${esc(seo.description || active.design.subhead)}</textarea></label>
-      <label class="ss-field"><span>Keywords</span><input data-ss-seo="keywords" value="${esc(seo.keywords || "")}" placeholder="comma, separated, keywords"/></label>
-      <label class="ss-field"><span>Slug</span><input data-ss-seo="slug" value="${esc(seo.slug || home.slug)}"/></label>
-      <div class="ss-actions-row">
-        <button class="btn btn-primary" type="button" data-act="ss-seo-generate">AI rewrite from page content</button>
-        <button class="btn btn-quiet" type="button" data-act="ss-seo-save">Save SEO</button>
-      </div>
-      <p class="ss-note">Open-graph image generation and structured data aren't wired yet — everything else here saves for real.</p>
-    </div>`;
-}
-
-/* --------------------------- Integrations tab --------------------------- */
-function integrationsTab(active) {
-  return `
-    <div class="ss-integrations">
-      <div class="ss-integration-grid">
-        ${INTEGRATION_DEFS.map((d) => {
-          const rec = active.integrations[d.id];
-          const connected = rec.status === "connected";
-          return `
-            <div class="ss-integration-card ${connected ? "is-on" : ""}">
-              <div class="ss-integration-top"><b>${esc(d.name)}</b><span class="chip chip-${connected ? "active" : "not-wired"}">${connected ? "Connected" : "Not connected"}</span></div>
-              <label class="ss-field"><span>${esc(d.field)}</span><input data-ss-integration="${d.id}" placeholder="${esc(d.placeholder)}" value="${esc(rec.value || "")}" ${connected ? "disabled" : ""}/></label>
-              <div class="ss-integration-actions">
-                ${connected
-                  ? `<button class="btn btn-quiet" type="button" data-act="ss-integration-disconnect" data-id="${d.id}">Disconnect</button>`
-                  : `<button class="btn btn-primary" type="button" data-act="ss-integration-connect" data-id="${d.id}">Connect</button>`}
-              </div>
-            </div>`;
-        }).join("")}
-      </div>
-      <p class="ss-note">Connecting saves the ID/URL locally and marks it live for Publish checks. PhantomForce never stores production secrets in the browser.</p>
-    </div>`;
-}
-
-/* --------------------------- Publish tab --------------------------- */
-function publishTab(active) {
-  const url = active.design.existingUrl || active.url;
-  return `
-    <div class="ss-publish">
-      <div class="ss-publish-status">
-        <span class="chip chip-${esc(active.status)}">${esc(statusLabel(active.status))}</span>
-        <p>${PUBLISH_COPY[active.status] || ""}</p>
-      </div>
-      <div class="ss-publish-actions">
-        ${active.status === "draft" ? `<button class="btn btn-good" type="button" data-act="ss-ready">Mark ready to publish</button>` : ""}
-        ${active.status === "publish-ready" ? `<button class="btn btn-primary" type="button" data-act="ss-queue">Queue publish approval</button>` : ""}
-        ${url
-          ? `<button class="btn btn-primary" type="button" data-act="ss-open-live">${ssIcon("globe")} Open live site</button>`
-          : `<button class="btn btn-quiet" type="button" disabled title="Connect a domain in Integrations or link an existing site first">${ssIcon("globe")} Open live site</button>`}
-      </div>
-      <div class="ss-publish-meta">
-        <div class="kv"><span>Domain</span><b>${esc(url || "Not connected")}</b></div>
-        <div class="kv"><span>Last updated</span><b>${ago(active.updated)}</b></div>
-        <div class="kv"><span>Pages</span><b>${active.pages.length}</b></div>
-      </div>
-    </div>`;
-}
-
-/* --------------------------- Activity tab --------------------------- */
-function activityTab(active) {
-  const brand = (active.title || "").split(" — ")[0];
-  const rows = (store.state.activity || []).filter((a) => a.text && brand && a.text.includes(brand)).slice(0, 30);
-  return `
-    <div class="ss-activity">
-      ${rows.length
-        ? rows.map((a) => `<div class="ss-activity-row"><b>${esc(a.who)}</b><span>${esc(a.text)}</span><i>${ago(a.at)}</i></div>`).join("")
-        : `<p class="ss-empty-note">No activity yet for this site.</p>`}
     </div>`;
 }
 
@@ -494,21 +459,10 @@ function mediaPickerMarkup() {
 
 /* -------------------------------- shell -------------------------------- */
 function shellMarkup(active, sites, products) {
-  const panel = ssUi.tab === "build" ? buildTab(active, products)
-    : ssUi.tab === "pages" ? pagesTab(active)
-    : ssUi.tab === "design" ? designTab(active, products)
-    : ssUi.tab === "content" ? contentTab(active, products)
-    : ssUi.tab === "seo" ? seoTab(active)
-    : ssUi.tab === "integrations" ? integrationsTab(active)
-    : ssUi.tab === "publish" ? publishTab(active)
-    : activityTab(active);
   return `
     <div class="ss-shell">
-      <div class="ss-toolbar">
-        ${header(active, sites)}
-        ${tabbar()}
-      </div>
-      <div class="ss-panel" data-ss-panel>${panel}</div>
+      <div class="ss-toolbar">${header(active, sites)}</div>
+      <div class="ss-panel" data-ss-panel>${buildTab(active, products)}</div>
     </div>
     ${ssUi.setup ? setupDrawerMarkup(ssUi.setup) : ""}
     ${ssUi.picker ? mediaPickerMarkup() : ""}`;
@@ -552,6 +506,13 @@ export function renderSiteStudio(el, opts = {}) {
 
   const setup = ssUi.setup;
 
+  // Accordions track their own open/closed state via the native <details>
+  // "toggle" event (silent — no rerender) so a later rerender (e.g. typing
+  // in a field) doesn't snap a section the user opened back shut.
+  el.querySelectorAll("[data-ss-acc]").forEach((d) => {
+    d.addEventListener("toggle", () => { ssUi.open[d.dataset.ssAcc] = d.open; });
+  });
+
   bindActions(el, {
     "ss-open-setup": () => { ssUi.setup = freshSetup(); rerender(); },
     "ss-close-setup": () => { ssUi.setup = null; rerender(); },
@@ -578,9 +539,8 @@ export function renderSiteStudio(el, opts = {}) {
       pushActivity("Site Studio", `generated a new site draft for ${draft.title} from the AI setup flow.`, draft.ws);
       store.save(); rerender();
     },
-    "ss-tab": (id) => { ssUi.tab = id; rerender(); },
     "ss-device": (id) => { ssUi.device = id; rerender(); },
-    "ss-goto-publish": () => { ssUi.tab = "publish"; rerender(); },
+    "ss-goto-publish": () => { ssUi.open.publish = true; rerender(); requestAnimationFrame(() => el.querySelector('[data-ss-acc="publish"]')?.scrollIntoView({ behavior: "smooth", block: "start" })); },
     "ss-select": (id) => { ssUi.selected = id; rerender(); },
     "ss-add-section": (id) => { if (active) { active.sections.push(id); active.updated = new Date().toISOString(); pushActivity("Site Studio", `added ${id} section to ${active.title}.`, active.ws); store.save(); rerender(); } },
     "ss-remove-section": (id) => { if (active) { active.sections.splice(Number(id), 1); active.updated = new Date().toISOString(); store.save(); rerender(); } },
