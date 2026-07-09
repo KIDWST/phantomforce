@@ -12,11 +12,12 @@
  * demoable, and swaps to true results the moment a provider is connected.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260709-97";
-import { PLATFORMS, registerContentAsset } from "./contenthub.js?v=phantom-live-20260709-97";
+import { session as accessSession } from "./store.js?v=phantom-live-20260709-98";
+import {
+  PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
+} from "./contenthub.js?v=phantom-live-20260709-98";
 
 const CFG_KEY = "pf.medialab.v1";
-const SOCIAL_KEY = "pf.social.accounts.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const TAU = Math.PI * 2;
 
@@ -154,29 +155,6 @@ let mediaSettingsOpts = {};
 let hermesExtensionListenerReady = false;
 let socialBridgePollTimer = 0;
 
-function defaultSocialAccounts() {
-  return PLATFORMS.map((p) => ({
-    id: p.id,
-    name: p.name,
-    color: p.color,
-    handle: "",
-    url: "",
-    loginIdentity: "",
-    enabled: false,
-    connectMode: "manual",
-    officialConnectState: "not_configured",
-    lastConnectAt: "",
-  }));
-}
-function loadSocialAccounts() {
-  let saved = [];
-  try { saved = JSON.parse(localStorage.getItem(SOCIAL_KEY) || "[]"); } catch {}
-  const rows = Array.isArray(saved) ? saved : [];
-  return defaultSocialAccounts().map((base) => ({ ...base, ...(rows.find((row) => row && row.id === base.id) || {}) }));
-}
-function saveSocialAccounts(accounts) {
-  try { localStorage.setItem(SOCIAL_KEY, JSON.stringify(accounts)); } catch {}
-}
 function cleanSocialHandle(value = "") {
   return String(value || "")
     .trim()
@@ -210,11 +188,6 @@ function socialProfileTarget(account) {
 }
 function socialLoginTarget(account) {
   return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
-}
-function socialStatus(account) {
-  if (account.hermesProof || account.enabled) return "linked";
-  if (account.lastConnectAt || account.loginIdentity) return "pending";
-  return "empty";
 }
 function socialStatusLabel(account) {
   const st = socialStatus(account);

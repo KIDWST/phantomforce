@@ -31,6 +31,32 @@ export const TYPES = { image: "Image", carousel: "Carousel", reel: "Reel", short
 const plat = (id) => PLATFORMS.find((p) => p.id === id) || PLATFORMS[0];
 const isVideo = (t) => ["reel", "short", "video"].includes(t);
 
+/* ---------------- social account connection (shared with Media Lab settings) ----------------
+   A "linked" account means PhantomForce detected the real signed-in public profile through the
+   browser bridge — never a fabricated number. Analytics/Overview must not show any metric that
+   isn't traceable to a real connected account. */
+const SOCIAL_KEY = "pf.social.accounts.v1";
+function defaultSocialAccounts() {
+  return PLATFORMS.map((p) => ({
+    id: p.id, name: p.name, color: p.color, handle: "", url: "", loginIdentity: "",
+    enabled: false, connectMode: "manual", officialConnectState: "not_configured", lastConnectAt: "",
+  }));
+}
+export function loadSocialAccounts() {
+  let saved = [];
+  try { saved = JSON.parse(localStorage.getItem(SOCIAL_KEY) || "[]"); } catch {}
+  const rows = Array.isArray(saved) ? saved : [];
+  return defaultSocialAccounts().map((base) => ({ ...base, ...(rows.find((row) => row && row.id === base.id) || {}) }));
+}
+export function saveSocialAccounts(accounts) {
+  try { localStorage.setItem(SOCIAL_KEY, JSON.stringify(accounts)); } catch {}
+}
+export function socialStatus(account) {
+  if (account.hermesProof || account.enabled) return "linked";
+  if (account.lastConnectAt || account.loginIdentity) return "pending";
+  return "empty";
+}
+
 /* ---------------- seeded generation (stable across reloads) ---------------- */
 function mulberry(seed) { return function () { seed |= 0; seed = (seed + 0x6D2B79F5) | 0; let t = Math.imul(seed ^ (seed >>> 15), 1 | seed); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
 const CAPTIONS = [
@@ -1059,83 +1085,58 @@ function openPost(p, esc) {
 }
 
 /* =========================================================================
-   ANALYTICS  (fetches the exact same data via analyze())
+   ANALYTICS — real connections only. If no social account is actually
+   linked, this shows nothing but a connect prompt: no KPIs, no charts, no
+   modeled numbers. Once linked, it shows what's genuinely real (which
+   accounts, real Content Hub asset counts) and is honest that live
+   performance metrics need each platform's analytics API wired server-side
+   before any reach/engagement number can be shown — never a placeholder.
    ========================================================================= */
 export function renderAnalytics(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
-  const data = loadContent();
-  const a = analyze(data.posts);
-  const topPlatform = a.byPlatform[0];
-  const topType = a.byType[0];
-  const clickToLeadRate = +(100 * Math.max(1, Math.round(a.totals.clicks * 0.08)) / Math.max(1, a.totals.clicks)).toFixed(1);
-  const modeledLeads = Math.max(1, Math.round(a.totals.clicks * 0.08));
-  const modeledPipeline = modeledLeads * 850;
-  const trendRows = [
-    { label: "Short-form video", signal: `${K(a.totals.views)} views`, take: "Use reels and shorts for discovery, then retarget with offer posts." },
-    { label: topPlatform ? `${topPlatform.name} reach` : "Channel reach", signal: topPlatform ? K(topPlatform.reach) : "-", take: "Put the strongest creator ideas on the channel already moving." },
-    { label: topType ? `${topType.label} format` : "Content format", signal: topType ? `${topType.count} posts` : "-", take: "Keep the winning format in rotation before adding new experiments." },
-    { label: "Audience intent", signal: `${K(a.totals.comments)} comments`, take: "Mine comments for objections, questions, and next content hooks." },
-  ];
-  const maxR = Math.max(1, ...a.series.map((s) => s.reach));
-  const W = 640, H = 150;
-  const pts = a.series.map((s, i) => [i / (a.series.length - 1) * W, H - (s.reach / maxR) * (H - 12) - 6]);
-  const line = pts.map((p, i) => `${i ? "L" : "M"}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(" ");
-  const area = `${line} L${W} ${H} L0 ${H} Z`;
-  const maxPlat = Math.max(1, ...a.byPlatform.map((p) => p.engagement));
+  const accounts = loadSocialAccounts();
+  const linked = accounts.filter((acct) => socialStatus(acct) === "linked");
+
+  if (!linked.length) {
+    el.innerHTML = `
+      <div class="an an-gate">
+        <section class="an-hero">
+          <div>
+            <p class="ch-eyebrow">Business intelligence</p>
+            <h3>Connect a social account to see analytics.</h3>
+            <p>Analytics only shows numbers pulled from an account you've actually signed in with. Nothing is modeled, estimated, or invented here.</p>
+          </div>
+        </section>
+        <div class="an-connect-card">
+          <p class="an-connect-lede">No social account is connected yet.</p>
+          <button class="btn btn-primary" type="button" data-open-ws="settings">Connect a social account</button>
+        </div>
+      </div>`;
+    return;
+  }
+
+  const assets = loadContentAssets();
   el.innerHTML = `
     <div class="an">
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Business intelligence</p>
-          <h3>What is trending, what is working, and what should change.</h3>
-          <p>Analytics is the business view: performance, audience signals, channel trends, and modeled pipeline impact from local content data.</p>
+          <h3>Connected — real accounts only.</h3>
+          <p>Analytics only shows data pulled from accounts you've actually connected. Nothing here is modeled or estimated.</p>
         </div>
-        <span class="an-src">${svgIc("up")} Source: <b>Content Hub data</b> · ${a.totals.posts} published items</span>
+        <span class="an-src">${svgIc("up")} ${linked.length} account${linked.length === 1 ? "" : "s"} connected</span>
       </section>
-      <div class="ch-kpis">
-        ${kpi("Reach", K(a.totals.reach), "market attention")}
-        ${kpi("Engagement rate", a.totals.engagementRate + "%", `${K(a.totals.engagement)} actions`)}
-        ${kpi("Site clicks", K(a.totals.clicks), "intent signal")}
-        ${kpi("Modeled leads", K(modeledLeads), `${clickToLeadRate}% of clicks`, "good")}
-        ${kpi("Modeled pipeline", "$" + K(modeledPipeline), "estimate, not booked")}
+      <div class="an-connected-grid">
+        ${linked.map((acct) => `<div class="an-account-chip"><span class="ch-dot" style="background:${acct.color}"></span><b>${esc(acct.name)}</b><i>${esc(acct.handle || acct.loginIdentity || "connected")}</i></div>`).join("")}
       </div>
-      <div class="ch-cols">
-        <div class="ch-card an-wide">
-          <div class="ch-card-h"><h3>Market attention trend</h3><span class="ch-src">reach over time</span></div>
-          <svg class="an-chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none"><path class="an-area" d="${area}"/><path class="an-line" d="${line}"/></svg>
-        </div>
-        <div class="ch-card an-insight-card">
-          <div class="ch-card-h"><h3>Top business read</h3></div>
-          <b>${topPlatform ? esc(topPlatform.name) : "No channel"} is carrying attention.</b>
-          <p>${topPlatform ? `${esc(topPlatform.name)} has the strongest current reach. Use it for proof-led posts and push experimental ideas elsewhere.` : "Publish more content before drawing a conclusion."}</p>
-          <button class="section-link" data-open-ws="content">Plan next content -></button>
-        </div>
+      <div class="ch-card an-notice">
+        <b>Live performance metrics aren't wired up yet.</b>
+        <p>PhantomForce confirmed the signed-in profile above, but reach, engagement, and pipeline numbers need each platform's real analytics API connected server-side. Nothing shows here until that's actually live — no modeled estimates in the meantime.</p>
       </div>
-      <div class="an-business-grid">
-        <section class="ch-card">
-          <div class="ch-card-h"><h3>Trend signals</h3><span class="ch-src">what deserves attention</span></div>
-          <div class="an-trend-list">
-            ${trendRows.map((row) => `<article class="an-trend">
-              <span>${esc(row.signal)}</span>
-              <b>${esc(row.label)}</b>
-              <p>${esc(row.take)}</p>
-            </article>`).join("")}
-          </div>
-        </section>
-        <section class="ch-card">
-          <div class="ch-card-h"><h3>Channel performance</h3><span class="ch-src">engagement quality</span></div>
-          <div class="ch-bars">${a.byPlatform.map((p) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${p.color}"></i>${esc(p.name)}</span>
-            <span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round(100 * p.engagement / maxPlat)}%;background:${p.color}"></span></span><b class="ch-bar-val">${K(p.engagement)}</b></div>`).join("")}</div>
-        </section>
-      </div>
+      ${assets.length ? `
       <div class="ch-card">
-        <div class="ch-card-h"><h3>Business recommendations</h3><span class="ch-src">from content signals</span></div>
-        <div class="an-reco-grid">
-          <article><b>Double down</b><p>Keep publishing short-form proof and workflow clips where reach is already moving.</p></article>
-          <article><b>Convert attention</b><p>Turn comments and clicks into follow-up prompts, lead magnets, and owner-safe offers.</p></article>
-          <article><b>Test next</b><p>Run one objection carousel and one offer breakdown before changing the whole strategy.</p></article>
-        </div>
-      </div>
+        <div class="ch-card-h"><h3>Ready to publish</h3><span class="ch-src">from Content Hub</span></div>
+        <p class="an-assets-line">${assets.length} generated asset${assets.length === 1 ? "" : "s"} in Content Hub, ready once publishing is connected.</p>
+      </div>` : ""}
     </div>`;
-  el.querySelectorAll("[data-ch-open]").forEach((b) => b.onclick = () => openPost(data.posts.find((p) => p.id === b.dataset.chOpen), esc));
 }
