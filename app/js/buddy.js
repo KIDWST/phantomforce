@@ -6,7 +6,7 @@
    Self-contained: owns its physics loop, drag handling, and speech bubble.
    Reduced motion: sits calmly in the corner, still clickable. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-92";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-93";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const DOCK_KEY = "pf.buddy.docked.v1";

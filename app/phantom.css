@@ -480,10 +480,10 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 @keyframes panelIn { from { opacity: 0; transform: translateY(26px) scale(0.985); } to { opacity: 1; transform: none; } }
 .overlay-head {
   display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
-  padding: 22px clamp(18px, 2.6vw, 30px) 16px; border-bottom: 1px solid var(--line);
+  padding: 16px clamp(16px, 2vw, 24px) 12px; border-bottom: 1px solid var(--line);
 }
-.overlay-kicker { margin: 0 0 3px; font: 500 10px "DM Mono", monospace; letter-spacing: 0.26em; text-transform: uppercase; color: var(--neon); }
-.overlay-head h2 { margin: 0; font-size: clamp(21px, 3vw, 29px); letter-spacing: -0.02em; }
+.overlay-kicker { margin: 0 0 3px; font: 500 10px "DM Mono", monospace; letter-spacing: 0.24em; text-transform: uppercase; color: var(--neon); }
+.overlay-head h2 { margin: 0; font-size: clamp(18px, 1.8vw, 22px); letter-spacing: -0.01em; }
 .overlay-x {
   flex: 0 0 auto; width: 38px; height: 38px; display: grid; place-items: center; cursor: pointer;
   border: 1px solid var(--line); border-radius: 50%; background: rgba(3, 12, 9, 0.6); color: #caffdf; font-size: 15px;
@@ -593,15 +593,15 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     radial-gradient(circle at 88% 18%, rgba(65,255,161,0.18), transparent 34%),
     linear-gradient(145deg, rgba(7, 25, 18, 0.82), rgba(2, 8, 8, 0.9));
 }
-.memory-hero h3 { margin: 0 0 8px; font-size: clamp(22px, 3vw, 34px); letter-spacing: -0.03em; }
+.memory-hero h3 { margin: 0 0 5px; font-size: clamp(17px, 1.7vw, 21px); letter-spacing: -0.015em; }
 .memory-hero p:not(.overlay-kicker) { margin: 0; max-width: 760px; color: var(--dim); line-height: 1.5; }
 .memory-score {
-  width: 116px; min-height: 116px; border-radius: 32px; display: grid; place-items: center;
+  width: 78px; min-height: 78px; border-radius: 22px; display: grid; place-items: center;
   border: 1px solid rgba(65,255,161,0.28); background: rgba(65,255,161,0.08);
   box-shadow: inset 0 0 34px rgba(65,255,161,0.08), 0 0 34px rgba(65,255,161,0.08);
 }
-.memory-score b { font: 700 38px "DM Mono", monospace; color: var(--neon); line-height: 1; }
-.memory-score span { margin-top: -18px; font: 700 10px "DM Mono", monospace; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); }
+.memory-score b { font: 700 26px "DM Mono", monospace; color: var(--neon); line-height: 1; }
+.memory-score span { margin-top: -6px; font: 700 9px "DM Mono", monospace; letter-spacing: 0.16em; text-transform: uppercase; color: var(--dim); }
 .memory-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px; align-items: end; }
 .memory-search { display: grid; gap: 7px; }
 .memory-search span {
@@ -641,13 +641,13 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .memory-package {
   display: inline-flex; gap: 7px; align-items: center; border-radius: 12px; padding: 8px 10px;
 }
-.site-builder { display: grid; gap: 18px; }
+.site-builder { display: grid; gap: 14px; }
 .site-builder-head {
   display: flex; justify-content: space-between; align-items: flex-start; gap: 18px; flex-wrap: wrap;
-  padding: 18px; border: 1px solid var(--line); border-radius: 22px;
+  padding: 14px 16px; border: 1px solid var(--line); border-radius: 20px;
   background: radial-gradient(circle at 82% 12%, rgba(65,255,161,0.16), transparent 34%), rgba(3, 11, 9, 0.68);
 }
-.site-builder-head h3 { margin: 0 0 7px; font-size: clamp(22px, 3vw, 34px); letter-spacing: -0.03em; }
+.site-builder-head h3 { margin: 0 0 5px; font-size: clamp(17px, 1.6vw, 20px); letter-spacing: -0.015em; }
 .site-builder-head p:not(.overlay-kicker) { margin: 0; color: var(--dim); line-height: 1.45; }
 .site-builder-actions, .site-mini-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .looper-packet { border-color: rgba(65, 255, 161, 0.2); }
@@ -733,13 +733,13 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .site-preview-hero {
   display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(150px, 0.8fr); gap: 18px; align-items: center;
-  min-height: 255px; padding: clamp(22px, 4vw, 42px);
+  min-height: 190px; padding: clamp(18px, 2.6vw, 30px);
   background:
     radial-gradient(circle at 78% 34%, color-mix(in srgb, var(--site-accent) 28%, transparent), transparent 28%),
     linear-gradient(145deg, rgba(255,255,255,0.04), rgba(0,0,0,0.08));
 }
-.site-preview-hero p { margin: 0 0 8px; color: var(--site-accent); font: 700 11px "DM Mono", monospace; letter-spacing: 0.18em; text-transform: uppercase; }
-.site-preview-hero h3 { margin: 0 0 12px; font-size: clamp(28px, 4.6vw, 54px); line-height: 0.96; letter-spacing: -0.05em; }
+.site-preview-hero p { margin: 0 0 6px; color: var(--site-accent); font: 700 11px "DM Mono", monospace; letter-spacing: 0.18em; text-transform: uppercase; }
+.site-preview-hero h3 { margin: 0 0 8px; font-size: clamp(22px, 2.6vw, 32px); line-height: 1.02; letter-spacing: -0.03em; }
 .site-preview-hero span { display: block; max-width: 560px; color: rgba(234,255,242,0.74); line-height: 1.45; }
 .site-preview-hero button {
   margin-top: 20px; border: 0; border-radius: 999px; background: var(--site-accent); color: #02110b;
@@ -1417,24 +1417,24 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   align-items: center;
   justify-content: space-between;
   gap: 18px;
-  padding: clamp(22px, 2.4vw, 34px);
+  padding: 14px clamp(18px, 2vw, 28px);
   border-bottom: 1px solid var(--line);
 }
 .workspace-page-kicker {
-  margin: 0 0 8px;
-  font: 600 11px "DM Mono", monospace;
-  letter-spacing: 0.24em;
+  margin: 0 0 4px;
+  font: 600 10px "DM Mono", monospace;
+  letter-spacing: 0.2em;
   text-transform: uppercase;
   color: var(--neon);
 }
 .workspace-page-head h1 {
   margin: 0;
-  font-size: clamp(30px, 4vw, 46px);
-  line-height: 1;
-  letter-spacing: 0;
+  font-size: clamp(19px, 1.6vw, 24px);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
 }
 .workspace-page-body {
-  padding: clamp(18px, 2.3vw, 32px);
+  padding: clamp(14px, 1.8vw, 22px);
   overflow: visible;
 }
 .workspace-page-wide .workspace-page-body {
@@ -1448,13 +1448,13 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 /* ---------------- hero ---------------- */
 .hero2 {
   position: relative; display: grid; grid-template-columns: 1.05fr 1fr; gap: 20px; align-items: center; overflow: hidden;
-  padding: clamp(24px, 3vw, 40px); border: 1px solid var(--line); border-radius: 24px; min-height: 400px;
+  padding: clamp(16px, 1.8vw, 24px); border: 1px solid var(--line); border-radius: 22px; min-height: 280px;
   background: radial-gradient(80% 90% at 78% 40%, rgba(65, 255, 161, 0.09), transparent 60%), linear-gradient(160deg, rgba(8, 22, 16, 0.7), rgba(2, 8, 10, 0.78));
 }
 .hero2-copy { position: relative; z-index: 2; min-width: 0; }
-.hero2-title { margin: 0 0 12px; font-size: clamp(28px, 3.4vw, 44px); line-height: 1.04; letter-spacing: -0.02em; }
+.hero2-title { margin: 0 0 8px; font-size: clamp(19px, 1.8vw, 24px); line-height: 1.15; letter-spacing: -0.01em; }
 .hero2-title span[data-hero-name] { background: linear-gradient(180deg, #7dffc0, var(--neon)); -webkit-background-clip: text; background-clip: text; color: transparent; }
-.hero2-sub { margin: 0 0 22px; font-size: 15px; line-height: 1.5; color: var(--dim); }
+.hero2-sub { margin: 0 0 16px; font-size: 13.5px; line-height: 1.5; color: var(--dim); }
 .cmd-chips { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; max-width: 400px; margin-bottom: 16px; }
 .cmd-chip {
   display: flex; align-items: center; gap: 8px; padding: 11px 13px; cursor: pointer;
@@ -3886,8 +3886,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     order: 1;
     max-width: 240px;
     margin: 0 0 4px;
-    font-size: clamp(24px, 7vw, 30px);
-    line-height: 1.02;
+    font-size: clamp(18px, 6vw, 22px);
+    line-height: 1.08;
   }
   .hero2-title br { display: none; }
   .hero2-sub {
@@ -5098,17 +5098,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .vm-hero > * { position: relative; z-index: 1; }
 .vm-hero h2 {
   margin: 0;
-  max-width: 760px;
-  font-size: clamp(30px, 4.4vw, 58px);
-  line-height: 0.95;
-  letter-spacing: -0.055em;
+  max-width: 640px;
+  font-size: clamp(20px, 2.2vw, 28px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
 }
 .vm-hero p {
-  margin: 12px 0 0;
-  max-width: 780px;
+  margin: 8px 0 0;
+  max-width: 640px;
   color: var(--dim);
-  font-size: clamp(14px, 1.5vw, 17px);
-  line-height: 1.55;
+  font-size: clamp(13px, 1.2vw, 14.5px);
+  line-height: 1.5;
 }
 .vm-kicker {
   display: block;
@@ -5118,22 +5118,22 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   text-transform: uppercase;
 }
 .vm-hero-mark {
-  width: 148px;
-  min-height: 148px;
-  border-radius: 28px;
+  width: 92px;
+  min-height: 92px;
+  border-radius: 20px;
   display: grid;
   place-items: center;
-  gap: 8px;
+  gap: 5px;
   border: 1px solid rgba(65, 255, 161, 0.18);
   background: radial-gradient(circle, rgba(65, 255, 161, 0.18), rgba(0, 0, 0, 0.42));
   flex: 0 0 auto;
 }
 .vm-hero-mark span {
-  width: 54px;
-  height: 54px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   background: radial-gradient(circle, var(--neon), rgba(65, 255, 161, 0.08));
-  box-shadow: 0 0 32px rgba(65, 255, 161, 0.42);
+  box-shadow: 0 0 20px rgba(65, 255, 161, 0.42);
 }
 .vm-hero-mark b {
   font: 800 11px "DM Mono", monospace;
@@ -5141,20 +5141,20 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   color: var(--ink);
 }
 .vm-card {
-  border-radius: 22px;
-  padding: clamp(16px, 2vw, 22px);
+  border-radius: 20px;
+  padding: clamp(13px, 1.4vw, 17px);
 }
 .vm-status-card {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(280px, 380px);
-  gap: 18px;
+  gap: 14px;
 }
 .vm-status-main h3,
 .vm-card-head h3 {
-  margin: 5px 0 0;
-  font-size: clamp(22px, 2.6vw, 34px);
-  line-height: 1.02;
-  letter-spacing: -0.04em;
+  margin: 4px 0 0;
+  font-size: clamp(17px, 1.7vw, 21px);
+  line-height: 1.15;
+  letter-spacing: -0.02em;
 }
 .vm-status-main p {
   margin: 10px 0 0;
@@ -5268,14 +5268,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   gap: 10px;
 }
 .vm-metric {
-  border-radius: 16px;
-  padding: 14px;
-  min-height: 84px;
+  border-radius: 14px;
+  padding: 11px;
+  min-height: 66px;
 }
 .vm-metric b {
   display: block;
   color: var(--ink);
-  font-size: clamp(21px, 2.2vw, 30px);
+  font-size: clamp(17px, 1.6vw, 21px);
   line-height: 1;
 }
 .vm-metric span {
