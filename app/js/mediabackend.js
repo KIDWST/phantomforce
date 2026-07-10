@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260709-121";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260709-121";
+import { session } from "./store.js?v=phantom-live-20260709-122";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260709-122";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -167,9 +167,8 @@ export async function requestRemoveBackground(dataUrl) {
    reference image + modality "edit" so a connected edit-capable engine
    performs a real prompt-guided edit. No key ever touches the browser.
 
-   If no edit-capable engine is wired, the UI stays in manual studio mode:
-   prepare the prompt/image for a human-run workflow instead of pretending an
-   automated edit happened. */
+   If no edit-capable engine is wired, the UI reports AI Edit as unavailable
+   instead of pretending an automated edit happened. */
 // Engines ai-proxy actually knows how to run for real prompt-guided edits
 // (matches MEDIA_PROVIDERS[id].modalities in ai-proxy/server.mjs). Image-only
 // engines do not make edits "connected"; keep those out of this path.
@@ -183,7 +182,7 @@ export async function probeAiEditBackend() {
     const media = d.media || {};
     const keyedProvider = EDIT_CAPABLE_PROVIDERS.find((id) => media[id]);
     if (keyedProvider) return { available: true, mode: "connected", provider: keyedProvider };
-    return { available: false, mode: "manual", provider: "higgsfield" };
+    return { available: false, mode: "unavailable", provider: null };
   } catch {
     return { available: false, mode: "unavailable", provider: null };
   }
@@ -201,8 +200,8 @@ export async function requestAiEdit({ dataUrl, prompt, provider = "higgsfield" }
     }, 45000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && Array.isArray(d.assets) && d.assets[0]?.url) return { ok: true, url: d.assets[0].url };
-    return { ok: false, message: (d && d.message) || (d && d.error === "unconfigured" ? "Prompt-guided generation is not wired in this workspace yet." : "The media engine didn't return a result.") };
+    return { ok: false, message: (d && d.message) || (d && d.error === "unconfigured" ? "AI Edit is not connected yet." : "AI Edit did not return a result.") };
   } catch (e) {
-    return { ok: false, message: e && e.name === "AbortError" ? "AI edit timed out." : "Could not reach the media engine." };
+    return { ok: false, message: e && e.name === "AbortError" ? "AI Edit timed out." : "Could not reach AI Edit." };
   }
 }

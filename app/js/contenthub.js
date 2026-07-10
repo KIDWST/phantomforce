@@ -7,11 +7,11 @@
    anything else) can fetch the same numbers with zero coupling. */
 
 import {
-  freshEditState, applyFilterPreset, paintEdit, renderBaseFrame, heuristicAiEdit,
+  freshEditState, applyFilterPreset, paintEdit, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260709-121";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260709-121";
+} from "./imagefilters.js?v=phantom-live-20260709-122";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260709-122";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -777,52 +777,22 @@ function aiEditBody(lb, esc) {
   const checking = ai.status === "checking";
   const loading = ai.status === "loading";
   const busy = checking || loading;
-  const localNote = `<p class="ch-lb-ai-note">"Apply as adjustment" is a local brightness/contrast/style nudge, not AI — it works for simple asks like brighter, warmer, more contrast, or cinematic, fully offline.</p>
-    ${ai.status === "local-applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Applied locally (not AI) — use Reset to go back to the original.</p>` : ""}`;
-
-  if (ai.mode === "manual") {
-    // Manual studio mode: no automated media run. This only prepares the
-    // prompt/image and opens the owner's external creative studio in a new tab.
-    return `
-      <p class="ch-lb-ai-note ch-lb-ai-note-warn">Manual studio mode is active. Prep the prompt and image below, then finish the edit in your creator studio.</p>
-      <div class="ch-lb-ai-row">
-        <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, more contrast, cinematic…"/>
-      </div>
-      <div class="ch-lb-chips">
-        <button class="btn btn-quiet" type="button" data-ch-lb-ai-copy>Copy prompt</button>
-        <button class="btn btn-quiet" type="button" data-ch-lb-ai-dl>Download image</button>
-        <button class="btn btn-primary" type="button" data-ch-lb-ai-open-studio>Open creator studio ${svgIc("bolt")}</button>
-      </div>
-      <div class="ch-lb-chips">
-        <button class="btn btn-quiet" type="button" data-ch-lb-ai-local>Apply as adjustment</button>
-      </div>
-      ${localNote}
-      ${ai.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(ai.message || "Couldn't prep that.")}</p>` : ""}
-    `;
-  }
 
   if (ai.mode !== "connected") {
-    // No prompt-guided media engine is wired. Offer setup plus the same local
-    // fallback for simple asks.
     return `
-      <p class="ch-lb-ai-note ch-lb-ai-note-warn">Prompt-guided generation is not wired in this workspace yet.</p>
-      <div class="ch-lb-chips">
-        <button class="btn btn-primary" type="button" data-ch-lb-ai-connect>${svgIc("bolt")} Connect Media Engine</button>
-      </div>
       <div class="ch-lb-ai-row">
-        <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, more contrast, cinematic…"/>
-        <button class="btn btn-quiet" type="button" data-ch-lb-ai-local>Apply as adjustment</button>
+        <input class="ch-lb-ai-input" data-ch-lb-ai disabled placeholder="AI Edit needs setup…"/>
+        <button class="btn btn-primary" type="button" data-ch-lb-ai-connect>${svgIc("bolt")} Set up AI Edit</button>
       </div>
-      ${localNote}
+      <p class="ch-lb-ai-note ch-lb-ai-note-warn">AI Edit is not connected yet. Set it up once, then Generate will edit the image here.</p>
     `;
   }
 
   return `
     <div class="ch-lb-ai-row">
       <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…"/>
-      <button class="btn btn-primary" type="button" data-ch-lb-ai-run ${busy ? "disabled" : ""}>${loading ? "Generating…" : checking ? "Checking…" : "Generate"}</button>
+      <button class="btn btn-primary" type="button" data-ch-lb-ai-run ${busy ? "disabled" : ""}>${loading ? "Generating…" : checking ? "Checking…" : "Generate AI Edit"}</button>
     </div>
-    <p class="ch-lb-ai-note">Connected — Generate runs this image and prompt through your media engine.</p>
     ${ai.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(ai.message || "Edit failed.")}</p>` : ""}
     ${ai.status === "success" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Edit applied — use Reset to go back to the original.</p>` : ""}
   `;
@@ -1263,45 +1233,6 @@ function wireLightbox(root, opts) {
   const aiConnect = root.querySelector("[data-ch-lb-ai-connect]");
   if (aiConnect) aiConnect.onclick = () => { close(); opts.openWorkspace?.("settings"); };
 
-  const aiLocal = root.querySelector("[data-ch-lb-ai-local]");
-  if (aiLocal) aiLocal.onclick = () => {
-    const q = (root.querySelector("[data-ch-lb-ai]")?.value || "").trim();
-    if (!q) return;
-    heuristicAiEdit(q, s);
-    lb.aiEdit = { ...lb.aiEdit, status: "local-applied" };
-    repaint();
-    rerender();
-    opts.notify?.("Content Hub", `applied a local adjustment to "${asset.title}" (not AI): "${q.slice(0, 40)}".`);
-  };
-
-  // Manual studio mode: prep the prompt/image for the owner to run by hand.
-  // No login automation, no cookies, no scraping; just clipboard/download/open.
-  const aiCopy = root.querySelector("[data-ch-lb-ai-copy]");
-  if (aiCopy) aiCopy.onclick = async () => {
-    const q = (root.querySelector("[data-ch-lb-ai]")?.value || "").trim();
-    if (!q) { opts.notify?.("Content Hub", "Type a prompt first, then Copy prompt."); return; }
-    try {
-      await navigator.clipboard.writeText(q);
-      opts.notify?.("Content Hub", "Prompt copied — paste it into your creator studio.");
-    } catch {
-      opts.notify?.("Content Hub", "Couldn't copy to the clipboard — select and copy the prompt manually.");
-    }
-  };
-  const aiDownload = root.querySelector("[data-ch-lb-ai-dl]");
-  if (aiDownload) aiDownload.onclick = async () => {
-    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
-    if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't prep the image for the creator studio: ${exported.error}`); return; }
-    const link = document.createElement("a");
-    link.href = exported.url;
-    link.download = `phantomforce-${asset.id}.png`;
-    link.click();
-  };
-  const aiOpenStudio = root.querySelector("[data-ch-lb-ai-open-studio]");
-  if (aiOpenStudio) aiOpenStudio.onclick = () => {
-    window.open("https://higgsfield.ai", "_blank", "noopener,noreferrer");
-  };
-
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
   if (bgRun) bgRun.onclick = async () => {
     if (lb.bg.status === "unavailable") return;
@@ -1393,8 +1324,8 @@ function wireLightbox(root, opts) {
     lb._probed = true;
     probeAiEditBackend().then((r) => {
       if (chLightbox !== lb) return;
-      // mode is the persistent connectivity classification: connected,
-      // manual, or unavailable. status is the transient state of the current
+      // mode is the persistent connectivity classification: connected or
+      // unavailable. status is the transient state of the current
       // action (idle/loading/error/success/local-applied) layered on top.
       lb.aiEdit = { mode: r.mode, status: "idle", message: "", provider: r.provider };
       rerender();
