@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-130";
+} from "./store.js?v=phantom-live-20260710-131";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1176,8 +1176,92 @@ const WORKFORCE_EMPLOYEES = [
 
 const WORKFORCE_FILTERS = ["All", "Operations", "Sales", "Content", "Websites", "Finance", "Security", "Client Success"];
 
+const SWARM_SUBAGENT_TEMPLATES = [
+  {
+    id: "signal",
+    name: "Signal",
+    title: "Signal Scout",
+    focus: "Watches incoming context for useful signals, gaps, and next-best routes.",
+    skills: ["signal scan", "intake notes", "priority hints", "handoff prep"],
+    status: "available",
+    completedBoost: 9,
+    workloadOffset: -18,
+    productivityOffset: 1,
+  },
+  {
+    id: "draft",
+    name: "Draft",
+    title: "Draft Builder",
+    focus: "Turns the parent worker's lane into first-pass copy, plans, checklists, or packets.",
+    skills: ["drafting", "structure", "packet prep", "copy pass"],
+    status: "working",
+    completedBoost: 13,
+    workloadOffset: 8,
+    productivityOffset: -1,
+  },
+  {
+    id: "qa",
+    name: "QA",
+    title: "Quality Guard",
+    focus: "Checks work for missing details, confusing language, and approval-sensitive risks.",
+    skills: ["quality check", "risk notes", "owner review", "polish"],
+    status: "reviewing",
+    completedBoost: 7,
+    workloadOffset: -6,
+    productivityOffset: 2,
+  },
+  {
+    id: "relay",
+    name: "Relay",
+    title: "Route Relay",
+    focus: "Hands work to the next desk and keeps the owner approval path clear.",
+    skills: ["routing", "handoffs", "queue sync", "approval path"],
+    status: "available",
+    completedBoost: 6,
+    workloadOffset: -12,
+    productivityOffset: 0,
+  },
+  {
+    id: "ledger",
+    name: "Ledger",
+    title: "Receipt Keeper",
+    focus: "Tracks what was prepared, why it matters, and what still needs human approval.",
+    skills: ["receipts", "memory", "audit trail", "summary"],
+    status: "available",
+    completedBoost: 5,
+    workloadOffset: -22,
+    productivityOffset: 1,
+  },
+];
+
 function workerInitials(name = "") {
   return String(name).split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "PF";
+}
+
+function clampWorkerMetric(value, min = 0, max = 100) {
+  return Math.max(min, Math.min(max, Math.round(Number(value) || 0)));
+}
+
+function buildEmployeeSubagents(employee) {
+  const first = String(employee.name || "Phantom").split(/\s+/)[0] || "Phantom";
+  return SWARM_SUBAGENT_TEMPLATES.map((template, index) => ({
+    id: `${employee.id}-${template.id}`,
+    name: `${first} ${template.name}`,
+    title: template.title,
+    department: employee.department,
+    status: employee.status === "working" && template.id === "draft" ? "working" : template.status,
+    focus: `${template.focus} Parent worker: ${employee.name}.`,
+    skills: template.skills,
+    completed: Math.max(1, Math.round(employee.completed * 0.42) + template.completedBoost),
+    productivity: clampWorkerMetric(employee.productivity + template.productivityOffset, 70, 99),
+    workload: clampWorkerMetric(employee.workload + template.workloadOffset, 12, 82),
+    response: employee.response,
+    lastActivity: employee.status === "working" && index < 2 ? employee.lastActivity : "Ready now",
+    employeeVisible: employee.employeeVisible !== false && index < 3,
+    parentId: employee.id,
+    parentName: employee.name,
+    workerType: "subagent",
+  }));
 }
 
 function workerStatusLabel(status) {
@@ -1193,11 +1277,12 @@ function workerStatusLabel(status) {
 export function buildWorkerRoster() {
   const activity = store.state.activity || [];
   const pendingApprovals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  return WORKFORCE_EMPLOYEES.map((employee) => {
+  const employees = WORKFORCE_EMPLOYEES.map((employee) => ({ ...employee, workerType: "employee" }));
+  return employees.flatMap((employee) => [employee, ...buildEmployeeSubagents(employee)]).map((employee) => {
     const recent = activity.find((entry) =>
       String(entry.who || "").toLowerCase().includes(employee.name.toLowerCase())
       || String(entry.text || "").toLowerCase().includes(employee.department.toLowerCase()));
-    const waitingOnApproval = pendingApprovals > 0 && ["iris-cole", "sofia-lane", "marcus-vale"].includes(employee.id);
+    const waitingOnApproval = pendingApprovals > 0 && ["iris-cole", "sofia-lane", "marcus-vale"].includes(employee.parentId || employee.id);
     return {
       ...employee,
       worker_id: employee.id,
@@ -1211,12 +1296,17 @@ export function buildWorkerRoster() {
       has_activity: !!recent,
       approvals_required: waitingOnApproval ? pendingApprovals : 0,
       client_visible: employee.employeeVisible !== false,
+      worker_type: employee.workerType || "employee",
+      parent_id: employee.parentId || null,
+      parent_name: employee.parentName || null,
     };
   });
 }
 
 function workerMatchesFilter(worker) {
   if (workerUi.filter === "all") return true;
+  if (workerUi.filter === "employees") return worker.worker_type !== "subagent";
+  if (workerUi.filter === "subagents") return worker.worker_type === "subagent";
   if (workerUi.filter === "approval") return worker.status === "waiting-approval";
   return worker.department.toLowerCase().replace(/\s+/g, "-") === workerUi.filter;
 }
@@ -1281,16 +1371,26 @@ function workerMeshGroup(worker) {
 }
 
 function renderWorkerMesh(workers) {
-  const rings = workers.map((worker, index) => {
+  const employeeNodes = workers.filter((worker) => worker.worker_type !== "subagent");
+  const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
+  const namedNodes = [...employeeNodes, ...subagentNodes.slice(0, 28)];
+  const rings = namedNodes.map((worker, index) => {
     const tone = workerMeshTone(worker);
     const group = workerMeshGroup(worker);
-    const style = `--node-index:${index}; --node-delay:${(index % 7) * 0.28}s`;
+    const nodeY = (index % 3) * 7 - 7;
+    const style = `--node-index:${index}; --node-y:${nodeY}px; --node-delay:${(index % 7) * 0.28}s`;
     return `
-      <button class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)}" style="${style}" data-act="worker-filter" data-filter="${esc(worker.department.toLowerCase().replace(/\s+/g, "-"))}" title="${esc(worker.display_name)}">
+      <button class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${worker.worker_type === "subagent" ? "is-subagent" : ""}" style="${style}" data-act="worker-filter" data-filter="${esc(worker.department.toLowerCase().replace(/\s+/g, "-"))}" title="${esc(worker.display_name)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
-        <i>${esc(worker.department)}</i>
+        <i>${esc(worker.worker_type === "subagent" ? "subagent" : worker.department)}</i>
       </button>`;
+  }).join("");
+  const swarmDots = subagentNodes.map((worker, index) => {
+    const angle = (index * 37) % 360;
+    const orbit = 112 + (index % 5) * 10;
+    return `
+    <span class="worker-swarm-dot worker-swarm-${esc(workerMeshGroup(worker))}" style="--dot-index:${index}; --orbit-angle:${angle}deg; --orbit-size:${orbit}px; --dot-delay:${(index % 13) * 0.17}s" title="${esc(worker.display_name)}"></span>`;
   }).join("");
   const online = workers.filter((worker) => worker.status !== "offline").length;
   const departments = new Set(workers.map((worker) => worker.department)).size;
@@ -1298,6 +1398,7 @@ function renderWorkerMesh(workers) {
   return `
     <section class="worker-mesh" aria-label="Worker operations mesh">
       <div class="worker-mesh-stage">
+        <div class="worker-swarm-dots" aria-hidden="true">${swarmDots}</div>
         <div class="worker-mesh-rings" aria-hidden="true">
           <span></span><span></span><span></span>
         </div>
@@ -1314,7 +1415,8 @@ function renderWorkerMesh(workers) {
         </div>
       </div>
       <div class="worker-mesh-readout">
-        <span><b>${online}</b> online employees</span>
+        <span><b>${online}</b> online nodes</span>
+        <span><b>${subagentNodes.length}</b> subagents</span>
         <span><b>${departments}</b> departments</span>
         <span><b>${approvals}</b> approvals waiting</span>
       </div>
@@ -1328,7 +1430,7 @@ function renderWorkerCard(worker, _unused = [], options = {}) {
   const previewExpanded = (kind) => previewOpen && workerUi.preview?.kind === kind;
   const meshTone = workerMeshTone(worker);
   return `
-    <article class="worker-card worker-${esc(worker.status)}" role="listitem">
+    <article class="worker-card worker-${esc(worker.status)} ${worker.worker_type === "subagent" ? "is-subagent" : "is-employee"}" role="listitem">
       <div class="worker-card-visual worker-card-visual-${esc(meshTone)}" aria-hidden="true">
         <span></span><span></span><span></span><span></span>
       </div>
@@ -1340,7 +1442,8 @@ function renderWorkerCard(worker, _unused = [], options = {}) {
         </div>
         <span class="worker-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
       </div>
-      <div class="worker-dept">${esc(worker.department)}</div>
+      <div class="worker-dept">${esc(worker.worker_type === "subagent" ? `${worker.department} subagent` : worker.department)}</div>
+      ${worker.parent_name ? `<p class="worker-parent">Reports to ${esc(worker.parent_name)}</p>` : ""}
       <p class="worker-task">${esc(worker.current_task)}</p>
       <div class="worker-capacity">
         <span><b>${capPct}%</b> workload - ${esc(worker.response)} avg response</span>
@@ -1356,7 +1459,7 @@ function renderWorkerCard(worker, _unused = [], options = {}) {
       </div>
       <div class="worker-facts">
         <span>${worker.approvals_required ? "Waiting on approval" : "Approval-safe"}</span>
-        <span>Prepares work only</span>
+        <span>${worker.worker_type === "subagent" ? "Swarm node" : "Parent worker"}</span>
         <span>No outside action alone</span>
       </div>
       ${showActions ? `
@@ -1390,7 +1493,7 @@ function renderWorkforceFlow() {
 function renderWorkforce(el, rerender) {
   const allWorkers = buildWorkerRoster();
   const workers = isAdmin() ? allWorkers : allWorkers.filter((worker) => worker.client_visible);
-  const validFilters = ["all", "approval", ...WORKFORCE_FILTERS.slice(1).map((dept) => dept.toLowerCase().replace(/\s+/g, "-"))];
+  const validFilters = ["all", "employees", "subagents", "approval", ...WORKFORCE_FILTERS.slice(1).map((dept) => dept.toLowerCase().replace(/\s+/g, "-"))];
   if (!validFilters.includes(workerUi.filter)) workerUi.filter = "all";
   const visibleWorkers = workers.filter(workerMatchesFilter).sort((a, b) => workerSortScore(a) - workerSortScore(b));
   const pendingApprovals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
@@ -1402,25 +1505,37 @@ function renderWorkforce(el, rerender) {
     ...visible(store.state.bookings).filter((x) => x.status !== "confirmed"),
   ].length;
   const onlineCount = workers.filter((worker) => worker.status !== "offline").length;
+  const parentCount = workers.filter((worker) => worker.worker_type !== "subagent").length;
+  const subagentCount = workers.filter((worker) => worker.worker_type === "subagent").length;
   const departmentCount = new Set(workers.map((worker) => worker.department)).size;
   const avgProductivity = Math.round(workers.reduce((sum, worker) => sum + worker.productivity, 0) / Math.max(1, workers.length));
-  const filters = [["all", "All"], ...WORKFORCE_FILTERS.slice(1).map((dept) => [dept.toLowerCase().replace(/\s+/g, "-"), dept]), ["approval", "Approval"]];
+  const filters = [
+    ["all", "All nodes"],
+    ["employees", "Employees"],
+    ["subagents", "Subagents"],
+    ...WORKFORCE_FILTERS.slice(1).map((dept) => [dept.toLowerCase().replace(/\s+/g, "-"), dept]),
+    ["approval", "Approval"],
+  ];
   el.innerHTML = `
     <section class="workers-hero">
       <div>
-        <p class="worker-kicker">Workforce online</p>
-        <h3>PhantomForce Employees</h3>
-        <p>Your PhantomForce workforce is always organizing, researching, drafting, reviewing, and preparing work behind the scenes. Tell Phantom AI what you need; Phantom routes it to the right employee.</p>
+        <p class="worker-kicker">Swarm network online</p>
+        <h3>PhantomForce Workers</h3>
+        <p>The workforce is now a swarm: parent employees coordinate lanes while subagents scout, draft, check, relay, and log the work underneath them. Tell Phantom AI the outcome; Phantom routes the pieces.</p>
       </div>
       <div class="worker-scale">
-        <span><b>${onlineCount}</b> active workers</span>
+        <span><b>${onlineCount}</b> active nodes</span>
+        <span><b>${parentCount}</b> parent workers</span>
+        <span><b>${subagentCount}</b> subagents</span>
         <span><b>${departmentCount}</b> departments online</span>
       </div>
     </section>
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
     ${renderWorkerMesh(workers)}
     <div class="worker-metrics">
-      <div><span>Active Employees</span><b>${onlineCount}</b></div>
+      <div><span>Active Nodes</span><b>${onlineCount}</b></div>
+      <div><span>Parent Workers</span><b>${parentCount}</b></div>
+      <div><span>Subagents</span><b>${subagentCount}</b></div>
       <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
       <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
       <div><span>Productivity</span><b>${avgProductivity}%</b></div>
@@ -1431,7 +1546,7 @@ function renderWorkforce(el, rerender) {
       ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
     </div>
     <div class="worker-grid" role="list">
-      ${visibleWorkers.map((worker) => renderWorkerCard(worker, [], { actions: isAdmin() })).join("") || empty("No employees match this filter.")}
+      ${visibleWorkers.map((worker) => renderWorkerCard(worker, [], { actions: isAdmin() })).join("") || empty("No workers match this filter.")}
     </div>`;
   bindActions(el, {
     "worker-filter": (_id, button) => { workerUi.filter = button.dataset.filter || "all"; rerender(); },
@@ -1586,7 +1701,7 @@ export const WORKSPACE_DEFS = {
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
   memory: { title: "Memory", kicker: "Local context database", render: renderMemory },
-  workforce: { title: "Employees", kicker: "Workforce online", render: renderWorkforce },
+  workforce: { title: "Workers", kicker: "Swarm network", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
@@ -1605,6 +1720,9 @@ export function missionWidgets() {
   const revs = visible(store.state.reviews).filter((r) => r.status !== "published-ready");
   const bks = visible(store.state.bookings).filter((b) => b.status !== "confirmed");
   const activeTools = (store.state.toolSpine || []).filter((tool) => ["active", "standby", "gated", "sandbox", "setup-ready", "planning", "available", "owner-controlled"].includes(tool.mode)).length;
+  const workerRoster = buildWorkerRoster();
+  const onlineWorkers = workerRoster.filter((worker) => worker.status !== "offline");
+  const subagentCount = workerRoster.filter((worker) => worker.worker_type === "subagent").length;
 
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
@@ -1615,7 +1733,7 @@ export function missionWidgets() {
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
     { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Employees", stat: `${WORKFORCE_EMPLOYEES.length} online`, sub: isAdmin() ? `${activeTools} internal lanes` : "your support team", alert: false },
+    { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} nodes`, sub: isAdmin() ? `${subagentCount} subagents` : "your support swarm", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });

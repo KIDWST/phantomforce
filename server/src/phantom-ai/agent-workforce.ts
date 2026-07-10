@@ -162,6 +162,43 @@ const curatedSubagentDefinitions: SubagentDefinition[] = [
   { id: "swarm", name: "Swarm", parent: "Reviewer", specialty: "Ruflo-style squad planning vocabulary, quarantined." },
 ];
 
+const swarmSubagentTemplates = [
+  {
+    id: "signal",
+    name: "Signal",
+    specialty: "Watches incoming context for useful signals, gaps, and next-best routing hints.",
+  },
+  {
+    id: "draft",
+    name: "Draft",
+    specialty: "Prepares first-pass copy, plans, checklists, or work packets for owner review.",
+  },
+  {
+    id: "qa",
+    name: "QA",
+    specialty: "Checks the prepared work for missing details, confusing language, and approval-sensitive risk.",
+  },
+  {
+    id: "relay",
+    name: "Relay",
+    specialty: "Moves handoffs between internal lanes while keeping outside-world actions approval-gated.",
+  },
+  {
+    id: "ledger",
+    name: "Ledger",
+    specialty: "Tracks what was prepared, what changed, and what still needs human approval.",
+  },
+] satisfies Array<Pick<SubagentDefinition, "id" | "name" | "specialty">>;
+
+const generatedSwarmSubagentDefinitions: SubagentDefinition[] = workerDefinitions.flatMap((worker) =>
+  swarmSubagentTemplates.map((template) => ({
+    id: `${worker.id}-${template.id}`,
+    name: `${worker.name} ${template.name}`,
+    parent: worker.name,
+    specialty: template.specialty,
+  })),
+);
+
 const AUTOPILOT_PARENT_NAME: Record<string, string> = {
   health: "Autopilot Health",
   ops: "Autopilot Ops",
@@ -176,7 +213,11 @@ const automationSubagentDefinitions: SubagentDefinition[] = getAutomationJobDefi
   taskMatch: new RegExp(`^automation:${job.category}:${job.id}$`),
 }));
 
-const subagentDefinitions: SubagentDefinition[] = [...curatedSubagentDefinitions, ...automationSubagentDefinitions];
+const subagentDefinitions: SubagentDefinition[] = [
+  ...curatedSubagentDefinitions,
+  ...generatedSwarmSubagentDefinitions,
+  ...automationSubagentDefinitions,
+];
 
 const agentAssignments: Array<{
   id: string;
