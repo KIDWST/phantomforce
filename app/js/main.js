@@ -1573,14 +1573,12 @@ const mediaOpts = () => ({
   renderPending: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
 
-/* Real backend/vendor identity — the ONLY place these names may surface.
-   Every other view (Settings, chat, Media Lab) shows the generic lane/
-   engine name only; this owner-only page maps each lane back to what it
-   actually runs on. */
+/* Owner-only runtime lanes. Keep the product vocabulary clean here too:
+   this page can show readiness without exposing vendor plumbing. */
 const CHAT_LANES = [["Phantom Reasoning", "claude"], ["Phantom Code", "codex"], ["Phantom Router", "openrouter"], ["Phantom Local", "local"]];
 const BRAIN_LANE_IDENTITY = { claude: "Claude (Anthropic)", codex: "Codex (OpenAI)", openrouter: "OpenRouter", local: "Ollama / local runtime" };
 const LOOP_LANE_IDENTITY = { openai: "ChatGPT (OpenAI)", claude: "Claude (Anthropic)", glm: "GLM (OpenRouter)", local: "Local / Ollama", custom: "Custom endpoint" };
-const MEDIA_ENGINE_IDENTITY = { higgsfield: "Higgsfield", claude: "Claude (Anthropic)", openai: "OpenAI", runway: "Runway", flux: "Flux (Black Forest Labs)" };
+const MEDIA_ENGINE_IDENTITY = { cinematic: "PhantomForce native lane", claude: "Direction lane", openai: "Image lane", runway: "Motion lane", flux: "Still lane" };
 
 /* ============================================================================
    DEVELOPER TAB — the real curtain-pull. Owner-only. Every section here is
@@ -1588,7 +1586,7 @@ const MEDIA_ENGINE_IDENTITY = { higgsfield: "Higgsfield", claude: "Claude (Anthr
    health) — nothing on this page is a static mockup. It never executes a
    provider, approval, send, or production write; it only looks. */
 const DEV_AGENT_ICON = { "phantom-ai": "brain", hermes: "db", builder: "dev", strategist: "brain", reviewer: "check", gatekeeper: "shield", scout: "dollar", sentinel: "shield", cutlab: "film" };
-const DEV_PROGRAM_ICON = { n8n: "auto", openspec: "doc", "agent-os": "book", serena: "search", ruflo: "users", "phantom-ai-online-fetch": "bolt", rembg: "media", higgsfield: "film", openai: "spark", fastify: "cog", "ai-proxy": "cog" };
+const DEV_PROGRAM_ICON = { n8n: "auto", openspec: "doc", "agent-os": "book", serena: "search", ruflo: "users", "phantom-ai-online-fetch": "bolt", rembg: "media", "media-lab": "film", openai: "spark", fastify: "cog", "ai-proxy": "cog" };
 const DEV_TONE = {
   active: "on", working: "on", connected: "on", running_local: "on", reachable: "on",
   standby: "warn", available: "warn", idle: "warn", waiting: "warn", drafting: "warn", watching: "warn", ready: "warn",
@@ -1676,14 +1674,14 @@ function buildDevPrograms(workforce, rembg, mediaHealth) {
       : (rembg?.error || "rembg is not installed or not reachable."),
     meta: rembg?.checkedAt ? `Checked ${ago(rembg.checkedAt)} · ${rembg.lane || "unknown"} lane` : null,
   });
-  const higgsfieldKeyed = !!mediaHealth?.media?.higgsfield;
+  const mediaLabReady = !!mediaHealth?.media?.cinematic;
   list.push({
-    id: "higgsfield", name: "Higgsfield", icon: "film",
-    tone: higgsfieldKeyed ? "on" : "warn",
-    status: higgsfieldKeyed ? "Connected" : "Manual mode",
-    detail: higgsfieldKeyed
-      ? "Real API key configured on ai-proxy — AI Edit calls it directly."
-      : "Subscription-only, no API key — AI Edit offers Copy prompt / Open Higgsfield instead of a fake call.",
+    id: "media-lab", name: "Media Lab", icon: "film",
+    tone: mediaLabReady ? "on" : "warn",
+    status: mediaLabReady ? "Connected" : "Needs setup",
+    detail: mediaLabReady
+      ? "AI Edit and generation can run inside PhantomForce."
+      : "AI Edit is not connected yet. No outside editor is exposed from the app.",
     meta: null,
   });
   const openaiKeyed = !!mediaHealth?.media?.openai;
@@ -1859,7 +1857,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       <section class="dev-section">
         <div class="dev-section-head">
           <h4>${svg("bolt")} Integrations &amp; programs</h4>
-          <p>Rembg, Higgsfield, OpenAI, the backends themselves, and every tool in the workforce registry — checked for real, right now.</p>
+          <p>Local media tools, PhantomForce backends, and every tool in the workforce registry — checked for real, right now.</p>
         </div>
         <div class="dev-program-grid">
           ${programs.map((p) => devProgramCard(p, esc)).join("")}
@@ -1976,7 +1974,7 @@ function renderDeveloperPage(body) {
 }
 
 const CUSTOM = {
-  media: { title: "Media Lab", kicker: "Creative Engine — create with context", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
+  media: { title: "Media Lab", kicker: "Create with context", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   sites: { title: "Site Studio", kicker: "AI website & store builder", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
   content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },

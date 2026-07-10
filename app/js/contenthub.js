@@ -782,9 +782,9 @@ function aiEditBody(lb, esc) {
     return `
       <div class="ch-lb-ai-row">
         <input class="ch-lb-ai-input" data-ch-lb-ai disabled placeholder="AI Edit needs setup…"/>
-        <button class="btn btn-primary" type="button" data-ch-lb-ai-connect>${svgIc("bolt")} Set up AI Edit</button>
+        <button class="btn btn-primary" type="button" disabled>${svgIc("bolt")} Generate AI Edit</button>
       </div>
-      <p class="ch-lb-ai-note ch-lb-ai-note-warn">AI Edit is not connected yet. Set it up once, then Generate will edit the image here.</p>
+      <p class="ch-lb-ai-note ch-lb-ai-note-warn">AI Edit is not connected yet. Once connected, this edits the image here.</p>
     `;
   }
 
@@ -1203,7 +1203,7 @@ function wireLightbox(root, opts) {
       opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${exported.error}`);
       return;
     }
-    const result = await requestAiEdit({ dataUrl: exported.url, prompt: q, provider: lb.aiEdit.provider || "higgsfield" });
+    const result = await requestAiEdit({ dataUrl: exported.url, prompt: q, provider: lb.aiEdit.provider || "cinematic" });
     if (chLightbox !== lb) return; // lightbox closed/reset while the request was in flight
     if (!result.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: result.message };
@@ -1229,9 +1229,6 @@ function wireLightbox(root, opts) {
         rerender();
       });
   };
-
-  const aiConnect = root.querySelector("[data-ch-lb-ai-connect]");
-  if (aiConnect) aiConnect.onclick = () => { close(); opts.openWorkspace?.("settings"); };
 
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
   if (bgRun) bgRun.onclick = async () => {

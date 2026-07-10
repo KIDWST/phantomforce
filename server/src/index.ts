@@ -2924,7 +2924,7 @@ app.get("/phantom-ai/security/autonomous/status", async (request, reply) => {
   };
 });
 
-app.get("/phantom-ai/media-lab/higgsfield/status", async (request, reply) => {
+async function handleMediaLabCreativeStatus(request: FastifyRequest, reply: FastifyReply) {
   const session = requireAccessSession(request, reply);
 
   if (!session) {
@@ -2942,17 +2942,17 @@ app.get("/phantom-ai/media-lab/higgsfield/status", async (request, reply) => {
     ok: true,
     session,
     service: "PhantomForce Media Lab",
-    provider: "higgsfield",
+    provider: "cinematic",
     commercial_provider: true,
     subscribed_access: entitled,
     admin_access: session.canManageAccess,
-    client_visible_name: "Generate Video",
-    higgsfield_tool_lanes: {
+    client_visible_name: "Media Lab",
+    media_tool_lanes: {
       mode: statusToolMode,
       mcp_cli: {
         enabled: statusToolMode !== "phantomcut",
         last_success_at: lastHiggsfieldMcpDraftAt,
-        note: "Higgsfield MCP via the operator brain (codex CLI) — verified on first successful draft.",
+        note: "Operator media lane verified on first successful draft.",
       },
       phantomcut: { enabled: statusToolMode !== "mcp_cli", reachable: health.ok, legacy: true },
     },
@@ -2969,11 +2969,14 @@ app.get("/phantom-ai/media-lab/higgsfield/status", async (request, reply) => {
       paid_job_called: false,
       upload_performed: false,
       run_endpoint_exposed: false,
-      explicit_confirmation_required: "RUN_HIGGSFIELD_PAID_JOB",
+      explicit_confirmation_required: "RUN_MEDIA_PAID_JOB",
       no_public_posting: true,
     },
   };
-});
+}
+
+app.get("/phantom-ai/media-lab/creative/status", handleMediaLabCreativeStatus);
+app.get("/phantom-ai/media-lab/higgsfield/status", handleMediaLabCreativeStatus);
 
 app.get("/phantom-ai/creative-engine/tools", async (request, reply) => {
   const session = requireAccessSession(request, reply);
@@ -3009,20 +3012,20 @@ app.get("/phantom-ai/creative-engine/tools", async (request, reply) => {
     },
     tools: [
       {
-        name: "higgsfield.draft",
+        name: "media.draft",
         available: (mcpLaneEnabled || bridgeReachable) && hasMediaLabAccess(session),
         credit_spend: false,
-        route: "POST /phantom-ai/media-lab/higgsfield/draft",
+        route: "POST /phantom-ai/media-lab/creative/draft",
         note: mcpLaneEnabled
-          ? "Creates a draft through the operator's Higgsfield MCP tools (legacy PhantomCut as fallback). Draft-only — the paid render is approved separately."
-          : "Creates a draft in the owner's Higgsfield studio. Draft-only — the paid render is approved separately.",
+          ? "Creates a draft through the operator media lane. Draft-only — the paid render is approved separately."
+          : "Creates a Media Lab draft. Draft-only — the paid render is approved separately.",
       },
       {
-        name: "higgsfield.render",
+        name: "media.render",
         available: false,
         credit_spend: true,
         route: null,
-        note: "Not exposed. PhantomCut gates paid renders behind the explicit RUN_HIGGSFIELD_PAID_JOB confirmation; Hermes intentionally has no auto-spend route.",
+        note: "Not exposed. Paid renders stay behind explicit Media Lab confirmation; there is no auto-spend route.",
       },
     ],
     approval_required: true,
@@ -3198,7 +3201,7 @@ app.post(
   },
 );
 
-app.post("/phantom-ai/media-lab/higgsfield/draft", async (request, reply) => {
+async function handleMediaLabCreativeDraft(request: FastifyRequest, reply: FastifyReply) {
   const session = requireAccessSession(request, reply);
 
   if (!session) {
@@ -3242,7 +3245,7 @@ app.post("/phantom-ai/media-lab/higgsfield/draft", async (request, reply) => {
       lastHiggsfieldMcpDraftAt = new Date().toISOString();
       return {
         ok: true,
-        provider: "higgsfield",
+        provider: "cinematic",
         commercial_provider: true,
         action: "draft_only",
         tool_lane: "mcp_cli",
@@ -3251,8 +3254,8 @@ app.post("/phantom-ai/media-lab/higgsfield/draft", async (request, reply) => {
           paid_job_called: false,
           upload_performed: false,
           run_endpoint_exposed: false,
-          explicit_confirmation_required: "RUN_HIGGSFIELD_PAID_JOB",
-          note: "Draft created through the operator's Higgsfield MCP tools. Paid renders remain separately approved.",
+          explicit_confirmation_required: "RUN_MEDIA_PAID_JOB",
+          note: "Draft created through the operator media lane. Paid renders remain separately approved.",
         },
       };
     }
@@ -3273,7 +3276,7 @@ app.post("/phantom-ai/media-lab/higgsfield/draft", async (request, reply) => {
     if (draft.ok) {
       return {
         ok: true,
-        provider: "higgsfield",
+        provider: "cinematic",
         commercial_provider: true,
         action: "draft_only",
         tool_lane: "phantomcut",
@@ -3282,8 +3285,8 @@ app.post("/phantom-ai/media-lab/higgsfield/draft", async (request, reply) => {
           paid_job_called: false,
           upload_performed: false,
           run_endpoint_exposed: false,
-          explicit_confirmation_required: "RUN_HIGGSFIELD_PAID_JOB",
-          note: "This dashboard creates the Higgsfield draft only. Running a paid/upload generation remains separately gated.",
+          explicit_confirmation_required: "RUN_MEDIA_PAID_JOB",
+          note: "This dashboard creates a Media Lab draft only. Running a paid/upload generation remains separately gated.",
         },
       };
     }
@@ -3294,12 +3297,15 @@ app.post("/phantom-ai/media-lab/higgsfield/draft", async (request, reply) => {
     ok: false,
     error: lanesTried.map((l) => `${l.lane}: ${l.error}`).join(" · "),
     lanes_tried: lanesTried,
-    provider: "higgsfield",
+    provider: "cinematic",
     provider_called: false,
     paid_job_called: false,
     upload_performed: false,
   });
-});
+}
+
+app.post("/phantom-ai/media-lab/creative/draft", handleMediaLabCreativeDraft);
+app.post("/phantom-ai/media-lab/higgsfield/draft", handleMediaLabCreativeDraft);
 
 app.post("/phantom-ai/security/scan/preview", async (request, reply) => {
   const session = requireAccessSession(request, reply);

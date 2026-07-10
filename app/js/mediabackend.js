@@ -163,16 +163,13 @@ export async function requestRemoveBackground(dataUrl) {
 }
 
 /* ---------------- Prompt-guided edit media engine ----------------
-   Reuses the media-generation route Media Lab uses for creation, with a
-   reference image + modality "edit" so a connected edit-capable engine
-   performs a real prompt-guided edit. No key ever touches the browser.
+   Reuses the Media Lab generation route with a reference image + modality
+   "edit" so a connected edit-capable lane performs a real prompt-guided edit.
+   No key ever touches the browser.
 
-   If no edit-capable engine is wired, the UI reports AI Edit as unavailable
+   If no edit-capable lane is wired, the UI reports AI Edit as unavailable
    instead of pretending an automated edit happened. */
-// Engines ai-proxy actually knows how to run for real prompt-guided edits
-// (matches MEDIA_PROVIDERS[id].modalities in ai-proxy/server.mjs). Image-only
-// engines do not make edits "connected"; keep those out of this path.
-const EDIT_CAPABLE_PROVIDERS = ["higgsfield"];
+const EDIT_CAPABLE_PROVIDERS = ["cinematic"];
 
 /* Raw ai-proxy /health passthrough — every provider key's real state (not
    just the edit-capable ones Content Hub cares about), plus the configured
@@ -204,7 +201,7 @@ export async function probeAiEditBackend() {
   }
 }
 
-export async function requestAiEdit({ dataUrl, prompt, provider = "higgsfield" }) {
+export async function requestAiEdit({ dataUrl, prompt, provider = "cinematic" }) {
   try {
     const r = await fetchWithTimeout(`${aiProxyBase()}/generate`, {
       method: "POST",

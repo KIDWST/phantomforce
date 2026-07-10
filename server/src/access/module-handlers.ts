@@ -149,18 +149,18 @@ const moduleDefinitions: Record<string, ModuleDefinition> = {
     ],
   },
   video: {
-    title: "Video Studio",
-    summary: "Subscriber video generation phantom backed by PhantomForce Media Lab and Higgsfield drafts.",
+    title: "Video Lab",
+    summary: "Subscriber video generation phantom backed by PhantomForce Media Lab drafts.",
     widgets: [
-      { id: "provider", label: "Provider", value: "Higgsfield" },
+      { id: "provider", label: "Lane", value: "Media Lab" },
       { id: "mode", label: "Mode", value: "Draft first" },
     ],
     records: [
-      { id: "higgsfield-draft", title: "Generate Video draft lane", status: "available" },
+      { id: "media-draft", title: "Generate video draft lane", status: "available" },
       { id: "approval", title: "Paid/upload run confirmation", status: "required" },
     ],
     actions: [
-      { id: "view-video-studio", label: "Open Video Studio", requiresFullAccess: false },
+      { id: "view-video-lab", label: "Open Video Lab", requiresFullAccess: false },
       { id: "draft-generation-job", label: "Draft generation job", requiresFullAccess: true },
     ],
   },

@@ -1,15 +1,9 @@
-/* PhantomForce — Media Lab: an all-in-one AI photo & video generator + editor.
+/* PhantomForce — Media Lab: native image/video creation and editing.
  *
- * PLUGGABLE BY DESIGN. A provider is just a config entry (see DEFAULT_PROVIDERS)
- * with an id, the modalities it supports, and its models. The browser never
- * holds a real key: generation POSTs {provider, modality, model, prompt, …} to
- * a server route (the ai-proxy /generate) that maps the id → the real API and
- * signs it with a key from its environment. To add a provider: push one object
- * here and add a matching handler in ai-proxy (server.mjs / worker.js). Done.
- *
- * When no generation backend is reachable the studio still works end to end:
- * it renders a real, on-brand procedural PREVIEW so the whole UI is usable and
- * demoable, and swaps to true results the moment a provider is connected.
+ * The browser only talks to PhantomForce lanes. Vendor routing stays behind
+ * the server boundary, so the admin UI never turns into a provider console.
+ * When generation is not connected, the UI renders a clear preview state
+ * instead of sending people out to another product.
  */
 
 import { session as accessSession } from "./store.js?v=phantom-live-20260710-123";
@@ -24,11 +18,14 @@ const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const PROMPT_INTENT_KEY = "pf.medialab.promptIntent.v1";
 const TAU = Math.PI * 2;
 
-/* ---------------- provider registry (pluggable defaults) ---------------- */
+const PRIMARY_MEDIA_LANE = "cinematic";
+const normalizeLaneId = (id = "") => String(id || "").toLowerCase();
+
+/* ---------------- media lane registry ---------------- */
 export const DEFAULT_PROVIDERS = [
   {
-    id: "higgsfield", name: "Cinematic Engine", tagline: "Image and video production",
-    brand: "#8b7bff", keyEnv: "HIGGSFIELD_API_KEY", enabled: true,
+    id: PRIMARY_MEDIA_LANE, name: "Cinematic Engine", tagline: "Image and video production",
+    brand: "#8b7bff", keyEnv: "PHANTOM_MEDIA_KEY", enabled: true,
     modalities: ["image", "video", "edit"],
     models: {
       image: ["gpt_image_2", "nano_banana_2"],
@@ -43,7 +40,7 @@ export const DEFAULT_PROVIDERS = [
     models: { enhance: ["claude-sonnet-5", "claude-opus-4-8"] },
   },
   {
-    id: "openai", name: "Studio Engine", tagline: "Stills, video, and inline edits",
+    id: "openai", name: "Image Engine", tagline: "Stills, video, and inline edits",
     brand: "#10a37f", keyEnv: "OPENAI_API_KEY", enabled: false,
     modalities: ["image", "video", "edit"],
     models: { image: ["gpt-image-1"], video: ["sora-2"], edit: ["gpt-image-1"] },
@@ -118,20 +115,15 @@ const MEDIA_PRESETS = [
 ];
 
 /* Customer-safe display names for render lanes; option values stay untouched
-   so requests keep sending the real model ids. */
+   so requests keep sending model ids the backend understands. */
 const LANE_LABELS = {
-  "higgsfield-soul": "Signature stills",
-  "higgsfield-turbo": "Rapid stills",
-  "higgsfield-dop": "Cinema motion",
-  "higgsfield-motion": "Motion loop",
-  "higgsfield-soul-edit": "Signature retouch",
   "gpt_image_2": "GPT Image 2",
   "nano_banana_2": "Nano Banana 2",
-  "marketing_studio_image": "Marketing Studio image",
+  "marketing_studio_image": "Campaign image",
   "seedance_2_0": "Seedance 2.0",
   "kling3_0": "Kling 3.0",
-  "marketing_studio_video": "Marketing Studio video",
-  "gpt-image-1": "Studio stills",
+  "marketing_studio_video": "Campaign video",
+  "gpt-image-1": "Generated stills",
   "sora-2": "Story motion",
   "gen-4": "Feature motion",
   "gen-3-alpha-turbo": "Rapid motion",
@@ -379,7 +371,8 @@ export function loadCfg() {
   let saved = {};
   try { saved = JSON.parse(localStorage.getItem(CFG_KEY) || "{}"); } catch {}
   const providers = DEFAULT_PROVIDERS.map((p) => {
-    const s = (saved.providers || {})[p.id] || {};
+    const savedProviders = saved.providers || {};
+    const s = savedProviders[p.id] || {};
     return {
       ...p,
       enabled: s.enabled != null ? s.enabled : p.enabled,
@@ -388,12 +381,21 @@ export function loadCfg() {
       defaultModel: s.defaultModel || {},
     };
   });
-  // any custom providers the user added
-  for (const c of saved.customProviders || []) providers.push({ ...c, custom: true });
+  // Keep older saved accounts working, but do not surface legacy provider ids.
+  for (const c of saved.customProviders || []) {
+    const id = normalizeLaneId(c.id);
+    if (id === PRIMARY_MEDIA_LANE && providers.some((p) => p.id === PRIMARY_MEDIA_LANE)) continue;
+    providers.push({ ...c, id, custom: true });
+  }
+  const savedRouting = saved.routing || {};
   return {
     providers,
     endpointBase: saved.endpointBase || "",
-    routing: { image: "higgsfield", video: "higgsfield", enhance: "claude", ...(saved.routing || {}) },
+    routing: {
+      image: normalizeLaneId(savedRouting.image || PRIMARY_MEDIA_LANE),
+      video: normalizeLaneId(savedRouting.video || PRIMARY_MEDIA_LANE),
+      enhance: normalizeLaneId(savedRouting.enhance || "claude"),
+    },
     customProviders: saved.customProviders || [],
     credits: saved.credits != null ? saved.credits : 480,
     requireApproval: saved.requireApproval != null ? saved.requireApproval : false,
@@ -425,14 +427,9 @@ function genBase(cfg) {
 
 /* ---------------- engine health (shared by doctor + generate) ----------------
    Lanes, best first:
-   - CREATIVE ENGINE (primary): same-origin /api/creative-engine/status — the
-     transport-aware backend that brokers UI -> backend -> Hermes -> Higgsfield
-     MCP/tools. The higgsfield CLI is only an explicit admin/dev fallback.
-   - API lane: the ai-proxy with a provider key (HIGGSFIELD_API_KEY).
-   - Legacy BRIDGE lane: direct Hermes draft via /phantom-ai/* (older backends
-     without the Creative Engine route). Hermes has NO /phantom-ai/health — the
-     real route is GET /phantom-ai/media-lab/higgsfield/status, and the static
-     proxy answers 502 {"error":"Admin API unavailable."} when Hermes is down. */
+   - Media service: same-origin /api/creative-engine/status for connected boxes.
+   - API lane: the ai-proxy with a server-side media key.
+   - Legacy bridge lane: same-origin Media Lab draft/status route for older boxes. */
 let engineHealth = { at: 0, engine: null, studio: false, proxy: false, media: {}, bridge: false, bridgeAuth: false, hasToken: false };
 let lastRenderIssue = null;   // most recent failed render — the doctor reports it over a rosy probe
 async function checkEngineHealth(cfg, force = false) {
@@ -448,23 +445,22 @@ async function checkEngineHealth(cfg, force = false) {
   const token = accessSession.token();
   const auth = token ? { Authorization: `Bearer ${token}` } : undefined;
   const jobs = [
-    (async () => {   // PRIMARY: transport-aware Creative Engine (Hermes/MCP)
+    (async () => {
       const r = await probe("/api/creative-engine/status", 9000, auth);
       const d = await r.json().catch(() => null);
       if (r.ok && d && d.transport) next.engine = d;
     })(),
-    (async () => {   // legacy studio backend on this origin
+    (async () => {
       const r = await probe("/health", 3000);
       const d = await r.json().catch(() => null);
       if (r.ok && d && d.ok && /admin-static/i.test(String(d.service || ""))) {
         next.studio = true;
-        // present:false = CLI confirmed missing; absent field (older server) = unknown
-        next.studioCli = d.higgsfield_cli ? d.higgsfield_cli.present !== false : null;
-        next.studioCliDetail = d.higgsfield_cli?.detail || "";
+        next.studioCli = null;
+        next.studioCliDetail = "";
       }
     })(),
-    (async () => {   // bridge lane: probe the route Hermes ACTUALLY serves
-      const r = await probe("/phantom-ai/media-lab/higgsfield/status", 4000, auth);
+    (async () => {
+      const r = await probe("/phantom-ai/media-lab/creative/status", 4000, auth);
       const d = await r.json().catch(() => null);
       if (!d) return;                                    // static 404 → no bridge
       if (r.ok && d.ok) { next.bridge = true; next.bridgeAuth = true; return; }
@@ -487,8 +483,8 @@ async function checkEngineHealth(cfg, force = false) {
 function cleanBrief(value = "", limit = 2200) {
   return String(value || "").replace(/\s+/g, " ").trim().slice(0, limit);
 }
-function normalizeHiggsfieldModel(req = {}) {
-  if (req.provider !== "higgsfield") return req.model || "";
+function normalizeCinematicModel(req = {}) {
+  if (normalizeLaneId(req.provider) !== PRIMARY_MEDIA_LANE) return req.model || "";
   if (req.modality === "image") {
     return ["gpt_image_2", "nano_banana_2"].includes(req.model) ? req.model : "gpt_image_2";
   }
@@ -498,7 +494,7 @@ function buildGenerationSpec(req = {}) {
   const params = req.params || {};
   const rawPrompt = cleanBrief(req.prompt);
   const negative = cleanBrief(req.negative, 700);
-  const model = normalizeHiggsfieldModel(req) || req.model || "";
+  const model = normalizeCinematicModel(req) || req.model || "";
   /* THE PROMPT IS THE PROMPT. Diffusion models are caption-matchers, not
      instruction-followers: meta-text like "Output: image. Frame: 1:1.
      Honor the request literally" gets DRAWN, not obeyed — it was actively
@@ -523,7 +519,7 @@ function buildGenerationSpec(req = {}) {
     provider_prompt: cleanBrief(providerPromptParts, 2600),
     negative_prompt: negative,
     modality: req.modality === "video" ? "video" : "image",
-    provider: req.provider || "",
+      provider: normalizeLaneId(req.provider || PRIMARY_MEDIA_LANE),
     model,
     preset: req.preset || "Custom",
     style: req.style || "None",
@@ -548,22 +544,22 @@ function normalizeGeneratedAssets(list = [], req = {}, spec = {}) {
     }))
     .filter((asset) => asset.url);
 }
-function higgsfieldDraftMode(req = {}, spec = {}) {
-  const model = spec.model || normalizeHiggsfieldModel(req);
+function cinematicDraftMode(req = {}, spec = {}) {
+  const model = spec.model || normalizeCinematicModel(req);
   if (model === "marketing_studio_video") return "marketing";
   return spec.modality === "image" ? "image" : "video";
 }
-function higgsfieldResolution(spec = {}) {
+function cinematicResolution(spec = {}) {
   if (spec.quality === "high") return spec.modality === "image" ? "2k" : "1080p";
   return spec.modality === "image" ? "1k" : "720p";
 }
-async function draftHiggsfieldRequest(req = {}, spec = {}) {
+async function draftCinematicRequest(req = {}, spec = {}) {
   const token = accessSession.token();
-  if (req.provider !== "higgsfield") return null;
+  if (normalizeLaneId(req.provider) !== PRIMARY_MEDIA_LANE) return null;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 12000);
   try {
-    const response = await fetch("/phantom-ai/media-lab/higgsfield/draft", {
+    const response = await fetch("/phantom-ai/media-lab/creative/draft", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -571,11 +567,11 @@ async function draftHiggsfieldRequest(req = {}, spec = {}) {
       },
       body: JSON.stringify({
         prompt: spec.provider_prompt,
-        mode: higgsfieldDraftMode(req, spec),
+        mode: cinematicDraftMode(req, spec),
         model: spec.model,
         duration: String(spec.duration),
         aspect_ratio: spec.aspect,
-        resolution: higgsfieldResolution(spec),
+        resolution: cinematicResolution(spec),
         media_role: req.ref ? "start-image" : "image",
         product_url: "",
         generate_audio: "",
@@ -592,22 +588,22 @@ async function draftHiggsfieldRequest(req = {}, spec = {}) {
   }
 }
 // Returns { assets:[{type,url,meta}], live:boolean } — never throws; falls back
-// to a procedural preview so the studio is always usable.
+// to a procedural preview so Media Lab is always usable.
 async function generate(cfg, req) {
   const base = genBase(cfg);
+  req = { ...req, provider: normalizeLaneId(req.provider || PRIMARY_MEDIA_LANE) };
   const p = provider(cfg, req.provider) || {};
   const spec = buildGenerationSpec(req);
   const health = await checkEngineHealth(cfg).catch(() => engineHealth);
-  /* BACKEND LANE FIRST: the same-origin transport-aware backend brokers the
-     brief PhantomForce -> Hermes -> Higgsfield MCP/tools (primary). The CLI
-     exists only behind an explicit admin fallback flag on the backend. */
-  const backendLane = req.provider === "higgsfield" && !p.endpoint
+  /* BACKEND LANE FIRST: the same-origin PhantomForce backend brokers the
+     brief and returns either real assets or an approval-safe preview packet. */
+  const backendLane = req.provider === PRIMARY_MEDIA_LANE && !p.endpoint
     && (!!health.engine || (health.studio && health.studioCli !== false));
   const url = p.endpoint || (backendLane ? "/generate" : `${base}/generate`);
-  /* LEGACY DIRECT QUEUE: no transport-aware backend on this origin, no API
-     key, but Hermes answers -> draft straight into the owner's account. */
-  if (req.provider === "higgsfield" && !backendLane && !health.media.higgsfield && health.bridge) {
-    const draft = await draftHiggsfieldRequest({ ...req, prompt: spec.provider_prompt, model: spec.model }, spec);
+  /* LEGACY DIRECT QUEUE: no newer backend on this origin, but the older
+     same-origin draft route answers. */
+  if (req.provider === PRIMARY_MEDIA_LANE && !backendLane && !health.media[PRIMARY_MEDIA_LANE] && health.bridge) {
+    const draft = await draftCinematicRequest({ ...req, prompt: spec.provider_prompt, model: spec.model }, spec);
     if (draft) {
       const assets = [];
       for (let i = 0; i < (req.modality === "video" ? 1 : spec.count); i++) {
@@ -645,8 +641,8 @@ async function generate(cfg, req) {
     const r = await fetch(url, {
       method: "POST",
       headers,
-      // async on the backend lane: the box answers instantly (Hermes draft or
-      // a CLI job id we poll) — a tunnel that cuts long requests can't kill it
+      // async on the backend lane: the box answers instantly with a draft/job id
+      // we poll, so a tunnel that cuts long requests can't kill it
       body: JSON.stringify(backendLane
         ? { ...providerReq, async: true, approved: req.approved === true, credit_warning_shown: req.creditWarningShown === true }
         : providerReq),
@@ -656,14 +652,14 @@ async function generate(cfg, req) {
     if (d && d.error === "approval_required") {
       return { assets: [], live: false, approvalRequired: true, transport: d.transport || "cli_fallback", spec, message: d.message || "" };
     }
-    // background job (hermes MCP draft or CLI render): poll until it lands.
-    // A draft (hermes_mcp) is a quick tool call, not a render — it gets a
+    // background job: poll until it lands.
+    // A draft packet is a quick tool call, not a render — it gets a
     // short leash so the UI never sits frozen for the render-length timeout.
     if (d && d.job && !d.queued && !(Array.isArray(d.assets) && d.assets.length)) {
       const jobKind = d.transport === "hermes_mcp" ? "draft" : "render";
       d = await pollStudioJob(d.job, spec, headers, jobKind);
     }
-    // Hermes/MCP transport: the brief is queued as a draft — no credits spent
+    // Draft transport: the brief is queued as a draft — no credits spent
     if (d && d.queued && d.transport === "hermes_mcp") {
       const assets = [];
       for (let i = 0; i < (req.modality === "video" ? 1 : spec.count); i++) {
@@ -681,15 +677,15 @@ async function generate(cfg, req) {
     fallbackReason = err?.name === "AbortError" ? "provider_timeout" : "provider_unreachable";
   }
   finally { clearTimeout(timer); }
-  const draft = await draftHiggsfieldRequest(providerReq, spec);
+  const draft = await draftCinematicRequest(providerReq, spec);
   const assets = [];
   for (let i = 0; i < (providerReq.params.count || 1); i++) assets.push(previewAsset(providerReq, i, { spec, fallbackReason, draft }));
   return { assets, live: false, spec, fallbackReason, fallbackDetail, fallbackLane: url, draft };
 }
 
-/* Poll a studio background job until it lands. Transient network blips while
+/* Poll a Media Lab background job until it lands. Transient network blips while
    polling must NOT kill a render that's still cooking on the box.
-   A DRAFT (hermes_mcp tool call) is a quick request, not a render — it gets
+   A DRAFT packet is a quick request, not a render — it gets
    a short leash (3 min) instead of the render-length timeout, so a slow/dead
    MCP lane surfaces as an honest timeout instead of a silent, endless spinner.
    Callers show their own elapsed-time feedback while this awaits. */
@@ -702,43 +698,40 @@ async function pollStudioJob(jobId, spec, headers, kind = "render") {
     try {
       const r = await fetch(`/generate/job/${encodeURIComponent(jobId)}`, { headers });
       const d = await r.json().catch(() => null);
-      if (r.status === 404) return { error: "job_lost", message: d?.message || "the studio server restarted mid-render" };
+      if (r.status === 404) return { error: "job_lost", message: d?.message || "Media Lab restarted mid-render" };
       if (!d) continue;
       misses = 0;
       if (d.status === "done" || d.status === "failed" || d.status === "blocked") return d;
     } catch {
-      if (++misses >= 24) return { error: "provider_unreachable", message: "lost contact with the studio box for 2 minutes" };
+      if (++misses >= 24) return { error: "provider_unreachable", message: "lost contact with Media Lab for 2 minutes" };
     }
   }
   if (kind === "draft") return { error: "provider_timeout", message: "the draft tool call took longer than 3 minutes — the operator lane may be stuck" };
   return { error: "provider_timeout", message: "" };
 }
 
-/* Turn a raw studio/CLI failure into the exact next move for the owner. */
+/* Turn a raw Media Lab failure into the exact next move for the owner. */
 function explainMediaFailure(reason = "", detail = "", lane = "") {
   const text = `${reason} ${detail}`.toLowerCase();
-  const studioLane = lane.startsWith("/");
   if (reason === "blocked")
-    return detail || "the Creative Engine reported a blocked state — open the banner above for the exact reason";
+    return detail || "Media Lab is blocked — open the banner above for the exact reason";
   if (/enoent|not recognized|command not found|no such file/.test(text))
-    return "the higgsfield CLI isn't installed on the admin box — install it and sign in (higgsfield login), then Re-check";
+    return "Media Lab needs setup on the admin box, then Re-check";
   if (/login|logged|sign[ -]?in|auth|unauthoriz|credential|expired|forbidden/.test(text))
-    return "the higgsfield CLI is signed out — run `higgsfield login` on the admin box, then Re-check";
+    return "Media Lab sign-in needs attention on the admin box, then Re-check";
   if (/quota|credit|insufficient|billing|payment|limit reached/.test(text))
-    return "the creative engine says the plan is out of renders — check your connected account";
+    return "Media Lab is out of render credits — check your plan";
   if (/job_lost/.test(text))
-    return "the studio server restarted mid-render — run it again";
+    return "Media Lab restarted mid-render — run it again";
   if (/unreachable/.test(text))
-    return studioLane
-      ? "the connection to the admin box dropped mid-render (tunnels cut long requests) — pull the latest build on the box and restart the static server once; renders then run as background jobs that survive any tunnel"
-      : `nothing answered at ${lane || "the render endpoint"} — start the studio box or bash ai-proxy/run.sh for the API lane`;
+    return "Media Lab did not answer — restart the media service, then Re-check";
   if (/timeout/.test(text))
-    return "the creative engine took too long — run it again or drop the quality a notch";
+    return "Media Lab took too long — run it again or drop the quality a notch";
   if (/admin_session_required/.test(text))
     return "this session isn't signed in as admin — sign in and try again";
   if (/no_assets/.test(text))
-    return "the creative engine finished but handed back no files — run it again or simplify the prompt";
-  return detail ? `the studio said: ${detail}` : "";
+    return "Media Lab finished but returned no files — run it again or simplify the prompt";
+  return detail ? `Media Lab said: ${detail}` : "";
 }
 
 async function enhancePrompt(cfg, prompt) {
@@ -945,7 +938,7 @@ function previewAsset(req, i, context = {}) {
   g.fillStyle = "rgba(120,255,190,0.88)";
   g.font = "800 10px 'DM Mono', monospace";
   const plateTag = context.queued
-    ? (context.via === "hermes" ? "QUEUED · APPROVE IN YOUR STUDIO" : "RENDERING IN YOUR STUDIO")
+    ? (context.via === "hermes" ? "QUEUED · FINAL REVIEW" : "RENDERING IN PHANTOMFORCE")
     : context.fallbackReason
       ? "OFFLINE SKETCH · " + String(context.fallbackReason).replace(/^provider_/i, "").replace(/_/g, " ").toUpperCase().slice(0, 26)
       : "PREVIEW";
@@ -1127,7 +1120,7 @@ function renderPending(body) {
 }
 
 /* ---- Generate ---- */
-const genState = { modality: "image", provider: "higgsfield", model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, busy: false, showNeg: false, preset: "custom", stageFull: false };
+const genState = { modality: "image", provider: PRIMARY_MEDIA_LANE, model: "", prompt: "", negative: "", aspect: "1:1", count: 2, quality: "standard", style: "Cinematic", duration: 6, ref: null, busy: false, showNeg: false, preset: "custom", stageFull: false };
 
 function activePreset() {
   return MEDIA_PRESETS.find((p) => p.id === genState.preset) || null;
@@ -1433,7 +1426,7 @@ function resultsHtml(esc) {
     <div class="ml-idle">
       <div class="ml-idle-orb" aria-hidden="true"><span></span><span></span><span></span></div>
       <b>Create with context</b>
-      <i>Phantom preps the brief, routes it to your creative engine, reviews the output, and turns it into campaigns, sites, and follow-ups. Finished media lands here — and in Content Hub.</i>
+      <i>Phantom preps the brief, creates the media, reviews the output, and turns it into campaigns, sites, and follow-ups. Finished media lands here — and in Content Hub.</i>
       <div class="ml-board" aria-hidden="true">
         ${["1:1", "4:5", "16:9", "9:16", "3:2"].map((r, i) => `<span class="ml-board-cell" style="--d:${(i * 0.4).toFixed(1)}s" data-ratio="${r}"></span>`).join("")}
       </div>
@@ -1524,7 +1517,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
     const base = genBase(cfg).replace(/^https?:\/\//, "");
     const h = await checkEngineHealth(cfg, force).catch(() => engineHealth);
     if (!doctor.isConnected) return;
-    const prov = genState.provider || "higgsfield";
+    const prov = genState.provider || PRIMARY_MEDIA_LANE;
     if (force) lastRenderIssue = null;
     if (lastRenderIssue) {
       // a green "connected" banner must never contradict a failing render —
@@ -1534,38 +1527,36 @@ function wireGenerate(body, cfg, opts, root, esc) {
           || `${String(lastRenderIssue.reason || "unknown error")} — fix it on the admin box, then hit Re-check.`);
       return;
     }
-    if (h.engine && prov === "higgsfield") {
+    if (h.engine && prov === PRIMARY_MEDIA_LANE) {
       const e = h.engine;
-      const adminTail = e.cliFallbackEnabled ? "Transport: Hermes/MCP · CLI fallback ENABLED." : null;
+      const adminTail = null;
       // your session token lives in sessionStorage (tab-scoped) while "signed
       // in" state lives in localStorage (persists) — a new tab or a browser
       // restart can leave you looking signed in with no token to actually
       // authenticate render requests. Say THAT precisely, not a relayed
       // backend auth error that reads like a separate account is needed.
       if (!h.hasToken && e.status !== "connected") {
-        setDoctor("warn", "Creative Engine — Sign-in expired", ["Sign out, sign back in, then re-check"],
-          "This tab's session token is missing (a new tab or a browser restart can drop it even though you still look signed in). Sign out, sign back in, and hit Re-check.");
+        setDoctor("warn", "Media Lab — Sign-in expired", ["Sign out, sign back in, then re-check"],
+          "Your admin session needs a refresh. Sign out, sign back in, and hit Re-check.");
       } else if (e.status === "connected") {
-        setDoctor("ok", "Creative Engine — Ready", ["Owner-approved spend", "Auto-captured to Content Hub"], adminTail);
+        setDoctor("ok", "Media Lab — Ready", ["Owner-approved", "Auto-saved to Content Hub"], adminTail);
       } else if (e.status === "not_configured") {
-        setDoctor("warn", "Creative Engine — Offline", ["Nothing generates until reconnected"], e.message || adminTail);
+        setDoctor("warn", "Media Lab — Offline", ["Generation needs attention"], adminTail);
       } else {
-        setDoctor("warn", "Creative Engine — Blocked", ["Some creative tools aren't available"], e.message || adminTail);
+        setDoctor("warn", "Media Lab — Blocked", ["Some creative tools need attention"], adminTail);
       }
-    } else if (h.studio && prov === "higgsfield") {
-      setDoctor("ok", "Creative Engine — Ready", ["Owner-approved spend"]);
+    } else if (h.studio && prov === PRIMARY_MEDIA_LANE) {
+      setDoctor("ok", "Media Lab — Ready", ["Owner-approved"]);
     } else if (h.media[prov]) {
-      setDoctor("ok", "Creative Engine — Ready", ["Live renders enabled", `${prov} key loaded`]);
+      setDoctor("ok", "Media Lab — Ready", ["Live generation enabled"]);
     } else if (h.bridge && !h.bridgeAuth) {
-      setDoctor("warn", "Creative Engine — Signed out", ["Sign in with your admin account, then re-check"]);
+      setDoctor("warn", "Media Lab — Sign-in expired", ["Sign out, sign back in, then re-check"]);
     } else if (h.bridge) {
-      setDoctor("ok", "Creative Engine — Ready", ["No key needed", "Auto-captured to Content Hub"]);
+      setDoctor("ok", "Media Lab — Ready", ["Auto-saved to Content Hub"]);
     } else if (h.proxy) {
-      setDoctor("warn", "Creative Engine — No render lane yet", ["Offline sketches only until connected"],
-        `Proxy reachable at ${base}, but no render key or desktop bridge is configured.`);
+      setDoctor("warn", "Media Lab — Needs setup", ["Offline sketches only until connected"]);
     } else {
-      setDoctor("down", "Creative Engine — Unreachable", ["Nothing generates until reconnected"],
-        `Nothing answered on this origin or at ${base}. Start the desktop bridge or the API lane on the admin box.`);
+      setDoctor("down", "Media Lab — Unreachable", ["Generation needs attention"]);
     }
   };
   const runDoctorAndLog = async (force = false) => {
@@ -1627,7 +1618,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
   const spendLane = !!(health.media?.[genState.provider] || health.engine?.cliFallbackEnabled);
   let approved = true;
   if (spendLane && cfg.requireApproval) {
-    approved = window.confirm("This will use your connected creative engine credits. Approve render?");
+    approved = window.confirm("This will use Media Lab credits. Approve render?");
     if (!approved) {
       if (opts.notify) opts.notify("Media Factory", "Render cancelled — nothing was charged.");
       return;
@@ -1642,7 +1633,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
   const busyStartedAt = Date.now();
   const busyTick = () => {
     const s = Math.round((Date.now() - busyStartedAt) / 1000);
-    const stageText = s < 15 ? "Rendering" : s < 45 ? "Still working" : s < 120 ? "Taking longer than usual — hang tight" : "Well past normal — checking the creative engine";
+      const stageText = s < 15 ? "Rendering" : s < 45 ? "Still working" : s < 120 ? "Taking longer than usual — hang tight" : "Well past normal — checking Media Lab";
     const label = s < 60 ? `Working… ${s}s` : `Working… ${Math.floor(s / 60)}m ${s % 60}s`;
     const stageEl = body.querySelector("[data-ml-busy-stage]");
     const labelEl = body.querySelector("[data-ml-busy-label]");
@@ -1689,7 +1680,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
       : { reason: out.fallbackReason || "unreachable", detail: out.fallbackDetail || "", lane: out.fallbackLane || "", at: Date.now() };
     logJob(out.live ? "ok" : out.queued ? "ok" : "warn",
       out.live ? `Generated ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""}`
-        : out.queued ? "Queued — awaiting your approval in the creative engine"
+        : out.queued ? "Queued — waiting for final review in Media Lab"
         : `Render didn't complete — sketched locally (${out.fallbackReason || "unreachable"})`);
     refreshGeneratePanel(body, cfg, opts, root);
     if (opts.notify) {
@@ -1697,9 +1688,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
       const status = out.live
         ? "generated"
         : out.queued
-          ? out.transport === "hermes_mcp"
-            ? "queued into your creative engine studio — approve the render there (no credits spent yet) for"
-            : "queued in your creative engine studio — the desktop bridge renders it with your subscription; finished cuts land in Content Hub for"
+          ? "queued in Media Lab — final review is waiting for"
           : `render failed (${out.fallbackReason || "unreachable"})${why ? ` — ${why};` : " —"} sketched the request locally for`;
       opts.notify("Media Factory", `${status} ${out.assets.length} ${genState.modality}${out.assets.length > 1 ? "s" : ""} - "${genState.prompt.slice(0, 40)}".`);
     }
@@ -2013,16 +2002,13 @@ export function renderMediaSettings(el, opts = {}) {
     <div class="settings">
       <div class="set-section">
         <h3>Media generation</h3>
-        <p class="set-note">PhantomForce routes generation through your connected providers server-side — the browser never holds a key. Enable a provider, pick default models, and set which one handles each job. Adding a new provider is one config entry + one server route.</p>
+        <p class="set-note">Media Lab keeps generation inside PhantomForce. Pick the default lanes, set approval behavior, and let PhantomForce handle the routing behind the curtain.</p>
         <div class="set-routes">
           ${routeRow("image", "Image engine")}
           ${routeRow("video", "Video engine")}
           ${routeRow("enhance", "Prompt intelligence")}
         </div>
         <label class="set-inline"><input type="checkbox" data-set-approval ${cfg.requireApproval ? "checked" : ""}/> Require approval before paid generation</label>
-        <label class="set-field"><span>Generation endpoint (advanced)</span>
-          <input data-set-base placeholder="https://ai.phantomforce.online" value="${esc(cfg.endpointBase)}"/>
-          <em>Where /generate and /chat are served. Leave blank to auto-detect.</em></label>
       </div>
 
       ${rembgEngineSection(esc)}
@@ -2040,19 +2026,11 @@ export function renderMediaSettings(el, opts = {}) {
           ${socialAccounts.map((account) => socialCard(account, esc)).join("")}
         </div>
       </div>
-
-      <div class="set-section">
-        <div class="set-sec-head"><h3>Providers</h3><button class="set-add" data-set-addprov>${svgIc("bolt")} Add provider</button></div>
-        <div class="set-providers" data-set-providers>
-          ${cfg.providers.map((p) => providerCard(p, esc)).join("")}
-        </div>
-      </div>
     </div>`;
 
   // routing
   el.querySelectorAll("[data-route]").forEach((s) => s.onchange = () => { cfg.routing[s.dataset.route] = s.value; saveCfg(cfg); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
-  const base = el.querySelector("[data-set-base]"); base.onchange = () => { cfg.endpointBase = base.value.trim(); saveCfg(cfg); };
   wireRembgEngineSection(el, opts);
 
   // social account linking stays local and never reads browser cookies/tokens
@@ -2096,29 +2074,6 @@ export function renderMediaSettings(el, opts = {}) {
     };
   });
 
-  // provider cards
-  el.querySelectorAll("[data-prov-card]").forEach((card) => {
-    const id = card.dataset.provCard;
-    const p = provider(cfg, id);
-    const en = card.querySelector("[data-prov-enable]");
-    if (en) en.onchange = () => { p.enabled = en.checked; saveCfg(cfg); renderMediaSettings(el, opts); };
-    const ep = card.querySelector("[data-prov-endpoint]"); if (ep) ep.onchange = () => { p.endpoint = ep.value.trim(); saveCfg(cfg); };
-    const lk = card.querySelector("[data-prov-key]"); if (lk) lk.onchange = () => { p.localKey = lk.value.trim(); saveCfg(cfg); };
-    card.querySelectorAll("[data-prov-defmodel]").forEach((sel) => sel.onchange = () => { p.defaultModel[sel.dataset.provDefmodel] = sel.value; saveCfg(cfg); });
-    const del = card.querySelector("[data-prov-del]"); if (del) del.onclick = () => { cfg.providers = cfg.providers.filter((x) => x.id !== id); saveCfg(cfg); renderMediaSettings(el, opts); };
-  });
-
-  const add = el.querySelector("[data-set-addprov]");
-  if (add) add.onclick = () => {
-    const name = prompt("Provider name (e.g. Luma, Kling, Ideogram):"); if (!name) return;
-    const id = name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-    if (cfg.providers.find((x) => x.id === id)) { alert("A provider with that id already exists."); return; }
-    const modalities = (prompt("Modalities it supports (comma-separated: image, video, edit, enhance):", "image, video") || "image").split(",").map((s) => s.trim()).filter(Boolean);
-    const models = {};
-    modalities.forEach((m) => { const mm = prompt(`Model names for ${m} (comma-separated):`, ""); if (mm) models[m] = mm.split(",").map((s) => s.trim()).filter(Boolean); });
-    cfg.providers.push({ id, name: name.trim(), tagline: "Custom provider", brand: "#41ffa1", keyEnv: `${id.toUpperCase().replace(/-/g, "_")}_API_KEY`, enabled: true, modalities, models, custom: true, endpoint: "", localKey: "", defaultModel: {} });
-    saveCfg(cfg); renderMediaSettings(el, opts);
-  };
 }
 
 function socialCard(account, esc) {
@@ -2156,30 +2111,6 @@ function socialCard(account, esc) {
       </div>
     </form>` : ""}
   </article>`;
-}
-
-function providerCard(p, esc) {
-  return `<div class="set-prov ${p.enabled ? "is-on" : ""}" data-prov-card="${p.id}">
-    ${p.custom ? `<button class="set-card-x" data-prov-del aria-label="Remove custom provider">×</button>` : ""}
-    <div class="set-prov-top">
-      <span class="set-prov-dot" style="background:${p.brand}"></span>
-      <div class="set-prov-id"><b>${esc(p.name)}${p.custom ? ` <em class="set-tag">custom</em>` : ""}</b><i>${esc(p.tagline || "")}</i></div>
-      <label class="set-switch"><input type="checkbox" data-prov-enable ${p.enabled ? "checked" : ""}/><span></span></label>
-    </div>
-    <div class="set-prov-mods">${p.modalities.map((m) => `<span class="set-mod">${m}</span>`).join("")}</div>
-    ${p.enabled ? `
-    <div class="set-prov-body">
-      <div class="set-prov-key">${svgIc("lock")} <span class="set-keystate ${p.localKey ? "local" : "server"}">${p.localKey ? "Local override key set" : "Server-managed API key"}</span></div>
-      ${Object.keys(p.models || {}).filter((m) => (p.models[m] || []).length).map((m) => `
-        <label class="set-mini"><span>Default ${m}</span>
-          <select data-prov-defmodel="${m}">${p.models[m].map((mo) => `<option ${(p.defaultModel && p.defaultModel[m]) === mo ? "selected" : ""}>${esc(mo)}</option>`).join("")}</select></label>`).join("")}
-      <details class="set-adv"><summary>Advanced</summary>
-        <label class="set-mini"><span>Endpoint override</span><input data-prov-endpoint placeholder="default: /generate" value="${esc(p.endpoint || "")}"/></label>
-        <label class="set-mini"><span>API key (self-host only)</span><input data-prov-key type="password" placeholder="stored locally; prefer server env" value="${esc(p.localKey || "")}"/></label>
-        ${p.custom ? `<button class="ml-link set-del" data-prov-del>Remove provider</button>` : ""}
-      </details>
-    </div>` : ""}
-  </div>`;
 }
 
 /* ---------------- tiny icon set (self-contained) ---------------- */

@@ -83,7 +83,7 @@ const SYSTEM_PROMPT = [
   "You are PhantomForce, a private cyber-AI operator for business owners, answering questions on your public site phantomforce.online.",
   "This public page is a protected demo lane: you can sell, explain, qualify, draft, and prepare demo intent, but you do not directly execute tools, spend credits, upload files, send messages, or access private systems from this chat.",
   "PhantomForce does include image generation, video generation, media editing, business automation, websites, follow-up systems, security checks, and operator workflows in the full product.",
-  "If asked about creating images or videos, never say it is outside scope. Say yes: PhantomForce can create them through gated Media Lab/Higgsfield-style workflows; public demos are capped and full generation is plan/approval/credit-gated so visitors cannot burn resources for free.",
+  "If asked about creating images or videos, never say it is outside scope. Say yes: PhantomForce can create them through gated Media Lab workflows; public demos are capped and full generation is plan/approval/credit-gated so visitors cannot burn resources for free.",
   "Answer in at most three short sentences. Be sharp, confident, and concrete — when you can, give one genuinely useful, actionable idea.",
   "Stay on business: leads, follow-ups, replies, scheduling, quotes, invoices, images, video, ads, content, operations, and the risks a business faces (scams, data leaks, compliance, deadlines).",
   "The full PhantomForce runs privately for one business in approval mode or autopilot under owner-set rules; public demo chat never sends, uploads, spends, or touches private systems, and when it genuinely fits, point the visitor to the download button below the chat.",
@@ -93,7 +93,7 @@ const SYSTEM_PROMPT = [
 ].join(" ");
 
 function isCreativeGenerationIntent(message) {
-  return /\b(video|reel|short|tiktok|youtube|ad|commercial|image|photo|picture|graphic|logo|thumbnail|generate|create|make|edit|media|higgsfield)\b/i.test(message || "");
+  return /\b(video|reel|short|tiktok|youtube|ad|commercial|image|photo|picture|graphic|logo|thumbnail|generate|create|make|edit|media)\b/i.test(message || "");
 }
 
 function deniesCreativeGeneration(reply) {
@@ -101,7 +101,7 @@ function deniesCreativeGeneration(reply) {
 }
 
 function publicCreativeGenerationReply() {
-  return "Yes — PhantomForce can create images and videos through gated Media Lab generation. Public demos stay capped so credits do not get burned; full Higgsfield-style generation opens after signup, approval, and a plan/credit limit.";
+  return "Yes — PhantomForce can create images and videos through gated Media Lab generation. Public demos stay capped so credits do not get burned; full generation opens after signup, approval, and a plan/credit limit.";
 }
 
 function shapePublicReply(message, reply) {
@@ -275,12 +275,17 @@ async function genOpenAIImage(req, key) {
 }
 
 const MEDIA_PROVIDERS = {
+  cinematic: { keyEnv: "HIGGSFIELD_API_KEY", modalities: ["image", "video", "edit"], gen: genHiggsfield },
   higgsfield: { keyEnv: "HIGGSFIELD_API_KEY", modalities: ["image", "video", "edit"], gen: genHiggsfield },
   openai: { keyEnv: "OPENAI_API_KEY", modalities: ["image"], gen: genOpenAIImage },
   // Add yours here, e.g.:
   // runway: { keyEnv: "RUNWAY_API_KEY", modalities: ["video"], gen: genRunway },
 };
-const mediaConfigured = () => Object.fromEntries(Object.entries(MEDIA_PROVIDERS).map(([id, p]) => [id, !!process.env[p.keyEnv]]));
+const mediaConfigured = () => Object.fromEntries(
+  Object.entries(MEDIA_PROVIDERS)
+    .filter(([id]) => id !== "higgsfield")
+    .map(([id, p]) => [id, !!process.env[p.keyEnv]]),
+);
 
 function handleGenerate(req, res, send) {
   if (!MEDIA_ENABLED) return send({ error: "media_disabled" }, 200);
