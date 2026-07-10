@@ -1,5 +1,5 @@
 /* PhantomForce — shared media-engine client for the media editor: background
-   removal (rembg) and AI Edit. Every call here is a real network request —
+   removal and AI Edit. Every call here is a real network request —
    no fabricated success, no fake progress. Unreachable/unconfigured always
    resolves to an honest unavailable/error result, never a silent pretend
    success. Content Hub's lightbox, Media Lab's Edit tab, and Settings all
@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260710-123";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260710-123";
+import { session } from "./store.js?v=phantom-live-20260710-124";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260710-124";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -103,7 +103,7 @@ export async function exportCanvas(canvas, repaintFn, format = "image/png", qual
   return safeCanvasDataUrl(canvas, format, quality);
 }
 
-/* ---------------- background removal (rembg) ---------------- */
+/* ---------------- background removal ---------------- */
 
 /* Full status detail — used by the editor panel and Settings > Media
    Engines. `lane` records which service actually answered, or "unreachable"
@@ -122,7 +122,7 @@ export async function getRembgStatus(opts = {}) {
     const r = await fetchWithTimeout(`${aiProxyBase()}/api/media/remove-background/status`, {}, 5000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && typeof d.available === "boolean") {
-      return { lane: "ai-proxy", available: d.available, pythonCommand: null, version: null, error: d.available ? null : "rembg is not installed or not connected.", checkedAt: new Date().toISOString() };
+      return { lane: "ai-proxy", available: d.available, pythonCommand: null, version: null, error: d.available ? null : "Background removal is not connected.", checkedAt: new Date().toISOString() };
     }
   } catch { /* both lanes unreachable */ }
 
@@ -144,7 +144,7 @@ export async function requestRemoveBackground(dataUrl) {
     if (r.status !== 404) {
       const d = await r.json().catch(() => null);
       if (r.ok && d && d.ok && d.image) return { ok: true, image: d.image };
-      if (d) return { ok: false, message: (typeof d.error === "string" && d.error) || d.message || "Background removal unavailable — rembg is not installed or not connected." };
+      if (d) return { ok: false, message: (typeof d.error === "string" && d.error) || d.message || "Background removal is not connected." };
     }
   } catch { /* try the fallback lane */ }
 
@@ -156,7 +156,7 @@ export async function requestRemoveBackground(dataUrl) {
     }, 40000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok && d.image) return { ok: true, image: d.image };
-    return { ok: false, message: (d && d.message) || "Background removal unavailable — rembg is not installed or not connected." };
+    return { ok: false, message: (d && d.message) || "Background removal is not connected." };
   } catch (e) {
     return { ok: false, message: e && e.name === "AbortError" ? "Background removal timed out." : "Could not reach the media engine." };
   }

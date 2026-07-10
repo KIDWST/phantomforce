@@ -10,8 +10,8 @@ import {
   freshEditState, applyFilterPreset, paintEdit, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260710-123";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-123";
+} from "./imagefilters.js?v=phantom-live-20260710-124";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-124";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -778,15 +778,7 @@ function aiEditBody(lb, esc) {
   const loading = ai.status === "loading";
   const busy = checking || loading;
 
-  if (ai.mode !== "connected") {
-    return `
-      <div class="ch-lb-ai-row">
-        <input class="ch-lb-ai-input" data-ch-lb-ai disabled placeholder="AI Edit needs setup…"/>
-        <button class="btn btn-primary" type="button" disabled>${svgIc("bolt")} Generate AI Edit</button>
-      </div>
-      <p class="ch-lb-ai-note ch-lb-ai-note-warn">AI Edit is not connected yet. Once connected, this edits the image here.</p>
-    `;
-  }
+  if (ai.mode !== "connected") return "";
 
   return `
     <div class="ch-lb-ai-row">
@@ -820,8 +812,8 @@ function removeBgBody(lb, esc) {
     <div class="ch-lb-chips">
       <button class="btn btn-quiet" type="button" data-ch-lb-bg-run ${checking || loading || unavailable ? "disabled" : ""}>${loading ? "Removing…" : checking ? "Checking…" : "Remove Background"}</button>
     </div>
-    ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Background removal unavailable — rembg is not installed or not connected.</p>` : ""}
-    ${bg.status === "idle" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Ready — rembg is connected.</p>` : ""}
+    ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Background removal is not connected yet.</p>` : ""}
+    ${bg.status === "idle" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Ready — background removal is available.</p>` : ""}
     ${bg.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "Background removal failed.")}</p>` : ""}
     ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed — Save/Download now export a transparent PNG.</p>` : ""}
   `;
@@ -933,10 +925,10 @@ function lightboxMarkup(lb, esc) {
             <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
           </div>
           <aside class="ch-lb-tools">
-            <div class="ch-lb-ai">
+            ${lb.aiEdit?.mode === "connected" ? `<div class="ch-lb-ai">
               <p class="ch-lb-ai-label">${svgIc("spark")} Describe an edit</p>
               ${aiEditBody(lb, esc)}
-            </div>
+            </div>` : ""}
             <div class="ch-lb-ai">
               <p class="ch-lb-ai-label">${svgIc("spark")} Remove background</p>
               ${removeBgBody(lb, esc)}
@@ -986,8 +978,8 @@ function lightboxMarkup(lb, esc) {
 function tutorialMarkup() {
   const rows = [
     ["Open an image", "Double-click any image in the library to open it here."],
-    ["Describe an edit", "Type what you want and hit Generate. This only works once the media engine is connected in Settings — otherwise the button is disabled and says so."],
-    ["Remove background", "Only enabled when rembg is installed and reachable. Runs for real, shows a before/after, then Apply or Cancel."],
+    ["Describe an edit", "Type what you want and hit Generate. This appears only when AI Edit is connected, so the editor never shows a dead control."],
+    ["Remove background", "Runs for real when background removal is connected, shows a before/after, then Apply or Cancel."],
     ["Subject bokeh", "Click \"AI detect subject\" — it uses your local background-removal engine to find the real subject shape, so gaps like the space between a cat's ears blur correctly. Then use \"Add focus spots\" to touch up anything it missed; drag a spot to move it, click to select and resize, right-click to remove it."],
     ["Adjust / Transform / Style presets / Text overlay", "Tucked into the sections below — click a heading to open it. Text overlay has fonts, color, outline, shadow, alignment, position, and layout presets."],
     ["Save vs. Save as copy", "Save updates this asset in place. Save as copy keeps the original and creates a new one."],

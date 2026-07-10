@@ -6,12 +6,12 @@
  * instead of sending people out to another product.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260710-123";
+import { session as accessSession } from "./store.js?v=phantom-live-20260710-124";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260710-123";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-123";
-import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-123";
+} from "./contenthub.js?v=phantom-live-20260710-124";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-124";
+import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-124";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1942,7 +1942,7 @@ function downloadAsset(a) {
 /* =========================================================================
    SETTINGS  (provider configuration)
    ========================================================================= */
-/* Local Background Removal (rembg) status — checked once per settings mount,
+/* Local Background Removal status — checked once per settings mount,
    re-checked on demand. Never hardcoded: always the real result of
    getRembgStatus()'s Python-import probe. */
 let rembgSettingsStatus = null;
@@ -1957,16 +1957,16 @@ function rembgEngineSection(esc) {
       <div class="set-sec-head">
         <div>
           <h3>Local Background Removal</h3>
-          <p class="set-note">Runs rembg on your own machine via the server — no image ever leaves your network for this. Used by Content Hub's Remove Background and AI subject bokeh.</p>
+          <p class="set-note">Runs locally through PhantomForce — no image leaves your network for this. Used by Content Hub's Remove Background and AI subject bokeh.</p>
         </div>
         <span class="set-safe-pill ${connected ? "is-on" : "is-off"}">${esc(stateLabel)}</span>
       </div>
       <div class="set-rembg-rows">
         <div class="set-rembg-row"><span>Python command</span><b>${esc(s?.pythonCommand || "—")}</b></div>
-        <div class="set-rembg-row"><span>rembg available</span><b>${checking ? "…" : String(!!s?.available)}</b></div>
+        <div class="set-rembg-row"><span>Background removal</span><b>${checking ? "…" : (s?.available ? "Available" : "Not connected")}</b></div>
         <div class="set-rembg-row"><span>Last checked</span><b>${s?.checkedAt ? new Date(s.checkedAt).toLocaleString() : "Never"}</b></div>
       </div>
-      ${!checking && s && !s.available ? `<p class="set-note set-note-warn">${esc(s.error || "rembg is not installed or not reachable.")} Install with: <code>pip install rembg pillow</code></p>` : ""}
+      ${!checking && s && !s.available ? `<p class="set-note set-note-warn">${esc(s.error || "Background removal is not connected.")}</p>` : ""}
       <button class="set-add" data-set-rembg-recheck ${checking ? "disabled" : ""}>${svgIc("cpu")} ${checking ? "Checking…" : "Re-check"}</button>
     </div>`;
 }

@@ -116,7 +116,7 @@ ${visual}
     filter: options.filter || "studio",
     bgRemoved: false,
     edits: ["generated-local-artifact"],
-    toolchain: ["Phantom local image generator", "Canvas/SVG editor", "rembg-ready local background removal"],
+    toolchain: ["Phantom local image generator", "Canvas/SVG editor", "Local background removal"],
     updated: new Date().toISOString(),
   };
 }

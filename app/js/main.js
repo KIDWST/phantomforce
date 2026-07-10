@@ -5,23 +5,23 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
-} from "./store.js?v=phantom-live-20260710-123";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-123";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-123";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-123";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-123";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-123";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-123";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-123";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-123";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-123";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-123";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-123";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-123";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-123";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-123";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-123";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-123";
+} from "./store.js?v=phantom-live-20260710-124";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-124";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-124";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-124";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-124";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-124";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-124";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-124";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-124";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-124";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-124";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-124";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-124";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-124";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-124";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-124";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-124";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -629,7 +629,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260710-123";
+const POSE_VERSION = "phantom-live-20260710-124";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1582,7 +1582,7 @@ const MEDIA_ENGINE_IDENTITY = { cinematic: "PhantomForce native lane", claude: "
 
 /* ============================================================================
    DEVELOPER TAB — the real curtain-pull. Owner-only. Every section here is
-   backed by a real call (agent workforce ledger, rembg probe, ai-proxy
+   backed by a real call (agent workforce ledger, media probes, ai-proxy
    health) — nothing on this page is a static mockup. It never executes a
    provider, approval, send, or production write; it only looks. */
 const DEV_AGENT_ICON = { "phantom-ai": "brain", hermes: "db", builder: "dev", strategist: "brain", reviewer: "check", gatekeeper: "shield", scout: "dollar", sentinel: "shield", cutlab: "film" };
@@ -1666,12 +1666,12 @@ function devProgramCard(p, esc) {
 function buildDevPrograms(workforce, rembg, mediaHealth) {
   const list = [];
   list.push({
-    id: "rembg", name: "Rembg", icon: "media",
+    id: "background-removal", name: "Background Removal", icon: "media",
     tone: rembg?.available ? "on" : "off",
     status: rembg?.available ? "Connected" : "Not connected",
     detail: rembg?.available
       ? `Local background removal running via ${rembg.pythonCommand || "python"}${rembg.version ? ` (${rembg.version})` : ""}.`
-      : (rembg?.error || "rembg is not installed or not reachable."),
+      : (rembg?.error || "Background removal is not connected."),
     meta: rembg?.checkedAt ? `Checked ${ago(rembg.checkedAt)} · ${rembg.lane || "unknown"} lane` : null,
   });
   const mediaLabReady = !!mediaHealth?.media?.cinematic;
@@ -1696,7 +1696,7 @@ function buildDevPrograms(workforce, rembg, mediaHealth) {
     id: "fastify", name: "Fastify backend", icon: "cog",
     tone: workforce ? "on" : "off",
     status: workforce ? "Reachable" : "Unreachable",
-    detail: "The real admin backend — sessions, rembg, agent status, every owner-only route.",
+    detail: "The real admin backend — sessions, media tools, agent status, every owner-only route.",
     meta: null,
   });
   list.push({
