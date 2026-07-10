@@ -6,23 +6,23 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260710-134";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-134";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-134";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-134";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-134";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-134";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-134";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-134";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-134";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-134";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-134";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-134";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-134";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-134";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-134";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-134";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-134";
+} from "./store.js?v=phantom-live-20260710-135";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-135";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-135";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-135";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-135";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-135";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-135";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-135";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-135";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-135";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-135";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-135";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-135";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-135";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-135";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-135";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-135";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -194,14 +194,20 @@ const NAV = [
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
-const MOBILE_NAV = [
-  { id: "dashboard", label: "Home",      icon: "grid",  route: "nav", target: "dashboard" },
-  { id: "money",     label: "Money",     icon: "dollar", route: "nav", target: "money" },
-  { id: "sites",     label: "Site",      icon: "site",  route: "nav", target: "sites" },
-  { id: "workers",   label: "Workers",   icon: "users", route: "nav", target: "workers" },
-  { id: "vacation",  label: "Away",      icon: "auto",  route: "nav", target: "vacation", adminOnly: true },
-  { id: "analytics", label: "Analytics", icon: "chart", route: "nav", target: "analytics" },
-];
+/* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
+   same items, same ownerOnly/adminOnly gates, just a compact label and a
+   horizontally scrollable strip instead of a vertical list. */
+const MOBILE_LABEL_OVERRIDES = { dashboard: "Home", sites: "Site", vacation: "Away" };
+const MOBILE_NAV = NAV.map((n) => ({
+  id: n.id,
+  label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
+  icon: n.icon,
+  route: "nav",
+  target: n.id,
+  adminOnly: n.adminOnly,
+  ownerOnly: n.ownerOnly,
+  badge: n.badge,
+}));
 let activeNav = "dashboard";
 let activePageId = null;
 let mobileNavOpen = false;
@@ -253,10 +259,12 @@ function mobileNavActive(item) {
 function renderMobileBottomNav() {
   const nav = $("[data-mobile-bottom-nav]");
   if (!nav) return;
+  const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   nav.innerHTML = MOBILE_NAV.filter(canAccessSurface).map((item) => `
     <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""}" data-mobile-nav="${esc(item.id)}" type="button">
       ${svg(item.icon)}
       <span>${esc(item.label)}</span>
+      ${item.badge && pending ? `<em class="mobile-bottom-badge">${pending}</em>` : ""}
     </button>`).join("");
 }
 
@@ -634,7 +642,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260710-134";
+const POSE_VERSION = "phantom-live-20260710-135";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
