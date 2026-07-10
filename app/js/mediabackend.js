@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260710-127";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260710-127";
+import { session } from "./store.js?v=phantom-live-20260710-128";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260710-128";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -216,5 +216,51 @@ export async function requestAiEdit({ dataUrl, prompt, provider = "cinematic" })
     return { ok: false, message: (d && d.message) || (d && d.error === "unconfigured" ? "AI Edit is not connected yet." : "AI Edit did not return a result.") };
   } catch (e) {
     return { ok: false, message: e && e.name === "AbortError" ? "AI Edit timed out." : "Could not reach AI Edit." };
+  }
+}
+
+/* ---------------- content asset sync (cross-device photos) ----------------
+   Content Hub's actual photo/video data normally lives only in whichever
+   browser created it (localStorage). These calls back it up to the real
+   Fastify server (server/src/phantom-ai/content-asset-storage.ts) so the
+   same asset shows up on any device logged into the same owner session.
+   Every asset auto-expires after 30 days server-side — this is a sync/
+   archive layer, not permanent storage. Never throws; failures are always
+   reported honestly so a photo doesn't silently vanish or fail to sync
+   without the caller knowing. */
+export async function syncAssetUpload(dataUrl, filename) {
+  try {
+    const r = await fetchWithTimeout("/phantom-ai/content/assets", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ image: dataUrl, filename }),
+    }, 30000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok && d.asset) return { ok: true, asset: d.asset };
+    return { ok: false, error: (d && d.error) || `Sync failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the sync backend." };
+  }
+}
+
+export async function listSyncedAssets() {
+  try {
+    const r = await fetchWithTimeout("/phantom-ai/content/assets", { headers: authHeaders() }, 12000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok && Array.isArray(d.assets)) return { ok: true, assets: d.assets };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).`, assets: [] };
+  } catch {
+    return { ok: false, error: "Could not reach the sync backend.", assets: [] };
+  }
+}
+
+export async function fetchSyncedAssetFile(id) {
+  try {
+    const r = await fetchWithTimeout(`/phantom-ai/content/assets/${encodeURIComponent(id)}/file`, { headers: authHeaders() }, 20000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok && d.image) return { ok: true, dataUrl: d.image, asset: d.asset };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the sync backend." };
   }
 }

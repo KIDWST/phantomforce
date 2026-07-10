@@ -10,8 +10,8 @@ import {
   freshEditState, applyFilterPreset, paintEdit, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260710-127";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-127";
+} from "./imagefilters.js?v=phantom-live-20260710-128";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260710-128";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -196,6 +196,7 @@ function normalizeContentAsset(input = {}) {
     aiEditPlan: String(input.aiEditPlan || ""),
     updatedAt: Number(input.updatedAt || 0) || 0,
     bytes: dataBytes(url),
+    syncedId: String(input.syncedId || ""),
   };
 }
 function pruneContentAssets(items = []) {
@@ -245,11 +246,73 @@ export function saveContentAssets(items = []) {
   }
   return clean;
 }
-export function registerContentAsset(asset) {
+export function registerContentAsset(asset, options = {}) {
   const normalized = normalizeContentAsset(asset);
   const current = loadContentAssets().filter((item) => item.id !== normalized.id);
   const saved = saveContentAssets([normalized, ...current]);
-  return { asset: saved.find((item) => item.id === normalized.id) || normalized, stats: contentAssetStats(saved) };
+  const finalAsset = saved.find((item) => item.id === normalized.id) || normalized;
+  if (!options.skipSync && !finalAsset.syncedId && finalAsset.url && finalAsset.url.startsWith("data:")) {
+    queueAssetSync(finalAsset.id);
+  }
+  return { asset: finalAsset, stats: contentAssetStats(saved) };
+}
+
+/* ---------------- cross-device sync (backs up to the real server) ----------------
+   Fire-and-forget: a new/edited photo saves locally first (instant, works
+   offline), then quietly backs up to the Fastify server so the same photo
+   becomes editable from any other device logged into the same account.
+   Failures are silent here by design — the local save already succeeded,
+   and syncing is a best-effort convenience, not a requirement to keep
+   working. syncedId marks an asset as already backed up so it's never
+   re-uploaded on every re-render. */
+async function queueAssetSync(assetId) {
+  const asset = loadContentAssets().find((item) => item.id === assetId);
+  if (!asset || asset.syncedId || !asset.url || !asset.url.startsWith("data:")) return;
+  const result = await syncAssetUpload(asset.url, asset.title);
+  if (!result.ok) return;
+  const fresh = loadContentAssets();
+  const target = fresh.find((item) => item.id === assetId);
+  if (!target) return; // deleted locally while the upload was in flight
+  saveContentAssets(fresh.map((item) => item.id === assetId ? { ...item, syncedId: result.asset.id } : item));
+}
+
+let assetPullState = { pulled: false, pulling: false };
+
+/* Runs once per Content Hub mount: pulls the list of server-synced assets
+   and merges in any this device doesn't have locally yet (registered with
+   skipSync so pulling never triggers a re-upload right back to the
+   server). This is what makes a photo edited on one device show up on
+   another — same account, same synced pool. */
+async function pullSyncedAssetsOnce(el, opts) {
+  if (assetPullState.pulled || assetPullState.pulling) return;
+  assetPullState.pulling = true;
+  const listResult = await listSyncedAssets();
+  if (!listResult.ok) { assetPullState.pulling = false; assetPullState.pulled = true; return; }
+
+  const known = new Set(loadContentAssets().map((item) => item.syncedId).filter(Boolean));
+  const missing = listResult.assets.filter((remote) => !known.has(remote.id));
+  let mergedAny = false;
+
+  for (const remote of missing) {
+    const fileResult = await fetchSyncedAssetFile(remote.id);
+    if (!fileResult.ok) continue;
+    registerContentAsset({
+      id: `synced-${remote.id}`,
+      type: remote.mime_type.startsWith("video/") ? "video" : "image",
+      title: remote.original_name.replace(/\.[^.]+$/, "") || "Synced photo",
+      prompt: "Synced from another device.",
+      source: "Cross-device sync",
+      url: fileResult.dataUrl,
+      createdAt: Date.parse(remote.created_at) || Date.now(),
+      saved: true,
+      syncedId: remote.id,
+    }, { skipSync: true });
+    mergedAny = true;
+  }
+
+  assetPullState.pulling = false;
+  assetPullState.pulled = true;
+  if (mergedAny && document.body.contains(el)) renderContentHub(el, opts);
 }
 export function contentAssetStats(items = loadContentAssets()) {
   const bytes = items.reduce((sum, asset) => sum + assetBytes(asset), 0);
@@ -544,6 +607,7 @@ export function renderContentHub(el, opts = {}) {
     </div>
     ${chLightbox ? lightboxMarkup(chLightbox, esc) : ""}`;
   el.querySelectorAll("[data-ch-tab]").forEach((b) => b.onclick = () => { chState.tab = b.dataset.chTab; renderContentHub(el, opts); });
+  pullSyncedAssetsOnce(el, opts);
   const body = el.querySelector("[data-ch-body]");
   const t = chState.tab;
   if (t === "ideas") renderCreatorIdeas(body, data, esc, el, opts);
