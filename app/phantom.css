@@ -2483,6 +2483,12 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-engine-mini-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim-2); flex: 0 0 auto; }
 .ml-engine-mini.is-ready { color: #baffdd; border-color: rgba(65,255,161,0.28); }
 .ml-engine-mini.is-ready .ml-engine-mini-dot { background: var(--neon); box-shadow: 0 0 8px rgba(65,255,161,0.8); animation: mlPulse 2.6s ease-in-out infinite; }
+.ml-engine-mini.is-checking { color: #b9d0c8; border-color: rgba(185,208,200,0.2); }
+.ml-engine-mini.is-checking .ml-engine-mini-dot { background: #b9d0c8; animation: mlPulse 1.8s ease-in-out infinite; }
+.ml-engine-mini.is-warn { color: #ffe7a3; border-color: rgba(255,196,0,0.35); }
+.ml-engine-mini.is-warn .ml-engine-mini-dot { background: #ffc400; box-shadow: 0 0 8px rgba(255,196,0,0.7); }
+.ml-engine-mini.is-down { color: #ffb5bf; border-color: rgba(255,84,104,0.35); }
+.ml-engine-mini.is-down .ml-engine-mini-dot { background: var(--risk); box-shadow: 0 0 8px rgba(255,84,104,0.65); }
 .ml-engine-mini b { display: inline-flex; align-items: center; gap: 4px; padding-left: 8px; border-left: 1px solid var(--line); color: var(--neon); }
 .ml-engine-mini b .ic { width: 11px; height: 11px; }
 

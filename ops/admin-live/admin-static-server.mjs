@@ -358,6 +358,27 @@ async function handleCreativeEngineStatus(req, res) {
     message: "",
   };
 
+  const enableOwnerCliRenderStatus = async (message) => {
+    if (!creativeEngine.cliFallbackEnabled) return false;
+    const session = await validateAdminBearer(req).catch(() => null);
+    if (!session) return false;
+    const cli = await refreshCliStatus();
+    out.higgsfield.cli = { present: cli.present, detail: cli.detail };
+    if (cli.present === false) return false;
+    out.status = "connected";
+    out.message = message || "Creative Engine is ready through the owner render lane.";
+    out.tools = [
+      {
+        name: "higgsfield.render",
+        available: true,
+        credit_spend: true,
+        route: "POST /generate",
+        note: "Owner-approved local render lane. The UI must send approved:true before credits can be spent.",
+      },
+    ];
+    return true;
+  };
+
   if (creativeEngine.transport === "disabled") {
     out.message = "Creative Engine transport is disabled (CREATIVE_ENGINE_TRANSPORT=disabled).";
     sendJson(res, 200, out);
@@ -366,6 +387,10 @@ async function handleCreativeEngineStatus(req, res) {
 
   const probe = await hermesFetch("/phantom-ai/media-lab/higgsfield/status", req, {}, 6500);
   if (!probe.reached) {
+    if (await enableOwnerCliRenderStatus("Creative Engine is ready through the owner render lane; the bridge lane is offline.")) {
+      sendJson(res, 200, out);
+      return;
+    }
     out.status = "not_configured";
     out.message = `Blocked: Hermes endpoint is not configured or not answering at ${creativeEngine.hermesBaseUrl}. Start Hermes on this box (or set HERMES_BASE_URL).`;
     sendJson(res, 200, out);
@@ -374,6 +399,10 @@ async function handleCreativeEngineStatus(req, res) {
   out.hermes.reachable = true;
 
   if (probe.status === 401 || probe.status === 403) {
+    if (await enableOwnerCliRenderStatus("Creative Engine is ready through the owner render lane; the bridge session needs attention.")) {
+      sendJson(res, 200, out);
+      return;
+    }
     out.status = "error";
     out.message = "Hermes is reachable but rejected this session — sign in with an admin account (or set HERMES_API_TOKEN).";
     sendJson(res, 200, out);

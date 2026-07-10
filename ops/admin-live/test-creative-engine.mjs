@@ -121,6 +121,8 @@ async function followJob(port, first, tries = 30) {
 /* ---- C. CLI fallback: needs the env flag AND explicit approval ---- */
 {
   const { port } = await startBackend({ HERMES_BASE_URL: "http://127.0.0.1:9", HIGGSFIELD_CLI_FALLBACK_ENABLED: "true" });
+  const status = await j(await fetch(`http://127.0.0.1:${port}/api/creative-engine/status`, { headers: AUTH }));
+  ok("CLI fallback status reports owner render lane ready", status.status === "connected" && status.cliFallbackEnabled === true && status.tools?.some((tool) => tool.available), status.message);
   const noApproval = await followJob(port, await j(await fetch(`http://127.0.0.1:${port}/generate`, { method: "POST", headers: AUTH, body: JSON.stringify(brief) })));
   ok("CLI lane demands approval", noApproval.error === "approval_required" && /Approve render\?/.test(noApproval.message), (noApproval.message || "").slice(0, 80));
   ok("no render happened without approval", cliCalls() === 0);

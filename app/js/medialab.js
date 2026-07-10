@@ -6,12 +6,12 @@
  * instead of sending people out to another product.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260710-125";
+import { session as accessSession } from "./store.js?v=phantom-live-20260710-126";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260710-125";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-125";
-import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-125";
+} from "./contenthub.js?v=phantom-live-20260710-126";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-126";
+import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-126";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -477,6 +477,54 @@ async function checkEngineHealth(cfg, force = false) {
   await Promise.allSettled(jobs);
   engineHealth = next;
   return next;
+}
+function renderLaneReady(health, providerId = PRIMARY_MEDIA_LANE) {
+  const h = health || {};
+  const engine = h.engine || null;
+  const tools = Array.isArray(engine?.tools) ? engine.tools : [];
+  const ownerRenderTool = tools.some((tool) => tool?.available !== false && /render/i.test(String(tool?.name || "")));
+  const ownerCliReady = engine?.cliFallbackEnabled === true && engine?.higgsfield?.cli?.present !== false;
+  if (providerId === PRIMARY_MEDIA_LANE && engine?.status === "connected" && (ownerRenderTool || ownerCliReady || engine?.higgsfield?.availableThroughHermes)) return true;
+  if (h.media?.[providerId]) return true;
+  if (providerId === PRIMARY_MEDIA_LANE && h.bridge && h.bridgeAuth) return true;
+  return false;
+}
+function engineAttention(health, providerId = PRIMARY_MEDIA_LANE) {
+  const h = health || {};
+  if (renderLaneReady(h, providerId)) return "";
+  if (h.engine?.status === "error" || h.engine?.status === "not_configured") return h.engine?.message || "Media engine needs attention.";
+  if (h.bridge && !h.bridgeAuth) return "Your admin session needs a refresh.";
+  if (h.proxy) return "Media generation is not connected yet.";
+  return "Media engine is offline.";
+}
+function updateEngineMini(root, state, label, title = "") {
+  const mini = root?.querySelector?.("[data-ml-engine-mini]");
+  if (!mini) return;
+  mini.classList.toggle("is-ready", state === "ok");
+  mini.classList.toggle("is-warn", state === "warn");
+  mini.classList.toggle("is-down", state === "down");
+  mini.classList.toggle("is-checking", state === "checking");
+  mini.title = title || label || "";
+  const text = mini.querySelector("[data-ml-engine-mini-label]");
+  if (text) text.textContent = label;
+}
+async function refreshEngineMini(root, cfg, force = false) {
+  const hasLane = providersFor(cfg, "image").length + providersFor(cfg, "video").length > 0;
+  if (!hasLane) {
+    updateEngineMini(root, "down", "Engine off", "No media engine is enabled.");
+    return;
+  }
+  updateEngineMini(root, "checking", "Checking engine", "Checking the media engine.");
+  const h = await checkEngineHealth(cfg, force).catch(() => engineHealth);
+  const providerId = genState.provider || PRIMARY_MEDIA_LANE;
+  if (lastRenderIssue) {
+    updateEngineMini(root, "warn", "Needs attention", explainMediaFailure(lastRenderIssue.reason, lastRenderIssue.detail, lastRenderIssue.lane) || "The last render did not finish.");
+  } else if (renderLaneReady(h, providerId)) {
+    updateEngineMini(root, "ok", "Engine ready", "Media Lab can generate through the active owner render lane.");
+  } else {
+    const detail = engineAttention(h, providerId);
+    updateEngineMini(root, /sign|session|auth/i.test(detail) ? "warn" : "down", /sign|session|auth/i.test(detail) ? "Needs sign-in" : "Engine offline", detail);
+  }
 }
 
 /* ---------------- generation client ---------------- */
@@ -1026,7 +1074,7 @@ export function renderMediaStudio(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   if (session.tab === "briefs") session.tab = "pending";
-  const engineReady = providersFor(cfg, "image").length + providersFor(cfg, "video").length > 0;
+  const hasConfiguredEngine = providersFor(cfg, "image").length + providersFor(cfg, "video").length > 0;
   el.innerHTML = `
     <div class="ml">
       <div class="ml-topbar">
@@ -1037,9 +1085,9 @@ export function renderMediaStudio(el, opts = {}) {
           ${NAV_DRAWERS.map(([id, label, ic]) => `<button class="ml-topbar-ic ${activeDrawer === id ? "is-active" : ""}" data-ml-drawer-open="${id}" title="${label}" aria-label="${label}">${svgIc(ic)}</button>`).join("")}
           <button class="ml-topbar-ic" data-ml-open-settings-rail title="Settings" aria-label="Settings">${svgIc("gear")}</button>
         </div>
-        <div class="ml-engine-mini ${engineReady ? "is-ready" : ""}" title="${engineReady ? "Cinematic Engine ready" : "Cinematic Engine on standby — no engine enabled"}">
+        <div class="ml-engine-mini ${hasConfiguredEngine ? "is-checking" : "is-down"}" data-ml-engine-mini title="${hasConfiguredEngine ? "Checking the media engine." : "No media engine is enabled."}">
           <span class="ml-engine-mini-dot" aria-hidden="true"></span>
-          <span>${engineReady ? "Engine ready" : "Engine standby"}</span>
+          <span data-ml-engine-mini-label>${hasConfiguredEngine ? "Checking engine" : "Engine off"}</span>
           <b>${svgIc("bolt")}${cfg.credits}</b>
         </div>
       </div>
@@ -1057,6 +1105,7 @@ export function renderMediaStudio(el, opts = {}) {
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderLibrary(body, opts, el);
+  refreshEngineMini(el, cfg).catch(() => updateEngineMini(el, "down", "Engine offline", "Media engine did not answer."));
 }
 
 /* ---- drawers: Templates / History / Engine — real data, slide-over panel ---- */
@@ -1518,7 +1567,9 @@ function wireGenerate(body, cfg, opts, root, esc) {
     const h = await checkEngineHealth(cfg, force).catch(() => engineHealth);
     if (!doctor.isConnected) return;
     const prov = genState.provider || PRIMARY_MEDIA_LANE;
+    const ready = renderLaneReady(h, prov);
     if (force) lastRenderIssue = null;
+    else if (ready && lastRenderIssue && Date.now() - (lastRenderIssue.at || 0) > 45000) lastRenderIssue = null;
     if (lastRenderIssue) {
       // a green "connected" banner must never contradict a failing render —
       // the most recent failure is THE state until it's cleared or fixed
@@ -1538,15 +1589,13 @@ function wireGenerate(body, cfg, opts, root, esc) {
       if (!h.hasToken && e.status !== "connected") {
         setDoctor("warn", "Media Lab — Sign-in expired", ["Sign out, sign back in, then re-check"],
           "Your admin session needs a refresh. Sign out, sign back in, and hit Re-check.");
-      } else if (e.status === "connected") {
+      } else if (ready) {
         setDoctor("ok", "Media Lab — Ready", ["Owner-approved", "Auto-saved to Content Hub"], adminTail);
       } else if (e.status === "not_configured") {
         setDoctor("warn", "Media Lab — Offline", ["Generation needs attention"], adminTail);
       } else {
         setDoctor("warn", "Media Lab — Blocked", ["Some creative tools need attention"], adminTail);
       }
-    } else if (h.studio && prov === PRIMARY_MEDIA_LANE) {
-      setDoctor("ok", "Media Lab — Ready", ["Owner-approved"]);
     } else if (h.media[prov]) {
       setDoctor("ok", "Media Lab — Ready", ["Live generation enabled"]);
     } else if (h.bridge && !h.bridgeAuth) {
@@ -1555,6 +1604,8 @@ function wireGenerate(body, cfg, opts, root, esc) {
       setDoctor("ok", "Media Lab — Ready", ["Auto-saved to Content Hub"]);
     } else if (h.proxy) {
       setDoctor("warn", "Media Lab — Needs setup", ["Offline sketches only until connected"]);
+    } else if (h.studio && prov === PRIMARY_MEDIA_LANE) {
+      setDoctor("warn", "Media Lab — Needs setup", ["Media service is up", "render lane not ready"]);
     } else {
       setDoctor("down", "Media Lab — Unreachable", ["Generation needs attention"]);
     }
@@ -1568,7 +1619,10 @@ function wireGenerate(body, cfg, opts, root, esc) {
     logJob(state === "ok" ? "ok" : state === "down" ? "down" : "warn", doctor.querySelector("[data-ml-doctor-title]")?.textContent || "Engine check");
     paintJobLog(body, esc);
   };
-  doctor?.querySelector("[data-ml-doctor-retry]")?.addEventListener("click", () => runDoctorAndLog(true));
+  doctor?.querySelector("[data-ml-doctor-retry]")?.addEventListener("click", async () => {
+    await runDoctorAndLog(true);
+    await refreshEngineMini(root, cfg, true);
+  });
   runDoctorAndLog();
 
   body.querySelectorAll("[data-tile-act]").forEach((b) => b.onclick = () => tileAction(b.dataset.tileAct, b.dataset.id, cfg, opts, root, esc, body));
