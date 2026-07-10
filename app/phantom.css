@@ -668,7 +668,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   display: inline-flex; gap: 7px; align-items: center; border-radius: 12px; padding: 8px 10px;
 }
 
-/* ---------------- Phantom Brain / Neural Spine ---------------- */
+/* ---------------- Memory / routing diagnostics ---------------- */
 .brain-shell { display: grid; gap: 16px; }
 .brain-hero {
   display: flex; align-items: center; justify-content: space-between; gap: 18px;
@@ -1176,6 +1176,29 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .worker-scale b, .worker-metrics b { display: block; color: var(--neon); font: 700 22px "Space Grotesk", sans-serif; }
 .worker-scale span, .worker-metrics span { color: var(--dim); font-size: 12px; }
+.worker-routing-panel {
+  display: grid; grid-template-columns: minmax(0, 0.82fr) minmax(0, 1.18fr) minmax(150px, 210px);
+  gap: 14px; align-items: stretch; border: 1px solid rgba(65, 255, 161, 0.2); border-radius: 18px; padding: 16px;
+  background:
+    radial-gradient(circle at 14% 0%, rgba(65,255,161,0.13), transparent 34%),
+    linear-gradient(135deg, rgba(3,14,11,0.86), rgba(0,7,9,0.94));
+}
+.worker-routing-panel h4 { margin: 0; color: #f2fff8; font-size: 18px; letter-spacing: 0; }
+.worker-routing-panel p { margin: 7px 0 0; color: var(--dim); font-size: 12.5px; line-height: 1.5; }
+.worker-routing-cards {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+}
+.worker-routing-cards article, .worker-routing-proof span {
+  border: 1px solid rgba(65,255,161,0.14); border-radius: 14px; padding: 11px; background: rgba(0,0,0,0.22);
+}
+.worker-routing-cards span {
+  display: block; margin-bottom: 7px; color: var(--neon);
+  font: 800 9px "DM Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase;
+}
+.worker-routing-cards b { color: #f2fff8; font-size: 13.5px; }
+.worker-routing-proof { display: grid; gap: 8px; }
+.worker-routing-proof b { display: block; color: var(--neon); font: 900 18px "Space Grotesk", sans-serif; }
+.worker-routing-proof span { color: var(--dim); font-size: 11.5px; }
 .worker-notice {
   display: flex; align-items: center; justify-content: space-between; gap: 12px;
   border: 1px solid rgba(255, 209, 102, 0.32); border-radius: 14px; padding: 12px 14px;
@@ -1516,6 +1539,9 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .worker-grid-client .worker-facts span:nth-child(3) { display: none; }
 @media (max-width: 900px) {
   .workers-hero { grid-template-columns: 1fr; }
+  .worker-routing-panel { grid-template-columns: 1fr; }
+  .worker-routing-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .worker-routing-proof { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .worker-shell-card.is-open { grid-column: 1 / -1; }
   .worker-detail-stats, .worker-safe-row { grid-template-columns: 1fr; }
   .worker-flow-card { grid-template-columns: 1fr; }
@@ -1530,6 +1556,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 @media (max-width: 560px) {
   .worker-department { padding: 11px; border-radius: 16px; }
+  .worker-routing-cards, .worker-routing-proof { grid-template-columns: 1fr; }
   .worker-department-head { align-items: flex-start; flex-direction: column; gap: 4px; }
   .worker-shell-grid { grid-template-columns: 1fr; }
   .worker-shell-main { grid-template-columns: auto minmax(0, 1fr) auto; gap: 9px; padding: 11px; }
@@ -5214,7 +5241,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 
 /* ============================================================= */
-/* ================  UNIFIED CHATBOX (hero brain)  ============= */
+/* ================  UNIFIED CHATBOX (hero command)  ============= */
 /* ============================================================= */
 .chatbox {
   display: flex; flex-direction: column; width: min(100%, 500px); overflow: hidden;
@@ -5585,6 +5612,39 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .console .chatbox-tools { padding: 7px 18px 8px; }
   .console .chatbox-trust { display: none; }
 }
+@media (max-width: 1200px) and (min-width: 901px) {
+  .console {
+    padding-top: 18px;
+  }
+  .console .hero2 {
+    height: min(660px, max(500px, calc(100dvh - 265px)));
+  }
+  .console .chatbox-head {
+    padding: 11px 16px;
+  }
+  .console .chatbox-log {
+    padding: clamp(15px, 2vw, 22px);
+    padding-right: min(38%, 320px);
+  }
+  .console .chat-start {
+    padding-top: 8px;
+  }
+  .console .chat-start-t {
+    font-size: clamp(18px, 2.1vw, 22px);
+  }
+  .console .chat-start-s {
+    max-width: 620px;
+  }
+  .console .chatbox-composer {
+    padding: 12px 12px 12px 18px;
+  }
+  .console .chatbox-tools {
+    padding: 9px 18px 10px;
+  }
+  .console .chatbox-trust {
+    padding-bottom: 12px;
+  }
+}
 .console .hero2-stage {
   position: absolute;
   top: clamp(76px, 8cqw, 118px);
@@ -5639,12 +5699,33 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     width: 100%;
   }
   .console .hero2-stage {
-    top: 24px;
-    right: 24px;
-    width: 156px;
-    min-height: 156px;
+    top: clamp(58px, 7cqw, 90px);
+    right: clamp(-58px, -5cqw, -18px);
+    bottom: clamp(82px, 8cqw, 118px);
+    width: clamp(520px, 68cqw, 760px);
+    min-height: 0;
+    height: auto !important;
+    justify-items: end;
     transform: none;
-    opacity: 0.18;
+    opacity: 0.42;
+    -webkit-mask-image: radial-gradient(circle at 68% 56%, #000 0 52%, rgba(0, 0, 0, 0.82) 68%, transparent 93%);
+    mask-image: radial-gradient(circle at 68% 56%, #000 0 52%, rgba(0, 0, 0, 0.82) 68%, transparent 93%);
+  }
+  .console .phantom-mode-stage {
+    width: min(100%, 720px) !important;
+    max-width: none;
+    height: 100%;
+  }
+  .console .phantom-mode-pose {
+    width: min(94%, 680px) !important;
+    max-height: 100% !important;
+    opacity: 0.88;
+  }
+  .console .hero2-stage .ghost-canvas {
+    display: block;
+    min-height: 0 !important;
+    opacity: 0.16;
+    transform: scale(1.05);
   }
 }
 
@@ -5688,17 +5769,77 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   }
 }
 
+@media (max-width: 900px) and (min-width: 768px) {
+  .console .hero2 {
+    height: min(720px, max(560px, calc(100dvh - 260px)));
+  }
+  .console .chatbox {
+    min-height: 0;
+    height: 100%;
+  }
+  .console .chatbox-log {
+    padding-right: min(36%, 270px);
+  }
+  .console .hero2-stage {
+    top: clamp(142px, 18cqw, 190px);
+    right: clamp(-72px, -8cqw, -42px);
+    bottom: clamp(76px, 9cqw, 106px);
+    width: clamp(430px, 62cqw, 560px);
+    height: auto !important;
+    min-height: 0 !important;
+    opacity: 0.4;
+    z-index: 1;
+    justify-items: end;
+    -webkit-mask-image: radial-gradient(circle at 70% 55%, #000 0 52%, rgba(0, 0, 0, 0.78) 68%, transparent 94%);
+    mask-image: radial-gradient(circle at 70% 55%, #000 0 52%, rgba(0, 0, 0, 0.78) 68%, transparent 94%);
+  }
+  .console .phantom-mode-stage {
+    width: min(100%, 560px) !important;
+    max-width: none;
+    height: 100%;
+    transform: none;
+  }
+  .console .phantom-mode-pose {
+    width: min(94%, 520px) !important;
+    max-height: 100% !important;
+    opacity: 0.86;
+  }
+  .console .hero2-stage .ghost-canvas {
+    display: block;
+    height: 100% !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    left: auto;
+    transform: scale(1.04);
+    opacity: 0.14;
+  }
+}
+
 @media (max-width: 520px) {
   .console .chatbox {
-    min-height: min(76vh, 640px);
+    min-height: min(62vh, 560px);
     border-radius: 16px;
   }
   .console .chatbox-log {
     padding: 13px;
   }
+  .console .chatbox-composer {
+    margin: 0 10px;
+    border: 1px solid rgba(65, 255, 161, 0.26);
+    border-radius: 18px;
+    background: rgba(1, 9, 8, 0.72);
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.025), 0 0 28px rgba(65, 255, 161, 0.08);
+  }
   .console .chatbox-composer input {
     height: 38px;
     font-size: 15px;
+  }
+  .console .chatbox-tools {
+    padding-top: 9px;
+  }
+  .console .chatbox-trust {
+    display: none;
   }
 }
 

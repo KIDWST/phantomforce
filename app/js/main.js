@@ -6,24 +6,23 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260710-138";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-138";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-138";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-138";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-138";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-138";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-138";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-138";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-138";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-138";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-138";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-138";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-138";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-138";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-138";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-138";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-138";
-import { renderPhantomBrain } from "./brain.js?v=phantom-live-20260710-138";
+} from "./store.js?v=phantom-live-20260710-139";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-139";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-139";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-139";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-139";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-139";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-139";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-139";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-139";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-139";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-139";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-139";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-139";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-139";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-139";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-139";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-139";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -186,7 +185,6 @@ const NAV = [
   { id: "sites",      label: "Site Studio",  icon: "site",  ws: "sites" },
   { id: "money",      label: "Money",        icon: "dollar", ws: "money" },
   { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
-  { id: "brain",      label: "Brain",        icon: "brain", ws: "brain", ownerOnly: true },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
@@ -215,6 +213,7 @@ let activePageId = null;
 let mobileNavOpen = false;
 
 const WORKSPACE_ALIASES = {
+  brain: "workforce",
   memory: "memory",
   content: "content",
   analytics: "analytics",
@@ -644,7 +643,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260710-138";
+const POSE_VERSION = "phantom-live-20260710-139";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1804,8 +1803,8 @@ function buildDevPrograms(workforce, rembg, mediaHealth) {
     tone: "on",
     status: mediaHealth?.reachable ? "Reachable" : "Bridge waiting",
     detail: mediaHealth?.reachable
-      ? `Chat brain: ${mediaHealth.provider || "unset"}${mediaHealth.model ? ` / ${mediaHealth.model}` : ""}.`
-      : "Brain bridge is registered and safely held until the local proxy answers.",
+      ? `Chat routing: ${mediaHealth.provider || "unset"}${mediaHealth.model ? ` / ${mediaHealth.model}` : ""}.`
+      : "Chat bridge is registered and safely held until the local proxy answers.",
     meta: null,
   });
   (workforce?.programs || []).forEach((p) => {
@@ -1943,8 +1942,9 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
         ["Production ledger writes", "Blocked"],
       ];
   const shortcuts = [
-    ["PhantomOps", "adminos", "System status, tool lane, and owner ops cockpit."],
-    ["Memory", "memory", "Memory, recall, and local context."],
+    ["Workers", "workforce", "Worker map, helper lanes, routing, and activity signals."],
+    ["Memory", "memory", "Recall rules, preferences, and local context."],
+    ["PhantomOps", "adminos", "System status, tool lanes, and owner ops control."],
     ["Approvals", "approvals", "Human approval queue and blocked-action review."],
     ["Settings", "settings", "Media and provider configuration guardrails."],
   ];
@@ -2041,7 +2041,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
         <p class="set-note">Change the real backend target for each Phantom lane. Saves locally and applies to the next chat request.</p>
         <div class="developer-lane-groups">
           <div class="developer-lane-group developer-lane-group-wide">
-            <b>Chat brain lanes</b>
+            <b>Phantom routing lanes</b>
             <div class="developer-lane-controls">${renderBrainLaneControls()}</div>
             <p class="developer-lane-saved" data-dev-lane-saved hidden>Saved — next message uses this routing.</p>
           </div>
@@ -2127,7 +2127,6 @@ const CUSTOM = {
   sites: { title: "Site Studio", kicker: "AI website & store builder", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
   content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
-  brain: { title: "Phantom Brain", kicker: "Neural spine", custom: true, wide: true, ownerOnly: true, render: (body) => renderPhantomBrain(body) },
   account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },

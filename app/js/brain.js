@@ -1,5 +1,5 @@
-import { session } from "./store.js?v=phantom-live-20260710-138";
-import { esc } from "./workspaces.js?v=phantom-live-20260710-138";
+import { session } from "./store.js?v=phantom-live-20260710-139";
+import { esc } from "./workspaces.js?v=phantom-live-20260710-139";
 
 const state = {
   loading: true,
@@ -23,7 +23,7 @@ async function brainFetch(path, options = {}) {
     headers: authHeaders(options.headers || {}),
   });
   const data = await response.json().catch(() => null);
-  if (!response.ok || !data?.ok) throw new Error(data?.error || `Brain request failed (${response.status})`);
+  if (!response.ok || !data?.ok) throw new Error(data?.error || `Memory request failed (${response.status})`);
   return data;
 }
 
@@ -93,7 +93,7 @@ function recentEvents(events) {
       ${badge(event.surface)}
       <b>${esc(event.summary)}</b>
       <small>${esc(event.type)} · ${esc(event.outcome || "recorded")} · ${new Date(event.timestamp).toLocaleString()}</small>
-    </article>`).join("") || `<div class="ws-empty">No brain events yet.</div>`;
+    </article>`).join("") || `<div class="ws-empty">No routing events yet.</div>`;
 }
 
 function contextPreviewHtml(preview) {
@@ -127,7 +127,7 @@ function renderShell(root) {
       <section class="brain-hero">
         <div>
           <p class="overlay-kicker">Adaptive operator memory</p>
-          <h3>Phantom Brain</h3>
+          <h3>Memory & Routing</h3>
           <p>Real memory, context composition, feedback, health, proof logs, and approval impulse control. No fake model-weight claims.</p>
         </div>
         <button class="btn btn-primary" data-brain-refresh>Refresh</button>
@@ -136,7 +136,7 @@ function renderShell(root) {
       <div class="brain-stat-grid">
         ${stat("Status", status.active ? "Active" : "Offline", status.mode || "application layer")}
         ${stat("Memories", status.memoryCount ?? memories.length, "active vault records")}
-        ${stat("Events", status.brainEventCount ?? 0, "brain event log")}
+        ${stat("Events", status.brainEventCount ?? 0, "routing event log")}
         ${stat("Ledger", status.ledgerEventCount ?? 0, "Hermes proof entries")}
         ${stat("Profile", `${Math.round((status.profileConfidence || profile.confidence || 0) * 100)}%`, "confidence")}
         ${stat("Approval", status.approvalMode || "approval-first", "external actions gated")}
@@ -204,7 +204,7 @@ function renderShell(root) {
         </article>
 
         <article class="brain-card">
-          <p class="overlay-kicker">System Brain Health</p>
+          <p class="overlay-kicker">System Health</p>
           <h4>What is actually connected</h4>
           <div class="brain-list">${healthRows(health)}</div>
         </article>
@@ -223,7 +223,7 @@ async function rerender(root) {
     await loadBrain();
   } catch (error) {
     state.loading = false;
-    state.error = error?.message || "Could not load Phantom Brain.";
+    state.error = error?.message || "Could not load memory and routing.";
   }
   renderShell(root);
   bind(root);
@@ -252,7 +252,7 @@ async function editMemory(root, id, currentText) {
 }
 
 async function forgetMemory(root, id) {
-  if (!confirm("Forget this Brain memory?")) return;
+  if (!confirm("Forget this memory?")) return;
   await brainFetch(`/phantom-ai/brain/memories/${encodeURIComponent(id)}`, { method: "DELETE" });
   state.notice = "Memory forgotten.";
   await rerender(root);
@@ -309,6 +309,6 @@ function bind(root) {
 
 export function renderPhantomBrain(root) {
   state.loading = true;
-  root.innerHTML = `<div class="brain-shell"><div class="ws-empty">Loading Phantom Brain...</div></div>`;
+  root.innerHTML = `<div class="brain-shell"><div class="ws-empty">Loading memory and routing...</div></div>`;
   rerender(root);
 }

@@ -1,8 +1,8 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260710-138";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel } from "./store.js?v=phantom-live-20260710-138";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260710-139";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel } from "./store.js?v=phantom-live-20260710-139";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 
@@ -122,15 +122,15 @@ function renderSafetySummary(settings) {
     blocked: "External actions blocked",
     owner_rules: "Use owner rules",
   }[settings.externalActionMode] || "External actions ask first";
-  const brainLabel = {
-    local: "Instant brain (no backend)",
+  const routingLabel = {
+    local: "Instant routing (no backend)",
     api: "Connected backend",
     subscription: "Subscription managed",
-  }[settings.brainMode] || "Instant brain (no backend)";
+  }[settings.brainMode] || "Instant routing (no backend)";
   return `
     <div class="set-status-grid">
       <span><b>Loop</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Off"}</i></span>
-      <span><b>Brain</b><i>${esc(brainLabel)} · ${esc(providerFor(settings.provider).name)}</i></span>
+      <span><b>Routing</b><i>${esc(routingLabel)} · ${esc(providerFor(settings.provider).name)}</i></span>
       <span><b>Autopilot</b><i>${settings.autopilotScope === "safe_repeat" ? "Safe repeat work only" : "Manual only"}</i></span>
       <span><b>Boundary</b><i>${esc(externalLabel)}</i></span>
     </div>`;

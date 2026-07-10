@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-138";
+} from "./store.js?v=phantom-live-20260710-139";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1689,6 +1689,36 @@ function renderWorkforceFlow() {
     </section>`;
 }
 
+function renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount }) {
+  const cards = [
+    ["Route", "Phantom picks the right worker for the job.", "outcome first"],
+    ["Remember", "Workspace rules and preferences guide the answer.", "local memory"],
+    ["Prepare", "Workers draft, check, package, and organize the work.", `${realPrepared} ready`],
+    ["Prove", "Signals and approvals show what actually happened.", `${ledgerSignalCount} signals`],
+  ];
+  return `
+    <section class="worker-routing-panel" aria-label="How Phantom routes work">
+      <div>
+        <p class="worker-kicker">PhantomOps</p>
+        <h4>Workers are where the intelligence shows up.</h4>
+        <p>Ask for an outcome, and Phantom routes it through workers, memory, approvals, and proof.</p>
+      </div>
+      <div class="worker-routing-cards">
+        ${cards.map(([titleText, body, meta]) => `
+          <article>
+            <span>${esc(meta)}</span>
+            <b>${esc(titleText)}</b>
+            <p>${esc(body)}</p>
+          </article>`).join("")}
+      </div>
+      <div class="worker-routing-proof">
+        <span><b>${pendingApprovals}</b> approvals waiting</span>
+        <span><b>${ledgerSignalCount}</b> real signals</span>
+        <span><b>${realPrepared}</b> prepared items</span>
+      </div>
+    </section>`;
+}
+
 function workerParentMatchesFilter(worker, subagents = [], cells = []) {
   if (workerUi.filter === "all" || workerUi.filter === "employees") return true;
   if (workerUi.filter === "subagents") return subagents.length > 0;
@@ -1945,6 +1975,7 @@ function renderWorkforce(el, rerender) {
         <span><b>${departmentCount}</b> departments mapped</span>
       </div>
     </section>
+    ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount })}
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
     <div class="worker-metrics">
       <div><span>Mapped Nodes</span><b>${mappedCount}</b></div>
@@ -2118,7 +2149,7 @@ function renderPhantom(el) {
 
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
-  phantom: { title: "Phantom AI", kicker: "Command brain", render: renderPhantom },
+  phantom: { title: "Phantom AI", kicker: "Command surface", render: renderPhantom },
   leads: { title: "Leads & Follow-Up", kicker: "Pipeline desk", render: renderLeads },
   proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },

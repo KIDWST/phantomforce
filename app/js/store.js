@@ -306,13 +306,13 @@ export const TOOL_SPINE = [
   {
     id: "brain-router",
     name: "Model Switchboard",
-    internal: "Brain Layer",
-    worker: "Brain Router",
+    internal: "Routing Layer",
+    worker: "Model Router",
     mode: "active",
     status: "routed",
     role: "Routes admin-only thinking, review, coding, and worker model lanes behind Phantom AI.",
-    ownerControl: "Owner brain routing is active. Clients only see Phantom, not the backend model names.",
-    activity: "routing requests through the correct brain lane while keeping tool names hidden.",
+    ownerControl: "Owner routing is active. Clients only see Phantom, not the backend model names.",
+    activity: "routing requests through the correct model lane while keeping tool names hidden.",
     path: "Private backend",
     visibleToClients: false,
   },
@@ -810,7 +810,7 @@ export const PHANTOM_LANES = [
 ];
 export const PHANTOM_LANE_TARGETS = [
   { id: "claude_cli", name: "Claude CLI", provider: "phantom", models: ["claude-cli", "claude-sonnet", "claude-opus"] },
-  { id: "codex", name: "Codex / Private Brain", provider: "phantom", models: ["codex-default", "codex-high", "codex-fast"] },
+  { id: "codex", name: "Codex / Private Operator", provider: "phantom", models: ["codex-default", "codex-high", "codex-fast"] },
   { id: "glm_5_2", name: "GLM / OpenRouter Route", provider: "openrouter_glm", models: ["z-ai/glm-5.2", "openrouter-auto", "local-glm"] },
 ];
 export function phantomLaneTargetName(id) {
