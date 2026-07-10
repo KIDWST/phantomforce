@@ -767,7 +767,39 @@ export function moneyView() {
   const wonValue = won.reduce((s, p) => s + p.price, 0);
   const retainerMonthly = props.filter((p) => p.retainer && p.status !== "lost")
     .reduce((s, p) => s + (RETAINERS.find((r) => r.id === p.retainer)?.price || 0), 0);
-  return { open, won, lost, pipeline, wonValue, retainerMonthly };
+  const finance = normalizeFinance(store.state.finance);
+  store.state.finance = finance;
+  const transactions = visible(finance.transactions)
+    .slice()
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || String(b.createdAt).localeCompare(String(a.createdAt)));
+  const accounts = visible(finance.accounts);
+  const cashIn = transactions.filter((tx) => tx.amount > 0).reduce((sum, tx) => sum + tx.amount, 0);
+  const cashOut = transactions.filter((tx) => tx.amount < 0).reduce((sum, tx) => sum + Math.abs(tx.amount), 0);
+  const netCash = cashIn - cashOut;
+  const ledgerBalance = transactions.reduce((sum, tx) => sum + tx.amount, 0);
+  const uncategorizedCount = transactions.filter((tx) => !tx.category || tx.category === "Uncategorized").length;
+  const connectedAccounts = accounts.filter((account) => account.status === "connected");
+  const readySources = finance.connectors.filter((connector) => connector.status === "ready" || connector.status === "connected").length;
+  return {
+    open,
+    won,
+    lost,
+    pipeline,
+    wonValue,
+    retainerMonthly,
+    transactions,
+    accounts,
+    connectors: finance.connectors,
+    cashIn,
+    cashOut,
+    netCash,
+    ledgerBalance,
+    uncategorizedCount,
+    connectedAccounts,
+    readySources,
+    latestTransaction: transactions[0] || null,
+    opportunity: { open, won, lost, pipeline, wonValue, retainerMonthly },
+  };
 }
 
 /* ---------------- derived: today's plan ---------------- */

@@ -803,31 +803,240 @@ function renderProtect(el, rerender) {
 }
 
 /* =============================== MONEY =============================== */
+const moneySigned = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmtMoney(value);
+const financeCategoryOptions = (selected = "Uncategorized") =>
+  FINANCE_CATEGORIES.map((category) => `<option value="${esc(category)}" ${category === selected ? "selected" : ""}>${esc(category)}</option>`).join("");
+const todayInput = () => new Date().toISOString().slice(0, 10);
+function financeDate(value) {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? todayInput() : d.toISOString().slice(0, 10);
+}
+function parseCurrency(value) {
+  const cleaned = String(value || "").replace(/[$,\s]/g, "").replace(/^\((.*)\)$/, "-$1");
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+function parseCsvLine(line) {
+  const cells = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"' && line[i + 1] === '"') { cell += '"'; i += 1; continue; }
+    if (ch === '"') { quoted = !quoted; continue; }
+    if (ch === "," && !quoted) { cells.push(cell.trim()); cell = ""; continue; }
+    cell += ch;
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+function parseFinanceCsv(text, ws) {
+  const lines = String(text || "").split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/[^a-z0-9]+/g, ""));
+  const idx = (...names) => headers.findIndex((h) => names.some((name) => h === name || h.includes(name)));
+  const dateIdx = idx("date", "posted", "transactiondate");
+  const descIdx = idx("description", "merchant", "name", "memo", "details");
+  const amountIdx = idx("amount");
+  const creditIdx = idx("credit", "deposit");
+  const debitIdx = idx("debit", "withdrawal", "charge");
+  const categoryIdx = idx("category", "type");
+  const accountIdx = idx("account", "card");
+  return lines.slice(1).map((line) => {
+    const cells = parseCsvLine(line);
+    let amount = amountIdx >= 0 ? parseCurrency(cells[amountIdx]) : 0;
+    if (!amount && (creditIdx >= 0 || debitIdx >= 0)) amount = parseCurrency(cells[creditIdx]) - parseCurrency(cells[debitIdx]);
+    const description = cells[descIdx] || "Imported transaction";
+    const account = cells[accountIdx] || "CSV import";
+    const category = FINANCE_CATEGORIES.includes(cells[categoryIdx]) ? cells[categoryIdx] : "Uncategorized";
+    const date = financeDate(cells[dateIdx]);
+    return {
+      id: uid("txn"),
+      ws,
+      date,
+      description: description.slice(0, 160),
+      amount,
+      category,
+      account: account.slice(0, 80),
+      source: "csv",
+      externalId: `csv:${date}:${amount}:${description}:${account}`.toLowerCase(),
+      createdAt: new Date().toISOString(),
+    };
+  }).filter((tx) => tx.amount !== 0);
+}
+function connectorLabel(connector) {
+  if (connector.status === "ready") return "Ready";
+  if (connector.status === "connected") return "Connected";
+  if (connector.status === "requested") return "Setup requested";
+  return "Not connected";
+}
+
 function renderMoney(el, rerender) {
   const m = moneyView();
-  const invoiceReady = visible(store.state.proposals).filter((p) => p.status === "invoice-ready");
+  const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  const recent = m.transactions.slice(0, 18);
+  const actualCount = m.transactions.length;
+  const proposalGoal = m.opportunity;
   el.innerHTML = `
-    <div class="stat-row">
-      <div class="stat"><span>Open pipeline</span><b>${fmtMoney(m.pipeline)}</b><i>${m.open.length} proposal${m.open.length === 1 ? "" : "s"}</i></div>
-      <div class="stat"><span>Won</span><b>${fmtMoney(m.wonValue)}</b><i>${m.won.length} closed</i></div>
-      <div class="stat"><span>Retainers attached</span><b>${fmtMoney(m.retainerMonthly)}/mo</b><i>recurring once live</i></div>
-      <div class="stat"><span>Invoice-ready</span><b>${invoiceReady.length}</b><i>payment connector not wired</i></div>
-    </div>
-    <h3 class="ws-subhead">Open proposals by value</h3>
-    <div class="stack">
-      ${m.open.slice().sort((a, b) => b.price - a.price).map((p) => `
-        <article class="record record-row">
-          ${wsTag(p.ws)}<h4>${esc(p.client)}</h4>${chip(p.status)}<b class="record-price">${fmtMoney(p.price)}</b>
-        </article>`).join("") || empty("No open proposals — pipeline is either closed or waiting to be built.")}
-    </div>
-    <h3 class="ws-subhead">Next money actions</h3>
-    ${m.open.length || m.won.length || invoiceReady.length ? `<ul class="record-list record-list-lg">
-      ${m.open.filter((p) => p.status === "sent-ready").map((p) => `<li>▸ ${esc(p.client)} is send-ready — get it in front of them and set the follow-up.</li>`).join("")}
-      ${m.won.filter((p) => !p.retainer).map((p) => `<li>▸ ${esc(p.client)} closed without a retainer — pitch Keeper ($150/mo) at delivery.</li>`).join("")}
-      ${invoiceReady.map((p) => `<li>▸ ${esc(p.client)} is invoice-ready — track payment manually until the connector exists.</li>`).join("")}
-      <li>▸ Price-tier check: anything scoped over 20 hours should quote at Pro ($2,500), not Core.</li>
-    </ul>` : empty("No money actions yet. Real proposals and invoices will appear here after you create them.")}
-    <p class="ws-note">Quote → approval → invoice-ready → payment-tracked. Real invoices and payment requests stay off until a payment connector is configured.</p>`;
+    <section class="finance-shell">
+      <div class="finance-truth">
+        <div>
+          <p class="overlay-kicker">ACTUAL TRANSACTIONS ONLY</p>
+          <h3>Business finance ledger</h3>
+          <p>Money reads bank/card imports, connected-account syncs, or manual entries. No proposal pipeline, no guessed revenue, no fake profit.</p>
+        </div>
+        <button class="btn" type="button" data-act="export">Export CSV</button>
+      </div>
+      <div class="stat-row finance-stats">
+        <div class="stat"><span>Cash in</span><b>${fmtMoney(m.cashIn)}</b><i>${actualCount ? "from real transactions" : "no income recorded"}</i></div>
+        <div class="stat"><span>Cash out</span><b>${fmtMoney(m.cashOut)}</b><i>${actualCount ? "expenses and withdrawals" : "no expenses recorded"}</i></div>
+        <div class="stat"><span>Net cashflow</span><b>${moneySigned(m.netCash)}</b><i>${actualCount ? "income minus outflow" : "ledger empty"}</i></div>
+        <div class="stat"><span>Ledger balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
+      </div>
+
+      <div class="finance-grid">
+        <section class="finance-panel">
+          <div class="finance-panel-head">
+            <h3>Connect or import</h3>
+            <span>${m.readySources} source${m.readySources === 1 ? "" : "s"} ready</span>
+          </div>
+          <div class="finance-connectors">
+            ${m.connectors.map((connector) => `
+              <article class="finance-connector finance-${esc(connector.status)}">
+                <span class="finance-connector-kind">${esc(connector.type)}</span>
+                <b>${esc(connector.name)}</b>
+                <p>${connector.id === "manual"
+                  ? "Manual entry and CSV import are active right now."
+                  : `Live sync uses ${esc(connector.provider)} once backend credentials and secure token storage are configured.`}</p>
+                <div class="finance-connector-foot">
+                  <i>${esc(connectorLabel(connector))}</i>
+                  ${connector.id === "manual"
+                    ? `<label class="btn btn-quiet finance-import">Import CSV<input type="file" accept=".csv,text/csv" data-finance-import hidden /></label>`
+                    : `<button class="btn btn-quiet" data-act="connector" data-id="${esc(connector.id)}" type="button">${connector.status === "requested" ? "Setup requested" : "Prepare setup"}</button>`}
+                </div>
+              </article>`).join("")}
+          </div>
+        </section>
+
+        <section class="finance-panel">
+          <div class="finance-panel-head">
+            <h3>Add transaction</h3>
+            <span>manual record</span>
+          </div>
+          <form class="finance-entry" data-finance-form>
+            <label><span>Date</span><input type="date" name="date" value="${todayInput()}" required /></label>
+            <label><span>Description</span><input type="text" name="description" placeholder="Stripe payout, Adobe, contractor..." required /></label>
+            <label><span>Direction</span><select name="direction"><option value="income">Money in</option><option value="expense">Money out</option></select></label>
+            <label><span>Amount</span><input type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required /></label>
+            <label><span>Category</span><select name="category">${financeCategoryOptions()}</select></label>
+            <label><span>Account</span><input type="text" name="account" placeholder="Business checking / card" /></label>
+            <button class="btn btn-primary" type="submit">Add transaction</button>
+          </form>
+        </section>
+      </div>
+
+      <section class="finance-panel">
+        <div class="finance-panel-head">
+          <h3>Transaction reader</h3>
+          <span>${actualCount} actual record${actualCount === 1 ? "" : "s"}</span>
+        </div>
+        <div class="finance-table" role="table" aria-label="Business transactions">
+          ${recent.map((tx) => `
+            <article class="finance-row ${tx.amount < 0 ? "is-out" : "is-in"}" role="row">
+              <time>${esc(fmtDate(tx.date))}</time>
+              <div>
+                <b>${esc(tx.description)}</b>
+                <i>${esc(tx.account)} · ${esc(tx.category)} · ${esc(tx.source)}</i>
+              </div>
+              <strong>${moneySigned(tx.amount)}</strong>
+              <button class="record-x" data-act="delete-tx" data-id="${esc(tx.id)}" type="button" aria-label="Delete transaction">×</button>
+            </article>`).join("") || empty("No transactions yet. Connect a bank/card, import a CSV export, or add the first one manually.")}
+        </div>
+      </section>
+
+      <section class="finance-goal-note">
+        <div>
+          <p class="overlay-kicker">GOALS, NOT MONEY</p>
+          <h3>Potential revenue belongs with missions.</h3>
+          <p>Open quotes and won proposals can guide goals, but they do not count as ledger cash until a bank/card/manual transaction confirms the money moved.</p>
+        </div>
+        <div class="finance-goal-stats">
+          <span><b>${fmtMoney(proposalGoal.pipeline)}</b><i>open quote potential</i></span>
+          <span><b>${fmtMoney(proposalGoal.wonValue)}</b><i>won proposal value</i></span>
+          <span><b>${fmtMoney(proposalGoal.retainerMonthly)}/mo</b><i>retainer goal</i></span>
+        </div>
+      </section>
+    </section>`;
+  const finance = store.state.finance;
+  const ensureAccount = (name) => {
+    const label = (name || "Manual ledger").trim().slice(0, 80);
+    if (!finance.accounts.some((account) => account.ws === ws && account.name.toLowerCase() === label.toLowerCase())) {
+      finance.accounts.unshift({ id: uid("acct"), ws, name: label, type: "manual", institution: "", status: "manual", lastSync: null });
+    }
+    return label;
+  };
+  const form = el.querySelector("[data-finance-form]");
+  if (form) {
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const rawAmount = Number(data.get("amount"));
+      if (!Number.isFinite(rawAmount) || rawAmount <= 0) return;
+      const direction = data.get("direction") === "expense" ? -1 : 1;
+      const account = ensureAccount(String(data.get("account") || "Manual ledger"));
+      finance.transactions.unshift({
+        id: uid("txn"),
+        ws,
+        date: financeDate(data.get("date")),
+        description: String(data.get("description") || "Manual transaction").slice(0, 160),
+        amount: direction * rawAmount,
+        category: String(data.get("category") || "Uncategorized"),
+        account,
+        source: "manual",
+        externalId: null,
+        notes: "",
+        createdAt: new Date().toISOString(),
+      });
+      pushActivity("Finance Ledger", `added a ${direction > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(direction * rawAmount)}.`, ws);
+      store.save();
+      rerender();
+    };
+  }
+  const importInput = el.querySelector("[data-finance-import]");
+  if (importInput) {
+    importInput.onchange = async () => {
+      const file = importInput.files?.[0];
+      if (!file) return;
+      const rows = parseFinanceCsv(await file.text(), ws);
+      const existing = new Set((finance.transactions || []).map((tx) => tx.externalId).filter(Boolean));
+      const fresh = rows.filter((tx) => !tx.externalId || !existing.has(tx.externalId));
+      fresh.forEach((tx) => ensureAccount(tx.account));
+      finance.transactions.unshift(...fresh);
+      pushActivity("Finance Ledger", `imported ${fresh.length} transaction${fresh.length === 1 ? "" : "s"} from ${file.name}.`, ws);
+      store.save();
+      rerender();
+    };
+  }
+  bindActions(el, {
+    "delete-tx": (id) => {
+      finance.transactions = finance.transactions.filter((tx) => tx.id !== id);
+      store.save(); rerender();
+    },
+    connector: (id) => {
+      const connector = finance.connectors.find((item) => item.id === id);
+      if (!connector) return;
+      connector.status = "requested";
+      connector.requestedAt = new Date().toISOString();
+      pushActivity("Finance Ledger", `${connector.name} setup requested. Sync will stay off until the secure connector backend is configured.`, ws);
+      store.save(); rerender();
+    },
+    export: (id, btn) => {
+      const header = "date,description,amount,category,account,source";
+      const rows = m.transactions.map((tx) => [tx.date, tx.description, tx.amount, tx.category, tx.account, tx.source]
+        .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","));
+      copyText(btn, [header, ...rows].join("\n"));
+    },
+  });
 }
 
 /* ============================= MEMORY ============================= */
