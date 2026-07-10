@@ -100,16 +100,14 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .brand { display: flex; align-items: center; gap: 10px; }
 .brand-ghost {
-  width: 18px;
+  width: 20px;
   height: 20px;
   flex: 0 0 auto;
   display: inline-block;
-  background: linear-gradient(180deg, #66ffb6 0%, #2effce 52%, #19d9ff 100%);
-  -webkit-mask: url("../favicon.svg?v=fable-phantom-20260705-01") center / contain no-repeat;
-  mask: url("../favicon.svg?v=fable-phantom-20260705-01") center / contain no-repeat;
+  object-fit: contain;
   filter:
-    drop-shadow(0 0 7px rgba(65, 255, 161, 0.9))
-    drop-shadow(0 0 16px rgba(25, 217, 255, 0.38));
+    drop-shadow(0 0 7px rgba(65, 255, 161, 0.55))
+    drop-shadow(0 0 16px rgba(25, 217, 255, 0.28));
 }
 .brand-word { font: 500 13px "DM Mono", monospace; letter-spacing: 0.34em; }
 .brand-sub {
@@ -1806,7 +1804,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 .side-brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 10px; border-bottom: 1px solid var(--line); }
-.side-brand .brand-ghost { width: 28px; height: 30px; }
+.side-brand .brand-ghost { width: 30px; height: 30px; }
 .side-brand-text b { display: block; font: 600 13px "Space Grotesk", sans-serif; letter-spacing: 0.12em; }
 .side-brand-text i { display: block; margin-top: 2px; font: 500 8px "DM Mono", monospace; font-style: normal; letter-spacing: 0.16em; color: var(--dim); }
 .side-toggle { display: none; }
@@ -4387,7 +4385,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     text-align: left;
     cursor: pointer;
   }
-  .mobile-admin-brand .brand-ghost { width: 30px; height: 30px; border-radius: 9px; }
+  .mobile-admin-brand .brand-ghost { width: 32px; height: 32px; }
   .mobile-admin-brand span:last-child { display: grid; gap: 1px; min-width: 0; }
   .mobile-admin-brand b {
     max-width: 154px;
