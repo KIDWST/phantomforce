@@ -5663,6 +5663,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   -webkit-mask-image: radial-gradient(circle at 58% 50%, #000 0 62%, rgba(0, 0, 0, 0.84) 74%, transparent 96%);
   mask-image: radial-gradient(circle at 58% 50%, #000 0 62%, rgba(0, 0, 0, 0.84) 74%, transparent 96%);
 }
+/* the WebGL glow layer has no .console-scoped rule of its own upstream, so
+   without this it silently inherits whichever plain .phantom-webgl rule
+   matches the current viewport width (desktop/mobile breakpoints tuned for
+   the older non-console hero) instead of following its own stage box. */
+.console .phantom-webgl {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+}
 .console .phantom-mode-stage {
   width: min(100%, 960px);
   height: 100%;
@@ -5813,6 +5824,73 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     left: auto;
     transform: scale(1.04);
     opacity: 0.14;
+  }
+}
+
+/* Below 768px (real phones) the "watermark absolutely-positioned behind the
+   chat" treatment above breaks down: the chat panel is full-bleed with a
+   near-opaque background and z-index:2 (see the plain max-width:900px block
+   above), while the stage sits at z-index:0/1 beneath it — so on every
+   phone width the phantom was rendered completely invisible, tucked behind
+   the chat panel as a 112px corner badge nobody could ever see. Below this
+   breakpoint the phantom becomes an in-flow banner ABOVE the chat instead
+   (grid-area "stage" before "copy"), guaranteeing it always has its own
+   visible space rather than being layered under anything. */
+@media (max-width: 767px) {
+  .console .hero2 {
+    display: grid !important;
+    grid-template-columns: 1fr;
+    grid-template-areas: "stage" "copy";
+    height: auto;
+    min-height: auto;
+    padding: 16px;
+  }
+  .console .chatbox {
+    min-height: min(62vh, 560px);
+    height: auto;
+  }
+  .console .hero2-stage {
+    grid-area: stage;
+    position: relative !important;
+    top: auto;
+    right: auto;
+    bottom: auto;
+    width: 100%;
+    height: clamp(170px, 42vw, 230px);
+    min-height: clamp(170px, 42vw, 230px) !important;
+    margin: 0 0 10px;
+    order: 0 !important;
+    align-items: center;
+    justify-items: center;
+    transform: none;
+    opacity: 1;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 1;
+    mix-blend-mode: normal;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+  .console .hero2-copy {
+    grid-area: copy;
+    position: relative;
+    z-index: 2;
+  }
+  .console .phantom-mode-stage {
+    width: clamp(150px, 40vw, 210px) !important;
+    max-width: 210px;
+    height: 100%;
+    margin: 0 auto;
+    transform: none;
+  }
+  .console .phantom-mode-pose {
+    width: clamp(140px, 38vw, 200px) !important;
+    max-height: 100% !important;
+    opacity: 0.96;
+  }
+  .console .phantom-mode-caption,
+  .console .hero2-stage .ghost-canvas {
+    display: none;
   }
 }
 
