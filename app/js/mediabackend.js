@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260709-122";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260709-122";
+import { session } from "./store.js?v=phantom-live-20260710-123";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260710-123";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -173,6 +173,22 @@ export async function requestRemoveBackground(dataUrl) {
 // (matches MEDIA_PROVIDERS[id].modalities in ai-proxy/server.mjs). Image-only
 // engines do not make edits "connected"; keep those out of this path.
 const EDIT_CAPABLE_PROVIDERS = ["higgsfield"];
+
+/* Raw ai-proxy /health passthrough — every provider key's real state (not
+   just the edit-capable ones Content Hub cares about), plus the configured
+   chat brain. Used by the Developer tab so every integration shows its
+   actual status, not a filtered subset. Never throws; unreachable reads as
+   ok:false, never a guessed "connected". */
+export async function getMediaEngineHealth() {
+  try {
+    const r = await fetchWithTimeout(`${aiProxyBase()}/health`, {}, 6000);
+    const d = await r.json().catch(() => null);
+    if (!r.ok || !d) return { ok: false, reachable: false };
+    return { ok: true, reachable: true, ...d };
+  } catch {
+    return { ok: false, reachable: false };
+  }
+}
 
 export async function probeAiEditBackend() {
   try {

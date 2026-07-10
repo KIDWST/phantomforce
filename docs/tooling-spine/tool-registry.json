@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0",
+  "status": "scaffolded",
+  "rules": {
+    "read_only": true,
+    "requires_owner_session": true,
+    "execution_disabled_by_default": true,
+    "note": "Everything here is a dry-run/planning-only posture until a worker lane is explicitly wired to real execution."
+  },
+  "tools": [
+    {
+      "id": "n8n",
+      "display_name": "n8n",
+      "intended_role": "Local workflow automation — draft and stage multi-step workflows before anything runs for real.",
+      "allowed_mode": "dry_run_draft_only",
+      "blocked_actions": ["execute_workflow", "start_n8n_process", "open_public_webhook", "use_credentials"],
+      "next_phase": "Owner reviews drafted workflow JSON manually before any execution is enabled."
+    },
+    {
+      "id": "openspec",
+      "display_name": "OpenSpec",
+      "intended_role": "Acceptance-criteria and implementation-boundary proposals before code changes land.",
+      "allowed_mode": "local_proposal_draft",
+      "blocked_actions": ["auto_apply_to_product_repo", "sync_to_remote"],
+      "next_phase": "Owner reviews and applies proposals by hand."
+    },
+    {
+      "id": "agent-os",
+      "display_name": "Agent OS",
+      "intended_role": "Operating standards reference for worker handoffs, constraints, and behavior.",
+      "allowed_mode": "reference_only",
+      "blocked_actions": ["install", "auto_sync", "modify_workers"],
+      "next_phase": "Documentation-only for now — no runtime integration planned yet."
+    },
+    {
+      "id": "serena",
+      "display_name": "Serena",
+      "intended_role": "Semantic code navigation / code map for worker context.",
+      "allowed_mode": "planning_reference",
+      "blocked_actions": ["index_write", "external_network_call", "modify_files"],
+      "next_phase": "Generate a read-only code map profile on explicit request only."
+    },
+    {
+      "id": "ruflo",
+      "display_name": "Ruflo",
+      "intended_role": "Squad / multi-agent planning vocabulary for future coordinated work.",
+      "allowed_mode": "quarantined_planning_only",
+      "blocked_actions": ["spawn_agents", "execute_plan", "external_call"],
+      "next_phase": "Stays quarantined until a real multi-agent runtime decision is made."
+    },
+    {
+      "id": "phantom-ai-online-fetch",
+      "display_name": "Online Fetch Lane",
+      "intended_role": "Allowlisted research fetch lane for Phantom AI, gated behind Hermes controls.",
+      "allowed_mode": "planned_allowlisted_fetch",
+      "blocked_actions": ["arbitrary_url_fetch", "credential_use", "write_actions"],
+      "next_phase": "Ship a strict domain allowlist plus Hermes-gated approval before any live fetch."
+    }
+  ]
+}
