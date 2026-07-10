@@ -780,6 +780,55 @@ const MODEL_DISPLAY_LABELS = {
   "custom": "Custom",
 };
 export const modelDisplayLabel = (id) => MODEL_DISPLAY_LABELS[id] || id;
+
+/* ============================ Phantom Lane Targets ============================
+   Owner-only backend mapping for the four chat lanes. These are real routing
+   preferences read by command.js before it calls /phantom-ai/chat. */
+const PHANTOM_LANE_KEY = "pf.phantomlanes.v1";
+export const PHANTOM_LANES = [
+  { id: "claude", name: "Phantom Reasoning", role: "Strategy, copy, review", defaultTarget: "claude_cli" },
+  { id: "codex", name: "Phantom Code", role: "Code, repo work, implementation", defaultTarget: "codex" },
+  { id: "openrouter", name: "Phantom Router", role: "Flexible cloud routing", defaultTarget: "glm_5_2" },
+  { id: "local", name: "Phantom Local", role: "Private/local-first work", defaultTarget: "glm_5_2" },
+];
+export const PHANTOM_LANE_TARGETS = [
+  { id: "claude_cli", name: "Claude CLI", provider: "phantom", models: ["claude-cli", "claude-sonnet", "claude-opus"] },
+  { id: "codex", name: "Codex / Private Brain", provider: "phantom", models: ["codex-default", "codex-high", "codex-fast"] },
+  { id: "glm_5_2", name: "GLM / OpenRouter Route", provider: "openrouter_glm", models: ["z-ai/glm-5.2", "openrouter-auto", "local-glm"] },
+];
+export function phantomLaneTargetName(id) {
+  return PHANTOM_LANE_TARGETS.find((target) => target.id === id)?.name || id;
+}
+function normalizePhantomLaneConfig(input = {}) {
+  const saved = input && typeof input === "object" ? input : {};
+  const lanes = {};
+  for (const lane of PHANTOM_LANES) {
+    const existing = saved.lanes?.[lane.id] || {};
+    const target = PHANTOM_LANE_TARGETS.some((item) => item.id === existing.target) ? existing.target : lane.defaultTarget;
+    const targetDef = PHANTOM_LANE_TARGETS.find((item) => item.id === target) || PHANTOM_LANE_TARGETS[0];
+    const model = targetDef.models.includes(existing.model) ? existing.model : targetDef.models[0];
+    lanes[lane.id] = { target, model };
+  }
+  return { lanes, updatedAt: saved.updatedAt || null };
+}
+export function loadPhantomLaneConfig() {
+  try {
+    return normalizePhantomLaneConfig(JSON.parse(localStorage.getItem(PHANTOM_LANE_KEY) || "{}"));
+  } catch {
+    return normalizePhantomLaneConfig({});
+  }
+}
+export function savePhantomLaneConfig(next) {
+  const normalized = normalizePhantomLaneConfig({ ...(next || {}), updatedAt: new Date().toISOString() });
+  try { localStorage.setItem(PHANTOM_LANE_KEY, JSON.stringify(normalized)); } catch {}
+  return normalized;
+}
+export function getPhantomLaneTarget(laneId) {
+  const cfg = loadPhantomLaneConfig();
+  const lane = PHANTOM_LANES.find((item) => item.id === laneId) || PHANTOM_LANES[0];
+  const selected = cfg.lanes[lane.id] || { target: lane.defaultTarget };
+  return PHANTOM_LANE_TARGETS.find((target) => target.id === selected.target) || PHANTOM_LANE_TARGETS[0];
+}
 export const PHANTOM_LOOP_DEFAULTS = Object.freeze({
   enabled: false,
   targetProvider: "openai",

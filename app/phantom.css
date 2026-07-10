@@ -3300,6 +3300,27 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .developer-list i { font-style: normal; text-align: right; overflow-wrap: anywhere; }
 .developer-lane-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; margin-top: 6px; }
 .developer-lane-group > b { display: block; font-size: 12px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em; }
+.developer-lane-controls { display: grid; gap: 8px; margin-top: 14px; }
+.developer-lane-control {
+  display: grid; grid-template-columns: minmax(150px, 1fr) minmax(150px, .95fr) minmax(150px, .95fr) auto;
+  align-items: end; gap: 10px; padding: 10px; border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22); border: 1px solid rgba(65, 255, 161, 0.1);
+}
+.developer-lane-copy { min-width: 0; display: grid; gap: 2px; }
+.developer-lane-copy b { color: var(--ink); font-size: 13px; }
+.developer-lane-copy i { color: var(--dim); font-size: 11px; font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.developer-lane-control label { display: grid; gap: 4px; min-width: 0; }
+.developer-lane-control label span {
+  color: var(--dim); font: 700 9px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase;
+}
+.developer-lane-control select {
+  min-width: 0; width: 100%; height: 36px; border-radius: 10px; padding: 0 32px 0 10px;
+  border: 1px solid rgba(65, 255, 161, 0.18); background: rgba(1, 8, 6, 0.9); color: var(--ink);
+  font: 600 12px inherit; outline: none;
+}
+.developer-lane-control select:focus { border-color: rgba(65, 255, 161, 0.55); box-shadow: 0 0 0 3px rgba(65, 255, 161, 0.1); }
+.developer-lane-control em { color: #aaffd0; font-style: normal; font-size: 11px; text-align: right; white-space: nowrap; }
+.developer-lane-saved { margin: 8px 0 0; color: var(--neon); font-size: 11px; }
 .developer-shortcuts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 14px; }
 .developer-shortcut {
   text-align: left; cursor: pointer; border: 1px solid var(--line); border-radius: 14px; padding: 13px;
@@ -3424,6 +3445,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ml-workspace { grid-template-columns: 1fr; }
   .dev-agent-grid, .dev-program-grid, .dev-skeleton-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .dev-stat-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .developer-lane-control { grid-template-columns: 1fr 1fr; }
+  .developer-lane-copy, .developer-lane-control em { grid-column: 1 / -1; text-align: left; }
 }
 @media (max-width: 900px) {
   .ml-engine-mini span { display: none; }
@@ -3436,6 +3459,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ml-grid { grid-template-columns: repeat(2, 1fr); }
   .ml-drawer { width: 100vw; }
   .developer-hero, .developer-grid, .developer-shortcuts, .developer-lane-groups { grid-template-columns: 1fr; }
+  .developer-lane-control { grid-template-columns: 1fr; }
+  .developer-lane-copy, .developer-lane-control em { grid-column: auto; }
   .developer-owner { justify-items: start; text-align: left; }
   .dev-hero-right { justify-items: start; }
   .dev-agent-grid, .dev-program-grid, .dev-skeleton-grid, .dev-stat-row { grid-template-columns: 1fr; }

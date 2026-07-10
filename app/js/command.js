@@ -10,8 +10,9 @@ import {
   store, uid, visible, currentWs, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
-} from "./store.js?v=phantom-live-20260710-124";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260710-124";
+  getPhantomLaneTarget, loadPhantomLaneConfig,
+} from "./store.js?v=phantom-live-20260710-125";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260710-125";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 const DAY = 86400000;
@@ -52,10 +53,17 @@ function loadRuntimeAiSettings() {
 }
 
 function modelLaneForSettings(settings) {
-  if (settings.provider === "openrouter") return "glm_5_2";
-  if (settings.provider === "local") return "glm_5_2";
-  if (settings.provider === "claude") return "claude_cli";
-  return "codex";
+  return getPhantomLaneTarget(settings.provider).id;
+}
+
+function providerForSettings(settings) {
+  return getPhantomLaneTarget(settings.provider).provider || "phantom";
+}
+
+function selectedLaneModelForSettings(settings) {
+  const cfg = loadPhantomLaneConfig();
+  const lane = cfg.lanes?.[settings.provider];
+  return lane?.model || getPhantomLaneTarget(settings.provider).models?.[0] || "";
 }
 
 function canAskHermes(intent, settings) {
@@ -82,9 +90,10 @@ async function askHermesBrain(raw, intent, settings) {
       body: JSON.stringify({
         message: raw,
         user_request: raw,
-        provider: settings.provider === "openrouter" ? "openrouter_glm" : "phantom",
+        provider: providerForSettings(settings),
         admin_model: modelLaneForSettings(settings),
         model_lane: modelLaneForSettings(settings),
+        requested_model: selectedLaneModelForSettings(settings),
         execution_mode: settings.externalActionMode === "owner_rules" ? "auto" : "approval",
         task_type: intent.primaryIntent,
         business_name: "PhantomForce",
@@ -101,6 +110,8 @@ async function askHermesBrain(raw, intent, settings) {
             response_length: settings.responseLength,
             memory_mode: settings.memoryMode,
             context_depth: settings.contextDepth,
+            lane_target: modelLaneForSettings(settings),
+            lane_model: selectedLaneModelForSettings(settings),
           },
         },
         phantom_loop: loop.enabled ? {

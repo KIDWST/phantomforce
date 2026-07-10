@@ -5,23 +5,24 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
-} from "./store.js?v=phantom-live-20260710-124";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-124";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-124";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-124";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-124";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-124";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-124";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-124";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-124";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-124";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-124";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-124";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-124";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-124";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-124";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-124";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-124";
+  loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
+} from "./store.js?v=phantom-live-20260710-125";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-125";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-125";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-125";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-125";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-125";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-125";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-125";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-125";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-125";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-125";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-125";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-125";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-125";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-125";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-125";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-125";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -629,7 +630,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260710-124";
+const POSE_VERSION = "phantom-live-20260710-125";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1575,8 +1576,6 @@ const mediaOpts = () => ({
 
 /* Owner-only runtime lanes. Keep the product vocabulary clean here too:
    this page can show readiness without exposing vendor plumbing. */
-const CHAT_LANES = [["Phantom Reasoning", "claude"], ["Phantom Code", "codex"], ["Phantom Router", "openrouter"], ["Phantom Local", "local"]];
-const BRAIN_LANE_IDENTITY = { claude: "Claude (Anthropic)", codex: "Codex (OpenAI)", openrouter: "OpenRouter", local: "Ollama / local runtime" };
 const LOOP_LANE_IDENTITY = { openai: "ChatGPT (OpenAI)", claude: "Claude (Anthropic)", glm: "GLM (OpenRouter)", local: "Local / Ollama", custom: "Custom endpoint" };
 const MEDIA_ENGINE_IDENTITY = { cinematic: "PhantomForce native lane", claude: "Direction lane", openai: "Image lane", runway: "Motion lane", flux: "Still lane" };
 
@@ -1596,6 +1595,38 @@ const DEV_TONE = {
 };
 function devTone(state) { return DEV_TONE[String(state || "").toLowerCase()] || "warn"; }
 function devDot() { return `<span class="dev-dot" aria-hidden="true"></span>`; }
+function laneTargetForId(id) {
+  return PHANTOM_LANE_TARGETS.find((target) => target.id === id) || PHANTOM_LANE_TARGETS[0];
+}
+function laneTargetOptions(selected) {
+  return PHANTOM_LANE_TARGETS.map((target) => `<option value="${esc(target.id)}" ${target.id === selected ? "selected" : ""}>${esc(target.name)}</option>`).join("");
+}
+function laneModelOptions(targetId, selectedModel) {
+  const target = laneTargetForId(targetId);
+  return target.models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(model)}</option>`).join("");
+}
+function renderBrainLaneControls() {
+  const cfg = loadPhantomLaneConfig();
+  return PHANTOM_LANES.map((lane) => {
+    const selected = cfg.lanes?.[lane.id] || {};
+    const target = laneTargetForId(selected.target || lane.defaultTarget);
+    const model = target.models.includes(selected.model) ? selected.model : target.models[0];
+    return `
+      <div class="developer-lane-control" data-dev-lane-row="${esc(lane.id)}">
+        <div class="developer-lane-copy">
+          <b>${esc(lane.name)}</b>
+          <i>${esc(lane.role)}</i>
+        </div>
+        <label><span>Backend</span>
+          <select data-dev-lane-target="${esc(lane.id)}">${laneTargetOptions(target.id)}</select>
+        </label>
+        <label><span>Model</span>
+          <select data-dev-lane-model="${esc(lane.id)}">${laneModelOptions(target.id, model)}</select>
+        </label>
+        <em data-dev-lane-current="${esc(lane.id)}">${esc(phantomLaneTargetName(target.id))}</em>
+      </div>`;
+  }).join("");
+}
 
 async function fetchAgentWorkforceStatus(windowHours = 24) {
   try {
@@ -1746,6 +1777,46 @@ function animateDevCount(el, target) {
 
 let devRefreshTimer = 0;
 function wireDeveloperSection(body, opts) {
+  const showLaneSaved = () => {
+    const saved = body.querySelector("[data-dev-lane-saved]");
+    if (!saved) return;
+    saved.hidden = false;
+    clearTimeout(showLaneSaved._timer);
+    showLaneSaved._timer = setTimeout(() => { saved.hidden = true; }, 2200);
+  };
+  const saveLane = (laneId, patch = {}) => {
+    const cfg = loadPhantomLaneConfig();
+    const laneDef = PHANTOM_LANES.find((lane) => lane.id === laneId);
+    if (!laneDef) return cfg;
+    const current = cfg.lanes[laneId] || { target: laneDef.defaultTarget };
+    const targetId = patch.target || current.target || laneDef.defaultTarget;
+    const target = laneTargetForId(targetId);
+    const nextModel = patch.model || (target.id === current.target ? current.model : target.models[0]) || target.models[0];
+    cfg.lanes[laneId] = {
+      target: target.id,
+      model: target.models.includes(nextModel) ? nextModel : target.models[0],
+    };
+    return savePhantomLaneConfig(cfg);
+  };
+  body.querySelectorAll("[data-dev-lane-target]").forEach((select) => {
+    select.onchange = () => {
+      const laneId = select.dataset.devLaneTarget;
+      const cfg = saveLane(laneId, { target: select.value });
+      const selected = cfg.lanes[laneId];
+      const model = body.querySelector(`[data-dev-lane-model="${laneId}"]`);
+      if (model) model.innerHTML = laneModelOptions(selected.target, selected.model);
+      const current = body.querySelector(`[data-dev-lane-current="${laneId}"]`);
+      if (current) current.textContent = phantomLaneTargetName(selected.target);
+      showLaneSaved();
+    };
+  });
+  body.querySelectorAll("[data-dev-lane-model]").forEach((select) => {
+    select.onchange = () => {
+      const laneId = select.dataset.devLaneModel;
+      saveLane(laneId, { model: select.value });
+      showLaneSaved();
+    };
+  });
   body.querySelectorAll("[data-dev-sub-toggle]").forEach((btn) => {
     btn.onclick = () => {
       const id = btn.dataset.devSubToggle;
@@ -1889,11 +1960,12 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       <section class="developer-card">
         <p class="developer-kicker">Backend identity</p>
         <h4>What each lane actually runs on</h4>
-        <p class="set-note">Every other screen — Settings, chat, Media Lab — shows only the generic lane or engine name. This is the one place the real backend behind each one is named.</p>
+        <p class="set-note">Change the real backend target for each Phantom lane. Saves locally and applies to the next chat request.</p>
         <div class="developer-lane-groups">
-          <div class="developer-lane-group">
-            <b>Chat brain</b>
-            <div class="developer-list">${CHAT_LANES.map(([name, id]) => `<span><b>${esc(name)}</b><i>${esc(BRAIN_LANE_IDENTITY[id] || id)}</i></span>`).join("")}</div>
+          <div class="developer-lane-group developer-lane-group-wide">
+            <b>Chat brain lanes</b>
+            <div class="developer-lane-controls">${renderBrainLaneControls()}</div>
+            <p class="developer-lane-saved" data-dev-lane-saved hidden>Saved — next message uses this routing.</p>
           </div>
           <div class="developer-lane-group">
             <b>Phantom Loop targets</b>
