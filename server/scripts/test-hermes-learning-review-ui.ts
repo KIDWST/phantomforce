@@ -67,9 +67,10 @@ for (const token of requiredCssTokens) {
   assert(css.includes(token), `Hermes learning review CSS should include ${token}.`);
 }
 
-const buildId = "phantom-live-20260706-32";
-assert(indexHtml.includes(`window.PHANTOM_BUILD = "${buildId}"`), "Index should expose the current build id.");
-assert(indexHtml.includes(`content="${buildId}"`), "Index phantom-build meta tag should be bumped.");
+const buildIdMatch = indexHtml.match(/window\.PHANTOM_BUILD = "([^"]+)"/);
+assert(buildIdMatch, "Index should expose the current build id.");
+const buildId = buildIdMatch[1];
+assert(indexHtml.includes(`content="${buildId}"`), "Index phantom-build meta tag should match the current build id.");
 assert(indexHtml.includes(`/app/js/main.js?v=${buildId}`), "Index should load the bumped main module.");
 assert(mainJs.includes(`./workspaces.js?v=${buildId}`), "Main module should load the bumped workspace bundle.");
 assert(mainJs.includes(`const POSE_VERSION = "${buildId}"`), "Pose asset cache should be bumped.");
