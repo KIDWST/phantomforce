@@ -288,40 +288,55 @@ function goNav(id) {
 
 function openOperationsMap() {
   if (activePageId) renderDashboardPage(true);
-  const section = $("[data-map-section]");
-  if (!section) return;
-  if (section.classList.contains("is-map-open")) {
+  if (openId === "operations-map") {
     closeOperationsMap();
     return;
   }
-  section.classList.remove("is-map-closed");
-  section.classList.add("is-map-open");
+  const summary = flowSummary();
+  clearOverlayOnly();
+  openId = "operations-map";
+  document.body.classList.add("overlay-open");
+  overlayRoot.innerHTML = `
+    <div class="overlay overlay-wide flowmap-overlay" role="dialog" aria-modal="true" aria-label="Operations map">
+      <button class="overlay-backdrop" data-map-close aria-label="Close operations map"></button>
+      <section class="overlay-panel">
+        <header class="overlay-head">
+          <div>
+            <p class="overlay-kicker">Operations map</p>
+            <h2>Live systems map</h2>
+            <p class="overlay-sub">${esc(summary.text)}</p>
+          </div>
+          <button class="overlay-x" data-map-close aria-label="Close operations map">✕</button>
+        </header>
+        <div class="overlay-body">
+          <section class="flowmap flowmap-modal is-map-open" aria-label="Live operations map">
+            <div class="flow-stage" data-flowmap tabindex="-1"></div>
+          </section>
+        </div>
+      </section>
+    </div>`;
   updateOperationsMapControls();
   renderFlowMap();
-  section.scrollIntoView({ behavior: reduceMotion ? "auto" : "smooth", block: "center" });
-  const stage = $("[data-flowmap]", section);
+  const stage = $("[data-flowmap]", overlayRoot);
   if (stage) setTimeout(() => {
     try { stage.focus({ preventScroll: true }); }
     catch { stage.focus(); }
-  }, reduceMotion ? 0 : 260);
+  }, reduceMotion ? 0 : 160);
   setGhostMood("listening", { emotion: "bright", ms: 1200 });
   stageReact("nav", 620);
 }
 function closeOperationsMap() {
-  const section = $("[data-map-section]");
-  if (!section) return;
-  section.classList.remove("is-map-open");
-  section.classList.add("is-map-closed");
+  if (openId !== "operations-map") return;
+  clearOverlayOnly();
   updateOperationsMapControls();
-  const opener = $("[data-map-open]", section) || $("[data-map-open]");
+  const opener = $("[data-map-open]");
   if (opener) {
     try { opener.focus({ preventScroll: true }); }
     catch { opener.focus(); }
   }
 }
 function updateOperationsMapControls() {
-  const section = $("[data-map-section]");
-  const isOpen = Boolean(section?.classList.contains("is-map-open"));
+  const isOpen = openId === "operations-map";
   $$("[data-map-open]").forEach((button) => {
     button.setAttribute("aria-expanded", String(isOpen));
     button.setAttribute("aria-label", isOpen ? "Close operations map" : "Open operations map");
@@ -329,24 +344,12 @@ function updateOperationsMapControls() {
   $$("[data-map-open-label]").forEach((label) => { label.textContent = isOpen ? "Close map" : "Open map"; });
 }
 
-/* Default collapsed unless something urgent is active — applied once on the
-   first dashboard mount so it never fights a user's manual open/close. */
-let mapDefaultApplied = false;
 function renderFlowCompactSummary() {
-  const section = $("[data-map-section]");
-  if (!section) return;
   const summary = flowSummary();
-  const textEl = $("[data-flow-compact-text]");
-  if (textEl) textEl.textContent = summary.text;
-  const dot = $("[data-flow-compact-dot]");
-  if (dot) dot.classList.toggle("is-urgent", summary.urgent);
-  if (!mapDefaultApplied) {
-    mapDefaultApplied = true;
-    if (summary.urgent) {
-      section.classList.remove("is-map-closed");
-      section.classList.add("is-map-open");
-    }
-  }
+  $$("[data-map-open]").forEach((button) => {
+    button.dataset.urgent = String(summary.urgent);
+    button.title = `${summary.text}. Tap to open the live operations map.`;
+  });
   updateOperationsMapControls();
 }
 
@@ -1555,7 +1558,7 @@ function wireDeck() {
     if (phantom.hidden) return;
     const typing = /^(input|textarea|select)$/i.test(e.target.tagName);
     if (e.key === "/" && !typing) { e.preventDefault(); focusCommandInput(); }
-    else if (e.key === "Escape" && $("[data-map-section]")?.classList.contains("is-map-open")) { closeOperationsMap(); }
+    else if (e.key === "Escape" && openId === "operations-map") { closeOperationsMap(); }
     else if (e.key === "Escape" && mobileNavOpen) { setMobileNav(false); }
     else if (e.key === "Escape" && notifOpen) { notifOpen = false; renderNotifs(); }
   });
