@@ -10,8 +10,8 @@ import {
   freshEditState, applyFilterPreset, paintEdit, renderBaseFrame, heuristicAiEdit,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260709-119";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260709-119";
+} from "./imagefilters.js?v=phantom-live-20260709-120";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260709-120";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -773,16 +773,41 @@ function chTSlider(label, key, min, max, val, esc) {
 }
 
 function aiEditBody(lb, esc) {
-  const ai = lb.aiEdit || { status: "idle" };
+  const ai = lb.aiEdit || { mode: "unavailable", status: "idle" };
   const checking = ai.status === "checking";
   const loading = ai.status === "loading";
-  const unavailable = ai.status === "unavailable" || ai.status === "local-applied";
   const busy = checking || loading;
-  if (unavailable) {
-    // No real edit provider connected — don't fake it. Offer the honest
-    // path (connect one in Settings) plus a clearly-labeled local fallback
-    // that reuses the existing adjustment sliders for simple asks, so the
-    // panel still does something useful with zero setup.
+  const localNote = `<p class="ch-lb-ai-note">"Apply as adjustment" is a local brightness/contrast/style nudge, not AI — it works for simple asks like brighter, warmer, more contrast, or cinematic, fully offline.</p>
+    ${ai.status === "local-applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Applied locally (not AI) — use Reset to go back to the original.</p>` : ""}`;
+
+  if (ai.mode === "manual") {
+    // Higgsfield is a web-app subscription, not something this app can call
+    // via API without a real key — never faked as "connected". Instead:
+    // prep the prompt/image so Jordan can run it in Higgsfield by hand.
+    // No scraping, no automated login, no cookies/session tokens touched —
+    // this only copies text and opens a new tab.
+    return `
+      <p class="ch-lb-ai-note ch-lb-ai-note-warn">Higgsfield is connected as a subscription, not an API key — PhantomForce can't call it directly. Prep your prompt and image below, then run it in Higgsfield yourself.</p>
+      <div class="ch-lb-ai-row">
+        <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, more contrast, cinematic…"/>
+      </div>
+      <div class="ch-lb-chips">
+        <button class="btn btn-quiet" type="button" data-ch-lb-ai-copy>Copy prompt</button>
+        <button class="btn btn-quiet" type="button" data-ch-lb-ai-dl>Download image</button>
+        <button class="btn btn-primary" type="button" data-ch-lb-ai-open-higgsfield>Open Higgsfield ${svgIc("bolt")}</button>
+      </div>
+      <div class="ch-lb-chips">
+        <button class="btn btn-quiet" type="button" data-ch-lb-ai-local>Apply as adjustment</button>
+      </div>
+      ${localNote}
+      ${ai.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(ai.message || "Couldn't prep that.")}</p>` : ""}
+    `;
+  }
+
+  if (ai.mode !== "connected") {
+    // No provider at all — not even a Higgsfield subscription configured.
+    // Don't fake it. Offer the honest path (connect one in Settings) plus
+    // the same local fallback for simple asks.
     return `
       <p class="ch-lb-ai-note ch-lb-ai-note-warn">No AI edit provider is connected yet — prompt-guided edits need a real provider.</p>
       <div class="ch-lb-chips">
@@ -792,16 +817,16 @@ function aiEditBody(lb, esc) {
         <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, more contrast, cinematic…"/>
         <button class="btn btn-quiet" type="button" data-ch-lb-ai-local>Apply as adjustment</button>
       </div>
-      <p class="ch-lb-ai-note">"Apply as adjustment" is a local brightness/contrast/style nudge, not AI — it works for simple asks like brighter, warmer, more contrast, or cinematic, fully offline.</p>
-      ${ai.status === "local-applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Applied locally (not AI) — use Reset to go back to the original.</p>` : ""}
+      ${localNote}
     `;
   }
+
   return `
     <div class="ch-lb-ai-row">
       <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…"/>
       <button class="btn btn-primary" type="button" data-ch-lb-ai-run ${busy ? "disabled" : ""}>${loading ? "Generating…" : checking ? "Checking…" : "Generate"}</button>
     </div>
-    ${ai.status === "available" ? `<p class="ch-lb-ai-note">Connected — Generate sends this image and your prompt to the configured edit provider.</p>` : ""}
+    <p class="ch-lb-ai-note">Connected — Generate sends this image and your prompt to the configured edit provider.</p>
     ${ai.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(ai.message || "Edit failed.")}</p>` : ""}
     ${ai.status === "success" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Edit applied — use Reset to go back to the original.</p>` : ""}
   `;
@@ -1201,7 +1226,7 @@ function wireLightbox(root, opts) {
   const aiRun = root.querySelector("[data-ch-lb-ai-run]");
   if (aiRun) aiRun.onclick = async () => {
     const q = (root.querySelector("[data-ch-lb-ai]")?.value || "").trim();
-    if (!q || lb.aiEdit.status === "unavailable") return;
+    if (!q || lb.aiEdit.mode !== "connected") return;
     lb.aiEdit = { ...lb.aiEdit, status: "loading" };
     rerender();
     const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
@@ -1251,6 +1276,35 @@ function wireLightbox(root, opts) {
     repaint();
     rerender();
     opts.notify?.("Content Hub", `applied a local adjustment to "${asset.title}" (not AI): "${q.slice(0, 40)}".`);
+  };
+
+  // Manual mode (Higgsfield subscription, no API key): prep the prompt/image
+  // for Jordan to run by hand. Never touches Higgsfield itself — no login,
+  // no cookies, no scraping, just clipboard/download/a plain new-tab open.
+  const aiCopy = root.querySelector("[data-ch-lb-ai-copy]");
+  if (aiCopy) aiCopy.onclick = async () => {
+    const q = (root.querySelector("[data-ch-lb-ai]")?.value || "").trim();
+    if (!q) { opts.notify?.("Content Hub", "Type a prompt first, then Copy prompt."); return; }
+    try {
+      await navigator.clipboard.writeText(q);
+      opts.notify?.("Content Hub", "Prompt copied — paste it into Higgsfield.");
+    } catch {
+      opts.notify?.("Content Hub", "Couldn't copy to the clipboard — select and copy the prompt manually.");
+    }
+  };
+  const aiDownload = root.querySelector("[data-ch-lb-ai-dl]");
+  if (aiDownload) aiDownload.onclick = async () => {
+    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    if (chLightbox !== lb) return;
+    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't prep the image for Higgsfield: ${exported.error}`); return; }
+    const link = document.createElement("a");
+    link.href = exported.url;
+    link.download = `phantomforce-${asset.id}.png`;
+    link.click();
+  };
+  const aiOpenHiggsfield = root.querySelector("[data-ch-lb-ai-open-higgsfield]");
+  if (aiOpenHiggsfield) aiOpenHiggsfield.onclick = () => {
+    window.open("https://higgsfield.ai", "_blank", "noopener,noreferrer");
   };
 
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
@@ -1344,7 +1398,13 @@ function wireLightbox(root, opts) {
     lb._probed = true;
     probeAiEditBackend().then((r) => {
       if (chLightbox !== lb) return;
-      lb.aiEdit = { status: r.available ? "available" : "unavailable", message: "", provider: r.provider };
+      // mode is the persistent connectivity classification — "connected"
+      // (real API key, Generate calls it for real), "manual" (Higgsfield
+      // subscription with no API key — never faked as connected, offer to
+      // prep a prompt + open Higgsfield instead), or "unavailable" (no
+      // provider at all). status is the transient state of the CURRENT
+      // action (idle/loading/error/success/local-applied) layered on top.
+      lb.aiEdit = { mode: r.mode, status: "idle", message: "", provider: r.provider };
       rerender();
     });
     probeRemoveBackground().then((available) => {
