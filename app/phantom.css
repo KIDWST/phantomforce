@@ -5413,6 +5413,54 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .au-log-row { grid-template-columns: 1fr; gap: 2px; }
 }
 
+/* ---- Autopilot: real scheduled server automations ---- */
+.ap-wrap { display: flex; flex-direction: column; gap: 14px; }
+.ap-category { display: flex; flex-direction: column; gap: 9px; }
+.ap-category h4 { margin: 0; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
+.ap-job-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.ap-job-card {
+  display: flex; flex-direction: column; gap: 8px; padding: 13px; border-radius: 14px;
+  border: 1px solid var(--line); background: rgba(255, 255, 255, 0.016); transition: border-color .18s;
+}
+.ap-job-card.ap-tone-on { border-color: rgba(65, 255, 161, 0.24); }
+.ap-job-card.ap-tone-warn { border-color: rgba(255, 209, 102, 0.26); }
+.ap-job-card.ap-tone-off { opacity: 0.6; }
+.ap-job-top { display: flex; align-items: center; gap: 10px; }
+.ap-job-id { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.ap-job-id b { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ap-job-id i { font-style: normal; font-size: 10.5px; color: var(--dim); }
+.ap-run-now { flex: 0 0 auto; padding: 5px 10px; font-size: 11px; }
+.ap-job-desc { margin: 0; font-size: 11.5px; color: var(--dim); line-height: 1.5; }
+.ap-job-foot { display: flex; flex-direction: column; gap: 2px; padding-top: 7px; border-top: 1px solid var(--line); }
+.ap-job-status { align-self: flex-start; font: 700 9px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,0.24); }
+.ap-job-status.ap-tone-on { color: #baffd9; }
+.ap-job-status.ap-tone-warn { color: #ffe3ab; }
+.ap-job-status.ap-tone-off { color: var(--dim); }
+.ap-job-foot span:nth-child(2) { font-size: 11px; color: var(--ink); line-height: 1.4; }
+.ap-job-foot i { font-style: normal; font-size: 10px; color: var(--dim); }
+.ap-loading { padding: 20px; text-align: center; }
+
+.ap-switch { position: relative; display: inline-flex; flex: 0 0 auto; cursor: pointer; }
+.ap-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.ap-switch-track {
+  display: inline-flex; align-items: center; width: 34px; height: 19px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12); border: 1px solid var(--line); transition: background .18s, border-color .18s; padding: 0 2px;
+}
+.ap-switch-thumb {
+  width: 13px; height: 13px; border-radius: 50%; background: var(--dim); transform: translateX(0);
+  transition: transform .18s, background .18s;
+}
+.ap-switch input:checked + .ap-switch-track { background: rgba(65, 255, 161, 0.22); border-color: rgba(65, 255, 161, 0.4); }
+.ap-switch input:checked + .ap-switch-track .ap-switch-thumb { transform: translateX(15px); background: var(--neon); box-shadow: 0 0 8px var(--neon); }
+.ap-switch input:disabled + .ap-switch-track { opacity: 0.5; cursor: not-allowed; }
+.ap-switch input:focus-visible + .ap-switch-track { outline: 2px solid var(--neon); outline-offset: 2px; }
+@media (max-width: 720px) {
+  .ap-job-grid { grid-template-columns: 1fr; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ap-switch-track, .ap-switch-thumb, .ap-job-card { transition: none; }
+}
+
 /* ============ Vacation Mode first-class workspace ============ */
 .vm {
   display: flex;
