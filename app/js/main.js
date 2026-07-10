@@ -1941,20 +1941,13 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
     <div class="developer-shell dev-shell">
       <section class="developer-hero dev-hero">
         <div>
-          <p class="developer-kicker">Owner operator surface</p>
           <h3>Developer Control Room</h3>
-          <p>Every agent, subagent, and integration this system actually has — live, not a mockup. Read-only: nothing here executes a provider, approval, send, or production write.</p>
         </div>
         <div class="dev-hero-right">
           <button class="dev-refresh-btn" type="button" data-dev-refresh title="Re-check everything now">
             <span class="dev-refresh-ic">${svg("clock")}</span> <span>Refresh</span>
           </button>
           <p class="dev-updated">Updated ${esc(ago(generatedAt))}</p>
-          <div class="developer-owner">
-            <span class="developer-owner-avatar dev-pulse-avatar">JW</span>
-            <b>${esc(s.name || "Jordan")}</b>
-            <i><span></span>Owner systems protected</i>
-          </div>
         </div>
       </section>
 
@@ -2073,7 +2066,6 @@ function developerSkeletonHtml() {
     <div class="developer-shell dev-shell dev-loading">
       <section class="developer-hero dev-hero">
         <div>
-          <p class="developer-kicker">Owner operator surface</p>
           <h3>Developer Control Room</h3>
           <p>Checking every agent and integration…</p>
         </div>
