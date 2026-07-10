@@ -5,22 +5,23 @@ import {
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
-} from "./store.js?v=phantom-live-20260709-122";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260709-122";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260709-122";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260709-122";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260709-122";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260709-122";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260709-122";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260709-122";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260709-122";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260709-122";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260709-122";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260709-122";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260709-122";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260709-122";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260709-122";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260709-122";
+} from "./store.js?v=phantom-live-20260710-123";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-123";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-123";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-123";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-123";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-123";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-123";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-123";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-123";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-123";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-123";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-123";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-123";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-123";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-123";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-123";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-123";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -628,7 +629,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260709-122";
+const POSE_VERSION = "phantom-live-20260710-123";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1581,21 +1582,202 @@ const BRAIN_LANE_IDENTITY = { claude: "Claude (Anthropic)", codex: "Codex (OpenA
 const LOOP_LANE_IDENTITY = { openai: "ChatGPT (OpenAI)", claude: "Claude (Anthropic)", glm: "GLM (OpenRouter)", local: "Local / Ollama", custom: "Custom endpoint" };
 const MEDIA_ENGINE_IDENTITY = { higgsfield: "Higgsfield", claude: "Claude (Anthropic)", openai: "OpenAI", runway: "Runway", flux: "Flux (Black Forest Labs)" };
 
-function renderDeveloperPage(body) {
-  if (!isOwnerOperator()) {
-    body.innerHTML = `
-      <div class="developer-denied">
-        <p class="developer-kicker">Owner-only</p>
-        <h3>Developer access is reserved for the PhantomForce owner account.</h3>
-        <p>This surface is hidden from normal client, employee, and admin sessions.</p>
-      </div>`;
-    return;
+/* ============================================================================
+   DEVELOPER TAB — the real curtain-pull. Owner-only. Every section here is
+   backed by a real call (agent workforce ledger, rembg probe, ai-proxy
+   health) — nothing on this page is a static mockup. It never executes a
+   provider, approval, send, or production write; it only looks. */
+const DEV_AGENT_ICON = { "phantom-ai": "brain", hermes: "db", builder: "dev", strategist: "brain", reviewer: "check", gatekeeper: "shield", scout: "dollar", sentinel: "shield", cutlab: "film" };
+const DEV_PROGRAM_ICON = { n8n: "auto", openspec: "doc", "agent-os": "book", serena: "search", ruflo: "users", "phantom-ai-online-fetch": "bolt", rembg: "media", higgsfield: "film", openai: "spark", fastify: "cog", "ai-proxy": "cog" };
+const DEV_TONE = {
+  active: "on", working: "on", connected: "on", running_local: "on", reachable: "on",
+  standby: "warn", available: "warn", idle: "warn", waiting: "warn", drafting: "warn", watching: "warn", ready: "warn",
+  scaffolded_idle: "warn", sandbox_reference: "warn", planning_reference: "warn", manual: "warn", "manual mode": "warn",
+  quarantined_planning_only: "warn", dry_run_draft_only: "warn", local_proposal_draft: "warn", reference_only: "warn", planned_allowlisted_fetch: "warn",
+  blocked: "off", unconfigured: "off", missing: "off", planned: "off", unavailable: "off", unreachable: "off",
+};
+function devTone(state) { return DEV_TONE[String(state || "").toLowerCase()] || "warn"; }
+function devDot() { return `<span class="dev-dot" aria-hidden="true"></span>`; }
+
+async function fetchAgentWorkforceStatus(windowHours = 24) {
+  try {
+    const token = session.token();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const r = await fetch(`/phantom-ai/agents/status?window_hours=${windowHours}`, { headers, signal: ctrl.signal });
+    clearTimeout(timer);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok) return { ok: true, workforce: d.workforce };
+    return { ok: false, error: (d && (d.error?.message || d.error)) || `Agent status request failed (${r.status}).` };
+  } catch (e) {
+    return { ok: false, error: e?.name === "AbortError" ? "Agent status request timed out." : "Could not reach the agent status backend." };
   }
+}
+
+function devAgentCard(worker, subs, esc) {
+  const tone = devTone(worker.state);
+  const icon = DEV_AGENT_ICON[worker.id] || "dev";
+  return `
+    <article class="dev-agent-card dev-tone-${tone}">
+      <div class="dev-agent-top">
+        <span class="dev-agent-ic">${svg(icon)}</span>
+        <div class="dev-agent-id"><b>${esc(worker.name)}</b><i>${esc(worker.role)}</i></div>
+        <span class="dev-state-pill dev-tone-${tone}">${devDot()}${esc(worker.state)}</span>
+      </div>
+      <p class="dev-agent-focus">${esc(worker.focus)}</p>
+      <div class="dev-agent-metrics">
+        <span><b>${worker.tasks_last_1h}</b><i>1h</i></span>
+        <span><b>${worker.tasks_last_24h}</b><i>24h</i></span>
+        <span><b>${worker.tasks_last_7d}</b><i>7d</i></span>
+        <span><b>${(worker.tokens_last_24h || 0).toLocaleString()}</b><i>tokens</i></span>
+        <span><b>${(worker.estimated_cost_usd_last_24h || 0).toFixed(4)}</b><i>24h cost</i></span>
+      </div>
+      <div class="dev-agent-foot">
+        <span>${esc(worker.tool_binding)}</span>
+        <span>${worker.last_run_at ? esc(ago(worker.last_run_at)) : "no runs yet"}</span>
+      </div>
+      ${subs.length ? `
+      <button class="dev-sub-toggle" type="button" data-dev-sub-toggle="${esc(worker.id)}" aria-expanded="false">
+        <span data-dev-sub-caret>▸</span> ${subs.length} subagent${subs.length === 1 ? "" : "s"}
+      </button>
+      <div class="dev-sub-list" data-dev-sub-list="${esc(worker.id)}" hidden>
+        ${subs.map((sub) => {
+          const subTone = devTone(sub.state);
+          return `<div class="dev-sub-item dev-tone-${subTone}">
+            ${devDot()}<b>${esc(sub.name)}</b><i>${esc(sub.specialty)}</i><span>${esc(sub.state)}</span>
+          </div>`;
+        }).join("")}
+      </div>` : ""}
+    </article>`;
+}
+
+function devProgramCard(p, esc) {
+  return `
+    <article class="dev-program-card dev-tone-${p.tone}">
+      <div class="dev-program-top">
+        <span class="dev-program-ic">${svg(p.icon)}</span>
+        <b>${esc(p.name)}</b>
+        <span class="dev-state-pill dev-tone-${p.tone}">${devDot()}${esc(p.status)}</span>
+      </div>
+      <p>${esc(p.detail)}</p>
+      ${p.meta ? `<i class="dev-program-meta">${esc(p.meta)}</i>` : ""}
+    </article>`;
+}
+
+function buildDevPrograms(workforce, rembg, mediaHealth) {
+  const list = [];
+  list.push({
+    id: "rembg", name: "Rembg", icon: "media",
+    tone: rembg?.available ? "on" : "off",
+    status: rembg?.available ? "Connected" : "Not connected",
+    detail: rembg?.available
+      ? `Local background removal running via ${rembg.pythonCommand || "python"}${rembg.version ? ` (${rembg.version})` : ""}.`
+      : (rembg?.error || "rembg is not installed or not reachable."),
+    meta: rembg?.checkedAt ? `Checked ${ago(rembg.checkedAt)} · ${rembg.lane || "unknown"} lane` : null,
+  });
+  const higgsfieldKeyed = !!mediaHealth?.media?.higgsfield;
+  list.push({
+    id: "higgsfield", name: "Higgsfield", icon: "film",
+    tone: higgsfieldKeyed ? "on" : "warn",
+    status: higgsfieldKeyed ? "Connected" : "Manual mode",
+    detail: higgsfieldKeyed
+      ? "Real API key configured on ai-proxy — AI Edit calls it directly."
+      : "Subscription-only, no API key — AI Edit offers Copy prompt / Open Higgsfield instead of a fake call.",
+    meta: null,
+  });
+  const openaiKeyed = !!mediaHealth?.media?.openai;
+  list.push({
+    id: "openai", name: "OpenAI", icon: "spark",
+    tone: openaiKeyed ? "on" : "off",
+    status: openaiKeyed ? "Connected" : "Not connected",
+    detail: openaiKeyed ? "Image-generation key configured on ai-proxy." : "No OPENAI_API_KEY set on ai-proxy.",
+    meta: null,
+  });
+  list.push({
+    id: "fastify", name: "Fastify backend", icon: "cog",
+    tone: workforce ? "on" : "off",
+    status: workforce ? "Reachable" : "Unreachable",
+    detail: "The real admin backend — sessions, rembg, agent status, every owner-only route.",
+    meta: null,
+  });
+  list.push({
+    id: "ai-proxy", name: "ai-proxy", icon: "cog",
+    tone: mediaHealth?.reachable ? "on" : "off",
+    status: mediaHealth?.reachable ? "Reachable" : "Unreachable",
+    detail: mediaHealth?.reachable
+      ? `Chat brain: ${mediaHealth.provider || "unset"}${mediaHealth.model ? ` / ${mediaHealth.model}` : ""}.`
+      : "Lightweight proxy for media generation and the public chat brain — not responding.",
+    meta: null,
+  });
+  (workforce?.programs || []).forEach((p) => {
+    list.push({
+      id: p.id, name: p.display_name, icon: DEV_PROGRAM_ICON[p.id] || "dev",
+      tone: devTone(p.state),
+      status: String(p.state || "").replace(/_/g, " "),
+      detail: p.current_use || p.intended_role,
+      meta: `${p.manager_agent} · ${p.blocked_actions_count} blocked action${p.blocked_actions_count === 1 ? "" : "s"} · next: ${p.next_phase}`,
+    });
+  });
+  return list;
+}
+
+function devTicker(items, esc) {
+  if (!items || !items.length) return `<p class="dev-empty">No recent activity yet.</p>`;
+  return items.map((item) => `
+    <div class="dev-ticker-item">
+      <b>${esc(item.label)}</b>
+      <span>${esc(item.text)}</span>
+      <i>${esc(ago(item.timestamp))}</i>
+    </div>`).join("");
+}
+
+function animateDevCount(el, target) {
+  if (!el) return;
+  if (reduceMotion || !Number.isFinite(target)) { el.textContent = String(target); return; }
+  const start = performance.now();
+  const dur = 900;
+  const step = (now) => {
+    const p = Math.min(1, (now - start) / dur);
+    const eased = 1 - Math.pow(1 - p, 3);
+    el.textContent = String(Math.round(target * eased));
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+
+let devRefreshTimer = 0;
+function wireDeveloperSection(body, opts) {
+  body.querySelectorAll("[data-dev-sub-toggle]").forEach((btn) => {
+    btn.onclick = () => {
+      const id = btn.dataset.devSubToggle;
+      const list = body.querySelector(`[data-dev-sub-list="${id}"]`);
+      const caret = btn.querySelector("[data-dev-sub-caret]");
+      const open = list.hasAttribute("hidden");
+      if (open) { list.removeAttribute("hidden"); btn.setAttribute("aria-expanded", "true"); if (caret) caret.textContent = "▾"; }
+      else { list.setAttribute("hidden", ""); btn.setAttribute("aria-expanded", "false"); if (caret) caret.textContent = "▸"; }
+    };
+  });
+  const refreshBtn = body.querySelector("[data-dev-refresh]");
+  if (refreshBtn) refreshBtn.onclick = () => {
+    if (refreshBtn.classList.contains("is-spinning")) return;
+    refreshBtn.classList.add("is-spinning");
+    loadDeveloperData(body, opts).finally(() => refreshBtn.classList.remove("is-spinning"));
+  };
+  body.querySelectorAll(".dev-agent-card, .dev-program-card").forEach((card, i) => {
+    card.style.animationDelay = `${Math.min(i * 35, 400)}ms`;
+  });
+}
+
+function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaHealth }, opts) {
   const s = ctx.session || {};
-  const mem = memoryStats();
-  const state = store.state || {};
-  const pendingApprovals = visible(state.approvals || []).filter((a) => a.status === "pending").length;
-  const queuedArtifacts = (state.contentQueue || []).filter((item) => !item.archived && item.status !== "removed").length;
+  const w = workforce;
+  const summary = w?.summary;
+  const workers = w?.workers || [];
+  const subagents = w?.subagents || [];
+  const programs = buildDevPrograms(w, rembg, mediaHealth);
+  const generatedAt = summary?.generated_at || new Date().toISOString();
+
   const routes = [
     ["Owner account", "PhantomForce Owner"],
     ["Session", s.sessionId || "owner-admin"],
@@ -1604,41 +1786,94 @@ function renderDeveloperPage(body) {
     ["Host", location.hostname || "local"],
     ["Build", document.querySelector('meta[name="phantom-build"]')?.content || "local"],
   ];
-  const safety = [
-    ["Provider calls", "Blocked here"],
-    ["Approval execution", "Absent"],
-    ["External sends", "Blocked"],
-    ["Queue writes", "Not from this page"],
-    ["Production ledger writes", "Blocked"],
-    ["Secrets", "Never displayed"],
-  ];
+  const safety = w
+    ? [
+        ["Read-only", w.safety_flags.read_only ? "Yes" : "No"],
+        ["Provider called", w.safety_flags.provider_called ? "Yes" : "No"],
+        ["External call performed", w.safety_flags.external_call_performed ? "Yes" : "No"],
+        ["n8n started", w.safety_flags.n8n_started ? "Yes" : "No"],
+        ["Workflow executed", w.safety_flags.workflow_executed ? "Yes" : "No"],
+        ["Approval executed", w.safety_flags.approval_executed ? "Yes" : "No"],
+        ["Production ledger written", w.safety_flags.production_ledger_written ? "Yes" : "No"],
+      ]
+    : [
+        ["Provider calls", "Blocked here"],
+        ["Approval execution", "Absent"],
+        ["External sends", "Blocked"],
+        ["Production ledger writes", "Blocked"],
+      ];
   const shortcuts = [
     ["PhantomOps", "adminos", "System status, tool lane, and owner ops cockpit."],
     ["Memory", "memory", "Memory, recall, and local context."],
     ["Approvals", "approvals", "Human approval queue and blocked-action review."],
     ["Settings", "settings", "Media and provider configuration guardrails."],
   ];
+
   body.innerHTML = `
-    <div class="developer-shell">
-      <section class="developer-hero">
+    <div class="developer-shell dev-shell">
+      <section class="developer-hero dev-hero">
         <div>
           <p class="developer-kicker">Owner operator surface</p>
           <h3>Developer Control Room</h3>
-          <p>Private operational visibility for the PhantomForce owner account. This page is read-only and does not execute providers, approvals, sends, or production writes.</p>
+          <p>Every agent, subagent, and integration this system actually has — live, not a mockup. Read-only: nothing here executes a provider, approval, send, or production write.</p>
         </div>
-        <div class="developer-owner">
-          <span class="developer-owner-avatar">JW</span>
-          <b>${esc(s.name || "Jordan")}</b>
-          <i><span></span>Owner systems protected</i>
+        <div class="dev-hero-right">
+          <button class="dev-refresh-btn" type="button" data-dev-refresh title="Re-check everything now">
+            <span class="dev-refresh-ic">${svg("clock")}</span> <span>Refresh</span>
+          </button>
+          <p class="dev-updated">Updated ${esc(ago(generatedAt))}</p>
+          <div class="developer-owner">
+            <span class="developer-owner-avatar dev-pulse-avatar">JW</span>
+            <b>${esc(s.name || "Jordan")}</b>
+            <i><span></span>Owner systems protected</i>
+          </div>
         </div>
       </section>
 
-      <section class="stat-row developer-stats">
-        <article class="stat-card"><span>Memory records</span><b>${mem.total}</b><i>Local memory surface</i></article>
-        <article class="stat-card"><span>Pending approvals</span><b>${pendingApprovals}</b><i>Execution still gated</i></article>
-        <article class="stat-card"><span>Queued artifacts</span><b>${queuedArtifacts}</b><i>Awaiting autopilot or removal</i></article>
-        <article class="stat-card"><span>Owner gate</span><b>On</b><i>Owner-only tab</i></article>
+      ${w ? `
+      <section class="dev-stat-row" data-dev-stats>
+        <article class="dev-stat"><span data-dev-count="${summary.active_workers}">0</span><i>Active workers</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.total_workers}">0</span><i>Total workers</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.subagents_mapped}">0</span><i>Subagents</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.tasks_in_window}">0</span><i>Tasks / ${summary.window_hours}h</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.tokens_in_window}">0</span><i>Tokens / ${summary.window_hours}h</i></article>
+        <article class="dev-stat"><span class="dev-stat-static">${summary.estimated_cost_usd_in_window.toFixed(4)}</span><i>Est. cost / ${summary.window_hours}h</i></article>
+      </section>` : `
+      <div class="dev-error-banner">
+        <b>Couldn't load live agent status.</b>
+        <span>${esc(workforceError || "Unknown error.")}</span>
+        <button type="button" data-dev-refresh>Retry</button>
+      </div>`}
+
+      ${w ? `
+      <section class="dev-section">
+        <div class="dev-section-head">
+          <h4>${svg("users")} Agents &amp; subagents</h4>
+          <p>Every worker this system runs, mapped to what actually happened in the last ${summary.window_hours}h — pulled straight from the Hermes ledger, not guessed.</p>
+        </div>
+        <div class="dev-agent-grid">
+          ${workers.map((worker) => devAgentCard(worker, subagents.filter((sub) => sub.parent === worker.name), esc)).join("")}
+        </div>
+      </section>` : ""}
+
+      <section class="dev-section">
+        <div class="dev-section-head">
+          <h4>${svg("bolt")} Integrations &amp; programs</h4>
+          <p>Rembg, Higgsfield, OpenAI, the backends themselves, and every tool in the workforce registry — checked for real, right now.</p>
+        </div>
+        <div class="dev-program-grid">
+          ${programs.map((p) => devProgramCard(p, esc)).join("")}
+        </div>
       </section>
+
+      ${w ? `
+      <section class="dev-section">
+        <div class="dev-section-head">
+          <h4>${svg("chart")} Live activity</h4>
+          <p>The most recent ledger entries — what actually ran, when.</p>
+        </div>
+        <div class="dev-ticker">${devTicker(w.ticker, esc)}</div>
+      </section>` : ""}
 
       <div class="developer-grid">
         <article class="developer-card">
@@ -1685,6 +1920,59 @@ function renderDeveloperPage(body) {
         </div>
       </section>
     </div>`;
+
+  wireDeveloperSection(body, opts);
+  if (w) body.querySelectorAll("[data-dev-count]").forEach((el) => animateDevCount(el, Number(el.dataset.devCount)));
+}
+
+async function loadDeveloperData(body, opts) {
+  const [wfResult, rembg, mediaHealth] = await Promise.all([
+    fetchAgentWorkforceStatus(24),
+    getRembgStatus(),
+    getMediaEngineHealth(),
+  ]);
+  if (!document.body.contains(body)) return;
+  renderDeveloperContent(body, {
+    workforce: wfResult.ok ? wfResult.workforce : null,
+    workforceError: wfResult.ok ? null : wfResult.error,
+    rembg, mediaHealth,
+  }, opts);
+}
+
+function developerSkeletonHtml() {
+  return `
+    <div class="developer-shell dev-shell dev-loading">
+      <section class="developer-hero dev-hero">
+        <div>
+          <p class="developer-kicker">Owner operator surface</p>
+          <h3>Developer Control Room</h3>
+          <p>Checking every agent and integration…</p>
+        </div>
+      </section>
+      <div class="dev-skeleton-grid">
+        ${Array.from({ length: 6 }).map(() => `<div class="dev-skeleton-card"></div>`).join("")}
+      </div>
+    </div>`;
+}
+
+function renderDeveloperPage(body) {
+  clearInterval(devRefreshTimer);
+  if (!isOwnerOperator()) {
+    body.innerHTML = `
+      <div class="developer-denied">
+        <p class="developer-kicker">Owner-only</p>
+        <h3>Developer access is reserved for the PhantomForce owner account.</h3>
+        <p>This surface is hidden from normal client, employee, and admin sessions.</p>
+      </div>`;
+    return;
+  }
+  body.innerHTML = developerSkeletonHtml();
+  const opts = {};
+  loadDeveloperData(body, opts);
+  devRefreshTimer = setInterval(() => {
+    if (!document.body.contains(body) || currentWs() !== "developer") { clearInterval(devRefreshTimer); return; }
+    loadDeveloperData(body, opts);
+  }, 30000);
 }
 
 const CUSTOM = {
