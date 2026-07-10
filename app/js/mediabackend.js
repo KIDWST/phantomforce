@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260710-133";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260710-133";
+import { session } from "./store.js?v=phantom-live-20260710-134";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260710-134";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -115,6 +115,16 @@ export async function getRembgStatus(opts = {}) {
     const d = await r.json().catch(() => null);
     if (r.ok && d && typeof d.available === "boolean") {
       return { lane: "server", available: d.available, pythonCommand: d.pythonCommand || null, version: d.version || null, error: d.error || null, checkedAt: d.checkedAt || null };
+    }
+    if (r.status === 401 || r.status === 403) {
+      return {
+        lane: "server",
+        available: false,
+        pythonCommand: null,
+        version: null,
+        error: "Admin session expired. Sign in again, then re-check background removal.",
+        checkedAt: new Date().toISOString(),
+      };
     }
   } catch { /* try the fallback lane */ }
 

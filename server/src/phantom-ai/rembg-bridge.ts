@@ -68,18 +68,25 @@ const CACHE_MS = 30_000;
 async function probeOneCommand(command: string): Promise<RembgStatus | null> {
   const result = await spawnCapture(
     command,
-    ["-c", "import rembg, sys; sys.stdout.write(getattr(rembg, '__version__', 'ok'))"],
-    6000,
+    [
+      "-c",
+      [
+        "import importlib.metadata, importlib.util, sys",
+        "sys.exit(2) if importlib.util.find_spec('rembg') is None else None",
+        "sys.stdout.write(importlib.metadata.version('rembg'))",
+      ].join("; "),
+    ],
+    8000,
   );
   if (result.spawnError) return null; // this command doesn't exist on PATH at all
   if (result.code !== 0) {
-    // command exists but `import rembg` failed — real, useful error, not a guess
+    // command exists but the rembg package is not installed — real, useful error, not a guess
     const detail = (result.stderr || result.stdout || `exited with code ${result.code}`).trim().split("\n").pop() ?? "import failed";
     return {
       available: false,
       pythonCommand: command,
       version: null,
-      error: `${command} found, but "import rembg" failed: ${detail.slice(0, 240)}`,
+      error: `${command} found, but rembg is not installed or not visible to that interpreter: ${detail.slice(0, 240)}`,
       checkedAt: new Date().toISOString(),
     };
   }
