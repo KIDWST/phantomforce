@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-131";
+} from "./store.js?v=phantom-live-20260710-132";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -18,7 +18,7 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all" };
-const workerUi = { filter: "all", notice: "", preview: null };
+const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null };
 const MEMORY_DAY = 86400000;
 
 function bindActions(root, handlers) {
@@ -1490,12 +1490,162 @@ function renderWorkforceFlow() {
     </section>`;
 }
 
+function workerParentMatchesFilter(worker, subagents = []) {
+  if (workerUi.filter === "all" || workerUi.filter === "employees") return true;
+  if (workerUi.filter === "subagents") return subagents.length > 0;
+  if (workerUi.filter === "approval") {
+    return worker.status === "waiting-approval" || subagents.some((subagent) => subagent.status === "waiting-approval");
+  }
+  return worker.department.toLowerCase().replace(/\s+/g, "-") === workerUi.filter;
+}
+
+function groupWorkersByDepartment(workers) {
+  const groups = new Map();
+  workers.forEach((worker) => {
+    if (!groups.has(worker.department)) groups.set(worker.department, []);
+    groups.get(worker.department).push(worker);
+  });
+  return [...groups.entries()].sort(([left], [right]) => left.localeCompare(right));
+}
+
+function shortSubagentFocus(subagent) {
+  return String(subagent.current_task || subagent.focus || "")
+    .replace(/\s*Parent worker:.*$/i, "")
+    .trim();
+}
+
+function workerTabContent(worker, subagents, activeTab) {
+  if (activeTab === "subagents") {
+    return `
+      <div class="worker-subagent-list" role="list">
+        ${subagents.map((subagent) => `
+          <article class="worker-subagent-row worker-${esc(subagent.status)}" role="listitem">
+            <span class="wf-avatar wf-avatar-${esc(subagent.avatar?.tone || subagent.status)}">${esc(subagent.avatar?.initials || workerInitials(subagent.display_name))}</span>
+            <div>
+              <b>${esc(subagent.display_name)}</b>
+              <i>${esc(subagent.role)} · ${esc(workerStatusLabel(subagent.status))}</i>
+              <p>${esc(shortSubagentFocus(subagent))}</p>
+            </div>
+          </article>`).join("")}
+      </div>`;
+  }
+
+  if (activeTab === "safety") {
+    return `
+      <div class="worker-tab-copy">
+        <b>Approval-safe lane</b>
+        <p>${esc(worker.display_name)} and the attached subagents can organize, research, draft, review, and prepare work. Anything external still comes back to you before it sends, posts, uploads, charges, deploys, or changes access.</p>
+        <div class="worker-safe-row">
+          <span>No outside action alone</span>
+          <span>Owner approval stays required</span>
+          <span>Client-facing changes stay gated</span>
+        </div>
+      </div>`;
+  }
+
+  if (activeTab === "activity") {
+    return `
+      <div class="worker-tab-copy">
+        <b>Current lane signal</b>
+        <p>${esc(worker.last_active_at || "Ready now")} · ${esc(workerStatusLabel(worker.status))}. This view shows readiness and local activity signals only.</p>
+        <div class="worker-detail-stats">
+          <span><b>${subagents.length}</b><i>subagents attached</i></span>
+          <span><b>${worker.has_activity ? "live" : "ready"}</b><i>activity signal</i></span>
+          <span><b>${worker.approvals_required || 0}</b><i>approvals waiting</i></span>
+        </div>
+      </div>`;
+  }
+
+  return `
+    <div class="worker-tab-copy">
+      <b>${esc(worker.current_task)}</b>
+      <p>Phantom routes matching work to this parent worker, then splits the smaller pieces across Signal, Draft, QA, Relay, and Ledger subagents.</p>
+      <div class="worker-detail-stats">
+        <span><b>${esc(worker.department)}</b><i>department</i></span>
+        <span><b>${subagents.length}</b><i>subagents</i></span>
+        <span><b>${esc(worker.response)}</b><i>avg response</i></span>
+      </div>
+    </div>`;
+}
+
+function renderWorkerExpansion(worker, subagents) {
+  const tabs = [
+    ["overview", "Overview"],
+    ["subagents", "Subagents"],
+    ["safety", "Safety"],
+    ["activity", "Activity"],
+  ];
+  const activeTab = tabs.some(([id]) => id === workerUi.tab) ? workerUi.tab : "overview";
+  return `
+    <div class="worker-shell-expand">
+      <div class="worker-tab-row" role="tablist" aria-label="${esc(worker.display_name)} details">
+        ${tabs.map(([id, label]) => `
+          <button class="worker-tab ${activeTab === id ? "is-active" : ""}" data-act="worker-tab" data-id="${esc(worker.worker_id)}" data-tab="${esc(id)}" role="tab" aria-selected="${activeTab === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
+      </div>
+      <div class="worker-tab-panel" role="tabpanel">
+        ${workerTabContent(worker, subagents, activeTab)}
+      </div>
+    </div>`;
+}
+
+function renderWorkerShell(worker, subagents) {
+  const selected = workerUi.selectedId === worker.worker_id;
+  const capPct = Math.max(0, Math.min(100, Math.round(worker.workload || 0)));
+  return `
+    <article class="worker-shell-card worker-${esc(worker.status)} ${selected ? "is-open" : ""}">
+      <button class="worker-shell-main" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-expanded="${selected ? "true" : "false"}">
+        <span class="wf-avatar wf-avatar-${esc(worker.avatar?.tone || worker.status)}">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
+        <span class="worker-shell-name">
+          <b>${esc(worker.display_name)}</b>
+          <i>${esc(worker.role)}</i>
+        </span>
+        <span class="worker-shell-meta">
+          <b>${subagents.length}</b>
+          <i>subagents</i>
+        </span>
+        <span class="worker-shell-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
+      </button>
+      <div class="worker-shell-bar" aria-hidden="true"><i style="--worker-cap:${capPct}%"></i></div>
+      ${selected ? renderWorkerExpansion(worker, subagents) : ""}
+    </article>`;
+}
+
+function renderWorkerDirectory(parentWorkers, allWorkers) {
+  const subagentsByParent = new Map();
+  allWorkers.filter((worker) => worker.worker_type === "subagent").forEach((subagent) => {
+    const key = subagent.parent_id || "";
+    if (!subagentsByParent.has(key)) subagentsByParent.set(key, []);
+    subagentsByParent.get(key).push(subagent);
+  });
+  const filteredParents = parentWorkers.filter((worker) => workerParentMatchesFilter(worker, subagentsByParent.get(worker.worker_id) || []));
+  if (!filteredParents.some((worker) => worker.worker_id === workerUi.selectedId)) {
+    workerUi.selectedId = filteredParents[0]?.worker_id || "";
+    workerUi.tab = "overview";
+  }
+  const groups = groupWorkersByDepartment(filteredParents);
+  return `
+    <section class="worker-directory" aria-label="Worker directory">
+      ${groups.map(([department, group]) => `
+        <section class="worker-department">
+          <div class="worker-department-head">
+            <span>${esc(department)}</span>
+            <b>${group.length} parent${group.length === 1 ? "" : "s"}</b>
+          </div>
+          <div class="worker-shell-grid">
+            ${group.map((worker) => renderWorkerShell(worker, subagentsByParent.get(worker.worker_id) || [])).join("")}
+          </div>
+        </section>`).join("") || empty("No workers match this filter.")}
+    </section>`;
+}
+
 function renderWorkforce(el, rerender) {
   const allWorkers = buildWorkerRoster();
   const workers = isAdmin() ? allWorkers : allWorkers.filter((worker) => worker.client_visible);
   const validFilters = ["all", "employees", "subagents", "approval", ...WORKFORCE_FILTERS.slice(1).map((dept) => dept.toLowerCase().replace(/\s+/g, "-"))];
   if (!validFilters.includes(workerUi.filter)) workerUi.filter = "all";
-  const visibleWorkers = workers.filter(workerMatchesFilter).sort((a, b) => workerSortScore(a) - workerSortScore(b));
+  const parentWorkers = workers
+    .filter((worker) => worker.worker_type !== "subagent")
+    .sort((a, b) => workerSortScore(a) - workerSortScore(b) || a.display_name.localeCompare(b.display_name));
   const pendingApprovals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const realPrepared = [
     ...visible(store.state.leads),
@@ -1508,7 +1658,6 @@ function renderWorkforce(el, rerender) {
   const parentCount = workers.filter((worker) => worker.worker_type !== "subagent").length;
   const subagentCount = workers.filter((worker) => worker.worker_type === "subagent").length;
   const departmentCount = new Set(workers.map((worker) => worker.department)).size;
-  const avgProductivity = Math.round(workers.reduce((sum, worker) => sum + worker.productivity, 0) / Math.max(1, workers.length));
   const filters = [
     ["all", "All nodes"],
     ["employees", "Employees"],
@@ -1521,7 +1670,7 @@ function renderWorkforce(el, rerender) {
       <div>
         <p class="worker-kicker">Swarm network online</p>
         <h3>PhantomForce Workers</h3>
-        <p>The workforce is now a swarm: parent employees coordinate lanes while subagents scout, draft, check, relay, and log the work underneath them. Tell Phantom AI the outcome; Phantom routes the pieces.</p>
+        <p>Clean parent-worker view. Click a worker to expand its tabs, see attached subagents, and check safety rules without dumping the whole swarm on the page.</p>
       </div>
       <div class="worker-scale">
         <span><b>${onlineCount}</b> active nodes</span>
@@ -1531,27 +1680,32 @@ function renderWorkforce(el, rerender) {
       </div>
     </section>
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
-    ${renderWorkerMesh(workers)}
     <div class="worker-metrics">
       <div><span>Active Nodes</span><b>${onlineCount}</b></div>
       <div><span>Parent Workers</span><b>${parentCount}</b></div>
       <div><span>Subagents</span><b>${subagentCount}</b></div>
       <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
       <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
-      <div><span>Productivity</span><b>${avgProductivity}%</b></div>
       <div><span>Departments Online</span><b>${departmentCount}</b></div>
     </div>
-    ${renderWorkforceFlow()}
     <div class="worker-filter-row">
       ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
     </div>
-    <div class="worker-grid" role="list">
-      ${visibleWorkers.map((worker) => renderWorkerCard(worker, [], { actions: isAdmin() })).join("") || empty("No workers match this filter.")}
-    </div>`;
+    ${renderWorkerDirectory(parentWorkers, workers)}`;
   bindActions(el, {
     "worker-filter": (_id, button) => { workerUi.filter = button.dataset.filter || "all"; rerender(); },
     "worker-notice-close": () => { workerUi.notice = ""; rerender(); },
     "worker-preview-close": () => { workerUi.preview = null; rerender(); },
+    "worker-select": (id) => {
+      workerUi.selectedId = id || workerUi.selectedId;
+      workerUi.tab = "overview";
+      rerender();
+    },
+    "worker-tab": (id, button) => {
+      workerUi.selectedId = id || workerUi.selectedId;
+      workerUi.tab = button.dataset.tab || "overview";
+      rerender();
+    },
     "worker-preview": (id, button) => {
       const action = button.dataset.preview || "action";
       workerUi.preview = { workerId: id || null, kind: action };
