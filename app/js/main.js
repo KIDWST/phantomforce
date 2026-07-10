@@ -6,23 +6,23 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260710-140";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-140";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-140";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-140";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-140";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-140";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-140";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-140";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-140";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-140";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-140";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-140";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-140";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-140";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-140";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-140";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-140";
+} from "./store.js?v=phantom-live-20260710-143";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-143";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-143";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-143";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-143";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-143";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-143";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-143";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-143";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-143";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-143";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-143";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-143";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-143";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-143";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-143";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-143";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -69,10 +69,12 @@ function focusWithoutScroll(input) {
 
 function setCommandFocusState(active) {
   phantom?.classList.toggle("is-command-focused", !!active);
+  document.body.classList.toggle("phantom-keyboard-active", !!active);
   if (active) {
     commandTouchScroll = { x: window.scrollX, y: window.scrollY };
     bindKeyboardViewport();
     updateKeyboardOffset();
+    [80, 220, 420].forEach((ms) => setTimeout(updateKeyboardOffset, ms));
     if (mobileNavOpen) setMobileNav(false);
   } else {
     document.documentElement.style.setProperty("--phantom-keyboard-offset", "0px");
@@ -652,7 +654,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260710-140";
+const POSE_VERSION = "phantom-live-20260710-143";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1975,9 +1977,9 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       ${w ? `
       <section class="dev-stat-row" data-dev-stats>
         <article class="dev-stat"><span data-dev-count="${summary.runtime_active_workers || 0}">0</span><i>Ledger-active categories</i></article>
-        <article class="dev-stat"><span data-dev-count="${summary.total_mapped_nodes || summary.total_worker_nodes || (summary.total_workers + summary.subagents_mapped)}">0</span><i>Mapped topology nodes</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.total_mapped_nodes || summary.total_worker_nodes || (summary.total_workers + summary.subagents_mapped)}">0</span><i>Mapped workers</i></article>
         <article class="dev-stat"><span data-dev-count="${summary.runtime_executable_actions || 0}">0</span><i>Executable safe actions</i></article>
-        <article class="dev-stat"><span data-dev-count="${summary.template_generated_nodes || 0}">0</span><i>Template-generated nodes</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.template_generated_nodes || 0}">0</span><i>Mapped subagents</i></article>
         <article class="dev-stat"><span data-dev-count="${summary.tasks_in_window}">0</span><i>Tasks / ${summary.window_hours}h</i></article>
         <article class="dev-stat"><span data-dev-count="${summary.tokens_in_window}">0</span><i>Tokens / ${summary.window_hours}h</i></article>
         <article class="dev-stat"><span class="dev-stat-static">${summary.estimated_cost_usd_in_window.toFixed(4)}</span><i>Est. cost / ${summary.window_hours}h</i></article>
@@ -1992,20 +1994,20 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       <section class="dev-section">
         <div class="dev-section-head">
           <h4>${svg("shield")} Workforce reality</h4>
-          <p>${esc(nodeTruth.label || summary.truth_label || "Mapped workforce topology. Generated cells are contracts, not autonomous running workers.")}</p>
+          <p>${esc(nodeTruth.label || summary.truth_label || "Mapped workforce. Helper lanes are contracts, not autonomous running workers.")}</p>
         </div>
         <div class="dev-program-grid">
-          <article class="dev-program-card dev-tone-on"><b>${Number(nodeTruth.parent_worker_definitions || summary.parent_worker_definitions || 0).toLocaleString()}</b><p>Parent worker definitions observed through Hermes/tool status.</p></article>
-          <article class="dev-program-card dev-tone-warn"><b>${Number(nodeTruth.generated_subagent_instances || summary.generated_subagent_instances || 0).toLocaleString()}</b><p>Template-generated subagent mappings. They route context; they are not independent processes.</p></article>
-          <article class="dev-program-card dev-tone-warn"><b>${Number(nodeTruth.generated_neural_cell_instances || summary.generated_neural_cell_instances || 0).toLocaleString()}</b><p>Neural processing cell contracts. They define expected steps and only show activity when a real route records it.</p></article>
+          <article class="dev-program-card dev-tone-on"><b>${Number(nodeTruth.parent_worker_definitions || summary.parent_worker_definitions || 0).toLocaleString()}</b><p>Lead worker definitions observed through Hermes/tool status.</p></article>
+          <article class="dev-program-card dev-tone-warn"><b>${Number(nodeTruth.generated_subagent_instances || summary.generated_subagent_instances || 0).toLocaleString()}</b><p>Mapped subagent plans. They route context and only count as real work when ledger activity exists.</p></article>
+          <article class="dev-program-card dev-tone-warn"><b>${Number(nodeTruth.generated_neural_cell_instances || summary.generated_neural_cell_instances || 0).toLocaleString()}</b><p>Helper-lane contracts. They define expected steps and only show activity when a real route records it.</p></article>
           <article class="dev-program-card dev-tone-on"><b>${Number(nodeTruth.runtime_executable_actions || summary.runtime_executable_actions || 0).toLocaleString()}</b><p>Callable admin-safe actions. These are the executable parts of this workforce surface.</p></article>
         </div>
       </section>
 
       <section class="dev-section">
         <div class="dev-section-head">
-          <h4>${svg("users")} Agents &amp; subagents</h4>
-          <p>Parent workers plus mapped helper definitions. Runtime task/tokens below come from Hermes ledger matches only; generated cells do not inherit fake activity.</p>
+          <h4>${svg("users")} Workers &amp; subagents</h4>
+          <p>Lead workers plus mapped helper definitions. Runtime task/tokens below come from Hermes ledger matches only; helper lanes do not inherit fake activity.</p>
         </div>
         <div class="dev-agent-grid">
           ${workers.map((worker) => devAgentCard(worker, subagents.filter((sub) => sub.parent === worker.name), esc)).join("")}

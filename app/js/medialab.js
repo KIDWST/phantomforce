@@ -6,12 +6,12 @@
  * instead of sending people out to another product.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260710-140";
+import { session as accessSession } from "./store.js?v=phantom-live-20260710-143";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260710-140";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-140";
-import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-140";
+} from "./contenthub.js?v=phantom-live-20260710-143";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-143";
+import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-143";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1056,7 +1056,7 @@ function consumePromptIntent(opts = {}) {
 }
 
 const NAV_TABS = [
-  ["generate", "Cockpit"],
+  ["generate", "Create"],
   ["library", "Media Pool"],
   ["pending", "Pending"],
   ["edit", "Edit"],
@@ -1074,29 +1074,25 @@ export function renderMediaStudio(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   if (session.tab === "briefs") session.tab = "pending";
-  const hasConfiguredEngine = providersFor(cfg, "image").length + providersFor(cfg, "video").length > 0;
   el.innerHTML = `
     <div class="ml">
       <div class="ml-topbar">
+        <button class="ml-back" data-ml-back type="button" aria-label="Go back"><span aria-hidden="true">&larr;</span><em>Back</em></button>
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
           ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
         </nav>
-        <div class="ml-topbar-tools">
-          ${NAV_DRAWERS.map(([id, label, ic]) => `<button class="ml-topbar-ic ${activeDrawer === id ? "is-active" : ""}" data-ml-drawer-open="${id}" title="${label}" aria-label="${label}">${svgIc(ic)}</button>`).join("")}
-          <button class="ml-topbar-ic" data-ml-open-settings-rail title="Settings" aria-label="Settings">${svgIc("gear")}</button>
-        </div>
-        <div class="ml-engine-mini ${hasConfiguredEngine ? "is-checking" : "is-down"}" data-ml-engine-mini title="${hasConfiguredEngine ? "Checking the media engine." : "No media engine is enabled."}">
-          <span class="ml-engine-mini-dot" aria-hidden="true"></span>
-          <span data-ml-engine-mini-label>${hasConfiguredEngine ? "Checking engine" : "Engine off"}</span>
-          <b>${svgIc("bolt")}${cfg.credits}</b>
-        </div>
+        <button class="ml-settings-gear ${activeDrawer === "settings" ? "is-active" : ""}" data-ml-open-local-settings type="button" title="Media Lab settings" aria-label="Media Lab settings">${svgIc("gear")}</button>
       </div>
       <div class="ml-body" data-ml-body></div>
       ${activeDrawer ? drawerHtml(activeDrawer, cfg, esc, opts) : ""}
     </div>`;
+  el.querySelector("[data-ml-back]")?.addEventListener("click", () => {
+    if (window.history.length > 1) window.history.back();
+    else opts.openWorkspace?.("home");
+  });
   el.querySelectorAll("[data-ml-tab]").forEach((b) => b.onclick = () => { session.tab = b.dataset.mlTab; activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelectorAll("[data-ml-drawer-open]").forEach((b) => b.onclick = () => { activeDrawer = activeDrawer === b.dataset.mlDrawerOpen ? null : b.dataset.mlDrawerOpen; renderMediaStudio(el, opts); });
-  el.querySelector("[data-ml-open-settings-rail]")?.addEventListener("click", () => opts.openSettings && opts.openSettings());
+  el.querySelector("[data-ml-open-local-settings]")?.addEventListener("click", () => { activeDrawer = activeDrawer === "settings" ? null : "settings"; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-drawer-close]")?.addEventListener("click", () => { activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-drawer-backdrop]")?.addEventListener("click", () => { activeDrawer = null; renderMediaStudio(el, opts); });
   wireDrawer(el, activeDrawer, cfg, opts, esc);
@@ -1105,7 +1101,6 @@ export function renderMediaStudio(el, opts = {}) {
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderLibrary(body, opts, el);
-  refreshEngineMini(el, cfg).catch(() => updateEngineMini(el, "down", "Engine offline", "Media engine did not answer."));
 }
 
 /* ---- drawers: Templates / History / Engine — real data, slide-over panel ---- */
@@ -1232,18 +1227,6 @@ function renderGenerate(body, cfg, opts, root) {
   const aspectGrp = aspectGroups(aspects);
 
   body.innerHTML = `
-    <div class="ml-doctor" data-ml-doctor>
-      <span class="ml-doctor-badge" aria-hidden="true"><i class="ml-doctor-dot"></i></span>
-      <span class="ml-doctor-copy">
-        <b data-ml-doctor-title>Checking the media engine…</b>
-        <span class="ml-doctor-stats" data-ml-doctor-msg></span>
-      </span>
-      <details class="ml-doctor-details" data-ml-doctor-details hidden>
-        <summary>Details</summary>
-        <p data-ml-doctor-raw></p>
-      </details>
-      <button class="ml-doctor-retry" data-ml-doctor-retry type="button">${svgIc("spark")}Re-check</button>
-    </div>
     <div class="ml-workspace">
       <section class="ml-brief" aria-label="Shot Builder">
         <div class="ml-brief-head">
@@ -1285,33 +1268,12 @@ function renderGenerate(body, cfg, opts, root) {
           </label>
         </div>
 
-        <details class="ml-advanced">
-          <summary>${svgIc("gear")} Advanced settings</summary>
-          <div class="ml-advanced-body">
-            <label class="ml-field"><span>Quality</span>
-              <div class="ml-seg ml-seg-sm" data-ml-quality>
-                <button class="${genState.quality === "standard" ? "is-on" : ""}" data-v="standard">Standard</button>
-                <button class="${genState.quality === "high" ? "is-on" : ""}" data-v="high">High</button>
-              </div>
-            </label>
-            <p class="ml-advanced-note">High quality uses more production credits per take.</p>
-          </div>
-        </details>
-
-        <div class="ml-brief-engine">
-          <label class="ml-field"><span>Engine</span>
-            <div class="ml-provs" data-ml-provs>
-              ${provs.map((pr) => `<button class="ml-prov ${genState.provider === pr.id ? "is-on" : ""}" data-v="${pr.id}" style="--pb:${pr.brand}">
-                <i style="background:${pr.brand}"></i>${esc(pr.name)}</button>`).join("") || `<span class="ml-hint">No engine enabled for ${genState.modality}. <b data-ml-open-settings>Configure →</b></span>`}
-            </div>
-          </label>
-          ${models.length ? `<label class="ml-field"><span>Lane</span><select class="ml-select" data-ml-model title="Render lane">${models.map((m) => `<option value="${esc(m)}" ${genState.model === m ? "selected" : ""}>${esc(laneLabel(m))}</option>`).join("")}</select></label>` : ""}
-        </div>
+        ${!genState.provider ? `<button class="ml-settings-needed" data-ml-open-settings type="button">${svgIc("gear")} Connect Media Lab in settings</button>` : ""}
 
         <button class="ml-generate ml-hero" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
           <span class="ml-generate-glow" aria-hidden="true"></span>
           <span class="ml-generate-main">${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality === "video" ? "cut" : "image"}`}</span>
-          <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : `~${estCredits()} credits · Phantom handles the rest`}</i>
+          <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : "Phantom handles the rest"}</i>
         </button>
       </section>
 
@@ -1333,7 +1295,6 @@ function renderGenerate(body, cfg, opts, root) {
       </section>
     </div>
     ${nextStepsHtml(esc)}
-    ${railHtml(cfg, esc)}
     ${jobLogHtml(esc)}`;
 
   wireGenerate(body, cfg, opts, root, esc);
@@ -1385,11 +1346,9 @@ function settingsChips(esc) {
   const chips = [
     preset ? preset.label : "Custom",
     genState.modality === "video" ? "Video" : "Image",
-    genState.model ? laneLabel(genState.model) : null,
     genState.style !== "None" ? genState.style : null,
     genState.aspect,
     genState.modality === "video" ? `${genState.duration}s` : `${genState.count} take${genState.count > 1 ? "s" : ""}`,
-    `≈ ${estCredits()} credits`,
   ].filter(Boolean);
   return `<div class="ml-brief-chips" aria-label="Current generation settings">${chips.map((c) => `<span>${esc(String(c))}</span>`).join("")}</div>`;
 }
@@ -2057,10 +2016,18 @@ export function renderMediaSettings(el, opts = {}) {
       <div class="set-section">
         <h3>Media generation</h3>
         <p class="set-note">Media Lab keeps generation inside PhantomForce. Pick the default lanes, set approval behavior, and let PhantomForce handle the routing behind the curtain.</p>
+        <div class="set-rembg-rows">
+          <div class="set-rembg-row"><span>Production credits</span><b>${esc(String(cfg.credits))}</b></div>
+          <div class="set-rembg-row"><span>Default quality</span><b>${esc(genState.quality === "high" ? "High" : "Standard")}</b></div>
+        </div>
         <div class="set-routes">
           ${routeRow("image", "Image engine")}
           ${routeRow("video", "Video engine")}
           ${routeRow("enhance", "Prompt intelligence")}
+        </div>
+        <div class="ml-seg ml-seg-sm set-quality-toggle" data-set-quality>
+          <button class="${genState.quality === "standard" ? "is-on" : ""}" data-v="standard">Standard</button>
+          <button class="${genState.quality === "high" ? "is-on" : ""}" data-v="high">High</button>
         </div>
         <label class="set-inline"><input type="checkbox" data-set-approval ${cfg.requireApproval ? "checked" : ""}/> Require approval before paid generation</label>
       </div>
@@ -2084,6 +2051,7 @@ export function renderMediaSettings(el, opts = {}) {
 
   // routing
   el.querySelectorAll("[data-route]").forEach((s) => s.onchange = () => { cfg.routing[s.dataset.route] = s.value; saveCfg(cfg); });
+  el.querySelectorAll("[data-set-quality] button").forEach((b) => b.onclick = () => { genState.quality = b.dataset.v || "standard"; renderMediaSettings(el, opts); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
   wireRembgEngineSection(el, opts);
 

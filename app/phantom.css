@@ -2779,6 +2779,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-topbar-ic .ic { width: 15px; height: 15px; }
 .ml-topbar-ic:hover { color: var(--ink); border-color: var(--line-strong); }
 .ml-topbar-ic.is-active { color: var(--neon); border-color: rgba(65,255,161,0.4); background: rgba(65,255,161,0.08); }
+.ml-settings-pill {
+  margin-left: auto; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  min-height: 34px; padding: 8px 13px; border-radius: 999px;
+  border: 1px solid var(--line); background: rgba(0,0,0,0.22);
+  color: var(--ink); cursor: pointer; font: 700 11px "DM Mono", monospace;
+  letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
+}
+.ml-settings-pill .ic { width: 13px; height: 13px; color: var(--neon); }
+.ml-settings-pill:hover { border-color: var(--line-strong); background: rgba(65,255,161,0.06); }
 .ml-engine-mini {
   margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px;
   border: 1px solid var(--line); border-radius: 999px; background: rgba(0,0,0,0.22);
@@ -2858,6 +2867,13 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-advanced-body { display: flex; flex-direction: column; gap: 6px; padding: 2px 0 8px; }
 .ml-seg-sm button { padding: 7px 10px; font-size: 12px; }
 .ml-advanced-note { margin: 0; font-size: 11px; color: var(--dim); }
+.ml-settings-needed {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  min-height: 42px; border-radius: 12px; border: 1px dashed rgba(255,209,102,0.45);
+  background: rgba(255,209,102,0.06); color: #ffe7a3; cursor: pointer;
+  font: 700 12px "Space Grotesk", sans-serif;
+}
+.ml-settings-needed .ic { width: 14px; height: 14px; }
 /* reference drop: a slim row, not a giant dead rectangle */
 .ml-drop { position: relative; display: flex; align-items: center; gap: 10px; min-height: 0; padding: 10px 12px; border: 1px dashed var(--line-strong); border-radius: 12px; background: rgba(65,255,161,0.02); color: var(--dim); cursor: pointer; text-align: left; font-size: 12px; }
 .ml-drop.drag { border-color: var(--neon); background: rgba(65,255,161,0.08); }
@@ -7173,5 +7189,82 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 
   .mobile-bottom-item.is-active {
     background: linear-gradient(135deg, rgba(65, 255, 161, 0.26), rgba(13, 132, 91, 0.2));
+  }
+}
+
+/* Mobile keyboard focus: the active chat input is .chatbox-composer. Older
+   focus rules moved .cmd-input, which left the real composer buried under the
+   iOS keyboard. Pin the real composer above the visual viewport keyboard gap. */
+@media (max-width: 767px) {
+  .phantom.is-command-focused {
+    overflow-x: hidden;
+  }
+
+  .phantom.is-command-focused .app-main {
+    padding-bottom: calc(150px + var(--phantom-keyboard-offset) + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .phantom.is-command-focused .console,
+  .phantom.is-command-focused .console-workspace {
+    padding-bottom: calc(158px + var(--phantom-keyboard-offset) + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .phantom.is-command-focused .console .hero2 {
+    min-height: calc(100svh - var(--mobile-admin-topbar) - 22px) !important;
+    overflow: visible;
+  }
+
+  .phantom.is-command-focused .console .chatbox {
+    overflow: visible;
+  }
+
+  .phantom.is-command-focused .console .chatbox-log {
+    padding-bottom: 92px;
+  }
+
+  .phantom.is-command-focused .console .chatbox-composer {
+    position: fixed;
+    left: 10px;
+    right: 10px;
+    bottom: calc(10px + var(--phantom-keyboard-offset) + env(safe-area-inset-bottom, 0px));
+    z-index: 140;
+    width: auto;
+    max-width: none;
+    min-height: 58px;
+    margin: 0;
+    padding: 8px 8px 8px 15px;
+    border: 1px solid rgba(65, 255, 161, 0.44);
+    border-radius: 18px;
+    background: rgba(2, 10, 8, 0.98);
+    box-shadow:
+      0 18px 44px rgba(0, 0, 0, 0.66),
+      0 0 0 1px rgba(0, 0, 0, 0.52),
+      0 0 34px rgba(65, 255, 161, 0.2);
+    -webkit-backdrop-filter: blur(20px);
+    backdrop-filter: blur(20px);
+    transform: translateZ(0);
+  }
+
+  .phantom.is-command-focused .console .chatbox-composer input {
+    height: 40px;
+    font-size: 16px;
+    color: #f1fff8;
+    opacity: 1;
+  }
+
+  .phantom.is-command-focused .console .chatbox-composer input::placeholder {
+    color: rgba(190, 219, 205, 0.74);
+  }
+
+  .phantom.is-command-focused .console .chatbox-composer .cmd-send {
+    width: 44px;
+    height: 44px;
+  }
+
+  .phantom.is-command-focused .mobile-bottom-nav,
+  body.phantom-keyboard-active .mobile-bottom-nav {
+    opacity: 0;
+    transform: translateY(120%);
+    pointer-events: none;
   }
 }

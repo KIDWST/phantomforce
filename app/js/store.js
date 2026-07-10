@@ -35,6 +35,28 @@ export const RETAINERS = [
   { id: "operator", name: "Operator", price: 300, blurb: "Upkeep + lead follow-up desk + monthly content drop." },
   { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full workforce running weekly: media, pipeline, protection." },
 ];
+export const FINANCE_CATEGORIES = [
+  "Sales income",
+  "Service income",
+  "Refund",
+  "Software",
+  "Advertising",
+  "Contractors",
+  "Payroll",
+  "Equipment",
+  "Travel",
+  "Meals",
+  "Fees",
+  "Taxes",
+  "Owner draw",
+  "Transfer",
+  "Uncategorized",
+];
+export const FINANCE_CONNECTORS = [
+  { id: "bank", type: "bank", name: "Bank account", provider: "Plaid", status: "not-connected" },
+  { id: "card", type: "credit-card", name: "Credit card", provider: "Plaid", status: "not-connected" },
+  { id: "manual", type: "manual", name: "Manual ledger", provider: "Local entry / CSV", status: "ready" },
+];
 
 /* ---------------- local memory ---------------- */
 export const MEMORY_RETENTION_DAYS = 30;
@@ -322,6 +344,48 @@ function toolActivitySeed() {
   return [];
 }
 
+function financeSeed() {
+  return {
+    accounts: [],
+    transactions: [],
+    connectors: FINANCE_CONNECTORS,
+  };
+}
+
+function normalizeFinance(finance) {
+  const input = finance && typeof finance === "object" ? finance : financeSeed();
+  const connectors = FINANCE_CONNECTORS.map((connector) => ({
+    ...connector,
+    ...((input.connectors || []).find((item) => item?.id === connector.id) || {}),
+  }));
+  const accounts = Array.isArray(input.accounts) ? input.accounts.map((account) => ({
+    id: account.id || uid("acct"),
+    ws: account.ws || "phantomforce",
+    name: String(account.name || "Business account").slice(0, 80),
+    type: account.type || "manual",
+    institution: String(account.institution || "").slice(0, 80),
+    status: account.status || "manual",
+    lastSync: account.lastSync || null,
+  })) : [];
+  const transactions = Array.isArray(input.transactions) ? input.transactions.map((tx) => {
+    const amount = Number(tx.amount || 0);
+    return {
+      id: tx.id || uid("txn"),
+      ws: tx.ws || "phantomforce",
+      date: tx.date || new Date().toISOString().slice(0, 10),
+      description: String(tx.description || "Transaction").slice(0, 160),
+      amount: Number.isFinite(amount) ? amount : 0,
+      category: FINANCE_CATEGORIES.includes(tx.category) ? tx.category : "Uncategorized",
+      account: String(tx.account || "Manual ledger").slice(0, 80),
+      source: tx.source || "manual",
+      externalId: tx.externalId || null,
+      notes: String(tx.notes || "").slice(0, 300),
+      createdAt: tx.createdAt || new Date().toISOString(),
+    };
+  }).filter((tx) => tx.amount !== 0) : [];
+  return { accounts, transactions, connectors };
+}
+
 /* ---------------- seed ---------------- */
 function seed() {
   return {
@@ -338,6 +402,7 @@ function seed() {
     looperPlans: [],
     sites: [],
     products: [],
+    finance: financeSeed(),
     security: [],
     approvals: [],
     agents: [],
@@ -361,6 +426,7 @@ function normalizeData(data) {
   d.looperPlans = Array.isArray(d.looperPlans) ? d.looperPlans : [];
   d.sites = Array.isArray(d.sites) ? d.sites : [];
   d.products = Array.isArray(d.products) ? d.products : [];
+  d.finance = normalizeFinance(d.finance);
   d.security = Array.isArray(d.security) ? d.security : [];
   d.approvals = Array.isArray(d.approvals) ? d.approvals : [];
   d.agents = Array.isArray(d.agents) ? d.agents : [];

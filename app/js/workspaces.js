@@ -6,9 +6,9 @@
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
-  PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
+  PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-140";
+} from "./store.js?v=phantom-live-20260710-143";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1192,7 +1192,7 @@ const SWARM_SUBAGENT_TEMPLATES = [
     id: "draft",
     name: "Draft",
     title: "Draft Builder",
-    focus: "Turns the parent worker's lane into first-pass copy, plans, checklists, or packets.",
+    focus: "Turns the lead worker's lane into first-pass copy, plans, checklists, or packets.",
     skills: ["drafting", "structure", "packet prep", "copy pass"],
     status: "working",
     completedBoost: 13,
@@ -1397,7 +1397,7 @@ function buildEmployeeSubagents(employee) {
     title: template.title,
     department: employee.department,
     status: "mapped",
-    focus: `${template.focus} Parent worker: ${employee.name}.`,
+    focus: `${template.focus} Lead worker: ${employee.name}.`,
     skills: template.skills,
     completed: 0,
     productivity: null,
@@ -1490,7 +1490,7 @@ export function buildWorkerRoster() {
       productivity: null,
       workload: 0,
       response: "not live-measured",
-      metric_source: recent ? "local activity ledger" : "capability topology only",
+      metric_source: recent ? "local activity ledger" : "workforce map only",
       approvals_required: waitingOnApproval ? pendingApprovals : 0,
       client_visible: employee.employeeVisible !== false,
       worker_type: workerType,
@@ -1618,7 +1618,7 @@ function renderWorkerMesh(workers) {
         </div>
       </div>
       <div class="worker-mesh-readout">
-        <span><b>${mapped}</b> mapped nodes</span>
+        <span><b>${mapped}</b> workers mapped</span>
         <span><b>${observed}</b> ledger signals</span>
         <span><b>${subagentNodes.length}</b> subagents</span>
         <span><b>${departments}</b> departments</span>
@@ -1658,7 +1658,7 @@ function renderWorkerCard(worker, _unused = [], options = {}) {
       </div>
       <div class="worker-facts">
         <span>${worker.approvals_required ? "Waiting on approval" : "Approval-safe"}</span>
-        <span>${worker.worker_type === "subagent" ? "Swarm node" : "Parent worker"}</span>
+        <span>${worker.worker_type === "subagent" ? "Subagent" : "Lead worker"}</span>
         <span>No outside action alone</span>
       </div>
       ${showActions ? `
@@ -1766,8 +1766,8 @@ function renderWorkerNetworkPanel(worker, subagents, cellsBySubagent, rootCells)
   return `
     <div class="worker-network-panel">
       <div class="worker-network-head">
-        <b>${esc(worker.display_name)} neural map</b>
-        <span>${rootCells.length} cells · ${subagents.length} lanes · ${paths.length * 2} synapse paths</span>
+        <b>${esc(worker.display_name)} worker map</b>
+        <span>${rootCells.length} helper lanes · ${subagents.length} subagents · ${paths.length * 2} routes</span>
       </div>
       <div class="worker-layer-grid">
         ${layers.map((layer) => `<span><b>${layerCounts[layer] || 0}</b><i>${esc(layer)}</i></span>`).join("")}
@@ -1777,7 +1777,7 @@ function renderWorkerNetworkPanel(worker, subagents, cellsBySubagent, rootCells)
           <article>
             <b>${esc(subagent.display_name)}</b>
             <p>${esc(first)} -> ${esc(last)}</p>
-            <span>${count} specialist cells</span>
+            <span>${count} helper lanes</span>
           </article>`).join("")}
       </div>
     </div>`;
@@ -1792,7 +1792,7 @@ function workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeT
             <span class="wf-avatar wf-avatar-${esc(subagent.avatar?.tone || subagent.status)}">${esc(subagent.avatar?.initials || workerInitials(subagent.display_name))}</span>
             <div>
               <b>${esc(subagent.display_name)}</b>
-              <i>${esc(subagent.role)} · ${esc(workerStatusLabel(subagent.status))} · ${(cellsBySubagent.get(subagent.worker_id) || []).length} cells</i>
+              <i>${esc(subagent.role)} · ${esc(workerStatusLabel(subagent.status))} · ${(cellsBySubagent.get(subagent.worker_id) || []).length} helper lanes</i>
               <p>${esc(shortSubagentFocus(subagent))}</p>
             </div>
           </article>`).join("")}
@@ -1821,7 +1821,7 @@ function workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeT
         <p>${esc(worker.last_active_at || "No ledger activity")} · ${esc(workerStatusLabel(worker.status))}. This view shows mapped capability plus local activity signals only.</p>
         <div class="worker-detail-stats">
           <span><b>${subagents.length}</b><i>subagents attached</i></span>
-          <span><b>${rootCells.length}</b><i>neural cells mapped</i></span>
+          <span><b>${rootCells.length}</b><i>helper lanes mapped</i></span>
           <span><b>${worker.has_activity ? "live" : "ready"}</b><i>activity signal</i></span>
           <span><b>${worker.approvals_required || 0}</b><i>approvals waiting</i></span>
         </div>
@@ -1831,11 +1831,11 @@ function workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeT
   return `
     <div class="worker-tab-copy">
       <b>${esc(worker.current_task)}</b>
-      <p>Phantom routes matching work to this parent worker, then uses mapped helper lanes for signal, research, planning, drafting, QA, relay, proof, ledger, and feedback. These lanes are contracts unless a real route or ledger event activates them.</p>
+      <p>Phantom routes matching work to this lead worker, then uses mapped helper lanes for signal, research, planning, drafting, QA, relay, proof, ledger, and feedback. These lanes are contracts unless a real route or ledger event activates them.</p>
       <div class="worker-detail-stats">
         <span><b>${esc(worker.department)}</b><i>department</i></span>
         <span><b>${subagents.length}</b><i>subagents</i></span>
-        <span><b>${rootCells.length}</b><i>neural cells</i></span>
+        <span><b>${rootCells.length}</b><i>helper lanes</i></span>
         <span><b>${esc(worker.metric_source || "topology")}</b><i>metric source</i></span>
       </div>
     </div>`;
@@ -1876,11 +1876,11 @@ function renderWorkerShell(worker, subagents, cellsBySubagent, rootCells) {
         </span>
         <span class="worker-shell-meta">
           <b>${rootCells.length}</b>
-          <i>cells</i>
+          <i>lanes</i>
         </span>
         <span class="worker-shell-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
       </button>
-      <div class="worker-shell-bar" aria-hidden="true" title="Topology density, not live workload"><i style="--worker-cap:${mapPct}%"></i></div>
+      <div class="worker-shell-bar" aria-hidden="true" title="Worker map density, not live workload"><i style="--worker-cap:${mapPct}%"></i></div>
       ${selected ? renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells) : ""}
     </article>`;
 }
@@ -1952,37 +1952,37 @@ function renderWorkforce(el, rerender) {
   const neuralCellCount = workers.filter((worker) => worker.worker_type === "cell").length;
   const departmentCount = new Set(workers.map((worker) => worker.department)).size;
   const filters = [
-    ["all", "All parents"],
+    ["all", "All workers"],
     ["employees", "Workers"],
     ["subagents", "Subagents"],
-    ["cells", "Neural cells"],
+    ["cells", "Helper lanes"],
     ...WORKFORCE_FILTERS.slice(1).map((dept) => [dept.toLowerCase().replace(/\s+/g, "-"), dept]),
     ["approval", "Approval"],
   ];
   el.innerHTML = `
     <section class="workers-hero">
       <div>
-        <p class="worker-kicker">Workforce topology</p>
+        <p class="worker-kicker">Workforce map</p>
         <h3>PhantomForce Workers</h3>
-        <p>Clean parent-worker view. Click a worker to expand mapped helper lanes, neural-cell contracts, and safety rules. Activity is shown only when a real local ledger signal exists.</p>
+        <p>Clean workforce view. Click a worker to see its subagents, helper lanes, and safety rules. Built to scale toward 1,000+ real workers without exposing tool names to clients.</p>
       </div>
       <div class="worker-scale">
-        <span><b>${mappedCount}</b> mapped nodes</span>
+        <span><b>${mappedCount}</b> workers mapped</span>
         <span><b>${ledgerSignalCount}</b> ledger signals</span>
-        <span><b>${parentCount}</b> parent workers</span>
+        <span><b>${parentCount}</b> lead workers</span>
         <span><b>${subagentCount}</b> subagents</span>
-        <span><b>${neuralCellCount}</b> neural cells</span>
+        <span><b>${neuralCellCount}</b> helper lanes</span>
         <span><b>${departmentCount}</b> departments mapped</span>
       </div>
     </section>
     ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount })}
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
     <div class="worker-metrics">
-      <div><span>Mapped Nodes</span><b>${mappedCount}</b></div>
+      <div><span>Workers Mapped</span><b>${mappedCount}</b></div>
       <div><span>Ledger Signals</span><b>${ledgerSignalCount}</b></div>
-      <div><span>Parent Workers</span><b>${parentCount}</b></div>
+      <div><span>Lead Workers</span><b>${parentCount}</b></div>
       <div><span>Subagents</span><b>${subagentCount}</b></div>
-      <div><span>Neural Cells</span><b>${neuralCellCount}</b></div>
+      <div><span>Helper Lanes</span><b>${neuralCellCount}</b></div>
       <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
       <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
       <div><span>Departments Mapped</span><b>${departmentCount}</b></div>
@@ -2192,7 +2192,7 @@ export function missionWidgets() {
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
     { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} nodes`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} cells` : "your support swarm", alert: false },
+    { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
