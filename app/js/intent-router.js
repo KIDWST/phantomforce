@@ -30,6 +30,8 @@ const CURRENT_INFO = /\b(weather|forecast|temperature|rain|snow|humidity|news|he
    or Site Studio action — explicit enable/disable phrasing only. */
 const LOOP_ENABLE = /\b(start|enable|turn on|activate)\s+(phantom\s+loop|loopus|looper)\b|\bphantom\s+loop\s+on\b|\bloop\s+this\s+(through|with)\b|\broute\s+this\s+through\b/i;
 const LOOP_DISABLE = /\b(stop|disable|turn off|deactivate)\s+(phantom\s+loop|loopus|looper)\b|\bphantom\s+loop\s+off\b/i;
+const LOOPER_BUILD = /\b(start\s+(phantom\s+loop|loopus|looper)\s+for\s+.+|build\s+me\s+(a|an)\s+.+|create\s+(a|an)\s+(campaign|intake form|landing page|booking page|website|site|dashboard|portal|funnel)|make\s+(a|an)\s+(intake form|landing page|booking page|website|site|dashboard|portal|funnel)|turn\s+this\s+into\s+a\s+build\s+plan)\b/i;
+const BUILD_TARGET = /\b(landing page|booking page|website|site|campaign|intake form|build plan|dashboard|portal|funnel)\b/i;
 const EXPLICIT_ARTIFACT = /\b(create|draft|build|make|prepare|write|new)\b/i;
 /* Termina (multi-agent command wall) — EXPLICIT phrasing only. A bare mention
    of "termina" in a question stays conversation. */
@@ -70,6 +72,10 @@ function automationDraft(text) {
   };
 }
 
+function loopTargetIsOnlyGreeting(text) {
+  const m = clean(text).match(/\bstart\s+(phantom\s+loop|loopus|looper)\s+for\s+(.+)$/i);
+  return !!(m && GREETING.test(m[2]));
+}
 
 export function classifyPhantomIntent(raw = "") {
   const text = clean(raw);
@@ -83,6 +89,7 @@ export function classifyPhantomIntent(raw = "") {
     shouldCreateAutomation: false,
     shouldEnableLoop: false,
     shouldDisableLoop: false,
+    shouldStartLooper: false,
     shouldOpenTermina: false,
     shouldStartVacationMode: false,
     needsLiveData: false,
@@ -99,8 +106,14 @@ export function classifyPhantomIntent(raw = "") {
   /* Phantom Loop is a chat-routing toggle, checked before greeting/gratitude
      so "turn off phantom loop" isn't swallowed, but it never fires on plain
      conversation — only this exact enable/disable phrasing. */
+  if (LOOPER_BUILD.test(text) && BUILD_TARGET.test(text) && !loopTargetIsOnlyGreeting(text)) {
+    return { ...result, primaryIntent: "looper_build", confidence: 0.91, shouldStartLooper: true, reasonCode: "explicit_looper_build_request" };
+  }
+  if (loopTargetIsOnlyGreeting(text)) {
+    return { ...result, primaryIntent: "greeting", confidence: 0.9, reasonCode: "loop_target_greeting_only" };
+  }
   if (LOOP_ENABLE.test(text)) {
-    return { ...result, primaryIntent: "phantom_loop_on", confidence: 0.95, shouldEnableLoop: true, reasonCode: "explicit_loop_enable" };
+    return { ...result, primaryIntent: "phantom_loop_on", confidence: 0.95, shouldEnableLoop: true, shouldStartLooper: true, reasonCode: "explicit_loop_enable" };
   }
   if (LOOP_DISABLE.test(text)) {
     return { ...result, primaryIntent: "phantom_loop_off", confidence: 0.95, shouldDisableLoop: true, reasonCode: "explicit_loop_disable" };
@@ -281,12 +294,12 @@ const LANE_BY_INTENT = {
   task_candidate: "clarification", automation_candidate: "clarification",
   create_task: "command", memory_update: "command", phantom_loop_on: "command", phantom_loop_off: "command",
   create_automation: "workflow", reminder: "workflow", termina_parallel: "workflow", vacation_mode: "workflow",
-  approval_request: "approval",
+  looper_build: "workflow", approval_request: "approval",
 };
 const AREA_BY_INTENT = {
   create_task: "workers", memory_update: "memory", create_automation: "automations", reminder: "automations",
   termina_parallel: "workers", vacation_mode: "vacation", approval_request: "approvals",
-  phantom_loop_on: "settings", phantom_loop_off: "settings",
+  phantom_loop_on: "settings", phantom_loop_off: "settings", looper_build: "sites",
 };
 /* Only these lanes are allowed to show a card by default — conversation/
    answer/brainstorm/clarification stay text-only unless a specific response

@@ -35,6 +35,19 @@ export const RETAINERS = [
   { id: "operator", name: "Operator", price: 300, blurb: "Upkeep + lead follow-up desk + monthly content drop." },
   { id: "partner", name: "Partner", price: 625, range: "$500–$750", blurb: "Full workforce running weekly: media, pipeline, protection." },
 ];
+export const VACATION_POLICY = {
+  allowDrafting: true,
+  allowTaskCreation: true,
+  allowMediaBriefs: true,
+  allowRendering: false,
+  allowPublishing: false,
+  allowSending: false,
+  allowDeploying: false,
+  allowDeleting: false,
+  requireApprovalForCredits: true,
+  requireApprovalForExternalActions: true,
+  maxRunMinutes: 480,
+};
 export const FINANCE_CATEGORIES = [
   "Sales income",
   "Service income",
@@ -406,6 +419,7 @@ function seed() {
     security: [],
     approvals: [],
     agents: [],
+    vacationRuns: [],
     memory: [],
     toolSpine: TOOL_SPINE,
     activity: [],
@@ -430,6 +444,7 @@ function normalizeData(data) {
   d.security = Array.isArray(d.security) ? d.security : [];
   d.approvals = Array.isArray(d.approvals) ? d.approvals : [];
   d.agents = Array.isArray(d.agents) ? d.agents : [];
+  d.vacationRuns = Array.isArray(d.vacationRuns) ? d.vacationRuns : [];
   d.memory = pruneMemory(Array.isArray(d.memory) ? d.memory : []);
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...((d.toolSpine || []).find((x) => x.id === tool.id) || {}), ...tool }));
   d.activity = Array.isArray(d.activity) ? d.activity : [];

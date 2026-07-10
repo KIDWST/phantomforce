@@ -1,4 +1,4 @@
-/* PhantomForce — the void. Click-first cyber entity you can also speak to. */
+/* PhantomForce — the void. Click-first operator presence you can also speak to. */
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const smallScreen = window.matchMedia("(max-width: 720px)").matches;
@@ -93,34 +93,34 @@ function localReply(text) {
   const s = (text || "").toLowerCase().trim();
   if (/^(hi|hey|hello|yo|sup|howdy|hiya|wassup|good (morning|evening|afternoon))\b/.test(s) || /^(what'?s up|hey phantom|hello phantom)/.test(s))
     return pick([
-      "Hey. I'm PhantomForce — I run the boring half of your business so you don't. What's eating your time?",
-      "Hello. Point me at the chaos — leads, messages, scheduling — and watch it go quiet.",
-      "Hey there. I never sleep, never forget, and I can work by approval or autopilot under your rules. What do you need handled?",
+      "Hey. I'm PhantomForce: an AI-assisted operations crew for leads, follow-up, content, websites, and approvals. What needs attention first?",
+      "Hello. Bring me the messy backend work: leads, messages, scheduling, content, or client follow-up.",
+      "Hey. I prepare the work, you approve the moves, and the business stops leaking time. What are we fixing?",
     ]);
   if (/who are you|what are you|your name|who'?s this|what is this/.test(s))
     return pick([
-      "I'm PhantomForce — a private AI that runs your operations. The operator you couldn't afford to hire.",
-      "PhantomForce. I quietly run the day-to-day of a business — privately, for you alone.",
+      "PhantomForce is AI-assisted operations plus real-world execution: backend workflows, media, sites, follow-up, approvals, and dashboards.",
+      "Think of me as your operator layer: software, agents, ChicagoShots media, and human approval gates working together.",
     ]);
   if (/what can you do|what do you do|how do you (help|work)|capabilit|feature/.test(s))
     return pick([
-      "I chase leads, draft your replies, book the jobs, build proposals, even make content — approval when you want control, autopilot when the rules are clear.",
-      "I handle the flood — messages, follow-ups, scheduling, quotes, content — so you do the work you love.",
+      "Leads, follow-up, booking, quotes, content, websites, client dashboards, approvals, and reporting. AI prepares it; humans approve and execute it.",
+      "Start with an Ops + Content Setup Sprint: clean the workflow, set up capture/follow-up, and build the first useful system.",
     ]);
-  if (/thank|thanks|cheers|appreciate/.test(s)) return "Anytime. And this is just a taste — imagine it running 24/7.";
-  if (/how much|price|cost|pricing|expensive|afford|free/.test(s)) return "Less than the hours you're bleeding. Your operator works out the exact number with you.";
-  if (/real|legit|trust|fake|believe|prove/.test(s)) return "Real, and private. Nothing trains anyone else, and autopilot only runs inside the rules you set.";
-  if (/lead|inquir|prospect|follow.?up|chase/.test(s)) return pick(["Every lead captured, answered, and chased — nothing slips.", "Leads stop falling through. I catch them, reply, and keep following up."]);
-  if (/sched|book|calendar|remind|appoint|reschedul/.test(s)) return pick(["Bookings, reminders, and changes — handled without the back-and-forth.", "Your calendar runs itself. I book, remind, and reshuffle."]);
-  if (/repl|email|message|inbox|comm|\btext\b|\bdm\b|whatsapp|messenger/.test(s)) return pick(["Replies drafted the second they're needed — review them or let approved repeats run.", "I clear the inbox: answers ready for your tap or your autopilot rules."]);
-  if (/quote|invoic|money|\bpay\b|sales|deal|proposal/.test(s)) return pick(["Quotes, proposals, and the money trail — drafted and tracked.", "I turn an inquiry into a quote and chase the payment."]);
-  if (/content|video|post|deck|\bdoc\b|social|website|\bsite\b|reel|tiktok|instagram|image|photo|ad|commercial/.test(s)) return pick(["Images, videos, posts, docs, and ads — generated through gated Media Lab workflows so credits stay protected.", "Yes, PhantomForce can make creative. Public demos stay capped; full image/video generation opens after signup and approval."]);
-  if (/privat|secure|protect|data|risk|malware|phish|threat|hack|scam/.test(s)) return pick(["I watch the risks — scams, leaks, deadlines — and keep it locked inside your business.", "Protection's built in: I flag the scams and threats before they cost you."]);
+  if (/thank|thanks|cheers|appreciate/.test(s)) return "Anytime. This is the public preview; the paid work is scoped, approved, and built around your actual business flow.";
+  if (/how much|price|cost|pricing|expensive|afford|free/.test(s)) return "Most businesses start with a $750 Starter or $1,500 Core Setup Sprint. Bigger workflows move to Pro setup or retainer after scope.";
+  if (/real|legit|trust|fake|believe|prove/.test(s)) return "Real positioning: AI-assisted, human-approved, operator-controlled. Public chat is a demo; client work is scoped before anything runs.";
+  if (/lead|inquir|prospect|follow.?up|chase/.test(s)) return pick(["Every inquiry captured and turned into a clean next step: reply, quote, booking, or approval.", "Leads stop falling through. PhantomForce organizes the response, follow-up, and handoff path."]);
+  if (/sched|book|calendar|remind|appoint|reschedul/.test(s)) return pick(["Booking flows, reminders, and changes get prepared without the back-and-forth.", "We can turn scattered appointment requests into one clean booking and follow-up workflow."]);
+  if (/repl|email|message|inbox|comm|\btext\b|\bdm\b|whatsapp|messenger/.test(s)) return pick(["Replies get drafted the second they're needed. You approve what leaves the business.", "The inbox becomes an approval queue: clear drafts, context, and next actions."]);
+  if (/quote|invoic|money|\bpay\b|sales|deal|proposal/.test(s)) return pick(["Quotes, proposals, status, and payment follow-up get organized into one visible workstream.", "A messy inquiry can become a scoped offer, a draft proposal, and a tracked follow-up."]);
+  if (/content|video|post|deck|\bdoc\b|social|website|\bsite\b|reel|tiktok|instagram|image|photo|ad|commercial/.test(s)) return pick(["ChicagoShots covers the real media layer; PhantomForce plans, organizes, drafts, and routes approvals around the content.", "Creative can run through ChicagoShots, websites/apps, and gated Media Lab generation. Public demos stay capped; client work is approved first."]);
+  if (/privat|secure|protect|data|risk|malware|phish|threat|hack|scam/.test(s)) return pick(["Risk watch is part of operations: scams, leaks, bad links, deadlines, and messy access get flagged before they become expensive.", "Private by design means scoped systems, approval gates, and no public client data in the demo lane."]);
   if (/help|stuck|overwhelm|too much|\bbusy\b|stress|no time|drowning/.test(s)) return pick(["That's exactly what I'm for. Tell me the one thing stealing your hours.", "Breathe. Hand me the part you dread and it's handled."]);
   return pick([
-    "I hear you. Tell me the part of your business that never stops — that's where I start.",
-    "Got it. Point me at the task you keep putting off and watch it disappear.",
-    "Say the thing eating your day — leads, messages, money, content — and I'll take it.",
+    "I hear you. Tell me the part of your business that keeps slipping: leads, follow-up, content, booking, site updates, or approvals.",
+    "Got it. The useful first move is finding the workflow that leaks time or money, then turning it into a repeatable system.",
+    "Say the thing eating your day: leads, messages, money, content, websites, or approvals. That's where PhantomForce starts.",
   ]);
 }
 
@@ -189,17 +189,17 @@ function initConversation() {
   // ---- the power tour: the entity walks through everything it runs, unprompted ----
   // one line per chip, same order as the [data-power] buttons in the HTML
   const powerLines = [
-    "Every new inquiry captured, organized, and answered — nothing slips.",
-    "Replies drafted in your voice, ready for review or approved autopilot.",
-    "Conversations become booked jobs, reminders, and next steps.",
-    "Estimates and invoices prepared, payment follow-up tracked.",
-    "Posts, reels, and campaigns planned, drafted, and packaged.",
-    "Pages, offers, and client updates kept current.",
-    "Old leads and quiet clients get warmed back up.",
-    "Risky items and autopilot boundaries flagged before they cost you.",
+    "Every inquiry captured and turned into a clean next step.",
+    "Follow-up drafted with context, timing, and approval built in.",
+    "Booking flows prepared, confirmed, reminded, and tracked.",
+    "Quotes, proposals, status, and payment follow-up organized.",
+    "Content plans, clips, posts, and visuals coordinated with ChicagoShots and Media Lab support.",
+    "Websites, stores, offers, and client updates kept current.",
+    "Approvals stay human: drafts, checks, and next actions before anything goes out.",
+    "Risky access, scams, deadlines, and automation boundaries flagged early.",
   ];
   // after a full lap, the coda: every chip lit at once, the ask made plainly
-  const codaLine = "Run it yourself, or take the vacation while your agents keep working.";
+  const codaLine = "Start with an Ops + Content Setup Sprint.";
   /* each chip topic gets a stance that MEANS it — same order as the chips */
   const POWER_POSES = ["point", "chin", "present", "assert", "conjure", "welcome", "coy", "cross"];
   const TOUR_STEP_MS = 9000, TOUR_CODA_MS = 12000, TOUR_BOOT_MS = 6000, TOUR_RESUME_MS = 30000;
@@ -278,7 +278,7 @@ function initConversation() {
       if (downloadStatus) {
         downloadStatus.hidden = false;
         downloadStatus.className = "download-status err";
-        downloadStatus.textContent = "Enter your name to unlock the download.";
+        downloadStatus.textContent = "Enter your name to start the setup/demo path.";
       }
       downloadName?.focus();
       return;
@@ -287,7 +287,7 @@ function initConversation() {
       if (downloadStatus) {
         downloadStatus.hidden = false;
         downloadStatus.className = "download-status err";
-        downloadStatus.textContent = "Enter a valid email so I can send your download.";
+        downloadStatus.textContent = "Enter a valid email so I can send the setup/demo link.";
       }
       downloadEmail?.focus();
       return;
@@ -297,7 +297,7 @@ function initConversation() {
     if (downloadStatus) {
       downloadStatus.hidden = false;
       downloadStatus.className = "download-status";
-      downloadStatus.textContent = "Sending your PhantomForce download link...";
+      downloadStatus.textContent = "Sending your PhantomForce setup/demo link...";
     }
     registerForDemo(name, email).then((ok) => {
       // the highest-emotion moment on the page gets a real reaction
@@ -307,7 +307,7 @@ function initConversation() {
       downloadStatus.hidden = false;
       downloadStatus.className = `download-status ${ok ? "ok" : "err"}`;
       downloadStatus.textContent = ok
-        ? "Check your email — your PhantomForce download is on its way."
+        ? "Check your email — your PhantomForce setup/demo link is on its way."
         : "Couldn't reach me just now. Try again in a moment.";
       if (ok) downloadForm.classList.add("sent");
     }).finally(() => {
@@ -356,7 +356,7 @@ function initConversation() {
         // live brain enforces its own per-day cap
         if (ai && ai.limited) {
           deliver(() => {
-            speak(ai.message || "That's your free questions for now — download PhantomForce to go deeper.");
+            speak(ai.message || "That's your free questions for now — start with PhantomForce to go deeper.");
             showDownload();
           });
           return;
@@ -373,7 +373,7 @@ function initConversation() {
         // free local responder: reactive, then capped to pull them in
         deliver(() => {
           if (typed > FREE_LIMIT) {
-            speak("That's a taste. The full version runs 24/7, privately, for your whole business — download PhantomForce to go deeper.");
+            speak("That's a taste. A setup sprint turns this into a real operating workflow for your business — start with PhantomForce to go deeper.");
             showDownload();
           } else {
             speak(localReply(v));
@@ -386,7 +386,7 @@ function initConversation() {
   // boot: the entity wakes, GREETS you (warm, not a sales face), then tours
   say.replaceChildren();
   window.setTimeout(() => {
-    speak("Every lead captured. Every reply handled. Every job moving.");
+    speak("AI-assisted operations, media, and backend execution for small business.");
     setCharMood("talking", "content", 4200, "welcome");   // a greeting is warmth — override the boast routing
     scheduleTour(TOUR_BOOT_MS);
   }, 650);

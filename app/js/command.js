@@ -8,7 +8,7 @@
 
 import {
   store, uid, visible, currentWs, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
-  PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
+  PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig,
 } from "./store.js?v=phantom-live-20260710-146";
@@ -280,6 +280,81 @@ function createAutomation(subject, raw) {
   return a;
 }
 
+function createLooperPlan(raw) {
+  const cleaned = String(raw || "New build packet")
+    .replace(/\b(start\s+(phantom\s+loop|loopus|looper)\s+for|build\s+me|create|make|turn\s+this\s+into)\b/gi, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  const plan = {
+    id: uid("loop"),
+    ws,
+    title: title(cleaned || "Guarded build packet").slice(0, 90),
+    request: String(raw || "").slice(0, 300),
+    status: "draft",
+    safety: "No render, publish, or send. External actions require approval.",
+    steps: [
+      "Clarify the business outcome and target user.",
+      "Create a local draft or implementation plan.",
+      "Verify locally before any public action.",
+      "Queue publish/send/deploy/spend decisions for approval.",
+    ],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  store.state.looperPlans = Array.isArray(store.state.looperPlans) ? store.state.looperPlans : [];
+  store.state.looperPlans.unshift(plan);
+  pushActivity("Phantom Loop", `drafted guarded build packet: ${plan.title}.`, ws);
+  store.save();
+  return plan;
+}
+
+function createVacationModeRun(raw) {
+  const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  const run = {
+    id: uid("vac"),
+    ws,
+    title: "Vacation Mode coverage run",
+    request: String(raw || "").slice(0, 300),
+    status: "approval_required",
+    policy: { ...VACATION_POLICY },
+    blockedActions: ["render", "publish", "send", "deploy", "spend", "delete", "external"],
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const agent = {
+    id: uid("agt"),
+    ws,
+    kind: "vacation-run",
+    name: "Vacation Mode Coverage",
+    mission: "Draft, plan, organize, prepare, summarize, and queue approvals while the owner is away.",
+    status: "approval_required",
+    allowedDuringVacation: true,
+    requiresApprovalDuringVacation: true,
+    ref: run.id,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+  const approval = {
+    id: uid("app"),
+    ws,
+    type: "vacation-mode",
+    title: "Approve Vacation Mode coverage",
+    detail: "Local coverage run prepared. External actions and credits remain blocked until explicit approval.",
+    ref: run.id,
+    status: "pending",
+    requestedBy: "Phantom AI",
+    at: new Date().toISOString(),
+  };
+  store.state.vacationRuns = Array.isArray(store.state.vacationRuns) ? store.state.vacationRuns : [];
+  store.state.vacationRuns.unshift(run);
+  store.state.agents.unshift(agent);
+  store.state.approvals.unshift(approval);
+  pushActivity("Vacation Mode", "prepared an approval-gated coverage run.", ws);
+  store.save();
+  return run;
+}
+
 function approvalCount() {
   return visible(store.state.approvals).filter((a) => a.status === "pending").length;
 }
@@ -412,7 +487,7 @@ function intentResponse(intent, text, settings = null) {
     /* a greeting is a greeting — no status dump, no task, no cards */
     return {
       say: isAdmin()
-        ? "I'm online. What are we doing — building, posting, editing, automating, or checking the business?"
+        ? "I'm online. What are we working on — building, posting, editing, automating, or checking the business?"
         : "I'm online. Tell me what you want to build, fix, post, automate, or check.",
       cards: [],
       open: null,
@@ -468,6 +543,21 @@ function intentResponse(intent, text, settings = null) {
       open: null,
     };
   }
+  if (intent.primaryIntent === "looper_build") {
+    if (!isAdmin()) {
+      return {
+        say: "Phantom Loop build packets are admin-only. Nothing launched, no task was created, and no external action ran.",
+        cards: [],
+        open: null,
+      };
+    }
+    const plan = createLooperPlan(text);
+    return {
+      say: `Looper draft created: "${plan.title}". No render, publish, or send. This is a guarded local build packet waiting for owner review.`,
+      cards: [card("Looper draft", plan.title, plan.safety, [openAction("Open build plans", "sites"), openAction("Review approvals", "approvals")], "Draft only")],
+      open: null,
+    };
+  }
   if (intent.primaryIntent === "task_candidate") {
     return {
       say: "I can make that a task, turn it into a plan, or just talk it through. What do you want?",
@@ -492,13 +582,13 @@ function intentResponse(intent, text, settings = null) {
   if (intent.primaryIntent === "vacation_mode") {
     /* Vacation Mode is a separate system from Automation — it is real,
        backend-tracked away-coverage (vacation.js, /api/vacation-mode/*),
-       not a chat-fabricated automation record. Chat never arms it directly;
-       it hands off to the real Vacation Mode page where activation, mode,
-       and permissions are actually set. */
+       not a chat-fabricated automation record. Chat can prepare a local
+       approval-gated coverage run, but it never starts external work. */
     if (intent.shouldStartVacationMode) {
+      const run = createVacationModeRun(text);
       return {
-        say: "Vacation Mode is a separate system from your automations — I can't turn it on from chat, but I'll take you to the Vacation Mode page to switch on away-coverage. Your normal automations stay exactly as they are either way.",
-        cards: [card("Vacation Mode", "Head to the Vacation Mode page", "Away-coverage runs under its own permissions and approval rules. It can use your existing automations, but turning it on or off never changes whether those automations are active.", [openAction("Open Vacation Mode", "vacation")], "Not started here")],
+        say: `Vacation Mode run armed as approval-gated draft "${run.title}". Allowed: draft, plan, organize, prepare, summarize, and report. Blocked until approval: render, publish, send, deploy, spend, delete, and external actions.`,
+        cards: [card("Vacation Mode — approval required", run.title, "A local coverage run was prepared and placed in the Approval Queue. No external action started.", [openAction("Open Vacation Mode", "vacation"), openAction("Review approval", "approvals")], "Approval-gated")],
         open: "vacation",
       };
     }
