@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-144";
+} from "./store.js?v=phantom-live-20260710-145";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1021,7 +1021,10 @@ function renderMoney(el, rerender) {
     button.onclick = (event) => {
       event.preventDefault();
       event.stopPropagation();
-      finance.transactions = finance.transactions.filter((tx) => tx.id !== button.dataset.id);
+      const id = event.currentTarget?.dataset?.id || button.getAttribute("data-id") || "";
+      const financeState = store.state.finance || finance;
+      financeState.transactions = (financeState.transactions || []).filter((tx) => String(tx.id) !== id);
+      store.state.finance = financeState;
       store.save();
       rerender();
     };
