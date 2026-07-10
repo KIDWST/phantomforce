@@ -1,7 +1,11 @@
 const DESKTOP_PROTOCOL = "phantomforce.hermes.extension.v1";
 const BRIDGE_TIMEOUT_MS = 1800;
 const REFRESH_MS = 15000;
-const RESPONSE_TYPES = new Set(["PF_HERMES_DESKTOP_CONTEXT_RESULT", "PF_HERMES_FOCUS_TAB_RESULT"]);
+const RESPONSE_TYPES = new Set([
+  "PF_HERMES_DESKTOP_CONTEXT_RESULT",
+  "PF_HERMES_FOCUS_TAB_RESULT",
+  "PF_HERMES_MEDIA_CONTROL_RESULT",
+]);
 
 let listenerReady = false;
 let requestSeq = 0;
@@ -70,6 +74,23 @@ function focusDesktopTab(tabId) {
   return bridgeRequest("PF_HERMES_FOCUS_TAB_REQUEST", { tabId });
 }
 
+function mediaControl(tabId, command) {
+  return bridgeRequest("PF_HERMES_MEDIA_CONTROL_REQUEST", { tabId, command });
+}
+
+function compactTitle(value = "") {
+  return String(value || "Media").replace(/\s+[-|•]\s+(YouTube|Spotify|Netflix|SoundCloud|Twitch|Vimeo|Apple Music).*$/i, "").trim() || "Media";
+}
+
+function mediaInitial(tab = {}) {
+  const source = tab.app || hostOf(tab.url) || tab.title || "M";
+  return String(source).trim().charAt(0).toUpperCase() || "M";
+}
+
+function thumbnailUrl(tab = {}) {
+  return tab.thumbnail || tab.thumbnailUrl || tab.artwork || tab.favIconUrl || tab.icon || "";
+}
+
 function renderPill(label, isOn = false) {
   return `<span class="dc-pill${isOn ? " is-on" : ""}">${esc(label)}</span>`;
 }
@@ -95,7 +116,41 @@ function renderTab(tab = {}, { primary = false } = {}) {
     </div>`;
 }
 
+function renderThumb(tab = {}) {
+  const url = thumbnailUrl(tab);
+  if (url) {
+    return `<button class="dc-mini-thumb" type="button" data-dc-focus="${esc(tab.id || "")}" title="Open media tab"><img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer"/></button>`;
+  }
+  return `<button class="dc-mini-thumb" type="button" data-dc-focus="${esc(tab.id || "")}" title="Open media tab"><span>${esc(mediaInitial(tab))}</span></button>`;
+}
+
+function renderMiniRoot(root, state) {
+  const mediaTabs = Array.isArray(state.mediaTabs) ? state.mediaTabs : [];
+  const active = state.activeMedia || mediaTabs[0] || null;
+  const status = state.loading ? "checking" : state.ok ? (active ? (active.audible ? "playing" : "ready") : "idle") : "waiting";
+  const hasTab = Boolean(active?.id);
+  root.innerHTML = `
+    <div class="dc-mini-shell" data-dc-mini-shell>
+      ${hasTab ? renderThumb(active) : `<button class="dc-mini-thumb is-empty" type="button" data-dc-refresh title="Find media"><span>♪</span></button>`}
+      <div class="dc-mini-copy">
+        <span><i class="dc-dot${state.ok ? " is-on" : ""}"></i> Media bridge · ${esc(status)}</span>
+        <b title="${esc(active?.title || "No media detected")}">${esc(active ? compactTitle(active.title) : "No media playing")}</b>
+      </div>
+      <div class="dc-mini-controls" aria-label="Media controls">
+        <button type="button" data-dc-control="previous" ${hasTab ? "" : "disabled"} title="Previous">‹</button>
+        <button class="is-main" type="button" data-dc-control="play-pause" ${hasTab ? "" : "disabled"} title="Play or pause">${active?.audible ? "Ⅱ" : "▶"}</button>
+        <button type="button" data-dc-control="next" ${hasTab ? "" : "disabled"} title="Next">›</button>
+        <button type="button" data-dc-refresh title="Refresh">↻</button>
+      </div>
+    </div>`;
+}
+
 function renderRoot(root, state) {
+  const compact = root.dataset.dcLayout === "mini" || root.classList.contains("desktop-context-top");
+  if (compact) {
+    renderMiniRoot(root, state);
+    return;
+  }
   const mediaTabs = Array.isArray(state.mediaTabs) ? state.mediaTabs : [];
   const active = state.activeMedia || mediaTabs[0] || null;
   const status = state.loading ? "scanning" : state.ok ? `${mediaTabs.length} found` : "bridge waiting";
@@ -155,10 +210,41 @@ export function mountDesktopContextWidget(root, opts = {}) {
     const focusButton = event.target.closest?.("[data-dc-focus]");
     if (focusButton) {
       const tabId = focusButton.getAttribute("data-dc-focus");
-      focusButton.textContent = "...";
+      if (!tabId) return;
+      const isThumb = focusButton.classList.contains("dc-mini-thumb");
+      const previous = focusButton.textContent;
+      if (!isThumb) focusButton.textContent = "...";
+      else focusButton.classList.add("is-working");
       const response = await focusDesktopTab(tabId);
-      focusButton.textContent = response?.ok ? "Opened" : "Open";
-      setTimeout(() => { focusButton.textContent = "Open"; }, 1200);
+      if (!isThumb) {
+        focusButton.textContent = response?.ok ? "Opened" : "Open";
+        setTimeout(() => { focusButton.textContent = "Open"; }, 1200);
+      } else {
+        focusButton.classList.remove("is-working");
+        focusButton.title = response?.ok ? "Opened media tab" : "Open media tab";
+      }
+      return;
+    }
+    const controlButton = event.target.closest?.("[data-dc-control]");
+    if (controlButton) {
+      const command = controlButton.getAttribute("data-dc-control");
+      const state = root.__pfDesktopContextState || {};
+      const active = state.activeMedia || (Array.isArray(state.mediaTabs) ? state.mediaTabs[0] : null);
+      if (!active?.id || !command) return;
+      const previous = controlButton.textContent;
+      controlButton.textContent = "…";
+      controlButton.disabled = true;
+      const response = await mediaControl(active.id, command);
+      controlButton.textContent = response?.ok ? "✓" : previous;
+      controlButton.disabled = false;
+      if (!response?.ok) {
+        controlButton.title = "Media control bridge needs the extension update";
+        opts.notify?.("Media Bridge", "Media control command was sent, but the desktop bridge did not confirm it yet.");
+      }
+      setTimeout(() => {
+        controlButton.textContent = previous;
+        refreshDesktopContext(root, opts);
+      }, 900);
     }
   });
   refreshDesktopContext(root, opts);

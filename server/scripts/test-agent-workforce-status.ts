@@ -32,11 +32,25 @@ type AdminAgentStatusResponse = {
       tasks_in_window: number;
       tokens_in_window: number;
       active_workers: number;
+      runtime_active_workers: number;
       parent_workers: number;
       total_workers: number;
       subagents_mapped: number;
       total_worker_nodes: number;
+      total_mapped_nodes: number;
+      executable_nodes: number;
+      runtime_executable_actions: number;
+      routable_nodes: number;
+      active_runtime_instances: number;
+      curated_subagent_definitions: number;
+      generated_subagent_instances: number;
       neural_cells_mapped: number;
+      generated_neural_cell_instances: number;
+      automation_job_definitions: number;
+      template_definitions: number;
+      template_generated_nodes: number;
+      generated_nodes_independently_executable: false;
+      truth_label: string;
       tool_count: number;
     };
     workers: Array<{
@@ -52,6 +66,38 @@ type AdminAgentStatusResponse = {
       name: string;
       tasks_last_24h: number;
       tokens_last_24h: number;
+      backing_type: string;
+      runtime_role: string;
+      executable: boolean;
+      routable: boolean;
+      template_generated: boolean;
+      independent_runtime: boolean;
+      metric_source: string;
+      contract: {
+        responsibility: string;
+        inputs: string[];
+        outputs: string[];
+        upstream: string[];
+        downstream: string[];
+        permissionBoundary: string;
+        failureBehavior: string;
+        observability: string;
+        value: string;
+      };
+    }>;
+    node_truth: {
+      total_mapped_nodes: number;
+      executable_nodes: number;
+      runtime_executable_actions: number;
+      active_runtime_instances: number;
+      template_generated_nodes: number;
+      generated_nodes_independently_executable: false;
+      label: string;
+    };
+    request_traces: Array<{
+      id: string;
+      entry_point: string;
+      audit_result: string;
     }>;
     assignments: Array<{
       id: string;
@@ -135,7 +181,43 @@ try {
   assert(adminBody.workforce.summary.total_workers >= 8, "Admin should see the worker map.");
   assert(adminBody.workforce.summary.subagents_mapped >= 1000, "Admin should see the 1000+ subagent and neural-cell map.");
   assert(adminBody.workforce.summary.total_worker_nodes >= 1000, "Admin should see the 1000+ worker-node swarm.");
+  assert(
+    adminBody.workforce.summary.total_mapped_nodes === adminBody.workforce.summary.total_worker_nodes,
+    "Mapped nodes should be explicitly separated from runtime execution.",
+  );
   assert(adminBody.workforce.summary.neural_cells_mapped >= 900, "Admin should see the neural-cell layer.");
+  assert(adminBody.workforce.summary.generated_neural_cell_instances === adminBody.workforce.summary.neural_cells_mapped, "Neural cell count should be labeled as generated instances.");
+  assert(adminBody.workforce.summary.generated_nodes_independently_executable === false, "Generated nodes must not claim independent execution.");
+  assert(adminBody.workforce.summary.runtime_executable_actions >= 1, "Executable surface should be counted as safe actions, not generated cells.");
+  assert(adminBody.workforce.node_truth.total_mapped_nodes === adminBody.workforce.summary.total_mapped_nodes, "Node truth should mirror mapped topology count.");
+  assert(adminBody.workforce.node_truth.generated_nodes_independently_executable === false, "Node truth should say generated nodes are not independent executables.");
+  assert(adminBody.workforce.node_truth.label.includes("Mapped workforce topology"), "Node truth should include a direct truth label.");
+  const allNodeIds = [
+    ...adminBody.workforce.workers.map((worker) => worker.id),
+    ...adminBody.workforce.subagents.map((subagent) => subagent.id),
+  ];
+  assert(new Set(allNodeIds).size === allNodeIds.length, "No duplicate workforce node identities should exist.");
+  assert(
+    adminBody.workforce.subagents.every((subagent) => subagent.contract?.responsibility && subagent.contract.inputs.length && subagent.contract.outputs.length),
+    "Every subagent/cell node should expose a purpose/input/output contract.",
+  );
+  assert(
+    adminBody.workforce.subagents
+      .filter((subagent) => subagent.backing_type === "template_generated_neural_cell")
+      .every((subagent) => subagent.executable === false && subagent.independent_runtime === false && subagent.tasks_last_24h === 0 && subagent.tokens_last_24h === 0),
+    "Template-generated neural cells must be labeled as non-executable and must not inherit fake metrics.",
+  );
+  assert(
+    adminBody.workforce.subagents
+      .filter((subagent) => subagent.backing_type === "template_generated_subagent")
+      .every((subagent) => subagent.independent_runtime === false && subagent.metric_source.includes("definition/topology")),
+    "Template-generated subagents must be topology/contracts unless real activity exists.",
+  );
+  assert(adminBody.workforce.request_traces.length >= 7, "Reality audit should expose representative request traces.");
+  assert(
+    adminBody.workforce.request_traces.some((trace) => trace.id === "casual-chat" && trace.audit_result.includes("No generated subagent")),
+    "Casual chat trace should prove it does not create worker activity.",
+  );
   assert(adminBody.workforce.workers.some((worker) => worker.id === "gatekeeper"), "Gatekeeper should exist.");
   assert(adminBody.workforce.workers.every((worker) => typeof worker.tokens_last_24h === "number"), "Workers should expose token usage.");
   assert(adminBody.workforce.tool_stack.some((tool) => tool.id === "n8n"), "Tool stack should include n8n.");
@@ -192,6 +274,7 @@ try {
   assert(!("tool_stack" in clientBody.workforce), "Client workforce should not include tool stack records.");
   assert(!clientPayload.includes("tokens_last_24h"), "Client payload must not include per-agent token usage.");
   assert(!clientPayload.includes('"tool_stack":'), "Client payload must not include tool stack records.");
+  assert(!/workers active/i.test(clientBody.workforce.summary.label), "Client label must not imply live workers without ledger proof.");
 
   const actions = await app.inject({
     method: "GET",
@@ -262,6 +345,9 @@ try {
         clientStatus: clientStatus.statusCode,
         totalWorkers: adminBody.workforce.summary.total_workers,
         totalWorkerNodes: adminBody.workforce.summary.total_worker_nodes,
+        mappedNodes: adminBody.workforce.summary.total_mapped_nodes,
+        executableActions: adminBody.workforce.summary.runtime_executable_actions,
+        activeRuntimeInstances: adminBody.workforce.summary.active_runtime_instances,
         activeWorkers: adminBody.workforce.summary.active_workers,
         subagentsMapped: adminBody.workforce.summary.subagents_mapped,
         neuralCellsMapped: adminBody.workforce.summary.neural_cells_mapped,

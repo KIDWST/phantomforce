@@ -3,6 +3,7 @@ import { getHermesLedgerStatus, readHermesLedgerRecords } from "./hermes-ledger.
 import { inspectInternalHarnessReadiness } from "./internal-harness-router.js";
 import { buildToolLanePreview, loadToolRegistry } from "./tool-lane.js";
 import { getAutomationJobDefinitions } from "./automation-engine.js";
+import { getAgentActionDefinitions } from "./agent-actions.js";
 
 const DEFAULT_WINDOW_HOURS = 24;
 
@@ -147,21 +148,48 @@ type SubagentDefinition = {
   rootParent?: string;
   layer?: string;
   taskMatch?: RegExp;
+  backingType?: WorkforceBackingType;
+};
+
+type WorkforceBackingType =
+  | "parent_worker_definition"
+  | "curated_subagent_definition"
+  | "template_generated_subagent"
+  | "template_generated_neural_cell"
+  | "automation_job_definition";
+
+type WorkforceRuntimeRole =
+  | "ledger_observed_worker"
+  | "safe_action_runner"
+  | "routable_capability"
+  | "mapped_capability"
+  | "processing_contract";
+
+type WorkforceNodeContract = {
+  responsibility: string;
+  inputs: string[];
+  outputs: string[];
+  upstream: string[];
+  downstream: string[];
+  permissionBoundary: string;
+  failureBehavior: string;
+  observability: string;
+  value: string;
 };
 
 const curatedSubagentDefinitions: SubagentDefinition[] = [
-  { id: "atlas", name: "Atlas", parent: "PhantomAI", specialty: "Breaks vague asks into execution paths." },
-  { id: "forge", name: "Forge", parent: "Builder", specialty: "Prepares local code and UI changes." },
-  { id: "scribe", name: "Scribe", parent: "Hermes", specialty: "Condenses context, receipts, and summaries." },
-  { id: "lens", name: "Lens", parent: "Reviewer", specialty: "Inspects UI, copy, and truth claims." },
-  { id: "relay", name: "Relay", parent: "Gatekeeper", specialty: "Maps n8n/Pangolin/tool-lane readiness." },
-  { id: "closer", name: "Closer", parent: "Scout", specialty: "Turns leads into quote/follow-up moves." },
-  { id: "warden", name: "Warden", parent: "Sentinel", specialty: "Flags secrets, suspicious scripts, and risky uploads." },
-  { id: "frame", name: "Frame", parent: "CutLab", specialty: "Keeps video/content workflow proof organized." },
-  { id: "spec", name: "Spec", parent: "Builder", specialty: "OpenSpec-style acceptance and implementation boundaries." },
-  { id: "standard", name: "Standard", parent: "PhantomAI", specialty: "PhantomOps-style working standards and handoffs." },
-  { id: "map", name: "Map", parent: "Builder", specialty: "Serena-style code navigation profile." },
-  { id: "swarm", name: "Swarm", parent: "Reviewer", specialty: "Ruflo-style squad planning vocabulary, quarantined." },
+  { id: "atlas", name: "Atlas", parent: "PhantomAI", specialty: "Breaks vague asks into execution paths.", backingType: "curated_subagent_definition" },
+  { id: "forge", name: "Forge", parent: "Builder", specialty: "Prepares local code and UI changes.", backingType: "curated_subagent_definition" },
+  { id: "scribe", name: "Scribe", parent: "Hermes", specialty: "Condenses context, receipts, and summaries.", backingType: "curated_subagent_definition" },
+  { id: "lens", name: "Lens", parent: "Reviewer", specialty: "Inspects UI, copy, and truth claims.", backingType: "curated_subagent_definition" },
+  { id: "relay", name: "Relay", parent: "Gatekeeper", specialty: "Maps n8n/Pangolin/tool-lane readiness.", backingType: "curated_subagent_definition" },
+  { id: "closer", name: "Closer", parent: "Scout", specialty: "Turns leads into quote/follow-up moves.", backingType: "curated_subagent_definition" },
+  { id: "warden", name: "Warden", parent: "Sentinel", specialty: "Flags secrets, suspicious scripts, and risky uploads.", backingType: "curated_subagent_definition" },
+  { id: "frame", name: "Frame", parent: "CutLab", specialty: "Keeps video/content workflow proof organized.", backingType: "curated_subagent_definition" },
+  { id: "spec", name: "Spec", parent: "Builder", specialty: "OpenSpec-style acceptance and implementation boundaries.", backingType: "curated_subagent_definition" },
+  { id: "standard", name: "Standard", parent: "PhantomAI", specialty: "PhantomOps-style working standards and handoffs.", backingType: "curated_subagent_definition" },
+  { id: "map", name: "Map", parent: "Builder", specialty: "Serena-style code navigation profile.", backingType: "curated_subagent_definition" },
+  { id: "swarm", name: "Swarm", parent: "Reviewer", specialty: "Ruflo-style squad planning vocabulary, quarantined.", backingType: "curated_subagent_definition" },
 ];
 
 const swarmSubagentTemplates = [
@@ -219,6 +247,7 @@ const generatedSwarmSubagentDefinitions: SubagentDefinition[] = workerDefinition
     parent: worker.name,
     rootParent: worker.name,
     specialty: template.specialty,
+    backingType: "template_generated_subagent",
   })),
 );
 
@@ -243,6 +272,7 @@ const generatedNeuralCellDefinitions: SubagentDefinition[] = generatedSwarmSubag
     rootParent: subagent.rootParent,
     layer: template.layer,
     specialty: template.specialty,
+    backingType: "template_generated_neural_cell",
   })),
 );
 
@@ -258,6 +288,7 @@ const automationSubagentDefinitions: SubagentDefinition[] = getAutomationJobDefi
   parent: AUTOPILOT_PARENT_NAME[job.category] ?? "PhantomAI",
   specialty: `${job.description} (runs ${job.cadence}).`,
   taskMatch: new RegExp(`^automation:${job.category}:${job.id}$`),
+  backingType: "automation_job_definition",
 }));
 
 const subagentDefinitions: SubagentDefinition[] = [
@@ -266,6 +297,221 @@ const subagentDefinitions: SubagentDefinition[] = [
   ...generatedNeuralCellDefinitions,
   ...automationSubagentDefinitions,
 ];
+
+const subagentTemplateContracts: Record<string, WorkforceNodeContract> = {
+  signal: {
+    responsibility: "Detect useful routing signals, gaps, and urgency before work is drafted.",
+    inputs: ["current request", "surface/module", "recent ledger summaries"],
+    outputs: ["route hints", "missing-context notes", "priority cues"],
+    upstream: ["PhantomAI", "Hermes ledger", "context composer"],
+    downstream: ["Plan", "Draft", "parent worker"],
+    permissionBoundary: "Read-only. Cannot execute outside-world actions.",
+    failureBehavior: "If no signal is available, the parent worker continues with normal routing.",
+    observability: "Visible through generated topology and parent ledger activity.",
+    value: "Reduces repeated intake work and keeps routing consistent.",
+  },
+  draft: {
+    responsibility: "Prepare first-pass copy, plan structure, checklist, or owner-ready packet.",
+    inputs: ["route hints", "selected worker lane", "relevant memory/context"],
+    outputs: ["draft artifact", "questions", "approval candidate"],
+    upstream: ["Signal", "Plan", "parent worker"],
+    downstream: ["QA", "Guard", "Review/Approvals"],
+    permissionBoundary: "Draft-only. No send, post, upload, deploy, charge, or workflow execution.",
+    failureBehavior: "Return a clarification request or blocked draft instead of executing.",
+    observability: "Drafts become UI records, approval previews, or ledger events only when a real route creates them.",
+    value: "Turns intent into a concrete artifact for the owner to inspect.",
+  },
+  qa: {
+    responsibility: "Check drafts for missing context, bad claims, unclear language, and approval risk.",
+    inputs: ["draft artifact", "rules", "brand/context memory"],
+    outputs: ["review notes", "risk flags", "needs-change signal"],
+    upstream: ["Draft", "Memory Cell", "Guard Cell"],
+    downstream: ["Proof", "Review queue", "parent worker"],
+    permissionBoundary: "Review-only. Cannot approve or execute.",
+    failureBehavior: "Marks the artifact as needs-review rather than passing it as complete.",
+    observability: "Appears as review status or approval-gated feedback when the route has a real artifact.",
+    value: "Improves quality before work reaches the owner or client-facing surface.",
+  },
+  relay: {
+    responsibility: "Move context between lanes without losing request identity or approval state.",
+    inputs: ["route decision", "request id", "artifact metadata"],
+    outputs: ["handoff target", "status update"],
+    upstream: ["Route Cell", "parent worker"],
+    downstream: ["workspace module", "approval queue", "next worker"],
+    permissionBoundary: "Handoff-only. Does not start n8n or external workflows.",
+    failureBehavior: "Keeps the item in the current workspace with a blocked/missing-integration note.",
+    observability: "Handoffs are visible through module records, approval previews, or ledger events.",
+    value: "Prevents conflicting ownership and duplicate work.",
+  },
+  ledger: {
+    responsibility: "Record what happened, what changed, and what remains blocked or pending.",
+    inputs: ["route result", "worker result", "approval status"],
+    outputs: ["receipt summary", "memory candidate", "proof pointer"],
+    upstream: ["Proof", "parent worker", "approval queue"],
+    downstream: ["Hermes ledger", "Brain memory/context"],
+    permissionBoundary: "Metadata-only. No secrets, credentials, cookies, or private payload dumps.",
+    failureBehavior: "Return a missing-proof state; never claim completion without a receipt.",
+    observability: "Backed by Hermes/Brain event counts and recent ledger rows.",
+    value: "Gives future workers proof and context so they do not rediscover the same facts.",
+  },
+  research: {
+    responsibility: "Collect safe local context, known facts, and previous receipts before drafting.",
+    inputs: ["request terms", "memory vault", "ledger", "connected local status"],
+    outputs: ["verified context notes", "source hints", "unknowns"],
+    upstream: ["PhantomAI", "Hermes", "Memory Cell"],
+    downstream: ["Plan", "Draft", "Verify Cell"],
+    permissionBoundary: "Local/read-only unless a separate approved research lane exists.",
+    failureBehavior: "Labels missing sources instead of inventing facts.",
+    observability: "Shown as context/debug reasons in Brain preview or route metadata.",
+    value: "Improves accuracy and avoids repeated setup questions.",
+  },
+  plan: {
+    responsibility: "Sequence the work into safe steps and identify what needs approval.",
+    inputs: ["intent", "research notes", "permission mode", "available tools"],
+    outputs: ["step plan", "risk split", "required handoffs"],
+    upstream: ["Signal", "Research", "Guard Cell"],
+    downstream: ["Draft", "Relay", "Approval queue"],
+    permissionBoundary: "Plan-only; cannot execute planned steps.",
+    failureBehavior: "Returns a blocked dependency or clarification instead of proceeding silently.",
+    observability: "Plans are visible as draft packets, approval previews, or Brain context reasons.",
+    value: "Makes complex work safer and easier for downstream workers.",
+  },
+  proof: {
+    responsibility: "Attach evidence, receipt pointers, and validation notes to completed or blocked work.",
+    inputs: ["worker output", "validation result", "tool health", "ledger metadata"],
+    outputs: ["proof record", "completion/blocked reason"],
+    upstream: ["QA", "Verify Cell", "Health Cell"],
+    downstream: ["Ledger", "owner-facing status"],
+    permissionBoundary: "Proof-only; cannot mark live external work complete without transport proof.",
+    failureBehavior: "Keeps work in preview/blocked state when proof is missing.",
+    observability: "Proof appears in ledger summaries or status cards.",
+    value: "Prevents fake success states and makes outcomes auditable.",
+  },
+  feedback: {
+    responsibility: "Convert explicit corrections and outcomes into low-risk future routing hints.",
+    inputs: ["owner correction", "approval/rejection outcome", "useful/not-useful signal"],
+    outputs: ["memory suggestion", "profile hint", "avoidance note"],
+    upstream: ["owner feedback", "Approval queue", "Brain memory"],
+    downstream: ["Context composer", "Memory vault"],
+    permissionBoundary: "No sensitive profiling; no secret storage; owner can forget/edit memory.",
+    failureBehavior: "Stores only low-confidence suggestions unless explicitly remembered.",
+    observability: "Visible in Brain recent learnings and memory vault.",
+    value: "Helps Phantom stop repeating known mistakes.",
+  },
+};
+
+const neuralCellContracts: Record<string, WorkforceNodeContract> = {
+  intake: {
+    responsibility: "Classify the request and tag the business lane.",
+    inputs: ["current message", "surface/module", "session role"],
+    outputs: ["intent label", "lane tags", "missing context"],
+    upstream: ["PhantomAI chat/router"],
+    downstream: ["Signal", "Route Cell"],
+    permissionBoundary: "Classification only; no side effects.",
+    failureBehavior: "Falls back to conversational clarification.",
+    observability: "Context preview and route debug reasons.",
+    value: "Keeps casual chat separate from work creation.",
+  },
+  memory: {
+    responsibility: "Attach relevant memory and previous receipts selectively.",
+    inputs: ["intent", "memory vault", "Hermes ledger"],
+    outputs: ["compact context", "memory reasons"],
+    upstream: ["Brain memory", "Hermes"],
+    downstream: ["Research", "Draft", "Verify"],
+    permissionBoundary: "Tenant/session scoped; no secrets.",
+    failureBehavior: "Continues with no-memory context and labels the absence.",
+    observability: "Brain context preview shows selected memories.",
+    value: "Prevents repeated rediscovery and keeps work personalized.",
+  },
+  rank: {
+    responsibility: "Score urgency, value, risk, and next-best action.",
+    inputs: ["intent", "memory/context", "approval state"],
+    outputs: ["priority score", "risk level", "next action"],
+    upstream: ["Signal", "Memory"],
+    downstream: ["Plan", "Guard"],
+    permissionBoundary: "Recommendation only.",
+    failureBehavior: "Defaults to owner review when risk is uncertain.",
+    observability: "Risk/approval fields in Brain context pack.",
+    value: "Helps the router pick useful work instead of noisy work.",
+  },
+  compose: {
+    responsibility: "Prepare the first useful output chunk.",
+    inputs: ["plan", "context", "style rules"],
+    outputs: ["draft text", "artifact shell", "clarifying question"],
+    upstream: ["Plan", "Memory", "Research"],
+    downstream: ["Verify", "QA"],
+    permissionBoundary: "Draft-only.",
+    failureBehavior: "Asks for missing details or returns a partial draft.",
+    observability: "Draft artifacts or chat response summary.",
+    value: "Turns routing into something the owner can use.",
+  },
+  verify: {
+    responsibility: "Check claims, assumptions, and route fit.",
+    inputs: ["draft", "source/context notes", "known tool status"],
+    outputs: ["validation result", "assumption labels"],
+    upstream: ["Compose", "Research", "Health"],
+    downstream: ["QA", "Proof"],
+    permissionBoundary: "Review-only.",
+    failureBehavior: "Blocks or labels uncertain claims.",
+    observability: "Review notes and proof status.",
+    value: "Raises accuracy and catches hallucinated capabilities.",
+  },
+  guard: {
+    responsibility: "Apply approval and permission boundaries.",
+    inputs: ["proposed action", "risk level", "session role"],
+    outputs: ["approval required", "blocked/allowed mode"],
+    upstream: ["Rank", "Plan", "Approval policy"],
+    downstream: ["Relay", "Approval queue"],
+    permissionBoundary: "Can block; cannot execute.",
+    failureBehavior: "Blocks risky actions by default.",
+    observability: "Approval flags and blocked action reasons.",
+    value: "Preserves impulse control for outside-world actions.",
+  },
+  route: {
+    responsibility: "Select the workspace or worker lane that should receive the artifact.",
+    inputs: ["intent", "approval status", "tool health"],
+    outputs: ["destination route", "handoff packet"],
+    upstream: ["Intake", "Guard", "Health"],
+    downstream: ["Relay", "workspace module"],
+    permissionBoundary: "Routing only; no execution.",
+    failureBehavior: "Keeps work in chat with missing-integration note.",
+    observability: "Open route/card in the UI.",
+    value: "Connects the brain to hands and feet.",
+  },
+  archive: {
+    responsibility: "Write the receipt/memory candidate for useful outcomes.",
+    inputs: ["result", "proof", "approval status"],
+    outputs: ["ledger event", "memory suggestion"],
+    upstream: ["Proof", "Feedback"],
+    downstream: ["Hermes", "Brain memory"],
+    permissionBoundary: "Summary metadata only; no credentials.",
+    failureBehavior: "Does not claim durable memory when write fails.",
+    observability: "Ledger/event counts.",
+    value: "Makes future work faster and more grounded.",
+  },
+  feedback: {
+    responsibility: "Learn from corrections and approvals without retraining model weights.",
+    inputs: ["explicit feedback", "approval outcome", "repeated failure pattern"],
+    outputs: ["low-confidence profile hint", "memory suggestion"],
+    upstream: ["owner feedback", "Review queue"],
+    downstream: ["Context composer", "Memory vault"],
+    permissionBoundary: "Business/operator preferences only.",
+    failureBehavior: "Requires reinforcement before becoming strong permanent memory.",
+    observability: "Brain recent learnings.",
+    value: "Reduces repeated mistakes and robotic output.",
+  },
+  health: {
+    responsibility: "Check whether required tools are connected, manual, or blocked.",
+    inputs: ["tool registry", "ai-proxy health", "rembg status", "n8n preview"],
+    outputs: ["health/readiness state", "blocked dependency reason"],
+    upstream: ["Tool spine", "media/backend status"],
+    downstream: ["Route", "Guard", "owner status"],
+    permissionBoundary: "Read-only health checks.",
+    failureBehavior: "Pauses work or marks manual mode instead of pretending connectivity.",
+    observability: "System Brain Health and Developer Control Room.",
+    value: "Prevents dead-end routes and fake connected states.",
+  },
+};
 
 const agentAssignments: Array<{
   id: string;
@@ -397,6 +643,11 @@ function buildWorkerMetrics(definition: WorkerDefinition, allRecords: HermesLedg
     role: definition.role,
     tool_binding: definition.tool_binding,
     state: stateFromMetrics(definition, records24h.length),
+    backing_type: "parent_worker_definition" as const,
+    runtime_role: "ledger_observed_worker" as const,
+    executable: false,
+    routable: Boolean(definition.route || definition.taskMatch || definition.id === "phantom-ai" || definition.id === "hermes"),
+    metric_source: "Hermes ledger records matched to route/task patterns",
     focus: definition.focus,
     tasks_last_1h: records1h.length,
     tasks_last_24h: records24h.length,
@@ -408,22 +659,90 @@ function buildWorkerMetrics(definition: WorkerDefinition, allRecords: HermesLedg
   };
 }
 
-function subagentStatus(parentState: AgentState, tasks24h: number) {
-  if (parentState === "active" && tasks24h > 0) return "working";
-  if (parentState === "active") return "available";
-  if (parentState === "unconfigured") return "waiting";
-  return "standby";
+function backingTypeForSubagent(subagent: SubagentDefinition): WorkforceBackingType {
+  if (subagent.backingType) return subagent.backingType;
+  return subagent.layer ? "template_generated_neural_cell" : "curated_subagent_definition";
+}
+
+function templateIdFromSubagentId(subagent: SubagentDefinition) {
+  if (subagent.backingType === "template_generated_neural_cell") {
+    return subagent.id.split("-").pop() ?? "";
+  }
+  if (subagent.backingType === "template_generated_subagent") {
+    return subagent.id.split("-").pop() ?? "";
+  }
+  return subagent.id;
+}
+
+function contractForSubagent(subagent: SubagentDefinition): WorkforceNodeContract {
+  if (subagent.backingType === "template_generated_neural_cell") {
+    return neuralCellContracts[templateIdFromSubagentId(subagent)] ?? {
+      responsibility: subagent.specialty,
+      inputs: ["parent subagent context"],
+      outputs: ["mapped cell signal"],
+      upstream: [subagent.parent],
+      downstream: [subagent.rootParent ?? subagent.parent],
+      permissionBoundary: "Mapped processing contract only.",
+      failureBehavior: "Parent route continues without this mapped cell.",
+      observability: "Visible in topology only unless a real ledger event references it.",
+      value: "Documents the expected processing step for this lane.",
+    };
+  }
+
+  if (subagent.backingType === "template_generated_subagent") {
+    return subagentTemplateContracts[templateIdFromSubagentId(subagent)] ?? {
+      responsibility: subagent.specialty,
+      inputs: ["parent worker context"],
+      outputs: ["mapped subagent signal"],
+      upstream: [subagent.parent],
+      downstream: [subagent.rootParent ?? subagent.parent],
+      permissionBoundary: "Mapped capability only.",
+      failureBehavior: "Parent route continues without this mapped subagent.",
+      observability: "Visible in topology only unless a real ledger event references it.",
+      value: "Documents the expected helper lane for this parent worker.",
+    };
+  }
+
+  return {
+    responsibility: subagent.specialty,
+    inputs: ["matched request", "parent worker context", "Hermes/tool state where available"],
+    outputs: ["capability-specific route hint", "safe action preview", "status note"],
+    upstream: [subagent.parent],
+    downstream: [subagent.rootParent ?? subagent.parent, "owner-visible workspace"],
+    permissionBoundary: "Cannot execute outside-world actions. Uses safe actions only when explicitly invoked by an admin.",
+    failureBehavior: "Returns unavailable/blocked status or no-op preview.",
+    observability: "Safe action output, tool registry status, or Hermes ledger records.",
+    value: "Names a concrete helper capability without pretending it is an independent autonomous worker.",
+  };
+}
+
+function runtimeRoleForSubagent(subagent: SubagentDefinition): WorkforceRuntimeRole {
+  if (subagent.backingType === "template_generated_neural_cell") return "processing_contract";
+  if (subagent.backingType === "template_generated_subagent") return "mapped_capability";
+  if (subagent.backingType === "automation_job_definition") return "routable_capability";
+  return "routable_capability";
+}
+
+function subagentState(backingType: WorkforceBackingType, parentState: string, tasks24h: number) {
+  if (tasks24h > 0) return "observed";
+  if (backingType === "template_generated_neural_cell") return "mapped_cell";
+  if (backingType === "template_generated_subagent") return parentState === "unconfigured" ? "blocked_by_parent" : "mapped";
+  if (backingType === "automation_job_definition") return "scheduled_definition";
+  return parentState === "unconfigured" ? "blocked_by_parent" : "defined";
 }
 
 function buildClientSummary(workers: ReturnType<typeof buildWorkerMetrics>[]) {
-  const activeCount = workers.filter((worker) => worker.state === "active").length;
+  const runtimeSignalCount = workers.filter((worker) => worker.tasks_last_24h > 0).length;
+  const mappedCount = workers.length;
 
   return {
     visible_to_client: true,
-    active_agent_count: activeCount,
-    total_agent_count: workers.length,
-    status: activeCount > 0 ? "agents_available" : "standing_by",
-    label: `${activeCount} worker${activeCount === 1 ? "" : "s"} active`,
+    active_agent_count: runtimeSignalCount,
+    total_agent_count: mappedCount,
+    status: runtimeSignalCount > 0 ? "ledger_activity_observed" : "routes_mapped",
+    label: runtimeSignalCount > 0
+      ? `${runtimeSignalCount} worker ledger signal${runtimeSignalCount === 1 ? "" : "s"}`
+      : `${mappedCount} support route${mappedCount === 1 ? "" : "s"} mapped`,
   };
 }
 
@@ -533,6 +852,95 @@ function buildProgramUse(toolStack: Array<{
   }));
 }
 
+function buildWorkforceRequestTraces() {
+  return [
+    {
+      id: "casual-chat",
+      request: "hey",
+      entry_point: "POST /phantom-ai/chat or local command router",
+      intent_classification: "conversation",
+      context_memory: "Brain context composer may add tone/preference memory; no worker task is created.",
+      worker_selection: "PhantomAI only",
+      permission_evaluation: "not approval-gated",
+      output: "short conversational response",
+      proof: "Brain event/chat response summary only when backend chat is used.",
+      audit_result: "No generated subagent or cell is marked active from casual chat alone.",
+    },
+    {
+      id: "business-task",
+      request: "draft a proposal / build a landing page",
+      entry_point: "Dashboard chat or workspace module",
+      intent_classification: "task/draft",
+      context_memory: "Hermes/Brain memory selects relevant project and style context.",
+      worker_selection: "Parent worker category such as Builder, Scout, or CutLab; generated subagents provide the contract map.",
+      permission_evaluation: "draft-only until owner approval is needed",
+      output: "draft artifact or approval preview",
+      proof: "Hermes/Brain event if backend route is used; local UI activity if frontend-only.",
+      audit_result: "Mapped cells describe the route, but executable work is still only through real app routes/actions.",
+    },
+    {
+      id: "media-generation",
+      request: "generate/edit image or video",
+      entry_point: "Media Lab",
+      intent_classification: "media",
+      context_memory: "Media settings, Content Hub assets, ai-proxy/media health, rembg status.",
+      worker_selection: "CutLab/Media lane",
+      permission_evaluation: "paid/provider generation remains approval/configuration gated",
+      output: "generated media, pending item, or blocked/manual-state message",
+      proof: "Media Lab job log and Content Hub asset when generated locally/through configured backend.",
+      audit_result: "If media provider is unavailable, Health/Guard contracts require blocked/manual state instead of fake success.",
+    },
+    {
+      id: "external-action",
+      request: "send/post/upload/deploy/spend",
+      entry_point: "Chat, approval preview, or workspace action",
+      intent_classification: "approval_required_action",
+      context_memory: "Approval strictness and action safety rules",
+      worker_selection: "Gatekeeper/Guard/Approval queue",
+      permission_evaluation: "approval required; execution endpoints remain absent/blocked unless separately implemented",
+      output: "draft/preview/approval queue item",
+      proof: "Approval preview/queue record, not an execution receipt",
+      audit_result: "No worker, subagent, or cell can bypass approval.",
+    },
+    {
+      id: "vacation-mode",
+      request: "turn on vacation mode / handle away coverage",
+      entry_point: "Vacation Mode route",
+      intent_classification: "away_coverage",
+      context_memory: "Vacation settings, automations, approval policy",
+      worker_selection: "Autopilot categories and automation job definitions",
+      permission_evaluation: "only granted safe/prep work proceeds; external actions queue approval",
+      output: "away coverage status, reports, or approvals",
+      proof: "Vacation activity records and automation ledger events",
+      audit_result: "Autonomous behavior is limited to configured read-only/prep jobs.",
+    },
+    {
+      id: "memory-context",
+      request: "use my brand voice / remember this",
+      entry_point: "Brain endpoints or chat feedback",
+      intent_classification: "memory_or_context",
+      context_memory: "Memory vault, behavioral profile, Hermes ledger",
+      worker_selection: "Hermes/Scribe/Memory Cell contract",
+      permission_evaluation: "tenant scoped; secrets excluded; editable/forgettable",
+      output: "context pack, memory suggestion, or saved memory",
+      proof: "Brain memory/event record",
+      audit_result: "Memory cells are contract nodes that influence context composer output.",
+    },
+    {
+      id: "missing-integration",
+      request: "run n8n / use unavailable provider",
+      entry_point: "Tool lane, Media Lab, Developer Control Room",
+      intent_classification: "blocked_dependency",
+      context_memory: "Tool registry and health checks",
+      worker_selection: "Relay/Health/Guard",
+      permission_evaluation: "blocked or scaffolded/manual; no startup or workflow execution",
+      output: "readiness state and next safe step",
+      proof: "Tool lane preview/status payload",
+      audit_result: "Unavailable integrations must stay blocked/scaffolded rather than being displayed as live.",
+    },
+  ];
+}
+
 export async function buildAgentWorkforceStatus(options: {
   admin: boolean;
   windowHours?: number;
@@ -547,14 +955,18 @@ export async function buildAgentWorkforceStatus(options: {
   ]);
   const recent = recordsSince(allRecords, windowHours);
   const workers = workerDefinitions.map((definition) => buildWorkerMetrics(definition, allRecords));
+  const safeActions = getAgentActionDefinitions();
   const subagents = subagentDefinitions.map((subagent) => {
     const parent = workers.find((worker) => worker.name === subagent.parent)
       ?? workers.find((worker) => worker.name === subagent.rootParent);
+    const backingType = backingTypeForSubagent(subagent);
+    const contract = contractForSubagent(subagent);
+    const runtimeRole = runtimeRoleForSubagent(subagent);
 
     if (subagent.taskMatch) {
       const matched = allRecords.filter((record) => subagent.taskMatch!.test(record.task_type));
       const records24h = recordsSince(matched, 24);
-      const state = records24h.length > 0 ? "working" : parent?.state === "active" ? "available" : "standby";
+      const state = subagentState(backingType, parent?.state ?? "standby", records24h.length);
 
       return {
         id: subagent.id,
@@ -563,6 +975,14 @@ export async function buildAgentWorkforceStatus(options: {
         root_parent: subagent.rootParent ?? subagent.parent,
         layer: subagent.layer ?? "subagent",
         specialty: subagent.specialty,
+        backing_type: backingType,
+        runtime_role: runtimeRole,
+        executable: safeActions.some((action) => action.worker === subagent.name),
+        routable: true,
+        template_generated: backingType === "template_generated_subagent" || backingType === "template_generated_neural_cell",
+        independent_runtime: false,
+        metric_source: records24h.length > 0 ? "Hermes ledger records matched by task type" : "definition only; no matching ledger record in window",
+        contract,
         state,
         tasks_last_24h: records24h.length,
         tokens_last_24h: sumTokens(records24h),
@@ -570,8 +990,7 @@ export async function buildAgentWorkforceStatus(options: {
       };
     }
 
-    const tasks24h = parent ? Math.floor(parent.tasks_last_24h / 2) : 0;
-    const tokens24h = parent ? Math.floor(parent.tokens_last_24h / 2) : 0;
+    const hasExecutableAction = safeActions.some((action) => action.worker === subagent.name);
 
     return {
       id: subagent.id,
@@ -580,9 +999,18 @@ export async function buildAgentWorkforceStatus(options: {
       root_parent: subagent.rootParent ?? subagent.parent,
       layer: subagent.layer ?? "subagent",
       specialty: subagent.specialty,
-      state: subagentStatus(parent?.state ?? "standby", tasks24h),
-      tasks_last_24h: tasks24h,
-      tokens_last_24h: tokens24h,
+      backing_type: backingType,
+      runtime_role: hasExecutableAction ? "safe_action_runner" : runtimeRole,
+      executable: hasExecutableAction,
+      routable: backingType !== "template_generated_neural_cell",
+      template_generated: backingType === "template_generated_subagent" || backingType === "template_generated_neural_cell",
+      independent_runtime: false,
+      metric_source: "definition/topology only; no synthetic task or token count assigned",
+      contract,
+      state: subagentState(backingType, parent?.state ?? "standby", 0),
+      tasks_last_24h: 0,
+      tokens_last_24h: 0,
+      last_run_at: null,
     };
   });
   const toolStack = registry.tools.map((tool) => ({
@@ -612,14 +1040,30 @@ export async function buildAgentWorkforceStatus(options: {
     tokens_in_window: sumTokens(recent),
     estimated_cost_usd_in_window: Number(sumCost(recent).toFixed(6)),
     active_workers: workers.filter((worker) => worker.state === "active").length,
+    runtime_active_workers: workers.filter((worker) => worker.tasks_last_24h > 0).length,
     parent_workers: workers.length,
     total_workers: workers.length,
     subagents_mapped: subagents.length,
     total_worker_nodes: workers.length + subagents.length,
+    total_mapped_nodes: workers.length + subagents.length,
+    executable_nodes: workers.filter((worker) => worker.executable).length + subagents.filter((subagent) => subagent.executable).length,
+    runtime_executable_actions: safeActions.length,
+    routable_nodes: workers.filter((worker) => worker.routable).length + subagents.filter((subagent) => subagent.routable).length,
+    active_runtime_instances: workers.filter((worker) => worker.tasks_last_24h > 0).length
+      + subagents.filter((subagent) => subagent.tasks_last_24h > 0).length,
+    parent_worker_definitions: workers.length,
+    curated_subagent_definitions: curatedSubagentDefinitions.length,
+    generated_subagent_instances: generatedSwarmSubagentDefinitions.length,
     neural_cells_mapped: generatedNeuralCellDefinitions.length,
+    generated_neural_cell_instances: generatedNeuralCellDefinitions.length,
+    automation_job_definitions: automationSubagentDefinitions.length,
+    template_definitions: swarmSubagentTemplates.length + neuralCellTemplates.length,
+    template_generated_nodes: generatedSwarmSubagentDefinitions.length + generatedNeuralCellDefinitions.length,
     swarm_subagent_templates: swarmSubagentTemplates.length,
     neural_cell_templates: neuralCellTemplates.length,
     worker_node_floor: 1000,
+    generated_nodes_independently_executable: false,
+    truth_label: "Mapped workforce topology; generated cells are processing contracts, not autonomous running workers.",
     n8n_scaffolded: n8nPreview.n8n_status.n8n_scaffolded,
     n8n_running: n8nPreview.n8n_status.n8n_running,
     tool_registry_loaded: registry.loaded,
@@ -649,6 +1093,27 @@ export async function buildAgentWorkforceStatus(options: {
     client_summary: clientSummary,
     workers,
     subagents,
+    node_truth: {
+      total_mapped_nodes: summary.total_mapped_nodes,
+      parent_worker_definitions: summary.parent_worker_definitions,
+      curated_subagent_definitions: summary.curated_subagent_definitions,
+      generated_subagent_instances: summary.generated_subagent_instances,
+      generated_neural_cell_instances: summary.generated_neural_cell_instances,
+      automation_job_definitions: summary.automation_job_definitions,
+      template_definitions: summary.template_definitions,
+      template_generated_nodes: summary.template_generated_nodes,
+      executable_nodes: summary.executable_nodes,
+      runtime_executable_actions: summary.runtime_executable_actions,
+      active_runtime_instances: summary.active_runtime_instances,
+      routable_nodes: summary.routable_nodes,
+      generated_nodes_independently_executable: false,
+      label: summary.truth_label,
+    },
+    contracts: {
+      subagent_templates: subagentTemplateContracts,
+      neural_cells: neuralCellContracts,
+    },
+    request_traces: buildWorkforceRequestTraces(),
     tool_stack: toolStack,
     assignments: agentAssignments,
     programs,

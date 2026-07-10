@@ -6,24 +6,24 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260710-137";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-137";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-137";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-137";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-137";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-137";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-137";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-137";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-137";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-137";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-137";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-137";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-137";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-137";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-137";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-137";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-137";
-import { renderPhantomBrain } from "./brain.js?v=phantom-live-20260710-137";
+} from "./store.js?v=phantom-live-20260710-138";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-138";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-138";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-138";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-138";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-138";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-138";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-138";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-138";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-138";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-138";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-138";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-138";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-138";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-138";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-138";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-138";
+import { renderPhantomBrain } from "./brain.js?v=phantom-live-20260710-138";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -644,7 +644,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260710-137";
+const POSE_VERSION = "phantom-live-20260710-138";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1601,11 +1601,12 @@ const MEDIA_ENGINE_IDENTITY = { cinematic: "PhantomForce native lane", claude: "
 const DEV_AGENT_ICON = { "phantom-ai": "brain", hermes: "db", builder: "dev", strategist: "brain", reviewer: "check", gatekeeper: "shield", scout: "dollar", sentinel: "shield", cutlab: "film" };
 const DEV_PROGRAM_ICON = { n8n: "auto", openspec: "doc", "agent-os": "book", serena: "search", ruflo: "users", "phantom-ai-online-fetch": "bolt", rembg: "media", "media-lab": "film", openai: "spark", fastify: "cog", "ai-proxy": "cog" };
 const DEV_TONE = {
-  active: "on", working: "on", connected: "on", running_local: "on", reachable: "on",
+  active: "on", working: "on", connected: "on", running_local: "on", reachable: "on", observed: "on",
   standby: "warn", available: "warn", idle: "warn", waiting: "warn", drafting: "warn", watching: "warn", ready: "warn",
+  defined: "warn", mapped: "warn", mapped_cell: "warn", scheduled_definition: "warn",
   scaffolded_idle: "warn", sandbox_reference: "warn", planning_reference: "warn", manual: "warn", "manual mode": "warn",
   quarantined_planning_only: "warn", dry_run_draft_only: "warn", local_proposal_draft: "warn", reference_only: "warn", planned_allowlisted_fetch: "warn",
-  blocked: "off", unconfigured: "off", missing: "off", planned: "off", unavailable: "off", unreachable: "off",
+  blocked: "off", blocked_by_parent: "off", unconfigured: "off", missing: "off", planned: "off", unavailable: "off", unreachable: "off",
 };
 function devTone(state) { return DEV_TONE[String(state || "").toLowerCase()] || "warn"; }
 function devDot() { return `<span class="dev-dot" aria-hidden="true"></span>`; }
@@ -1911,6 +1912,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
   const s = ctx.session || {};
   const w = workforce;
   const summary = w?.summary;
+  const nodeTruth = w?.node_truth || {};
   const workers = w?.workers || [];
   const subagents = w?.subagents || [];
   const programs = buildDevPrograms(w, rembg, mediaHealth);
@@ -1963,10 +1965,10 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
 
       ${w ? `
       <section class="dev-stat-row" data-dev-stats>
-        <article class="dev-stat"><span data-dev-count="${summary.active_workers}">0</span><i>Active workers</i></article>
-        <article class="dev-stat"><span data-dev-count="${summary.total_worker_nodes || (summary.total_workers + summary.subagents_mapped)}">0</span><i>Network nodes</i></article>
-        <article class="dev-stat"><span data-dev-count="${summary.total_workers}">0</span><i>Parent workers</i></article>
-        <article class="dev-stat"><span data-dev-count="${summary.subagents_mapped}">0</span><i>Subagents + cells</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.runtime_active_workers || 0}">0</span><i>Ledger-active categories</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.total_mapped_nodes || summary.total_worker_nodes || (summary.total_workers + summary.subagents_mapped)}">0</span><i>Mapped topology nodes</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.runtime_executable_actions || 0}">0</span><i>Executable safe actions</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.template_generated_nodes || 0}">0</span><i>Template-generated nodes</i></article>
         <article class="dev-stat"><span data-dev-count="${summary.tasks_in_window}">0</span><i>Tasks / ${summary.window_hours}h</i></article>
         <article class="dev-stat"><span data-dev-count="${summary.tokens_in_window}">0</span><i>Tokens / ${summary.window_hours}h</i></article>
         <article class="dev-stat"><span class="dev-stat-static">${summary.estimated_cost_usd_in_window.toFixed(4)}</span><i>Est. cost / ${summary.window_hours}h</i></article>
@@ -1980,8 +1982,21 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       ${w ? `
       <section class="dev-section">
         <div class="dev-section-head">
+          <h4>${svg("shield")} Workforce reality</h4>
+          <p>${esc(nodeTruth.label || summary.truth_label || "Mapped workforce topology. Generated cells are contracts, not autonomous running workers.")}</p>
+        </div>
+        <div class="dev-program-grid">
+          <article class="dev-program-card dev-tone-on"><b>${Number(nodeTruth.parent_worker_definitions || summary.parent_worker_definitions || 0).toLocaleString()}</b><p>Parent worker definitions observed through Hermes/tool status.</p></article>
+          <article class="dev-program-card dev-tone-warn"><b>${Number(nodeTruth.generated_subagent_instances || summary.generated_subagent_instances || 0).toLocaleString()}</b><p>Template-generated subagent mappings. They route context; they are not independent processes.</p></article>
+          <article class="dev-program-card dev-tone-warn"><b>${Number(nodeTruth.generated_neural_cell_instances || summary.generated_neural_cell_instances || 0).toLocaleString()}</b><p>Neural processing cell contracts. They define expected steps and only show activity when a real route records it.</p></article>
+          <article class="dev-program-card dev-tone-on"><b>${Number(nodeTruth.runtime_executable_actions || summary.runtime_executable_actions || 0).toLocaleString()}</b><p>Callable admin-safe actions. These are the executable parts of this workforce surface.</p></article>
+        </div>
+      </section>
+
+      <section class="dev-section">
+        <div class="dev-section-head">
           <h4>${svg("users")} Agents &amp; subagents</h4>
-          <p>Every worker this system runs, mapped to what actually happened in the last ${summary.window_hours}h — pulled straight from the Hermes ledger, not guessed.</p>
+          <p>Parent workers plus mapped helper definitions. Runtime task/tokens below come from Hermes ledger matches only; generated cells do not inherit fake activity.</p>
         </div>
         <div class="dev-agent-grid">
           ${workers.map((worker) => devAgentCard(worker, subagents.filter((sub) => sub.parent === worker.name), esc)).join("")}

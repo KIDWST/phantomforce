@@ -797,6 +797,9 @@ export async function getBrainSystemHealth() {
           totalWorkers: workforce.summary.total_workers,
           activeWorkers: workforce.summary.active_workers,
           subagentsMapped: workforce.summary.subagents_mapped,
+          totalMappedNodes: workforce.summary.total_mapped_nodes,
+          executableActions: workforce.summary.runtime_executable_actions,
+          generatedCellsAreRuntimeWorkers: false,
           tasksInWindow: workforce.summary.tasks_in_window,
         }
       : null,

@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-137";
+} from "./store.js?v=phantom-live-20260710-138";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -989,8 +989,8 @@ function renderToolSpineCards({ compact = false } = {}) {
 }
 
 /* ============================= WORKFORCE ============================= */
-// Seeded local roster until a real workforce API lands. This is capability
-// visibility only: no external calls, sends, posts, uploads, or executions.
+// Capability topology only. These records describe how work can be routed;
+// they are not live autonomous workers unless a ledger/activity signal says so.
 const WORKFORCE_EMPLOYEES = [
   {
     id: "maya-brooks",
@@ -1396,14 +1396,14 @@ function buildEmployeeSubagents(employee) {
     name: `${first} ${template.name}`,
     title: template.title,
     department: employee.department,
-    status: employee.status === "working" && template.id === "draft" ? "working" : template.status,
+    status: "mapped",
     focus: `${template.focus} Parent worker: ${employee.name}.`,
     skills: template.skills,
-    completed: Math.max(1, Math.round(employee.completed * 0.42) + template.completedBoost),
-    productivity: clampWorkerMetric(employee.productivity + template.productivityOffset, 70, 99),
-    workload: clampWorkerMetric(employee.workload + template.workloadOffset, 12, 82),
-    response: employee.response,
-    lastActivity: employee.status === "working" && index < 2 ? employee.lastActivity : "Ready now",
+    completed: 0,
+    productivity: null,
+    workload: 0,
+    response: "mapped",
+    lastActivity: "Topology only",
     employeeVisible: employee.employeeVisible !== false && index < 3,
     parentId: employee.id,
     parentName: employee.name,
@@ -1417,14 +1417,14 @@ function buildSubagentCells(employee, subagent) {
     name: `${subagent.name} ${template.name}`,
     title: template.title,
     department: employee.department,
-    status: subagent.status === "working" && ["compose", "route"].includes(template.id) ? "working" : "available",
+    status: "mapped_cell",
     focus: `${template.focus} Parent subagent: ${subagent.name}. Root worker: ${employee.name}.`,
     skills: template.skills,
-    completed: Math.max(1, Math.round(subagent.completed * 0.34) + index + 2),
-    productivity: clampWorkerMetric(subagent.productivity + template.productivityOffset, 72, 99),
-    workload: clampWorkerMetric(subagent.workload + template.workloadOffset, 8, 76),
-    response: subagent.response,
-    lastActivity: subagent.status === "working" && index < 2 ? subagent.lastActivity : "Ready now",
+    completed: 0,
+    productivity: null,
+    workload: 0,
+    response: "contract",
+    lastActivity: "Mapped processing contract",
     employeeVisible: false,
     parentId: subagent.id,
     parentName: subagent.name,
@@ -1440,6 +1440,11 @@ function workerStatusLabel(status) {
     available: "Available",
     working: "Working",
     reviewing: "Reviewing",
+    observed: "Ledger signal",
+    defined: "Defined",
+    mapped: "Mapped",
+    mapped_cell: "Mapped cell",
+    blocked_by_parent: "Blocked by parent",
     "waiting-approval": "Waiting approval",
     offline: "Offline",
   })[status] || title(status);
@@ -1460,6 +1465,16 @@ export function buildWorkerRoster() {
       || String(entry.text || "").toLowerCase().includes(employee.department.toLowerCase()));
     const approvalRoot = employee.rootParentId || employee.parentId || employee.id;
     const waitingOnApproval = pendingApprovals > 0 && ["iris-cole", "sofia-lane", "marcus-vale"].includes(approvalRoot);
+    const workerType = employee.workerType || "employee";
+    const truthStatus = waitingOnApproval
+      ? "waiting-approval"
+      : recent
+        ? "observed"
+        : workerType === "cell"
+          ? "mapped_cell"
+          : workerType === "subagent"
+            ? "mapped"
+            : "defined";
     return {
       ...employee,
       worker_id: employee.id,
@@ -1467,13 +1482,18 @@ export function buildWorkerRoster() {
       role: employee.title,
       current_task: employee.focus,
       capabilities: employee.skills,
-      status: waitingOnApproval ? "waiting-approval" : employee.status,
-      avatar: { initials: workerInitials(employee.name), tone: waitingOnApproval ? "waiting-approval" : employee.status },
-      last_active_at: recent ? ago(recent.at) : employee.lastActivity,
+      status: truthStatus,
+      avatar: { initials: workerInitials(employee.name), tone: truthStatus },
+      last_active_at: recent ? ago(recent.at) : "No ledger activity",
       has_activity: !!recent,
+      completed: recent ? 1 : 0,
+      productivity: null,
+      workload: 0,
+      response: "not live-measured",
+      metric_source: recent ? "local activity ledger" : "capability topology only",
       approvals_required: waitingOnApproval ? pendingApprovals : 0,
       client_visible: employee.employeeVisible !== false,
-      worker_type: employee.workerType || "employee",
+      worker_type: workerType,
       parent_id: employee.parentId || null,
       parent_name: employee.parentName || null,
       root_parent_id: employee.rootParentId || null,
@@ -1493,7 +1513,7 @@ function workerMatchesFilter(worker) {
 }
 
 function workerSortScore(worker) {
-  return ({ "waiting-approval": 0, working: 1, reviewing: 2, available: 3, offline: 4 })[worker.status] || 5;
+  return ({ "waiting-approval": 0, observed: 1, defined: 2, mapped: 3, mapped_cell: 4, offline: 5 })[worker.status] || 6;
 }
 
 function workerPreviewTitle(kind, workerName) {
@@ -1536,8 +1556,9 @@ function renderWorkerPreview(worker, kind = "delegate") {
 function workerMeshTone(worker) {
   if (worker.status === "waiting-approval") return "approval";
   if (worker.status === "offline") return "blocked";
-  if (worker.status === "reviewing") return "idle";
-  if (worker.has_activity) return "live";
+  if (worker.status === "observed" || worker.has_activity) return "live";
+  if (worker.status === "mapped_cell") return "idle";
+  if (worker.status === "mapped" || worker.status === "defined") return "ready";
   return "ready";
 }
 
@@ -1573,7 +1594,8 @@ function renderWorkerMesh(workers) {
     return `
     <span class="worker-swarm-dot worker-swarm-${esc(workerMeshGroup(worker))}" style="--dot-index:${index}; --orbit-angle:${angle}deg; --orbit-size:${orbit}px; --dot-delay:${(index % 13) * 0.17}s" title="${esc(worker.display_name)}"></span>`;
   }).join("");
-  const online = workers.filter((worker) => worker.status !== "offline").length;
+  const observed = workers.filter((worker) => worker.has_activity).length;
+  const mapped = workers.length;
   const departments = new Set(workers.map((worker) => worker.department)).size;
   const approvals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   return `
@@ -1596,7 +1618,8 @@ function renderWorkerMesh(workers) {
         </div>
       </div>
       <div class="worker-mesh-readout">
-        <span><b>${online}</b> online nodes</span>
+        <span><b>${mapped}</b> mapped nodes</span>
+        <span><b>${observed}</b> ledger signals</span>
         <span><b>${subagentNodes.length}</b> subagents</span>
         <span><b>${departments}</b> departments</span>
         <span><b>${approvals}</b> approvals waiting</span>
@@ -1606,7 +1629,6 @@ function renderWorkerMesh(workers) {
 
 function renderWorkerCard(worker, _unused = [], options = {}) {
   const showActions = options.actions !== false;
-  const capPct = Math.max(0, Math.min(100, Math.round(worker.workload || 0)));
   const previewOpen = workerUi.preview?.workerId === worker.worker_id;
   const previewExpanded = (kind) => previewOpen && workerUi.preview?.kind === kind;
   const meshTone = workerMeshTone(worker);
@@ -1626,13 +1648,9 @@ function renderWorkerCard(worker, _unused = [], options = {}) {
       <div class="worker-dept">${esc(worker.worker_type === "subagent" ? `${worker.department} subagent` : worker.department)}</div>
       ${worker.parent_name ? `<p class="worker-parent">Reports to ${esc(worker.parent_name)}</p>` : ""}
       <p class="worker-task">${esc(worker.current_task)}</p>
-      <div class="worker-capacity">
-        <span><b>${capPct}%</b> workload - ${esc(worker.response)} avg response</span>
-        <i style="--worker-cap:${capPct}%"></i>
-      </div>
       <div class="worker-productivity">
-        <span><b>${worker.productivity}</b> productivity</span>
-        <span><b>${worker.completed}</b> completed tasks</span>
+        <span><b>${worker.has_activity ? "yes" : "no"}</b> ledger signal</span>
+        <span><b>${worker.completed}</b> observed tasks</span>
         <span>${esc(worker.last_active_at)}</span>
       </div>
       <div class="worker-tags">
@@ -1770,7 +1788,7 @@ function workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeT
     return `
       <div class="worker-tab-copy">
         <b>Current lane signal</b>
-        <p>${esc(worker.last_active_at || "Ready now")} · ${esc(workerStatusLabel(worker.status))}. This view shows readiness and local activity signals only.</p>
+        <p>${esc(worker.last_active_at || "No ledger activity")} · ${esc(workerStatusLabel(worker.status))}. This view shows mapped capability plus local activity signals only.</p>
         <div class="worker-detail-stats">
           <span><b>${subagents.length}</b><i>subagents attached</i></span>
           <span><b>${rootCells.length}</b><i>neural cells mapped</i></span>
@@ -1783,12 +1801,12 @@ function workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeT
   return `
     <div class="worker-tab-copy">
       <b>${esc(worker.current_task)}</b>
-      <p>Phantom routes matching work to this parent worker, then splits the smaller pieces across Signal, Draft, QA, Relay, and Ledger subagents.</p>
+      <p>Phantom routes matching work to this parent worker, then uses mapped helper lanes for signal, research, planning, drafting, QA, relay, proof, ledger, and feedback. These lanes are contracts unless a real route or ledger event activates them.</p>
       <div class="worker-detail-stats">
         <span><b>${esc(worker.department)}</b><i>department</i></span>
         <span><b>${subagents.length}</b><i>subagents</i></span>
         <span><b>${rootCells.length}</b><i>neural cells</i></span>
-        <span><b>${esc(worker.response)}</b><i>avg response</i></span>
+        <span><b>${esc(worker.metric_source || "topology")}</b><i>metric source</i></span>
       </div>
     </div>`;
 }
@@ -1817,7 +1835,7 @@ function renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells) {
 
 function renderWorkerShell(worker, subagents, cellsBySubagent, rootCells) {
   const selected = workerUi.selectedId === worker.worker_id;
-  const capPct = Math.max(0, Math.min(100, Math.round(worker.workload || 0)));
+  const mapPct = Math.max(8, Math.min(100, Math.round((rootCells.length / Math.max(1, rootCells.length + subagents.length)) * 100)));
   return `
     <article class="worker-shell-card worker-${esc(worker.status)} ${selected ? "is-open" : ""}">
       <button class="worker-shell-main" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-expanded="${selected ? "true" : "false"}">
@@ -1832,7 +1850,7 @@ function renderWorkerShell(worker, subagents, cellsBySubagent, rootCells) {
         </span>
         <span class="worker-shell-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
       </button>
-      <div class="worker-shell-bar" aria-hidden="true"><i style="--worker-cap:${capPct}%"></i></div>
+      <div class="worker-shell-bar" aria-hidden="true" title="Topology density, not live workload"><i style="--worker-cap:${mapPct}%"></i></div>
       ${selected ? renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells) : ""}
     </article>`;
 }
@@ -1897,7 +1915,8 @@ function renderWorkforce(el, rerender) {
     ...visible(store.state.sites).filter((x) => x.status === "draft" || x.status === "publish-ready"),
     ...visible(store.state.bookings).filter((x) => x.status !== "confirmed"),
   ].length;
-  const onlineCount = workers.filter((worker) => worker.status !== "offline").length;
+  const mappedCount = workers.length;
+  const ledgerSignalCount = workers.filter((worker) => worker.has_activity).length;
   const parentCount = workers.filter((worker) => worker.worker_type === "employee").length;
   const subagentCount = workers.filter((worker) => worker.worker_type === "subagent").length;
   const neuralCellCount = workers.filter((worker) => worker.worker_type === "cell").length;
@@ -1913,27 +1932,29 @@ function renderWorkforce(el, rerender) {
   el.innerHTML = `
     <section class="workers-hero">
       <div>
-        <p class="worker-kicker">Swarm network online</p>
+        <p class="worker-kicker">Workforce topology</p>
         <h3>PhantomForce Workers</h3>
-        <p>Clean parent-worker view. Click a worker to expand its tabs, see attached subagents, and check safety rules without dumping the whole swarm on the page.</p>
+        <p>Clean parent-worker view. Click a worker to expand mapped helper lanes, neural-cell contracts, and safety rules. Activity is shown only when a real local ledger signal exists.</p>
       </div>
       <div class="worker-scale">
-        <span><b>${onlineCount}</b> active nodes</span>
+        <span><b>${mappedCount}</b> mapped nodes</span>
+        <span><b>${ledgerSignalCount}</b> ledger signals</span>
         <span><b>${parentCount}</b> parent workers</span>
         <span><b>${subagentCount}</b> subagents</span>
         <span><b>${neuralCellCount}</b> neural cells</span>
-        <span><b>${departmentCount}</b> departments online</span>
+        <span><b>${departmentCount}</b> departments mapped</span>
       </div>
     </section>
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
     <div class="worker-metrics">
-      <div><span>Active Nodes</span><b>${onlineCount}</b></div>
+      <div><span>Mapped Nodes</span><b>${mappedCount}</b></div>
+      <div><span>Ledger Signals</span><b>${ledgerSignalCount}</b></div>
       <div><span>Parent Workers</span><b>${parentCount}</b></div>
       <div><span>Subagents</span><b>${subagentCount}</b></div>
       <div><span>Neural Cells</span><b>${neuralCellCount}</b></div>
       <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
       <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
-      <div><span>Departments Online</span><b>${departmentCount}</b></div>
+      <div><span>Departments Mapped</span><b>${departmentCount}</b></div>
     </div>
     <div class="worker-filter-row">
       ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}

@@ -6,11 +6,11 @@
 
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, ago, fmtMoney, statusLabel,
-} from "./store.js?v=phantom-live-20260710-137";
+} from "./store.js?v=phantom-live-20260710-138";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260710-137";
-import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260710-137";
+} from "./workspaces.js?v=phantom-live-20260710-138";
+import { loadContentAssets } from "./contenthub.js?v=phantom-live-20260710-138";
 
 const cap = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
 const firstSentence = (value) => String(value || "").split(/[.!?]/)[0].trim();
