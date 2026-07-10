@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-132";
+} from "./store.js?v=phantom-live-20260710-133";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1234,6 +1234,89 @@ const SWARM_SUBAGENT_TEMPLATES = [
   },
 ];
 
+const NEURAL_CELL_TEMPLATES = [
+  {
+    id: "intake",
+    name: "Intake Cell",
+    title: "Input Classifier",
+    layer: "input",
+    focus: "Reads the ask, spots the business lane, and tags missing context.",
+    skills: ["intent", "context tags", "missing info", "triage"],
+    workloadOffset: -24,
+    productivityOffset: 1,
+  },
+  {
+    id: "memory",
+    name: "Memory Cell",
+    title: "Context Recall",
+    layer: "memory",
+    focus: "Pulls useful local memory and keeps private context attached to the route.",
+    skills: ["memory", "context", "receipts", "workspace history"],
+    workloadOffset: -20,
+    productivityOffset: 2,
+  },
+  {
+    id: "rank",
+    name: "Rank Cell",
+    title: "Priority Scorer",
+    layer: "reasoning",
+    focus: "Scores urgency, value, risk, and the next useful move.",
+    skills: ["priority", "value score", "risk score", "next action"],
+    workloadOffset: -10,
+    productivityOffset: 1,
+  },
+  {
+    id: "compose",
+    name: "Compose Cell",
+    title: "Draft Neuron",
+    layer: "draft",
+    focus: "Builds the first useful output chunk before QA sees it.",
+    skills: ["draft", "structure", "copy", "artifact prep"],
+    workloadOffset: 6,
+    productivityOffset: -1,
+  },
+  {
+    id: "verify",
+    name: "Verify Cell",
+    title: "Truth Check",
+    layer: "review",
+    focus: "Checks claims, labels assumptions, and catches mismatch before review.",
+    skills: ["verification", "assumptions", "consistency", "review"],
+    workloadOffset: -8,
+    productivityOffset: 2,
+  },
+  {
+    id: "guard",
+    name: "Guard Cell",
+    title: "Safety Gate",
+    layer: "safety",
+    focus: "Keeps sends, posts, uploads, payments, deploys, and access changes gated.",
+    skills: ["guardrails", "approval", "risk", "external action block"],
+    workloadOffset: -14,
+    productivityOffset: 1,
+  },
+  {
+    id: "route",
+    name: "Route Cell",
+    title: "Handoff Router",
+    layer: "routing",
+    focus: "Connects the output to the right workspace, worker, or approval packet.",
+    skills: ["handoff", "workspace route", "queue", "owner review"],
+    workloadOffset: -18,
+    productivityOffset: 0,
+  },
+  {
+    id: "archive",
+    name: "Archive Cell",
+    title: "Receipt Writer",
+    layer: "ledger",
+    focus: "Packages a clean receipt so Phantom remembers the useful parts.",
+    skills: ["receipt", "summary", "local memory", "audit trail"],
+    workloadOffset: -22,
+    productivityOffset: 1,
+  },
+];
+
 function workerInitials(name = "") {
   return String(name).split(/\s+/).map((part) => part[0]).filter(Boolean).slice(0, 2).join("").toUpperCase() || "PF";
 }
@@ -1264,6 +1347,30 @@ function buildEmployeeSubagents(employee) {
   }));
 }
 
+function buildSubagentCells(employee, subagent) {
+  return NEURAL_CELL_TEMPLATES.map((template, index) => ({
+    id: `${subagent.id}-${template.id}`,
+    name: `${subagent.name} ${template.name}`,
+    title: template.title,
+    department: employee.department,
+    status: subagent.status === "working" && ["compose", "route"].includes(template.id) ? "working" : "available",
+    focus: `${template.focus} Parent subagent: ${subagent.name}. Root worker: ${employee.name}.`,
+    skills: template.skills,
+    completed: Math.max(1, Math.round(subagent.completed * 0.34) + index + 2),
+    productivity: clampWorkerMetric(subagent.productivity + template.productivityOffset, 72, 99),
+    workload: clampWorkerMetric(subagent.workload + template.workloadOffset, 8, 76),
+    response: subagent.response,
+    lastActivity: subagent.status === "working" && index < 2 ? subagent.lastActivity : "Ready now",
+    employeeVisible: false,
+    parentId: subagent.id,
+    parentName: subagent.name,
+    rootParentId: employee.id,
+    rootParentName: employee.name,
+    workerType: "cell",
+    neuralLayer: template.layer,
+  }));
+}
+
 function workerStatusLabel(status) {
   return ({
     available: "Available",
@@ -1278,11 +1385,17 @@ export function buildWorkerRoster() {
   const activity = store.state.activity || [];
   const pendingApprovals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const employees = WORKFORCE_EMPLOYEES.map((employee) => ({ ...employee, workerType: "employee" }));
-  return employees.flatMap((employee) => [employee, ...buildEmployeeSubagents(employee)]).map((employee) => {
+  const network = employees.flatMap((employee) => {
+    const subagents = buildEmployeeSubagents(employee);
+    const cells = subagents.flatMap((subagent) => buildSubagentCells(employee, subagent));
+    return [employee, ...subagents, ...cells];
+  });
+  return network.map((employee) => {
     const recent = activity.find((entry) =>
       String(entry.who || "").toLowerCase().includes(employee.name.toLowerCase())
       || String(entry.text || "").toLowerCase().includes(employee.department.toLowerCase()));
-    const waitingOnApproval = pendingApprovals > 0 && ["iris-cole", "sofia-lane", "marcus-vale"].includes(employee.parentId || employee.id);
+    const approvalRoot = employee.rootParentId || employee.parentId || employee.id;
+    const waitingOnApproval = pendingApprovals > 0 && ["iris-cole", "sofia-lane", "marcus-vale"].includes(approvalRoot);
     return {
       ...employee,
       worker_id: employee.id,
@@ -1299,14 +1412,18 @@ export function buildWorkerRoster() {
       worker_type: employee.workerType || "employee",
       parent_id: employee.parentId || null,
       parent_name: employee.parentName || null,
+      root_parent_id: employee.rootParentId || null,
+      root_parent_name: employee.rootParentName || null,
+      neural_layer: employee.neuralLayer || null,
     };
   });
 }
 
 function workerMatchesFilter(worker) {
   if (workerUi.filter === "all") return true;
-  if (workerUi.filter === "employees") return worker.worker_type !== "subagent";
+  if (workerUi.filter === "employees") return worker.worker_type === "employee";
   if (workerUi.filter === "subagents") return worker.worker_type === "subagent";
+  if (workerUi.filter === "cells") return worker.worker_type === "cell";
   if (workerUi.filter === "approval") return worker.status === "waiting-approval";
   return worker.department.toLowerCase().replace(/\s+/g, "-") === workerUi.filter;
 }
@@ -1490,11 +1607,14 @@ function renderWorkforceFlow() {
     </section>`;
 }
 
-function workerParentMatchesFilter(worker, subagents = []) {
+function workerParentMatchesFilter(worker, subagents = [], cells = []) {
   if (workerUi.filter === "all" || workerUi.filter === "employees") return true;
   if (workerUi.filter === "subagents") return subagents.length > 0;
+  if (workerUi.filter === "cells") return cells.length > 0;
   if (workerUi.filter === "approval") {
-    return worker.status === "waiting-approval" || subagents.some((subagent) => subagent.status === "waiting-approval");
+    return worker.status === "waiting-approval"
+      || subagents.some((subagent) => subagent.status === "waiting-approval")
+      || cells.some((cell) => cell.status === "waiting-approval");
   }
   return worker.department.toLowerCase().replace(/\s+/g, "-") === workerUi.filter;
 }
@@ -1510,11 +1630,48 @@ function groupWorkersByDepartment(workers) {
 
 function shortSubagentFocus(subagent) {
   return String(subagent.current_task || subagent.focus || "")
-    .replace(/\s*Parent worker:.*$/i, "")
+    .replace(/\s*Parent (worker|subagent):.*$/i, "")
     .trim();
 }
 
-function workerTabContent(worker, subagents, activeTab) {
+function workerLayerCounts(cells) {
+  return cells.reduce((counts, cell) => {
+    const layer = cell.neural_layer || "mapped";
+    counts[layer] = (counts[layer] || 0) + 1;
+    return counts;
+  }, {});
+}
+
+function renderWorkerNetworkPanel(worker, subagents, cellsBySubagent, rootCells) {
+  const layerCounts = workerLayerCounts(rootCells);
+  const layers = ["input", "memory", "reasoning", "draft", "review", "safety", "routing", "ledger"];
+  const paths = subagents.map((subagent) => {
+    const cells = cellsBySubagent.get(subagent.worker_id) || [];
+    const first = cells[0]?.display_name || `${subagent.display_name} intake`;
+    const last = cells[cells.length - 1]?.display_name || `${subagent.display_name} receipt`;
+    return { subagent, first, last, count: cells.length };
+  });
+  return `
+    <div class="worker-network-panel">
+      <div class="worker-network-head">
+        <b>${esc(worker.display_name)} neural map</b>
+        <span>${rootCells.length} cells · ${subagents.length} lanes · ${paths.length * 2} synapse paths</span>
+      </div>
+      <div class="worker-layer-grid">
+        ${layers.map((layer) => `<span><b>${layerCounts[layer] || 0}</b><i>${esc(layer)}</i></span>`).join("")}
+      </div>
+      <div class="worker-synapse-list">
+        ${paths.map(({ subagent, first, last, count }) => `
+          <article>
+            <b>${esc(subagent.display_name)}</b>
+            <p>${esc(first)} -> ${esc(last)}</p>
+            <span>${count} specialist cells</span>
+          </article>`).join("")}
+      </div>
+    </div>`;
+}
+
+function workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeTab) {
   if (activeTab === "subagents") {
     return `
       <div class="worker-subagent-list" role="list">
@@ -1523,12 +1680,14 @@ function workerTabContent(worker, subagents, activeTab) {
             <span class="wf-avatar wf-avatar-${esc(subagent.avatar?.tone || subagent.status)}">${esc(subagent.avatar?.initials || workerInitials(subagent.display_name))}</span>
             <div>
               <b>${esc(subagent.display_name)}</b>
-              <i>${esc(subagent.role)} · ${esc(workerStatusLabel(subagent.status))}</i>
+              <i>${esc(subagent.role)} · ${esc(workerStatusLabel(subagent.status))} · ${(cellsBySubagent.get(subagent.worker_id) || []).length} cells</i>
               <p>${esc(shortSubagentFocus(subagent))}</p>
             </div>
           </article>`).join("")}
       </div>`;
   }
+
+  if (activeTab === "network") return renderWorkerNetworkPanel(worker, subagents, cellsBySubagent, rootCells);
 
   if (activeTab === "safety") {
     return `
@@ -1550,6 +1709,7 @@ function workerTabContent(worker, subagents, activeTab) {
         <p>${esc(worker.last_active_at || "Ready now")} · ${esc(workerStatusLabel(worker.status))}. This view shows readiness and local activity signals only.</p>
         <div class="worker-detail-stats">
           <span><b>${subagents.length}</b><i>subagents attached</i></span>
+          <span><b>${rootCells.length}</b><i>neural cells mapped</i></span>
           <span><b>${worker.has_activity ? "live" : "ready"}</b><i>activity signal</i></span>
           <span><b>${worker.approvals_required || 0}</b><i>approvals waiting</i></span>
         </div>
@@ -1563,15 +1723,17 @@ function workerTabContent(worker, subagents, activeTab) {
       <div class="worker-detail-stats">
         <span><b>${esc(worker.department)}</b><i>department</i></span>
         <span><b>${subagents.length}</b><i>subagents</i></span>
+        <span><b>${rootCells.length}</b><i>neural cells</i></span>
         <span><b>${esc(worker.response)}</b><i>avg response</i></span>
       </div>
     </div>`;
 }
 
-function renderWorkerExpansion(worker, subagents) {
+function renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells) {
   const tabs = [
     ["overview", "Overview"],
     ["subagents", "Subagents"],
+    ["network", "Network"],
     ["safety", "Safety"],
     ["activity", "Activity"],
   ];
@@ -1581,14 +1743,15 @@ function renderWorkerExpansion(worker, subagents) {
       <div class="worker-tab-row" role="tablist" aria-label="${esc(worker.display_name)} details">
         ${tabs.map(([id, label]) => `
           <button class="worker-tab ${activeTab === id ? "is-active" : ""}" data-act="worker-tab" data-id="${esc(worker.worker_id)}" data-tab="${esc(id)}" role="tab" aria-selected="${activeTab === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
+        <button class="worker-tab worker-tab-collapse" data-act="worker-collapse" data-id="${esc(worker.worker_id)}">Collapse</button>
       </div>
       <div class="worker-tab-panel" role="tabpanel">
-        ${workerTabContent(worker, subagents, activeTab)}
+        ${workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeTab)}
       </div>
     </div>`;
 }
 
-function renderWorkerShell(worker, subagents) {
+function renderWorkerShell(worker, subagents, cellsBySubagent, rootCells) {
   const selected = workerUi.selectedId === worker.worker_id;
   const capPct = Math.max(0, Math.min(100, Math.round(worker.workload || 0)));
   return `
@@ -1600,26 +1763,37 @@ function renderWorkerShell(worker, subagents) {
           <i>${esc(worker.role)}</i>
         </span>
         <span class="worker-shell-meta">
-          <b>${subagents.length}</b>
-          <i>subagents</i>
+          <b>${rootCells.length}</b>
+          <i>cells</i>
         </span>
         <span class="worker-shell-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
       </button>
       <div class="worker-shell-bar" aria-hidden="true"><i style="--worker-cap:${capPct}%"></i></div>
-      ${selected ? renderWorkerExpansion(worker, subagents) : ""}
+      ${selected ? renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells) : ""}
     </article>`;
 }
 
 function renderWorkerDirectory(parentWorkers, allWorkers) {
   const subagentsByParent = new Map();
+  const cellsBySubagent = new Map();
+  const cellsByRoot = new Map();
   allWorkers.filter((worker) => worker.worker_type === "subagent").forEach((subagent) => {
     const key = subagent.parent_id || "";
     if (!subagentsByParent.has(key)) subagentsByParent.set(key, []);
     subagentsByParent.get(key).push(subagent);
   });
-  const filteredParents = parentWorkers.filter((worker) => workerParentMatchesFilter(worker, subagentsByParent.get(worker.worker_id) || []));
+  allWorkers.filter((worker) => worker.worker_type === "cell").forEach((cell) => {
+    const subagentKey = cell.parent_id || "";
+    const rootKey = cell.root_parent_id || "";
+    if (!cellsBySubagent.has(subagentKey)) cellsBySubagent.set(subagentKey, []);
+    if (!cellsByRoot.has(rootKey)) cellsByRoot.set(rootKey, []);
+    cellsBySubagent.get(subagentKey).push(cell);
+    cellsByRoot.get(rootKey).push(cell);
+  });
+  const filteredParents = parentWorkers.filter((worker) =>
+    workerParentMatchesFilter(worker, subagentsByParent.get(worker.worker_id) || [], cellsByRoot.get(worker.worker_id) || []));
   if (!filteredParents.some((worker) => worker.worker_id === workerUi.selectedId)) {
-    workerUi.selectedId = filteredParents[0]?.worker_id || "";
+    workerUi.selectedId = "";
     workerUi.tab = "overview";
   }
   const groups = groupWorkersByDepartment(filteredParents);
@@ -1632,7 +1806,12 @@ function renderWorkerDirectory(parentWorkers, allWorkers) {
             <b>${group.length} parent${group.length === 1 ? "" : "s"}</b>
           </div>
           <div class="worker-shell-grid">
-            ${group.map((worker) => renderWorkerShell(worker, subagentsByParent.get(worker.worker_id) || [])).join("")}
+            ${group.map((worker) => renderWorkerShell(
+              worker,
+              subagentsByParent.get(worker.worker_id) || [],
+              cellsBySubagent,
+              cellsByRoot.get(worker.worker_id) || [],
+            )).join("")}
           </div>
         </section>`).join("") || empty("No workers match this filter.")}
     </section>`;
@@ -1641,10 +1820,10 @@ function renderWorkerDirectory(parentWorkers, allWorkers) {
 function renderWorkforce(el, rerender) {
   const allWorkers = buildWorkerRoster();
   const workers = isAdmin() ? allWorkers : allWorkers.filter((worker) => worker.client_visible);
-  const validFilters = ["all", "employees", "subagents", "approval", ...WORKFORCE_FILTERS.slice(1).map((dept) => dept.toLowerCase().replace(/\s+/g, "-"))];
+  const validFilters = ["all", "employees", "subagents", "cells", "approval", ...WORKFORCE_FILTERS.slice(1).map((dept) => dept.toLowerCase().replace(/\s+/g, "-"))];
   if (!validFilters.includes(workerUi.filter)) workerUi.filter = "all";
   const parentWorkers = workers
-    .filter((worker) => worker.worker_type !== "subagent")
+    .filter((worker) => worker.worker_type === "employee")
     .sort((a, b) => workerSortScore(a) - workerSortScore(b) || a.display_name.localeCompare(b.display_name));
   const pendingApprovals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const realPrepared = [
@@ -1655,13 +1834,15 @@ function renderWorkforce(el, rerender) {
     ...visible(store.state.bookings).filter((x) => x.status !== "confirmed"),
   ].length;
   const onlineCount = workers.filter((worker) => worker.status !== "offline").length;
-  const parentCount = workers.filter((worker) => worker.worker_type !== "subagent").length;
+  const parentCount = workers.filter((worker) => worker.worker_type === "employee").length;
   const subagentCount = workers.filter((worker) => worker.worker_type === "subagent").length;
+  const neuralCellCount = workers.filter((worker) => worker.worker_type === "cell").length;
   const departmentCount = new Set(workers.map((worker) => worker.department)).size;
   const filters = [
-    ["all", "All nodes"],
-    ["employees", "Employees"],
+    ["all", "All parents"],
+    ["employees", "Workers"],
     ["subagents", "Subagents"],
+    ["cells", "Neural cells"],
     ...WORKFORCE_FILTERS.slice(1).map((dept) => [dept.toLowerCase().replace(/\s+/g, "-"), dept]),
     ["approval", "Approval"],
   ];
@@ -1676,6 +1857,7 @@ function renderWorkforce(el, rerender) {
         <span><b>${onlineCount}</b> active nodes</span>
         <span><b>${parentCount}</b> parent workers</span>
         <span><b>${subagentCount}</b> subagents</span>
+        <span><b>${neuralCellCount}</b> neural cells</span>
         <span><b>${departmentCount}</b> departments online</span>
       </div>
     </section>
@@ -1684,6 +1866,7 @@ function renderWorkforce(el, rerender) {
       <div><span>Active Nodes</span><b>${onlineCount}</b></div>
       <div><span>Parent Workers</span><b>${parentCount}</b></div>
       <div><span>Subagents</span><b>${subagentCount}</b></div>
+      <div><span>Neural Cells</span><b>${neuralCellCount}</b></div>
       <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
       <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
       <div><span>Departments Online</span><b>${departmentCount}</b></div>
@@ -1697,7 +1880,12 @@ function renderWorkforce(el, rerender) {
     "worker-notice-close": () => { workerUi.notice = ""; rerender(); },
     "worker-preview-close": () => { workerUi.preview = null; rerender(); },
     "worker-select": (id) => {
-      workerUi.selectedId = id || workerUi.selectedId;
+      workerUi.selectedId = workerUi.selectedId === id ? "" : (id || workerUi.selectedId);
+      workerUi.tab = "overview";
+      rerender();
+    },
+    "worker-collapse": () => {
+      workerUi.selectedId = "";
       workerUi.tab = "overview";
       rerender();
     },
@@ -1877,6 +2065,7 @@ export function missionWidgets() {
   const workerRoster = buildWorkerRoster();
   const onlineWorkers = workerRoster.filter((worker) => worker.status !== "offline");
   const subagentCount = workerRoster.filter((worker) => worker.worker_type === "subagent").length;
+  const neuralCellCount = workerRoster.filter((worker) => worker.worker_type === "cell").length;
 
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
@@ -1887,7 +2076,7 @@ export function missionWidgets() {
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
     { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} nodes`, sub: isAdmin() ? `${subagentCount} subagents` : "your support swarm", alert: false },
+    { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} nodes`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} cells` : "your support swarm", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });

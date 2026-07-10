@@ -1275,6 +1275,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   font: 800 10px "DM Mono", monospace; text-transform: uppercase; letter-spacing: 0.08em;
 }
 .worker-tab:hover, .worker-tab.is-active { border-color: rgba(65,255,161,0.5); background: rgba(65,255,161,0.13); color: var(--neon); }
+.worker-tab-collapse { margin-left: auto; color: #ffeec0; border-color: rgba(255,209,102,0.24); }
+.worker-tab-collapse:hover { color: #04160d; background: linear-gradient(120deg, #ffd166, #41ffa1); border-color: transparent; }
 .worker-tab-panel {
   border: 1px solid rgba(65,255,161,0.13); border-radius: 14px; padding: 13px;
   background: radial-gradient(circle at 78% 0%, rgba(65,255,161,0.08), transparent 32%), rgba(0,0,0,0.18);
@@ -1283,7 +1285,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .worker-tab-copy b { color: #f2fff8; font-size: 14px; }
 .worker-tab-copy p { margin: 0; color: #cfeada; font-size: 12.5px; line-height: 1.5; }
 .worker-detail-stats, .worker-safe-row {
-  display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px;
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(135px, 1fr)); gap: 8px;
 }
 .worker-detail-stats span, .worker-safe-row span {
   border: 1px solid rgba(255,255,255,0.075); border-radius: 12px; padding: 9px;
@@ -1292,6 +1294,34 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .worker-detail-stats b { display: block; color: var(--neon); font: 900 15px "Space Grotesk", sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .worker-detail-stats i { display: block; margin-top: 2px; font-style: normal; }
 .worker-safe-row span { color: #dfffee; font: 700 10.5px "DM Mono", monospace; }
+.worker-network-panel { display: grid; gap: 12px; }
+.worker-network-head {
+  display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+}
+.worker-network-head b { color: #f2fff8; font-size: 14px; }
+.worker-network-head span { color: var(--dim); font: 800 10px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; }
+.worker-layer-grid {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px;
+}
+.worker-layer-grid span {
+  position: relative; overflow: hidden; border: 1px solid rgba(65,255,161,0.12); border-radius: 12px; padding: 10px;
+  background: linear-gradient(145deg, rgba(65,255,161,0.07), rgba(0,0,0,0.16));
+}
+.worker-layer-grid span::after {
+  content: ""; position: absolute; inset: auto 10px 8px 10px; height: 2px; border-radius: 999px;
+  background: linear-gradient(90deg, var(--neon), transparent);
+  opacity: 0.5;
+}
+.worker-layer-grid b { display: block; color: var(--neon); font: 900 20px "Space Grotesk", sans-serif; }
+.worker-layer-grid i { color: var(--dim); font: 800 9px "DM Mono", monospace; text-transform: uppercase; letter-spacing: 0.09em; font-style: normal; }
+.worker-synapse-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 8px; }
+.worker-synapse-list article {
+  border: 1px solid rgba(65,255,161,0.11); border-radius: 12px; padding: 10px;
+  background: rgba(0,0,0,0.18);
+}
+.worker-synapse-list b { display: block; color: #f2fff8; font-size: 12.5px; }
+.worker-synapse-list p { margin: 5px 0; color: #cfeada; font: 700 10px "DM Mono", monospace; line-height: 1.35; }
+.worker-synapse-list span { color: var(--dim); font-size: 11px; }
 .worker-subagent-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 8px; }
 .worker-subagent-row {
   display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 9px; align-items: start;
@@ -1428,6 +1458,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .worker-tab-row { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
   .worker-tab-row::-webkit-scrollbar { display: none; }
   .worker-tab { flex: 0 0 auto; }
+  .worker-tab-collapse { margin-left: 0; }
+  .worker-layer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .worker-subagent-list { grid-template-columns: 1fr; }
   .worker-grid { grid-template-columns: 1fr; }
   .worker-filter-row { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; }

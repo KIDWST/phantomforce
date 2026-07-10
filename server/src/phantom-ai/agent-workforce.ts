@@ -144,6 +144,8 @@ type SubagentDefinition = {
   name: string;
   parent: string;
   specialty: string;
+  rootParent?: string;
+  layer?: string;
   taskMatch?: RegExp;
 };
 
@@ -195,6 +197,29 @@ const generatedSwarmSubagentDefinitions: SubagentDefinition[] = workerDefinition
     id: `${worker.id}-${template.id}`,
     name: `${worker.name} ${template.name}`,
     parent: worker.name,
+    rootParent: worker.name,
+    specialty: template.specialty,
+  })),
+);
+
+const neuralCellTemplates = [
+  { id: "intake", name: "Intake Cell", layer: "input", specialty: "Classifies the ask, spots missing context, and tags the route." },
+  { id: "memory", name: "Memory Cell", layer: "memory", specialty: "Attaches useful local memory, receipts, and workspace context." },
+  { id: "rank", name: "Rank Cell", layer: "reasoning", specialty: "Scores urgency, value, risk, and the next useful move." },
+  { id: "compose", name: "Compose Cell", layer: "draft", specialty: "Builds the first useful output chunk before review." },
+  { id: "verify", name: "Verify Cell", layer: "review", specialty: "Checks claims, labels assumptions, and catches mismatch." },
+  { id: "guard", name: "Guard Cell", layer: "safety", specialty: "Keeps outside-world actions behind approval gates." },
+  { id: "route", name: "Route Cell", layer: "routing", specialty: "Connects the output to the right workspace or owner packet." },
+  { id: "archive", name: "Archive Cell", layer: "ledger", specialty: "Writes the receipt so Phantom remembers the useful parts." },
+] satisfies Array<Pick<SubagentDefinition, "id" | "name" | "layer" | "specialty">>;
+
+const generatedNeuralCellDefinitions: SubagentDefinition[] = generatedSwarmSubagentDefinitions.flatMap((subagent) =>
+  neuralCellTemplates.map((template) => ({
+    id: `${subagent.id}-${template.id}`,
+    name: `${subagent.name} ${template.name}`,
+    parent: subagent.name,
+    rootParent: subagent.rootParent,
+    layer: template.layer,
     specialty: template.specialty,
   })),
 );
@@ -216,6 +241,7 @@ const automationSubagentDefinitions: SubagentDefinition[] = getAutomationJobDefi
 const subagentDefinitions: SubagentDefinition[] = [
   ...curatedSubagentDefinitions,
   ...generatedSwarmSubagentDefinitions,
+  ...generatedNeuralCellDefinitions,
   ...automationSubagentDefinitions,
 ];
 
@@ -500,7 +526,8 @@ export async function buildAgentWorkforceStatus(options: {
   const recent = recordsSince(allRecords, windowHours);
   const workers = workerDefinitions.map((definition) => buildWorkerMetrics(definition, allRecords));
   const subagents = subagentDefinitions.map((subagent) => {
-    const parent = workers.find((worker) => worker.name === subagent.parent);
+    const parent = workers.find((worker) => worker.name === subagent.parent)
+      ?? workers.find((worker) => worker.name === subagent.rootParent);
 
     if (subagent.taskMatch) {
       const matched = allRecords.filter((record) => subagent.taskMatch!.test(record.task_type));
@@ -511,6 +538,8 @@ export async function buildAgentWorkforceStatus(options: {
         id: subagent.id,
         name: subagent.name,
         parent: subagent.parent,
+        root_parent: subagent.rootParent ?? subagent.parent,
+        layer: subagent.layer ?? "subagent",
         specialty: subagent.specialty,
         state,
         tasks_last_24h: records24h.length,
@@ -526,6 +555,8 @@ export async function buildAgentWorkforceStatus(options: {
       id: subagent.id,
       name: subagent.name,
       parent: subagent.parent,
+      root_parent: subagent.rootParent ?? subagent.parent,
+      layer: subagent.layer ?? "subagent",
       specialty: subagent.specialty,
       state: subagentStatus(parent?.state ?? "standby", tasks24h),
       tasks_last_24h: tasks24h,
@@ -561,6 +592,8 @@ export async function buildAgentWorkforceStatus(options: {
     active_workers: workers.filter((worker) => worker.state === "active").length,
     total_workers: workers.length,
     subagents_mapped: subagents.length,
+    total_worker_nodes: workers.length + subagents.length,
+    neural_cells_mapped: generatedNeuralCellDefinitions.length,
     n8n_scaffolded: n8nPreview.n8n_status.n8n_scaffolded,
     n8n_running: n8nPreview.n8n_status.n8n_running,
     tool_registry_loaded: registry.loaded,
