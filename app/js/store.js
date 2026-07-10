@@ -106,6 +106,22 @@ export function shouldAiRemember(value = "") {
   return /\b(remember|make sure|from now on|always|never|i like|i don't like|important|owner|employee|policy|pricing|package|business|brand|client|customer|workspace)\b/i.test(String(value || ""));
 }
 
+/* Greetings, thanks, acks — chatter that isn't actually about anything.
+   Gates auto-saved conversation memory (rememberConversation below) so
+   the Memory page stays a real record instead of every "hi" and "ok". */
+const TRIVIAL_MESSAGE_PATTERN = /^(hi|hello|hey|yo|sup|thanks|thank you|thx|ok|okay|sure|yes|no|yep|nope|nah|cool|nice|lol|test|testing|hmm|k|kk)[\s!.?]*$/i;
+
+function isMemoryWorthy(prompt, reply) {
+  const cleanPrompt = sanitizeMemoryText(prompt);
+  if (!cleanPrompt) return false;
+  if (TRIVIAL_MESSAGE_PATTERN.test(cleanPrompt.trim())) return false;
+  const wordCount = cleanPrompt.trim().split(/\s+/).filter(Boolean).length;
+  if (wordCount < 3 && !shouldAiRemember(cleanPrompt)) return false;
+  const category = classifyMemory(`${cleanPrompt} ${sanitizeMemoryText(reply)}`);
+  if (category !== "conversation") return true;
+  return shouldAiRemember(cleanPrompt) || shouldAiRemember(reply);
+}
+
 export function pruneMemory(entries = []) {
   const cutoff = Date.now() - MEMORY_RETENTION_DAYS * DAY;
   return entries
@@ -634,6 +650,7 @@ export function addMemory(entry = {}) {
 export function rememberConversation({ prompt = "", reply = "", mode = "ask", route = "" } = {}) {
   const cleanPrompt = sanitizeMemoryText(prompt);
   if (!cleanPrompt) return null;
+  if (!isMemoryWorthy(cleanPrompt, reply)) return null;
   const cleanReply = sanitizeMemoryText(reply);
   const combined = cleanReply ? `User: ${cleanPrompt}\nPhantom: ${cleanReply}` : `User: ${cleanPrompt}`;
   const category = classifyMemory(`${cleanPrompt} ${cleanReply}`);

@@ -1,0 +1,58 @@
+{
+  "name": "ChicagoShots Lead Intake (Dry Run)",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual-trigger",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {},
+      "id": "new-lead-captured",
+      "name": "New Lead Captured (placeholder)",
+      "notes": "Represents a new lead coming in. No trigger, credential, or webhook is wired up — replace with a real source when you're ready to build this for real.",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {},
+      "id": "draft-followup",
+      "name": "Draft Follow-Up (placeholder)",
+      "notes": "Where a follow-up message would be drafted. No send action is configured — this is intentionally a dead end until reviewed.",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [680, 300]
+    },
+    {
+      "parameters": {},
+      "id": "queue-for-approval",
+      "name": "Queue for Owner Approval (placeholder)",
+      "notes": "Represents handing the draft to a human for review before anything sends. No integration is connected.",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [900, 300]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [[{ "node": "New Lead Captured (placeholder)", "type": "main", "index": 0 }]]
+    },
+    "New Lead Captured (placeholder)": {
+      "main": [[{ "node": "Draft Follow-Up (placeholder)", "type": "main", "index": 0 }]]
+    },
+    "Draft Follow-Up (placeholder)": {
+      "main": [[{ "node": "Queue for Owner Approval (placeholder)", "type": "main", "index": 0 }]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "note": "Dry-run draft only. No credentials, no webhook, no live trigger. Owner reviews and rebuilds this by hand in the n8n editor before anything is wired up for real."
+  }
+}
