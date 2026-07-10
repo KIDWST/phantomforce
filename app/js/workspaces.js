@@ -2371,7 +2371,7 @@ export const WORKSPACE_DEFS = {
   media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
-  money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
+  money: { title: "Money", kicker: "Finance ledger", render: renderMoney },
   memory: { title: "Memory", kicker: "Local context database", render: renderMemory },
   workforce: { title: "Workers", kicker: "Swarm network", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
@@ -2399,13 +2399,13 @@ export function missionWidgets() {
 
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
-    { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
+    { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
     { id: "media", icon: "▶", title: "Media Lab", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
     { id: "sites", icon: "▦", title: "Site Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
-    { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
+    { id: "money", icon: "◈", title: "Money", stat: m.transactions.length ? moneySigned(m.netCash) : "ledger", sub: m.transactions.length ? `${m.transactions.length} transaction${m.transactions.length === 1 ? "" : "s"}` : "add/import transactions", alert: false },
     { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];

@@ -972,7 +972,7 @@ function renderQueue() {
 const QUICK = [
   { label: "Create new content", icon: "spark",  run: "Create campaign media" },
   { label: "Start video campaign", icon: "film",  run: "Create a launch video" },
-  { label: "Check pipeline", icon: "chart",   run: "What's my pipeline?" },
+  { label: "Check cashflow", icon: "chart",   run: "What's my cash flow?" },
   { label: "Open media library", icon: "upload",   open: "media" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
@@ -1108,14 +1108,16 @@ function execPalette(i = cmdkIdx) {
 }
 
 /* ============================ spoken briefing ============================ */
+const signedMoney = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmtMoney(value);
+
 function briefingText() {
   const m = moneyView();
   const pend = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
   const bits = [`${greeting()}, ${name}`];
-  if (m.pipeline) bits.push(`${fmtMoney(m.pipeline)} in open pipeline`);
+  if (m.transactions.length) bits.push(`${signedMoney(m.netCash)} net cashflow`);
   if (pend) bits.push(`${pend} approval${pend > 1 ? "s" : ""} waiting on you`);
-  if (!pend && !m.pipeline) bits.push("no real work loaded yet");
+  if (!pend && !m.transactions.length) bits.push("no real work loaded yet");
   return bits.slice(0, 3).join(" · ") + ". What do you want handled first?";
 }
 
@@ -1258,7 +1260,7 @@ const CHAT_STARTERS = [
   { label: "Create a proposal", run: "Draft a proposal for a new client" },
   { label: "Plan a campaign", run: "Create campaign media for a new campaign" },
   { label: "Make an intake form", run: "Build a client intake form page" },
-  { label: "Review my business", run: "What's my pipeline?" },
+  { label: "Review my business", run: "Review my business health" },
 ];
 
 function starterHtml() {
