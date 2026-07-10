@@ -1432,19 +1432,7 @@ function renderWorkforce(el, rerender) {
     </div>
     <div class="worker-grid" role="list">
       ${visibleWorkers.map((worker) => renderWorkerCard(worker, [], { actions: isAdmin() })).join("") || empty("No employees match this filter.")}
-    </div>
-    <section class="worker-enterprise">
-      <div class="worker-safety-list">
-        <span>Employees prepare work; Phantom AI assigns the lane automatically.</span>
-        <span>Owner approval is required for sends, posts, uploads, payments, invoices, and deploys.</span>
-        <span>Internal tool names stay behind the curtain until a customer-facing feature is ready.</span>
-      </div>
-      <div>
-        <p class="worker-kicker">Approval-first operating model</p>
-        <h4>The team can prepare almost anything. Only the owner can release it.</h4>
-        <p>This page is visibility and trust: it shows who is preparing the work, what department owns it, and where approval gates protect the business.</p>
-      </div>
-    </section>`;
+    </div>`;
   bindActions(el, {
     "worker-filter": (_id, button) => { workerUi.filter = button.dataset.filter || "all"; rerender(); },
     "worker-notice-close": () => { workerUi.notice = ""; rerender(); },
