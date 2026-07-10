@@ -19,6 +19,7 @@ import { getAutonomousSecurityScanStatus } from "./security-scan-scheduler.js";
 import { getAccessAuthConfiguration } from "../access/session.js";
 import { buildProductionReadinessReport } from "../access/production-readiness.js";
 import { prisma } from "../access/prisma-runtime.js";
+import { getContentAssetStorageProvider } from "./content-asset-storage.js";
 
 const ENGINE_VERSION = "2026.07.10-autopilot-v1";
 const DEFAULT_STATE_DIR = path.join(process.cwd(), ".local", "automation-engine");
@@ -279,6 +280,24 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
         ok: preview.n8n_status.n8n_scaffolded,
         summary: `n8n scaffold ${preview.n8n_status.n8n_scaffolded ? "present" : "missing"}, running: ${preview.n8n_status.n8n_running ? "yes" : "no"}, ${preview.n8n_status.workflow_drafts.length} draft workflow(s).`,
         next_action: preview.n8n_status.n8n_scaffolded ? "No action needed." : "Scaffold the n8n workflow-stack if automation drafting is wanted.",
+      };
+    },
+  },
+  {
+    id: "content-asset-cleanup",
+    name: "Content Asset Cleanup",
+    category: "ops",
+    cadence: "daily",
+    description: "Deletes cross-device-synced content assets older than 30 days from the local sync store.",
+    run: async () => {
+      const provider = getContentAssetStorageProvider();
+      const result = await provider.deleteExpiredAssets();
+      return {
+        ok: true,
+        summary: result.deletedCount > 0
+          ? `Deleted ${result.deletedCount} expired content asset(s) past the 30-day retention window.`
+          : "No expired content assets to delete.",
+        next_action: "No action needed.",
       };
     },
   },

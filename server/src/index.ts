@@ -161,6 +161,7 @@ import {
   setAutomationJobEnabled,
   startAutomationEngine,
 } from "./phantom-ai/automation-engine.js";
+import { getContentAssetStorageProvider } from "./phantom-ai/content-asset-storage.js";
 import {
   getProviderSetupStatus,
   previewModelRouterFoundation,
@@ -3196,6 +3197,87 @@ app.get("/phantom-ai/media-lab/proxy-image", async (request, reply) => {
   } finally {
     clearTimeout(timeout);
   }
+});
+
+/* ---- Content asset sync (cross-device photo/video sync) ----
+   Content Hub's actual asset data (the image/video bytes) normally lives
+   only in whichever browser created it — this is the real server-side
+   store that lets a photo edited on one device show up on another. Scoped
+   to the caller's session (owner sessions always resolve to the same
+   scope regardless of device, so the same owner login on two devices sees
+   the same assets). Every asset auto-expires after 30 days — this is a
+   temporary sync/archive layer, not permanent storage; see
+   content-asset-storage.ts for the pluggable provider seam (local disk
+   today, a real Google Drive API/OAuth provider possible later). */
+function contentAssetOwnerScope(session: AccessSession) {
+  return session.clientId ?? session.id;
+}
+
+const ContentAssetUploadSchema = z.object({
+  image: z.string().trim().min(1).max(24_000_000),
+  filename: z.string().trim().max(160).optional(),
+});
+
+app.post("/phantom-ai/content/assets", { bodyLimit: 24 * 1024 * 1024 }, async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = ContentAssetUploadSchema.safeParse(request.body);
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+
+  const provider = getContentAssetStorageProvider();
+  const result = await provider.putAsset({
+    ownerScope: contentAssetOwnerScope(session),
+    dataUrl: parsed.data.image,
+    originalName: parsed.data.filename,
+  });
+
+  if (!result.ok) {
+    return reply.code(400).send({ ok: false, error: result.error });
+  }
+
+  return { ok: true, session, asset: result.asset };
+});
+
+app.get("/phantom-ai/content/assets", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const provider = getContentAssetStorageProvider();
+  const assets = await provider.listAssets(contentAssetOwnerScope(session));
+  return { ok: true, session, assets };
+});
+
+app.get("/phantom-ai/content/assets/:id/file", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const provider = getContentAssetStorageProvider();
+  const result = await provider.getAssetFile(id, contentAssetOwnerScope(session));
+
+  if (!result.ok) {
+    return reply.code(404).send({ ok: false, error: result.error });
+  }
+
+  return { ok: true, session, image: result.dataUrl, asset: result.asset };
+});
+
+app.delete("/phantom-ai/content/assets/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const provider = getContentAssetStorageProvider();
+  const deleted = await provider.deleteAsset(id, contentAssetOwnerScope(session));
+
+  if (!deleted) {
+    return reply.code(404).send({ ok: false, error: "not_found" });
+  }
+
+  return { ok: true, session };
 });
 
 /* ---- Local background removal (rembg) ----
