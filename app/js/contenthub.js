@@ -10,8 +10,8 @@ import {
   freshEditState, applyFilterPreset, paintEdit, renderBaseFrame, heuristicAiEdit,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260709-120";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260709-120";
+} from "./imagefilters.js?v=phantom-live-20260709-121";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas } from "./mediabackend.js?v=phantom-live-20260709-121";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -367,7 +367,7 @@ function exportMarkdown(items, label = "selection") {
     `Exported: ${payload.exported_at}`,
     `Scope: ${label}`,
     "",
-    "Safety: local export only. No upload, post, send, provider call, queue write, or external action was performed.",
+    "Safety: local export only. No upload, post, send, external generation, queue write, or outside action was performed.",
     "",
     "## Media Assets",
     assetRows.length ? assetRows.join("\n") : "- None",
@@ -781,20 +781,17 @@ function aiEditBody(lb, esc) {
     ${ai.status === "local-applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Applied locally (not AI) — use Reset to go back to the original.</p>` : ""}`;
 
   if (ai.mode === "manual") {
-    // Higgsfield is a web-app subscription, not something this app can call
-    // via API without a real key — never faked as "connected". Instead:
-    // prep the prompt/image so Jordan can run it in Higgsfield by hand.
-    // No scraping, no automated login, no cookies/session tokens touched —
-    // this only copies text and opens a new tab.
+    // Manual studio mode: no automated media run. This only prepares the
+    // prompt/image and opens the owner's external creative studio in a new tab.
     return `
-      <p class="ch-lb-ai-note ch-lb-ai-note-warn">Higgsfield is connected as a subscription, not an API key — PhantomForce can't call it directly. Prep your prompt and image below, then run it in Higgsfield yourself.</p>
+      <p class="ch-lb-ai-note ch-lb-ai-note-warn">Manual studio mode is active. Prep the prompt and image below, then finish the edit in your creator studio.</p>
       <div class="ch-lb-ai-row">
         <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, more contrast, cinematic…"/>
       </div>
       <div class="ch-lb-chips">
         <button class="btn btn-quiet" type="button" data-ch-lb-ai-copy>Copy prompt</button>
         <button class="btn btn-quiet" type="button" data-ch-lb-ai-dl>Download image</button>
-        <button class="btn btn-primary" type="button" data-ch-lb-ai-open-higgsfield>Open Higgsfield ${svgIc("bolt")}</button>
+        <button class="btn btn-primary" type="button" data-ch-lb-ai-open-studio>Open creator studio ${svgIc("bolt")}</button>
       </div>
       <div class="ch-lb-chips">
         <button class="btn btn-quiet" type="button" data-ch-lb-ai-local>Apply as adjustment</button>
@@ -805,11 +802,10 @@ function aiEditBody(lb, esc) {
   }
 
   if (ai.mode !== "connected") {
-    // No provider at all — not even a Higgsfield subscription configured.
-    // Don't fake it. Offer the honest path (connect one in Settings) plus
-    // the same local fallback for simple asks.
+    // No prompt-guided media engine is wired. Offer setup plus the same local
+    // fallback for simple asks.
     return `
-      <p class="ch-lb-ai-note ch-lb-ai-note-warn">No AI edit provider is connected yet — prompt-guided edits need a real provider.</p>
+      <p class="ch-lb-ai-note ch-lb-ai-note-warn">Prompt-guided generation is not wired in this workspace yet.</p>
       <div class="ch-lb-chips">
         <button class="btn btn-primary" type="button" data-ch-lb-ai-connect>${svgIc("bolt")} Connect Media Engine</button>
       </div>
@@ -826,7 +822,7 @@ function aiEditBody(lb, esc) {
       <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…"/>
       <button class="btn btn-primary" type="button" data-ch-lb-ai-run ${busy ? "disabled" : ""}>${loading ? "Generating…" : checking ? "Checking…" : "Generate"}</button>
     </div>
-    <p class="ch-lb-ai-note">Connected — Generate sends this image and your prompt to the configured edit provider.</p>
+    <p class="ch-lb-ai-note">Connected — Generate runs this image and prompt through your media engine.</p>
     ${ai.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(ai.message || "Edit failed.")}</p>` : ""}
     ${ai.status === "success" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Edit applied — use Reset to go back to the original.</p>` : ""}
   `;
@@ -1020,9 +1016,9 @@ function lightboxMarkup(lb, esc) {
 function tutorialMarkup() {
   const rows = [
     ["Open an image", "Double-click any image in the library to open it here."],
-    ["Describe an edit", "Type what you want and hit Generate. This only works once a real edit provider is connected in Settings — otherwise the button is disabled and says so."],
+    ["Describe an edit", "Type what you want and hit Generate. This only works once the media engine is connected in Settings — otherwise the button is disabled and says so."],
     ["Remove background", "Only enabled when rembg is installed and reachable. Runs for real, shows a before/after, then Apply or Cancel."],
-    ["Subject bokeh", "Click \"AI detect subject\" — it uses your connected rembg backend to find the real subject shape, so gaps like the space between a cat's ears blur correctly. Then use \"Add focus spots\" to touch up anything it missed; drag a spot to move it, click to select and resize, right-click to remove it."],
+    ["Subject bokeh", "Click \"AI detect subject\" — it uses your local background-removal engine to find the real subject shape, so gaps like the space between a cat's ears blur correctly. Then use \"Add focus spots\" to touch up anything it missed; drag a spot to move it, click to select and resize, right-click to remove it."],
     ["Adjust / Transform / Style presets / Text overlay", "Tucked into the sections below — click a heading to open it. Text overlay has fonts, color, outline, shadow, alignment, position, and layout presets."],
     ["Save vs. Save as copy", "Save updates this asset in place. Save as copy keeps the original and creates a new one."],
     ["In the library grid", "Shift+click selects a range, Ctrl+click adds one at a time, Ctrl+A selects everything visible, Ctrl+Z undoes your last delete."],
@@ -1077,7 +1073,7 @@ function wireLightbox(root, opts) {
   // Cross-origin sources without CORS headers would otherwise silently
   // taint the canvas — every later toDataURL() call (Save/Download) throws
   // with no visible error. loadImageForEditing() requests CORS, then falls
-  // back to a same-origin backend proxy so this never happens silently.
+  // back to a same-origin media proxy so this never happens silently.
   loadImageForEditing(asset.url)
     .then((img) => { paintEdit(canvas, img, s); positionMarkers(); })
     .catch((error) => {
@@ -1245,7 +1241,7 @@ function wireLightbox(root, opts) {
       opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${result.message}`);
       return;
     }
-    // loadImageForEditing (not a raw new Image()) so a provider-hosted
+    // loadImageForEditing (not a raw new Image()) so a media-engine
     // result without CORS headers doesn't silently taint the canvas —
     // that would make every later Save/Download throw with no visible error.
     loadImageForEditing(result.url)
@@ -1259,7 +1255,7 @@ function wireLightbox(root, opts) {
       })
       .catch(() => {
         if (chLightbox !== lb) return;
-        lb.aiEdit = { ...lb.aiEdit, status: "error", message: "The edit provider returned an image that could not be loaded." };
+        lb.aiEdit = { ...lb.aiEdit, status: "error", message: "The media engine returned an image that could not be loaded." };
         rerender();
       });
   };
@@ -1278,16 +1274,15 @@ function wireLightbox(root, opts) {
     opts.notify?.("Content Hub", `applied a local adjustment to "${asset.title}" (not AI): "${q.slice(0, 40)}".`);
   };
 
-  // Manual mode (Higgsfield subscription, no API key): prep the prompt/image
-  // for Jordan to run by hand. Never touches Higgsfield itself — no login,
-  // no cookies, no scraping, just clipboard/download/a plain new-tab open.
+  // Manual studio mode: prep the prompt/image for the owner to run by hand.
+  // No login automation, no cookies, no scraping; just clipboard/download/open.
   const aiCopy = root.querySelector("[data-ch-lb-ai-copy]");
   if (aiCopy) aiCopy.onclick = async () => {
     const q = (root.querySelector("[data-ch-lb-ai]")?.value || "").trim();
     if (!q) { opts.notify?.("Content Hub", "Type a prompt first, then Copy prompt."); return; }
     try {
       await navigator.clipboard.writeText(q);
-      opts.notify?.("Content Hub", "Prompt copied — paste it into Higgsfield.");
+      opts.notify?.("Content Hub", "Prompt copied — paste it into your creator studio.");
     } catch {
       opts.notify?.("Content Hub", "Couldn't copy to the clipboard — select and copy the prompt manually.");
     }
@@ -1296,14 +1291,14 @@ function wireLightbox(root, opts) {
   if (aiDownload) aiDownload.onclick = async () => {
     const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't prep the image for Higgsfield: ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't prep the image for the creator studio: ${exported.error}`); return; }
     const link = document.createElement("a");
     link.href = exported.url;
     link.download = `phantomforce-${asset.id}.png`;
     link.click();
   };
-  const aiOpenHiggsfield = root.querySelector("[data-ch-lb-ai-open-higgsfield]");
-  if (aiOpenHiggsfield) aiOpenHiggsfield.onclick = () => {
+  const aiOpenStudio = root.querySelector("[data-ch-lb-ai-open-studio]");
+  if (aiOpenStudio) aiOpenStudio.onclick = () => {
     window.open("https://higgsfield.ai", "_blank", "noopener,noreferrer");
   };
 
@@ -1391,18 +1386,15 @@ function wireLightbox(root, opts) {
     }
   };
 
-  // Probe real backends exactly once per lightbox session — never on every
+  // Probe real media services exactly once per lightbox session — never on every
   // keystroke/rerender. Both probes are honest: unreachable/unconfigured
   // always resolves to "unavailable", never a fake "connected" state.
   if (!lb._probed) {
     lb._probed = true;
     probeAiEditBackend().then((r) => {
       if (chLightbox !== lb) return;
-      // mode is the persistent connectivity classification — "connected"
-      // (real API key, Generate calls it for real), "manual" (Higgsfield
-      // subscription with no API key — never faked as connected, offer to
-      // prep a prompt + open Higgsfield instead), or "unavailable" (no
-      // provider at all). status is the transient state of the CURRENT
+      // mode is the persistent connectivity classification: connected,
+      // manual, or unavailable. status is the transient state of the current
       // action (idle/loading/error/success/local-applied) layered on top.
       lb.aiEdit = { mode: r.mode, status: "idle", message: "", provider: r.provider };
       rerender();
@@ -1410,7 +1402,7 @@ function wireLightbox(root, opts) {
     probeRemoveBackground().then((available) => {
       if (chLightbox !== lb) return;
       lb.bg = { status: available ? "idle" : "unavailable", message: "" };
-      // AI subject detection reuses the same rembg backend, so it's honest
+      // AI subject detection reuses the same local background-removal engine, so it's honest
       // about being unavailable together with Remove Background — never a
       // fake "connected" state when the real check failed.
       if (lb.bokehDetect.status === "idle" || lb.bokehDetect.status === "unavailable") {
@@ -1615,9 +1607,9 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   });
   body.querySelector("[data-ch-batch-ai]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
-    setSelectedAssetMetadata(ids, { aiEditPlan: "Local AI edit plan drafted; provider call still gated." });
+    setSelectedAssetMetadata(ids, { aiEditPlan: "Local AI edit plan drafted; external generation still gated." });
     exportLibraryItems(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset" && ids.has(item.id)), "batch-ai-edit-plan");
-    opts.notify?.("Content Hub", "Created a local batch AI edit plan. No provider call ran.");
+    opts.notify?.("Content Hub", "Created a local batch AI edit plan. No external generation ran.");
     rerender();
   });
   body.querySelector("[data-ch-edit-selected]")?.addEventListener("click", () => {

@@ -1,21 +1,21 @@
-/* PhantomForce — shared real-backend client for the media editor: background
+/* PhantomForce — shared media-engine client for the media editor: background
    removal (rembg) and AI Edit. Every call here is a real network request —
    no fabricated success, no fake progress. Unreachable/unconfigured always
    resolves to an honest unavailable/error result, never a silent pretend
    success. Content Hub's lightbox, Media Lab's Edit tab, and Settings all
-   use this so "is a real backend connected" is answered the same way
+   use this so "is a real media engine connected" is answered the same way
    everywhere.
 
    Two lanes, tried in order (same philosophy as Media Lab's own multi-lane
    health check):
    1. Same-origin Fastify server (server/src/index.ts) — the real admin
-      backend, authenticated with the session's bearer token. This is what
+      media service, authenticated with the session's bearer token. This is what
       runs in production behind admin.phantomforce.online.
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260709-120";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260709-120";
+import { session } from "./store.js?v=phantom-live-20260709-121";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260709-121";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -42,10 +42,10 @@ async function fetchWithTimeout(url, options = {}, ms = 6000) {
    A canvas that ever draws a cross-origin image without CORS gets "tainted"
    by the browser — every later toDataURL()/getImageData() call throws.
    Images still always load directly for display: gating the image on a
-   backend proxy round-trip means a slow/unreachable proxy breaks viewing
+   media service round-trip means a slow/unreachable service breaks viewing
    entirely, which is worse than the taint problem it's meant to solve.
    Instead, editing operations that actually need pixel data (Save, Download,
-   sending to a provider) go through imagefilters.js's safeCanvasDataUrl,
+   sending to a media engine) go through imagefilters.js's safeCanvasDataUrl,
    catch the taint there, and call rescueTaintedImage below to fetch a clean
    same-origin copy through this proxy — only then does an unreachable proxy
    become a real (clearly explained) error, and only for that one action. */
@@ -78,7 +78,7 @@ async function proxyImageToDataUrl(url) {
   return null;
 }
 
-/* Fetches a same-origin copy of a tainting image through the backend proxy
+/* Fetches a same-origin copy of a tainting image through the media proxy
    and loads it. Returns null (never throws) if both proxy lanes fail, so
    callers can show one honest "couldn't recover" message. */
 export async function rescueTaintedImage(url) {
@@ -106,7 +106,7 @@ export async function exportCanvas(canvas, repaintFn, format = "image/png", qual
 /* ---------------- background removal (rembg) ---------------- */
 
 /* Full status detail — used by the editor panel and Settings > Media
-   Engines. `lane` records which backend actually answered, or "unreachable"
+   Engines. `lane` records which service actually answered, or "unreachable"
    if neither did (never guessed). */
 export async function getRembgStatus(opts = {}) {
   const recheck = opts.recheck ? "?recheck=true" : "";
@@ -126,7 +126,7 @@ export async function getRembgStatus(opts = {}) {
     }
   } catch { /* both lanes unreachable */ }
 
-  return { lane: "unreachable", available: false, pythonCommand: null, version: null, error: "Could not reach a media backend to check rembg.", checkedAt: new Date().toISOString() };
+  return { lane: "unreachable", available: false, pythonCommand: null, version: null, error: "Could not reach a media engine to check background removal.", checkedAt: new Date().toISOString() };
 }
 
 /* Simple boolean check for the editor's mount-time probe. */
@@ -158,28 +158,21 @@ export async function requestRemoveBackground(dataUrl) {
     if (r.ok && d && d.ok && d.image) return { ok: true, image: d.image };
     return { ok: false, message: (d && d.message) || "Background removal unavailable — rembg is not installed or not connected." };
   } catch (e) {
-    return { ok: false, message: e && e.name === "AbortError" ? "Background removal timed out." : "Could not reach the media backend." };
+    return { ok: false, message: e && e.name === "AbortError" ? "Background removal timed out." : "Could not reach the media engine." };
   }
 }
 
-/* ---------------- AI edit (real /generate, modality "edit") ----------------
+/* ---------------- Prompt-guided edit media engine ----------------
    Reuses the media-generation route Media Lab uses for creation, with a
-   reference image + modality "edit" so a connected provider performs a real
-   prompt-guided edit. No key ever touches the browser.
+   reference image + modality "edit" so a connected edit-capable engine
+   performs a real prompt-guided edit. No key ever touches the browser.
 
-   Higgsfield specifically is a web-app subscription product, not something
-   with a public API key by default — ai-proxy can only call it for real if
-   HIGGSFIELD_API_KEY is set in its environment. A subscription in the
-   browser does NOT set that env var, so this never reports "connected" just
-   because Jordan is logged into higgsfield.ai — mode stays "manual" until a
-   real key exists, and the UI offers to prep a prompt + open Higgsfield
-   rather than pretending to call an API that isn't there. */
-// Providers ai-proxy actually knows how to run a real prompt-guided EDIT
-// through (matches MEDIA_PROVIDERS[id].modalities in ai-proxy/server.mjs).
-// A key for an image-only provider (e.g. OpenAI) doesn't make edits
-// "connected" — ai-proxy doesn't check modality support before dispatching,
-// so calling it for edit would silently do the wrong thing (generate an
-// unrelated image) rather than fail — keep that path out of "connected".
+   If no edit-capable engine is wired, the UI stays in manual studio mode:
+   prepare the prompt/image for a human-run workflow instead of pretending an
+   automated edit happened. */
+// Engines ai-proxy actually knows how to run for real prompt-guided edits
+// (matches MEDIA_PROVIDERS[id].modalities in ai-proxy/server.mjs). Image-only
+// engines do not make edits "connected"; keep those out of this path.
 const EDIT_CAPABLE_PROVIDERS = ["higgsfield"];
 
 export async function probeAiEditBackend() {
@@ -208,8 +201,8 @@ export async function requestAiEdit({ dataUrl, prompt, provider = "higgsfield" }
     }, 45000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && Array.isArray(d.assets) && d.assets[0]?.url) return { ok: true, url: d.assets[0].url };
-    return { ok: false, message: (d && d.message) || (d && d.error === "unconfigured" ? "No AI edit provider is connected yet." : "The edit backend didn't return a result.") };
+    return { ok: false, message: (d && d.message) || (d && d.error === "unconfigured" ? "Prompt-guided generation is not wired in this workspace yet." : "The media engine didn't return a result.") };
   } catch (e) {
-    return { ok: false, message: e && e.name === "AbortError" ? "AI edit timed out." : "Could not reach the AI edit backend." };
+    return { ok: false, message: e && e.name === "AbortError" ? "AI edit timed out." : "Could not reach the media engine." };
   }
 }
