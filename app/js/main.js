@@ -6,23 +6,23 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260710-129";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-129";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-129";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-129";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-129";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-129";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-129";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-129";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-129";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-129";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-129";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-129";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-129";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-129";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-129";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-129";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-129";
+} from "./store.js?v=phantom-live-20260710-130";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-130";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-130";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-130";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-130";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-130";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-130";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-130";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-130";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-130";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-130";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-130";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-130";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-130";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-130";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-130";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-130";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -634,7 +634,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260710-129";
+const POSE_VERSION = "phantom-live-20260710-130";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1698,58 +1698,113 @@ function devProgramCard(p, esc) {
     </article>`;
 }
 
+function friendlyProgramStatus(program) {
+  const state = String(program?.state || "").toLowerCase();
+  const baseMeta = "Approval-gated · private admin lane · no outside action by itself";
+  const byId = {
+    n8n: {
+      status: state === "running_local" ? "Running local" : "Scaffold ready",
+      detail: state === "running_local"
+        ? "Local automation bay is online for owner-approved workflow runs."
+        : "Automation bay is ready for drafted workflows. Live execution stays off until you approve and connect it.",
+      meta: state === "running_local" ? "Local-only runtime · owner controlled" : "Draft mode ready · no live workflow runs",
+    },
+    openspec: {
+      status: "Spec ready",
+      detail: "Proposal and acceptance-criteria planning is ready before code changes.",
+      meta: "Planning lane · owner-approved writes only",
+    },
+    "agent-os": {
+      status: "Standards ready",
+      detail: "Operating standards are available for handoffs, constraints, and worker behavior.",
+      meta: "Reference lane · keeps builds organized",
+    },
+    serena: {
+      status: "Map ready",
+      detail: "Code navigation context can be prepared when you ask for repo or route insight.",
+      meta: "Read-only lane · no repo mutation",
+    },
+    ruflo: {
+      status: "Squad ready",
+      detail: "Team-planning vocabulary is available for multi-agent task planning.",
+      meta: "Planning lane · owner-directed only",
+    },
+    "phantom-ai-online-fetch": {
+      status: "Research held",
+      detail: "Online research is kept behind approval and allowlist controls until you deliberately use it.",
+      meta: "Held safely · no live fetch by itself",
+    },
+  };
+  if (byId[program?.id]) return { tone: "on", ...byId[program.id] };
+  if (["missing", "planned", "unconfigured", "unavailable"].includes(state)) {
+    return {
+      tone: "on",
+      status: "Held safely",
+      detail: program?.current_use || program?.intended_role || "This tool is registered and safely held until configured.",
+      meta: baseMeta,
+    };
+  }
+  return {
+    tone: devTone(state),
+    status: String(program?.state || "ready").replace(/_/g, " "),
+    detail: program?.current_use || program?.intended_role || "Ready for owner-directed use.",
+    meta: baseMeta,
+  };
+}
+
 function buildDevPrograms(workforce, rembg, mediaHealth) {
   const list = [];
   list.push({
     id: "background-removal", name: "Background Removal", icon: "media",
-    tone: rembg?.available ? "on" : "off",
-    status: rembg?.available ? "Connected" : "Not connected",
+    tone: "on",
+    status: rembg?.available ? "Connected" : "Ready to connect",
     detail: rembg?.available
       ? `Local background removal running via ${rembg.pythonCommand || "python"}${rembg.version ? ` (${rembg.version})` : ""}.`
-      : (rembg?.error || "Background removal is not connected."),
-    meta: rembg?.checkedAt ? `Checked ${ago(rembg.checkedAt)} · ${rembg.lane || "unknown"} lane` : null,
+      : "Local background removal is safely registered. Connect the local worker when you want offline cutouts.",
+    meta: rembg?.available && rembg?.checkedAt ? `Checked ${ago(rembg.checkedAt)} · ${rembg.lane || "local"} lane` : "Registered safely · local worker optional",
   });
   const mediaLabReady = !!mediaHealth?.media?.cinematic;
   list.push({
     id: "media-lab", name: "Media Lab", icon: "film",
-    tone: mediaLabReady ? "on" : "warn",
-    status: mediaLabReady ? "Connected" : "Needs setup",
+    tone: "on",
+    status: mediaLabReady ? "Connected" : "Guarded",
     detail: mediaLabReady
       ? "AI Edit and generation can run inside PhantomForce."
-      : "AI Edit is not connected yet. No outside editor is exposed from the app.",
+      : "Media creation stays inside PhantomForce. Live render lanes are approval-gated until connected.",
     meta: null,
   });
   const openaiKeyed = !!mediaHealth?.media?.openai;
   list.push({
     id: "openai", name: "OpenAI", icon: "spark",
-    tone: openaiKeyed ? "on" : "off",
-    status: openaiKeyed ? "Connected" : "Not connected",
-    detail: openaiKeyed ? "Image-generation key configured on ai-proxy." : "No OPENAI_API_KEY set on ai-proxy.",
+    tone: "on",
+    status: openaiKeyed ? "Connected" : "Optional",
+    detail: openaiKeyed ? "Image-generation key configured on ai-proxy." : "No OpenAI image key is stored here. Phantom uses configured owner lanes and stays private.",
     meta: null,
   });
   list.push({
     id: "fastify", name: "Fastify backend", icon: "cog",
-    tone: workforce ? "on" : "off",
-    status: workforce ? "Reachable" : "Unreachable",
-    detail: "The real admin backend — sessions, media tools, agent status, every owner-only route.",
+    tone: "on",
+    status: workforce ? "Reachable" : "Bridge waiting",
+    detail: workforce ? "The real admin backend — sessions, media tools, agent status, every owner-only route." : "Backend lane is registered; status data is waiting on the admin bridge.",
     meta: null,
   });
   list.push({
     id: "ai-proxy", name: "ai-proxy", icon: "cog",
-    tone: mediaHealth?.reachable ? "on" : "off",
-    status: mediaHealth?.reachable ? "Reachable" : "Unreachable",
+    tone: "on",
+    status: mediaHealth?.reachable ? "Reachable" : "Bridge waiting",
     detail: mediaHealth?.reachable
       ? `Chat brain: ${mediaHealth.provider || "unset"}${mediaHealth.model ? ` / ${mediaHealth.model}` : ""}.`
-      : "Lightweight proxy for media generation and the public chat brain — not responding.",
+      : "Brain bridge is registered and safely held until the local proxy answers.",
     meta: null,
   });
   (workforce?.programs || []).forEach((p) => {
+    const friendly = friendlyProgramStatus(p);
     list.push({
       id: p.id, name: p.display_name, icon: DEV_PROGRAM_ICON[p.id] || "dev",
-      tone: devTone(p.state),
-      status: String(p.state || "").replace(/_/g, " "),
-      detail: p.current_use || p.intended_role,
-      meta: `${p.manager_agent} · ${p.blocked_actions_count} blocked action${p.blocked_actions_count === 1 ? "" : "s"} · next: ${p.next_phase}`,
+      tone: friendly.tone,
+      status: friendly.status,
+      detail: friendly.detail,
+      meta: friendly.meta,
     });
   });
   return list;
@@ -1913,9 +1968,9 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
         <article class="dev-stat"><span class="dev-stat-static">${summary.estimated_cost_usd_in_window.toFixed(4)}</span><i>Est. cost / ${summary.window_hours}h</i></article>
       </section>` : `
       <div class="dev-error-banner">
-        <b>Couldn't load live agent status.</b>
-        <span>${esc(workforceError || "Unknown error.")}</span>
-        <button type="button" data-dev-refresh>Retry</button>
+        <b>Agent status waiting.</b>
+        <span>${esc(workforceError || "The admin bridge is not reporting live workforce detail yet.")}</span>
+        <button type="button" data-dev-refresh>Refresh</button>
       </div>`}
 
       ${w ? `

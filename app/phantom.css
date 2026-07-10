@@ -3372,14 +3372,14 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .dev-stat i { font-style: normal; font-size: 10.5px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--dim); }
 
 .dev-error-banner {
-  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid rgba(255, 92, 115, 0.32);
-  border-radius: 14px; padding: 14px 16px; background: rgba(255, 92, 115, 0.06);
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap; border: 1px solid rgba(65, 255, 161, 0.28);
+  border-radius: 14px; padding: 14px 16px; background: rgba(65, 255, 161, 0.06);
 }
-.dev-error-banner b { color: #ffd7dd; }
+.dev-error-banner b { color: #caffdf; }
 .dev-error-banner span { color: var(--dim); font-size: 12px; flex: 1 1 220px; }
 .dev-error-banner button {
-  border: 1px solid rgba(255, 92, 115, 0.4); border-radius: 9px; padding: 6px 12px; background: rgba(255, 92, 115, 0.14);
-  color: #ffd7dd; font: 600 12px "Space Grotesk"; cursor: pointer;
+  border: 1px solid rgba(65, 255, 161, 0.38); border-radius: 9px; padding: 6px 12px; background: rgba(65, 255, 161, 0.12);
+  color: #caffdf; font: 600 12px "Space Grotesk"; cursor: pointer;
 }
 
 .dev-section { display: flex; flex-direction: column; gap: 12px; }
