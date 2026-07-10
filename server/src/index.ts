@@ -171,6 +171,16 @@ import {
   clientSafeMediaLabImageToolchainStatus,
   getMediaLabImageToolchainStatus,
 } from "./phantom-ai/media-lab-image-toolchain.js";
+import {
+  appendBrainEvent,
+  buildBrainStatus,
+  composeBrainContext,
+  createBrainMemory,
+  forgetBrainMemory,
+  listBrainMemories,
+  recordBrainFeedback,
+  updateBrainMemory,
+} from "./phantom-ai/neural-spine.js";
 import { detectRembg, runRembgRemoveBackground } from "./phantom-ai/rembg-bridge.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
@@ -236,6 +246,49 @@ const HiggsfieldDraftSchema = z.object({
   media_role: z.enum(["image", "start-image", "end-image", "video", "audio"]).optional().default("video"),
   product_url: z.string().trim().max(600).optional().default(""),
   generate_audio: z.enum(["", "true", "false", "yes", "no"]).optional().default(""),
+});
+
+const BrainMemoryCreateSchema = z.object({
+  text: z.string().trim().min(1).max(1200),
+  type: z.string().trim().max(40).optional(),
+  confidence: z.number().min(0.05).max(1).optional(),
+  weight: z.number().min(0.05).max(1).optional(),
+  source: z.string().trim().max(80).optional(),
+});
+
+const BrainMemoryPatchSchema = z.object({
+  text: z.string().trim().min(1).max(1200).optional(),
+  type: z.string().trim().max(40).optional(),
+  confidence: z.number().min(0.05).max(1).optional(),
+  weight: z.number().min(0.05).max(1).optional(),
+  active: z.boolean().optional(),
+});
+
+const BrainFeedbackSchema = z.object({
+  kind: z.string().trim().max(80).optional(),
+  text: z.string().trim().max(1200).optional(),
+  targetId: z.string().trim().max(160).optional(),
+  useful: z.boolean().optional(),
+  surface: z.string().trim().max(60).optional(),
+});
+
+const BrainContextPreviewSchema = z.object({
+  message: z.string().max(1600).optional(),
+  surface: z.string().trim().max(60).optional(),
+  proposedActionType: z.string().trim().max(80).optional(),
+  currentModule: z.string().trim().max(80).optional(),
+});
+
+const BrainEventSchema = z.object({
+  surface: z.string().trim().max(60).optional(),
+  type: z.string().trim().min(1).max(80),
+  summary: z.string().trim().min(1).max(320),
+  linkedRunId: z.string().trim().max(140).optional(),
+  outcome: z.string().trim().max(80).optional(),
+  importance: z.enum(["low", "medium", "high"]).optional(),
+  safeForMemory: z.boolean().optional(),
+  source: z.string().trim().max(80).optional(),
+  metadata: z.record(z.unknown()).optional(),
 });
 
 type PhantomCutBridgeResult =
@@ -821,6 +874,32 @@ function buildMemoryScopeProof(normalized: {
     tenant_override_blocked: normalized.tenant_override_blocked,
     actor_override_blocked: normalized.actor_override_blocked,
   };
+}
+
+function buildBrainContextModule(brainContext: Awaited<ReturnType<typeof composeBrainContext>>): ContextModuleData {
+  return {
+    module: "phantom_brain",
+    summary: brainContext.microPrompt.slice(0, 320),
+    items: [
+      {
+        title: `Intent: ${brainContext.suggestedIntent}`,
+        status: brainContext.riskLevel,
+        detail: brainContext.needsApproval ? "Approval gate active." : "Local/chat-safe.",
+      },
+      ...brainContext.relevantMemories.slice(0, 4).map((memory) => ({
+        title: `${memory.type}: ${memory.text.slice(0, 72)}`,
+        status: `confidence ${Math.round(memory.confidence * 100)}%`,
+        detail: memory.reason,
+      })),
+    ],
+  };
+}
+
+function buildBrainAugmentedSummary(
+  normalized: { business_summary: string },
+  brainContext: Awaited<ReturnType<typeof composeBrainContext>>,
+) {
+  return `${normalized.business_summary}\n\nPhantom Brain micro-context:\n${brainContext.microPrompt}`.slice(0, 1600);
 }
 
 function parsePhantomAiChatProvider(value: unknown) {
@@ -2636,6 +2715,230 @@ app.get("/phantom-ai/ops/context", async (request, reply) => {
   return { ok: true, session, read_only: true, context };
 });
 
+app.get("/phantom-ai/brain/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const brain = await buildBrainStatus(session);
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    brain,
+    provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    external_action_executed: false,
+  };
+});
+
+app.get("/phantom-ai/brain/memories", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = (request.query ?? {}) as { type?: unknown; limit?: unknown; include_inactive?: unknown };
+  const limit =
+    typeof query.limit === "string" && Number.isFinite(Number(query.limit))
+      ? Math.max(1, Math.min(200, Number(query.limit)))
+      : 120;
+  const memories = await listBrainMemories(session, {
+    type: typeof query.type === "string" ? query.type : undefined,
+    limit,
+    includeInactive: query.include_inactive === "true",
+  });
+
+  return {
+    ok: true,
+    session,
+    memories,
+    provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    external_action_executed: false,
+  };
+});
+
+app.post("/phantom-ai/brain/memories", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = BrainMemoryCreateSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, session, error: "Invalid memory payload.", issues: parsed.error.issues });
+  }
+
+  const memory = await createBrainMemory(session, parsed.data);
+
+  return {
+    ok: true,
+    session,
+    memory,
+    provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    external_action_executed: false,
+  };
+});
+
+app.patch("/phantom-ai/brain/memories/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = BrainMemoryPatchSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, session, error: "Invalid memory patch.", issues: parsed.error.issues });
+  }
+
+  const params = request.params as { id: string };
+  let memory;
+  try {
+    memory = await updateBrainMemory(session, params.id, parsed.data);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "memory_update_failed";
+    if (message === "memory_not_found") {
+      return reply.code(404).send({ ok: false, session, error: "Memory not found." });
+    }
+    throw error;
+  }
+  if (!memory) {
+    return reply.code(404).send({ ok: false, session, error: "Memory not found." });
+  }
+
+  return {
+    ok: true,
+    session,
+    memory,
+    provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    external_action_executed: false,
+  };
+});
+
+app.delete("/phantom-ai/brain/memories/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const params = request.params as { id: string };
+  let memory;
+  try {
+    memory = await forgetBrainMemory(session, params.id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "memory_forget_failed";
+    if (message === "memory_not_found") {
+      return reply.code(404).send({ ok: false, session, error: "Memory not found." });
+    }
+    throw error;
+  }
+  if (!memory) {
+    return reply.code(404).send({ ok: false, session, error: "Memory not found." });
+  }
+
+  return {
+    ok: true,
+    session,
+    memory,
+    provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    external_action_executed: false,
+  };
+});
+
+app.post("/phantom-ai/brain/feedback", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = BrainFeedbackSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, session, error: "Invalid feedback payload.", issues: parsed.error.issues });
+  }
+
+  const feedback = await recordBrainFeedback(session, parsed.data);
+
+  return {
+    ok: true,
+    session,
+    feedback,
+    provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    external_action_executed: false,
+  };
+});
+
+app.post("/phantom-ai/brain/context-preview", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = BrainContextPreviewSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply
+      .code(400)
+      .send({ ok: false, session, error: "Invalid context preview payload.", issues: parsed.error.issues });
+  }
+
+  const context = await composeBrainContext(session, { ...parsed.data, logEvent: false });
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    context,
+    provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    external_action_executed: false,
+  };
+});
+
+app.post("/phantom-ai/brain/events", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = BrainEventSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, session, error: "Invalid brain event payload.", issues: parsed.error.issues });
+  }
+
+  const event = await appendBrainEvent(session, parsed.data);
+
+  return {
+    ok: true,
+    session,
+    event,
+    provider_called: false,
+    network_call_performed: false,
+    approval_executed: false,
+    external_action_executed: false,
+  };
+});
+
 app.get("/phantom-ai/agents/status", async (request, reply) => {
   const session = requireAccessSession(request, reply);
 
@@ -3965,6 +4268,16 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     return privacyFirstLocationReply;
   }
 
+  const brainContext = await composeBrainContext(session, {
+    message: normalized.user_request,
+    surface: "chat",
+    proposedActionType: normalized.task_type,
+    currentModule: normalized.task_type,
+    logEvent: true,
+  });
+  const brainModule = buildBrainContextModule(brainContext);
+  const brainAugmentedSummary = buildBrainAugmentedSummary(normalized, brainContext);
+
   if (session.canManageAccess) {
     const adminModelLane = parseAdminPhantomAiModelLane(body.admin_model ?? body.model_lane ?? body.provider);
     const adminProviderRoute = adminPhantomAiProviderRoute(adminModelLane);
@@ -3991,6 +4304,17 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         payment_request_created: false,
         invoice_created: false,
         memory_scope: buildMemoryScopeProof(normalized),
+        brain: {
+          context_used: true,
+          suggested_intent: brainContext.suggestedIntent,
+          risk_level: brainContext.riskLevel,
+          needs_approval: brainContext.needsApproval,
+          micro_prompt: brainContext.microPrompt,
+          relevant_memory_count: brainContext.relevantMemories.length,
+          used_memory_ids: brainContext.debug.injectedMemoryIds,
+          active_rules: brainContext.activeRules,
+          reasons: brainContext.debug.reasons,
+        },
       };
     }
     const preview = previewModelRouterFoundation(normalized, {
@@ -4010,10 +4334,14 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       sensitivity_level: preview.decision.sensitivity_level,
       provider_route: adminProviderRoute,
       user_request: normalized.user_request,
-      business_summary: normalized.business_summary,
-      module_data: normalized.module_data,
+      business_summary: brainAugmentedSummary,
+      module_data: [...normalized.module_data, brainModule],
+      relevant_rules: brainContext.activeRules,
+      approval_restrictions: brainContext.needsApproval
+        ? ["Phantom Brain requires approval before external, destructive, payment, upload, post, send, or spend actions."]
+        : [],
     });
-    const approvalRequired = preview.decision.approval_required || preview.action_preview.approval_required;
+    const approvalRequired = brainContext.needsApproval || preview.decision.approval_required || preview.action_preview.approval_required;
     const adminResult =
       adminModelLane === "glm_5_2"
         ? process.env.PHANTOM_FORCE_OPENROUTER_GLM === "true"
@@ -4140,6 +4468,23 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     };
 
     await appendHermesLedgerRecord(ledgerRecord);
+    await appendBrainEvent(session, {
+      surface: "chat",
+      type: "chat_response",
+      summary: ledgerRecord.result_summary,
+      linkedRunId: ledgerRecord.agent_run_id,
+      outcome: resultStatus,
+      importance: approvalRequired ? "high" : "low",
+      safeForMemory: false,
+      source: "phantom_ai_chat",
+      metadata: {
+        providerRoute: adminProviderRoute,
+        modelLane: adminModelLane,
+        approvalRequired,
+        providerCalled,
+      },
+      logToHermes: false,
+    });
 
     return {
       ok: true,
@@ -4194,6 +4539,17 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         provider_route: adminProviderRoute,
         recalled_memory_count: memoryContext.memory.recalled_count,
       },
+      brain: {
+        context_used: true,
+        suggested_intent: brainContext.suggestedIntent,
+        risk_level: brainContext.riskLevel,
+        needs_approval: brainContext.needsApproval,
+        micro_prompt: brainContext.microPrompt,
+        relevant_memory_count: brainContext.relevantMemories.length,
+        used_memory_ids: brainContext.debug.injectedMemoryIds,
+        active_rules: brainContext.activeRules,
+        reasons: brainContext.debug.reasons,
+      },
       memory_scope: buildMemoryScopeProof(normalized),
       memory_context: {
         scope: memoryContext.scope,
@@ -4229,10 +4585,14 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       sensitivity_level: preview.decision.sensitivity_level,
       provider_route: "openrouter_glm",
       user_request: normalized.user_request,
-      business_summary: normalized.business_summary,
-      module_data: normalized.module_data,
+      business_summary: brainAugmentedSummary,
+      module_data: [...normalized.module_data, brainModule],
+      relevant_rules: brainContext.activeRules,
+      approval_restrictions: brainContext.needsApproval
+        ? ["Phantom Brain requires approval before external, destructive, payment, upload, post, send, or spend actions."]
+        : [],
     });
-    const approvalRequired = preview.decision.approval_required || preview.action_preview.approval_required;
+    const approvalRequired = brainContext.needsApproval || preview.decision.approval_required || preview.action_preview.approval_required;
     const openrouter = await callOpenRouterGlm52(
       {
         requestId: normalized.request_id,
@@ -4282,6 +4642,22 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     };
 
     await appendHermesLedgerRecord(ledgerRecord);
+    await appendBrainEvent(session, {
+      surface: "chat",
+      type: "chat_response",
+      summary: ledgerRecord.result_summary,
+      linkedRunId: ledgerRecord.agent_run_id,
+      outcome: openrouter.status,
+      importance: approvalRequired ? "high" : "low",
+      safeForMemory: false,
+      source: "phantom_ai_chat",
+      metadata: {
+        providerRoute: "openrouter_glm",
+        approvalRequired,
+        providerCalled: openrouter.provider_called,
+      },
+      logToHermes: false,
+    });
 
     if (!openrouter.provider_called || !openrouter.output_text.trim()) {
       if (providerChoice === "openrouter_glm") {
@@ -4306,6 +4682,17 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             recalled_memory_count: memoryContext.memory.recalled_count,
             compact_context_chars: memoryContext.augmented_context_chars,
             redaction: memoryContext.redaction,
+          },
+          brain: {
+            context_used: true,
+            suggested_intent: brainContext.suggestedIntent,
+            risk_level: brainContext.riskLevel,
+            needs_approval: brainContext.needsApproval,
+            micro_prompt: session.canManageAccess ? brainContext.microPrompt : undefined,
+            relevant_memory_count: brainContext.relevantMemories.length,
+            used_memory_ids: session.canManageAccess ? brainContext.debug.injectedMemoryIds : [],
+            active_rules: session.canManageAccess ? brainContext.activeRules : [],
+            reasons: session.canManageAccess ? brainContext.debug.reasons : [],
           },
           memory_scope: buildMemoryScopeProof(normalized),
           ledger_record: redactHermesLedgerRecord(ledgerRecord),
@@ -4336,6 +4723,17 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         compact_context_chars: memoryContext.augmented_context_chars,
         redaction: memoryContext.redaction,
       },
+      brain: {
+        context_used: true,
+        suggested_intent: brainContext.suggestedIntent,
+        risk_level: brainContext.riskLevel,
+        needs_approval: brainContext.needsApproval,
+        micro_prompt: session.canManageAccess ? brainContext.microPrompt : undefined,
+        relevant_memory_count: brainContext.relevantMemories.length,
+        used_memory_ids: session.canManageAccess ? brainContext.debug.injectedMemoryIds : [],
+        active_rules: session.canManageAccess ? brainContext.activeRules : [],
+        reasons: session.canManageAccess ? brainContext.debug.reasons : [],
+      },
       memory_scope: buildMemoryScopeProof(normalized),
       ledger_record: redactHermesLedgerRecord(ledgerRecord),
       provider_request_body_created: openrouter.request_body_prepared,
@@ -4348,9 +4746,29 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     }
   }
 
-  const result = await runModelRouterFoundation(normalized);
+  const result = await runModelRouterFoundation({
+    ...normalized,
+    business_summary: brainAugmentedSummary,
+    module_data: [...normalized.module_data, brainModule],
+  });
   const interactionMemory = await recordHermesInteractionMemoryFromRun(result);
   const protectedResponse = buildPhantomAiWorkspaceReply(normalized.user_request, normalized.business_name);
+  await appendBrainEvent(session, {
+    surface: "chat",
+    type: "chat_response",
+    summary: redactSensitiveText(protectedResponse).replace(/\s+/g, " ").slice(0, 240),
+    linkedRunId: result.ledger_record.agent_run_id,
+    outcome: "protected_fallback",
+    importance: brainContext.needsApproval ? "high" : "low",
+    safeForMemory: false,
+    source: "phantom_ai_chat",
+    metadata: {
+      suggestedIntent: brainContext.suggestedIntent,
+      riskLevel: brainContext.riskLevel,
+      needsApproval: brainContext.needsApproval,
+    },
+    logToHermes: false,
+  });
 
   return {
     ok: true,
@@ -4364,6 +4782,17 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     decision: result.decision,
     ledger_record: redactHermesLedgerRecord(result.ledger_record),
     interaction_memory: interactionMemory,
+    brain: {
+      context_used: true,
+      suggested_intent: brainContext.suggestedIntent,
+      risk_level: brainContext.riskLevel,
+      needs_approval: brainContext.needsApproval,
+      micro_prompt: session.canManageAccess ? brainContext.microPrompt : undefined,
+      relevant_memory_count: brainContext.relevantMemories.length,
+      used_memory_ids: session.canManageAccess ? brainContext.debug.injectedMemoryIds : [],
+      active_rules: session.canManageAccess ? brainContext.activeRules : [],
+      reasons: session.canManageAccess ? brainContext.debug.reasons : [],
+    },
     memory_scope: buildMemoryScopeProof(normalized),
     provider_request_body_created: false,
     live_provider_called: false,
