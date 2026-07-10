@@ -32,8 +32,11 @@ type AdminAgentStatusResponse = {
       tasks_in_window: number;
       tokens_in_window: number;
       active_workers: number;
+      parent_workers: number;
       total_workers: number;
       subagents_mapped: number;
+      total_worker_nodes: number;
+      neural_cells_mapped: number;
       tool_count: number;
     };
     workers: Array<{
@@ -130,7 +133,9 @@ try {
   assert(adminBody.workforce.role === "admin", "Admin response should expose admin role.");
   assert(adminBody.workforce.summary.window_hours === 24, "Window should be honored.");
   assert(adminBody.workforce.summary.total_workers >= 8, "Admin should see the worker map.");
-  assert(adminBody.workforce.summary.subagents_mapped >= 10, "Admin should see subagent map.");
+  assert(adminBody.workforce.summary.subagents_mapped >= 1000, "Admin should see the 1000+ subagent and neural-cell map.");
+  assert(adminBody.workforce.summary.total_worker_nodes >= 1000, "Admin should see the 1000+ worker-node swarm.");
+  assert(adminBody.workforce.summary.neural_cells_mapped >= 900, "Admin should see the neural-cell layer.");
   assert(adminBody.workforce.workers.some((worker) => worker.id === "gatekeeper"), "Gatekeeper should exist.");
   assert(adminBody.workforce.workers.every((worker) => typeof worker.tokens_last_24h === "number"), "Workers should expose token usage.");
   assert(adminBody.workforce.tool_stack.some((tool) => tool.id === "n8n"), "Tool stack should include n8n.");
@@ -256,8 +261,10 @@ try {
         adminStatus: adminStatus.statusCode,
         clientStatus: clientStatus.statusCode,
         totalWorkers: adminBody.workforce.summary.total_workers,
+        totalWorkerNodes: adminBody.workforce.summary.total_worker_nodes,
         activeWorkers: adminBody.workforce.summary.active_workers,
         subagentsMapped: adminBody.workforce.summary.subagents_mapped,
+        neuralCellsMapped: adminBody.workforce.summary.neural_cells_mapped,
         toolCount: adminBody.workforce.summary.tool_count,
         clientLabel: clientBody.workforce.summary.label,
         providerCalled: adminBody.workforce.safety_flags.provider_called,

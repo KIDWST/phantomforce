@@ -190,6 +190,26 @@ const swarmSubagentTemplates = [
     name: "Ledger",
     specialty: "Tracks what was prepared, what changed, and what still needs human approval.",
   },
+  {
+    id: "research",
+    name: "Research",
+    specialty: "Pulls safe local context, docs, and ledger clues before a draft is made.",
+  },
+  {
+    id: "plan",
+    name: "Plan",
+    specialty: "Breaks work into sequenced, approval-safe steps before it reaches the owner.",
+  },
+  {
+    id: "proof",
+    name: "Proof",
+    specialty: "Captures receipts, evidence, and the reason a route was chosen.",
+  },
+  {
+    id: "feedback",
+    name: "Feedback",
+    specialty: "Turns corrections and outcomes into future routing hints without external action.",
+  },
 ] satisfies Array<Pick<SubagentDefinition, "id" | "name" | "specialty">>;
 
 const generatedSwarmSubagentDefinitions: SubagentDefinition[] = workerDefinitions.flatMap((worker) =>
@@ -211,6 +231,8 @@ const neuralCellTemplates = [
   { id: "guard", name: "Guard Cell", layer: "safety", specialty: "Keeps outside-world actions behind approval gates." },
   { id: "route", name: "Route Cell", layer: "routing", specialty: "Connects the output to the right workspace or owner packet." },
   { id: "archive", name: "Archive Cell", layer: "ledger", specialty: "Writes the receipt so Phantom remembers the useful parts." },
+  { id: "feedback", name: "Feedback Cell", layer: "learning", specialty: "Turns corrections, approvals, and rejects into lower-risk next moves." },
+  { id: "health", name: "Health Cell", layer: "health", specialty: "Checks connected tools and blocked/manual modes before work routes." },
 ] satisfies Array<Pick<SubagentDefinition, "id" | "name" | "layer" | "specialty">>;
 
 const generatedNeuralCellDefinitions: SubagentDefinition[] = generatedSwarmSubagentDefinitions.flatMap((subagent) =>
@@ -590,10 +612,14 @@ export async function buildAgentWorkforceStatus(options: {
     tokens_in_window: sumTokens(recent),
     estimated_cost_usd_in_window: Number(sumCost(recent).toFixed(6)),
     active_workers: workers.filter((worker) => worker.state === "active").length,
+    parent_workers: workers.length,
     total_workers: workers.length,
     subagents_mapped: subagents.length,
     total_worker_nodes: workers.length + subagents.length,
     neural_cells_mapped: generatedNeuralCellDefinitions.length,
+    swarm_subagent_templates: swarmSubagentTemplates.length,
+    neural_cell_templates: neuralCellTemplates.length,
+    worker_node_floor: 1000,
     n8n_scaffolded: n8nPreview.n8n_status.n8n_scaffolded,
     n8n_running: n8nPreview.n8n_status.n8n_running,
     tool_registry_loaded: registry.loaded,

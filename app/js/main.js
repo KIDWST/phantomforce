@@ -1964,8 +1964,9 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       ${w ? `
       <section class="dev-stat-row" data-dev-stats>
         <article class="dev-stat"><span data-dev-count="${summary.active_workers}">0</span><i>Active workers</i></article>
-        <article class="dev-stat"><span data-dev-count="${summary.total_workers}">0</span><i>Total workers</i></article>
-        <article class="dev-stat"><span data-dev-count="${summary.subagents_mapped}">0</span><i>Subagents</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.total_worker_nodes || (summary.total_workers + summary.subagents_mapped)}">0</span><i>Network nodes</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.total_workers}">0</span><i>Parent workers</i></article>
+        <article class="dev-stat"><span data-dev-count="${summary.subagents_mapped}">0</span><i>Subagents + cells</i></article>
         <article class="dev-stat"><span data-dev-count="${summary.tasks_in_window}">0</span><i>Tasks / ${summary.window_hours}h</i></article>
         <article class="dev-stat"><span data-dev-count="${summary.tokens_in_window}">0</span><i>Tokens / ${summary.window_hours}h</i></article>
         <article class="dev-stat"><span class="dev-stat-static">${summary.estimated_cost_usd_in_window.toFixed(4)}</span><i>Est. cost / ${summary.window_hours}h</i></article>
