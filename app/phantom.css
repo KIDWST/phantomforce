@@ -2923,6 +2923,18 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-engine-drawer-rows span { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 9px; background: rgba(0,0,0,0.22); }
 .ml-engine-drawer-rows b { color: var(--dim); font-weight: 500; }
 .ml-engine-drawer-rows i { font-style: normal; color: #d9ffe9; text-align: right; }
+.ml-drawer-settings { display: grid; gap: 14px; }
+.ml-drawer-section {
+  display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line);
+  border-radius: 14px; background: rgba(2,14,9,0.42);
+}
+.ml-drawer-label {
+  color: var(--neon); font: 800 10px "DM Mono", monospace;
+  letter-spacing: 0.14em; text-transform: uppercase;
+}
+.ml-settings-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; align-items: end; }
+.ml-settings-empty { padding: 10px 11px; border-radius: 11px; border: 1px solid rgba(255,209,102,0.3); color: #ffe7a3; background: rgba(255,209,102,0.06); font-size: 12px; }
+.ml-settings-textarea { min-height: 74px; resize: vertical; }
 
 /* cockpit flow: shot builder -> hero CTA -> preview stage -> production rail,
    stacked as one vertical sequence instead of three competing side columns —
@@ -2944,6 +2956,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-brief-head .ml-card-head { padding-bottom: 0; margin-bottom: 0; }
 .ml-brief-head .ml-card-head::after { display: none; }
 .ml-brief-head .ml-seg { flex: 0 0 auto; }
+.ml-setup-link {
+  flex: 0 1 auto; min-width: 0; display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  max-width: 100%; padding: 8px 11px; border-radius: 999px;
+  border: 1px solid var(--line); background: rgba(0,0,0,0.22);
+  color: #c8f7df; cursor: pointer; font: 700 11px "DM Mono", monospace;
+  letter-spacing: 0.03em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ml-setup-link .ic { width: 13px; height: 13px; color: var(--neon); flex: 0 0 auto; }
+.ml-setup-link:hover { border-color: var(--line-strong); background: rgba(65,255,161,0.06); }
 .ml-brief-engine { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
 .ml-brief-engine .ml-field:first-child { flex: 1 1 auto; }
 .ml-brief-engine .ml-provs { flex-wrap: wrap; }

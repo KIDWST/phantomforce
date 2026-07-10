@@ -1017,11 +1017,16 @@ function renderMoney(el, rerender) {
       rerender();
     };
   }
+  el.querySelectorAll("[data-act='delete-tx']").forEach((button) => {
+    button.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      finance.transactions = finance.transactions.filter((tx) => tx.id !== button.dataset.id);
+      store.save();
+      rerender();
+    };
+  });
   bindActions(el, {
-    "delete-tx": (id) => {
-      finance.transactions = finance.transactions.filter((tx) => tx.id !== id);
-      store.save(); rerender();
-    },
     connector: (id) => {
       const connector = finance.connectors.find((item) => item.id === id);
       if (!connector) return;
