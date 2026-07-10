@@ -2,6 +2,7 @@ import type { HermesLedgerRecord, ProviderRoute } from "./types.js";
 import { getHermesLedgerStatus, readHermesLedgerRecords } from "./hermes-ledger.js";
 import { inspectInternalHarnessReadiness } from "./internal-harness-router.js";
 import { buildToolLanePreview, loadToolRegistry } from "./tool-lane.js";
+import { getAutomationJobDefinitions } from "./automation-engine.js";
 
 const DEFAULT_WINDOW_HOURS = 24;
 
@@ -109,9 +110,44 @@ const workerDefinitions: WorkerDefinition[] = [
     taskMatch: /(media|video|phantomcut|higgsfield|chicagoshots)/i,
     baseState: "standby",
   },
+  {
+    id: "autopilot-health",
+    name: "Autopilot Health",
+    role: "Autonomous system health and readiness",
+    tool_binding: "automation_engine_health_lane",
+    focus: "Runs scheduled health checks across rembg, ai-proxy, PhantomCut, the tool registry, and the monthly security scanner — read-only, no approval needed.",
+    taskMatch: /^automation:health:/,
+    baseState: "standby",
+  },
+  {
+    id: "autopilot-ops",
+    name: "Autopilot Ops",
+    role: "Autonomous business operations",
+    tool_binding: "automation_engine_ops_lane",
+    focus: "Runs scheduled ops digests — approvals, actions, production readiness, access posture, n8n readiness — read-only.",
+    taskMatch: /^automation:ops:/,
+    baseState: "standby",
+  },
+  {
+    id: "autopilot-content",
+    name: "Autopilot Content",
+    role: "Autonomous content and marketing readiness",
+    tool_binding: "automation_engine_content_lane",
+    focus: "Runs scheduled content/media-engine readiness digests — read-only, never posts or generates.",
+    taskMatch: /^automation:content:/,
+    baseState: "standby",
+  },
 ];
 
-const subagentDefinitions = [
+type SubagentDefinition = {
+  id: string;
+  name: string;
+  parent: string;
+  specialty: string;
+  taskMatch?: RegExp;
+};
+
+const curatedSubagentDefinitions: SubagentDefinition[] = [
   { id: "atlas", name: "Atlas", parent: "PhantomAI", specialty: "Breaks vague asks into execution paths." },
   { id: "forge", name: "Forge", parent: "Builder", specialty: "Prepares local code and UI changes." },
   { id: "scribe", name: "Scribe", parent: "Hermes", specialty: "Condenses context, receipts, and summaries." },
@@ -125,6 +161,22 @@ const subagentDefinitions = [
   { id: "map", name: "Map", parent: "Builder", specialty: "Serena-style code navigation profile." },
   { id: "swarm", name: "Swarm", parent: "Reviewer", specialty: "Ruflo-style squad planning vocabulary, quarantined." },
 ];
+
+const AUTOPILOT_PARENT_NAME: Record<string, string> = {
+  health: "Autopilot Health",
+  ops: "Autopilot Ops",
+  content: "Autopilot Content",
+};
+
+const automationSubagentDefinitions: SubagentDefinition[] = getAutomationJobDefinitions().map((job) => ({
+  id: job.id,
+  name: job.name,
+  parent: AUTOPILOT_PARENT_NAME[job.category] ?? "PhantomAI",
+  specialty: `${job.description} (runs ${job.cadence}).`,
+  taskMatch: new RegExp(`^automation:${job.category}:${job.id}$`),
+}));
+
+const subagentDefinitions: SubagentDefinition[] = [...curatedSubagentDefinitions, ...automationSubagentDefinitions];
 
 const agentAssignments: Array<{
   id: string;
@@ -408,11 +460,32 @@ export async function buildAgentWorkforceStatus(options: {
   const workers = workerDefinitions.map((definition) => buildWorkerMetrics(definition, allRecords));
   const subagents = subagentDefinitions.map((subagent) => {
     const parent = workers.find((worker) => worker.name === subagent.parent);
+
+    if (subagent.taskMatch) {
+      const matched = allRecords.filter((record) => subagent.taskMatch!.test(record.task_type));
+      const records24h = recordsSince(matched, 24);
+      const state = records24h.length > 0 ? "working" : parent?.state === "active" ? "available" : "standby";
+
+      return {
+        id: subagent.id,
+        name: subagent.name,
+        parent: subagent.parent,
+        specialty: subagent.specialty,
+        state,
+        tasks_last_24h: records24h.length,
+        tokens_last_24h: sumTokens(records24h),
+        last_run_at: latestTimestamp(matched),
+      };
+    }
+
     const tasks24h = parent ? Math.floor(parent.tasks_last_24h / 2) : 0;
     const tokens24h = parent ? Math.floor(parent.tokens_last_24h / 2) : 0;
 
     return {
-      ...subagent,
+      id: subagent.id,
+      name: subagent.name,
+      parent: subagent.parent,
+      specialty: subagent.specialty,
       state: subagentStatus(parent?.state ?? "standby", tasks24h),
       tasks_last_24h: tasks24h,
       tokens_last_24h: tokens24h,

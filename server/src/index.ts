@@ -156,6 +156,12 @@ import {
   startAutonomousSecurityScanScheduler,
 } from "./phantom-ai/security-scan-scheduler.js";
 import {
+  listAutomationJobs,
+  runAutomationJobNow,
+  setAutomationJobEnabled,
+  startAutomationEngine,
+} from "./phantom-ai/automation-engine.js";
+import {
   getProviderSetupStatus,
   previewModelRouterFoundation,
   runModelRouterFoundation,
@@ -2679,6 +2685,82 @@ app.get("/phantom-ai/agents/actions", async (request, reply) => {
   };
 });
 
+app.get("/phantom-ai/automations", async (request, reply) => {
+  // Owner-only. Lists the real, scheduled (daily/weekly/monthly) automation
+  // jobs — every one is read-only/prep-only and logs a real Hermes ledger
+  // record on each run, which is what makes the agent-workforce "active
+  // worker" counts respond to real recurring activity.
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    jobs: await listAutomationJobs(),
+    safety_flags: {
+      sends_or_posts: false,
+      payments_or_invoices: false,
+      provider_calls: false,
+      external_writes: false,
+    },
+  };
+});
+
+const AutomationToggleSchema = z.object({ enabled: z.boolean() });
+
+app.post("/phantom-ai/automations/:id/toggle", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = AutomationToggleSchema.safeParse(request.body);
+
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+
+  const { id } = request.params as { id: string };
+  const result = await setAutomationJobEnabled(id, parsed.data.enabled);
+
+  if (!result.ok) {
+    return reply.code(404).send({ ok: false, error: "unknown_automation_job" });
+  }
+
+  return { ok: true, session, job_id: result.job_id, enabled: result.enabled };
+});
+
+app.post("/phantom-ai/automations/:id/run", async (request, reply) => {
+  // Manual "run now" — still just executes the same read-only job body a
+  // scheduled tick would; no different code path, no elevated permissions.
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const { id } = request.params as { id: string };
+  const result = await runAutomationJobNow(id);
+
+  if (!result.ok) {
+    return reply.code(404).send({ ok: false, error: "unknown_automation_job" });
+  }
+
+  return {
+    ok: true,
+    session,
+    job_id: result.job_id,
+    last_run_at: result.last_run_at,
+    last_status: result.last_status,
+    last_summary: result.last_summary,
+  };
+});
+
 app.get("/phantom-ai/deployment/model/status", async (request, reply) => {
   const session = requireAccessSession(request, reply);
 
@@ -4636,16 +4718,20 @@ app.post("/falcon/jobs/validate", async (request, reply) => {
 export { app };
 
 let stopAutonomousSecurityScanner: (() => void) | null = null;
+let stopAutomationEngine: (() => void) | null = null;
 
 app.addHook("onClose", async () => {
   stopAutonomousSecurityScanner?.();
   stopAutonomousSecurityScanner = null;
+  stopAutomationEngine?.();
+  stopAutomationEngine = null;
 });
 
 if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
   try {
     await app.listen({ host, port });
     stopAutonomousSecurityScanner = startAutonomousSecurityScanScheduler(app.log);
+    stopAutomationEngine = startAutomationEngine(app.log);
     app.log.info(`PhantomForce server listening on http://${host}:${port}`);
   } catch (error) {
     app.log.error(error);

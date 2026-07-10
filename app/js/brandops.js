@@ -8,9 +8,63 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs } from "./store.js?v=phantom-live-20260710-126";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260710-127";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+
+/* ---------------- Autopilot: the real, scheduled server-side automations ----------------
+   These are NOT the client-side "agents" records above — they're read-only,
+   scheduled (daily/weekly/monthly) jobs that live on the server, each
+   logging a real result to the Hermes ledger on every run. Every request
+   here is a real network call; unreachable/unauthorized always renders an
+   honest error state, never a fabricated job list. */
+let autopilotJobs = null;
+let autopilotError = null;
+let autopilotLoading = false;
+let autopilotBusyIds = new Set();
+
+function authHeaders(extra = {}) {
+  const token = session.token();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+async function fetchAutopilotJobs() {
+  try {
+    const r = await fetch("/phantom-ai/automations", { headers: authHeaders() });
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok) return { ok: true, jobs: d.jobs };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the automation engine." };
+  }
+}
+
+async function toggleAutopilotJob(id, enabled) {
+  try {
+    const r = await fetch(`/phantom-ai/automations/${encodeURIComponent(id)}/toggle`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ enabled }),
+    });
+    const d = await r.json().catch(() => null);
+    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the automation engine." };
+  }
+}
+
+async function runAutopilotJobNow(id) {
+  try {
+    const r = await fetch(`/phantom-ai/automations/${encodeURIComponent(id)}/run`, { method: "POST", headers: authHeaders() });
+    const d = await r.json().catch(() => null);
+    return r.ok && d && d.ok ? { ok: true } : { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the automation engine." };
+  }
+}
+
+const AUTOPILOT_CATEGORY_LABEL = { health: "System health", ops: "Business operations", content: "Content & marketing" };
+const AUTOPILOT_CADENCE_LABEL = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 
 const AGENT_STATE = {
   active: { label: "RUNNING", cls: "on" },
@@ -33,6 +87,7 @@ const RECIPES = [
 ];
 
 const TABS = [
+  ["autopilot", "Autopilot"],
   ["active", "Active"],
   ["recipes", "Recipes"],
   ["drafts", "Drafts"],
@@ -40,7 +95,7 @@ const TABS = [
   ["safety", "Safety rules"],
 ];
 
-let auTab = "active";
+let auTab = "autopilot";
 
 function agentCard(a, opts) {
   const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
@@ -65,6 +120,58 @@ function agentCard(a, opts) {
       <button class="btn btn-quiet" data-au-vacation-toggle="${a.id}" title="Vacation Mode rules decide whether this can run while you are away.">${allowedDuringVacation ? "Block in Vacation Mode" : "Allow in Vacation Mode"}</button>
     </span>
     <button class="bm-x" data-au-del="${a.id}" aria-label="Remove automation">✕</button>
+  </div>`;
+}
+
+function autopilotJobCard(job) {
+  const busy = autopilotBusyIds.has(job.id);
+  const tone = !job.enabled ? "off" : job.last_status === "error" ? "warn" : job.last_status === "ok" ? "on" : "warn";
+  return `<article class="ap-job-card ap-tone-${tone}">
+    <div class="ap-job-top">
+      <label class="ap-switch" title="${job.enabled ? "Turn off" : "Turn on"}">
+        <input type="checkbox" data-ap-toggle="${esc(job.id)}" ${job.enabled ? "checked" : ""} ${busy ? "disabled" : ""} />
+        <span class="ap-switch-track"><span class="ap-switch-thumb"></span></span>
+      </label>
+      <div class="ap-job-id">
+        <b>${esc(job.name)}</b>
+        <i>${esc(AUTOPILOT_CADENCE_LABEL[job.cadence] || job.cadence)} · runs ${job.run_count} time${job.run_count === 1 ? "" : "s"}</i>
+      </div>
+      <button class="btn btn-quiet ap-run-now" type="button" data-ap-run="${esc(job.id)}" ${busy || !job.enabled ? "disabled" : ""}>${busy ? "Running…" : "Run now"}</button>
+    </div>
+    <p class="ap-job-desc">${esc(job.description)}</p>
+    <div class="ap-job-foot">
+      <span class="ap-job-status ap-tone-${tone}">${job.last_status ? esc(job.last_status) : "not run yet"}</span>
+      <span>${job.last_summary ? esc(job.last_summary) : "No runs logged yet."}</span>
+      <i>${job.last_run_at ? esc(ago(job.last_run_at)) : ""}</i>
+    </div>
+  </article>`;
+}
+
+function autopilotTab() {
+  if (autopilotJobs === null && autopilotError) {
+    return `<div class="au-empty"><b>Couldn't load Autopilot.</b><span>${esc(autopilotError)}</span><button class="btn" type="button" data-ap-retry>Retry</button></div>`;
+  }
+  if (autopilotJobs === null) {
+    return `<div class="ap-loading"><p class="au-empty-note">Checking the automation engine…</p></div>`;
+  }
+  const jobs = autopilotJobs || [];
+  const activeCount = jobs.filter((j) => j.enabled).length;
+  const categories = ["health", "ops", "content"];
+  return `<div class="ap-wrap">
+    <p class="bm-hint">These are real, scheduled server jobs — daily/weekly/monthly — that run fully autonomously and log every result to the Hermes ledger. Every one is read-only/prep-only: none of them send, post, pay, or publish. Flip a switch to turn a job off; "Run now" fires it immediately for a live check.</p>
+    <div class="au-summary" aria-label="Autopilot summary">
+      <span><b>${jobs.length}</b><i>Jobs defined</i></span>
+      <span><b>${activeCount}</b><i>Turned on</i></span>
+      <span><b>${jobs.filter((j) => j.last_status === "error").length}</b><i>Last run flagged</i></span>
+    </div>
+    ${categories.map((cat) => {
+      const inCat = jobs.filter((j) => j.category === cat);
+      if (!inCat.length) return "";
+      return `<section class="ap-category">
+        <h4>${esc(AUTOPILOT_CATEGORY_LABEL[cat] || cat)}</h4>
+        <div class="ap-job-grid">${inCat.map(autopilotJobCard).join("")}</div>
+      </section>`;
+    }).join("")}
   </div>`;
 }
 
@@ -116,7 +223,8 @@ export function renderAutomation(el, opts = {}) {
   const running = agents.filter((a) => a.status === "active").length;
   const paused = agents.filter((a) => a.status === "paused" || a.status === "waiting").length;
 
-  const panel = auTab === "active" ? activeTab(agents)
+  const panel = auTab === "autopilot" ? autopilotTab()
+    : auTab === "active" ? activeTab(agents)
     : auTab === "recipes" ? recipesTab()
     : auTab === "drafts" ? draftsTab(agents)
     : auTab === "logs" ? logsTab()
@@ -138,6 +246,60 @@ export function renderAutomation(el, opts = {}) {
     </div>`;
 
   el.querySelectorAll("[data-au-tab]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auTab; paint(); });
+
+  if (auTab === "autopilot" && !autopilotJobs && !autopilotLoading) {
+    autopilotLoading = true;
+    autopilotError = null;
+    fetchAutopilotJobs().then((res) => {
+      autopilotLoading = false;
+      if (res.ok) { autopilotJobs = res.jobs; autopilotError = null; }
+      else { autopilotError = res.error; }
+      if (document.body.contains(el)) paint();
+    });
+  }
+
+  el.querySelector("[data-ap-retry]")?.addEventListener("click", () => {
+    autopilotJobs = null;
+    autopilotError = null;
+    paint();
+  });
+
+  el.querySelectorAll("[data-ap-toggle]").forEach((input) => {
+    input.onchange = async () => {
+      const id = input.dataset.apToggle;
+      const nextEnabled = input.checked;
+      autopilotBusyIds.add(id);
+      paint();
+      const res = await toggleAutopilotJob(id, nextEnabled);
+      autopilotBusyIds.delete(id);
+      if (res.ok && autopilotJobs) {
+        const job = autopilotJobs.find((j) => j.id === id);
+        if (job) job.enabled = nextEnabled;
+        notify("Autopilot", `${nextEnabled ? "Turned on" : "Turned off"} "${job?.name || id}".`);
+      } else {
+        notify("Autopilot", `Couldn't update "${id}": ${res.error || "unknown error"}.`);
+      }
+      paint();
+    };
+  });
+
+  el.querySelectorAll("[data-ap-run]").forEach((btn) => {
+    btn.onclick = async () => {
+      const id = btn.dataset.apRun;
+      autopilotBusyIds.add(id);
+      paint();
+      const res = await runAutopilotJobNow(id);
+      autopilotBusyIds.delete(id);
+      if (res.ok) {
+        const refreshed = await fetchAutopilotJobs();
+        if (refreshed.ok) autopilotJobs = refreshed.jobs;
+        notify("Autopilot", `Ran "${id}" now.`);
+      } else {
+        notify("Autopilot", `Couldn't run "${id}": ${res.error || "unknown error"}.`);
+      }
+      paint();
+    };
+  });
 
   el.querySelectorAll("[data-au-recipe]").forEach((btn) => {
     btn.onclick = () => {
