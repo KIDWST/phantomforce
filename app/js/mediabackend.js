@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260709-119";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260709-119";
+import { session } from "./store.js?v=phantom-live-20260709-120";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260709-120";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -164,18 +164,35 @@ export async function requestRemoveBackground(dataUrl) {
 
 /* ---------------- AI edit (real /generate, modality "edit") ----------------
    Reuses the media-generation route Media Lab uses for creation, with a
-   reference image + modality "edit" so a connected provider (Higgsfield)
-   performs a real prompt-guided edit. No key ever touches the browser. */
+   reference image + modality "edit" so a connected provider performs a real
+   prompt-guided edit. No key ever touches the browser.
+
+   Higgsfield specifically is a web-app subscription product, not something
+   with a public API key by default — ai-proxy can only call it for real if
+   HIGGSFIELD_API_KEY is set in its environment. A subscription in the
+   browser does NOT set that env var, so this never reports "connected" just
+   because Jordan is logged into higgsfield.ai — mode stays "manual" until a
+   real key exists, and the UI offers to prep a prompt + open Higgsfield
+   rather than pretending to call an API that isn't there. */
+// Providers ai-proxy actually knows how to run a real prompt-guided EDIT
+// through (matches MEDIA_PROVIDERS[id].modalities in ai-proxy/server.mjs).
+// A key for an image-only provider (e.g. OpenAI) doesn't make edits
+// "connected" — ai-proxy doesn't check modality support before dispatching,
+// so calling it for edit would silently do the wrong thing (generate an
+// unrelated image) rather than fail — keep that path out of "connected".
+const EDIT_CAPABLE_PROVIDERS = ["higgsfield"];
+
 export async function probeAiEditBackend() {
   try {
     const r = await fetchWithTimeout(`${aiProxyBase()}/health`, {}, 5000);
     const d = await r.json().catch(() => null);
-    if (!r.ok || !d) return { available: false };
+    if (!r.ok || !d) return { available: false, mode: "unavailable", provider: null };
     const media = d.media || {};
-    const provider = Object.keys(media).find((id) => media[id]) || null;
-    return { available: !!provider, provider };
+    const keyedProvider = EDIT_CAPABLE_PROVIDERS.find((id) => media[id]);
+    if (keyedProvider) return { available: true, mode: "connected", provider: keyedProvider };
+    return { available: false, mode: "manual", provider: "higgsfield" };
   } catch {
-    return { available: false };
+    return { available: false, mode: "unavailable", provider: null };
   }
 }
 
