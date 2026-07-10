@@ -6,23 +6,23 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260710-143";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-143";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-143";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-143";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-143";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-143";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-143";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-143";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-143";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-143";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-143";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-143";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-143";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-143";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-143";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-143";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-143";
+} from "./store.js?v=phantom-live-20260710-144";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260710-144";
+import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260710-144";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260710-144";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260710-144";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260710-144";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260710-144";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260710-144";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260710-144";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260710-144";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260710-144";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260710-144";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260710-144";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260710-144";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260710-144";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260710-144";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260710-144";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -183,6 +183,7 @@ function showGate() {
 /* ============================ sidebar nav ============================ */
 const NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
+  { id: "crm",        label: "CRM",          icon: "users", ws: "leads" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "sites",      label: "Site Studio",  icon: "site",  ws: "sites" },
   { id: "money",      label: "Money",        icon: "dollar", ws: "money" },
@@ -201,6 +202,7 @@ const NAV = [
    horizontally scrollable strip instead of a vertical list. */
 const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
+  crm: "CRM",
   sites: "Site",
   content: "Content",
   automation: "Auto",
@@ -230,6 +232,21 @@ const WORKSPACE_ALIASES = {
   analytics: "analytics",
 };
 
+/* Secondary workspaces still belong to a clear product section. Keeping that
+   relationship here makes navigation follow AI routes, cards, deep links, and
+   browser history instead of only following direct nav clicks. */
+const NAV_PARENT_BY_WORKSPACE = {
+  phantom: "dashboard",
+  proposals: "crm",
+  reviews: "crm",
+  bookings: "crm",
+  protect: "settings",
+  adminos: "developer",
+  account: "settings",
+  promptlibrary: "content",
+  activity: "workers",
+};
+
 function workspaceId(id) {
   return WORKSPACE_ALIASES[id] || id;
 }
@@ -253,7 +270,7 @@ function renderNav() {
   const nav = $("[data-nav]");
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   nav.innerHTML = NAV.filter(canAccessSurface).map((n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}">
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""}>
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
@@ -273,7 +290,7 @@ function renderMobileBottomNav() {
   if (!nav) return;
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   nav.innerHTML = MOBILE_NAV.filter(canAccessSurface).map((item) => `
-    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""}" data-mobile-nav="${esc(item.id)}" type="button">
+    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""}" data-mobile-nav="${esc(item.id)}" type="button" ${mobileNavActive(item) ? 'aria-current="page"' : ""}>
       ${svg(item.icon)}
       <span>${esc(item.label)}</span>
       ${item.badge && pending ? `<em class="mobile-bottom-badge">${pending}</em>` : ""}
@@ -654,7 +671,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260710-143";
+const POSE_VERSION = "phantom-live-20260710-144";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2159,8 +2176,10 @@ function workspaceDef(id) {
 }
 function navForWorkspace(id) {
   const key = workspaceId(id);
-  return NAV.find((n) => n.id === activeNav && n.ws === key && canAccessSurface(n))
+  const parentId = NAV_PARENT_BY_WORKSPACE[key];
+  return NAV.find((n) => n.id === activeNav && (n.ws === key || n.id === parentId) && canAccessSurface(n))
     || NAV.find((n) => n.ws === key && canAccessSurface(n))
+    || NAV.find((n) => n.id === parentId && canAccessSurface(n))
     || null;
 }
 function clearOverlayOnly() {
@@ -2238,6 +2257,8 @@ function openWorkspace(id, pushHash = true) {
   stageReact("workspace", 720);
   clearOverlayOnly();
   openId = key;
+  const navHit = navForWorkspace(key);
+  if (navHit) activeNav = navHit.id;
   document.body.classList.add("overlay-open");
   overlayRoot.innerHTML = `
     <div class="overlay ${def.wide ? "overlay-wide" : ""}" role="dialog" aria-modal="true" aria-label="${esc(def.title)}">
@@ -2263,7 +2284,7 @@ function openWorkspace(id, pushHash = true) {
   if (pushHash && location.hash !== `#ws/${key}`) {
     try { history.pushState(null, "", `#ws/${key}`); } catch {}
   }
-  renderMobileBottomNav();
+  renderNav();
 }
 function closeOverlay(clearHash) {
   if (!openId) { if (clearHash) syncNavToView(); return; }
@@ -2288,7 +2309,7 @@ function syncNavToView() {
     renderNav();
     return;
   }
-  const hit = NAV.find((n) => n.ws === openId && canAccessSurface(n));
+  const hit = navForWorkspace(openId);
   if (hit) { activeNav = hit.id; renderNav(); }
 }
 document.addEventListener("keydown", (e) => { if (e.key === "Escape" && openId) closeOverlay(true); });

@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-143";
+} from "./store.js?v=phantom-live-20260710-144";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
