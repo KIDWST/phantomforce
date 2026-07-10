@@ -5833,9 +5833,13 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
    above), while the stage sits at z-index:0/1 beneath it — so on every
    phone width the phantom was rendered completely invisible, tucked behind
    the chat panel as a 112px corner badge nobody could ever see. Below this
-   breakpoint the phantom becomes an in-flow banner ABOVE the chat instead
-   (grid-area "stage" before "copy"), guaranteeing it always has its own
-   visible space rather than being layered under anything. */
+   breakpoint the phantom becomes an in-flow banner ABOVE the chat instead,
+   guaranteeing it always has its own visible space rather than being
+   layered under anything. A later max-width:767px block ("Mobile admin fit
+   pass") owns .console .hero2's display (flex-column, DOM order
+   copy-then-stage), so this uses order:-1 on the stage — not
+   grid-template-areas — to land above the chat regardless of which rule
+   wins the display property. */
 @media (max-width: 767px) {
   .console .hero2 {
     display: grid !important;
@@ -5859,7 +5863,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     height: clamp(170px, 42vw, 230px);
     min-height: clamp(170px, 42vw, 230px) !important;
     margin: 0 0 10px;
-    order: 0 !important;
+    order: -1 !important;
     align-items: center;
     justify-items: center;
     transform: none;
