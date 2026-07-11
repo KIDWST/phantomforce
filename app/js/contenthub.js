@@ -10,9 +10,9 @@ import {
   freshEditState, applyFilterPreset, paintEdit, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260711-158";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-158";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-158";
+} from "./imagefilters.js?v=phantom-live-20260711-159";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-159";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-159";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -1194,7 +1194,7 @@ function renderContentLibrary(body, data, esc, root, opts) {
         ${chState.selectMode || chSelection.size ? `
         <div class="ch-select-summary">
           <b>${chSelection.size ? `${chSelection.size} selected` : "Selection tools"}</b>
-          <span>${selectedAssets} media · ${selectedPosts} posts · Shift+click for a range, Ctrl+click for one at a time</span>
+          <span>${selectedAssets} media · ${selectedPosts} posts · use Select for multi-select, Shift/Ctrl for desktop ranges</span>
         </div>
         <div class="ch-action-row">
           <button class="ch-tool is-on" data-ch-select-mode type="button">Done selecting</button>
@@ -1236,7 +1236,7 @@ function contentAssetCard(asset, esc) {
   const key = selectionKey("asset", asset.id);
   const selected = chSelection.has(key);
   const flags = [asset.saved ? "saved" : "", asset.batchLabel ? asset.batchLabel : "", asset.aiEditPlan ? "AI edit plan" : ""].filter(Boolean);
-  return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}" data-ch-asset-id="${esc(asset.id)}" title="${hasUrl ? "Double-click to open" : ""}">
+  return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}" data-ch-asset-id="${esc(asset.id)}" title="${hasUrl ? "Click to open" : ""}">
     <button class="ch-remove ch-asset-x" data-ch-delete-asset="${esc(asset.id)}" aria-label="Remove ${esc(asset.title)}" title="Remove ${esc(asset.title)}" type="button">x</button>
     <span class="ch-select-box" data-ch-select-hit aria-hidden="true">${selected ? "✓" : ""}</span>
     <span class="ch-asset-thumb" style="${hasUrl ? "" : assetBg(asset)}">
@@ -1561,7 +1561,7 @@ function lightboxMarkup(lb, esc) {
 }
 function tutorialMarkup() {
   const rows = [
-    ["Open an image", "Double-click any image in the library to open it here."],
+    ["Open an image", "Tap or click any image in the library to open it here."],
     ["Describe an edit", "Type what you want and hit Generate. This appears only when AI Edit is connected, so the editor never shows a dead control."],
     ["Remove background", "Runs for real when background removal is connected, shows a before/after, then Apply or Cancel."],
     ["Subject bokeh", "Click \"AI detect subject\" — it uses your local background-removal engine to find the real subject shape, so gaps like the space between a cat's ears blur correctly. Then use \"Add focus spots\" to touch up anything it missed; drag a spot to move it, click to select and resize, right-click to remove it."],
@@ -2040,7 +2040,15 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     const isRangeClick = event.shiftKey;
     const isToggleClick = event.ctrlKey || event.metaKey;
     const isHitBox = !!event.target.closest("[data-ch-select-hit]");
-    if (!chState.selectMode && !isHitBox && !isRangeClick && !isToggleClick) return;
+    if (!chState.selectMode && !isHitBox && !isRangeClick && !isToggleClick) {
+      const asset = assets.find((a) => a.id === card.dataset.chAssetId);
+      if (!asset || !asset.url) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : freshLightbox(asset);
+      rerender();
+      return;
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
     if (isRangeClick && chSelectAnchor && orderedKeys.includes(chSelectAnchor)) {
@@ -2081,13 +2089,6 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     }
   };
   document.addEventListener("keydown", chLibraryKeyHandler);
-  body.querySelectorAll("[data-ch-asset-id]").forEach((card) => card.addEventListener("dblclick", (event) => {
-    if (event.target.closest("button")) return;
-    const asset = assets.find((a) => a.id === card.dataset.chAssetId);
-    if (!asset || !asset.url) return;
-    chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : freshLightbox(asset);
-    rerender();
-  }));
   body.querySelectorAll("[data-ch-delete-asset]").forEach((btn) => btn.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();

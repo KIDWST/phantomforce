@@ -4044,7 +4044,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ml-stage-view { min-height: 300px; padding: 13px; }
   .ml-idle { min-height: 260px; }
   .ml-next-grid { grid-template-columns: repeat(2, 1fr); }
-  .ml-editor { grid-template-columns: 1fr; }
+  .ml-editor { grid-template-columns: 1fr; gap: 12px; }
+  .ml-canvas-wrap { min-height: clamp(280px, 48svh, 460px); max-height: none; padding: 10px; }
+  .ml-canvas { max-height: min(46svh, 430px); }
+  .ml-tools {
+    padding: 12px;
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    background: rgba(2,10,8,0.64);
+  }
   .ml-grid { grid-template-columns: repeat(2, 1fr); }
   .ml-drawer { width: 100vw; }
   .developer-hero, .developer-grid, .developer-shortcuts, .developer-lane-groups { grid-template-columns: 1fr; }
@@ -4081,6 +4089,20 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ml-next-grid { grid-template-columns: 1fr 1fr; }
   .ml-joblog { flex-wrap: wrap; }
   .ml-stage-frame.is-full { inset: 8px; }
+  .ml-canvas-wrap { min-height: 300px; }
+  .ml-tools { gap: 12px; }
+  .ml-tools .ml-chips button { min-height: 40px; flex: 1 1 auto; justify-content: center; }
+  .ml-text-in, .ml-tools .ml-prompt-wrap { width: 100%; }
+  .ml-editor-actions {
+    position: sticky;
+    bottom: calc(86px + env(safe-area-inset-bottom, 0px));
+    z-index: 3;
+    margin: 4px -12px -12px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--line);
+    background: rgba(2,10,8,0.96);
+  }
+  .ml-editor-actions .ml-generate { min-height: 44px; }
   .set-sec-head, .set-social-assist { flex-direction: column; align-items: stretch; }
   .set-safe-pill { align-self: flex-start; }
   .set-social-actions { align-items: stretch; }
@@ -4344,7 +4366,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ch-tool-danger { color: #ffb0bb; border-color: rgba(255,77,99,.28); }
 .ch-tool-danger:hover:not(:disabled) { color: #ffdce1; border-color: rgba(255,77,99,.75); background: rgba(255,77,99,.12); box-shadow: 0 0 18px rgba(255,77,99,.12); }
 .ch-asset-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
-.ch-asset-card { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: 14px; padding: 10px; background: rgba(4,12,9,.62); overflow: hidden; }
+.ch-asset-card { display: flex; flex-direction: column; gap: 10px; border: 1px solid var(--line); border-radius: 14px; padding: 10px; background: rgba(4,12,9,.62); overflow: hidden; transition: border-color .18s, background .18s, transform .15s; }
+.ch-asset-card:hover { border-color: var(--line-strong); background: rgba(8,20,14,.72); transform: translateY(-1px); }
 .ch-selectable { position: relative; }
 .ch-selectable.is-selected {
   border-color: var(--neon);
@@ -4510,12 +4533,13 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ch-storage { width: 100%; align-items: stretch; }
   .ch-storage i { width: 100%; }
   .ch-action-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .ch-tool { width: 100%; }
+  .ch-tool { width: 100%; min-height: 40px; white-space: normal; }
   .ch-pub-platforms, .ch-pub-source-grid, .ch-pub-row, .ch-pub-queue-grid { grid-template-columns: 1fr; }
   .ch-pub-tone-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .ch-pub-schedule { min-width: 0; margin-left: 0; grid-column: 1 / -1; }
-  .ch-asset-grid { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
-  .ch-asset-card { min-width: min(76vw, 250px); scroll-snap-align: start; }
+  .ch-asset-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; scroll-snap-type: none; padding-bottom: 0; }
+  .ch-asset-card { min-width: 0; scroll-snap-align: none; padding: 8px; }
+  .ch-asset-body span { -webkit-line-clamp: 1; }
   .ch-bar-row { grid-template-columns: 100px 1fr auto; }
   .ch-tr { grid-template-columns: 2fr 1fr .8fr; }
   .ch-tr span:nth-child(4) { display: none; }
@@ -7358,9 +7382,56 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 .ch-lb-view-body video { max-width: 100%; max-height: 78dvh; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
 
 @media (max-width: 900px) {
-  .ch-lb-body { grid-template-columns: 1fr; grid-template-rows: minmax(220px, 1fr) auto; overflow-y: auto; }
-  .ch-lb-tools { border-left: none; border-top: 1px solid var(--line); max-height: 52dvh; }
+  .ch-lb-body { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 52dvh) auto; overflow-y: auto; }
+  .ch-lb-canvas-wrap { min-height: 260px; padding: 14px; }
+  .ch-lb-tools { border-left: none; border-top: 1px solid var(--line); max-height: none; overflow: visible; }
   .ch-lb-shell { max-height: 96dvh; }
+}
+@media (max-width: 767px) {
+  .ch-lightbox { padding: 0; place-items: stretch; }
+  .ch-lb-shell {
+    width: 100%;
+    height: 100dvh;
+    max-height: none;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+  .ch-lb-head {
+    padding: calc(12px + env(safe-area-inset-top, 0px)) 12px 12px;
+    align-items: flex-start;
+  }
+  .ch-lb-head span { max-width: 62vw; }
+  .ch-lb-body {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .ch-lb-canvas-wrap {
+    flex: 0 0 min(54svh, 430px);
+    min-height: 300px;
+    padding: 10px;
+  }
+  .ch-lb-canvas { max-height: 100%; }
+  .ch-lb-tools {
+    padding: 12px;
+    gap: 12px;
+    background: rgba(2,10,8,0.92);
+  }
+  .ch-lb-ai-row { flex-direction: column; }
+  .ch-lb-text-grid, .ch-lb-bg-preview-imgs { grid-template-columns: 1fr; }
+  .ch-lb-chips button { min-height: 40px; flex: 1 1 auto; justify-content: center; }
+  .ch-lb-actions {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    margin: 0 -12px -12px;
+    padding: 10px 12px calc(10px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid var(--line);
+    background: rgba(2,10,8,0.96);
+  }
+  .ch-lb-actions .btn { min-height: 44px; }
 }
 
 /* Mobile admin fit pass: keep the command cockpit and taskbar in one phone viewport. */

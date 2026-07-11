@@ -6,12 +6,12 @@
  * instead of sending people out to another product.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260711-158";
+import { session as accessSession } from "./store.js?v=phantom-live-20260711-159";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260711-158";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260711-158";
-import { loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260711-158";
+} from "./contenthub.js?v=phantom-live-20260711-159";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260711-159";
+import { loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260711-159";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1875,7 +1875,7 @@ function renderEdit(body, cfg, opts, root) {
         <div class="ml-tool-head">Text overlay</div>
         <input class="ml-text-in" data-ml-text placeholder="Add a caption / headline…" value="${esc(editState.text)}"/>
         <div class="ml-tool-head">Quick style pass ${svgIc("spark")}</div>
-        <p class="ml-hint">Local mood/color nudge only — not a full AI-generated edit. For prompt-guided AI editing and background removal, use Content Hub's editor (double-click an image in the library).</p>
+        <p class="ml-hint">Local mood/color nudge only — not a full AI-generated edit. For prompt-guided AI editing and background removal, use Content Hub's editor by tapping an image in the library.</p>
         <div class="ml-prompt-wrap">
           <input class="ml-text-in" data-ml-aiedit placeholder="e.g. brighter, cinematic teal, moody night"/>
           <button class="ml-enhance" data-ml-runai>Apply</button>

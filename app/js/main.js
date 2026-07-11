@@ -6,23 +6,23 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260711-158";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-158";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260711-158";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-158";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-158";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-158";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-158";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-158";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-158";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-158";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-158";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-158";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-158";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-158";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-158";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-158";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-158";
+} from "./store.js?v=phantom-live-20260711-159";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-159";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-159";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-159";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-159";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-159";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-159";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-159";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-159";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-159";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-159";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-159";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-159";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-159";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-159";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-159";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-159";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -399,14 +399,27 @@ function renderFlowCompactSummary() {
 }
 
 /* ============================ topbar ============================ */
+let topbarWorkforce = null;
+let topbarWorkforceLoading = false;
+let topbarWorkforceChecked = false;
+
+function topbarBaselineWorkers() {
+  const summary = topbarWorkforce?.summary;
+  if (!summary) return null;
+  let count = Number(summary.baseline_workers_online ?? summary.active_workers ?? 0);
+  const workers = Array.isArray(topbarWorkforce?.workers) ? topbarWorkforce.workers : [];
+  const gatekeeperActive = workers.some((worker) => worker.id === "gatekeeper" && worker.state === "active");
+  if (/(^|\.)admin\.phantomforce\.online$/i.test(location.hostname) && !gatekeeperActive) count += 1;
+  return { count, jobs: Number(summary.tasks_in_window || 0) };
+}
+
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
-  const roster = buildWorkerRoster();
-  const activeWorkers = roster.filter((w) => w.status === "working" || w.status === "waiting-approval").length;
+  const workforce = topbarBaselineWorkers();
   const pills = [
     { label: "Phantom Status", value: "Online", tone: "ok", dot: true },
     { label: "System Status", value: attention ? "Attention needed" : "All Systems Operational", tone: attention ? "warn" : "ok", dot: true },
-    { label: "Active Workers", value: `${activeWorkers} of ${roster.length}`, tone: "ok", dot: true, open: "workforce" },
+    { label: "Workers Online", value: workforce ? `${workforce.count} baseline · ${workforce.jobs} jobs` : (topbarWorkforceChecked ? "Status unavailable" : "Checking…"), tone: workforce ? "ok" : "warn", dot: true, open: "workforce" },
   ];
   $("[data-status-pills]").innerHTML = pills.map((p) => `
     <div class="pill pill-${p.tone} ${p.open ? "pill-link" : ""}" ${p.open ? `data-pill-open="${p.open}" role="button" tabindex="0"` : ""}>
@@ -424,6 +437,15 @@ function renderStatusPills() {
     el.onclick = go;
     el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
   });
+  if (!topbarWorkforceChecked && !topbarWorkforceLoading) {
+    topbarWorkforceLoading = true;
+    fetchAgentWorkforceStatus(24).then((result) => {
+      topbarWorkforceLoading = false;
+      topbarWorkforceChecked = true;
+      if (result.ok) topbarWorkforce = result.workforce;
+      renderStatusPills();
+    });
+  }
 }
 
 let clockTimer = 0;
@@ -678,7 +700,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260711-158";
+const POSE_VERSION = "phantom-live-20260711-159";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

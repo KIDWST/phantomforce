@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260711-158";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260711-158";
+import { session } from "./store.js?v=phantom-live-20260711-159";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260711-159";
 
 function authHeaders(extra = {}) {
   const token = session.token();
