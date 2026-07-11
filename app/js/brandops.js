@@ -8,11 +8,11 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260710-150";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260710-154";
 import {
-  dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
+  DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260710-150";
+} from "./content-ideas.js?v=phantom-live-20260710-154";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -101,6 +101,7 @@ const TABS = [
 ];
 
 let auTab = "configured";
+let expandedAutomationId = null;
 
 function agentCard(a, opts) {
   const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
@@ -156,59 +157,133 @@ function options(list, selected) {
   return list.map((item) => `<option value="${esc(item)}" ${item === selected ? "selected" : ""}>${esc(item)}</option>`).join("");
 }
 
+function automationRow({ id, kicker, name, summary, meta, enabled, disabled = false, expanded = false, switchAttr = "", status = "" }) {
+  return `<article class="au-automation-row ${expanded ? "is-expanded" : ""}" data-au-expand="${esc(id)}" role="button" tabindex="0" aria-expanded="${expanded ? "true" : "false"}">
+    <label class="ap-switch au-row-switch" title="${disabled ? "Approval required before this can be switched" : enabled ? "Turn off" : "Turn on"}">
+      <input type="checkbox" ${switchAttr} ${enabled ? "checked" : ""} ${disabled ? "disabled" : ""} />
+      <span class="ap-switch-track"><span class="ap-switch-thumb"></span></span>
+    </label>
+    <div class="au-row-main">
+      <span class="au-row-kicker">${esc(kicker)}</span>
+      <b>${esc(name)}</b>
+      <p>${esc(summary || "No mission saved yet.")}</p>
+    </div>
+    <div class="au-row-meta">
+      ${status ? `<i>${esc(status)}</i>` : ""}
+      <span>${esc(meta || "")}</span>
+    </div>
+    <button class="au-row-open" type="button" data-au-open="${esc(id)}">${expanded ? "Close" : "Edit"}</button>
+  </article>`;
+}
+
+function dailyIdeaEditPanel(config, missingProfile) {
+  return `<div class="au-edit-panel" data-au-edit-panel="${esc(DAILY_IDEA_AUTOMATION_ID)}">
+    <div class="au-config-grid">
+      <label>Number of ideas<input type="number" min="1" max="12" step="1" data-di-count value="${esc(config.count)}" /></label>
+      <label>Style<select data-di-style>${options(DAILY_IDEA_STYLES, config.style)}</select></label>
+      <label>Content focus<select data-di-focus>${options(DAILY_IDEA_FOCUS, config.focus)}</select></label>
+      <label>Refresh hour<input type="number" min="0" max="23" step="1" data-di-hour value="${esc(config.refreshHour)}" /></label>
+      <label class="au-config-wide">What content?<input data-di-content-types value="${esc(config.contentTypes.join(", "))}" placeholder="Short video, Carousel, Image post" /></label>
+      <label class="au-config-wide">Channels<input data-di-channels value="${esc(config.channels.join(", "))}" placeholder="Instagram, TikTok, LinkedIn" /></label>
+    </div>
+    <div class="au-profile-box ${missingProfile ? "needs-profile" : ""}">
+      <div>
+        <b>Business profile for this account</b>
+        <p>New accounts should answer these basics on setup so Phantom does not guess wrong. These fields guide the daily ideas only; no provider call happens here.</p>
+      </div>
+      <div class="au-profile-grid">
+        <label>Business name<input data-di-profile="businessName" value="${esc(config.profile.businessName)}" placeholder="e.g. Ultimate Treasures" /></label>
+        <label>Audience<input data-di-profile="audience" value="${esc(config.profile.audience)}" placeholder="Who are we trying to reach?" /></label>
+        <label>Offer<input data-di-profile="offer" value="${esc(config.profile.offer)}" placeholder="What do we sell or want booked?" /></label>
+        <label>Voice<input data-di-profile="voice" value="${esc(config.profile.voice)}" placeholder="Direct, premium, playful, local..." /></label>
+        <label class="au-config-wide">Goal<input data-di-profile="goal" value="${esc(config.profile.goal)}" placeholder="Bookings, awareness, sales, leads..." /></label>
+      </div>
+    </div>
+    <div class="au-config-actions">
+      <button class="btn btn-primary" data-di-save type="button">Save automation</button>
+      <button class="btn btn-quiet" data-di-refresh type="button">Regenerate today's ${esc(config.count)}</button>
+      <button class="btn btn-quiet" data-di-open-ideas data-open-ws="content" type="button">Open New Ideas</button>
+    </div>
+    <p class="bm-hint">Daily ideas are replaced each day. If the user saves an idea in Content Hub, that saved idea stays; the disposable batch does not.</p>
+  </div>`;
+}
+
+function customAutomationEditPanel(a, pendingApproval, allowedDuringVacation) {
+  const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
+  return `<div class="au-edit-panel" data-au-edit-panel="${esc(a.id)}">
+    <div class="au-edit-grid">
+      <label>Name<input data-au-edit-name="${esc(a.id)}" value="${esc(a.name)}" /></label>
+      <label>Status<input value="${esc(st.label)}" disabled /></label>
+      <label class="au-config-wide">Mission<textarea data-au-edit-mission="${esc(a.id)}">${esc(a.mission || a.role || "")}</textarea></label>
+      <label>Source<input value="${esc(a.source || "Phantom dashboard")}" disabled /></label>
+      <label>Updated<input value="${esc(ago(a.updatedAt))}" disabled /></label>
+    </div>
+    <div class="au-config-actions">
+      <button class="btn btn-primary" data-au-save-agent="${esc(a.id)}" type="button">Save changes</button>
+      ${pendingApproval ? `<button class="btn btn-quiet" data-open-ws="approvals" type="button">Review approval</button>` : ""}
+      ${a.status === "active" ? `<button class="btn btn-quiet" data-au-pause="${esc(a.id)}" type="button">Pause</button>` : ""}
+      ${a.status === "paused" || a.status === "waiting" ? `<button class="btn btn-quiet" data-au-resume="${esc(a.id)}" type="button">Resume</button>` : ""}
+      <button class="btn btn-quiet" data-au-vacation-toggle="${esc(a.id)}" type="button">${allowedDuringVacation ? "Block in Vacation Mode" : "Allow in Vacation Mode"}</button>
+      <button class="btn btn-quiet" data-au-del="${esc(a.id)}" type="button">Delete</button>
+    </div>
+  </div>`;
+}
+
 function configuredAutomationTab(agents) {
   const { config, ideas, savedIdeas, missingProfile } = dailyIdeaState();
   const created = agents.filter((a) => a.kind === "automation");
+  if (expandedAutomationId && expandedAutomationId !== DAILY_IDEA_AUTOMATION_ID && !created.some((a) => a.id === expandedAutomationId)) {
+    expandedAutomationId = null;
+  }
+  const dailyExpanded = expandedAutomationId === DAILY_IDEA_AUTOMATION_ID;
+  const automationRows = [
+    `<div class="au-automation-block">
+      ${automationRow({
+        id: DAILY_IDEA_AUTOMATION_ID,
+        kicker: "Content Hub automation",
+        name: config.name,
+        summary: `Fresh disposable idea batch every day. Today: ${ideas.length} active, ${savedIdeas.length} saved.`,
+        meta: `${config.count}/day · ${config.style} · ${config.focus} · ${config.refreshHour}:00`,
+        enabled: config.enabled,
+        expanded: dailyExpanded,
+        switchAttr: "data-di-enabled-quick",
+        status: config.enabled ? "On" : "Off",
+      })}
+      ${dailyExpanded ? dailyIdeaEditPanel(config, missingProfile) : ""}
+    </div>`,
+    ...created.map((a) => {
+      const pendingApproval = (store.state.approvals || []).find((app) => app.ref === a.id && app.status === "pending");
+      const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
+      const allowedDuringVacation = a.allowedDuringVacation !== false;
+      const disabled = !!pendingApproval || a.status === "idle" || a.status === "needs-approval" || a.status === "blocked";
+      const expanded = expandedAutomationId === a.id;
+      return `<div class="au-automation-block">
+        ${automationRow({
+          id: a.id,
+          kicker: a.source || "User-created automation",
+          name: a.name,
+          summary: a.mission || a.role || "",
+          meta: `Updated ${ago(a.updatedAt)} · ${allowedDuringVacation ? "Vacation allowed" : "Vacation blocked"}`,
+          enabled: a.status === "active",
+          disabled,
+          expanded,
+          switchAttr: `data-au-enable="${esc(a.id)}"`,
+          status: pendingApproval ? "Approval needed" : st.label,
+        })}
+        ${expanded ? customAutomationEditPanel(a, pendingApproval, allowedDuringVacation) : ""}
+      </div>`;
+    }),
+  ];
   return `<div class="au-config-wrap">
-    <section class="au-config-card">
+    <section class="au-config-card au-config-list-card">
       <div class="au-config-head">
         <div>
-          <p class="ch-eyebrow">Content Hub automation</p>
-          <h3>${esc(config.name)}</h3>
-          <p>Generates a fresh disposable idea batch every day. Today has ${ideas.length} active idea${ideas.length === 1 ? "" : "s"} and ${savedIdeas.length} saved idea${savedIdeas.length === 1 ? "" : "s"}.</p>
-        </div>
-        <label class="ap-switch au-big-switch" title="${config.enabled ? "Turn off" : "Turn on"}">
-          <input type="checkbox" data-di-enabled ${config.enabled ? "checked" : ""} />
-          <span class="ap-switch-track"><span class="ap-switch-thumb"></span></span>
-        </label>
-      </div>
-      <div class="au-config-grid">
-        <label>Number of ideas<input type="number" min="1" max="12" step="1" data-di-count value="${esc(config.count)}" /></label>
-        <label>Style<select data-di-style>${options(DAILY_IDEA_STYLES, config.style)}</select></label>
-        <label>Content focus<select data-di-focus>${options(DAILY_IDEA_FOCUS, config.focus)}</select></label>
-        <label>Refresh hour<input type="number" min="0" max="23" step="1" data-di-hour value="${esc(config.refreshHour)}" /></label>
-        <label class="au-config-wide">What content?<input data-di-content-types value="${esc(config.contentTypes.join(", "))}" placeholder="Short video, Carousel, Image post" /></label>
-        <label class="au-config-wide">Channels<input data-di-channels value="${esc(config.channels.join(", "))}" placeholder="Instagram, TikTok, LinkedIn" /></label>
-      </div>
-      <div class="au-profile-box ${missingProfile ? "needs-profile" : ""}">
-        <div>
-          <b>Business profile for this account</b>
-          <p>New accounts should answer these basics on setup so Phantom does not guess wrong. These fields guide the daily ideas only; no provider call happens here.</p>
-        </div>
-        <div class="au-profile-grid">
-          <label>Business name<input data-di-profile="businessName" value="${esc(config.profile.businessName)}" placeholder="e.g. Ultimate Treasures" /></label>
-          <label>Audience<input data-di-profile="audience" value="${esc(config.profile.audience)}" placeholder="Who are we trying to reach?" /></label>
-          <label>Offer<input data-di-profile="offer" value="${esc(config.profile.offer)}" placeholder="What do we sell or want booked?" /></label>
-          <label>Voice<input data-di-profile="voice" value="${esc(config.profile.voice)}" placeholder="Direct, premium, playful, local..." /></label>
-          <label class="au-config-wide">Goal<input data-di-profile="goal" value="${esc(config.profile.goal)}" placeholder="Bookings, awareness, sales, leads..." /></label>
+          <p class="ch-eyebrow">Configured automations</p>
+          <h3>Automation list</h3>
+          <p>Compact by default. Use the switch without opening a row, or click a row when you need to edit the details.</p>
         </div>
       </div>
-      <div class="au-config-actions">
-        <button class="btn btn-primary" data-di-save type="button">Save automation</button>
-        <button class="btn btn-quiet" data-di-refresh type="button">Regenerate today's ${esc(config.count)}</button>
-        <button class="btn btn-quiet" data-di-open-ideas data-open-ws="content" type="button">Open New Ideas</button>
-      </div>
-      <p class="bm-hint">Daily ideas are replaced each day. If the user saves an idea in Content Hub, that saved idea stays; the disposable batch does not.</p>
-    </section>
-    <section class="au-config-card">
-      <div class="au-config-head">
-        <div>
-          <p class="ch-eyebrow">User-created automations</p>
-          <h3>Workflow records</h3>
-          <p>Automations created through Phantom chat or recipes appear here, then move through approval before they run.</p>
-        </div>
-      </div>
-      <div class="au-list compact">${created.length ? created.map((a) => agentCard(a)).join("") : `<div class="au-empty"><b>No custom automations yet.</b><span>Ask Phantom to create a recurring workflow when you need one.</span></div>`}</div>
+      <div class="au-automation-list">${automationRows.join("")}</div>
     </section>
   </div>`;
 }
@@ -314,13 +389,65 @@ export function renderAutomation(el, opts = {}) {
 
   el.querySelectorAll("[data-au-tab]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auTab; paint(); });
 
+  const toggleExpandedAutomation = (id) => {
+    expandedAutomationId = expandedAutomationId === id ? null : id;
+    paint();
+  };
+  el.querySelectorAll("[data-au-expand]").forEach((row) => {
+    row.addEventListener("click", (event) => {
+      if (event.target.closest(".au-row-switch, button, input, label, select, textarea, a")) return;
+      toggleExpandedAutomation(row.dataset.auExpand);
+    });
+    row.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      if (event.target.closest(".au-row-switch, button, input, label, select, textarea, a")) return;
+      event.preventDefault();
+      toggleExpandedAutomation(row.dataset.auExpand);
+    });
+  });
+  el.querySelectorAll(".au-row-switch").forEach((sw) => {
+    sw.addEventListener("click", (event) => event.stopPropagation());
+    sw.addEventListener("pointerdown", (event) => event.stopPropagation());
+    sw.addEventListener("keydown", (event) => event.stopPropagation());
+  });
+  el.querySelectorAll("[data-au-open]").forEach((btn) => {
+    btn.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      toggleExpandedAutomation(btn.dataset.auOpen);
+    };
+  });
+
+  el.querySelector("[data-di-enabled-quick]")?.addEventListener("change", (event) => {
+    const current = dailyIdeaState().config;
+    const next = saveDailyIdeaAutomation({ ...current, enabled: !!event.target.checked });
+    pushActivity("Automation", `${next.enabled ? "enabled" : "disabled"} ${next.name}.`, currentWs());
+    store.save();
+    notify("Automation", `${next.enabled ? "Turned on" : "Turned off"} "${next.name}".`);
+    paint();
+  });
+
+  el.querySelectorAll("[data-au-enable]").forEach((input) => {
+    input.onchange = () => {
+      const agent = (store.state.agents || []).find((a) => a.id === input.dataset.auEnable);
+      if (!agent) return;
+      const nextStatus = input.checked ? "active" : "paused";
+      agent.status = nextStatus;
+      agent.updatedAt = new Date().toISOString();
+      pushActivity("Automation", `${nextStatus === "active" ? "resumed" : "paused"} automation "${agent.name}".`, agent.ws || currentWs());
+      store.save();
+      notify("Automation", `${nextStatus === "active" ? "Turned on" : "Turned off"} "${agent.name}".`);
+      paint();
+    };
+  });
+
   el.querySelector("[data-di-save]")?.addEventListener("click", () => {
     const current = dailyIdeaState().config;
     const profile = { ...current.profile };
     el.querySelectorAll("[data-di-profile]").forEach((input) => { profile[input.dataset.diProfile] = input.value || ""; });
     const next = saveDailyIdeaAutomation({
       ...current,
-      enabled: !!el.querySelector("[data-di-enabled]")?.checked,
+      enabled: current.enabled,
       count: Number(el.querySelector("[data-di-count]")?.value || current.count),
       style: el.querySelector("[data-di-style]")?.value || current.style,
       focus: el.querySelector("[data-di-focus]")?.value || current.focus,
@@ -335,6 +462,22 @@ export function renderAutomation(el, opts = {}) {
     store.save();
     notify("Automation", `Saved "${next.name}" and regenerated today's idea batch.`);
     paint();
+  });
+
+  el.querySelectorAll("[data-au-save-agent]").forEach((btn) => {
+    btn.onclick = () => {
+      const agent = (store.state.agents || []).find((a) => a.id === btn.dataset.auSaveAgent);
+      if (!agent) return;
+      const name = el.querySelector(`[data-au-edit-name="${CSS.escape(agent.id)}"]`)?.value.trim();
+      const mission = el.querySelector(`[data-au-edit-mission="${CSS.escape(agent.id)}"]`)?.value.trim();
+      if (name) agent.name = name.slice(0, 90);
+      agent.mission = (mission || agent.mission || agent.role || "").slice(0, 500);
+      agent.updatedAt = new Date().toISOString();
+      pushActivity("Automation", `updated automation "${agent.name}".`, agent.ws || currentWs());
+      store.save();
+      notify("Automation", `Saved "${agent.name}".`);
+      paint();
+    };
   });
 
   el.querySelector("[data-di-refresh]")?.addEventListener("click", () => {

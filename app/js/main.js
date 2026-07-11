@@ -411,7 +411,7 @@ function renderStatusPills() {
   $("[data-status-pills]").innerHTML = pills.map((p) => `
     <div class="pill pill-${p.tone} ${p.open ? "pill-link" : ""}" ${p.open ? `data-pill-open="${p.open}" role="button" tabindex="0"` : ""}>
       <span class="pill-k">${p.label}</span>
-      <span class="pill-v">${p.dot ? `<i class="dot"></i>` : ""}${p.lock ? `<i class="lock" aria-hidden="true">🔒</i>` : ""}${esc(p.value)}</span>
+      <span class="pill-v">${p.dot ? `<i class="dot"></i>` : ""}${p.lock ? `<i class="lock" aria-hidden="true">🔒</i>` : ""}<span class="pill-v-text" title="${esc(p.value)}">${esc(p.value)}</span></span>
     </div>`).join("")
     + (isAdmin() ? `
     <label class="ws-switch" title="Switch workspace">

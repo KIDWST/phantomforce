@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-150";
+} from "./store.js?v=phantom-live-20260710-154";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -18,7 +18,7 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all" };
-const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null };
+const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 const MEMORY_DAY = 86400000;
 
 function bindActions(root, handlers) {
@@ -879,13 +879,8 @@ function renderMoney(el, rerender) {
   const proposalGoal = m.opportunity;
   el.innerHTML = `
     <section class="finance-shell">
-      <div class="finance-truth">
-        <div>
-          <p class="overlay-kicker">ACTUAL TRANSACTIONS ONLY</p>
-          <h3>Business finance ledger</h3>
-          <p>Money reads bank/card imports, connected-account syncs, or manual entries. No proposal pipeline, no guessed revenue, no fake profit.</p>
-        </div>
-        <button class="btn" type="button" data-act="export">Export CSV</button>
+      <div class="finance-toolbar">
+        <button class="btn" type="button" data-act="export" aria-label="Export Money ledger as CSV">Export CSV</button>
       </div>
       <div class="stat-row finance-stats">
         <div class="stat"><span>Cash in</span><b>${fmtMoney(m.cashIn)}</b><i>${actualCount ? "from real transactions" : "no income recorded"}</i></div>
@@ -1790,56 +1785,67 @@ function workerMeshGroup(worker) {
 }
 
 function renderWorkerMesh(workers) {
-  const employeeNodes = workers.filter((worker) => worker.worker_type !== "subagent");
+  const employeeNodes = workers.filter((worker) => worker.worker_type === "employee");
   const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
-  const namedNodes = [...employeeNodes, ...subagentNodes.slice(0, 28)];
-  const rings = namedNodes.map((worker, index) => {
+  const cappedSubagents = subagentNodes.slice(0, 28);
+  const overflowSubagents = subagentNodes.length - cappedSubagents.length;
+
+  const webNode = (worker, index, total, ring) => {
     const tone = workerMeshTone(worker);
     const group = workerMeshGroup(worker);
-    const nodeY = (index % 3) * 7 - 7;
-    const style = `--node-index:${index}; --node-y:${nodeY}px; --node-delay:${(index % 7) * 0.28}s`;
+    const radius = ring === "core" ? 118 : 208;
+    const spread = ring === "core" ? 360 : 340;
+    const offset = ring === "core" ? 0 : 18;
+    const angle = offset + (total ? (index / total) * spread : 0);
+    const isLive = tone === "live" || tone === "approval";
+    const style = `--node-angle:${angle}deg; --node-radius:${radius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
     return `
-      <button class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${worker.worker_type === "subagent" ? "is-subagent" : ""}" style="${style}" data-act="worker-filter" data-filter="${esc(worker.department.toLowerCase().replace(/\s+/g, "-"))}" title="${esc(worker.display_name)}">
+      <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""}" style="${style}" aria-hidden="true"></div>
+      <button class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ring === "outer" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" title="${esc(worker.display_name)} — ${esc(worker.role)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
-        <i>${esc(worker.worker_type === "subagent" ? "subagent" : worker.department)}</i>
+        <i>${esc(ring === "outer" ? "subagent" : worker.department)}</i>
       </button>`;
-  }).join("");
-  const swarmDots = subagentNodes.map((worker, index) => {
-    const angle = (index * 37) % 360;
-    const orbit = 112 + (index % 5) * 10;
-    return `
-    <span class="worker-swarm-dot worker-swarm-${esc(workerMeshGroup(worker))}" style="--dot-index:${index}; --orbit-angle:${angle}deg; --orbit-size:${orbit}px; --dot-delay:${(index % 13) * 0.17}s" title="${esc(worker.display_name)}"></span>`;
-  }).join("");
+  };
+
+  const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index, employeeNodes.length, "core")).join("");
+  const outerRingNodes = cappedSubagents.map((worker, index) => webNode(worker, index, cappedSubagents.length, "outer")).join("");
+
   const observed = workers.filter((worker) => worker.has_activity).length;
+  const waiting = workers.filter((worker) => worker.status === "waiting-approval").length;
   const mapped = workers.length;
   const departments = new Set(workers.map((worker) => worker.department)).size;
-  const approvals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
+
   return `
-    <section class="worker-mesh" aria-label="Worker operations mesh">
+    <section class="worker-mesh" aria-label="Worker operations web">
       <div class="worker-mesh-stage">
-        <div class="worker-swarm-dots" aria-hidden="true">${swarmDots}</div>
         <div class="worker-mesh-rings" aria-hidden="true">
           <span></span><span></span><span></span>
+        </div>
+        <div class="worker-node-field">
+          ${coreRingNodes}
+          ${outerRingNodes}
         </div>
         <div class="worker-core">
           <span>PF</span>
           <b>Phantom</b>
-          <i>router</i>
-        </div>
-        <div class="worker-links" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span><span></span>
-        </div>
-        <div class="worker-node-field">
-          ${rings}
+          <i>master router</i>
         </div>
       </div>
-      <div class="worker-mesh-readout">
-        <span><b>${mapped}</b> workers mapped</span>
-        <span><b>${observed}</b> ledger signals</span>
-        <span><b>${subagentNodes.length}</b> subagents</span>
-        <span><b>${departments}</b> departments</span>
-        <span><b>${approvals}</b> approvals waiting</span>
+      <div class="worker-mesh-foot">
+        <div class="worker-web-legend" aria-label="Legend">
+          <span><i class="worker-legend-dot worker-legend-live"></i>Active</span>
+          <span><i class="worker-legend-dot worker-legend-approval"></i>Waiting on you</span>
+          <span><i class="worker-legend-dot worker-legend-ready"></i>Mapped</span>
+          <span><i class="worker-legend-dot worker-legend-blocked"></i>Offline</span>
+          ${overflowSubagents > 0 ? `<span class="worker-legend-more">+${overflowSubagents} more subagents</span>` : ""}
+        </div>
+        <div class="worker-mesh-readout">
+          <span><b>${mapped}</b> workers mapped</span>
+          <span><b>${observed}</b> live signals</span>
+          <span><b>${waiting}</b> waiting on you</span>
+          <span><b>${departments}</b> departments</span>
+        </div>
       </div>
     </section>`;
 }
@@ -2102,7 +2108,7 @@ function renderWorkerShell(worker, subagents, cellsBySubagent, rootCells) {
     </article>`;
 }
 
-function renderWorkerDirectory(parentWorkers, allWorkers) {
+function buildWorkerGraph(allWorkers) {
   const subagentsByParent = new Map();
   const cellsBySubagent = new Map();
   const cellsByRoot = new Map();
@@ -2119,6 +2125,11 @@ function renderWorkerDirectory(parentWorkers, allWorkers) {
     cellsBySubagent.get(subagentKey).push(cell);
     cellsByRoot.get(rootKey).push(cell);
   });
+  return { subagentsByParent, cellsBySubagent, cellsByRoot };
+}
+
+function renderWorkerDirectory(parentWorkers, allWorkers) {
+  const { subagentsByParent, cellsBySubagent, cellsByRoot } = buildWorkerGraph(allWorkers);
   const filteredParents = parentWorkers.filter((worker) =>
     workerParentMatchesFilter(worker, subagentsByParent.get(worker.worker_id) || [], cellsByRoot.get(worker.worker_id) || []));
   if (!filteredParents.some((worker) => worker.worker_id === workerUi.selectedId)) {
@@ -2146,11 +2157,28 @@ function renderWorkerDirectory(parentWorkers, allWorkers) {
     </section>`;
 }
 
+function renderWorkerDrawer(worker, subagents, cellsBySubagent, rootCells) {
+  return `
+    <div class="worker-drawer-backdrop" data-act="worker-collapse" aria-hidden="true"></div>
+    <aside class="worker-drawer" role="dialog" aria-label="${esc(worker.display_name)} details">
+      <div class="worker-drawer-head">
+        <span class="wf-avatar wf-avatar-${esc(worker.avatar?.tone || worker.status)}">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
+        <div>
+          <b>${esc(worker.display_name)}</b>
+          <i>${esc(worker.role)} · ${esc(worker.department)}</i>
+        </div>
+        <span class="worker-shell-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
+      </div>
+      ${renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells)}
+    </aside>`;
+}
+
 function renderWorkforce(el, rerender) {
   const allWorkers = buildWorkerRoster();
   const workers = isAdmin() ? allWorkers : allWorkers.filter((worker) => worker.client_visible);
   const validFilters = ["all", "employees", "subagents", "cells", "approval", ...WORKFORCE_FILTERS.slice(1).map((dept) => dept.toLowerCase().replace(/\s+/g, "-"))];
   if (!validFilters.includes(workerUi.filter)) workerUi.filter = "all";
+  if (workerUi.view !== "list" && workerUi.view !== "map") workerUi.view = "map";
   const parentWorkers = workers
     .filter((worker) => worker.worker_type === "employee")
     .sort((a, b) => workerSortScore(a) - workerSortScore(b) || a.display_name.localeCompare(b.display_name));
@@ -2176,13 +2204,29 @@ function renderWorkforce(el, rerender) {
     ...WORKFORCE_FILTERS.slice(1).map((dept) => [dept.toLowerCase().replace(/\s+/g, "-"), dept]),
     ["approval", "Approval"],
   ];
+  const isMap = workerUi.view === "map";
+  const selectedWorker = workerUi.selectedId ? workers.find((worker) => worker.worker_id === workerUi.selectedId) : null;
+  const { subagentsByParent, cellsBySubagent, cellsByRoot } = buildWorkerGraph(workers);
+
   el.innerHTML = `
     <section class="workers-hero">
       <div>
-        <p class="worker-kicker">Workforce map</p>
+        <p class="worker-kicker">Workforce ${isMap ? "web" : "map"}</p>
         <h3>PhantomForce Workers</h3>
-        <p>Clean workforce view. Click a worker to see its subagents, helper lanes, and safety rules. Built to scale toward 1,000+ real workers without exposing tool names to clients.</p>
+        <p>${isMap
+          ? "Every worker is a thread in the web. Watch the pulses — that's real work moving. Click a worker to see what it's doing."
+          : "Full directory — departments, subagents, helper lanes, and safety rules. Built to scale toward 1,000+ real workers without exposing tool names to clients."}</p>
       </div>
+      <div class="worker-view-toggle" role="tablist" aria-label="Workers view">
+        <button class="worker-view-btn ${isMap ? "is-active" : ""}" data-act="worker-view" data-view="map" role="tab" aria-selected="${isMap ? "true" : "false"}">Web view</button>
+        <button class="worker-view-btn ${!isMap ? "is-active" : ""}" data-act="worker-view" data-view="list" role="tab" aria-selected="${!isMap ? "true" : "false"}">List view</button>
+      </div>
+    </section>
+    ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
+    ${isMap ? `
+      ${renderWorkerMesh(workers)}
+      ${selectedWorker ? renderWorkerDrawer(selectedWorker, subagentsByParent.get(selectedWorker.worker_id) || [], cellsBySubagent, cellsByRoot.get(selectedWorker.worker_id) || []) : ""}
+    ` : `
       <div class="worker-scale">
         <span><b>${mappedCount}</b> workers mapped</span>
         <span><b>${ledgerSignalCount}</b> ledger signals</span>
@@ -2191,24 +2235,24 @@ function renderWorkforce(el, rerender) {
         <span><b>${neuralCellCount}</b> helper lanes</span>
         <span><b>${departmentCount}</b> departments mapped</span>
       </div>
-    </section>
-    ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount })}
-    ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
-    <div class="worker-metrics">
-      <div><span>Workers Mapped</span><b>${mappedCount}</b></div>
-      <div><span>Ledger Signals</span><b>${ledgerSignalCount}</b></div>
-      <div><span>Lead Workers</span><b>${parentCount}</b></div>
-      <div><span>Subagents</span><b>${subagentCount}</b></div>
-      <div><span>Helper Lanes</span><b>${neuralCellCount}</b></div>
-      <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
-      <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
-      <div><span>Departments Mapped</span><b>${departmentCount}</b></div>
-    </div>
-    <div class="worker-filter-row">
-      ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
-    </div>
-    ${renderWorkerDirectory(parentWorkers, workers)}`;
+      ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount })}
+      <div class="worker-metrics">
+        <div><span>Workers Mapped</span><b>${mappedCount}</b></div>
+        <div><span>Ledger Signals</span><b>${ledgerSignalCount}</b></div>
+        <div><span>Lead Workers</span><b>${parentCount}</b></div>
+        <div><span>Subagents</span><b>${subagentCount}</b></div>
+        <div><span>Helper Lanes</span><b>${neuralCellCount}</b></div>
+        <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
+        <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
+        <div><span>Departments Mapped</span><b>${departmentCount}</b></div>
+      </div>
+      <div class="worker-filter-row">
+        ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
+      </div>
+      ${renderWorkerDirectory(parentWorkers, workers)}
+    `}`;
   bindActions(el, {
+    "worker-view": (_id, button) => { workerUi.view = button.dataset.view === "list" ? "list" : "map"; workerUi.selectedId = ""; rerender(); },
     "worker-filter": (_id, button) => { workerUi.filter = button.dataset.filter || "all"; rerender(); },
     "worker-notice-close": () => { workerUi.notice = ""; rerender(); },
     "worker-preview-close": () => { workerUi.preview = null; rerender(); },
