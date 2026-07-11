@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-171";
+} from "./store.js?v=phantom-live-20260711-177";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -2841,7 +2841,7 @@ export const WORKSPACE_DEFS = {
   money: { title: "Accounting", kicker: "Books, transaction reader, and cash truth", render: renderMoney },
   memory: { title: "Memory", kicker: "Context intelligence database", render: renderMemory },
   workforce: { title: "Workforce", kicker: "Business ops network", render: renderWorkforce },
-  approvals: { title: "Decision Queue", kicker: "Waiting on your call", render: renderApprovals },
+  approvals: { title: "Approvals", kicker: "Waiting on your call", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
@@ -2874,7 +2874,7 @@ export function missionWidgets() {
     { id: "protect", icon: "⬡", title: "Security Watch", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
     { id: "money", icon: "◈", title: "Accounting", stat: m.transactions.length ? moneySigned(m.netCash) : "books", sub: m.transactions.length ? `${m.transactions.length} transaction${m.transactions.length === 1 ? "" : "s"}` : "add/import transactions", alert: false },
     { id: "workforce", icon: "⬢", title: "Workforce", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
-    { id: "approvals", icon: "✓", title: "Decision Queue", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
+    { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
   return w;

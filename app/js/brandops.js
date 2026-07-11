@@ -288,7 +288,7 @@ function configuredAutomationTab(agents) {
   </div>`;
 }
 
-function autopilotTab() {
+function autopilotDeveloperTab() {
   if (autopilotJobs === null && autopilotError) {
     return `<div class="au-empty"><b>Couldn't load Autopilot.</b><span>${esc(autopilotError)}</span><button class="btn" type="button" data-ap-retry>Retry</button></div>`;
   }
@@ -314,6 +314,99 @@ function autopilotTab() {
       </section>`;
     }).join("")}
   </div>`;
+}
+
+function autopilotTab() {
+  const curtain = [
+    ["Client view", "Show approvals, prepared work, outcomes, and what needs a decision."],
+    ["Behind the curtain", "Server jobs, health checks, ledger probes, bridges, and run controls stay in Developer."],
+    ["Owner rules", "Autopilot can move safe prep work, but sends, uploads, posts, payments, deploys, and risky changes still stop at the gate."],
+  ];
+  return `<div class="ap-curtain">
+    <section class="ap-curtain-hero">
+      <p class="ch-eyebrow">Client curtain</p>
+      <h3>Keep the machinery private. Show the work moving.</h3>
+      <p>Clients should not see internal job names, local ports, health probes, or server controls. This view explains the promise: PhantomForce prepares, routes, and tracks the work while the operational console stays owner-only.</p>
+    </section>
+    <div class="ap-curtain-grid">
+      ${curtain.map(([title, copy]) => `<article class="ap-curtain-card"><b>${esc(title)}</b><p>${esc(copy)}</p></article>`).join("")}
+    </div>
+    <div class="ap-curtain-note">
+      <b>Developer-only diagnostics moved.</b>
+      <span>Open Developer for scheduled server jobs, toggles, live health checks, and run-now controls.</span>
+    </div>
+  </div>`;
+}
+
+function loadAutopilotDiagnostics(el, paint) {
+  if (autopilotJobs || autopilotLoading || autopilotError) return;
+  autopilotLoading = true;
+  autopilotError = null;
+  fetchAutopilotJobs().then((res) => {
+    autopilotLoading = false;
+    if (res.ok) { autopilotJobs = res.jobs; autopilotError = null; }
+    else { autopilotError = res.error; }
+    if (document.body.contains(el)) paint();
+  });
+}
+
+function wireAutopilotDiagnostics(el, notify, paint) {
+  el.querySelector("[data-ap-retry]")?.addEventListener("click", () => {
+    autopilotJobs = null;
+    autopilotError = null;
+    paint();
+  });
+
+  el.querySelectorAll("[data-ap-toggle]").forEach((input) => {
+    input.onchange = async () => {
+      const id = input.dataset.apToggle;
+      const nextEnabled = input.checked;
+      autopilotBusyIds.add(id);
+      paint();
+      const res = await toggleAutopilotJob(id, nextEnabled);
+      autopilotBusyIds.delete(id);
+      if (res.ok && autopilotJobs) {
+        const job = autopilotJobs.find((j) => j.id === id);
+        if (job) job.enabled = nextEnabled;
+        notify("Autopilot", `${nextEnabled ? "Turned on" : "Turned off"} "${job?.name || id}".`);
+      } else {
+        notify("Autopilot", `Couldn't update "${id}": ${res.error || "unknown error"}.`);
+      }
+      paint();
+    };
+  });
+
+  el.querySelectorAll("[data-ap-run]").forEach((btn) => {
+    btn.onclick = async () => {
+      const id = btn.dataset.apRun;
+      autopilotBusyIds.add(id);
+      paint();
+      const res = await runAutopilotJobNow(id);
+      autopilotBusyIds.delete(id);
+      if (res.ok) {
+        const refreshed = await fetchAutopilotJobs();
+        if (refreshed.ok) autopilotJobs = refreshed.jobs;
+        notify("Autopilot", `Ran "${id}" now.`);
+      } else {
+        notify("Autopilot", `Couldn't run "${id}": ${res.error || "unknown error"}.`);
+      }
+      paint();
+    };
+  });
+}
+
+export function renderDeveloperAutopilotPanel(el, opts = {}) {
+  const notify = opts.notify || (() => {});
+  const paint = () => renderDeveloperAutopilotPanel(el, opts);
+  loadAutopilotDiagnostics(el, paint);
+  el.innerHTML = `
+    <section class="developer-card ap-dev-panel">
+      <p class="developer-kicker">Autopilot diagnostics</p>
+      <h4>Scheduled server jobs</h4>
+      <p class="set-note">Owner/developer curtain view. These are internal read-only/prep jobs and local health checks; keep this out of client-facing surfaces.</p>
+      ${autopilotDeveloperTab()}
+    </section>`;
+  wireAutopilotDiagnostics(el, notify, paint);
 }
 
 function activeTab(agents) {
@@ -490,60 +583,6 @@ export function renderAutomation(el, opts = {}) {
 
   el.querySelector("[data-di-open-ideas]")?.addEventListener("click", () => {
     try { localStorage.setItem("pf.contenthub.openTab.v1", "ideas"); } catch {}
-  });
-
-  if (auTab === "autopilot" && !autopilotJobs && !autopilotLoading) {
-    autopilotLoading = true;
-    autopilotError = null;
-    fetchAutopilotJobs().then((res) => {
-      autopilotLoading = false;
-      if (res.ok) { autopilotJobs = res.jobs; autopilotError = null; }
-      else { autopilotError = res.error; }
-      if (document.body.contains(el)) paint();
-    });
-  }
-
-  el.querySelector("[data-ap-retry]")?.addEventListener("click", () => {
-    autopilotJobs = null;
-    autopilotError = null;
-    paint();
-  });
-
-  el.querySelectorAll("[data-ap-toggle]").forEach((input) => {
-    input.onchange = async () => {
-      const id = input.dataset.apToggle;
-      const nextEnabled = input.checked;
-      autopilotBusyIds.add(id);
-      paint();
-      const res = await toggleAutopilotJob(id, nextEnabled);
-      autopilotBusyIds.delete(id);
-      if (res.ok && autopilotJobs) {
-        const job = autopilotJobs.find((j) => j.id === id);
-        if (job) job.enabled = nextEnabled;
-        notify("Autopilot", `${nextEnabled ? "Turned on" : "Turned off"} "${job?.name || id}".`);
-      } else {
-        notify("Autopilot", `Couldn't update "${id}": ${res.error || "unknown error"}.`);
-      }
-      paint();
-    };
-  });
-
-  el.querySelectorAll("[data-ap-run]").forEach((btn) => {
-    btn.onclick = async () => {
-      const id = btn.dataset.apRun;
-      autopilotBusyIds.add(id);
-      paint();
-      const res = await runAutopilotJobNow(id);
-      autopilotBusyIds.delete(id);
-      if (res.ok) {
-        const refreshed = await fetchAutopilotJobs();
-        if (refreshed.ok) autopilotJobs = refreshed.jobs;
-        notify("Autopilot", `Ran "${id}" now.`);
-      } else {
-        notify("Autopilot", `Couldn't run "${id}": ${res.error || "unknown error"}.`);
-      }
-      paint();
-    };
   });
 
   el.querySelectorAll("[data-au-recipe]").forEach((btn) => {

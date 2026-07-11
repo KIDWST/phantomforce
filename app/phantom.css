@@ -2271,27 +2271,28 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
    user menu are pinned and never compress. */
 .topbar2 {
   display: flex; align-items: center; gap: 14px; flex-wrap: nowrap;
+  width: 100%; min-width: 0;
   padding: 14px clamp(16px, 2vw, 26px); border-bottom: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(3, 10, 8, 0.7), rgba(3, 10, 8, 0.3));
   position: sticky; top: 0; z-index: 20;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-/* Identity/status info is higher priority than the topbar-actions cluster
-   (search/clock/notif/user), which already declares its own shrink target
-   below (flex: 0 1 auto; min-width: 0) - let pills keep their natural width
-   and have that cluster give up space first. */
-.status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; flex-shrink: 0; }
+/* Browser zoom changes the effective CSS width, so every left-side topbar
+   group must be allowed to shrink before it crashes into clock/user controls. */
+.status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; flex: 1 1 0; }
 .topbar-actions {
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  gap: 14px;
+  justify-content: flex-end;
+  gap: 10px;
   flex: 0 1 auto;
   min-width: 0;
-  margin-left: clamp(12px, 1.8vw, 48px);
+  margin-left: auto;
 }
 .topbar-actions .cmdk-open { flex: 0 1 240px; }
-.topbar-actions .topbar-clock { margin-left: clamp(14px, 1.5vw, 64px); }
+.topbar-actions .topbar-clock { margin-left: clamp(6px, 0.8vw, 18px); }
 .pill { display: flex; flex-direction: column; gap: 2px; padding: 7px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); min-width: 0; }
+.status-pills .pill { flex: 0 1 178px; }
 .pill-link { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .pill-link:hover, .pill-link:focus-visible { border-color: var(--line-strong); background: rgba(65,255,161,0.08); outline: none; }
 .pill-k { font: 500 8px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
@@ -2304,7 +2305,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .pill-warn .pill-v { color: var(--warn); }
 .pill-warn .dot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
 .pill-v .lock { font-size: 11px; }
-.ws-switch { display: inline-flex; min-width: 0; flex: 0 1 auto; }
+.ws-switch { display: inline-flex; min-width: 0; flex: 0 1 180px; }
 .ws-switch select {
   appearance: none; -webkit-appearance: none; cursor: pointer; max-width: 170px;
   padding: 8px 30px 8px 13px; border-radius: 12px; font-size: 12.5px;
@@ -2315,7 +2316,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .ws-switch select:focus { outline: none; border-color: var(--neon); }
 .ws-switch option { background: #04120c; color: var(--ink); }
-.topbar-clock { margin-left: auto; text-align: right; line-height: 1.2; flex-shrink: 0; }
+.topbar-clock { text-align: right; line-height: 1.2; flex-shrink: 0; }
 .topbar-clock b { display: block; font: 600 17px "Space Grotesk", sans-serif; letter-spacing: 0.02em; }
 .topbar-clock i { font: 400 11px "DM Mono", monospace; font-style: normal; color: var(--dim); }
 .user-menu-wrap { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; }
@@ -3133,10 +3134,22 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .topbar-clock i { display: none; }
   .user-meta i { display: none; }
 }
+@media (max-width: 1700px) {
+  .topbar2 { gap: 10px; padding-inline: 16px; }
+  .status-pills { gap: 8px; }
+  .status-pills .pill { flex-basis: 150px; padding-inline: 10px; }
+  .status-pills .ws-switch { flex-basis: 158px; }
+  .desktop-context-top { flex: 0 1 330px; min-width: 260px; max-width: 360px; }
+  .topbar-actions { gap: 8px; }
+  .topbar-actions .cmdk-open { flex: 0 0 44px; width: 44px; padding-inline: 8px; justify-content: center; }
+  .cmdk-open-label, .cmdk-open-kbd { display: none; }
+  .topbar-actions .topbar-clock { margin-left: 4px; }
+  .topbar-clock i { display: none; }
+}
 @media (min-width: 1800px) {
   .topbar2 { justify-content: flex-start; }
-  .topbar-actions { margin-left: clamp(14px, 1.35vw, 56px); }
-  .topbar-actions .topbar-clock { margin-left: clamp(18px, 1.6vw, 86px); }
+  .topbar-actions { margin-left: auto; }
+  .topbar-actions .topbar-clock { margin-left: clamp(8px, 0.9vw, 22px); }
 }
 @media (max-width: 1320px) {
   .desktop-context-top { flex-basis: 320px; min-width: 240px; }
@@ -6758,6 +6771,38 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 
 /* ---- Autopilot: real scheduled server automations ---- */
 .ap-wrap { display: flex; flex-direction: column; gap: 14px; }
+.ap-curtain { display: flex; flex-direction: column; gap: 14px; }
+.ap-curtain-hero {
+  position: relative; overflow: hidden; border: 1px solid rgba(65, 255, 161, 0.22); border-radius: 18px;
+  padding: 24px; min-height: 185px; display: flex; flex-direction: column; justify-content: center;
+  background:
+    radial-gradient(circle at 78% 38%, rgba(65, 255, 161, 0.2), transparent 28%),
+    linear-gradient(135deg, rgba(5, 35, 23, 0.88), rgba(1, 7, 6, 0.92));
+}
+.ap-curtain-hero::after {
+  content: ""; position: absolute; inset: 16px 18px; pointer-events: none; opacity: 0.28;
+  border: 1px solid rgba(65, 255, 161, 0.22); border-radius: 14px;
+  background:
+    linear-gradient(90deg, transparent 0 18%, rgba(65, 255, 161, 0.08) 18% 18.5%, transparent 18.5% 100%),
+    repeating-linear-gradient(180deg, rgba(65, 255, 161, 0.07) 0 1px, transparent 1px 13px);
+}
+.ap-curtain-hero h3 { position: relative; z-index: 1; margin: 0; max-width: 660px; font-size: 28px; }
+.ap-curtain-hero p:not(.ch-eyebrow) { position: relative; z-index: 1; margin: 10px 0 0; max-width: 780px; color: var(--dim); line-height: 1.55; }
+.ap-curtain-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.ap-curtain-card {
+  min-height: 118px; padding: 15px; border: 1px solid var(--line); border-radius: 15px;
+  background: rgba(255, 255, 255, 0.018);
+}
+.ap-curtain-card b { display: block; margin-bottom: 8px; color: var(--ink); }
+.ap-curtain-card p { margin: 0; color: var(--dim); font-size: 12.5px; line-height: 1.5; }
+.ap-curtain-note {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap;
+  padding: 13px 15px; border: 1px solid rgba(65, 255, 161, 0.2); border-radius: 14px;
+  background: rgba(65, 255, 161, 0.055);
+}
+.ap-curtain-note b { color: #dfffee; }
+.ap-curtain-note span { color: var(--dim); font-size: 12px; line-height: 1.4; }
+.ap-dev-panel { display: flex; flex-direction: column; gap: 12px; }
 .ap-category { display: flex; flex-direction: column; gap: 9px; }
 .ap-category h4 { margin: 0; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.06em; }
 .ap-job-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
@@ -6798,6 +6843,9 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ap-switch input:disabled + .ap-switch-track { opacity: 0.5; cursor: not-allowed; }
 .ap-switch input:focus-visible + .ap-switch-track { outline: 2px solid var(--neon); outline-offset: 2px; }
 @media (max-width: 720px) {
+  .ap-curtain-grid { grid-template-columns: 1fr; }
+  .ap-curtain-hero { min-height: 0; padding: 18px; }
+  .ap-curtain-hero h3 { font-size: 22px; }
   .ap-job-grid { grid-template-columns: 1fr; }
 }
 @media (prefers-reduced-motion: reduce) {
