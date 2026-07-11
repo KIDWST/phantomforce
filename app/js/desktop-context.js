@@ -1,3 +1,5 @@
+import { session } from "./store.js?v=phantom-live-20260710-150";
+
 const DESKTOP_PROTOCOL = "phantomforce.hermes.extension.v1";
 const BRIDGE_TIMEOUT_MS = 1800;
 const REFRESH_MS = 15000;
@@ -66,7 +68,7 @@ function bridgeRequest(type, payload = {}) {
   });
 }
 
-function requestDesktopContext() {
+function requestBrowserDesktopContext() {
   return bridgeRequest("PF_HERMES_DESKTOP_CONTEXT_REQUEST");
 }
 
@@ -76,6 +78,77 @@ function focusDesktopTab(tabId) {
 
 function mediaControl(tabId, command) {
   return bridgeRequest("PF_HERMES_MEDIA_CONTROL_REQUEST", { tabId, command });
+}
+
+function authHeaders(extra = {}) {
+  const token = session.token();
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
+function normalizeSystemSession(item = {}) {
+  return {
+    ...item,
+    id: item.session_id || item.id || "",
+    sessionId: item.session_id || item.id || "",
+    source: "windows",
+    app: item.app || "Media",
+    title: item.title || "Media",
+    subtitle: item.artist || item.album || "",
+    audible: Boolean(item.playing),
+    active: true,
+    controls: item.controls || {},
+  };
+}
+
+async function requestSystemMediaContext() {
+  try {
+    const response = await fetch("/phantom-ai/desktop-media/status", { headers: authHeaders() });
+    const data = await response.json().catch(() => null);
+    const media = data?.media;
+    if (!response.ok || !media?.ok) {
+      return { ok: false, reason: media?.reason || data?.error || `http_${response.status}` };
+    }
+    const sessions = Array.isArray(media.sessions) ? media.sessions.map(normalizeSystemSession) : [];
+    const active = media.active ? normalizeSystemSession(media.active) : sessions[0] || null;
+    return { ok: true, activeMedia: active, mediaTabs: sessions, source: "windows" };
+  } catch {
+    return { ok: false, reason: "system_media_unreachable" };
+  }
+}
+
+async function controlSystemMedia(active, command) {
+  try {
+    const response = await fetch("/phantom-ai/desktop-media/control", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ session_id: active?.sessionId || active?.id || "", command }),
+    });
+    const data = await response.json().catch(() => null);
+    return { ok: Boolean(response.ok && data?.ok), reason: data?.media?.reason || data?.error || "" };
+  } catch {
+    return { ok: false, reason: "system_media_unreachable" };
+  }
+}
+
+async function requestDesktopContext() {
+  const [system, browser] = await Promise.all([
+    requestSystemMediaContext(),
+    requestBrowserDesktopContext(),
+  ]);
+  const browserTabs = Array.isArray(browser?.mediaTabs)
+    ? browser.mediaTabs.map((tab) => ({ ...tab, source: "browser" }))
+    : [];
+  const systemTabs = Array.isArray(system?.mediaTabs) ? system.mediaTabs : [];
+  const mediaTabs = [...systemTabs, ...browserTabs.filter((tab) =>
+    !systemTabs.some((item) => item.title === tab.title && item.app === tab.app),
+  )];
+  return {
+    ok: Boolean(system?.ok || browser?.ok),
+    activeMedia: system?.activeMedia || (browser?.activeMedia ? { ...browser.activeMedia, source: "browser" } : null),
+    mediaTabs,
+    source: system?.activeMedia ? "windows" : browser?.ok ? "browser" : "none",
+    reason: system?.reason || browser?.reason || "",
+  };
 }
 
 function compactTitle(value = "") {
@@ -118,28 +191,34 @@ function renderTab(tab = {}, { primary = false } = {}) {
 
 function renderThumb(tab = {}) {
   const url = thumbnailUrl(tab);
+  const focusAttr = tab.source === "browser" ? ` data-dc-focus="${esc(tab.id || "")}"` : "";
+  const title = tab.source === "browser" ? "Open media tab" : "Now playing";
   if (url) {
-    return `<button class="dc-mini-thumb" type="button" data-dc-focus="${esc(tab.id || "")}" title="Open media tab"><img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer"/></button>`;
+    return `<button class="dc-mini-thumb" type="button"${focusAttr} title="${title}"><img src="${esc(url)}" alt="" loading="lazy" referrerpolicy="no-referrer"/></button>`;
   }
-  return `<button class="dc-mini-thumb" type="button" data-dc-focus="${esc(tab.id || "")}" title="Open media tab"><span>${esc(mediaInitial(tab))}</span></button>`;
+  return `<button class="dc-mini-thumb" type="button"${focusAttr} title="${title}"><span>${esc(mediaInitial(tab))}</span></button>`;
 }
 
 function renderMiniRoot(root, state) {
   const mediaTabs = Array.isArray(state.mediaTabs) ? state.mediaTabs : [];
   const active = state.activeMedia || mediaTabs[0] || null;
   const status = state.loading ? "checking" : state.ok ? (active ? (active.audible ? "playing" : "ready") : "idle") : "waiting";
-  const hasTab = Boolean(active?.id);
+  const hasMedia = Boolean(active?.id);
+  const controls = active?.controls || {};
+  const canPlay = hasMedia && (active?.source !== "windows" || controls.play_pause !== false);
+  const canPrevious = hasMedia && (active?.source !== "windows" || controls.previous !== false);
+  const canNext = hasMedia && (active?.source !== "windows" || controls.next !== false);
   root.innerHTML = `
     <div class="dc-mini-shell" data-dc-mini-shell>
-      ${hasTab ? renderThumb(active) : `<button class="dc-mini-thumb is-empty" type="button" data-dc-refresh title="Find media"><span>♪</span></button>`}
+      ${hasMedia ? renderThumb(active) : `<button class="dc-mini-thumb is-empty" type="button" data-dc-refresh title="Find media"><span>♪</span></button>`}
       <div class="dc-mini-copy">
-        <span><i class="dc-dot${state.ok ? " is-on" : ""}"></i> Media bridge · ${esc(status)}</span>
+        <span><i class="dc-dot${state.ok ? " is-on" : ""}"></i> Media · ${esc(status)}</span>
         <b title="${esc(active?.title || "No media detected")}">${esc(active ? compactTitle(active.title) : "No media playing")}</b>
       </div>
       <div class="dc-mini-controls" aria-label="Media controls">
-        <button type="button" data-dc-control="previous" ${hasTab ? "" : "disabled"} title="Previous">‹</button>
-        <button class="is-main" type="button" data-dc-control="play-pause" ${hasTab ? "" : "disabled"} title="Play or pause">${active?.audible ? "Ⅱ" : "▶"}</button>
-        <button type="button" data-dc-control="next" ${hasTab ? "" : "disabled"} title="Next">›</button>
+        <button type="button" data-dc-control="previous" ${canPrevious ? "" : "disabled"} title="Previous">‹</button>
+        <button class="is-main" type="button" data-dc-control="play-pause" ${canPlay ? "" : "disabled"} title="Play or pause">${active?.audible ? "Ⅱ" : "▶"}</button>
+        <button type="button" data-dc-control="next" ${canNext ? "" : "disabled"} title="Next">›</button>
         <button type="button" data-dc-refresh title="Refresh">↻</button>
       </div>
     </div>`;
@@ -168,8 +247,8 @@ function renderRoot(root, state) {
     </div>
     ${active ? `<div class="dc-now">${renderTab(active, { primary: true })}</div>` : `
       <div class="dc-empty">
-        <b>No media tab detected.</b>
-        <span>Open YouTube, Spotify, or another media tab, then refresh.</span>
+        <b>No active media detected.</b>
+        <span>Start VLC, Media Player, YouTube, or another supported player.</span>
       </div>`}
     ${mediaTabs.length > 1 ? `<div class="dc-list">${mediaTabs.filter((tab) => tab.id !== active?.id).slice(0, 3).map((tab) => renderTab(tab)).join("")}</div>` : ""}
     <p class="dc-safe">Safe metadata only. No cookies, passwords, history, files, or messages.</p>`;
@@ -234,12 +313,14 @@ export function mountDesktopContextWidget(root, opts = {}) {
       const previous = controlButton.textContent;
       controlButton.textContent = "…";
       controlButton.disabled = true;
-      const response = await mediaControl(active.id, command);
+      const response = active.source === "windows"
+        ? await controlSystemMedia(active, command)
+        : await mediaControl(active.id, command);
       controlButton.textContent = response?.ok ? "✓" : previous;
       controlButton.disabled = false;
       if (!response?.ok) {
-        controlButton.title = "Media control bridge needs the extension update";
-        opts.notify?.("Media Bridge", "Media control command was sent, but the desktop bridge did not confirm it yet.");
+        controlButton.title = "This player did not accept that control";
+        opts.notify?.("Media", "That player did not accept the control yet. Start playback once, then refresh.");
       }
       setTimeout(() => {
         controlButton.textContent = previous;

@@ -5,7 +5,7 @@
    the field. Live stats from the store; every node opens its workspace.
    Two layouts: wide wave spine and phone snake. Reduced motion → static. */
 
-import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260710-147";
+import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260710-150";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NARROW_AT = 620;
@@ -34,7 +34,7 @@ export function flowSummary() {
     openLeads: openLeads.length,
     moving: moving.length,
     urgent: !secClean,
-    text: `${builds.length} site build${builds.length === 1 ? "" : "s"} · ${openLeads.length} open lead${openLeads.length === 1 ? "" : "s"} · ${moving.length} moving deliver${moving.length === 1 ? "y" : "ies"}`,
+    text: `${builds.length} website${builds.length === 1 ? "" : "s"} · ${openLeads.length} open lead${openLeads.length === 1 ? "" : "s"} · ${moving.length} moving deliver${moving.length === 1 ? "y" : "ies"}`,
   };
 }
 
@@ -45,7 +45,7 @@ function flowNodes() {
     { id: "quotes", ws: "proposals", icon: "◆", label: "Quotes", stat: `${m.open.length} live` },
     { id: "money", ws: "money", icon: "◈", label: "Money", stat: m.transactions.length ? signedMoney(m.netCash) : "ledger", size: 24 },
     { id: "delivery", ws: "media", icon: "▶", label: "Delivery", stat: `${moving.length} moving` },
-    { id: "site", ws: "sites", icon: "▦", label: "Site", stat: `${builds.length} builds` },
+    { id: "site", ws: "sites", icon: "▦", label: "Sites", stat: `${builds.length} live` },
     { id: "protect", ws: "protect", icon: "⬡", label: "Protect", stat: secClean ? "clean" : "attention", alert: !secClean },
   ];
 }
