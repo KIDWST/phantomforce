@@ -6,12 +6,12 @@
  * instead of sending people out to another product.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260711-178";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-181";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260711-178";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260711-178";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260711-178";
+} from "./contenthub.js?v=phantom-live-20260711-181";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260711-181";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260711-181";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -217,7 +217,7 @@ function redactHermesVisibleText(value = "", limit = 180) {
 }
 function loadHermesExtensionState() {
   try {
-    return JSON.parse(localStorage.getItem(HERMES_EXTENSION_KEY) || "{}") || {};
+    return JSON.parse(workspaceStorageGetItem(HERMES_EXTENSION_KEY) || "{}") || {};
   } catch {
     return {};
   }
@@ -228,7 +228,7 @@ function saveHermesExtensionState(patch = {}) {
     ...patch,
     updatedAt: new Date().toISOString(),
   };
-  try { localStorage.setItem(HERMES_EXTENSION_KEY, JSON.stringify(next)); } catch {}
+  try { workspaceStorageSetItem(HERMES_EXTENSION_KEY, JSON.stringify(next)); } catch {}
   return next;
 }
 function sanitizeHermesProfilePacket(payload = {}) {
@@ -369,7 +369,7 @@ function startSocialBridgePolling(targetPlatform = "") {
 /* ---------------- config ---------------- */
 export function loadCfg() {
   let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(CFG_KEY) || "{}"); } catch {}
+  try { saved = JSON.parse(workspaceStorageGetItem(CFG_KEY) || "{}"); } catch {}
   const providers = DEFAULT_PROVIDERS.map((p) => {
     const savedProviders = saved.providers || {};
     const s = savedProviders[p.id] || {};
@@ -415,7 +415,7 @@ export function saveCfg(cfg) {
     credits: cfg.credits,
     requireApproval: cfg.requireApproval,
   };
-  try { localStorage.setItem(CFG_KEY, JSON.stringify(out)); } catch {}
+  try { workspaceStorageSetItem(CFG_KEY, JSON.stringify(out)); } catch {}
 }
 const provider = (cfg, id) => cfg.providers.find((p) => p.id === id);
 const providersFor = (cfg, modality) => cfg.providers.filter((p) => p.enabled && p.modalities.includes(modality));
@@ -614,6 +614,7 @@ async function draftCinematicRequest(req = {}, spec = {}) {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify({
+        tenant_id: currentTenantId(),
         prompt: spec.provider_prompt,
         mode: cinematicDraftMode(req, spec),
         model: spec.model,
@@ -662,6 +663,7 @@ async function generate(cfg, req) {
   }
   const providerReq = {
     ...req,
+    tenant_id: currentTenantId(),
     model: spec.model,
     prompt: spec.provider_prompt,
     original_prompt: spec.original_prompt,
@@ -1026,9 +1028,9 @@ let session = { assets: [], tab: "generate", edit: null };
 
 function consumeEditIntent(opts = {}) {
   let intent = null;
-  try { intent = JSON.parse(localStorage.getItem(EDIT_INTENT_KEY) || "null"); } catch {}
+  try { intent = JSON.parse(workspaceStorageGetItem(EDIT_INTENT_KEY, { migrateGlobal: false }) || "null"); } catch {}
   if (!intent || intent.type !== "image" || !intent.url) return;
-  try { localStorage.removeItem(EDIT_INTENT_KEY); } catch {}
+  try { workspaceStorageRemoveItem(EDIT_INTENT_KEY); } catch {}
   const asset = {
     id: intent.id || `hub-edit-${Date.now()}`,
     type: "image",
@@ -1045,9 +1047,9 @@ function consumeEditIntent(opts = {}) {
 
 function consumePromptIntent(opts = {}) {
   let intent = null;
-  try { intent = JSON.parse(localStorage.getItem(PROMPT_INTENT_KEY) || "null"); } catch {}
+  try { intent = JSON.parse(workspaceStorageGetItem(PROMPT_INTENT_KEY, { migrateGlobal: false }) || "null"); } catch {}
   if (!intent || !intent.prompt) return;
-  try { localStorage.removeItem(PROMPT_INTENT_KEY); } catch {}
+  try { workspaceStorageRemoveItem(PROMPT_INTENT_KEY); } catch {}
   genState.modality = intent.modality === "video" ? "video" : "image";
   genState.prompt = intent.prompt;
   genState.preset = "custom";

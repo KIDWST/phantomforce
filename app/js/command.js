@@ -7,13 +7,13 @@
    mode never sends, uploads, charges, or deploys. */
 
 import {
-  store, uid, visible, currentWs, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
+  store, uid, visible, currentWs, currentTenantId, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
-  getPhantomLaneTarget, loadPhantomLaneConfig,
-} from "./store.js?v=phantom-live-20260711-178";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-178";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260711-178";
+  getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
+} from "./store.js?v=phantom-live-20260711-181";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-181";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260711-181";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -65,7 +65,7 @@ function loadRuntimeAiSettings() {
     externalActionMode: "approval",
   };
   try {
-    const saved = JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || "{}");
+    const saved = JSON.parse(workspaceStorageGetItem(AI_SETTINGS_KEY) || "{}");
     const brainMode = ["local", "api", "subscription"].includes(saved.brainMode) ? saved.brainMode : defaults.brainMode;
     return { ...defaults, ...saved, brainMode };
   } catch {
@@ -168,9 +168,11 @@ async function askHermesBrain(raw, intent, settings) {
         requested_model: selectedLaneModelForSettings(settings),
         execution_mode: settings.externalActionMode === "owner_rules" ? "auto" : "approval",
         task_type: intent.primaryIntent,
-        business_name: "PhantomForce",
+        tenant_id: currentTenantId(),
+        workspace_id: currentWs(),
+        business_name: wsName(currentWs()),
         actor_user_id: ctx.session?.sessionId || ctx.session?.name || "owner-admin",
-        business_summary: "PhantomForce Business Manager. AI-assisted operations, Creator Hub, client pipeline, bookings, offer desk, accounting, follow-up, site portfolio, approval gates, and local owner memory.",
+        business_summary: `${wsName(currentWs())} Business Manager workspace. AI-assisted operations, Creator Hub, bookings, offer desk, accounting, follow-up, site portfolio, approval gates, and scoped local memory.`,
         /* The server's parseContextModuleData expects an ARRAY of
            {module, summary, items:[{title,status,detail}]} — the old object
            shape was silently discarded, so the model never saw any of this.

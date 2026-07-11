@@ -1,5 +1,5 @@
-import { session } from "./store.js?v=phantom-live-20260711-178";
-import { esc } from "./workspaces.js?v=phantom-live-20260711-178";
+import { currentTenantId, currentWs, session, wsName } from "./store.js?v=phantom-live-20260711-181";
+import { esc } from "./workspaces.js?v=phantom-live-20260711-181";
 
 const state = {
   loading: true,
@@ -11,6 +11,27 @@ const state = {
   feedback: "",
   notice: "",
 };
+
+function tenantQuery(path) {
+  const joiner = path.includes("?") ? "&" : "?";
+  return path + joiner + "tenant_id=" + encodeURIComponent(currentTenantId());
+}
+
+function tenantPayload(payload = {}) {
+  return { ...payload, tenant_id: currentTenantId() };
+}
+
+function syncBrainTenant() {
+  const tenant = currentTenantId();
+  if (state.tenant === tenant) return;
+  state.tenant = tenant;
+  state.loading = true;
+  state.error = "";
+  state.brain = null;
+  state.preview = null;
+  state.feedback = "";
+  state.notice = "";
+}
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -28,7 +49,7 @@ async function brainFetch(path, options = {}) {
 }
 
 async function loadBrain() {
-  const data = await brainFetch("/phantom-ai/brain/status");
+  const data = await brainFetch(tenantQuery("/phantom-ai/brain/status"));
   state.brain = data.brain;
   state.loading = false;
   state.error = "";
@@ -125,7 +146,7 @@ function renderShell(root) {
       ${state.notice ? `<div class="brain-notice">${esc(state.notice)}</div>` : ""}
       <section class="brain-hero">
         <div>
-          <p class="overlay-kicker">Adaptive operator memory</p>
+          <p class="overlay-kicker">Adaptive operator memory · ${esc(wsName(currentWs()))}</p>
           <h3>Memory & Routing</h3>
           <p>Real memory, context composition, feedback, health, proof logs, and approval impulse control. No fake model-weight claims.</p>
         </div>
@@ -232,7 +253,7 @@ async function saveMemory(root, payload) {
   await brainFetch("/phantom-ai/brain/memories", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
+    body: JSON.stringify(tenantPayload(payload)),
   });
   state.notice = "Memory saved.";
   await rerender(root);
@@ -244,7 +265,7 @@ async function editMemory(root, id, currentText) {
   await brainFetch(`/phantom-ai/brain/memories/${encodeURIComponent(id)}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ text: next.trim() }),
+    body: JSON.stringify(tenantPayload({ text: next.trim() })),
   });
   state.notice = "Memory updated.";
   await rerender(root);
@@ -252,7 +273,7 @@ async function editMemory(root, id, currentText) {
 
 async function forgetMemory(root, id) {
   if (!confirm("Forget this memory?")) return;
-  await brainFetch(`/phantom-ai/brain/memories/${encodeURIComponent(id)}`, { method: "DELETE" });
+  await brainFetch(tenantQuery(`/phantom-ai/brain/memories/${encodeURIComponent(id)}`), { method: "DELETE" });
   state.notice = "Memory forgotten.";
   await rerender(root);
 }
@@ -285,7 +306,7 @@ function bind(root) {
     const data = await brainFetch("/phantom-ai/brain/context-preview", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: state.previewMessage, surface: "brain" }),
+      body: JSON.stringify(tenantPayload({ message: state.previewMessage, surface: "brain" })),
     });
     state.preview = data.context;
     renderShell(root);
@@ -298,7 +319,7 @@ function bind(root) {
     await brainFetch("/phantom-ai/brain/feedback", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ kind: "correction", text: state.feedback, surface: "brain" }),
+      body: JSON.stringify(tenantPayload({ kind: "correction", text: state.feedback, surface: "brain" })),
     });
     state.feedback = "";
     state.notice = "Feedback recorded.";

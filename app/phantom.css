@@ -1424,6 +1424,15 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   cursor: grab; touch-action: none;
 }
 .worker-mesh-stage.is-web-active:active { cursor: grabbing; }
+/* The page-enter transition leaves .workspace-page-body with a (functionally
+   identity, but literally present) transform after it finishes - ANY
+   transform value on an ancestor creates a new containing block, so
+   position: fixed above resolves against that ancestor's box instead of the
+   real viewport, rendering as a small in-page box instead of fullscreen.
+   Cancel it specifically while the web is open. */
+body:has([data-worker-web-stage].is-web-active) .workspace-page-body {
+  transform: none;
+}
 .worker-web-world {
   position: absolute; inset: 0; transform-origin: 0 0;
 }
@@ -1448,6 +1457,15 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .worker-node.is-web-dimmed { opacity: 0.15; }
 .worker-node.is-web-match { border-color: var(--neon); box-shadow: 0 0 0 2px rgba(65,255,161,0.4), 0 0 34px var(--node-glow); }
+/* This is meant to be read while dragging/zooming to find a specific
+   worker, not a decorative screensaver - constant motion here fights against
+   actually reading it, and was the source of the "laggy and ugly" feedback.
+   Everything stays put; color/selection is still how state reads. */
+.worker-mesh-stage.is-web-active .worker-node,
+.worker-mesh-stage.is-web-active .worker-thread.is-live::after,
+.worker-mesh-stage.is-web-active .worker-mesh-rings span {
+  animation: none;
+}
 .worker-mesh-rings { position: absolute; inset: 8%; pointer-events: none; }
 .worker-mesh-rings span {
   position: absolute; inset: calc(var(--ring, 0) * 11%); border: 1px solid rgba(65,255,161,0.12); border-radius: 50%;
@@ -4391,6 +4409,11 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   border: 1px solid var(--line); border-radius: 18px; padding: 18px; margin-bottom: 14px; background: var(--glass);
 }
 .ch-creator-head h3, .an-hero h3 { margin: 0; font-size: 22px; }
+.ch-tenant-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.ch-tenant-pill {
+  display: inline-flex; align-items: center; min-height: 32px; padding: 0 11px; border: 1px solid rgba(65,255,161,.22); border-radius: 999px;
+  background: rgba(65,255,161,.08); color: #bdf7d2; font: 700 10px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase;
+}
 .ch-creator-head p, .an-hero p { margin: 6px 0 0; max-width: 720px; color: var(--dim); font-size: 13px; line-height: 1.55; }
 .ch-eyebrow { margin: 0 !important; font: 700 9px "DM Mono", monospace; letter-spacing: .16em; text-transform: uppercase; color: var(--neon) !important; }
 
@@ -4781,6 +4804,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 @media (max-width: 640px) {
   .ch-kpis { grid-template-columns: repeat(2, 1fr); }
   .ch-creator-head, .an-hero { flex-direction: column; align-items: stretch; }
+  .ch-tenant-actions { justify-content: flex-start; }
   .ch-draft, .ch-calendar-item { grid-template-columns: 1fr; }
   .ch-production, .an-trend-list, .an-reco-grid { grid-template-columns: 1fr; }
   .ch-tabs, .ch-chips { overflow-x: auto; flex-wrap: nowrap; }
@@ -7774,6 +7798,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ch-lb-bokeh-markers { position: absolute; inset: 0; z-index: 4; pointer-events: none; transition: opacity 0.15s ease; }
 .ch-lb-bokeh-markers.is-hidden { opacity: 0; pointer-events: none; }
 .ch-lb-bokeh-markers.is-hidden .ch-lb-bokeh-marker { pointer-events: none; }
+.ch-bokeh-brush-cursor {
+  position: absolute; z-index: 6; transform: translate(-50%, -50%); border-radius: 50%;
+  border: 2px solid #ffd166; background: rgba(255,209,102,.07);
+  box-shadow: 0 0 0 5px rgba(65,255,161,.1), 0 0 22px rgba(65,255,161,.38);
+  opacity: 0; pointer-events: none; transition: width .08s ease, height .08s ease, opacity .08s ease;
+}
+.ch-bokeh-brush-cursor::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; transform: translate(-50%, -50%);
+  border-radius: 50%; background: #ffd166; box-shadow: 0 0 8px rgba(255,209,102,.9);
+}
+.ch-bokeh-brush-cursor.is-visible { opacity: 1; }
 .ch-lb-ai-input, .ch-lb-tools input[type="text"] {
   flex: 1 1 auto; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,0.32);
   color: var(--ink); padding: 9px 11px; font-size: 12.5px; outline: none;
@@ -8498,3 +8533,58 @@ body.overlay-open .buddy-canvas { pointer-events: none; }
 .memory-brain-panel > summary span { color: var(--dim); font-size: 12px; line-height: 1.45; }
 .memory-brain-panel > summary:hover { background: rgba(65, 255, 161, 0.05); }
 .memory-brain-mount { padding: 4px 18px 18px; }
+
+/* Phantom smart layer system */
+.ch-new-layer { margin: 0 0 10px; }
+.ch-new-layer-trigger {
+  width: 100%; min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 11px; border: 1px solid rgba(65,255,161,.38); border-radius: 10px;
+  background: linear-gradient(135deg, rgba(65,255,161,.13), rgba(65,255,161,.035)); color: var(--ink); cursor: pointer;
+}
+.ch-new-layer-trigger span { font: 700 12px "Space Grotesk"; }
+.ch-new-layer-trigger small { color: var(--dim); font: 650 9px "DM Mono", monospace; }
+.ch-new-layer-menu { margin-top: 7px; padding: 8px; border: 1px solid var(--line); border-radius: 11px; background: rgba(0,0,0,.25); }
+.ch-new-layer-menu[hidden] { display: none; }
+.ch-new-layer-actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+.ch-new-layer-actions button {
+  min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: rgba(65,255,161,.06); color: #dcffee;
+  cursor: pointer; font: 700 10.5px "Space Grotesk";
+}
+.ch-new-layer-actions button:hover { border-color: var(--neon); background: rgba(65,255,161,.13); }
+.ch-layer-dropzone {
+  width: 100%; min-height: 68px; margin-top: 7px; display: grid; place-items: center; align-content: center; gap: 3px;
+  border: 1px dashed rgba(65,255,161,.42); border-radius: 10px; background: rgba(65,255,161,.035); color: #dfffee; cursor: pointer;
+}
+.ch-layer-dropzone b { font-size: 11.5px; }
+.ch-layer-dropzone span { color: var(--dim); font-size: 10px; }
+.ch-layer-dropzone.is-drop-target, .ch-editor-stage.is-drop-target { border-color: var(--neon); background: rgba(65,255,161,.12); box-shadow: inset 0 0 0 2px rgba(65,255,161,.16); }
+.ch-compose-layer[draggable="true"] { cursor: grab; }
+.ch-compose-layer.is-dragging { opacity: .35; }
+.ch-compose-layer.is-drop-target { border-color: #ffd166; box-shadow: inset 3px 0 #ffd166; }
+.ch-lb-layer .ch-layer-row-actions button { width: 27px; min-width: 27px; }
+.ch-color-palette { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 7px; margin: 3px 0 12px; }
+.ch-color-palette button {
+  aspect-ratio: 1; min-width: 0; border: 2px solid rgba(255,255,255,.12); border-radius: 7px; background: var(--swatch); cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); transition: transform .12s ease, border-color .12s ease;
+}
+.ch-color-palette button:hover { transform: translateY(-1px) scale(1.05); border-color: rgba(255,255,255,.72); }
+.ch-color-palette button.is-selected { border-color: var(--neon); box-shadow: 0 0 0 2px rgba(65,255,161,.2), inset 0 0 0 1px rgba(0,0,0,.25); }
+@media (max-width: 720px) {
+  .ch-new-layer-trigger { min-height: 44px; }
+  .ch-layer-dropzone { min-height: 62px; }
+  .ch-color-palette { grid-template-columns: repeat(8, minmax(0,1fr)); gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ch-color-palette button { transition: none; }
+}
+
+
+/* Phantom AI quick tools */
+.ch-ai-quick-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; margin: 9px 0; }
+.ch-ai-quick-grid button {
+  min-height: 32px; border: 1px solid var(--line); border-radius: 8px; background: rgba(65,255,161,.055); color: #dfffee;
+  cursor: pointer; font: 700 10px "Space Grotesk"; padding: 6px 8px;
+}
+.ch-ai-quick-grid button:hover:not(:disabled) { border-color: var(--neon); background: rgba(65,255,161,.13); }
+.ch-ai-quick-grid button:disabled { opacity: .42; cursor: not-allowed; }
+@media (max-width: 720px) { .ch-ai-quick-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }

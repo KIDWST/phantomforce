@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260711-178";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260711-178";
+import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260711-181";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260711-181";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -24,7 +24,7 @@ function authHeaders(extra = {}) {
 
 function aiProxyBase() {
   try {
-    const cfg = JSON.parse(localStorage.getItem("pf.medialab.v1") || "{}");
+    const cfg = JSON.parse(workspaceStorageGetItem("pf.medialab.v1") || "{}");
     if (cfg.endpointBase) return String(cfg.endpointBase).replace(/\/+$/, "");
   } catch { /* fall through to default */ }
   return (location.hostname === "127.0.0.1" || location.hostname === "localhost")
@@ -211,14 +211,14 @@ export async function probeAiEditBackend() {
   }
 }
 
-export async function requestAiEdit({ dataUrl, prompt, provider = "cinematic" }) {
+export async function requestAiEdit({ dataUrl, prompt, provider = "cinematic", aspect = "1:1" }) {
   try {
     const r = await fetchWithTimeout(`${aiProxyBase()}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        provider, modality: "edit", prompt, ref: dataUrl,
-        params: { aspect: "1:1", count: 1 },
+        provider, modality: "edit", prompt, ref: dataUrl, tenant_id: currentTenantId(),
+        params: { aspect, count: 1 },
       }),
     }, 45000);
     const d = await r.json().catch(() => null);
@@ -243,7 +243,7 @@ export async function syncAssetUpload(dataUrl, filename) {
     const r = await fetchWithTimeout("/phantom-ai/content/assets", {
       method: "POST",
       headers: authHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify({ image: dataUrl, filename }),
+      body: JSON.stringify({ image: dataUrl, filename, tenant_id: currentTenantId() }),
     }, 30000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok && d.asset) return { ok: true, asset: d.asset };
@@ -255,7 +255,7 @@ export async function syncAssetUpload(dataUrl, filename) {
 
 export async function listSyncedAssets() {
   try {
-    const r = await fetchWithTimeout("/phantom-ai/content/assets", { headers: authHeaders() }, 12000);
+    const r = await fetchWithTimeout(`/phantom-ai/content/assets?tenant_id=${encodeURIComponent(currentTenantId())}`, { headers: authHeaders() }, 12000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok && Array.isArray(d.assets)) return { ok: true, assets: d.assets };
     return { ok: false, error: (d && d.error) || `Request failed (${r.status}).`, assets: [] };
@@ -266,7 +266,7 @@ export async function listSyncedAssets() {
 
 export async function fetchSyncedAssetFile(id) {
   try {
-    const r = await fetchWithTimeout(`/phantom-ai/content/assets/${encodeURIComponent(id)}/file`, { headers: authHeaders() }, 20000);
+    const r = await fetchWithTimeout(`/phantom-ai/content/assets/${encodeURIComponent(id)}/file?tenant_id=${encodeURIComponent(currentTenantId())}`, { headers: authHeaders() }, 20000);
     const d = await r.json().catch(() => null);
     if (r.ok && d && d.ok && d.image) return { ok: true, dataUrl: d.image, asset: d.asset };
     return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };

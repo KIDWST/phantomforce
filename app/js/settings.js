@@ -1,8 +1,8 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260711-178";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel } from "./store.js?v=phantom-live-20260711-178";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260711-181";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-181";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -105,14 +105,14 @@ function normalizeSettings(value) {
 
 function loadOperatorSettings() {
   try {
-    return normalizeSettings(JSON.parse(localStorage.getItem(AI_SETTINGS_KEY) || "{}"));
+    return normalizeSettings(JSON.parse(workspaceStorageGetItem(AI_SETTINGS_KEY) || "{}"));
   } catch {
     return normalizeSettings({});
   }
 }
 
 function saveOperatorSettings(settings) {
-  try { localStorage.setItem(AI_SETTINGS_KEY, JSON.stringify(normalizeSettings(settings))); } catch {}
+  try { workspaceStorageSetItem(AI_SETTINGS_KEY, JSON.stringify(normalizeSettings(settings))); } catch {}
 }
 
 export function getOperatorSettings() {
