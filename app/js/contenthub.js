@@ -10,15 +10,18 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260711-171";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-171";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-171";
+} from "./imagefilters.js?v=phantom-live-20260711-179";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-179";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-179";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition,
-} from "./content-editor.js?v=phantom-live-20260711-171";
+} from "./content-editor.js?v=phantom-live-20260711-179";
+import {
+  currentTenantId, currentWs, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
+} from "./store.js?v=phantom-live-20260711-179";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -75,12 +78,12 @@ function defaultSocialAccounts() {
 }
 export function loadSocialAccounts() {
   let saved = [];
-  try { saved = JSON.parse(localStorage.getItem(SOCIAL_KEY) || "[]"); } catch {}
+  try { saved = JSON.parse(workspaceStorageGetItem(SOCIAL_KEY) || "[]"); } catch {}
   const rows = Array.isArray(saved) ? saved : [];
   return defaultSocialAccounts().map((base) => ({ ...base, ...(rows.find((row) => row && row.id === base.id) || {}) }));
 }
 export function saveSocialAccounts(accounts) {
-  try { localStorage.setItem(SOCIAL_KEY, JSON.stringify(accounts)); } catch {}
+  try { workspaceStorageSetItem(SOCIAL_KEY, JSON.stringify(accounts)); } catch {}
 }
 export function socialStatus(account) {
   if (account.hermesProof || account.enabled) return "linked";
@@ -118,7 +121,7 @@ function defaultPublishState() {
 }
 function loadPublishState() {
   let saved = {};
-  try { saved = JSON.parse(localStorage.getItem(CH_PUBLISH_STATE_KEY) || "{}") || {}; } catch {}
+  try { saved = JSON.parse(workspaceStorageGetItem(CH_PUBLISH_STATE_KEY) || "{}") || {}; } catch {}
   const base = defaultPublishState();
   const merged = { ...base, ...saved };
   merged.platforms = normalizePlatformIds(merged.platforms, base.platforms);
@@ -130,17 +133,17 @@ function savePublishState(state = {}) {
   const base = defaultPublishState();
   const merged = { ...base, ...state, updatedAt: Date.now() };
   merged.platforms = normalizePlatformIds(merged.platforms, base.platforms);
-  try { localStorage.setItem(CH_PUBLISH_STATE_KEY, JSON.stringify(merged)); } catch {}
+  try { workspaceStorageSetItem(CH_PUBLISH_STATE_KEY, JSON.stringify(merged)); } catch {}
   return merged;
 }
 function loadPublishDrafts() {
   let rows = [];
-  try { rows = JSON.parse(localStorage.getItem(CH_PUBLISH_DRAFTS_KEY) || "[]"); } catch {}
+  try { rows = JSON.parse(workspaceStorageGetItem(CH_PUBLISH_DRAFTS_KEY) || "[]"); } catch {}
   return (Array.isArray(rows) ? rows : []).filter(Boolean).slice(0, 50);
 }
 function savePublishDrafts(rows = []) {
   const clean = rows.filter(Boolean).slice(0, 50);
-  try { localStorage.setItem(CH_PUBLISH_DRAFTS_KEY, JSON.stringify(clean)); } catch {}
+  try { workspaceStorageSetItem(CH_PUBLISH_DRAFTS_KEY, JSON.stringify(clean)); } catch {}
   return clean;
 }
 
@@ -219,15 +222,15 @@ function genPosts() {
 /* ---------------- data API (Analytics + Hub both use this) ---------------- */
 export function loadContent() {
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(CH_KEY) || "null"); } catch {}
+  try { saved = JSON.parse(workspaceStorageGetItem(CH_KEY) || "null"); } catch {}
   if (saved && Array.isArray(saved.posts) && saved.posts.length) return saved;
   const data = { posts: genPosts(), updatedAt: Date.now() };
-  try { localStorage.setItem(CH_KEY, JSON.stringify(data)); } catch {}
+  try { workspaceStorageSetItem(CH_KEY, JSON.stringify(data)); } catch {}
   return data;
 }
 function saveContent(data = {}) {
   const clean = { ...data, posts: Array.isArray(data.posts) ? data.posts : [], updatedAt: Date.now() };
-  try { localStorage.setItem(CH_KEY, JSON.stringify(clean)); } catch {}
+  try { workspaceStorageSetItem(CH_KEY, JSON.stringify(clean)); } catch {}
   return clean;
 }
 function dataBytes(url) {
@@ -302,7 +305,7 @@ function pruneContentAssets(items = []) {
 }
 export function loadContentAssets() {
   let raw = null;
-  try { raw = JSON.parse(localStorage.getItem(CH_ASSETS_KEY) || "null"); } catch {}
+  try { raw = JSON.parse(workspaceStorageGetItem(CH_ASSETS_KEY) || "null"); } catch {}
   const list = Array.isArray(raw) ? raw : (raw && Array.isArray(raw.assets) ? raw.assets : []);
   const pruned = pruneContentAssets(list);
   if (pruned.length !== list.length) saveContentAssets(pruned);
@@ -312,7 +315,7 @@ export function saveContentAssets(items = []) {
   let clean = pruneContentAssets(items);
   for (let attempt = 0; attempt < 4; attempt++) {
     try {
-      localStorage.setItem(CH_ASSETS_KEY, JSON.stringify({ assets: clean, updatedAt: Date.now(), limits: CONTENT_ASSET_LIMITS }));
+      workspaceStorageSetItem(CH_ASSETS_KEY, JSON.stringify({ assets: clean, updatedAt: Date.now(), limits: CONTENT_ASSET_LIMITS }));
       return clean;
     } catch {
       const withUrl = clean.filter((asset) => asset.url);
@@ -353,7 +356,24 @@ async function queueAssetSync(assetId) {
   saveContentAssets(fresh.map((item) => item.id === assetId ? { ...item, syncedId: result.asset.id } : item));
 }
 
-let assetPullState = { pulled: false, pulling: false };
+let assetPullState = { tenant: "", pulled: false, pulling: false };
+let chRenderedTenant = "";
+function syncCreatorTenant() {
+  const tenant = currentTenantId();
+  if (chRenderedTenant && chRenderedTenant !== tenant) {
+    chSelection.clear();
+    chLightbox = null;
+    chSelectAnchor = null;
+    chLastDeleted = null;
+    if (chLbKeyHandler) { document.removeEventListener("keydown", chLbKeyHandler); chLbKeyHandler = null; }
+    if (chLibraryKeyHandler) { document.removeEventListener("keydown", chLibraryKeyHandler); chLibraryKeyHandler = null; }
+    chState.tab = "library";
+    chState.platform = "all";
+    chState.ctype = "all";
+    chState.eng = "likes";
+  }
+  chRenderedTenant = tenant;
+}
 
 /* Runs once per Creator Hub mount: pulls the list of server-synced assets
    and merges in any this device doesn't have locally yet (registered with
@@ -361,6 +381,8 @@ let assetPullState = { pulled: false, pulling: false };
    server). This is what makes a photo edited on one device show up on
    another — same account, same synced pool. */
 async function pullSyncedAssetsOnce(el, opts) {
+  const tenant = currentTenantId();
+  if (assetPullState.tenant !== tenant) assetPullState = { tenant, pulled: false, pulling: false };
   if (assetPullState.pulled || assetPullState.pulling) return;
   assetPullState.pulling = true;
   const listResult = await listSyncedAssets();
@@ -547,14 +569,14 @@ function readFileAsDataUrl(file) {
 }
 function loadRemovedContent() {
   try {
-    const saved = JSON.parse(localStorage.getItem(CH_REMOVED_KEY) || "[]");
+    const saved = JSON.parse(workspaceStorageGetItem(CH_REMOVED_KEY) || "[]");
     return new Set(Array.isArray(saved) ? saved : []);
   } catch {
     return new Set();
   }
 }
 function saveRemovedContent(removed) {
-  try { localStorage.setItem(CH_REMOVED_KEY, JSON.stringify([...removed].slice(0, 200))); } catch {}
+  try { workspaceStorageSetItem(CH_REMOVED_KEY, JSON.stringify([...removed].slice(0, 200))); } catch {}
 }
 function isRemoved(id) {
   return loadRemovedContent().has(id);
@@ -663,10 +685,11 @@ let chLibraryKeyHandler = null;
 let chLastDeleted = null;
 
 export function renderContentHub(el, opts = {}) {
+  syncCreatorTenant();
   try {
-    const requestedTab = localStorage.getItem(CH_OPEN_TAB_KEY);
+    const requestedTab = workspaceStorageGetItem(CH_OPEN_TAB_KEY, { migrateGlobal: false });
     if (requestedTab && ["library", "publish", "ideas", "drafts", "calendar", "production"].includes(requestedTab)) chState.tab = requestedTab;
-    if (requestedTab) localStorage.removeItem(CH_OPEN_TAB_KEY);
+    if (requestedTab) workspaceStorageRemoveItem(CH_OPEN_TAB_KEY);
   } catch {}
   const esc = opts.esc || ((s) => String(s));
   const data = loadContent();
@@ -680,11 +703,11 @@ export function renderContentHub(el, opts = {}) {
     <div class="ch">
       <section class="ch-creator-head">
         <div>
-          <p class="ch-eyebrow">Creator intelligence</p>
+          <p class="ch-eyebrow">Creator intelligence · ${esc(wsName(currentWs()))}</p>
           <h3>Your creator system, from asset to publish.</h3>
           <p>Generated media, saved assets, post drafts, and campaign workflow live together so every idea can become content, offer, or launch material.</p>
         </div>
-        <button class="btn btn-primary" data-open-ws="media">Create media</button>
+        <div class="ch-tenant-actions"><span class="ch-tenant-pill">Isolated workspace</span><button class="btn btn-primary" data-open-ws="media">Create media</button></div>
       </section>
       <div class="ch-tabs">
         ${tabs.map(([id, l]) => `<button class="ch-tab ${chState.tab === id ? "is-active" : ""}" data-ch-tab="${id}">${l}</button>`).join("")}
@@ -1270,7 +1293,7 @@ function freshLightbox(asset, extra = {}) {
   delete cleanExtra.layers;
   return {
     asset, originalUrl: asset.url, baseUrl: extra.baseUrl || asset.url, cutoutUrl: extra.cutoutUrl || "",
-    state: freshEditState(), bokehPicking: false, showTutorial: false,
+    state: freshEditState(), bokehPicking: false, bokehCursor: null, showTutorial: false,
     selectedSpot: null, rememberBokehSize: true, _probed: false,
     layers: { image: true, cutout: true, bokeh: true, text: true, ...extraLayers },
     openSections: { adjust: true, transform: false, presets: false, text: false },
@@ -1804,20 +1827,34 @@ function wireLightbox(root, opts) {
     const label = root.querySelector("[data-ch-editor-zoom-label]");
     if (label) label.textContent = `${Math.round(zoom * 100)}%`;
   };
+  const positionBrushCursor = () => {
+    const brush = markerLayer?.querySelector("[data-ch-bokeh-brush-cursor]");
+    if (!brush) return;
+    if (!lb.bokehPicking || !lb.bokehCursor) { brush.classList.remove("is-visible"); return; }
+    const stageRect = editorStage?.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
+    const radius = (s.bokehBrush || 12) / 100 * Math.min(canvasRect.width, canvasRect.height);
+    brush.style.left = `${canvasRect.left - (stageRect?.left || 0) + lb.bokehCursor.x * canvasRect.width}px`;
+    brush.style.top = `${canvasRect.top - (stageRect?.top || 0) + lb.bokehCursor.y * canvasRect.height}px`;
+    brush.style.width = `${radius * 2}px`;
+    brush.style.height = `${radius * 2}px`;
+    brush.classList.add("is-visible");
+  };
   const positionMarkers = () => {
     if (!markerLayer) return;
     const spots = s.bokeh?.spots || [];
-    markerLayer.innerHTML = spots.map((_, i) => `<div class="ch-lb-bokeh-marker ${i === lb.selectedSpot ? "is-selected" : ""}" data-spot-index="${i}"></div>`).join("");
+    markerLayer.innerHTML = `${spots.map((_, i) => `<div class="ch-lb-bokeh-marker ${i === lb.selectedSpot ? "is-selected" : ""}" data-spot-index="${i}"></div>`).join("")}<div class="ch-bokeh-brush-cursor" data-ch-bokeh-brush-cursor></div>`;
     const stageRect = editorStage?.getBoundingClientRect();
     const canvasRect = canvas.getBoundingClientRect();
-    [...markerLayer.children].forEach((el, i) => {
-      const spot = spots[i];
+    [...markerLayer.querySelectorAll("[data-spot-index]")].forEach((el) => {
+      const spot = spots[Number(el.dataset.spotIndex)];
       const r = spot.r * Math.min(canvasRect.width, canvasRect.height);
       el.style.left = `${canvasRect.left - (stageRect?.left || 0) + spot.x * canvasRect.width}px`;
       el.style.top = `${canvasRect.top - (stageRect?.top || 0) + spot.y * canvasRect.height}px`;
       el.style.width = `${r * 2}px`;
       el.style.height = `${r * 2}px`;
     });
+    positionBrushCursor();
   };
   const repaint = () => {
     if (!canvas._img) return;
@@ -2061,8 +2098,12 @@ function wireLightbox(root, opts) {
   if (lb.bokehPicking) { overlay?.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; }
   root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = () => {
     lb.bokehPicking = !lb.bokehPicking;
-    if (lb.bokehPicking) lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
-    else lb.selectedSpot = null;
+    if (lb.bokehPicking) {
+      lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
+    } else {
+      lb.selectedSpot = null;
+      lb.bokehCursor = null;
+    }
     rerender();
   });
   const bokehOff = root.querySelector("[data-ch-lb-bokeh-off]");
@@ -2087,6 +2128,21 @@ function wireLightbox(root, opts) {
     if (lb.selectedSpot != null) { removeBokehSpotAt(s, lb.selectedSpot); lb.selectedSpot = null; repaint(); rerender(); }
   };
   const editHitSurface = overlay || canvas;
+  const trackBokehBrush = (event) => {
+    if (!lb.bokehPicking) return;
+    const rect = canvas.getBoundingClientRect();
+    const inside = event.clientX >= rect.left && event.clientX <= rect.right && event.clientY >= rect.top && event.clientY <= rect.bottom;
+    lb.bokehCursor = inside ? canvasPoint(event, canvas) : null;
+    positionBrushCursor();
+  };
+  // Track on the whole stage in capture mode. Existing focus markers sit above
+  // the canvas and must not interrupt the live brush preview.
+  editorStage?.addEventListener("pointermove", trackBokehBrush, true);
+  editorStage?.addEventListener("pointerleave", () => {
+    if (!lb.bokehPicking) return;
+    lb.bokehCursor = null;
+    positionBrushCursor();
+  });
   editHitSurface.onclick = (event) => {
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
@@ -2535,7 +2591,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
       return;
     }
     try {
-      localStorage.setItem(CH_MEDIA_EDIT_INTENT_KEY, JSON.stringify({
+      workspaceStorageSetItem(CH_MEDIA_EDIT_INTENT_KEY, JSON.stringify({
         id: assetItem.asset.id,
         url: assetItem.asset.url,
         type: assetItem.asset.type,

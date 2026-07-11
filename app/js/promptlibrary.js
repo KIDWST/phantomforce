@@ -5,6 +5,8 @@
    the PhantomForce team, and "Use in Media Lab" only ever hands a prompt
    string to the Shot Builder, never runs anything on its own. */
 
+import { workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-179";
+
 const LIB_KEY = "pf.promptlibrary.v1";
 const MEDIA_INTENT_KEY = "pf.medialab.promptIntent.v1";
 
@@ -114,7 +116,7 @@ export const PROMPT_SEED = [
 
 function loadLibrary() {
   let saved = null;
-  try { saved = JSON.parse(localStorage.getItem(LIB_KEY) || "null"); } catch {}
+  try { saved = JSON.parse(workspaceStorageGetItem(LIB_KEY) || "null"); } catch {}
   return {
     custom: Array.isArray(saved?.custom) ? saved.custom : [],
     starred: Array.isArray(saved?.starred) ? saved.starred : [],
@@ -122,7 +124,7 @@ function loadLibrary() {
   };
 }
 function saveLibrary(state) {
-  try { localStorage.setItem(LIB_KEY, JSON.stringify(state)); } catch {}
+  try { workspaceStorageSetItem(LIB_KEY, JSON.stringify(state)); } catch {}
 }
 
 function svgIc(k) {
@@ -316,7 +318,7 @@ function wirePromptLibrary(el, state, opts) {
     const id = b.dataset.plUse;
     const p = allPrompts(state).find((x) => x.id === id);
     if (!p) return;
-    try { localStorage.setItem(MEDIA_INTENT_KEY, JSON.stringify({ prompt: p.prompt, modality: p.cat === "video" ? "video" : "image", at: p.id })); } catch {}
+    try { workspaceStorageSetItem(MEDIA_INTENT_KEY, JSON.stringify({ prompt: p.prompt, modality: p.cat === "video" ? "video" : "image", at: p.id })); } catch {}
     opts.notify?.("Prompt Library", `Sent "${p.title}" to the Media Lab Shot Builder.`);
     opts.openWorkspace?.("media");
   });

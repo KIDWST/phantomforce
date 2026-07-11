@@ -1,3 +1,4 @@
+import { workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-179";
 const IDEA_AUTOMATION_KEY = "pf.contenthub.dailyIdeas.v1";
 const DAY = 864e5;
 
@@ -118,7 +119,7 @@ export function normalizeDailyIdeaAutomation(input = {}) {
 
 export function loadDailyIdeaAutomation() {
   try {
-    return normalizeDailyIdeaAutomation(JSON.parse(localStorage.getItem(IDEA_AUTOMATION_KEY) || "{}"));
+    return normalizeDailyIdeaAutomation(JSON.parse(workspaceStorageGetItem(IDEA_AUTOMATION_KEY) || "{}"));
   } catch {
     return normalizeDailyIdeaAutomation({});
   }
@@ -126,7 +127,7 @@ export function loadDailyIdeaAutomation() {
 
 export function saveDailyIdeaAutomation(next) {
   const normalized = normalizeDailyIdeaAutomation({ ...(next || {}), updatedAt: new Date().toISOString() });
-  try { localStorage.setItem(IDEA_AUTOMATION_KEY, JSON.stringify(normalized)); } catch {}
+  try { workspaceStorageSetItem(IDEA_AUTOMATION_KEY, JSON.stringify(normalized)); } catch {}
   return normalized;
 }
 

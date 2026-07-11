@@ -761,7 +761,67 @@ export const isOwnerOperator = () => {
     || (s.canManageAccess === true && /\b(jordan|phantomforce owner)\b/.test(identity));
 };
 export const currentWs = () => ctx.session?.ws || "phantomforce";
-export const setWorkspace = (id) => { if (!isAdmin()) return; ctx.session.ws = id; session.set(ctx.session); store.save(); };
+export const workspaceExists = (id) => store.state.workspaces.some((workspace) => workspace.id === id);
+export const workspaceMeta = (id = currentWs()) => store.state.workspaces.find((workspace) => workspace.id === id) || store.state.workspaces[0];
+const cleanTenantSegment = (value) => String(value || "phantomforce")
+  .trim()
+  .replace(/\s+/g, "-")
+  .replace(/[^a-zA-Z0-9_.:-]+/g, "-")
+  .replace(/^-+|-+$/g, "")
+  .slice(0, 80) || "phantomforce";
+export const currentTenantId = () => cleanTenantSegment(workspaceMeta(currentWs())?.id || currentWs());
+export const setWorkspace = (id) => {
+  if (!isAdmin()) return false;
+  const target = workspaceExists(id) ? id : "phantomforce";
+  if (!ctx.session) return false;
+  ctx.session.ws = target;
+  session.set(ctx.session);
+  store.save();
+  return true;
+};
+
+const scopedStorageMigrationKey = "pf.workspaceStorage.migrations.v1";
+function migratedWorkspaceKeys() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(scopedStorageMigrationKey) || "[]");
+    return new Set(Array.isArray(parsed) ? parsed : []);
+  } catch {
+    return new Set();
+  }
+}
+function markWorkspaceKeyMigrated(baseKey) {
+  const keys = migratedWorkspaceKeys();
+  keys.add(baseKey);
+  try { localStorage.setItem(scopedStorageMigrationKey, JSON.stringify([...keys].slice(0, 500))); } catch {}
+}
+export function workspaceStorageKey(baseKey, ws = currentWs()) {
+  return `${baseKey}::workspace::${cleanTenantSegment(ws)}`;
+}
+export function workspaceStorageGetItem(baseKey, { migrateGlobal = true } = {}) {
+  try {
+    const key = workspaceStorageKey(baseKey);
+    const scoped = localStorage.getItem(key);
+    if (scoped !== null) return scoped;
+    if (!migrateGlobal) return null;
+    const migrated = migratedWorkspaceKeys();
+    if (migrated.has(baseKey)) return null;
+    const legacy = localStorage.getItem(baseKey);
+    markWorkspaceKeyMigrated(baseKey);
+    if (legacy !== null) localStorage.setItem(key, legacy);
+    return legacy;
+  } catch {
+    return null;
+  }
+}
+export function workspaceStorageSetItem(baseKey, value) {
+  try {
+    localStorage.setItem(workspaceStorageKey(baseKey), value);
+    markWorkspaceKeyMigrated(baseKey);
+  } catch {}
+}
+export function workspaceStorageRemoveItem(baseKey) {
+  try { localStorage.removeItem(workspaceStorageKey(baseKey)); } catch {}
+}
 
 /* Admin at HQ sees everything; admin inside a workspace or an employee sees
    only that workspace's records. */
