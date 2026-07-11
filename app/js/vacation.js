@@ -1,13 +1,9 @@
-/* PhantomForce — Vacation Mode.
-   Backend-backed admin surface for bounded, temporary away-coverage while an
-   owner is away — a separate system from Automation (app/js/brandops.js).
-   Vacation Mode may invoke existing automations as part of its coverage
-   plan, but it never starts, stops, or owns them: turning Vacation Mode on
-   or off only changes away-coverage, never whether normal automations run.
-   This page does not send email, post, spend credits, or execute providers;
-   it stores settings, records proof, and queues review decisions. */
+/* PhantomForce Vacation Mode — hands-off business coverage.
+   AI work and real-human operator work are intentionally separate. Operator
+   credits never masquerade as AI credits, and queued work never masquerades
+   as completed human work. */
 
-import { session as accessSession, ago, store, visible } from "./store.js?v=phantom-live-20260711-160";
+import { session as accessSession, ago } from "./store.js?v=phantom-live-20260711-159";
 
 const esc = (value = "") => String(value)
   .replace(/&/g, "&amp;")
@@ -16,34 +12,25 @@ const esc = (value = "") => String(value)
   .replace(/"/g, "&quot;")
   .replace(/'/g, "&#39;");
 
-const PERMISSION_GROUPS = [
-  ["watchInbox", "Watch inbox", "Needs email connector"],
-  ["draftEmailReplies", "Draft email replies", "Safe draft work"],
-  ["sendEmailOnlyAfterApproval", "Send email only after approval", "Outbound stays gated"],
-  ["autoReplyToNewMessages", "Auto-reply to new messages", "Disabled until email is connected"],
-  ["followUpWithLeads", "Follow up with leads", "Queue replies for review"],
-  ["updateCrmTasks", "Update CRM/tasks", "Safe internal updates"],
-  ["scheduleSocialPosts", "Schedule social posts", "No public posts without approval"],
-  ["generateContentDrafts", "Generate content drafts", "Draft images, captions, and briefs"],
-  ["monitorUrgentItems", "Monitor urgent items", "Flag risk fast"],
-  ["notifyImportantChanges", "Notify me about important changes", "In-app now"],
-  ["allowLowRiskAutomations", "Allow low-risk automations", "Internal safe steps only"],
-  ["requireApprovalForAllOutbound", "Require approval for all outbound actions", "Recommended"],
-];
+const TASK_LABELS = {
+  phone_call: "Take or return a call",
+  attend_meeting: "Attend a meeting",
+  lead_follow_up: "Follow up with a lead",
+  booking_coordination: "Coordinate a booking",
+  client_message: "Handle a client message",
+  research: "Research and report",
+  exception_triage: "Handle an exception",
+  other: "Other human work",
+};
 
-const NOTIFICATION_GROUPS = [
-  ["inApp", "In-app notifications"],
-  ["emailSummary", "Email summary"],
-  ["urgentOnly", "Urgent-only notifications"],
-  ["dailyDigest", "Daily digest"],
-  ["realTimeActivityFeed", "Real-time activity feed"],
-];
-
-const MODE_COPY = {
-  off: "Off",
-  draft_only: "Draft-only",
-  approval_required: "Approval-required",
-  limited_autopilot: "Limited autopilot",
+const TASK_STATUS = {
+  needs_setup: "Needs setup",
+  blocked: "Blocked",
+  queued: "Waiting for operator",
+  assigned: "Operator assigned",
+  in_progress: "In progress",
+  completed: "Completed",
+  canceled: "Canceled",
 };
 
 const READINESS_COPY = {
@@ -54,27 +41,18 @@ const READINESS_COPY = {
   blocked_by_policy: "Blocked",
 };
 
-const RISK_COPY = {
-  low: "Low",
-  medium: "Medium",
-  high: "High",
-  urgent: "Urgent",
-};
-
 let state = {
   loading: true,
   error: "",
   status: null,
   activity: [],
   approvals: [],
+  tasks: [],
 };
 
 function authHeaders(extra = {}) {
   const token = typeof accessSession?.token === "function" ? accessSession.token() : "";
-  return {
-    ...extra,
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
-  };
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
 }
 
 async function api(path, options = {}) {
@@ -87,31 +65,32 @@ async function api(path, options = {}) {
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || data.ok === false) {
-    throw new Error(data.error || data.message || `Vacation Mode API failed (${response.status})`);
+    throw new Error(data.error || data.message || `Vacation Mode request failed (${response.status})`);
   }
   return data;
 }
 
-const STATUS_CACHE_KEY = "pf.vacation.statusCache.v1";
+const STATUS_CACHE_KEY = "pf.vacation.statusCache.v2";
 function cacheStatusForNav(status) {
   try { localStorage.setItem(STATUS_CACHE_KEY, JSON.stringify({ enabled: !!status?.enabled, at: Date.now() })); } catch {}
 }
-/* Nav-badge helper for main.js — reads the last successfully fetched status
-   so the sidebar can show ON/OFF without re-fetching on every render or
-   fabricating a state that was never actually confirmed. */
+
 export function cachedVacationStatus() {
   try {
-    const raw = JSON.parse(localStorage.getItem(STATUS_CACHE_KEY) || "null");
-    if (raw && typeof raw.enabled === "boolean") return raw;
+    const current = JSON.parse(localStorage.getItem(STATUS_CACHE_KEY) || "null");
+    if (current && typeof current.enabled === "boolean") return current;
+    const legacy = JSON.parse(localStorage.getItem("pf.vacation.statusCache.v1") || "null");
+    if (legacy && typeof legacy.enabled === "boolean") return legacy;
   } catch {}
   return null;
 }
 
 async function loadVacationData() {
-  const [status, activity, approvals] = await Promise.all([
+  const [status, activity, approvals, tasks] = await Promise.all([
     api("/api/vacation-mode/status"),
-    api("/api/vacation-mode/activity?limit=40"),
-    api("/api/vacation-mode/approvals?limit=30"),
+    api("/api/vacation-mode/activity?limit=60"),
+    api("/api/vacation-mode/approvals?limit=20"),
+    api("/api/vacation-mode/operator-tasks?limit=60"),
   ]);
   state = {
     loading: false,
@@ -119,12 +98,13 @@ async function loadVacationData() {
     status,
     activity: activity.activity || [],
     approvals: approvals.approvals || [],
+    tasks: tasks.tasks || [],
   };
   cacheStatusForNav(status);
 }
 
 function fmtTime(value) {
-  if (!value) return "None yet";
+  if (!value) return "Not yet";
   try { return new Date(value).toLocaleString([], { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }); }
   catch { return String(value); }
 }
@@ -133,267 +113,266 @@ function boolAttr(value) {
   return value ? "checked" : "";
 }
 
-function readinessTone(status) {
-  if (status === "ready") return "ready";
-  if (status === "in_app_only") return "info";
-  if (status === "not_connected") return "off";
-  if (status === "blocked_by_policy") return "block";
-  return "setup";
+function localDateTime(value) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset() * 60_000;
+  return new Date(date.getTime() - offset).toISOString().slice(0, 16);
 }
 
-function renderToggle(key, label, detail, checked) {
-  return `<label class="vm-toggle">
-    <span><b>${esc(label)}</b><i>${esc(detail || "")}</i></span>
-    <input type="checkbox" data-vm-permission="${esc(key)}" ${boolAttr(checked)} />
-  </label>`;
-}
-
-function renderNotificationToggle(key, label, checked) {
-  return `<label class="vm-toggle vm-toggle-small">
-    <span><b>${esc(label)}</b></span>
-    <input type="checkbox" data-vm-notification="${esc(key)}" ${boolAttr(checked)} ${key === "inApp" ? "disabled" : ""} />
-  </label>`;
-}
-
-function permissionPayload(root) {
-  const permissions = {};
-  root.querySelectorAll("[data-vm-permission]").forEach((input) => {
-    permissions[input.dataset.vmPermission] = input.checked;
-  });
-  const notificationPreferences = {};
-  root.querySelectorAll("[data-vm-notification]").forEach((input) => {
-    notificationPreferences[input.dataset.vmNotification] = input.checked;
-  });
-  const outOfOffice = {
-    enabled: !!root.querySelector("[data-vm-ooo-enabled]")?.checked,
-    template: root.querySelector("[data-vm-ooo-template]")?.value || "",
-    startDate: root.querySelector("[data-vm-ooo-start]")?.value || "",
-    endDate: root.querySelector("[data-vm-ooo-end]")?.value || "",
-    behavior: root.querySelector("[data-vm-ooo-behavior]")?.value || "draft_only",
+function coveragePayload(root) {
+  const getToggle = (key) => !!root.querySelector(`[data-vm-coverage="${key}"]`)?.checked;
+  const getPermission = (key) => !!root.querySelector(`[data-vm-permission="${key}"]`)?.checked;
+  return {
+    operatorCoverage: {
+      enabled: true,
+      ownerInterruptionPolicy: root.querySelector("[data-vm-interruption]")?.value || "emergencies_only",
+      allowPhoneCalls: getToggle("allowPhoneCalls"),
+      allowMeetings: getToggle("allowMeetings"),
+      allowLeadFollowUp: getToggle("allowLeadFollowUp"),
+      allowBookingCoordination: getToggle("allowBookingCoordination"),
+      allowClientMessages: getToggle("allowClientMessages"),
+      dailyCreditLimit: Number(root.querySelector("[data-vm-credit-limit]")?.value || 10),
+      handoffNotes: root.querySelector("[data-vm-handoff]")?.value || "",
+      awayStart: root.querySelector("[data-vm-away-start]")?.value || "",
+      awayEnd: root.querySelector("[data-vm-away-end]")?.value || "",
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "America/Chicago",
+    },
+    permissions: {
+      watchInbox: getPermission("watchInbox"),
+      draftEmailReplies: true,
+      sendEmailOnlyAfterApproval: false,
+      autoReplyToNewMessages: getPermission("autoReplyToNewMessages"),
+      followUpWithLeads: getPermission("followUpWithLeads"),
+      updateCrmTasks: true,
+      scheduleSocialPosts: getPermission("scheduleSocialPosts"),
+      generateContentDrafts: true,
+      monitorUrgentItems: true,
+      notifyImportantChanges: true,
+      allowLowRiskAutomations: true,
+      requireApprovalForAllOutbound: false,
+    },
+    outOfOffice: {
+      enabled: !!root.querySelector("[data-vm-ooo-enabled]")?.checked,
+      template: root.querySelector("[data-vm-ooo-template]")?.value || "",
+      startDate: root.querySelector("[data-vm-away-start]")?.value || "",
+      endDate: root.querySelector("[data-vm-away-end]")?.value || "",
+      behavior: root.querySelector("[data-vm-ooo-behavior]")?.value || "queue_for_operator",
+    },
+    notificationPreferences: {
+      inApp: true,
+      emailSummary: false,
+      urgentOnly: true,
+      dailyDigest: true,
+      realTimeActivityFeed: true,
+    },
   };
-  return { permissions, notificationPreferences, outOfOffice };
 }
 
-function statusCard(status) {
+function statusHero(status) {
   const active = !!status.enabled;
-  return `<section class="vm-card vm-status-card ${active ? "is-active" : ""}">
-    <div class="vm-status-main">
-      <span class="vm-kicker">Vacation Mode</span>
-      <h3>${active ? "Your phantom workforce is watching." : "Vacation Mode is off."}</h3>
-      <p>${active
-        ? "Approved internal work can keep moving. Anything outbound, risky, expensive, or destructive still waits for review."
-        : "Turn it on when you want PhantomForce to watch, draft, organize, and queue work while you are away."}</p>
+  const operator = status.operator || {};
+  const wallet = operator.wallet || {};
+  const network = operator.network || {};
+  return `<section class="vm-command ${active ? "is-active" : ""}">
+    <div class="vm-command-copy">
+      <span class="vm-kicker">Full business coverage</span>
+      <h2>${active ? "You are away. Phantom is on duty." : "Go away. Your business stays covered."}</h2>
+      <p>Phantom handles digital work. Human calls, meetings, and judgment-heavy work go to your operator desk using separate Operator Credits.</p>
+      <div class="vm-promise-row">
+        <span>AI work continues</span>
+        <span>Human operator queue</span>
+        <span>Owner interrupted for emergencies only</span>
+      </div>
     </div>
-    <div class="vm-status-side">
-      <span class="vm-state-pill ${active ? "on" : "off"}">${active ? "ON" : "OFF"}</span>
-      <div class="vm-mode-select">
-        <span>Mode</span>
-        <select data-vm-mode ${active ? "disabled" : ""}>
-          ${["draft_only", "approval_required", "limited_autopilot"].map((mode) => `<option value="${mode}" ${status.mode === mode ? "selected" : ""}>${MODE_COPY[mode]}</option>`).join("")}
-        </select>
-      </div>
-      <div class="vm-mini-facts">
-        <span><b>Started</b><i>${esc(fmtTime(status.startedAt))}</i></span>
-        <span><b>Last activity</b><i>${esc(fmtTime(status.lastActivityAt))}</i></span>
-      </div>
+    <div class="vm-command-state">
+      <span class="vm-state-pill ${active ? "on" : "off"}">${active ? "ON DUTY" : "OFF"}</span>
+      <strong>${wallet.available ?? 0}</strong>
+      <small>Operator Credits available</small>
+      <em>Separate from AI credits</em>
       <div class="vm-status-actions">
         ${active
-          ? `<button class="btn btn-primary vm-danger" data-vm-deactivate type="button">Turn off Vacation Mode</button>
-             <button class="btn btn-quiet" data-vm-kill type="button">Stop away-coverage immediately</button>`
-          : `<button class="btn btn-primary" data-vm-activate type="button">Turn on Vacation Mode</button>`}
+          ? `<button class="btn btn-primary vm-danger" data-vm-deactivate type="button">End Vacation Mode</button>
+             <button class="btn btn-quiet" data-vm-kill type="button">Stop new work now</button>`
+          : `<button class="btn btn-primary" data-vm-activate type="button">Start hands-off coverage</button>`}
       </div>
+      <i class="vm-staffing ${network.humanStaffingReady ? "is-ready" : ""}">${network.humanStaffingReady ? "Live operators available" : "Operator queue ready · staffing connection needed"}</i>
     </div>
   </section>`;
 }
 
-function metricsCards(metrics = {}) {
+function metrics(status) {
+  const m = status.metrics || {};
   const items = [
-    ["Items observed", metrics.itemsObserved ?? 0],
-    ["Drafts created", metrics.draftsCreated ?? 0],
-    ["Approvals pending", metrics.approvalsPending ?? 0],
-    ["Automations completed", metrics.automationsCompleted ?? 0],
-    ["Blocked actions", metrics.blockedActions ?? 0],
-    ["Last check-in", metrics.lastCheckIn ? ago(metrics.lastCheckIn) : "None"],
+    [m.operatorCreditsAvailable ?? 0, "Operator credits"],
+    [m.operatorTasksQueued ?? 0, "Human tasks open"],
+    [m.operatorTasksCompleted ?? 0, "Human tasks done"],
+    [m.digitalWorkCompleted ?? 0, "Digital work done"],
+    [m.ownerInterruptions ?? 0, "Need you"],
+    [m.lastCheckIn ? ago(m.lastCheckIn) : "Not yet", "Last check-in"],
   ];
-  return `<section class="vm-metrics">${items.map(([label, value]) => `<article class="vm-metric"><b>${esc(value)}</b><span>${esc(label)}</span></article>`).join("")}</section>`;
+  return `<section class="vm-metrics">${items.map(([value, label]) => `<article class="vm-metric"><b>${esc(value)}</b><span>${esc(label)}</span></article>`).join("")}</section>`;
 }
 
-function permissionsCard(status) {
+function coveragePlan(status) {
+  const c = status.operator?.coverage || {};
+  return `<section class="vm-card vm-plan-card">
+    <div class="vm-card-head"><span class="vm-kicker">One handoff</span><h3>Tell your operator what matters</h3></div>
+    <div class="vm-plan-grid">
+      <label class="vm-field"><span>Leave</span><input type="datetime-local" data-vm-away-start value="${esc(localDateTime(c.awayStart))}" /></label>
+      <label class="vm-field"><span>Return</span><input type="datetime-local" data-vm-away-end value="${esc(localDateTime(c.awayEnd))}" /></label>
+      <label class="vm-field"><span>Interrupt me</span><select data-vm-interruption>
+        <option value="emergencies_only" ${c.ownerInterruptionPolicy !== "daily_digest" ? "selected" : ""}>Emergencies only</option>
+        <option value="daily_digest" ${c.ownerInterruptionPolicy === "daily_digest" ? "selected" : ""}>Daily summary</option>
+      </select></label>
+      <label class="vm-field"><span>Daily human-work limit</span><input type="number" min="1" max="100" data-vm-credit-limit value="${esc(c.dailyCreditLimit ?? 10)}" /></label>
+      <label class="vm-field vm-wide"><span>Standing instructions</span><textarea data-vm-handoff rows="4" placeholder="What can your operator decide without interrupting you?">${esc(c.handoffNotes || "")}</textarea></label>
+    </div>
+    <div class="vm-toggle-grid vm-coverage-toggles">
+      ${[
+        ["allowPhoneCalls", "Calls", "Take or return business calls"],
+        ["allowMeetings", "Meetings", "Attend, take notes, and report back"],
+        ["allowLeadFollowUp", "Lead follow-up", "Keep opportunities moving"],
+        ["allowBookingCoordination", "Bookings", "Coordinate schedules and details"],
+        ["allowClientMessages", "Client messages", "Handle routine communication"],
+      ].map(([key, label, detail]) => `<label class="vm-toggle"><span><b>${label}</b><i>${detail}</i></span><input type="checkbox" data-vm-coverage="${key}" ${boolAttr(c[key] !== false)} /></label>`).join("")}
+    </div>
+    <div class="vm-save-row"><button class="btn btn-primary" data-vm-save type="button">Save coverage plan</button><span>These instructions follow this business workspace only.</span></div>
+  </section>`;
+}
+
+function operatorWallet(status) {
+  const operator = status.operator || {};
+  const wallet = operator.wallet || {};
+  const costs = operator.creditCosts || {};
+  return `<section class="vm-card vm-wallet-card">
+    <div class="vm-card-head"><span class="vm-kicker">Human work balance</span><h3>Operator Credits</h3></div>
+    <div class="vm-wallet-numbers">
+      <span><b>${esc(wallet.available ?? 0)}</b><i>Available</i></span>
+      <span><b>${esc(wallet.reserved ?? 0)}</b><i>Reserved</i></span>
+      <span><b>${esc(wallet.used ?? 0)}</b><i>Used</i></span>
+    </div>
+    <p>Operator Credits pay for real human time. AI generation and chat use a different balance.</p>
+    <div class="vm-cost-list">
+      <span>Call <b>${costs.phone_call ?? 2}</b></span>
+      <span>Meeting <b>${costs.attend_meeting ?? 4}</b></span>
+      <span>Follow-up <b>${costs.lead_follow_up ?? 1}</b></span>
+      <span>Booking <b>${costs.booking_coordination ?? 1}</b></span>
+    </div>
+  </section>`;
+}
+
+function newOperatorTask(status) {
+  const costs = status.operator?.creditCosts || {};
+  return `<section class="vm-card vm-new-task">
+    <div class="vm-card-head"><span class="vm-kicker">Real human work</span><h3>Give the operator desk a job</h3></div>
+    <div class="vm-operator-form">
+      <label class="vm-field"><span>Job</span><select data-vm-task-type>
+        ${Object.entries(TASK_LABELS).filter(([key]) => key !== "exception_triage").map(([key, label]) => `<option value="${key}">${esc(label)} · ${costs[key] ?? 1} credit${(costs[key] ?? 1) === 1 ? "" : "s"}</option>`).join("")}
+      </select></label>
+      <label class="vm-field"><span>Person or company</span><input data-vm-task-contact placeholder="Optional" /></label>
+      <label class="vm-field"><span>When</span><input type="datetime-local" data-vm-task-time /></label>
+      <label class="vm-field vm-wide"><span>What needs to happen?</span><textarea rows="4" data-vm-task-instructions placeholder="Example: Call the client, answer their basic questions, collect the missing project details, and leave me a short summary."></textarea></label>
+    </div>
+    <div class="vm-save-row"><button class="btn btn-primary" data-vm-queue-task type="button">Queue human work</button><span>Credits reserve when the task enters the queue. Queued does not mean completed.</span></div>
+  </section>`;
+}
+
+function taskQueue(tasks) {
+  const open = tasks.filter((task) => !["completed", "canceled"].includes(task.status));
+  const recentDone = tasks.filter((task) => ["completed", "canceled"].includes(task.status)).slice(0, 5);
+  const renderTask = (task) => `<article class="vm-op-task is-${esc(task.status)}">
+    <div class="vm-op-task-top"><span>${esc(TASK_STATUS[task.status] || task.status)}</span><time>${esc(fmtTime(task.updatedAt))}</time></div>
+    <h4>${esc(task.title)}</h4>
+    <p>${esc(task.instructions)}</p>
+    <div class="vm-op-task-meta">
+      <span>${esc(task.estimatedCredits)} operator credit${task.estimatedCredits === 1 ? "" : "s"}</span>
+      ${task.contactName ? `<span>${esc(task.contactName)}</span>` : ""}
+      ${task.scheduledAt ? `<span>${esc(fmtTime(task.scheduledAt))}</span>` : ""}
+    </div>
+    ${!["completed", "canceled"].includes(task.status) ? `<button class="vm-task-x" data-vm-cancel-task="${esc(task.id)}" type="button" title="Cancel task" aria-label="Cancel ${esc(task.title)}">×</button>` : ""}
+  </article>`;
+  return `<section class="vm-card vm-operator-queue">
+    <div class="vm-card-head"><span class="vm-kicker">Operator desk</span><h3>${open.length} human job${open.length === 1 ? "" : "s"} open</h3></div>
+    <div class="vm-op-list">${open.length ? open.map(renderTask).join("") : `<div class="vm-empty">No human work is waiting.</div>`}</div>
+    ${recentDone.length ? `<details class="vm-details"><summary>Recent closed work</summary><div class="vm-op-list">${recentDone.map(renderTask).join("")}</div></details>` : ""}
+  </section>`;
+}
+
+function ownerExceptions(approvals) {
+  return `<section class="vm-card vm-exceptions">
+    <div class="vm-card-head"><span class="vm-kicker">Only when it truly needs you</span><h3>Owner exceptions</h3></div>
+    ${approvals.length ? approvals.map((item) => `<article class="vm-approval vm-risk-${esc(item.riskLevel)}">
+      <div class="vm-approval-top"><span>${esc(item.riskLevel)}</span><i>${esc(fmtTime(item.timestamp))}</i></div>
+      <h4>${esc(item.title)}</h4><p>${esc(item.reason)}</p>
+      <button class="btn btn-quiet" type="button" data-open-ws="approvals">Open decision</button>
+    </article>`).join("") : `<div class="vm-empty"><b>Nobody needs you right now.</b><span>Routine exceptions go to the operator desk.</span></div>`}
+  </section>`;
+}
+
+function activityFeed(activity) {
+  return `<section class="vm-card vm-activity-card">
+    <div class="vm-card-head"><span class="vm-kicker">Proof, not promises</span><h3>What happened while you were away</h3></div>
+    <div class="vm-feed">${activity.length ? activity.map((item) => `<article class="vm-feed-item vm-event-${esc(item.eventType)}">
+      <span></span><div><b>${esc(item.actor)}</b><p>${esc(item.message)}</p></div><time>${esc(fmtTime(item.createdAt))}</time>
+    </article>`).join("") : `<div class="vm-empty">No Vacation Mode activity yet.</div>`}</div>
+  </section>`;
+}
+
+function setupDetails(status) {
   const p = status.permissions || {};
-  return `<section class="vm-card">
-    <div class="vm-card-head">
-      <span class="vm-kicker">Allowed while I’m away</span>
-      <h3>Permissions</h3>
-    </div>
-    <div class="vm-toggle-grid">
-      ${PERMISSION_GROUPS.map(([key, label, detail]) => renderToggle(key, label, detail, !!p[key])).join("")}
-    </div>
-    <div class="vm-save-row">
-      <button class="btn btn-primary" data-vm-save type="button">Save permissions</button>
-      <span>No sends, posts, uploads, invoices, paid calls, or destructive actions happen from this page.</span>
-    </div>
-  </section>`;
-}
-
-function readinessCard(status) {
-  return `<section class="vm-card">
-    <div class="vm-card-head">
-      <span class="vm-kicker">Readiness checklist</span>
-      <h3>What is ready</h3>
-    </div>
-    <div class="vm-readiness">
-      ${(status.readiness || []).map((item) => `<article class="vm-ready vm-ready-${readinessTone(item.status)}">
-        <span></span>
-        <div><b>${esc(item.label)}</b><i>${esc(item.detail)}</i></div>
-        <em>${esc(READINESS_COPY[item.status] || item.status)}</em>
-      </article>`).join("")}
-    </div>
-  </section>`;
-}
-
-function approvalsCard(approvals) {
-  return `<section class="vm-card">
-    <div class="vm-card-head">
-      <span class="vm-kicker">Needs your attention</span>
-      <h3>Urgent approvals</h3>
-    </div>
-    <div class="vm-approvals">
-      ${approvals.length ? approvals.map((item) => `<article class="vm-approval vm-risk-${esc(item.riskLevel)}">
-        <div class="vm-approval-top">
-          <span>${esc(RISK_COPY[item.riskLevel] || item.riskLevel)}</span>
-          <i>${esc(fmtTime(item.timestamp))}</i>
-        </div>
-        <h4>${esc(item.title)}</h4>
-        <p><b>Source:</b> ${esc(item.source)}</p>
-        <p><b>Suggested action:</b> ${esc(item.suggestedAction)}</p>
-        <p><b>Why flagged:</b> ${esc(item.reason)}</p>
-        <div class="vm-approval-actions">
-          <button class="btn btn-primary" data-vm-approval="${esc(item.id)}" data-vm-decision="approve" type="button">Approve</button>
-          <button class="btn btn-quiet" data-vm-approval="${esc(item.id)}" data-vm-decision="reject" type="button">Reject</button>
-          <button class="btn btn-quiet" data-vm-approval="${esc(item.id)}" data-vm-decision="snooze" type="button">Snooze</button>
-          <button class="btn btn-quiet" data-open-ws="approvals" type="button">Edit</button>
-        </div>
-      </article>`).join("") : `<div class="vm-empty">Nothing urgent right now.</div>`}
-    </div>
-  </section>`;
-}
-
-function activityCard(activity) {
-  return `<section class="vm-card">
-    <div class="vm-card-head">
-      <span class="vm-kicker">What your phantom workforce has been doing</span>
-      <h3>Activity feed</h3>
-    </div>
-    <div class="vm-feed">
-      ${activity.length ? activity.map((item) => `<article class="vm-feed-item vm-event-${esc(item.eventType)}">
-        <span></span>
-        <div><b>${esc(item.actor)} · ${esc(item.eventType.replace(/_/g, " "))}</b><p>${esc(item.message)}</p>${item.relatedEntity ? `<i>${esc(item.relatedEntity)}</i>` : ""}</div>
-        <time>${esc(fmtTime(item.createdAt))}</time>
-      </article>`).join("") : `<div class="vm-empty">No Vacation Mode activity yet.</div>`}
-    </div>
-  </section>`;
-}
-
-function outOfOfficeCard(status) {
   const ooo = status.outOfOffice || {};
-  return `<section class="vm-card">
-    <div class="vm-card-head">
-      <span class="vm-kicker">Out-of-office auto reply</span>
-      <h3>Email readiness</h3>
-    </div>
-    <div class="vm-ooo-grid">
-      <label class="vm-toggle vm-toggle-small">
-        <span><b>Enable auto-reply preference</b><i>Stored only until email is connected.</i></span>
-        <input type="checkbox" data-vm-ooo-enabled ${boolAttr(!!ooo.enabled)} />
-      </label>
-      <label class="vm-field"><span>Behavior</span>
-        <select data-vm-ooo-behavior>
+  return `<section class="vm-card vm-setup-card">
+    <details class="vm-details">
+      <summary>Digital coverage and connections</summary>
+      <div class="vm-toggle-grid">
+        ${[
+          ["watchInbox", "Watch inbox", "When an email connector is available"],
+          ["autoReplyToNewMessages", "Cover new messages", "Use the operator or connected reply policy"],
+          ["followUpWithLeads", "Follow up with leads", "Keep opportunities moving"],
+          ["scheduleSocialPosts", "Keep content moving", "Follow each social connector policy"],
+        ].map(([key, label, detail]) => `<label class="vm-toggle"><span><b>${label}</b><i>${detail}</i></span><input type="checkbox" data-vm-permission="${key}" ${boolAttr(p[key] !== false)} /></label>`).join("")}
+      </div>
+      <div class="vm-ooo-grid">
+        <label class="vm-toggle vm-toggle-small"><span><b>Out-of-office coverage</b><i>${ooo.providerStatus === "ready" ? "Connector ready" : "Queues for operator until email is connected"}</i></span><input type="checkbox" data-vm-ooo-enabled ${boolAttr(!!ooo.enabled)} /></label>
+        <label class="vm-field"><span>Message behavior</span><select data-vm-ooo-behavior>
+          <option value="queue_for_operator" ${ooo.behavior !== "draft_only" ? "selected" : ""}>Queue for operator</option>
           <option value="draft_only" ${ooo.behavior === "draft_only" ? "selected" : ""}>Draft only</option>
-          <option value="queue_for_approval" ${ooo.behavior === "queue_for_approval" ? "selected" : ""}>Queue for approval</option>
-          <option value="send_automatically" disabled>Send automatically — needs connected provider + explicit permission</option>
-        </select>
-      </label>
-      <label class="vm-field"><span>Start</span><input type="date" data-vm-ooo-start value="${esc(ooo.startDate || "")}" /></label>
-      <label class="vm-field"><span>End</span><input type="date" data-vm-ooo-end value="${esc(ooo.endDate || "")}" /></label>
-      <label class="vm-field vm-wide"><span>Reply template</span><textarea data-vm-ooo-template rows="5">${esc(ooo.template || "")}</textarea></label>
-    </div>
-    <div class="vm-provider-state">
-      <b>Provider status</b>
-      <span>${esc(READINESS_COPY[ooo.providerStatus] || "Not connected")}</span>
-      <i>Phantom can draft replies and queue them, but automatic email changes are blocked until the connector is configured.</i>
-    </div>
-  </section>`;
-}
-
-function notificationsCard(status) {
-  const prefs = status.notificationPreferences || {};
-  return `<section class="vm-card">
-    <div class="vm-card-head">
-      <span class="vm-kicker">Notifications</span>
-      <h3>How Phantom checks in</h3>
-    </div>
-    <div class="vm-toggle-grid vm-toggle-grid-compact">
-      ${NOTIFICATION_GROUPS.map(([key, label]) => renderNotificationToggle(key, label, !!prefs[key])).join("")}
-    </div>
-    <div class="vm-save-row">
-      <button class="btn btn-primary" data-vm-save type="button">Save notifications</button>
-      <span>Email and push delivery are stored as preferences until the provider is connected.</span>
-    </div>
-  </section>`;
-}
-
-/* Vacation Mode may use existing automations for away-coverage, but it never
-   owns them — this card only reads real automation records (store.state.agents)
-   and their allowedDuringVacation flag; it never creates, starts, or stops one. */
-function automationsCoverageCard() {
-  const running = visible(store.state.agents || []).filter((a) => a.status === "active");
-  const allowed = running.filter((a) => a.allowedDuringVacation !== false);
-  return `<section class="vm-card vm-queue-card">
-    <div class="vm-card-head">
-      <span class="vm-kicker">Automations, not Vacation Mode</span>
-      <h3>${allowed.length} automation${allowed.length === 1 ? "" : "s"} available for vacation coverage</h3>
-    </div>
-    <div class="vm-action-list">
-      ${running.length ? running.map((a) => {
-        const isAllowed = a.allowedDuringVacation !== false;
-        return `<span class="vm-automation-flag ${isAllowed ? "is-allowed" : "is-blocked"}">${esc(a.name)} — ${isAllowed ? "allowed during Vacation Mode" : "blocked during Vacation Mode"}${a.requiresApprovalDuringVacation !== false ? " · requires approval" : ""}</span>`;
-      }).join("") : `<span class="vm-empty-inline">No active automations yet — set one up on the Automation page.</span>`}
-    </div>
-    <p>Normal automations keep running whether Vacation Mode is on or off. Turning Vacation Mode off stops away-coverage only — it never pauses or deletes an automation.</p>
-    <div class="vm-save-row"><button class="btn btn-quiet" type="button" data-open-ws="automation">Open Automation</button></div>
+          <option value="send_automatically" ${ooo.providerStatus === "ready" ? "" : "disabled"}>Send automatically when connector policy allows</option>
+        </select></label>
+        <label class="vm-field vm-wide"><span>Reply message</span><textarea rows="4" data-vm-ooo-template>${esc(ooo.template || "")}</textarea></label>
+      </div>
+    </details>
+    <details class="vm-details">
+      <summary>Readiness checklist</summary>
+      <div class="vm-readiness">${(status.readiness || []).map((item) => `<article class="vm-ready vm-ready-${esc(item.status)}"><span></span><div><b>${esc(item.label)}</b><i>${esc(item.detail)}</i></div><em>${esc(READINESS_COPY[item.status] || item.status)}</em></article>`).join("")}</div>
+    </details>
+    <div class="vm-save-row"><button class="btn btn-primary" data-vm-save type="button">Save digital coverage</button></div>
   </section>`;
 }
 
 function renderShell(el) {
   if (state.loading) {
-    el.innerHTML = `<div class="vm-loading">Loading Vacation Mode…</div>`;
+    el.innerHTML = `<div class="vm-loading">Loading hands-off coverage…</div>`;
     return;
   }
   if (state.error) {
     el.innerHTML = `<div class="vm-error"><b>Vacation Mode could not load.</b><span>${esc(state.error)}</span><button class="btn" data-vm-retry type="button">Retry</button></div>`;
     return;
   }
-
   const status = state.status;
-  el.innerHTML = `<div class="vm">
-    <header class="vm-hero">
-      <div>
-        <span class="vm-kicker">Your phantom workforce</span>
-        <h2>Let the business keep moving while you’re away.</h2>
-        <p>Vacation Mode watches, drafts, updates safe internal work, and brings urgent decisions back to you. It does not send, post, spend, upload, invoice, or delete without approval.</p>
-      </div>
-      <div class="vm-hero-mark"><span></span><b>${status.enabled ? "ACTIVE" : "READY"}</b></div>
-    </header>
-    ${statusCard(status)}
-    ${metricsCards(status.metrics)}
-    <div class="vm-grid">
-      ${permissionsCard(status)}
-      ${readinessCard(status)}
-      ${approvalsCard(state.approvals)}
-      ${activityCard(state.activity)}
-      ${outOfOfficeCard(status)}
-      ${notificationsCard(status)}
-      ${automationsCoverageCard()}
+  el.innerHTML = `<div class="vm vm-v2">
+    ${statusHero(status)}
+    ${metrics(status)}
+    <div class="vm-grid vm-grid-power">
+      ${coveragePlan(status)}
+      ${operatorWallet(status)}
+      ${newOperatorTask(status)}
+      ${taskQueue(state.tasks)}
+      ${ownerExceptions(state.approvals)}
+      ${activityFeed(state.activity)}
+      ${setupDetails(status)}
     </div>
   </div>`;
 }
@@ -409,8 +388,8 @@ async function refresh(el) {
   renderShell(el);
 }
 
-async function postAndRefresh(el, path, body) {
-  await api(path, { method: path.includes("/settings") ? "PATCH" : "POST", body: JSON.stringify(body || {}) });
+async function postAndRefresh(el, path, body, method = "POST") {
+  await api(path, { method, body: JSON.stringify(body || {}) });
   await refresh(el);
 }
 
@@ -418,42 +397,49 @@ export function renderVacationMode(el, opts = {}) {
   const notify = opts.notify || (() => {});
   renderShell(el);
   if (state.loading || (!state.status && !state.error)) refresh(el);
-
   if (el.dataset.vmBound === "true") return;
   el.dataset.vmBound = "true";
+
   el.addEventListener("click", async (event) => {
     const target = event.target.closest("button");
     if (!target) return;
     try {
-      if (target.matches("[data-vm-retry]")) {
-        await refresh(el);
-        return;
-      }
+      if (target.matches("[data-vm-retry]")) return void await refresh(el);
       if (target.matches("[data-vm-activate]")) {
-        const payload = permissionPayload(el);
-        payload.mode = el.querySelector("[data-vm-mode]")?.value || "approval_required";
-        await postAndRefresh(el, "/api/vacation-mode/activate", payload);
-        notify("Vacation Mode", "Vacation Mode enabled. Away-coverage is active. Outbound actions still require approval.");
+        await postAndRefresh(el, "/api/vacation-mode/activate", coveragePayload(el));
+        notify("Vacation Mode", "Hands-off coverage is active. Phantom and the operator desk are on duty.");
         return;
       }
       if (target.matches("[data-vm-deactivate], [data-vm-kill]")) {
         await postAndRefresh(el, "/api/vacation-mode/deactivate", {});
-        notify("Vacation Mode", "Vacation Mode disabled. Away-coverage stopped. Normal automations remain active.");
+        notify("Vacation Mode", "New away-coverage work stopped.");
         return;
       }
       if (target.matches("[data-vm-save]")) {
-        await postAndRefresh(el, "/api/vacation-mode/settings", permissionPayload(el));
-        notify("Vacation Mode", "Settings saved.");
+        await postAndRefresh(el, "/api/vacation-mode/settings", coveragePayload(el), "PATCH");
+        notify("Vacation Mode", "Coverage plan saved.");
         return;
       }
-      const approval = target.closest("[data-vm-approval]");
-      if (approval) {
-        await postAndRefresh(
-          el,
-          `/api/vacation-mode/approvals/${encodeURIComponent(approval.dataset.vmApproval)}/decision`,
-          { decision: approval.dataset.vmDecision },
-        );
-        notify("Vacation Mode", "Approval decision recorded. No external action was executed.");
+      if (target.matches("[data-vm-queue-task]")) {
+        const type = el.querySelector("[data-vm-task-type]")?.value || "other";
+        const instructions = el.querySelector("[data-vm-task-instructions]")?.value.trim() || "";
+        if (!instructions) throw new Error("Tell the operator what needs to happen.");
+        const label = TASK_LABELS[type] || "Operator task";
+        await postAndRefresh(el, "/api/vacation-mode/operator-tasks", {
+          type,
+          title: label,
+          instructions,
+          contactName: el.querySelector("[data-vm-task-contact]")?.value || "",
+          scheduledAt: el.querySelector("[data-vm-task-time]")?.value || "",
+          source: "owner",
+        });
+        notify("Operator Desk", "Human work queued. Operator Credits were reserved; AI credits were not used.");
+        return;
+      }
+      const cancelId = target.dataset.vmCancelTask;
+      if (cancelId) {
+        await postAndRefresh(el, `/api/vacation-mode/operator-tasks/${encodeURIComponent(cancelId)}/cancel`, {});
+        notify("Operator Desk", "Task canceled and reserved credits released.");
       }
     } catch (error) {
       notify("Vacation Mode", error.message || "Vacation Mode action failed.");
