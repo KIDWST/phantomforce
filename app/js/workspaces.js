@@ -2100,77 +2100,56 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
   const hiddenCells = cellNodes.length - paintedCells.length;
 
   const selectedWorker = workers.find((worker) => worker.worker_id === workerUi.selectedId);
-  // Clicking a worker should visibly connect it to what it's part of, not
-  // just restate the same info in a side panel: selecting an employee lights
-  // up its own subagents; selecting a subagent lights up its siblings and
-  // their shared parent. Everyone outside that family dims.
-  let familyEmployeeId = null;
-  let familySubagentIds = null;
-  if (selectedWorker?.worker_type === "employee") {
-    familyEmployeeId = selectedWorker.worker_id;
-    familySubagentIds = new Set((subagentsByParent.get(selectedWorker.worker_id) || []).map((s) => s.worker_id));
-  } else if (selectedWorker?.worker_type === "subagent") {
-    familyEmployeeId = selectedWorker.parent_id || null;
-    familySubagentIds = new Set((subagentsByParent.get(selectedWorker.parent_id) || []).map((s) => s.worker_id));
-  }
-  const hasFamily = familySubagentIds !== null;
-  const inFamily = (worker) => worker.worker_id === familyEmployeeId || (familySubagentIds && familySubagentIds.has(worker.worker_id));
+  // Subagents only exist in the web when they're relevant: selecting an
+  // employee reveals its own subagents; selecting a subagent reveals its
+  // siblings (same parent). Nothing selected = just the employee circles.
+  // This replaces always drawing the full ~100-subagent population, which
+  // was the actual complaint - too much at once to read.
+  const visibleParentId = selectedWorker?.worker_type === "employee" ? selectedWorker.worker_id
+    : selectedWorker?.worker_type === "subagent" ? (selectedWorker.parent_id || null)
+    : null;
 
-  const CORE_RADIUS = 300;
+  const CORE_RADIUS = 260;
   const MOBILE_CORE_RADIUS = 96;
   const MOBILE_SUBAGENT_RADIUS = 150;
-
-  // Each subagent sits within its own parent employee's angular slice, fanned
-  // outward in shells of 2 per radial step - not a flat 2-ring band. The
-  // canvas pans/zooms, so there's no reason to cram a 15-subagent employee
-  // into the same footprint as a 2-subagent one: let cluster size scale with
-  // how many subagents that employee actually has, and give every shell
-  // generous room instead of fighting for space in a fixed band.
   const SUBAGENTS_PER_SHELL = 2;
-  const SHELL_BASE_RADIUS = 560;
-  const SHELL_RADIUS_STEP = 190;
+  const SHELL_BASE_RADIUS = 460;
+  const SHELL_RADIUS_STEP = 170;
   const slicePerEmployee = 360 / Math.max(1, employeeNodes.length);
-  // 0.82 measured out to a ~45px arc-gap at the innermost shell - not enough
-  // room for two ~88px-wide subagent nodes on either side of the boundary,
-  // so neighboring employees' clusters overlapped at their shared edge.
-  const sliceUsable = slicePerEmployee * 0.55;
   const cappedSubagentIds = new Set(cappedSubagents.map((s) => s.worker_id));
+
   const subagentSlots = [];
-  const claimedSubagentIds = new Set();
-  employeeNodes.forEach((employee, employeeIndex) => {
-    const employeeAngle = employeeIndex * slicePerEmployee;
-    const kids = (subagentsByParent.get(employee.worker_id) || []).filter((s) => cappedSubagentIds.has(s.worker_id));
+  const visibleEmployeeIndex = visibleParentId ? employeeNodes.findIndex((e) => e.worker_id === visibleParentId) : -1;
+  if (visibleEmployeeIndex >= 0) {
+    const employeeAngle = visibleEmployeeIndex * slicePerEmployee;
+    const kids = (subagentsByParent.get(visibleParentId) || []).filter((s) => cappedSubagentIds.has(s.worker_id));
+    // Only one cluster is ever on screen at a time now, so it can use a wide
+    // fan (nothing left/right to collide with) instead of squeezing into a
+    // narrow per-employee slice.
+    const fanSpread = Math.min(300, slicePerEmployee * employeeNodes.length * 0.6);
     kids.forEach((subagent, i) => {
-      claimedSubagentIds.add(subagent.worker_id);
       const shell = Math.floor(i / SUBAGENTS_PER_SHELL);
       const shellStart = shell * SUBAGENTS_PER_SHELL;
       const slotsInShell = Math.min(SUBAGENTS_PER_SHELL, kids.length - shellStart);
       const slotInShell = i - shellStart;
       const withinShell = slotsInShell > 1 ? (slotInShell / (slotsInShell - 1) - 0.5) : 0;
-      const angle = employeeAngle + withinShell * sliceUsable;
+      const angle = employeeAngle + withinShell * fanSpread;
       const radius = SHELL_BASE_RADIUS + shell * SHELL_RADIUS_STEP;
       subagentSlots.push({ worker: subagent, angle, radius });
     });
-  });
-  // Fallback for any subagent whose parent isn't a rendered employee (should
-  // be rare) - spread those evenly on their own outer shell so nothing
-  // silently disappears.
-  const orphanSubagents = cappedSubagents.filter((s) => !claimedSubagentIds.has(s.worker_id));
-  const orphanRadius = SHELL_BASE_RADIUS + (Math.ceil(subagentNodes.length / Math.max(1, employeeNodes.length) / SUBAGENTS_PER_SHELL) + 1) * SHELL_RADIUS_STEP;
-  orphanSubagents.forEach((subagent, i) => {
-    subagentSlots.push({ worker: subagent, angle: (i / Math.max(1, orphanSubagents.length)) * 360, radius: orphanRadius });
-  });
+  }
 
   const webNode = (worker, angle, radius, mobileRadius, isCore, index) => {
     const tone = workerMeshTone(worker);
     const group = workerMeshGroup(worker);
+    // "Doing something right now" gets a visible pulse; idle nodes stay
+    // still - motion should mean something, not run on every node all the
+    // time regardless of whether there's anything actually happening.
     const isLive = tone === "live" || tone === "approval";
-    const dimmed = hasFamily && !inFamily(worker);
-    const highlighted = hasFamily && worker.worker_id !== workerUi.selectedId && inFamily(worker);
     const style = `--node-angle:${angle}deg; --node-radius:${radius}px; --node-mobile-radius:${mobileRadius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
     return `
-      <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""} ${dimmed ? "is-web-dimmed" : ""}" style="${style}" aria-hidden="true"></div>
-      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${!isCore ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""} ${dimmed ? "is-web-dimmed" : ""} ${highlighted ? "is-web-match" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
+      <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""}" style="${style}" aria-hidden="true"></div>
+      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${!isCore ? "is-subagent" : ""} ${isLive ? "is-live" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
         <i>${esc(!isCore ? "subagent" : worker.department)}</i>
@@ -2760,6 +2739,10 @@ function renderWorkforce(el, rerender) {
       workerUi.selectedId = workerUi.selectedId === id ? "" : (id || workerUi.selectedId);
       workerUi.tab = "overview";
       workerUi.preview = null;
+      // Selecting an employee/subagent reveals its subagents fresh into the
+      // DOM - re-fit so they're actually visible instead of landing wherever
+      // the current pan/zoom happens to be pointed.
+      workerWebUi._needsFit = true;
       rerender();
     },
     "worker-collapse": () => {

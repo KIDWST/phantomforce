@@ -1472,6 +1472,16 @@ body:has([data-worker-web-stage].is-web-active) .workspace-page-body {
 .worker-mesh-stage.is-web-active .worker-mesh-rings span {
   animation: none;
 }
+/* Motion should mean something: a node actively doing work gets a visible
+   pulse; an idle one stays still. Higher specificity than the animation:
+   none rule above, so this wins for exactly the live/approval-tone nodes. */
+.worker-mesh-stage.is-web-active .worker-node.is-live {
+  animation: workerLivePulse 2.2s ease-in-out infinite;
+}
+@keyframes workerLivePulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(255,255,255,0.025) inset, 0 12px 30px rgba(0,0,0,0.35); }
+  50% { box-shadow: 0 0 0 1px rgba(255,255,255,0.025) inset, 0 12px 30px rgba(0,0,0,0.35), 0 0 22px var(--node-glow); }
+}
 .worker-mesh-rings { position: absolute; inset: 8%; pointer-events: none; }
 .worker-mesh-rings span {
   position: absolute; inset: calc(var(--ring, 0) * 11%); border: 1px solid rgba(65,255,161,0.12); border-radius: 50%;
