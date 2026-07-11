@@ -11,7 +11,7 @@ import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
 } from "./contenthub.js?v=phantom-live-20260710-150";
 import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-150";
-import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-150";
+import { loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-150";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -2022,48 +2022,9 @@ function downloadAsset(a) {
 /* =========================================================================
    SETTINGS  (provider configuration)
    ========================================================================= */
-/* Local Background Removal status — checked once per settings mount,
-   re-checked on demand. Never hardcoded: always the real result of
-   getRembgStatus()'s Python-import probe. */
-let rembgSettingsStatus = null;
-let rembgSettingsChecking = false;
-function rembgEngineSection(esc) {
-  const s = rembgSettingsStatus;
-  const checking = rembgSettingsChecking;
-  const connected = !checking && s?.available;
-  const stateLabel = checking ? "Checking…" : connected ? "Connected" : s ? "Not connected" : "Not checked yet";
-  return `
-    <div class="set-section">
-      <div class="set-sec-head">
-        <div>
-          <h3>Local Background Removal</h3>
-          <p class="set-note">Runs locally through PhantomForce — no image leaves your network for this. Used by Content Hub's Remove Background and AI subject bokeh.</p>
-        </div>
-        <span class="set-safe-pill ${connected ? "is-on" : "is-off"}">${esc(stateLabel)}</span>
-      </div>
-      <div class="set-rembg-rows">
-        <div class="set-rembg-row"><span>Python command</span><b>${esc(s?.pythonCommand || "—")}</b></div>
-        <div class="set-rembg-row"><span>Background removal</span><b>${checking ? "…" : (s?.available ? "Available" : "Not connected")}</b></div>
-        <div class="set-rembg-row"><span>Last checked</span><b>${s?.checkedAt ? new Date(s.checkedAt).toLocaleString() : "Never"}</b></div>
-      </div>
-      ${!checking && s && !s.available ? `<p class="set-note set-note-warn">${esc(s.error || "Background removal is not connected.")}</p>` : ""}
-      <button class="set-add" data-set-rembg-recheck ${checking ? "disabled" : ""}>${svgIc("cpu")} ${checking ? "Checking…" : "Re-check"}</button>
-    </div>`;
-}
-function wireRembgEngineSection(el, opts) {
-  const kickCheck = (force) => {
-    rembgSettingsChecking = true;
-    rerenderMediaSettings();
-    getRembgStatus({ recheck: force }).then((status) => {
-      rembgSettingsStatus = status;
-      rembgSettingsChecking = false;
-      rerenderMediaSettings();
-    });
-  };
-  if (rembgSettingsStatus === null && !rembgSettingsChecking) kickCheck(false);
-  const btn = el.querySelector("[data-set-rembg-recheck]");
-  if (btn) btn.onclick = () => kickCheck(true);
-}
+/* Backend engine identity (Python command, connection lane, raw health) is
+   owner-only surface area — it lives exclusively in the Developer tab
+   (main.js buildDevPrograms). This tab never re-exposes it. */
 
 export function renderMediaSettings(el, opts = {}) {
   mediaSettingsMount = el;
@@ -2099,8 +2060,6 @@ export function renderMediaSettings(el, opts = {}) {
         <label class="set-inline"><input type="checkbox" data-set-approval ${cfg.requireApproval ? "checked" : ""}/> Require approval before paid generation</label>
       </div>
 
-      ${rembgEngineSection(esc)}
-
       <div class="set-section set-social-section">
         <div class="set-sec-head">
           <div>
@@ -2120,7 +2079,6 @@ export function renderMediaSettings(el, opts = {}) {
   el.querySelectorAll("[data-route]").forEach((s) => s.onchange = () => { cfg.routing[s.dataset.route] = s.value; saveCfg(cfg); });
   el.querySelectorAll("[data-set-quality] button").forEach((b) => b.onclick = () => { genState.quality = b.dataset.v || "standard"; renderMediaSettings(el, opts); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
-  wireRembgEngineSection(el, opts);
 
   // social account linking stays local and never reads browser cookies/tokens
   el.querySelectorAll("[data-social-card]").forEach((card) => {
