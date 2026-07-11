@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-192";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-193";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260711-192";
+} from "./companion-preferences.js?v=phantom-live-20260711-193";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -109,6 +109,7 @@ function createBuddyController() {
   let nextIdleAt = 0;
   let nextWanderAt = 0;
   let lastPaintAt = 0;
+  let geometryRaf = 0;
 
   function mobile() { return window.matchMedia("(max-width: 720px)").matches; }
   function reduceMotion() { return reduceMotionQuery.matches || prefs.motionLevel === "reduced" || prefs.motionLevel === "none"; }
@@ -120,6 +121,30 @@ function createBuddyController() {
     const sidebar = document.querySelector(".sidebar")?.getBoundingClientRect();
     if (sidebar && sidebar.width > 120) return sidebar;
     return { left: 0, top: 0, width: window.innerWidth > 900 ? 212 : 0 };
+  }
+
+  function sidebarDockZone() {
+    const side = sidebarRect();
+    const sidebar = document.querySelector(".sidebar");
+    const nav = sidebar?.querySelector(".side-nav");
+    const navRect = nav?.getBoundingClientRect();
+    const items = nav ? [...nav.querySelectorAll(".nav-item")].filter((item) => {
+      const rect = item.getBoundingClientRect();
+      return rect.width > 0 && rect.height > 0;
+    }) : [];
+    const lastItem = items.length ? items[items.length - 1].getBoundingClientRect() : null;
+    const sideTop = Math.max(0, side.top || 0);
+    const sideBottom = Math.min(window.innerHeight, side.bottom || window.innerHeight);
+    const navBottom = lastItem?.bottom || navRect?.bottom || (sideTop + 420);
+    const top = Math.min(sideBottom - 190, Math.max(navBottom + 18, sideTop + 250));
+    const bottom = Math.max(top + 170, sideBottom - 10);
+    return {
+      left: side.left,
+      top,
+      bottom,
+      width: side.width,
+      height: Math.max(170, bottom - top),
+    };
   }
 
   function safeInsets() {
@@ -145,30 +170,24 @@ function createBuddyController() {
   function dimensionsForPrefs() {
     const base = sizeForPrefs();
     if (!sidebarPortraitMode()) return { width: base, height: base };
-    const side = sidebarRect();
-    const inset = safeInsets();
-    const availableHeight = Math.max(260, window.innerHeight - inset.top - inset.bottom);
-    const sizeBoost = prefs.size === "large" ? 1.12 : prefs.size === "compact" ? 0.88 : 1;
-    const width = Math.round(Math.min(Math.max(side.width - 34, 142), 176) * sizeBoost);
-    const height = Math.round(Math.min(Math.max(availableHeight * 0.34, 270), 360) * sizeBoost);
+    const zone = sidebarDockZone();
+    const sizeBoost = prefs.size === "large" ? 1.1 : prefs.size === "compact" ? 0.9 : 1;
+    const width = Math.round(Math.min(Math.max(zone.width - 22, 154), 214) * sizeBoost);
+    const height = Math.round(Math.min(Math.max(zone.height * 0.8, 320), 560) * sizeBoost);
     return {
-      width: Math.min(width, Math.max(128, side.width - 18)),
-      height: Math.min(height, Math.max(240, availableHeight - 24)),
+      width: Math.min(width, Math.max(142, zone.width - 12)),
+      height: Math.min(height, Math.max(280, zone.height - 12)),
     };
   }
 
   function sidebarPatrolBounds() {
-    const inset = safeInsets();
     const halfX = buddyWidth / 2;
     const halfY = buddyHeight / 2;
-    const side = sidebarRect();
-    const minX = side.left + 10 + halfX;
-    const maxX = side.left + side.width - 10 - halfX;
-    const minY = Math.min(
-      window.innerHeight - inset.bottom - halfY,
-      Math.max(side.top + 520, window.innerHeight * 0.58),
-    );
-    const maxY = window.innerHeight - inset.bottom - halfY;
+    const zone = sidebarDockZone();
+    const minX = zone.left + 6 + halfX;
+    const maxX = zone.left + zone.width - 6 - halfX;
+    const minY = zone.top + halfY;
+    const maxY = zone.bottom - halfY;
     return {
       minX,
       maxX: Math.max(minX, maxX),
@@ -213,22 +232,25 @@ function createBuddyController() {
     ty = dock.y;
   }
 
-  function configureCanvas() {
+  function configureCanvas({ snap = false } = {}) {
     if (!canvas) return;
     size = sizeForPrefs();
     const dims = dimensionsForPrefs();
+    const changed = Math.abs(dims.width - buddyWidth) > 1 || Math.abs(dims.height - buddyHeight) > 1;
     buddyWidth = dims.width;
     buddyHeight = dims.height;
     dpr = Math.min(window.devicePixelRatio || 1, 2);
-    canvas.width = Math.round(buddyWidth * dpr);
-    canvas.height = Math.round(buddyHeight * dpr);
-    canvas.style.width = `${buddyWidth}px`;
-    canvas.style.height = `${buddyHeight}px`;
+    if (changed || canvas.width !== Math.round(buddyWidth * dpr) || canvas.height !== Math.round(buddyHeight * dpr)) {
+      canvas.width = Math.round(buddyWidth * dpr);
+      canvas.height = Math.round(buddyHeight * dpr);
+      canvas.style.width = `${buddyWidth}px`;
+      canvas.style.height = `${buddyHeight}px`;
+    }
     layer.style.setProperty("--buddy-size", `${size}px`);
     layer.style.setProperty("--buddy-width", `${buddyWidth}px`);
     layer.style.setProperty("--buddy-height", `${buddyHeight}px`);
     setTargetToDock();
-    if (!x || !y || docked) {
+    if (!x || !y || (docked && snap)) {
       x = tx;
       y = ty;
     }
@@ -283,7 +305,7 @@ function createBuddyController() {
     ctx2 = canvas.getContext("2d");
     character = createPhantomCharacter({ small: true });
     bindEvents();
-    configureCanvas();
+    configureCanvas({ snap: true });
   }
 
   function removeLayer() {
@@ -431,11 +453,10 @@ function createBuddyController() {
     if (!force && now < nextWanderAt) return;
     if (docked && prefs.dockLocation === "sidebar" && !mobile() && motionAllowed() && !userBusy()) {
       const bounds = sidebarPatrolBounds();
-      const width = Math.max(1, bounds.maxX - bounds.minX);
       const height = Math.max(1, bounds.maxY - bounds.minY);
-      tx = bounds.minX + width * (0.28 + Math.random() * 0.44);
-      ty = bounds.minY + height * Math.random();
-      nextWanderAt = now + 2200 + Math.random() * 3400;
+      tx = (bounds.minX + bounds.maxX) / 2;
+      ty = bounds.minY + height * (0.25 + Math.random() * 0.5);
+      nextWanderAt = now + 2600 + Math.random() * 3000;
       return;
     }
     if (!roamingAllowed() || docked || userBusy()) {
@@ -525,8 +546,18 @@ function createBuddyController() {
   function bindEvents() {
     eventAbort = new AbortController();
     const signal = eventAbort.signal;
+    const scheduleGeometryRefresh = () => {
+      if (geometryRaf) return;
+      geometryRaf = requestAnimationFrame(() => {
+        geometryRaf = 0;
+        if (!layer) return;
+        configureCanvas({ snap: false });
+        if (docked || mobile()) setTargetToDock();
+      });
+    };
     window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; }, { passive: true, signal });
-    window.addEventListener("resize", () => { configureCanvas(); if (docked || mobile()) dock(); }, { passive: true, signal });
+    window.addEventListener("resize", () => { configureCanvas({ snap: true }); if (docked || mobile()) dock(); }, { passive: true, signal });
+    document.addEventListener("scroll", scheduleGeometryRefresh, { passive: true, capture: true, signal });
     document.addEventListener("click", (event) => {
       if (menu && !menu.hidden && !menu.contains(event.target) && event.target !== canvas) closeMenu();
     }, { signal });
@@ -612,8 +643,9 @@ function createBuddyController() {
       if (!running || token !== loopToken || !layer || !ctx2 || !character) return;
       requestAnimationFrame(frame);
       if (document.hidden) return;
+      const sidebarAliveNow = docked && sidebarPortraitMode() && motionAllowed() && !userBusy();
       const isDockedIdle = docked && (state === "docked" || state === "idle");
-      const frameGap = isDockedIdle || reduceMotion() ? 66 : 16;
+      const frameGap = reduceMotion() ? 66 : sidebarAliveNow ? 16 : isDockedIdle ? 66 : 16;
       if (now - lastPaintAt < frameGap) return;
       lastPaintAt = now;
       const t = (now - t0) * 0.001;
@@ -651,11 +683,13 @@ function createBuddyController() {
 
       const sidebarAlive = docked && sidebarPortraitMode() && motionAllowed() && !userBusy();
       const tilt = reduceMotion() || (docked && !sidebarAlive) ? 0 : Math.max(-10, Math.min(10, vx * 1.2));
-      const dockTwirl = sidebarAlive ? Math.sin(t * 2.4) * 8 + Math.sin(t * 0.7) * 3 : 0;
+      const dockTwirl = sidebarAlive ? Math.sin(t * 1.8) * 1.4 : 0;
       const flourish = state === "playful" && prefs.personality !== "quiet" && !reduceMotion()
-        ? Math.sin(t * 8) * 8
+        ? Math.sin(t * 8) * (sidebarPortraitMode() ? 1.5 : 8)
         : 0;
-      layer.style.transform = `translate(${(x - buddyWidth / 2).toFixed(1)}px, ${(y - buddyHeight / 2).toFixed(1)}px) rotate(${(tilt + dockTwirl + flourish).toFixed(1)}deg)`;
+      const rotation = sidebarPortraitMode() ? dockTwirl + flourish : tilt + dockTwirl + flourish;
+      layer.style.transform = `translate(${(x - buddyWidth / 2).toFixed(1)}px, ${(y - buddyHeight / 2).toFixed(1)}px)`;
+      canvas.style.transform = `rotate(${rotation.toFixed(1)}deg)`;
 
       const look = STATE_LOOK[state] || STATE_LOOK.idle;
       const px = Math.max(-0.5, Math.min(0.5, (lastPointer.x - x) / 640));
@@ -663,12 +697,18 @@ function createBuddyController() {
       ctx2.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx2.clearRect(0, 0, buddyWidth, buddyHeight);
       const portrait = sidebarPortraitMode();
+      if (portrait) {
+        ctx2.save();
+        ctx2.translate(buddyWidth / 2, buddyHeight * 0.58);
+        ctx2.scale(0.9, 1.2);
+        ctx2.translate(-buddyWidth / 2, -buddyHeight * 0.58);
+      }
       character.draw(ctx2, {
         t,
         dt,
         cx: buddyWidth / 2,
-        cy: portrait ? buddyHeight * 0.62 : buddyHeight * 0.56,
-        scale: portrait ? Math.min(buddyWidth * 0.46, buddyHeight * 0.235) : size * 0.3,
+        cy: portrait ? buddyHeight * 0.56 : buddyHeight * 0.56,
+        scale: portrait ? Math.min(buddyWidth * 0.52, buddyHeight * 0.27) : size * 0.3,
         mood: look.mood,
         emotion: look.emotion,
         pulse: pulse + (look.pulse || 0),
@@ -677,6 +717,7 @@ function createBuddyController() {
         startupOnly: false,
         moodAge: stateUntil ? Math.max(0, (stateUntil - now) * 0.001) : 2,
       });
+      if (portrait) ctx2.restore();
     };
     requestAnimationFrame(frame);
   }
