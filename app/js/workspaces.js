@@ -2116,17 +2116,21 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
   const hasFamily = familySubagentIds !== null;
   const inFamily = (worker) => worker.worker_id === familyEmployeeId || (familySubagentIds && familySubagentIds.has(worker.worker_id));
 
-  const RING = {
-    core: { radius: 260, mobileRadius: 96 },
-    inner: { radius: 430, mobileRadius: 150 },
-    far: { radius: 620, mobileRadius: 150 },
-  };
+  const CORE_RADIUS = 300;
+  const MOBILE_CORE_RADIUS = 96;
+  const MOBILE_SUBAGENT_RADIUS = 150;
 
-  // Each subagent sits within its own parent employee's angular slice
-  // (spread across the two radii tiers for density) instead of a flat ring
-  // unrelated to anyone - proximity is what makes "these belong to that
-  // worker" readable before you even click anything.
+  // Each subagent sits within its own parent employee's angular slice, fanned
+  // outward in shells of 2 per radial step - not a flat 2-ring band. The
+  // canvas pans/zooms, so there's no reason to cram a 15-subagent employee
+  // into the same footprint as a 2-subagent one: let cluster size scale with
+  // how many subagents that employee actually has, and give every shell
+  // generous room instead of fighting for space in a fixed band.
+  const SUBAGENTS_PER_SHELL = 2;
+  const SHELL_BASE_RADIUS = 480;
+  const SHELL_RADIUS_STEP = 190;
   const slicePerEmployee = 360 / Math.max(1, employeeNodes.length);
+  const sliceUsable = slicePerEmployee * 0.82; // leave a gap so neighboring clusters never touch
   const cappedSubagentIds = new Set(cappedSubagents.map((s) => s.worker_id));
   const subagentSlots = [];
   const claimedSubagentIds = new Set();
@@ -2135,32 +2139,38 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
     const kids = (subagentsByParent.get(employee.worker_id) || []).filter((s) => cappedSubagentIds.has(s.worker_id));
     kids.forEach((subagent, i) => {
       claimedSubagentIds.add(subagent.worker_id);
-      const withinSlice = kids.length > 1 ? (i / (kids.length - 1) - 0.5) : 0;
-      const angle = employeeAngle + withinSlice * slicePerEmployee * 0.85;
-      subagentSlots.push({ worker: subagent, angle, ring: i % 2 === 0 ? "inner" : "far" });
+      const shell = Math.floor(i / SUBAGENTS_PER_SHELL);
+      const shellStart = shell * SUBAGENTS_PER_SHELL;
+      const slotsInShell = Math.min(SUBAGENTS_PER_SHELL, kids.length - shellStart);
+      const slotInShell = i - shellStart;
+      const withinShell = slotsInShell > 1 ? (slotInShell / (slotsInShell - 1) - 0.5) : 0;
+      const angle = employeeAngle + withinShell * sliceUsable;
+      const radius = SHELL_BASE_RADIUS + shell * SHELL_RADIUS_STEP;
+      subagentSlots.push({ worker: subagent, angle, radius });
     });
   });
   // Fallback for any subagent whose parent isn't a rendered employee (should
-  // be rare) - spread those evenly so nothing silently disappears.
+  // be rare) - spread those evenly on their own outer shell so nothing
+  // silently disappears.
   const orphanSubagents = cappedSubagents.filter((s) => !claimedSubagentIds.has(s.worker_id));
+  const orphanRadius = SHELL_BASE_RADIUS + (Math.ceil(subagentNodes.length / Math.max(1, employeeNodes.length) / SUBAGENTS_PER_SHELL) + 1) * SHELL_RADIUS_STEP;
   orphanSubagents.forEach((subagent, i) => {
-    subagentSlots.push({ worker: subagent, angle: (i / Math.max(1, orphanSubagents.length)) * 360, ring: i % 2 === 0 ? "inner" : "far" });
+    subagentSlots.push({ worker: subagent, angle: (i / Math.max(1, orphanSubagents.length)) * 360, radius: orphanRadius });
   });
 
-  const webNode = (worker, angle, ringName, index) => {
+  const webNode = (worker, angle, radius, mobileRadius, isCore, index) => {
     const tone = workerMeshTone(worker);
     const group = workerMeshGroup(worker);
-    const ring = RING[ringName];
     const isLive = tone === "live" || tone === "approval";
     const dimmed = hasFamily && !inFamily(worker);
     const highlighted = hasFamily && worker.worker_id !== workerUi.selectedId && inFamily(worker);
-    const style = `--node-angle:${angle}deg; --node-radius:${ring.radius}px; --node-mobile-radius:${ring.mobileRadius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
+    const style = `--node-angle:${angle}deg; --node-radius:${radius}px; --node-mobile-radius:${mobileRadius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
     return `
       <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""} ${dimmed ? "is-web-dimmed" : ""}" style="${style}" aria-hidden="true"></div>
-      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ringName !== "core" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""} ${dimmed ? "is-web-dimmed" : ""} ${highlighted ? "is-web-match" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
+      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${!isCore ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""} ${dimmed ? "is-web-dimmed" : ""} ${highlighted ? "is-web-match" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
-        <i>${esc(ringName !== "core" ? "subagent" : worker.department)}</i>
+        <i>${esc(!isCore ? "subagent" : worker.department)}</i>
       </button>`;
   };
 
@@ -2176,8 +2186,8 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
     return `<span class="worker-cell-dot worker-cell-${esc(layer)} worker-cell-${esc(group)}" style="${style}" title="${esc(worker.display_name)} — ${esc(worker.role)}"></span>`;
   };
 
-  const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index * slicePerEmployee, "core", index)).join("");
-  const outerRingNodes = subagentSlots.map((slot, index) => webNode(slot.worker, slot.angle, slot.ring, index)).join("");
+  const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index * slicePerEmployee, CORE_RADIUS, MOBILE_CORE_RADIUS, true, index)).join("");
+  const outerRingNodes = subagentSlots.map((slot, index) => webNode(slot.worker, slot.angle, slot.radius, MOBILE_SUBAGENT_RADIUS, false, index)).join("");
   const helperLaneDots = paintedCells.map((worker, index) => cellDot(worker, index)).join("");
 
   const observed = workers.filter((worker) => worker.has_activity).length;
