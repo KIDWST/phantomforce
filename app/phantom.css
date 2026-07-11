@@ -2055,6 +2055,16 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
 .status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; }
+.topbar-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 14px;
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: clamp(12px, 1.8vw, 48px);
+}
+.topbar-actions .cmdk-open { flex: 0 1 240px; }
+.topbar-actions .topbar-clock { margin-left: clamp(14px, 1.5vw, 64px); }
 .pill { display: flex; flex-direction: column; gap: 2px; padding: 7px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); min-width: 0; }
 .pill-link { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .pill-link:hover, .pill-link:focus-visible { border-color: var(--line-strong); background: rgba(65,255,161,0.08); outline: none; }
@@ -2580,6 +2590,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 @media (max-width: 720px) {
   .topbar2 { gap: 10px; padding: 10px 12px; }
+  .topbar-actions { margin-left: auto; }
   .topbar-clock { margin-left: auto; }
   .status-pills { order: 3; flex-basis: 100%; }
   .console-workspace { padding: 12px; }
@@ -2887,7 +2898,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 @media (max-width: 1500px) { .cmdk-open { flex: 0 0 auto; padding: 8px; } .cmdk-open-label, .cmdk-open-kbd { display: none; } }
 @media (min-width: 1800px) {
   .topbar2 { justify-content: flex-start; }
-  .topbar-clock { margin-left: clamp(28px, 3.2vw, 180px); }
+  .topbar-actions { margin-left: clamp(14px, 1.35vw, 56px); }
+  .topbar-actions .topbar-clock { margin-left: clamp(18px, 1.6vw, 86px); }
 }
 @media (max-width: 1320px) {
   .desktop-context-top { flex-basis: 320px; min-width: 240px; }
@@ -4886,6 +4898,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     background: transparent !important;
     box-shadow: none;
   }
+  .topbar2 > .topbar-actions,
   .topbar2 > .cmdk-open,
   .topbar2 > .topbar-clock,
   .topbar2 > .notif-wrap,

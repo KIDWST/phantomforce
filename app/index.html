@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260710-151";
+      window.PHANTOM_BUILD = "phantom-live-20260710-154";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260710-151" />
+    <meta name="phantom-build" content="phantom-live-20260710-154" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -102,11 +102,11 @@
 
 
     </style>
-    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260710-151" />
+    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260710-154" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260710-151" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260710-154" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -139,7 +139,7 @@
     <div class="phantom" data-phantom hidden>
       <header class="mobile-admin-homebar" aria-label="Mobile admin home">
         <button class="mobile-admin-brand" data-mobile-home type="button" aria-label="Open dashboard">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260710-151" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260710-154" alt="" aria-hidden="true" />
           <span>
             <b>PhantomForce</b>
             <i>Admin</i>
@@ -162,7 +162,7 @@
       <!-- ---------- sidebar ---------- -->
       <aside class="sidebar" aria-label="Primary">
         <div class="side-brand">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260710-151" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260710-154" alt="" aria-hidden="true" />
           <span class="side-brand-text">
             <b>PHANTOMFORCE</b>
             <i>AI OPERATIONS CONSOLE</i>
@@ -183,32 +183,34 @@
         <header class="topbar2">
           <div class="status-pills" data-status-pills></div>
           <section class="desktop-context-card desktop-context-top" data-desktop-context data-dc-layout="mini" aria-label="Desktop media bridge"></section>
-          <button class="cmdk-open" data-cmdk-open aria-label="Open command palette">
-            <span class="cmdk-open-ic" data-cmdk-open-ic></span>
-            <span class="cmdk-open-label">Search or command…</span>
-            <kbd class="cmdk-open-kbd">⌘K</kbd>
-          </button>
-          <div class="topbar-clock">
-            <b data-clock-time>—</b>
-            <i data-clock-date>—</i>
-          </div>
-          <div class="notif-wrap">
-            <button class="notif-btn" data-notif-btn aria-label="Notifications">
-              <span data-notif-ic></span>
-              <em class="notif-dot" data-notif-dot hidden></em>
+          <div class="topbar-actions" aria-label="Quick actions">
+            <button class="cmdk-open" data-cmdk-open aria-label="Open command palette">
+              <span class="cmdk-open-ic" data-cmdk-open-ic></span>
+              <span class="cmdk-open-label">Search or command…</span>
+              <kbd class="cmdk-open-kbd">⌘K</kbd>
             </button>
-            <div class="notif-menu" data-notif-menu hidden></div>
-          </div>
-          <div class="user-menu-wrap">
-            <button class="topbar-user" data-user-btn aria-haspopup="menu" aria-expanded="false">
-              <span class="user-avatar" data-user-avatar>··</span>
-              <span class="user-meta">
-                <b data-user-name>—</b>
-                <i data-user-role>—</i>
-              </span>
-              <span class="user-caret" aria-hidden="true">▾</span>
-            </button>
-            <div class="user-menu" data-user-menu hidden></div>
+            <div class="topbar-clock">
+              <b data-clock-time>—</b>
+              <i data-clock-date>—</i>
+            </div>
+            <div class="notif-wrap">
+              <button class="notif-btn" data-notif-btn aria-label="Notifications">
+                <span data-notif-ic></span>
+                <em class="notif-dot" data-notif-dot hidden></em>
+              </button>
+              <div class="notif-menu" data-notif-menu hidden></div>
+            </div>
+            <div class="user-menu-wrap">
+              <button class="topbar-user" data-user-btn aria-haspopup="menu" aria-expanded="false">
+                <span class="user-avatar" data-user-avatar>··</span>
+                <span class="user-meta">
+                  <b data-user-name>—</b>
+                  <i data-user-role>—</i>
+                </span>
+                <span class="user-caret" aria-hidden="true">▾</span>
+              </button>
+              <div class="user-menu" data-user-menu hidden></div>
+            </div>
           </div>
         </header>
 
@@ -247,7 +249,7 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260710-151"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260710-154"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
@@ -443,6 +445,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260710-151"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260710-154"></script>
   </body>
 </html>
