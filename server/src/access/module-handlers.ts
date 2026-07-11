@@ -1,6 +1,7 @@
 import type { WorkspaceAccessDecision } from "./access-guard.js";
 import type { ClientAccessRecord } from "./client-access-state.js";
 import { readClientCalendar } from "../connectors/calendar-connector.js";
+import { getMediaLabLibrarySummary } from "../media-lab/effects-library.js";
 
 export type WorkspaceModuleAction = {
   id: string;
@@ -148,6 +149,23 @@ const moduleDefinitions: Record<string, ModuleDefinition> = {
       { id: "create-content", label: "Create content", requiresFullAccess: true },
     ],
   },
+  "media lab": {
+    title: "Media Lab",
+    summary: "Effects, motion packs, templates, and render-safe asset references for PhantomForce creative workflows.",
+    widgets: [
+      { id: "library", label: "Library", value: "Checking local pack" },
+      { id: "exposure", label: "Raw downloads", value: "Blocked" },
+    ],
+    records: [
+      { id: "catalog", title: "Motion Array source catalog", status: "metadata only" },
+      { id: "derivatives", title: "Rendered preview derivatives", status: "planned" },
+    ],
+    actions: [
+      { id: "browse-effects", label: "Browse effects", requiresFullAccess: false },
+      { id: "queue-preview-renders", label: "Queue preview renders", requiresFullAccess: true },
+      { id: "request-rights-review", label: "Request rights review", requiresFullAccess: true },
+    ],
+  },
   activity: {
     title: "Activity",
     summary: "Audit-friendly record of workspace changes.",
@@ -255,6 +273,34 @@ async function calendarModuleDefinition(record: ClientAccessRecord): Promise<Mod
   };
 }
 
+async function mediaLabModuleDefinition(): Promise<ModuleDefinition> {
+  const { summary } = await getMediaLabLibrarySummary();
+  const topCategories = summary.categories.slice(0, 4);
+
+  return {
+    title: "Media Lab",
+    summary: `${summary.totalAssets} source ZIPs indexed from ${summary.sourceProvider}. Raw asset downloads remain blocked until rights review clears a public cloud pack.`,
+    widgets: [
+      { id: "assets", label: "Indexed assets", value: String(summary.totalAssets) },
+      { id: "size", label: "Source size", value: summary.totalSizeLabel },
+      { id: "ready", label: "Cloud ready", value: String(summary.cloudReadyAssets) },
+      { id: "raw", label: "Raw downloads", value: summary.rawDownloadAllowed ? "Allowed" : "Blocked" },
+    ],
+    records: topCategories.length
+      ? topCategories.map((category) => ({
+          id: `media-lab-${category.category}`,
+          title: category.category.replace(/_/g, " "),
+          status: `${category.count} assets / ${category.sizeLabel}`,
+        }))
+      : [{ id: "media-lab-empty", title: "No local effects indexed", status: "check asset root" }],
+    actions: [
+      { id: "browse-effects", label: "Browse effects", requiresFullAccess: false },
+      { id: "queue-preview-renders", label: "Queue preview renders", requiresFullAccess: true },
+      { id: "request-rights-review", label: "Request rights review", requiresFullAccess: true },
+    ],
+  };
+}
+
 export async function getWorkspaceModuleView(
   record: ClientAccessRecord,
   decision: WorkspaceAccessDecision,
@@ -264,6 +310,8 @@ export async function getWorkspaceModuleView(
   const definition =
     normalizedModuleKey === "calendar"
       ? await calendarModuleDefinition(record)
+      : normalizedModuleKey === "media lab" || normalizedModuleKey === "medialab"
+        ? await mediaLabModuleDefinition()
       : moduleDefinitions[normalizedModuleKey] ?? defaultModuleDefinition(moduleKey, record);
   const writeAccess = decision.mode === "full";
   const connectorAvailable = definition.connector?.status !== "missing";

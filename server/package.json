@@ -15,6 +15,7 @@
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
     "test:auth:production-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-production-fail-closed.ps1",
     "test:auth:owner-production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-owner-production.ps1",
+    "media-lab:manifest": "tsx scripts/build-media-library-manifest.ts",
     "start": "node dist/index.js",
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev"

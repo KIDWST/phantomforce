@@ -4,6 +4,7 @@ import {
   ActionSchema,
   FALCON_JOB_SCHEMAS,
   FalconJobSchema,
+  MediaLabEffectsQuerySchema,
 } from "@phantomforce/contracts";
 import "dotenv/config";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
@@ -35,12 +36,14 @@ import {
   AccessLoginSchema,
   SESSION_HEADER,
   assertAccessAuthConfiguration,
+  canViewClientWorkspace,
   getAccessAuthConfiguration,
   issueAccessSessionToken,
   listAccessSessions,
   requireAdminAccessSession,
   requireAccessSession,
   requireClientWorkspaceView,
+  type AccessSession,
 } from "./access/session.js";
 import {
   ClientAccessStatusSchema,
@@ -56,6 +59,7 @@ import { getBillingProviderStatus } from "./access/billing-provider.js";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
+import { listMediaLabEffects, mediaLabLicenseBoundary } from "./media-lab/effects-library.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -73,6 +77,64 @@ await app.register(cors, {
 const falconBroker = createFalconBroker({
   baseUrl: process.env.FALCON_BASE_URL ?? "http://127.0.0.1:8765",
 });
+
+function requireMediaLabAccess(
+  session: AccessSession,
+  reply: FastifyReply,
+  clientId: string | undefined,
+) {
+  const requestedClientId = clientId?.trim() || session.clientId;
+
+  if (session.canManageAccess && !requestedClientId) {
+    return {
+      scope: "admin-global" as const,
+      clientId: null,
+    };
+  }
+
+  if (!requestedClientId) {
+    reply.code(403).send({
+      ok: false,
+      error: "Media Lab catalog access requires an admin session or a client workspace.",
+      session,
+    });
+    return undefined;
+  }
+
+  if (!canViewClientWorkspace(session, requestedClientId)) {
+    reply.code(403).send({
+      ok: false,
+      error: "This session cannot view the requested Media Lab workspace.",
+      session,
+      clientId: requestedClientId,
+    });
+    return undefined;
+  }
+
+  if (session.canManageAccess) {
+    return {
+      scope: "admin-client" as const,
+      clientId: requestedClientId,
+    };
+  }
+
+  const access = assertModuleAccess(requestedClientId, "Media Lab");
+
+  if (!access.ok) {
+    reply.code(access.statusCode).send({
+      ok: false,
+      error: access.error,
+      record: access.record,
+      decision: access.decision,
+    });
+    return undefined;
+  }
+
+  return {
+    scope: "client-module" as const,
+    clientId: requestedClientId,
+  };
+}
 
 try {
   assertAccessAuthConfiguration();
@@ -100,6 +162,51 @@ app.get("/contracts/actions", async () => {
   return {
     actionTypes: Object.keys(ACTION_SCHEMAS),
     falconJobTypes: Object.keys(FALCON_JOB_SCHEMAS),
+  };
+});
+
+app.get("/media-lab/effects", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const query = request.query as { clientId?: string };
+  const access = requireMediaLabAccess(session, reply, query.clientId);
+
+  if (!access) {
+    return reply;
+  }
+
+  const parsed = MediaLabEffectsQuerySchema.safeParse(request.query);
+
+  if (!parsed.success) {
+    return reply.code(400).send({
+      ok: false,
+      error: parsed.error.flatten(),
+    });
+  }
+
+  return {
+    ok: true,
+    session,
+    access,
+    ...(await listMediaLabEffects(parsed.data)),
+  };
+});
+
+app.get("/media-lab/license-boundary", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    boundary: mediaLabLicenseBoundary,
   };
 });
 

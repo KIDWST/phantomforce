@@ -34,6 +34,7 @@ import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
 type Route =
   | "command"
+  | "mediaLab"
   | "inbox"
   | "calendar"
   | "tasks"
@@ -216,6 +217,73 @@ type ProductionReadinessReport = {
   gates: ReadinessGate[];
 };
 
+type MediaLabEffectCategory =
+  | "transitions"
+  | "titles"
+  | "text_templates"
+  | "logo_templates"
+  | "overlays"
+  | "mockups"
+  | "sports"
+  | "macros"
+  | "templates"
+  | "software"
+  | "uncategorized";
+
+type MediaLabEffect = {
+  id: string;
+  title: string;
+  category: MediaLabEffectCategory;
+  tags: string[];
+  sourceProvider: "Motion Array";
+  sourcePack: string;
+  sourceFolder: string;
+  sourceRelativePath: string;
+  fileName: string;
+  fileExtension: string;
+  sizeBytes: number;
+  sizeLabel: string;
+  licenseStatus: "motion_array_project_use_only" | "needs_rights_review" | "blocked_software_package";
+  exposureMode: "metadata_only" | "rendered_derivative_only" | "blocked";
+  allowedUse: string;
+  rawDownloadAllowed: false;
+  cloudPackReady: boolean;
+};
+
+type MediaLabCatalog = {
+  summary: {
+    generatedAt: string;
+    sourceProvider: "Motion Array";
+    sourceRootConfigured: boolean;
+    totalAssets: number;
+    totalBytes: number;
+    totalSizeLabel: string;
+    cloudReadyAssets: number;
+    rawDownloadAllowed: false;
+    categories: Array<{
+      category: MediaLabEffectCategory;
+      count: number;
+      sizeBytes: number;
+      sizeLabel: string;
+    }>;
+    packs: Array<{
+      sourceFolder: string;
+      count: number;
+      sizeBytes: number;
+      sizeLabel: string;
+    }>;
+    licenseBoundary: {
+      sourceProvider: "Motion Array";
+      rawDownloadAllowed: false;
+      allowedUse: string;
+      blockedUse: string;
+      reviewRequiredBeforePublicCloud: true;
+    };
+  };
+  effects: MediaLabEffect[];
+  warnings: string[];
+};
+
 type AppSession = {
   id: string;
   label: string;
@@ -258,6 +326,7 @@ const initialSessions: AppSession[] = [
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Command", icon: <Command size={18} /> },
+  { id: "mediaLab", label: "Media Lab", icon: <Sparkles size={18} /> },
   { id: "inbox", label: "Inbox", icon: <Inbox size={18} /> },
   { id: "calendar", label: "Calendar", icon: <CalendarDays size={18} /> },
   { id: "tasks", label: "Tasks", icon: <SquareCheckBig size={18} /> },
@@ -403,6 +472,13 @@ const connections: Connection[] = [
     status: "locked",
     scopes: ["Typed jobs only", "Staff diagnostics", "Kill switch"],
   },
+  {
+    id: "media-lab",
+    name: "Media Lab effects library",
+    description: "Motion effects, templates, presets, and production references with raw source downloads blocked.",
+    status: "ready",
+    scopes: ["Catalog metadata", "Rendered derivatives", "Rights review"],
+  },
 ];
 
 const initialClientAccess: ClientAccess[] = [
@@ -415,7 +491,7 @@ const initialClientAccess: ClientAccess[] = [
     accessStatus: "active",
     gateway: "Pangolin",
     privateRoute: "app.phantomforce.online/chicagoshots",
-    modules: ["Command", "Content", "Tasks", "Approvals", "Activity"],
+    modules: ["Command", "Media Lab", "Content", "Tasks", "Approvals", "Activity"],
     lastAudit: "Access confirmed for partner workspace",
   },
   {
@@ -427,7 +503,7 @@ const initialClientAccess: ClientAccess[] = [
     accessStatus: "active",
     gateway: "Pangolin",
     privateRoute: "app.phantomforce.online/sports-ops-demo",
-    modules: ["Command", "Calendar", "Tasks", "Approvals", "Contacts"],
+    modules: ["Command", "Media Lab", "Calendar", "Tasks", "Approvals", "Contacts"],
     lastAudit: "Deposit paid; workspace active",
   },
   {
@@ -451,6 +527,8 @@ const modules = [
   "Tasks",
   "Approvals",
   "Activity",
+  "Media Lab",
+  "Content Studio",
   "Contacts",
   "Documents",
   "Falcon Worker",
@@ -462,13 +540,16 @@ const clientModuleCatalog = [
   "Tasks",
   "Approvals",
   "Contacts",
+  "Media Lab",
   "Content",
   "Activity",
   "Documents",
   "Reports",
 ];
 
-const API_BASE_URL = "http://127.0.0.1:5190";
+const API_BASE_URL =
+  (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL ??
+  "http://127.0.0.1:5190";
 const MONEY_DEMO_CLIENT_ID = "client-money-demo";
 
 function makeId(prefix: string) {
@@ -502,6 +583,8 @@ function App() {
   const [pangolinPlan, setPangolinPlan] = useState<PangolinRoutePlan[]>([]);
   const [pangolinStatus, setPangolinStatus] = useState<PangolinReadOnlyStatus | null>(null);
   const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
+  const [mediaLabCatalog, setMediaLabCatalog] = useState<MediaLabCatalog | null>(null);
+  const [mediaLabBusy, setMediaLabBusy] = useState(false);
   const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
   const [selectedOrg, setSelectedOrg] = useState("PhantomForce Pilot");
   const activeSession = useMemo(
@@ -705,6 +788,32 @@ function App() {
     }
   }
 
+  async function refreshMediaLabCatalog() {
+    setMediaLabBusy(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/media-lab/effects?limit=12`, {
+        headers: sessionHeaders(),
+      });
+      const data = (await response.json()) as MediaLabCatalog & { error?: string };
+
+      if (response.ok && data.summary) {
+        setMediaLabCatalog({
+          summary: data.summary,
+          effects: data.effects ?? [],
+          warnings: data.warnings ?? [],
+        });
+        return;
+      }
+
+      addActivity("Media Lab gated", data.error ?? "Effects library access is waiting on the backend guard.", "warn");
+    } catch {
+      addActivity("Media Lab offline", "The effects catalog API is waiting on the backend.", "warn");
+    } finally {
+      setMediaLabBusy(false);
+    }
+  }
+
   useEffect(() => {
     let cancelled = false;
 
@@ -739,6 +848,12 @@ function App() {
       cancelled = true;
     };
   }, [activeSessionId, sessionToken, signedIn]);
+
+  useEffect(() => {
+    if (!signedIn || route !== "mediaLab") return;
+
+    void refreshMediaLabCatalog();
+  }, [route, sessionToken, signedIn]);
 
   const stats = useMemo(() => {
     return {
@@ -1266,6 +1381,13 @@ function App() {
             events={events}
           />
         ) : null}
+        {route === "mediaLab" ? (
+          <MediaLabView
+            catalog={mediaLabCatalog}
+            busy={mediaLabBusy}
+            refreshCatalog={refreshMediaLabCatalog}
+          />
+        ) : null}
         {route === "inbox" ? <InboxView emails={emails} createFollowUpPlan={createFollowUpPlan} /> : null}
         {route === "calendar" ? <CalendarView events={events} /> : null}
         {route === "tasks" ? <TasksView tasks={tasks} completeTask={completeTask} /> : null}
@@ -1562,6 +1684,162 @@ function Metric({ icon, label, value, tone }: { icon: ReactNode; label: string; 
         <p>{label}</p>
       </div>
     </article>
+  );
+}
+
+function formatMediaCategory(category: MediaLabEffectCategory | string) {
+  return category
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function MediaLabView({
+  catalog,
+  busy,
+  refreshCatalog,
+}: {
+  catalog: MediaLabCatalog | null;
+  busy: boolean;
+  refreshCatalog: () => void;
+}) {
+  const summary = catalog?.summary;
+  const topPacks = summary?.packs.slice(0, 5) ?? [];
+  const effects = catalog?.effects ?? [];
+
+  return (
+    <Page
+      title="Media Lab"
+      kicker="Effects cloud"
+      action={
+        <button className="primary-small" type="button" onClick={refreshCatalog} disabled={busy}>
+          <RefreshCcw size={16} />
+          {busy ? "Scanning" : "Rescan"}
+        </button>
+      }
+    >
+      <section className="media-lab-hero">
+        <div>
+          <span className="eyebrow">Motionarray intake</span>
+          <h3>{summary ? `${summary.totalAssets} effects indexed` : "Effects catalog waiting"}</h3>
+          <p>
+            {summary
+              ? `${summary.totalSizeLabel} mapped into PhantomForce categories for editor search, Media Lab renders, and client-safe creative workflows.`
+              : "Start the backend to scan the local asset pack and load the catalog."}
+          </p>
+        </div>
+        <div className="media-boundary-card">
+          <ShieldCheck size={22} />
+          <strong>Raw downloads blocked</strong>
+          <span>{summary?.licenseBoundary.blockedUse ?? "Source files stay behind the production boundary."}</span>
+        </div>
+      </section>
+
+      <div className="media-stat-grid">
+        <article>
+          <span>Source</span>
+          <strong>{summary?.sourceProvider ?? "Motion Array"}</strong>
+        </article>
+        <article>
+          <span>Cloud ready</span>
+          <strong>{summary?.cloudReadyAssets ?? 0}</strong>
+        </article>
+        <article>
+          <span>Categories</span>
+          <strong>{summary?.categories.length ?? 0}</strong>
+        </article>
+        <article>
+          <span>Root</span>
+          <strong>{summary?.sourceRootConfigured ? "Online" : "Waiting"}</strong>
+        </article>
+      </div>
+
+      {summary ? (
+        <section className="media-category-panel">
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">Library map</span>
+              <h3>Effects by category</h3>
+            </div>
+            <span className="safe-pill">
+              <Lock size={15} />
+              Metadata only
+            </span>
+          </div>
+          <div className="media-category-grid">
+            {summary.categories.map((category) => (
+              <article key={category.category}>
+                <strong>{formatMediaCategory(category.category)}</strong>
+                <span>{category.count} assets</span>
+                <small>{category.sizeLabel}</small>
+              </article>
+            ))}
+          </div>
+        </section>
+      ) : null}
+
+      <section className="media-library-layout">
+        <div className="media-effect-column">
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">Catalog sample</span>
+              <h3>Largest source packs</h3>
+            </div>
+            <span className="safe-pill">
+              <Search size={15} />
+              {effects.length} shown
+            </span>
+          </div>
+          {effects.length ? (
+            <div className="media-effect-grid">
+              {effects.map((effect) => (
+                <article className={`media-effect-card ${effect.category}`} key={effect.id}>
+                  <div className="media-effect-thumb">
+                    <Sparkles size={22} />
+                  </div>
+                  <div>
+                    <span>{formatMediaCategory(effect.category)}</span>
+                    <h3>{effect.title}</h3>
+                    <p>{effect.sourceFolder} / {effect.sizeLabel}</p>
+                  </div>
+                  <div className="media-effect-tags">
+                    <b>{effect.exposureMode.replace(/_/g, " ")}</b>
+                    <b>{effect.rawDownloadAllowed ? "downloadable" : "raw blocked"}</b>
+                  </div>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<Sparkles size={20} />}
+              title="No effects loaded"
+              detail="The local catalog scanner has not returned asset metadata yet."
+            />
+          )}
+        </div>
+
+        <aside className="media-pack-panel">
+          <div className="section-head compact">
+            <h3>Source folders</h3>
+            <span>{topPacks.length} packs</span>
+          </div>
+          <div className="media-pack-list">
+            {topPacks.map((pack) => (
+              <article key={pack.sourceFolder}>
+                <strong>{pack.sourceFolder}</strong>
+                <span>{pack.count} assets</span>
+                <small>{pack.sizeLabel}</small>
+              </article>
+            ))}
+          </div>
+          {catalog?.warnings.length ? (
+            <div className="media-warning">
+              <AlertTriangle size={17} />
+              <span>{catalog.warnings[0]}</span>
+            </div>
+          ) : null}
+        </aside>
+      </section>
+    </Page>
   );
 }
 

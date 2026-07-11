@@ -686,6 +686,216 @@ img {
   font-size: 30px;
 }
 
+.media-lab-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  gap: 16px;
+  align-items: stretch;
+  padding: 20px;
+  background:
+    linear-gradient(100deg, rgba(10, 13, 17, 0.96), rgba(10, 13, 17, 0.76)),
+    url("/assets/operator-core.png") center / cover;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.media-lab-hero h3 {
+  margin: 8px 0;
+  font-size: 30px;
+}
+
+.media-lab-hero p,
+.media-boundary-card span,
+.media-effect-card p,
+.media-pack-panel span,
+.media-pack-panel small,
+.media-warning span {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.media-boundary-card {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  padding: 16px;
+  background: rgba(89, 208, 133, 0.1);
+  border: 1px solid rgba(89, 208, 133, 0.24);
+  border-radius: 8px;
+}
+
+.media-boundary-card svg {
+  color: var(--green);
+}
+
+.media-boundary-card strong {
+  font-size: 18px;
+}
+
+.media-stat-grid,
+.media-category-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.media-stat-grid article,
+.media-category-grid article,
+.media-pack-list article,
+.media-effect-card {
+  background: rgba(17, 21, 27, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+
+.media-stat-grid article {
+  display: grid;
+  gap: 5px;
+  padding: 14px;
+}
+
+.media-stat-grid span,
+.media-category-grid span,
+.media-category-grid small,
+.media-effect-card span,
+.media-effect-tags b {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.media-stat-grid strong {
+  color: var(--text);
+  font-size: 22px;
+}
+
+.media-category-panel,
+.media-pack-panel {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  background: rgba(17, 21, 27, 0.82);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: var(--shadow);
+}
+
+.media-category-grid article {
+  display: grid;
+  gap: 6px;
+  min-height: 92px;
+  padding: 13px;
+}
+
+.media-category-grid strong {
+  color: var(--text);
+}
+
+.media-library-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  gap: 14px;
+  align-items: start;
+}
+
+.media-effect-column {
+  display: grid;
+  gap: 12px;
+}
+
+.media-effect-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.media-effect-card {
+  display: grid;
+  grid-template-columns: 54px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  min-height: 156px;
+  padding: 12px;
+}
+
+.media-effect-card.software {
+  border-color: rgba(236, 47, 69, 0.32);
+}
+
+.media-effect-thumb {
+  width: 54px;
+  height: 54px;
+  display: grid;
+  place-items: center;
+  color: var(--cyan);
+  background: rgba(40, 196, 216, 0.12);
+  border: 1px solid rgba(40, 196, 216, 0.2);
+  border-radius: 8px;
+}
+
+.media-effect-card h3 {
+  margin: 5px 0 5px;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.media-effect-card p {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.media-effect-tags {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-self: end;
+}
+
+.media-effect-tags b {
+  padding: 6px 8px;
+  color: var(--soft);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  border-radius: 999px;
+}
+
+.media-pack-list {
+  display: grid;
+  gap: 8px;
+}
+
+.media-pack-list article {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 5px 10px;
+  padding: 11px;
+}
+
+.media-pack-list strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media-pack-list small {
+  grid-column: 1 / -1;
+}
+
+.media-warning {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 10px;
+  color: #fff0c4;
+  background: rgba(229, 181, 75, 0.1);
+  border: 1px solid rgba(229, 181, 75, 0.24);
+  border-radius: 8px;
+}
+
 .list-grid,
 .approval-grid,
 .connection-grid {
@@ -1971,9 +2181,16 @@ img {
   .list-grid,
   .approval-grid,
   .connection-grid,
+  .media-stat-grid,
+  .media-category-grid,
   .pangolin-grid,
   .access-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .media-library-layout,
+  .media-lab-hero {
+    grid-template-columns: 1fr;
   }
 
   .guard-panel {
@@ -2052,6 +2269,9 @@ img {
   .list-grid,
   .approval-grid,
   .connection-grid,
+  .media-stat-grid,
+  .media-category-grid,
+  .media-effect-grid,
   .pangolin-grid,
   .access-grid,
   .access-hero,
