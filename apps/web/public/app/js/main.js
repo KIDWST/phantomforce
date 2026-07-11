@@ -4,18 +4,18 @@ import {
   store, ctx, session, resolveSession, isAdmin, currentWs, setWorkspace, wsName,
   visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
-} from "./store.js?v=phantom-live-20260706-36";
-import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260706-36";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260706-36";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260706-36";
-import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260706-36";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260706-36";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260706-36";
-import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260706-36";
-import { mountAgentTicker } from "./agentops.js?v=phantom-live-20260706-36";
-import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260706-36";
-import { mountCompanion, setCompanionState, getChatSettings } from "./companion.js?v=phantom-live-20260706-36";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260706-36";
+} from "./store.js?v=phantom-live-20260708-39";
+import { handleCommand, commandSuggestions } from "./command.js?v=phantom-live-20260708-39";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260708-39";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260708-39";
+import { renderMediaStudio, renderMediaSettings } from "./medialab.js?v=phantom-live-20260708-39";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260708-39";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260708-39";
+import { renderFlowMap } from "./flowmap.js?v=phantom-live-20260708-39";
+import { mountAgentTicker } from "./agentops.js?v=phantom-live-20260708-39";
+import { renderBrandMemory, renderAutomation } from "./brandops.js?v=phantom-live-20260708-39";
+import { mountCompanion, setCompanionState, getChatSettings } from "./companion.js?v=phantom-live-20260708-39";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260708-39";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -302,11 +302,11 @@ function updateOperationsMapControls() {
   const section = $("[data-map-section]");
   const isOpen = Boolean(section?.classList.contains("is-map-open"));
   $$("[data-map-open]").forEach((button) => {
-    if (button.closest("[data-map-section]")) button.hidden = isOpen;
+    button.hidden = isOpen;
     button.setAttribute("aria-expanded", String(isOpen));
     button.setAttribute("aria-label", isOpen ? "Operations map is already open" : "Open operations map");
   });
-  $$("[data-map-open-label]").forEach((label) => { label.textContent = isOpen ? "Close map" : "Open map"; });
+  $$("[data-map-open-label]").forEach((label) => { label.textContent = "Open map"; });
   $$("[data-map-close]").forEach((button) => {
     button.hidden = !isOpen;
     button.setAttribute("aria-expanded", String(isOpen));
@@ -512,7 +512,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260706-36";
+const POSE_VERSION = "phantom-live-20260708-39";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
