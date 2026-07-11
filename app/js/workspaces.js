@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-164";
+} from "./store.js?v=phantom-live-20260711-165";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1952,9 +1952,15 @@ function wireWorkerWeb(el, rerender) {
   const MIN_ZOOM = 0.4, MAX_ZOOM = 2.5;
   let dragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0, dragMoved = false;
 
+  // Dragging can start anywhere on the canvas, including on top of a node -
+  // in a dense web, requiring an empty-pixel starting point turns every pan
+  // attempt into "click, drag, click" hunting for a gap. A stationary press
+  // still opens that node (dragMoved stays false); a press that moves is a
+  // pan, and the capture-phase click listener below swallows the resulting
+  // click before the node's own click handler ever sees it.
   stage.onpointerdown = (event) => {
     if (event.button !== undefined && event.button !== 0) return;
-    if (event.target.closest(".worker-node, .worker-web-exit, .worker-web-search")) return;
+    if (event.target.closest(".worker-web-exit, .worker-web-search")) return;
     dragging = true; dragMoved = false;
     dragStartX = event.clientX; dragStartY = event.clientY;
     panStartX = workerWebUi.pan.x; panStartY = workerWebUi.pan.y;
@@ -1971,10 +1977,13 @@ function wireWorkerWeb(el, rerender) {
     dragging = false;
     stage.releasePointerCapture(event.pointerId);
   };
-  stage.onclick = (event) => {
-    // a real drag shouldn't also register as a node-select click
-    if (dragMoved) { event.stopPropagation(); dragMoved = false; }
-  };
+  // Capture phase runs before the node button's own bubble-phase click
+  // handler, so stopping it here actually prevents the select - a bubble-
+  // phase listener on the stage would run too late (the button's handler
+  // already fired by then).
+  stage.addEventListener("click", (event) => {
+    if (dragMoved) { event.stopPropagation(); event.preventDefault(); dragMoved = false; }
+  }, true);
   stage.onwheel = (event) => {
     event.preventDefault();
     const rect = stage.getBoundingClientRect();
