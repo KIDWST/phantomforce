@@ -75,10 +75,15 @@ function canAskHermes(intent, settings) {
     && !intent.shouldCreateAutomation;
 }
 
+/* The backend chat route can walk up to 4 providers (Codex, Claude CLI,
+   OpenRouter, local Ollama) before giving up, each capped at 20-30s server
+   side — worst case lands around 110s. This timeout must stay above that or
+   the UI aborts before the backend's own fallback chain finishes and silently
+   drops to the local canned responder in handleCommand() below. */
 async function askHermesBrain(raw, intent, settings) {
   if (typeof fetch !== "function" || typeof AbortController === "undefined") return null;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6500);
+  const timeout = setTimeout(() => controller.abort(), 140000);
   const token = typeof session?.token === "function" ? session.token() : "";
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;

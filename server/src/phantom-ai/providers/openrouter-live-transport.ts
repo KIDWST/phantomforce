@@ -19,8 +19,11 @@ type OpenRouterFetch = (
     method: "POST";
     headers: Record<string, string>;
     body: string;
+    signal?: AbortSignal;
   },
 ) => Promise<OpenRouterFetchResponse>;
+
+const DEFAULT_OPENROUTER_TIMEOUT_MS = 45000;
 
 export type OpenRouterGlm52ChatInput = {
   requestId: string;
@@ -223,6 +226,10 @@ export async function callOpenRouterGlm52(
     max_tokens: input.maxTokens ?? 700,
   });
 
+  const timeoutMs = Number(env.PHANTOM_OPENROUTER_TIMEOUT_MS ?? DEFAULT_OPENROUTER_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), Number.isFinite(timeoutMs) ? timeoutMs : DEFAULT_OPENROUTER_TIMEOUT_MS);
+
   try {
     const response = await fetchImpl(OPENROUTER_CHAT_COMPLETIONS_ENDPOINT, {
       method: "POST",
@@ -233,6 +240,7 @@ export async function callOpenRouterGlm52(
         "X-Title": "PhantomForce Local PhantomAI",
       },
       body,
+      signal: controller.signal,
     });
     const json = await response.json().catch(async () => {
       const text = await response.text().catch(() => "");
@@ -272,13 +280,16 @@ export async function callOpenRouterGlm52(
       usage: extractUsage(json),
     };
   } catch (error) {
+    const timedOut = error instanceof Error && error.name === "AbortError";
     return {
       provider_id: OPENROUTER_GLM_PROVIDER_ID,
       model_id: OPENROUTER_GLM_52_MODEL_ID,
       endpoint: OPENROUTER_CHAT_COMPLETIONS_ENDPOINT,
       status: "error",
       blocked_reason: null,
-      error_message: redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000),
+      error_message: timedOut
+        ? `OpenRouter did not respond within ${timeoutMs}ms.`
+        : redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000),
       output_text: "OpenRouter transport failed before Phantom AI received a model response.",
       provider_called: false,
       network_call_performed: true,
@@ -300,5 +311,7 @@ export async function callOpenRouterGlm52(
         total_tokens: null,
       },
     };
+  } finally {
+    clearTimeout(timer);
   }
 }

@@ -121,23 +121,33 @@ function psSingleQuoted(value: string) {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
-export async function callCodexCliChat(input: CodexCliChatInput): Promise<CodexCliChatResult> {
+export async function callCodexCliChat(
+  input: CodexCliChatInput,
+  options: { env?: NodeJS.ProcessEnv | Record<string, string | undefined> } = {},
+): Promise<CodexCliChatResult> {
+  const env = options.env ?? process.env;
   const started = Date.now();
-  const tempDir = await mkdtemp(join(tmpdir(), "phantom-codex-chat-"));
-  const promptPath = join(tempDir, "prompt.txt");
-  const outputPath = join(tempDir, "last-message.txt");
-  const scriptPath = join(tempDir, "run-codex.ps1");
   const cwd = resolveCodexCwd(input.cwd);
-  const model = process.env.PHANTOM_CODEX_MODEL?.trim() || DEFAULT_CODEX_MODEL;
-  const timeout = Number(process.env.PHANTOM_CODEX_TIMEOUT_MS ?? 120000);
-  const configuredSandbox = process.env.PHANTOM_CODEX_SANDBOX?.trim() || "workspace-write";
+  const model = env.PHANTOM_CODEX_MODEL?.trim() || DEFAULT_CODEX_MODEL;
+  const timeout = Number(env.PHANTOM_CODEX_TIMEOUT_MS ?? 120000);
+  const configuredSandbox = env.PHANTOM_CODEX_SANDBOX?.trim() || "workspace-write";
   const sandbox = ["read-only", "workspace-write", "danger-full-access"].includes(configuredSandbox)
     ? configuredSandbox
     : "workspace-write";
-
-  await writeFile(promptPath, buildPrompt(input), "utf8");
+  // tempDir creation and prompt/script writes live inside the try below too —
+  // this whole function must resolve to a CodexCliChatResult and never reject,
+  // otherwise a bad temp dir (disk full, permissions) would throw past every
+  // caller's fallback chain instead of triggering a clean provider switch.
+  let tempDir: string | null = null;
 
   try {
+    tempDir = await mkdtemp(join(tmpdir(), "phantom-codex-chat-"));
+    const promptPath = join(tempDir, "prompt.txt");
+    const outputPath = join(tempDir, "last-message.txt");
+    const scriptPath = join(tempDir, "run-codex.ps1");
+
+    await writeFile(promptPath, buildPrompt(input), "utf8");
+
     const script = [
       "$ErrorActionPreference = 'Stop'",
       `$promptPath = ${psSingleQuoted(promptPath)}`,
@@ -209,6 +219,6 @@ export async function callCodexCliChat(input: CodexCliChatInput): Promise<CodexC
       seconds: Number(((Date.now() - started) / 1000).toFixed(2)),
     };
   } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
+    if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch(() => undefined);
   }
 }

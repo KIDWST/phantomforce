@@ -936,6 +936,211 @@ function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
   return "local" as const;
 }
 
+/* Admin Phantom AI chat fallback chain -----------------------------------
+   Jordan picks a lane (Codex/Claude/GLM) in Settings, but a single dead
+   provider (Codex out of usage, Claude CLI missing, Ollama not pulled)
+   should never leave the chat silent when three other configured brains
+   could answer. Every attempt below shares the same request context, so
+   Phantom auto-retries the remaining providers in a fixed order until one
+   actually answers, then tells Jordan which brain it fell back to. */
+type AdminPhantomAiProviderId = "codex_cli" | "claude_cli" | "openrouter_glm" | "local_ollama";
+
+function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPhantomAiProviderId {
+  if (lane === "claude_cli") return "claude_cli";
+  if (lane === "glm_5_2") return process.env.PHANTOM_FORCE_OPENROUTER_GLM === "true" ? "openrouter_glm" : "local_ollama";
+  return "codex_cli";
+}
+
+function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): AdminPhantomAiModelLane {
+  if (providerId === "claude_cli") return "claude_cli";
+  if (providerId === "codex_cli") return "codex";
+  return "glm_5_2";
+}
+
+function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
+  if (providerId === "codex_cli") return "Private Brain (Codex)";
+  if (providerId === "claude_cli") return "Claude CLI";
+  if (providerId === "openrouter_glm") return "OpenRouter GLM 5.2";
+  return "Local GLM (Ollama)";
+}
+
+function adminPhantomAiFallbackOrder(primary: AdminPhantomAiProviderId): AdminPhantomAiProviderId[] {
+  const all: AdminPhantomAiProviderId[] = ["codex_cli", "claude_cli", "openrouter_glm", "local_ollama"];
+  return [primary, ...all.filter((id) => id !== primary)];
+}
+
+type AdminPhantomAiChatContext = {
+  requestId: string;
+  businessName: string;
+  taskType: string;
+  userMessage: string;
+  compactContext: string;
+  sensitivityLevel: SensitivityLevel;
+  approvalRequired: boolean;
+  executionMode: "approval" | "auto";
+};
+
+/* Fallback attempts get shorter per-provider timeouts than a direct single-lane
+   call would use (Codex's own default is 120s). Admin chat may have to walk all
+   four providers in one request, so each hop is capped tightly enough that the
+   worst-case total stays inside the frontend's chat request timeout instead of
+   quietly burning minutes before the user sees anything. */
+const ADMIN_CHAT_FALLBACK_TIMEOUT_MS = {
+  codex_cli: 30000,
+  claude_cli: 30000,
+  openrouter_glm: 20000,
+  local_ollama: 25000,
+} as const;
+
+async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, ctx: AdminPhantomAiChatContext) {
+  if (providerId === "codex_cli") {
+    return callCodexCliChat(
+      {
+        requestId: ctx.requestId,
+        businessName: ctx.businessName,
+        taskType: ctx.taskType,
+        userMessage: ctx.userMessage,
+        compactContext: ctx.compactContext,
+        approvalRequired: ctx.approvalRequired,
+        executionMode: ctx.executionMode,
+        cwd: process.cwd(),
+      },
+      {
+        env: {
+          ...process.env,
+          PHANTOM_CODEX_TIMEOUT_MS: String(ADMIN_CHAT_FALLBACK_TIMEOUT_MS.codex_cli),
+        },
+      },
+    );
+  }
+  if (providerId === "claude_cli") {
+    return callClaudeCliChat({
+      requestId: ctx.requestId,
+      businessName: ctx.businessName,
+      taskType: ctx.taskType,
+      userMessage: ctx.userMessage,
+      compactContext: ctx.compactContext,
+      sensitivityLevel: ctx.sensitivityLevel,
+      approvalRequired: ctx.approvalRequired,
+      executionMode: ctx.executionMode,
+      timeoutMs: ADMIN_CHAT_FALLBACK_TIMEOUT_MS.claude_cli,
+    });
+  }
+  if (providerId === "openrouter_glm") {
+    return callOpenRouterGlm52(
+      {
+        requestId: ctx.requestId,
+        businessName: ctx.businessName,
+        taskType: ctx.taskType,
+        userMessage: ctx.userMessage,
+        compactContext: ctx.compactContext,
+        sensitivityLevel: ctx.sensitivityLevel,
+        approvalRequired: ctx.approvalRequired,
+        executionMode: ctx.executionMode,
+        adminOperatorLane: true,
+      },
+      {
+        env: {
+          ...process.env,
+          PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
+          PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
+          PHANTOM_OPENROUTER_TIMEOUT_MS: String(ADMIN_CHAT_FALLBACK_TIMEOUT_MS.openrouter_glm),
+        },
+      },
+    );
+  }
+  return callLocalOllamaChat(
+    {
+      requestId: ctx.requestId,
+      businessName: ctx.businessName,
+      taskType: ctx.taskType,
+      userMessage: ctx.userMessage,
+      compactContext: ctx.compactContext,
+      sensitivityLevel: ctx.sensitivityLevel,
+      approvalRequired: ctx.approvalRequired,
+      executionMode: ctx.executionMode,
+      adminOperatorLane: true,
+    },
+    {
+      env: {
+        ...process.env,
+        OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434",
+        PHANTOM_LOCAL_MODEL_AVAILABLE: "true",
+        PHANTOM_OLLAMA_TIMEOUT_MS: String(ADMIN_CHAT_FALLBACK_TIMEOUT_MS.local_ollama),
+      },
+    },
+  );
+}
+
+function isAdminPhantomAiResultUsable(result: { status: string }) {
+  return result.status === "called";
+}
+
+function adminPhantomAiResultErrorMessage(result: Record<string, unknown>) {
+  if (typeof result.error_message === "string" && result.error_message) return result.error_message;
+  if (typeof result.blocked_reason === "string" && result.blocked_reason) return result.blocked_reason;
+  return `status: ${String(result.status ?? "unknown")}`;
+}
+
+type AdminPhantomAiChatAttempt = {
+  provider_id: AdminPhantomAiProviderId;
+  status: string;
+  error_message: string | null;
+};
+
+async function callAdminPhantomAiProviderSafe(providerId: AdminPhantomAiProviderId, ctx: AdminPhantomAiChatContext): Promise<any> {
+  try {
+    return await callAdminPhantomAiProvider(providerId, ctx);
+  } catch (error) {
+    return {
+      provider_id: providerId,
+      model_id: providerId,
+      status: "error" as const,
+      output_text: "",
+      error_message: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
+async function runAdminPhantomAiChatWithFallback(requestedLane: AdminPhantomAiModelLane, ctx: AdminPhantomAiChatContext) {
+  const primaryProviderId = adminPhantomAiProviderIdForLane(requestedLane);
+  const order = adminPhantomAiFallbackOrder(primaryProviderId);
+  const attempts: AdminPhantomAiChatAttempt[] = [];
+  let providerId = primaryProviderId;
+  let result: any = await callAdminPhantomAiProviderSafe(providerId, ctx);
+
+  for (const candidate of order) {
+    if (candidate !== primaryProviderId) {
+      providerId = candidate;
+      result = await callAdminPhantomAiProviderSafe(providerId, ctx);
+    }
+    const usable = isAdminPhantomAiResultUsable(result as { status: string });
+    attempts.push({
+      provider_id: providerId,
+      status: (result as { status: string }).status,
+      error_message: usable ? null : adminPhantomAiResultErrorMessage(result as Record<string, unknown>),
+    });
+    if (usable) {
+      return { providerId, result, attempts, primaryProviderId, fallbackUsed: providerId !== primaryProviderId, allFailed: false };
+    }
+  }
+
+  return { providerId, result, attempts, primaryProviderId, fallbackUsed: true, allFailed: true };
+}
+
+function buildAdminPhantomAiAllProvidersFailedMessage(attempts: AdminPhantomAiChatAttempt[]) {
+  const lines = attempts.map(
+    (attempt) => `- ${adminPhantomAiProviderLabel(attempt.provider_id)}: ${attempt.error_message ?? "no response"}`,
+  );
+  return [
+    "Phantom couldn't reach any configured AI provider just now.",
+    "",
+    ...lines,
+    "",
+    "Check Codex usage limits, Claude CLI auth, OpenRouter key/flags, and whether Ollama is running, then try again.",
+  ].join("\n");
+}
+
 type PendingPrivacyIntent = {
   kind: "weather";
   created_at_ms: number;
@@ -4410,83 +4615,23 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         : [],
     });
     const approvalRequired = brainContext.needsApproval || preview.decision.approval_required || preview.action_preview.approval_required;
-    const adminResult =
-      adminModelLane === "glm_5_2"
-        ? process.env.PHANTOM_FORCE_OPENROUTER_GLM === "true"
-          ? {
-              lane: adminModelLane,
-              model_id: await callOpenRouterGlm52(
-                {
-                  requestId: normalized.request_id,
-                  businessName: normalized.business_name,
-                  taskType: normalized.task_type,
-                  userMessage: normalized.user_request,
-                  compactContext: memoryContext.augmented_context_preview,
-                  sensitivityLevel: preview.decision.sensitivity_level,
-                  approvalRequired,
-                  executionMode: adminExecutionMode,
-                  adminOperatorLane: true,
-                },
-                {
-                  env: {
-                    ...process.env,
-                    PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
-                    PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
-                  },
-                },
-              ),
-            }
-          : {
-              lane: adminModelLane,
-              model_id: await callLocalOllamaChat(
-                {
-                  requestId: normalized.request_id,
-                  businessName: normalized.business_name,
-                  taskType: normalized.task_type,
-                  userMessage: normalized.user_request,
-                  compactContext: memoryContext.augmented_context_preview,
-                  sensitivityLevel: preview.decision.sensitivity_level,
-                  approvalRequired,
-                  executionMode: adminExecutionMode,
-                  adminOperatorLane: true,
-                },
-                {
-                  env: {
-                    ...process.env,
-                    OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434",
-                    PHANTOM_LOCAL_MODEL_AVAILABLE: "true",
-                  },
-                },
-              ),
-            }
-        : adminModelLane === "claude_cli"
-          ? {
-              lane: adminModelLane,
-              model_id: await callClaudeCliChat({
-                requestId: normalized.request_id,
-                businessName: normalized.business_name,
-                taskType: normalized.task_type,
-                userMessage: normalized.user_request,
-                compactContext: memoryContext.augmented_context_preview,
-                sensitivityLevel: preview.decision.sensitivity_level,
-                approvalRequired,
-                executionMode: adminExecutionMode,
-              }),
-            }
-          : {
-              lane: adminModelLane,
-              model_id: await callCodexCliChat({
-                requestId: normalized.request_id,
-                businessName: normalized.business_name,
-                taskType: normalized.task_type,
-                userMessage: normalized.user_request,
-                compactContext: memoryContext.augmented_context_preview,
-                approvalRequired,
-                executionMode: adminExecutionMode,
-                cwd: process.cwd(),
-              }),
-            };
-    const modelResult = adminResult.model_id;
+    const fallbackChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
+      requestId: normalized.request_id,
+      businessName: normalized.business_name,
+      taskType: normalized.task_type,
+      userMessage: normalized.user_request,
+      compactContext: memoryContext.augmented_context_preview,
+      sensitivityLevel: preview.decision.sensitivity_level,
+      approvalRequired,
+      executionMode: adminExecutionMode,
+    });
+    const respondingProviderId = fallbackChat.providerId;
+    const respondingLane = adminPhantomAiLaneForProviderId(respondingProviderId);
+    const respondingLabel = adminPhantomAiProviderLabel(respondingProviderId);
+    const respondingProviderRoute = adminPhantomAiProviderRoute(respondingLane);
+    const fallbackSwitched = fallbackChat.fallbackUsed && !fallbackChat.allFailed;
+    const allProvidersFailed = fallbackChat.allFailed;
+    const modelResult = fallbackChat.result;
     const resultStatus = "status" in modelResult ? modelResult.status : "called";
     const resultError =
       "error_message" in modelResult && typeof modelResult.error_message === "string"
@@ -4512,25 +4657,29 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       request_id: normalized.request_id,
       task_type: normalized.task_type,
       sensitivity_level: preview.decision.sensitivity_level,
-      provider_route: adminProviderRoute,
+      provider_route: respondingProviderRoute,
       model_id: modelResult.model_id,
       context_chars: memoryContext.augmented_context_chars,
       estimated_tokens: Math.ceil(memoryContext.augmented_context_chars / 4),
       estimated_cost_usd: null,
       user_request_summary: redactSensitiveText(normalized.user_request).replace(/\s+/g, " ").slice(0, 240),
       result_summary: redactSensitiveText(
-        toolExecuted
-          ? `${adminModelLabel} executed ${toolName ?? "tool"} and returned a receipt.`
-          : providerCalled
-            ? `${adminModelLabel} returned a Hermes-backed admin response.`
-            : `${adminModelLabel} did not complete: ${resultBlocked ?? resultError ?? resultStatus}`,
+        allProvidersFailed
+          ? `All admin AI providers failed (${fallbackChat.attempts.map((a) => adminPhantomAiProviderLabel(a.provider_id)).join(", ")}).`
+          : toolExecuted
+            ? `${respondingLabel} executed ${toolName ?? "tool"} and returned a receipt.`
+            : providerCalled
+              ? `${respondingLabel} returned a Hermes-backed admin response${fallbackSwitched ? ` (fallback from ${adminPhantomAiProviderLabel(fallbackChat.primaryProviderId)})` : ""}.`
+              : `${respondingLabel} did not complete: ${resultBlocked ?? resultError ?? resultStatus}`,
       ).slice(0, 360),
       approval_required: approvalRequired,
       approval_status: approvalRequired ? "pending" : "not_required",
       risks: preview.decision.risks.map((risk) => redactSensitiveText(risk)).slice(0, 8),
-      next_action: toolExecuted
-        ? "Review the operator receipt in Phantom AI."
-        : `Continue in Phantom AI with ${adminModelLabel} or switch admin model lanes.`,
+      next_action: allProvidersFailed
+        ? "Check Codex usage limits, Claude CLI auth, OpenRouter key/flags, and Ollama status, then retry."
+        : toolExecuted
+          ? "Review the operator receipt in Phantom AI."
+          : `Continue in Phantom AI with ${respondingLabel} or switch admin model lanes.`,
       agent_run_id: `phantom-ai-admin-${adminModelLane}-${normalized.request_id}`,
       parent_task_id: normalized.request_id,
     };
@@ -4546,8 +4695,11 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       safeForMemory: false,
       source: "phantom_ai_chat",
       metadata: {
-        providerRoute: adminProviderRoute,
-        modelLane: adminModelLane,
+        providerRoute: respondingProviderRoute,
+        modelLane: respondingLane,
+        requestedModelLane: adminModelLane,
+        fallbackUsed: fallbackSwitched,
+        allProvidersFailed,
         approvalRequired,
         providerCalled,
       },
@@ -4558,16 +4710,23 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       ok: true,
       session,
       provider_choice: "phantom",
-      admin_model_lane: publicAdminPhantomAiModelLane(adminModelLane),
-      admin_model_label: adminModelLabel,
+      admin_model_lane: publicAdminPhantomAiModelLane(respondingLane),
+      admin_model_label: respondingLabel,
+      admin_model_requested_lane: publicAdminPhantomAiModelLane(adminModelLane),
       admin_execution_mode: adminExecutionMode,
-      model_id: adminModelLane === "codex" ? "phantom-private-brain" : modelResult.model_id,
+      model_id: respondingProviderId === "codex_cli" ? "phantom-private-brain" : modelResult.model_id,
       message: {
         role: "assistant",
-        content: resultError ? `${resultOutput}\n\n${adminModelLabel} error: ${resultError}` : resultOutput,
+        content: allProvidersFailed
+          ? buildAdminPhantomAiAllProvidersFailedMessage(fallbackChat.attempts)
+          : fallbackSwitched
+            ? `_(${adminPhantomAiProviderLabel(fallbackChat.primaryProviderId)} was unavailable — auto-switched to ${respondingLabel}.)_\n\n${resultOutput}`
+            : resultError
+              ? `${resultOutput}\n\n${respondingLabel} error: ${resultError}`
+              : resultOutput,
       },
       operator:
-        adminModelLane === "codex" && "tool_requested" in modelResult
+        respondingProviderId === "codex_cli" && "tool_requested" in modelResult
           ? {
               status: modelResult.status,
               admin_only: modelResult.admin_only,
@@ -4579,7 +4738,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             }
           : null,
       private_brain:
-        adminModelLane === "codex" && "provider_id" in modelResult && modelResult.provider_id === "codex_cli"
+        respondingProviderId === "codex_cli" && "provider_id" in modelResult && modelResult.provider_id === "codex_cli"
           ? {
               status: modelResult.status,
               model_id: "phantom-private-brain",
@@ -4593,18 +4752,21 @@ app.post("/phantom-ai/chat", async (request, reply) => {
             }
           : null,
       openrouter:
-        adminModelLane === "glm_5_2" && "provider_id" in modelResult && modelResult.provider_id === "openrouter_glm"
-          ? modelResult
-          : null,
+        "provider_id" in modelResult && modelResult.provider_id === "openrouter_glm" ? modelResult : null,
       local_ollama:
-        adminModelLane === "glm_5_2" && "provider_id" in modelResult && modelResult.provider_id === "local_ollama"
-          ? modelResult
-          : null,
-      claude_cli: adminModelLane === "claude_cli" ? modelResult : null,
+        "provider_id" in modelResult && modelResult.provider_id === "local_ollama" ? modelResult : null,
+      claude_cli: respondingProviderId === "claude_cli" ? modelResult : null,
+      fallback: {
+        used: fallbackSwitched,
+        all_failed: allProvidersFailed,
+        requested_provider: adminPhantomAiProviderLabel(fallbackChat.primaryProviderId),
+        responding_provider: respondingLabel,
+        attempts: fallbackChat.attempts,
+      },
       hermes: {
         context_used: true,
         ledger_written: true,
-        provider_route: adminProviderRoute,
+        provider_route: respondingProviderRoute,
         recalled_memory_count: memoryContext.memory.recalled_count,
       },
       brain: {
