@@ -8484,6 +8484,14 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 24px rgba(65, 255, 161, 0.12);
   backdrop-filter: blur(8px); pointer-events: none;
 }
+.buddy[data-dock="sidebar"] .buddy-say {
+  left: 8px;
+  right: auto;
+  transform: none;
+  max-width: 188px;
+  text-align: left;
+  border-radius: 14px 14px 14px 5px;
+}
 .buddy[data-state="notifying"] .buddy-canvas,
 .buddy[data-state="celebrating"] .buddy-canvas {
   filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 30px rgba(65, 255, 161, 0.24));

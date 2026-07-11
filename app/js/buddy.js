@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-189";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-190";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,12 +10,13 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260711-189";
+} from "./companion-preferences.js?v=phantom-live-20260711-190";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
 const GREETED_SESSION_KEY = "pf.companion.greeted.session.v1";
 const LAST_GREETING_KEY = "pf.companion.lastGreeting.v1";
+const LAST_QUIP_KEY = "pf.companion.lastQuip.v1";
 
 const GREETINGS = {
   professional: ["Ready when you are.", "Your Phantom is standing by.", "Systems are ready.", "Good timing. We have work to do."],
@@ -24,11 +25,22 @@ const GREETINGS = {
   quiet: ["Ready.", "Standing by.", "Online."],
 };
 
+const BASE_QUIPS = [
+  "I run the boring half. You take the glory.",
+  "Every desk is watching. Nothing slips.",
+  "Say the word and it becomes work.",
+  "I never sleep. It's a whole thing.",
+  "Approvals first. Chaos never.",
+  "Your calendar fears me.",
+  "Caught three threats before breakfast.",
+  "Docked, not domesticated.",
+];
+
 const QUIPS = {
-  professional: ["Standing by.", "Docked and watching.", "Approval gates stay on.", "Nothing external moves without you."],
-  friendly: ["I'm here.", "Tell me where to look.", "I can stay docked.", "Your Phantom is nearby."],
-  playful: ["I fit better over here.", "Small Phantom, serious job.", "I promise not to hover over the buttons.", "Dock me if I get dramatic."],
-  quiet: ["Here.", "Ready.", "Docked."],
+  professional: ["Standing by.", "Approval gates stay on.", "Nothing external moves without you.", ...BASE_QUIPS],
+  friendly: ["I'm here.", "Tell me where to look.", "Your Phantom is nearby.", ...BASE_QUIPS],
+  playful: ["I fit better over here.", "Small Phantom, serious job.", "I promise not to hover over the buttons.", "Haunting the sidebar. Professionally.", ...BASE_QUIPS],
+  quiet: ["Here.", "Ready.", "Docked.", "Approvals first."],
 };
 
 const STATE_LOOK = {
@@ -104,7 +116,7 @@ function createBuddyController() {
   function sidebarRect() {
     const sidebar = document.querySelector(".sidebar")?.getBoundingClientRect();
     if (sidebar && sidebar.width > 120) return sidebar;
-    return { left: 0, width: window.innerWidth > 900 ? 212 : 0 };
+    return { left: 0, top: 0, width: window.innerWidth > 900 ? 212 : 0 };
   }
 
   function safeInsets() {
@@ -127,17 +139,35 @@ function createBuddyController() {
     return map[prefs.size] || map.standard;
   }
 
+  function sidebarPatrolBounds() {
+    const inset = safeInsets();
+    const half = size / 2;
+    const side = sidebarRect();
+    const minX = side.left + 14 + half;
+    const maxX = side.left + side.width - 14 - half;
+    const minY = Math.min(
+      window.innerHeight - inset.bottom - half,
+      Math.max(side.top + 520, window.innerHeight * 0.58),
+    );
+    const maxY = window.innerHeight - inset.bottom - half;
+    return {
+      minX,
+      maxX: Math.max(minX, maxX),
+      minY,
+      maxY: Math.max(minY, maxY),
+    };
+  }
+
   function dockPoint() {
     const inset = safeInsets();
     const half = size / 2;
     const dock = mobile() && prefs.dockLocation === "sidebar" ? "bottom-right" : prefs.dockLocation;
     if (dock === "bottom-left") return { x: inset.left + half, y: window.innerHeight - inset.bottom - half };
     if (dock === "sidebar") {
-      const side = sidebarRect();
-      const sideCenter = side.left + side.width / 2;
+      const bounds = sidebarPatrolBounds();
       return {
-        x: Math.max(half + 10, Math.min(side.left + side.width - half - 10, sideCenter)),
-        y: window.innerHeight - inset.bottom - half,
+        x: (bounds.minX + bounds.maxX) / 2,
+        y: bounds.maxY,
       };
     }
     return { x: window.innerWidth - inset.right - half, y: window.innerHeight - inset.bottom - half };
@@ -146,6 +176,12 @@ function createBuddyController() {
   function clampToSafeZone() {
     const inset = safeInsets();
     const half = size / 2;
+    if (!mobile() && prefs.dockLocation === "sidebar") {
+      const bounds = sidebarPatrolBounds();
+      x = Math.max(bounds.minX, Math.min(bounds.maxX, x));
+      y = Math.max(bounds.minY, Math.min(bounds.maxY, y));
+      return;
+    }
     x = Math.max(inset.left + half, Math.min(window.innerWidth - inset.right - half, x));
     y = Math.max(inset.top + half, Math.min(window.innerHeight - inset.bottom - half, y));
   }
@@ -180,7 +216,7 @@ function createBuddyController() {
     layer.setAttribute("data-buddy", "");
     layer.innerHTML = `
       <div class="buddy-say" data-buddy-say hidden></div>
-      <canvas class="buddy-canvas" data-buddy-canvas width="10" height="10" aria-label="Phantom companion. Drag to move, double-click to dock, right-click for controls." role="img" tabindex="0"></canvas>
+      <canvas class="buddy-canvas" data-buddy-canvas width="10" height="10" aria-label="Phantom companion. Left-click for a quip, drag to bounce in the sidebar, right-click for controls." role="img" tabindex="0"></canvas>
       <div class="buddy-menu" data-buddy-menu hidden role="menu" aria-label="Phantom companion controls">
         <b>Phantom</b>
         <button type="button" data-buddy-action="ask" role="menuitem">Ask Phantom</button>
@@ -296,6 +332,16 @@ function createBuddyController() {
     return next;
   }
 
+  function quipText() {
+    const pool = QUIPS[prefs.personality] || QUIPS.friendly;
+    let last = "";
+    try { last = localStorage.getItem(LAST_QUIP_KEY) || ""; } catch {}
+    const options = pool.filter((item) => item !== last);
+    const next = (options.length ? options : pool)[Math.floor(Math.random() * (options.length ? options.length : pool.length))];
+    try { localStorage.setItem(LAST_QUIP_KEY, next); } catch {}
+    return next;
+  }
+
   function maybeGreet() {
     if (!layer || !canGreetNow()) return;
     markGreeted();
@@ -345,6 +391,7 @@ function createBuddyController() {
   function dock() {
     docked = true;
     setTargetToDock();
+    nextWanderAt = 0;
     setState("docked", 0);
     try { localStorage.setItem(LEGACY_DOCK_KEY, "1"); } catch {}
     applyPreferenceClasses();
@@ -356,8 +403,18 @@ function createBuddyController() {
 
   function pickWanderTarget(now, force = false) {
     if (!force && now < nextWanderAt) return;
+    if (docked && prefs.dockLocation === "sidebar" && !mobile() && motionAllowed() && !userBusy()) {
+      const bounds = sidebarPatrolBounds();
+      const width = Math.max(1, bounds.maxX - bounds.minX);
+      const height = Math.max(1, bounds.maxY - bounds.minY);
+      tx = bounds.minX + width * (0.28 + Math.random() * 0.44);
+      ty = bounds.minY + height * Math.random();
+      nextWanderAt = now + 2200 + Math.random() * 3400;
+      return;
+    }
     if (!roamingAllowed() || docked || userBusy()) {
       setTargetToDock();
+      nextWanderAt = now + 1600;
       return;
     }
     const inset = safeInsets();
@@ -482,9 +539,9 @@ function createBuddyController() {
         dock();
         say("I'll stay in the sidebar.", 1600);
       } else {
-        setState("curious", 1200);
-        const pool = QUIPS[prefs.personality] || QUIPS.friendly;
-        say(pool[Math.floor(Math.random() * pool.length)], 2200);
+        setState(prefs.personality === "quiet" ? "curious" : "playful", 1400);
+        pulse = Math.max(pulse, 0.85);
+        say(quipText(), 2400);
       }
       applyPreferenceClasses();
     };
@@ -545,18 +602,20 @@ function createBuddyController() {
       if (document.body.classList.contains("overlay-open")) {
         setTargetToDock();
       } else if (!dragging) {
-        if (docked || !roamingAllowed() || userBusy()) setTargetToDock();
+        if (docked) pickWanderTarget(now);
+        else if (!roamingAllowed() || userBusy()) setTargetToDock();
         else pickWanderTarget(now);
       }
 
       if (!dragging) {
-        const k = docked || !roamingAllowed() || reduceMotion() ? 0.12 : 0.026;
+        const sidebarAlive = docked && prefs.dockLocation === "sidebar" && !mobile() && motionAllowed() && !userBusy();
+        const k = docked || !roamingAllowed() || reduceMotion() ? (sidebarAlive ? 0.055 : 0.12) : 0.026;
         vx += (tx - x) * k * dt * 60;
         vy += (ty - y) * k * dt * 60;
-        vx *= docked ? 0.76 : 0.92;
-        vy *= docked ? 0.76 : 0.92;
-        x += vx;
-        y += vy + (reduceMotion() ? 0 : Math.sin(t * 1.25) * (docked ? 0.12 : 0.34));
+        vx *= docked ? (sidebarAlive ? 0.91 : 0.76) : 0.92;
+        vy *= docked ? (sidebarAlive ? 0.91 : 0.76) : 0.92;
+        x += vx + (sidebarAlive ? Math.sin(t * 1.7) * 0.18 : 0);
+        y += vy + (reduceMotion() ? 0 : Math.sin(t * 1.25) * (sidebarAlive ? 0.52 : docked ? 0.12 : 0.34));
         clampToSafeZone();
       }
 
@@ -564,11 +623,13 @@ function createBuddyController() {
       pulse = Math.max(0, pulse - dt * 1.1);
       applyPreferenceClasses();
 
-      const tilt = reduceMotion() || docked ? 0 : Math.max(-10, Math.min(10, vx * 1.2));
-      const flourish = state === "playful" && prefs.personality === "playful" && !reduceMotion()
-        ? Math.sin(t * 8) * 7
+      const sidebarAlive = docked && prefs.dockLocation === "sidebar" && !mobile() && motionAllowed() && !userBusy();
+      const tilt = reduceMotion() || (docked && !sidebarAlive) ? 0 : Math.max(-10, Math.min(10, vx * 1.2));
+      const dockTwirl = sidebarAlive ? Math.sin(t * 2.4) * 8 + Math.sin(t * 0.7) * 3 : 0;
+      const flourish = state === "playful" && prefs.personality !== "quiet" && !reduceMotion()
+        ? Math.sin(t * 8) * 8
         : 0;
-      layer.style.transform = `translate(${(x - size / 2).toFixed(1)}px, ${(y - size / 2).toFixed(1)}px) rotate(${(tilt + flourish).toFixed(1)}deg)`;
+      layer.style.transform = `translate(${(x - size / 2).toFixed(1)}px, ${(y - size / 2).toFixed(1)}px) rotate(${(tilt + dockTwirl + flourish).toFixed(1)}deg)`;
 
       const look = STATE_LOOK[state] || STATE_LOOK.idle;
       const px = Math.max(-0.5, Math.min(0.5, (lastPointer.x - x) / 640));
