@@ -1904,7 +1904,7 @@ function workerWebEnabled() {
 // particular stage size.
 function computeWorkerWebAutoFit(stageEl, worldEl) {
   const stageRect = stageEl.getBoundingClientRect();
-  const nodes = worldEl.querySelectorAll(".worker-node");
+  const nodes = worldEl.querySelectorAll(".worker-node, .worker-cell-dot");
   if (!nodes.length || !stageRect.width || !stageRect.height) {
     return { x: stageRect.width / 2, y: stageRect.height / 2, zoom: 1 };
   }
@@ -1958,24 +1958,33 @@ function wireWorkerWeb(el, rerender) {
   // still opens that node (dragMoved stays false); a press that moves is a
   // pan, and the capture-phase click listener below swallows the resulting
   // click before the node's own click handler ever sees it.
+  let captured = false;
   stage.onpointerdown = (event) => {
     if (event.button !== undefined && event.button !== 0) return;
     if (event.target.closest(".worker-web-exit, .worker-web-search")) return;
-    dragging = true; dragMoved = false;
+    dragging = true; dragMoved = false; captured = false;
     dragStartX = event.clientX; dragStartY = event.clientY;
     panStartX = workerWebUi.pan.x; panStartY = workerWebUi.pan.y;
-    stage.setPointerCapture(event.pointerId);
+    // Pointer capture is NOT taken here - only once movement proves this is a
+    // real drag (below). Capturing immediately on every press would retarget
+    // the eventual click event to the stage itself, so a plain tap on a node
+    // (zero movement) would never reach that node's own click handler at all.
   };
   stage.onpointermove = (event) => {
     if (!dragging) return;
     const dx = event.clientX - dragStartX, dy = event.clientY - dragStartY;
-    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+    if (!dragMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+      dragMoved = true;
+      stage.setPointerCapture(event.pointerId);
+      captured = true;
+    }
+    if (!dragMoved) return;
     workerWebUi.pan = { x: panStartX + dx, y: panStartY + dy };
     applyWorkerWebTransform(world);
   };
   stage.onpointerup = (event) => {
     dragging = false;
-    stage.releasePointerCapture(event.pointerId);
+    if (captured) { stage.releasePointerCapture(event.pointerId); captured = false; }
   };
   // Capture phase runs before the node button's own bubble-phase click
   // handler, so stopping it here actually prevents the select - a bubble-
@@ -2042,9 +2051,12 @@ function wireWorkerWeb(el, rerender) {
 function renderWorkerMesh(workers, runtime = null) {
   const employeeNodes = workers.filter((worker) => worker.worker_type === "employee");
   const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
+  const cellNodes = workers.filter((worker) => worker.worker_type === "cell");
   const mobileWeb = window.matchMedia("(max-width: 560px)").matches;
   const cappedSubagents = subagentNodes.slice(0, mobileWeb ? 12 : 28);
   const overflowSubagents = subagentNodes.length - cappedSubagents.length;
+  const paintedCells = mobileWeb ? cellNodes.slice(0, 360) : cellNodes;
+  const hiddenCells = cellNodes.length - paintedCells.length;
   // Split subagents across two rings instead of cramming all of them onto one
   // band - the fullscreen web has real pan/zoom room now (auto-fit just zooms
   // out further to show a bigger layout), so use that room: fewer nodes per
@@ -2075,9 +2087,22 @@ function renderWorkerMesh(workers, runtime = null) {
       </button>`;
   };
 
+  const cellDot = (worker, index) => {
+    const layer = String(worker.neural_layer || "mapped").toLowerCase().replace(/[^a-z0-9_-]/g, "") || "mapped";
+    const group = workerMeshGroup(worker);
+    const ring = index % 12;
+    const angle = (index * 137.508 + ring * 9) % 360;
+    const radius = (mobileWeb ? 184 : 720) + ring * (mobileWeb ? 7 : 32) + ((index % 5) - 2) * (mobileWeb ? 2 : 6);
+    const size = mobileWeb ? 2 + (index % 3) : 2.4 + (index % 4) * 0.45;
+    const alpha = 0.32 + (index % 5) * 0.07;
+    const style = `--cell-angle:${angle}deg; --cell-radius:${radius}px; --cell-size:${size}px; --cell-alpha:${alpha}; --cell-delay:${(index % 17) * 0.18}s`;
+    return `<span class="worker-cell-dot worker-cell-${esc(layer)} worker-cell-${esc(group)}" style="${style}" title="${esc(worker.display_name)} — ${esc(worker.role)}"></span>`;
+  };
+
   const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index, employeeNodes.length, "core")).join("");
   const outerRingNodes = innerSubagents.map((worker, index) => webNode(worker, index, innerSubagents.length, "inner")).join("")
     + farSubagents.map((worker, index) => webNode(worker, index, farSubagents.length, "far")).join("");
+  const helperLaneDots = paintedCells.map((worker, index) => cellDot(worker, index)).join("");
 
   const observed = workers.filter((worker) => worker.has_activity).length;
   const waiting = workers.filter((worker) => worker.status === "waiting-approval").length;
@@ -2092,7 +2117,10 @@ function renderWorkerMesh(workers, runtime = null) {
       <div class="worker-mesh-stage ${webEnabled ? "is-web-active" : ""}" data-worker-web-stage>
         <div class="worker-web-world" data-worker-web-world ${webEnabled ? `style="transform: translate(${workerWebUi.pan.x}px, ${workerWebUi.pan.y}px) scale(${workerWebUi.zoom})"` : ""}>
           <div class="worker-mesh-rings" aria-hidden="true">
-            <span></span><span></span><span></span>
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="worker-cell-field" aria-hidden="true">
+            ${helperLaneDots}
           </div>
           <div class="worker-node-field">
             ${coreRingNodes}
@@ -2115,14 +2143,17 @@ function renderWorkerMesh(workers, runtime = null) {
             <span><i class="worker-legend-dot worker-legend-live"></i>Active</span>
             <span><i class="worker-legend-dot worker-legend-approval"></i>Waiting on you</span>
             <span><i class="worker-legend-dot worker-legend-ready"></i>Mapped</span>
+            <span><i class="worker-legend-dot worker-legend-cell"></i>Helper lane</span>
             <span><i class="worker-legend-dot worker-legend-blocked"></i>Offline</span>
             ${overflowSubagents > 0 ? `<span class="worker-legend-more">+${overflowSubagents} more subagents</span>` : ""}
+            ${hiddenCells > 0 ? `<span class="worker-legend-more">+${hiddenCells.toLocaleString()} helper lanes beyond mobile view</span>` : `<span class="worker-legend-more">${cellNodes.length.toLocaleString()} helper lanes rendered</span>`}
           </div>
           <div class="worker-mesh-readout">
             <span><b>${Number.isFinite(baselineOnline) ? baselineOnline : "—"}</b> baseline online</span>
             <span><b>${Number.isFinite(recentJobs) ? recentJobs : "—"}</b> jobs · 24h</span>
-            <span><b>${mapped}</b> capacity mapped</span>
+            <span><b>${mapped.toLocaleString()}</b> capacity mapped</span>
             <span><b>${waiting || "clear"}</b> approval queue</span>
+            <span><b>${cellNodes.length.toLocaleString()}</b> helper lanes</span>
             <span><b>${departments}</b> departments covered</span>
           </div>
         </div>

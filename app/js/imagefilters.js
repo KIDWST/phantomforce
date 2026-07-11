@@ -18,7 +18,7 @@ export function freshEditState() {
   return {
     brightness: 100, contrast: 100, saturate: 100, hue: 0, blur: 0, rotate: 0, flip: false,
     text: "", textStyle: freshTextStyle(),
-    bokeh: null, bokehBrush: 24,
+    bokeh: null, bokehBrush: 12,
   };
 }
 
@@ -108,13 +108,13 @@ export function removeBokehSpotNear(state, x, y) {
   const idx = nearestBokehSpot(state, x, y);
   if (idx === -1) return false;
   state.bokeh.spots.splice(idx, 1);
-  if (!state.bokeh.spots.length) state.bokeh = null;
+  if (!state.bokeh.spots.length && !state.bokeh.maskImg) state.bokeh = null;
   return true;
 }
 export function removeBokehSpotAt(state, index) {
   if (!state.bokeh || !state.bokeh.spots[index]) return false;
   state.bokeh.spots.splice(index, 1);
-  if (!state.bokeh.spots.length) state.bokeh = null;
+  if (!state.bokeh.spots.length && !state.bokeh.maskImg) state.bokeh = null;
   return true;
 }
 /* Nearest spot index within click distance (in normalized 0..1 space),

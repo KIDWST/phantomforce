@@ -9,14 +9,14 @@
 import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
-  estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
+  setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
 } from "./imagefilters.js?v=phantom-live-20260711-167";
 import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-167";
 import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-167";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
-  loadCompositionImages, renderComposition, drawCompositionOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
+  loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition,
 } from "./content-editor.js?v=phantom-live-20260711-167";
 
@@ -1278,7 +1278,7 @@ function freshLightbox(asset, extra = {}) {
     bg: { status: "idle", message: "" },
     bokehDetect: { status: "idle", message: "" },
     text: { open: false },
-    composition: freshComposition(), editorUndo: [], editorRedo: [], editorGesture: null,
+    composition: freshComposition(), editorUndo: [], editorRedo: [], editorGesture: null, subjectMaskUrl: "",
     ...cleanExtra,
   };
 }
@@ -1455,14 +1455,14 @@ function bokehBody(lb, s, esc) {
     ${detectUnavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">AI subject detection needs Local Background Removal connected — set it up in Settings → Media Engines.</p>` : ""}
     ${detect.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(detect.message || "Subject detection failed.")}</p>` : ""}
     ${hasMask && detect.status !== "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">AI detected the subject — the background blurs around its real shape, gaps included (e.g. between a cat's ears). Add focus spots below to touch it up.</p>` : ""}
-    <p class="ch-lb-bokeh-note">${esc(lb.subjectHint || (hasMask ? "Use \"Add focus spots\" for anything the AI missed." : spots.length ? "Click to add more focus, click a spot to select it, right-click to remove it." : "No subject detected yet — try \"AI detect subject\" above, or turn on \"Add focus spots\" to drop a manual point."))}</p>
-    ${chBSlider("Brush size", "r", 8, 45, s.bokehBrush || 24)}
+    <p class="ch-lb-bokeh-note">${esc(lb.subjectHint || (hasMask ? "The detected subject is protected from blur and outlined on canvas. Add a small touch-up only if part of the subject was missed." : spots.length ? "Manual touch-ups keep those circles sharp. AI Detect is better for a full person or object." : "Detect the full subject first. Manual touch-ups are only for small areas the detector misses."))}</p>
+    ${chBSlider("Touch-up size", "r", 4, 30, s.bokehBrush || 12)}
     ${s.bokeh ? chBSlider("Background blur", "strength", 4, 32, s.bokeh.strength) : ""}
     ${s.bokeh ? chBSlider("Feather", "feather", 5, 90, Math.round((s.bokeh.feather ?? 0.45) * 100)) : ""}
     <label class="ch-lb-check"><input type="checkbox" data-ch-lb-remember-size ${lb.rememberBokehSize ? "checked" : ""}/> Remember size for next point</label>
     <div class="ch-lb-chips">
-      <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Adding focus… (click Done)" : "Add focus spots"}</button>
-      ${s.bokeh ? `<button type="button" data-ch-lb-bokeh-off>Clear all</button>` : ""}
+      <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Adding touch-up… (click Done)" : "Add manual touch-up"}</button>
+      ${s.bokeh ? `<button type="button" data-ch-lb-bokeh-off>Clear bokeh</button>` : ""}
     </div>
     ${selected ? `
     <div class="ch-lb-bokeh-selected">
@@ -1557,6 +1557,7 @@ function layerStackBody(lb, esc) {
   const compositionLayers = [...lb.composition.layers].reverse();
   const selected = new Set(lb.composition.selectedIds);
   const effectRows = [
+    ...(lb.state.bokeh?.maskImg ? [{ key: "subject", label: "Detected subject", active: layerVisible(lb, "subject") }] : []),
     ...(lb.cutoutUrl ? [{ key: "cutout", label: "Background removal", active: layerVisible(lb, "cutout") }] : []),
     ...(lb.state.bokeh ? [{ key: "bokeh", label: "Subject bokeh", active: layerVisible(lb, "bokeh") }] : []),
     ...((lb.state.text || "").trim() ? [{ key: "text", label: "Legacy text overlay", active: layerVisible(lb, "text") }] : []),
@@ -1582,7 +1583,7 @@ function layerStackBody(lb, esc) {
               ${layer.id === "base" ? "" : `<button type="button" data-ch-layer-duplicate="${esc(layer.id)}" title="Duplicate">⧉</button><button type="button" data-ch-layer-delete="${esc(layer.id)}" title="Delete">×</button>`}
             </span>
           </div>`).join("")}
-        ${effectRows.map((row) => `<div class="ch-lb-layer ch-effect-layer ${row.active ? "is-on" : "is-off"}"><button type="button" data-ch-lb-layer-toggle="${esc(row.key)}">${svgIc("eye")}</button><span><b>${esc(row.label)}</b><small>non-destructive effect</small></span></div>`).join("")}
+        ${effectRows.map((row) => `<div class="ch-lb-layer ch-effect-layer ${row.key === "subject" ? "is-subject-guide" : ""} ${row.active ? "is-on" : "is-off"}"><button type="button" data-ch-lb-layer-toggle="${esc(row.key)}">${svgIc("eye")}</button><span><b>${esc(row.label)}</b><small>${row.key === "subject" ? "editor-only selection guide" : "non-destructive effect"}</small></span></div>`).join("")}
       </div>
       ${selectedLayerInspector(lb, esc)}
     </div>`;
@@ -1795,6 +1796,7 @@ function wireLightbox(root, opts) {
     if (!canvas._img) return;
     renderComposition(canvas, canvas._img, paintStateForLightbox(lb), lb.composition);
     if (overlay) drawCompositionOverlay(overlay, canvas, lb.composition);
+    if (overlay && layerVisible(lb, "subject") && s.bokeh?.maskImg) drawDetectedSubjectOverlay(overlay, canvas, lb.composition, s.bokeh.maskImg);
     applyEditorZoom();
     positionMarkers();
   };
@@ -2033,21 +2035,11 @@ function wireLightbox(root, opts) {
   root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = () => {
     lb.bokehPicking = !lb.bokehPicking;
     if (lb.bokehPicking) lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
-    if (lb.bokehPicking && !s.bokeh?.spots?.length && !lb.subjectEstimated) {
-      lb.subjectEstimated = true;
-      const guess = estimateSubjectPoint(canvas);
-      if (guess) {
-        const idx = addBokehSpot(s, guess.x, guess.y, (s.bokehBrush || 24) / 100);
-        lb.selectedSpot = idx;
-        lb.subjectHint = "Estimated focus point — drag it into place, or click elsewhere on the subject to add more.";
-        repaint();
-      }
-    }
     rerender();
   });
   const bokehOff = root.querySelector("[data-ch-lb-bokeh-off]");
   if (bokehOff) bokehOff.onclick = () => {
-    s.bokeh = null; lb.selectedSpot = null; lb.subjectHint = null; lb.subjectEstimated = false;
+    s.bokeh = null; lb.subjectMaskUrl = ""; lb.selectedSpot = null; lb.subjectHint = null; lb.subjectEstimated = false;
     lb.bokehDetect = { status: lb.bokehDetect.status === "unavailable" ? "unavailable" : "idle", message: "" };
     repaint(); rerender();
   };
@@ -2072,7 +2064,7 @@ function wireLightbox(root, opts) {
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
     if (lb.bokehPicking) {
-      const brush = lb.rememberBokehSize ? (s.bokehBrush || 24) / 100 : 0.24;
+      const brush = lb.rememberBokehSize ? (s.bokehBrush || 12) / 100 : 0.12;
       const idx = addBokehSpot(s, x, y, brush);
       lb.selectedSpot = idx;
       repaint();
@@ -2247,7 +2239,12 @@ function wireLightbox(root, opts) {
       const maskImg = await loadImage(result.image);
       if (chLightbox !== lb) return;
       setBokehMask(s, maskImg);
-      lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
+      s.bokeh.spots = [];
+      lb.subjectMaskUrl = result.image;
+      lb.selectedSpot = null;
+      lb.bokehPicking = false;
+      lb.subjectHint = "Subject selected. The mint silhouette is an editor-only guide; the clean edge and background blur are baked into Save or Download.";
+      lb.layers = { image: true, cutout: true, bokeh: true, text: true, subject: true, ...(lb.layers || {}), bokeh: true, subject: true };
       lb.bokehDetect = { status: "success", message: "" };
       repaint();
       rerender();

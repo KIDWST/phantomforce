@@ -334,6 +334,37 @@ export function drawCompositionOverlay(overlay, canvas, composition) {
   });
 }
 
+/* Editor-only subject visualization. The segmentation cutout is transformed
+   through the same base-layer box/fit as the photo, then recolored into a
+   translucent mint silhouette with a bright contour. This is never painted
+   onto the export canvas. */
+export function drawDetectedSubjectOverlay(overlay, canvas, composition, maskImage) {
+  if (!overlay || !canvas || !maskImage) return;
+  const baseLayer = composition.layers.find((layer) => layer.id === "base");
+  if (!baseLayer || !baseLayer.visible) return;
+  const mask = document.createElement("canvas");
+  mask.width = canvas.width;
+  mask.height = canvas.height;
+  const ctx = mask.getContext("2d");
+  const boxW = Math.max(1, baseLayer.w * mask.width);
+  const boxH = Math.max(1, baseLayer.h * mask.height);
+  ctx.save();
+  ctx.translate(baseLayer.x * mask.width, baseLayer.y * mask.height);
+  ctx.rotate((Number(baseLayer.rotation || 0) * Math.PI) / 180);
+  drawImageFit(ctx, maskImage, -boxW / 2, -boxH / 2, boxW, boxH, baseLayer.fit || "cover");
+  ctx.restore();
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = "rgba(65,255,161,.14)";
+  ctx.fillRect(0, 0, mask.width, mask.height);
+
+  const out = overlay.getContext("2d");
+  out.save();
+  out.globalCompositeOperation = "source-over";
+  out.filter = `drop-shadow(0 0 ${Math.max(2, canvas.width / 420)}px rgba(65,255,161,.96)) drop-shadow(0 0 ${Math.max(5, canvas.width / 150)}px rgba(65,255,161,.68))`;
+  out.drawImage(mask, 0, 0);
+  out.restore();
+}
+
 export function canvasPoint(event, canvas) {
   const rect = canvas.getBoundingClientRect();
   return {
