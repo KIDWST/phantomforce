@@ -15,7 +15,7 @@ import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-liv
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-171";
 import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-171";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-171";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-171";
+import { renderAutomation, renderDeveloperAutopilotPanel } from "./brandops.js?v=phantom-live-20260711-176";
 import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-171";
 import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-171";
 import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-171";
@@ -2094,6 +2094,14 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
         </div>
       </section>
 
+      <section class="dev-section">
+        <div class="dev-section-head">
+          <h4>${svg("cog")} Scheduled server jobs</h4>
+          <p>Developer-only curtain pull for internal health checks, scheduled job controls, and evidence from the automation engine.</p>
+        </div>
+        <div data-dev-autopilot></div>
+      </section>
+
       ${w ? `
       <section class="dev-section">
         <div class="dev-section-head">
@@ -2111,7 +2119,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
         </article>
         <article class="developer-card">
           <p class="developer-kicker">Safety posture</p>
-          <h4>No live execution from Developer</h4>
+          <h4>Owner-gated execution only</h4>
           <div class="developer-list">${safety.map(([k, v]) => `<span><b>${esc(k)}</b><i>${esc(v)}</i></span>`).join("")}</div>
         </article>
       </div>
@@ -2151,6 +2159,8 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
     </div>`;
 
   wireDeveloperSection(body, opts);
+  const autopilotMount = body.querySelector("[data-dev-autopilot]");
+  if (autopilotMount) renderDeveloperAutopilotPanel(autopilotMount, opts);
   if (w) body.querySelectorAll("[data-dev-count]").forEach((el) => animateDevCount(el, Number(el.dataset.devCount)));
 }
 
@@ -2195,7 +2205,7 @@ function renderDeveloperPage(body) {
     return;
   }
   body.innerHTML = developerSkeletonHtml();
-  const opts = {};
+  const opts = mediaOpts();
   loadDeveloperData(body, opts);
   devRefreshTimer = setInterval(() => {
     if (!document.body.contains(body) || currentWs() !== "developer") { clearInterval(devRefreshTimer); return; }
