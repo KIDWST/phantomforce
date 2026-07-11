@@ -134,4 +134,3 @@ export async function persistConfiguration(options: {
   const path = await writeCustomizationDocument(document, options.root);
   return { path, document, version };
 }
-

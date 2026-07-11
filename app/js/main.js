@@ -25,6 +25,11 @@ import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.j
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-195";
 import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260711-195";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260711-195";
+import {
+  customizeNavigation,
+  loadOrganizationCustomization,
+  renderCustomizationStudio,
+} from "./customization.js?v=phantom-live-20260711-195";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -183,7 +188,7 @@ function showGate() {
 }
 
 /* ============================ sidebar nav ============================ */
-const NAV = [
+const BASE_NAV = [
   { id: "dashboard",  label: "Business HQ",  icon: "grid",  view: "main" },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
@@ -196,9 +201,11 @@ const NAV = [
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true },
+  { id: "customize",  label: "Workspace Studio", icon: "spark", ws: "customize", adminOnly: true },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
+let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
    same items, same ownerOnly/adminOnly gates, just a compact label and a
    horizontally scrollable strip instead of a vertical list. */
@@ -214,7 +221,7 @@ const MOBILE_LABEL_OVERRIDES = {
   vacation: "Away",
   developer: "Developer",
 };
-const MOBILE_NAV = NAV.map((n) => ({
+let MOBILE_NAV = NAV.map((n) => ({
   id: n.id,
   label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
   icon: n.icon,
@@ -224,6 +231,20 @@ const MOBILE_NAV = NAV.map((n) => ({
   ownerOnly: n.ownerOnly,
   badge: n.badge,
 }));
+
+function refreshCustomizedNavigation() {
+  NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
+  MOBILE_NAV = NAV.map((n) => ({
+    id: n.id,
+    label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
+    icon: n.icon,
+    route: "nav",
+    target: n.id,
+    adminOnly: n.adminOnly,
+    ownerOnly: n.ownerOnly,
+    badge: n.badge,
+  }));
+}
 let activeNav = "dashboard";
 let activePageId = null;
 /* which page last played its entrance animation — store-change rerenders
@@ -460,13 +481,14 @@ function renderStatusPills() {
   }
 }
 
-function switchWorkspace(id) {
+async function switchWorkspace(id) {
   const before = currentWs();
   if (!isAdmin()) {
     renderStatusPills();
     return;
   }
   if (!setWorkspace(id)) { renderStatusPills(); return; }
+  await loadOrganizationCustomization({ onApplied: refreshCustomizedNavigation });
   accountMenuOpen = false;
   notifOpen = false;
   clearOverlayOnly();
@@ -2324,6 +2346,7 @@ const CUSTOM = {
   automation: { title: "Automations", kicker: "Business workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
   vacation: { title: "Away Mode", kicker: "Your business stays covered while you are away", custom: true, wide: true, render: (body) => renderVacationMode(body, mediaOpts()) },
   promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
+  customize: { title: "Workspace Studio", kicker: "Make this organization feel purpose-built", custom: true, wide: true, adminOnly: true, render: (body) => renderCustomizationStudio(body, { onApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
   /* The full worker roster + telemetry + live tail log — kept out of the
      dashboard's permanent layout (that only shows a compact summary) and
      opened on demand from "View all activity". */
@@ -2613,6 +2636,15 @@ function enterPhantom() {
   }
   activeNav = "dashboard";
   renderConsole();
+  loadOrganizationCustomization({
+    onApplied: () => {
+      refreshCustomizedNavigation();
+      renderNav();
+      renderMobileBottomNav();
+      renderStatusPills();
+      renderUser();
+    },
+  });
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
