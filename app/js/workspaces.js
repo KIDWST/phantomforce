@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-161";
+} from "./store.js?v=phantom-live-20260711-162";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1886,7 +1886,8 @@ function baselineWorkerCount(runtime) {
 function renderWorkerMesh(workers, runtime = null) {
   const employeeNodes = workers.filter((worker) => worker.worker_type === "employee");
   const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
-  const cappedSubagents = subagentNodes.slice(0, 28);
+  const mobileWeb = window.matchMedia("(max-width: 560px)").matches;
+  const cappedSubagents = subagentNodes.slice(0, mobileWeb ? 12 : 28);
   const overflowSubagents = subagentNodes.length - cappedSubagents.length;
 
   const webNode = (worker, index, total, ring) => {
@@ -1897,7 +1898,8 @@ function renderWorkerMesh(workers, runtime = null) {
     const offset = ring === "core" ? 0 : 18;
     const angle = offset + (total ? (index / total) * spread : 0);
     const isLive = tone === "live" || tone === "approval";
-    const style = `--node-angle:${angle}deg; --node-radius:${radius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
+    const mobileRadius = ring === "core" ? 96 : 150;
+    const style = `--node-angle:${angle}deg; --node-radius:${radius}px; --node-mobile-radius:${mobileRadius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
     return `
       <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""}" style="${style}" aria-hidden="true"></div>
       <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ring === "outer" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
@@ -2409,11 +2411,14 @@ function renderWorkforce(el, rerender) {
       </div>
     </section>
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
-    ${renderBaselineWorkers(runtime)}
     ${isMap ? `
-      ${renderWorkerMesh(workers, runtime)}
-      ${renderWorkerMapDetail(selectedWorker, selectedSubagents, cellsBySubagent, selectedRootCells)}
+      <div class="worker-map-view">
+        ${renderBaselineWorkers(runtime)}
+        ${renderWorkerMesh(workers, runtime)}
+        ${renderWorkerMapDetail(selectedWorker, selectedSubagents, cellsBySubagent, selectedRootCells)}
+      </div>
     ` : `
+      ${renderBaselineWorkers(runtime)}
       <div class="worker-scale">
         <span><b>${workerRuntime.state === "ready" ? baselineOnline : "—"}</b> baseline online</span>
         <span><b>${workerRuntime.state === "ready" ? jobsLogged : "—"}</b> jobs logged</span>
