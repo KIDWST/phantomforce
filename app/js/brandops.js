@@ -8,11 +8,11 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-184";
+import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-185";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260711-184";
+} from "./content-ideas.js?v=phantom-live-20260711-185";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -407,6 +407,179 @@ export function renderDeveloperAutopilotPanel(el, opts = {}) {
       ${autopilotDeveloperTab()}
     </section>`;
   wireAutopilotDiagnostics(el, notify, paint);
+}
+
+/* ---------------- Agent runs: the real server execution lifecycle ----------------
+   Every row here is a real backend run record (queued → executing → verifying
+   → completed/failed/cancelled) with a persisted event trail, an artifact on
+   disk, and a Hermes ledger proof id. The same engine chat uses for "run a
+   business snapshot" — one system, two doors. Unreachable/unauthorized renders
+   an honest error; nothing is ever shown as running unless the server says so. */
+let agentRunsOps = null;
+let agentRunsList = null;
+let agentRunsError = null;
+let agentRunsLoading = false;
+let agentRunsBusy = false;
+let agentRunsExpandedId = null;
+let agentRunsPollTimer = null;
+const TERMINAL_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+const RUN_STATE_CLS = { queued: "idle", executing: "on", verifying: "on", completed: "on", failed: "hold", cancelled: "idle" };
+
+async function fetchAgentRunsData() {
+  try {
+    const [opsRes, runsRes] = await Promise.all([
+      fetch("/phantom-ai/runs/operations", { headers: authHeaders() }),
+      fetch("/phantom-ai/runs", { headers: authHeaders() }),
+    ]);
+    const ops = await opsRes.json().catch(() => null);
+    const runsPayload = await runsRes.json().catch(() => null);
+    if (opsRes.ok && ops?.ok && runsRes.ok && runsPayload?.ok) {
+      return { ok: true, operations: ops.operations, runs: runsPayload.runs };
+    }
+    const status = !opsRes.ok ? opsRes.status : runsRes.status;
+    return { ok: false, error: status === 401 || status === 403 ? "This session isn't authorized for the run engine." : `Run engine request failed (${status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the run engine." };
+  }
+}
+
+function agentRunEventRow(evt) {
+  return `<div class="dev-run-event">
+    <i>${esc(new Date(evt.at).toLocaleTimeString())}</i>
+    ${evt.state ? `<b>${esc(evt.state)}</b>` : `<b class="dev-run-event-note">·</b>`}
+    <span>${esc(evt.note)}</span>
+  </div>`;
+}
+
+function agentRunRow(run) {
+  const cls = RUN_STATE_CLS[run.state] || "gate";
+  const artifact = (run.artifacts || [])[0];
+  const expanded = agentRunsExpandedId === run.id;
+  const terminal = TERMINAL_RUN_STATES.has(run.state);
+  return `<div class="au-item dev-run-item" data-dev-run="${esc(run.id)}">
+    <span class="aops-led aops-${cls}"><i></i></span>
+    <span class="au-item-main">
+      <b>${esc(run.title)} <em class="dev-run-state dev-run-state-${esc(run.state)}">${esc(run.state)}</em></b>
+      <i>${esc(run.request || run.operation)}</i>
+      <em>${esc(run.id)} · updated ${esc(ago(run.updated_at))} · workspace ${esc(run.workspace)}</em>
+      ${artifact ? `<em class="dev-run-artifact">Artifact: ${esc(artifact.summary)}</em>` : ""}
+      ${run.proof_request_id ? `<em class="dev-run-proof">Ledger proof: request ${esc(run.proof_request_id)}</em>` : ""}
+      ${run.error ? `<em class="dev-run-error">${esc(run.error)}</em>` : ""}
+    </span>
+    <span class="dev-run-actions">
+      <button class="btn btn-quiet" type="button" data-dev-run-events="${esc(run.id)}">${expanded ? "Hide trail" : `Events (${(run.events || []).length})`}</button>
+      ${terminal ? "" : `<button class="btn btn-quiet" type="button" data-dev-run-cancel="${esc(run.id)}">Cancel</button>`}
+    </span>
+    ${expanded ? `<div class="dev-run-events">${(run.events || []).map(agentRunEventRow).join("")}</div>` : ""}
+  </div>`;
+}
+
+function agentRunsBody() {
+  if (agentRunsError) {
+    return `<div class="dev-error-banner"><b>Run engine unavailable.</b><span>${esc(agentRunsError)}</span><button type="button" data-dev-runs-retry>Retry</button></div>`;
+  }
+  if (!agentRunsList) return `<p class="au-empty-note">Checking the run engine…</p>`;
+  const active = agentRunsList.filter((r) => !TERMINAL_RUN_STATES.has(r.state)).length;
+  return `
+    <div class="dev-run-ops">
+      ${(agentRunsOps || []).map((op) => `
+        <article class="ap-curtain-card dev-run-op">
+          <b>${esc(op.title)}</b>
+          <p>${esc(op.description)}</p>
+          <button class="btn" type="button" data-dev-run-start="${esc(op.id)}" ${agentRunsBusy ? "disabled" : ""}>Run now</button>
+        </article>`).join("")}
+    </div>
+    ${agentRunsList.length ? `
+      <div class="au-summary" aria-label="Run summary">
+        <span><b>${agentRunsList.length}</b><i>Runs this session</i></span>
+        <span><b>${active}</b><i>In flight</i></span>
+        <span><b>${agentRunsList.filter((r) => r.state === "failed").length}</b><i>Failed</i></span>
+      </div>
+      <div class="au-list dev-run-list">${agentRunsList.map(agentRunRow).join("")}</div>`
+    : `<p class="au-empty-note">No runs yet since the server started. Start one above, or tell Phantom "run a business snapshot" in chat — both land here.</p>`}`;
+}
+
+function scheduleAgentRunsPoll(el, paint) {
+  clearTimeout(agentRunsPollTimer);
+  const hasActive = (agentRunsList || []).some((r) => !TERMINAL_RUN_STATES.has(r.state));
+  if (!hasActive) return;
+  agentRunsPollTimer = setTimeout(async () => {
+    if (!document.body.contains(el)) return;
+    const res = await fetchAgentRunsData();
+    if (!document.body.contains(el)) return;
+    if (res.ok) { agentRunsOps = res.operations; agentRunsList = res.runs; agentRunsError = null; }
+    paint();
+  }, 1200);
+}
+
+function wireAgentRunsPanel(el, notify, paint) {
+  el.querySelector("[data-dev-runs-retry]")?.addEventListener("click", () => {
+    agentRunsList = null;
+    agentRunsError = null;
+    agentRunsLoading = false;
+    paint();
+  });
+  el.querySelectorAll("[data-dev-run-start]").forEach((btn) => {
+    btn.onclick = async () => {
+      agentRunsBusy = true;
+      paint();
+      try {
+        const r = await fetch("/phantom-ai/runs", {
+          method: "POST",
+          headers: authHeaders({ "Content-Type": "application/json" }),
+          body: JSON.stringify({ operation: btn.dataset.devRunStart, request: "Started from Developer → Agent runs", workspace: currentWs() }),
+        });
+        const d = await r.json().catch(() => null);
+        if (r.ok && d?.ok) notify("Agent runs", `Started ${d.run.title} (${d.run.id}).`);
+        else notify("Agent runs", `Couldn't start the run: ${(d && d.error) || `request failed (${r.status})`}.`);
+      } catch {
+        notify("Agent runs", "Couldn't reach the run engine.");
+      }
+      agentRunsBusy = false;
+      const res = await fetchAgentRunsData();
+      if (res.ok) { agentRunsOps = res.operations; agentRunsList = res.runs; agentRunsError = null; }
+      if (document.body.contains(el)) paint();
+    };
+  });
+  el.querySelectorAll("[data-dev-run-events]").forEach((btn) => {
+    btn.onclick = () => {
+      agentRunsExpandedId = agentRunsExpandedId === btn.dataset.devRunEvents ? null : btn.dataset.devRunEvents;
+      paint();
+    };
+  });
+  el.querySelectorAll("[data-dev-run-cancel]").forEach((btn) => {
+    btn.onclick = async () => {
+      try {
+        await fetch(`/phantom-ai/runs/${encodeURIComponent(btn.dataset.devRunCancel)}/cancel`, { method: "POST", headers: authHeaders() });
+      } catch {}
+      const res = await fetchAgentRunsData();
+      if (res.ok) { agentRunsOps = res.operations; agentRunsList = res.runs; agentRunsError = null; }
+      if (document.body.contains(el)) paint();
+    };
+  });
+}
+
+export function renderDeveloperAgentRunsPanel(el, opts = {}) {
+  const notify = opts.notify || (() => {});
+  const paint = () => renderDeveloperAgentRunsPanel(el, opts);
+  if (!agentRunsList && !agentRunsLoading && !agentRunsError) {
+    agentRunsLoading = true;
+    fetchAgentRunsData().then((res) => {
+      agentRunsLoading = false;
+      if (res.ok) { agentRunsOps = res.operations; agentRunsList = res.runs; agentRunsError = null; }
+      else agentRunsError = res.error;
+      if (document.body.contains(el)) paint();
+    });
+  }
+  el.innerHTML = `
+    <section class="developer-card ap-dev-panel">
+      <p class="developer-kicker">Agent runs</p>
+      <h4>Real execution lifecycle</h4>
+      <p class="set-note">Every run walks queued → executing → verifying → completed/failed with a persisted event trail, an artifact on disk, and a Hermes ledger proof entry. Same engine chat uses for "run a business snapshot". Read-only executors — no sends, no spend.</p>
+      ${agentRunsBody()}
+    </section>`;
+  wireAgentRunsPanel(el, notify, paint);
+  scheduleAgentRunsPoll(el, paint);
 }
 
 function activeTab(agents) {

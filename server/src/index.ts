@@ -168,6 +168,13 @@ import {
   setAutomationJobEnabled,
   startAutomationEngine,
 } from "./phantom-ai/automation-engine.js";
+import {
+  getAgentRun,
+  listAgentRunOperations,
+  listAgentRuns,
+  requestAgentRunCancel,
+  startAgentRun,
+} from "./phantom-ai/agent-runs.js";
 import { getContentAssetStorageProvider } from "./phantom-ai/content-asset-storage.js";
 import {
   getProviderSetupStatus,
@@ -3387,6 +3394,68 @@ app.get("/phantom-ai/automations", async (request, reply) => {
       external_writes: false,
     },
   };
+});
+
+/* ---------------- agent runs: the real execution lifecycle ----------------
+   Admin-only. A run is a persisted record with real states (queued →
+   executing → verifying → completed/failed/cancelled), progress events,
+   on-disk artifacts, and a Hermes ledger proof entry. Executors do
+   read-only/prep work only — no sends, spends, or external actions. */
+const AgentRunStartSchema = z.object({
+  operation: z.string().min(1).max(60),
+  request: z.string().max(400).optional(),
+  workspace: z.string().max(60).optional(),
+});
+
+app.get("/phantom-ai/runs/operations", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return { ok: true, operations: listAgentRunOperations() };
+});
+
+app.get("/phantom-ai/runs", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return { ok: true, runs: listAgentRuns({ limit: 20 }) };
+});
+
+app.get("/phantom-ai/runs/:id", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const run = getAgentRun((request.params as { id: string }).id);
+  if (!run) return reply.code(404).send({ ok: false, error: "run_not_found" });
+  return { ok: true, run };
+});
+
+app.post("/phantom-ai/runs", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = AgentRunStartSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: "bad_request", detail: parsed.error.flatten() });
+  }
+  const result = await startAgentRun({
+    operation: parsed.data.operation,
+    workspace: parsed.data.workspace || "phantomforce",
+    sessionId: session.id,
+    request: parsed.data.request || "",
+    tenantId: `${parsed.data.workspace || "phantomforce"}-owner`,
+    businessName: parsed.data.workspace || "PhantomForce",
+  });
+  /* AgentRun itself carries an `error: string|null` field, so discriminate on
+     the run id — only the unknown-operation branch lacks one */
+  if (!("id" in result)) {
+    return reply.code(400).send({ ok: false, ...result });
+  }
+  return { ok: true, run: result };
+});
+
+app.post("/phantom-ai/runs/:id/cancel", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const run = requestAgentRunCancel((request.params as { id: string }).id);
+  if (!run) return reply.code(404).send({ ok: false, error: "run_not_found" });
+  return { ok: true, run };
 });
 
 const AutomationToggleSchema = z.object({ enabled: z.boolean() });
