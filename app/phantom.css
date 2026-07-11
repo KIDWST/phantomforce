@@ -3374,6 +3374,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-status-grid i { display: block; color: #e9fff1; font-style: normal; font-size: 12.5px; line-height: 1.3; }
 .set-sec-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
 .set-sec-head .set-note { margin: 4px 0 0; }
+.set-tabs { align-self: flex-start; max-width: 100%; }
+.set-tab-panel { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
 .set-add { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(65,255,161,0.06); color: var(--neon); cursor: pointer; font: 600 12px "Space Grotesk"; }
 .set-add:hover { background: rgba(65,255,161,0.14); }
 .set-add .ic { width: 14px; height: 14px; }
