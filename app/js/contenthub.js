@@ -10,15 +10,15 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260711-167";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-167";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-167";
+} from "./imagefilters.js?v=phantom-live-20260711-168";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-168";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-168";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition,
-} from "./content-editor.js?v=phantom-live-20260711-167";
+} from "./content-editor.js?v=phantom-live-20260711-168";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -1461,7 +1461,7 @@ function bokehBody(lb, s, esc) {
     ${s.bokeh ? chBSlider("Feather", "feather", 5, 90, Math.round((s.bokeh.feather ?? 0.45) * 100)) : ""}
     <label class="ch-lb-check"><input type="checkbox" data-ch-lb-remember-size ${lb.rememberBokehSize ? "checked" : ""}/> Remember size for next point</label>
     <div class="ch-lb-chips">
-      <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Adding touch-up… (click Done)" : "Add manual touch-up"}</button>
+      <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Done" : spots.length ? "Edit touch-ups" : "Add touch-up"}</button>
       ${s.bokeh ? `<button type="button" data-ch-lb-bokeh-off>Clear bokeh</button>` : ""}
     </div>
     ${selected ? `
@@ -1642,7 +1642,7 @@ function lightboxMarkup(lb, esc) {
                 <canvas class="ch-editor-overlay ${lb.bokehPicking ? "is-picking" : ""}" data-ch-editor-overlay></canvas>
               </div>
               <div class="ch-lb-bokeh-markers ${(layerVisible(lb, "bokeh") && (lb.bokehPicking || lb.selectedSpot != null)) ? "" : "is-hidden"}" data-ch-lb-bokeh-markers></div>
-              <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
+              <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add a sharp area · Done hides the guides</div>
             </div>
           </div>
           <aside class="ch-lb-tools">
@@ -2035,6 +2035,7 @@ function wireLightbox(root, opts) {
   root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = () => {
     lb.bokehPicking = !lb.bokehPicking;
     if (lb.bokehPicking) lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
+    else lb.selectedSpot = null;
     rerender();
   });
   const bokehOff = root.querySelector("[data-ch-lb-bokeh-off]");
