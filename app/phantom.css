@@ -2885,6 +2885,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 @keyframes bootRise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
 
 @media (max-width: 1500px) { .cmdk-open { flex: 0 0 auto; padding: 8px; } .cmdk-open-label, .cmdk-open-kbd { display: none; } }
+@media (min-width: 2400px) {
+  .topbar2 { justify-content: flex-start; }
+  .topbar-clock { margin-left: 0; }
+}
 @media (max-width: 1320px) {
   .desktop-context-top { flex-basis: 320px; min-width: 240px; }
   .dc-mini-copy span { display: none; }
