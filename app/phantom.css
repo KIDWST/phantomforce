@@ -1424,14 +1424,17 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   cursor: grab; touch-action: none;
 }
 .worker-mesh-stage.is-web-active:active { cursor: grabbing; }
-/* The page-enter transition leaves .workspace-page-body with a (functionally
-   identity, but literally present) transform after it finishes - ANY
-   transform value on an ancestor creates a new containing block, so
-   position: fixed above resolves against that ancestor's box instead of the
-   real viewport, rendering as a small in-page box instead of fullscreen.
-   Cancel it specifically while the web is open. */
+/* The page-enter transition's fill-forwards animation holds a (functionally
+   identity, but literally present) transform on .workspace-page-body after
+   it finishes - ANY transform value on an ancestor creates a new containing
+   block, so position: fixed above resolves against that ancestor's box
+   instead of the real viewport, rendering small and in-page instead of
+   fullscreen. A plain `transform: none` loses to the still-applied fill-
+   forwards animation (animations take precedence over the normal cascade),
+   so both the animation and the transform it holds need !important here. */
 body:has([data-worker-web-stage].is-web-active) .workspace-page-body {
-  transform: none;
+  animation: none !important;
+  transform: none !important;
 }
 .worker-web-world {
   position: absolute; inset: 0; transform-origin: 0 0;
