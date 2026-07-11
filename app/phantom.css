@@ -8550,6 +8550,29 @@ body.overlay-open .buddy-canvas { pointer-events: none; }
   }
 }
 
+/* ---- Memory page: Phantom Brain server-vault panel (owner-only) ---- */
+.memory-brain-panel {
+  margin-top: 6px;
+  border: 1px solid rgba(65, 255, 161, 0.22);
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(6, 20, 14, 0.72), rgba(2, 8, 10, 0.86));
+  overflow: hidden;
+}
+.memory-brain-panel > summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 15px 18px;
+}
+.memory-brain-panel > summary::-webkit-details-marker { display: none; }
+.memory-brain-panel > summary b { color: #eafff4; font-size: 14px; }
+.memory-brain-panel > summary b::before { content: "▸ "; color: var(--neon); }
+.memory-brain-panel[open] > summary b::before { content: "▾ "; }
+.memory-brain-panel > summary span { color: var(--dim); font-size: 12px; line-height: 1.45; }
+.memory-brain-panel > summary:hover { background: rgba(65, 255, 161, 0.05); }
+.memory-brain-mount { padding: 4px 18px 18px; }
 
 /* Phantom smart layer system */
 .ch-new-layer { margin: 0 0 10px; }

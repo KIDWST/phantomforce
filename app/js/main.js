@@ -1540,9 +1540,12 @@ function runCommand(raw) {
   const mode = MODES[activeMode] || MODES.ask;
   /* the prefix only fires when THIS message names the lane and reads like a
      request — a leftover sticky mode must never turn "whats the weather"
-     into "Create a video for whats the weather" */
+     into "Create a video for whats the weather", and a first-person
+     statement ("I have an idea for a video") is a person talking, never a
+     brief to silently rewrite into a creation command */
   const namedLane = modeNamedInText(raw);
-  const text = mode.prefix && namedLane === activeMode && !looksLikeQuestion(raw) && !/\b(draft|create|build|make|write|new)\b/i.test(raw)
+  const firstPerson = /^(i|i'm|im|i've|ive|we|we're|were|my|our|it|that|this)\b/i.test(raw.trim());
+  const text = mode.prefix && namedLane === activeMode && !looksLikeQuestion(raw) && !firstPerson && !/\b(draft|create|build|make|write|new)\b/i.test(raw)
     ? mode.prefix + raw
     : raw;
   speak(raw, "user");

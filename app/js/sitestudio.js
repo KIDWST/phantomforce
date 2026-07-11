@@ -155,6 +155,16 @@ function shellMarkup(active, sites, products) {
 export function renderSiteStudio(el) {
   const rerender = () => renderSiteStudio(el);
   const sites = visible(store.state.sites).map(normalizeSite);
+  /* chat handoff: when Phantom just built or edited a site from the chat,
+     it leaves a one-shot focus hint so this page opens ON that project —
+     one website system, two doors. */
+  try {
+    const focus = sessionStorage.getItem("pf.sites.focus.v1");
+    if (focus && sites.some((site) => site.id === focus)) {
+      siteUi.activeSiteId = focus;
+      sessionStorage.removeItem("pf.sites.focus.v1");
+    }
+  } catch {}
   if (!siteUi.activeSiteId || !sites.some((site) => site.id === siteUi.activeSiteId)) {
     siteUi.activeSiteId = sites[0]?.id || null;
   }

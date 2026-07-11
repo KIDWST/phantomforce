@@ -15,10 +15,24 @@ import {
 import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-183";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
+/* Cross-surface handoff: chat tells the Websites page which project to focus
+   so "make me a website" lands the user INSIDE the thing that was just
+   built, not on a stale selection. sitestudio.js consumes and clears it. */
+const SITE_FOCUS_KEY = "pf.sites.focus.v1";
+function setSiteFocus(id) {
+  try { sessionStorage.setItem(SITE_FOCUS_KEY, id); } catch {}
+}
+
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
-const SAFE_BACKEND_INTENTS = new Set(["identity", "capability", "question", "brainstorm", "plan", "chat"]);
+/* Intents the live backend brain may answer. Conversational + analytical
+   lanes only — anything that creates records or touches approvals stays on
+   the deterministic local path. feedback/status_check are included so the
+   real model (with business context) can respond like a person instead of
+   a canned line. Greetings/gratitude deliberately stay local: "hi" must
+   answer instantly, never wait on a provider chain. */
+const SAFE_BACKEND_INTENTS = new Set(["identity", "capability", "question", "brainstorm", "plan", "chat", "feedback", "status_check", "vent"]);
 
 /* Pull a subject out of phrases like "draft a proposal for Sarah's gym". */
 function subjectOf(text) {
@@ -35,9 +49,14 @@ const openAction = (label, ws) => ({ label, open: ws });
 const signedMoney = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmtMoney(value);
 
 function loadRuntimeAiSettings() {
+  /* brainMode defaults to "api" (Connected): the server walks a real
+     provider chain (Codex CLI → Claude CLI → OpenRouter → local Ollama) and
+     the client falls back to the local deterministic responder whenever no
+     provider answers — so Connected-by-default degrades gracefully instead
+     of silently locking everyone into canned regex replies forever. */
   const defaults = {
     provider: "claude",
-    brainMode: "local",
+    brainMode: "api",
     responseStyle: "operator",
     responseLength: "balanced",
     memoryMode: "business",
@@ -75,6 +94,52 @@ function canAskHermes(intent, settings) {
     && !intent.shouldCreateAutomation;
 }
 
+/* Business context for the live brain, in the exact shape the server's
+   parseContextModuleData accepts (max 8 modules, 5 items each). */
+function buildContextModules(settings) {
+  const ws = currentWs();
+  const memories = visible(store.state.memory || []);
+  const topMemories = [
+    ...memories.filter((m) => m.pinnedByUser || m.pinnedByAi),
+    ...memories.filter((m) => !m.pinnedByUser && !m.pinnedByAi),
+  ].slice(0, 5);
+  const m = moneyView();
+  const plan = todaysPlan().slice(0, 5);
+  const modules = [
+    {
+      module: "active_business",
+      summary: `Workspace: ${ws}. Memory mode: ${settings.memoryMode}. Context depth: ${settings.contextDepth}.`,
+      items: [],
+    },
+  ];
+  if (topMemories.length) {
+    modules.push({
+      module: "saved_memory",
+      summary: `${memories.length} saved memories for this business; top ${topMemories.length} below (pinned first).`,
+      items: topMemories.map((mem) => ({
+        title: String(mem.title || "").slice(0, 90),
+        status: mem.category || "note",
+        detail: String(mem.summary || mem.text || "").slice(0, 200),
+      })),
+    });
+  }
+  modules.push({
+    module: "money",
+    summary: m.transactions.length
+      ? `Net cash ${m.netCash}, ${m.transactions.length} transactions, pipeline ${m.pipeline}, ${m.open.length} open proposals.`
+      : `Ledger empty. Pipeline ${m.pipeline}, ${m.open.length} open proposals.`,
+    items: [],
+  });
+  if (plan.length) {
+    modules.push({
+      module: "today_plan",
+      summary: `${plan.length} items on today's plan.`,
+      items: plan.map((p) => ({ title: String(p.text || "").slice(0, 90) })),
+    });
+  }
+  return modules;
+}
+
 /* The backend chat route can walk up to 4 providers (Codex, Claude CLI,
    OpenRouter, local Ollama) before giving up, each capped at 20-30s server
    side — worst case lands around 110s. This timeout must stay above that or
@@ -107,21 +172,13 @@ async function askHermesBrain(raw, intent, settings) {
         business_name: wsName(currentWs()),
         actor_user_id: ctx.session?.sessionId || ctx.session?.name || "owner-admin",
         business_summary: `${wsName(currentWs())} Business Manager workspace. AI-assisted operations, Creator Hub, bookings, offer desk, accounting, follow-up, site portfolio, approval gates, and scoped local memory.`,
-        module_data: {
-          workspace: currentWs(),
-          memory: memoryStats(),
-          money: moneyView(),
-          today: todaysPlan().slice(0, 5),
-          runtime_settings: {
-            brain_mode: settings.brainMode,
-            response_style: settings.responseStyle,
-            response_length: settings.responseLength,
-            memory_mode: settings.memoryMode,
-            context_depth: settings.contextDepth,
-            lane_target: modelLaneForSettings(settings),
-            lane_model: selectedLaneModelForSettings(settings),
-          },
-        },
+        /* The server's parseContextModuleData expects an ARRAY of
+           {module, summary, items:[{title,status,detail}]} — the old object
+           shape was silently discarded, so the model never saw any of this.
+           Now it carries the active business, the owner's actual saved
+           memories (workspace-scoped, pinned first), money and today's plan
+           — real context, not just counts. */
+        module_data: buildContextModules(settings),
         phantom_loop: loop.enabled ? {
           target_provider: loop.targetProvider,
           target_model: loop.targetModel,
@@ -200,20 +257,53 @@ function createPendingMedia(subject) {
   return m;
 }
 
-function createPageDraft(subject, kind) {
-  const t = subject ? title(subject) : "New build";
-  const s = {
-    id: uid("site"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(),
-    title: `${t} — ${kind.toLowerCase()}`, kind, status: "draft",
-    sections: kind === "Store"
-      ? ["Storefront hero", "Product grid", "Offer section", "Checkout — payment connector not wired yet"]
-      : ["Hero with one clear promise", "Proof / reviews section", "Offer + pricing", "Call-to-action (approval-gated)"],
-    url: null, updated: new Date().toISOString(),
-  };
-  store.state.sites.unshift(s);
-  pushActivity("Websites", `drafted ${s.title}.`, s.ws);
+/* One website system, two doors: this creates EXACTLY the record shape the
+   Websites page (sitestudio.js) edits — baseSiteDraft + design + the user's
+   own description applied as the first AI edit pass. The full request text
+   runs through applyWebsitePrompt so "premium sports site for ChicagoShots
+   with booking" actually shapes sections/style/theme instead of producing a
+   generic shell. */
+function createWebsiteRecord(rawText, subject, kind = "Website") {
+  /* the NAME is just the business/brand — "ChicagoShots, premium and gold,
+     with booking" names the site "ChicagoShots"; the rest of the sentence
+     still shapes the design via applyWebsitePrompt below */
+  const named = subject
+    ? title(subject.split(/,|\bwith\b|\busing\b|\bfocus(ed)?\b|\bthat\b|—|\./i)[0].trim())
+    : "";
+  const draft = baseSiteDraft(named || "New site", kind);
+  draft.ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  draft.status = "draft";
+  draft.domains = [];
+  ensureSiteDesign(draft);
+  const domainMatch = String(rawText || "").match(/\b(?:https?:\/\/)?(?:www\.)?([a-z0-9-]+(?:\.[a-z0-9-]+)+)\b/i);
+  if (domainMatch) {
+    const domain = domainMatch[1].toLowerCase();
+    draft.domain = domain;
+    draft.url = `https://${domain}`;
+    draft.design.existingUrl = domain;
+    draft.domains.unshift(domain);
+  }
+  const applied = applyWebsitePrompt(draft, rawText);
+  store.state.sites.unshift(draft);
+  setSiteFocus(draft.id);
+  pushActivity("Websites", `built the first draft of ${draft.title} from chat.`, draft.ws);
   store.save();
-  return s;
+  return { site: draft, applied };
+}
+
+/* Edit the CURRENT site from chat — same applyWebsitePrompt the builder's
+   own prompt box uses, so both doors stay in sync. Newest site in the
+   active workspace wins (matches what the Websites page shows first). */
+function updateWebsiteFromChat(rawText) {
+  const sites = visible(store.state.sites || []);
+  if (!sites.length) return null;
+  const site = sites[0];
+  ensureSiteDesign(site);
+  const applied = applyWebsitePrompt(site, rawText);
+  setSiteFocus(site.id);
+  pushActivity("Websites", `updated ${site.title} from chat: ${applied}`, site.ws);
+  store.save();
+  return { site, applied };
 }
 
 function createReviewRequest(subject) {
@@ -536,6 +626,16 @@ function intentResponse(intent, text, settings = null) {
       open: null,
     };
   }
+  if (intent.primaryIntent === "vent") {
+    const pend = approvalCount();
+    return {
+      say: pend
+        ? `That's a lot to carry — let's not add to it. If it helps, the only thing actually waiting on you here is ${pend} approval${pend === 1 ? "" : "s"}; everything else can wait. Want me to take something off your plate, or just talk?`
+        : "That's a lot to carry — and nothing here is on fire, so take a breath. When you're ready I can take something off your plate, or we can just talk it through.",
+      cards: [],
+      open: null,
+    };
+  }
   if (intent.primaryIntent === "feedback") {
     return {
       say: "Yeah, that shouldn't happen. Want me to turn this into a fix task, or just talk through what feels wrong?",
@@ -547,6 +647,31 @@ function intentResponse(intent, text, settings = null) {
     return {
       say: "Plan lane. Define the outcome, list the constraints, choose the owner, break it into approval-safe steps, then decide which steps become records. No tasks were created.",
       cards: [card("Plan mode", "Draft plan only", "Ask for a proposal, task list, build packet, or approval queue when you want the plan converted.", [])],
+      open: null,
+    };
+  }
+  if (intent.primaryIntent === "create_website") {
+    const kind = /landing/i.test(text) ? "Landing page" : /(store ?front|online store)/i.test(text) ? "Store" : "Website";
+    const { site: d } = createWebsiteRecord(text, subjectOf(text), kind);
+    const domainNote = d.domain ? ` Domain saved: ${d.domain} (connecting and publishing still wait for your approval).` : "";
+    return {
+      say: `On it — I built the first draft of "${d.title}" using what you told me: ${d.sections.join(", ").toLowerCase()}.${domainNote} It's a real project in Websites now — open it to edit visually, or just keep telling me changes here and I'll apply them.`,
+      cards: [card("Website built", d.title, `${d.design.headline} · ${d.sections.length} sections · theme: ${d.design.theme}`, [openAction("Open in Websites", "sites")], d.domain || "No domain yet")],
+      open: "sites",
+    };
+  }
+  if (intent.primaryIntent === "website_update") {
+    const result = updateWebsiteFromChat(text);
+    if (!result) {
+      return {
+        say: "There's no website to edit yet in this business. Describe the site you want and I'll build the first draft right now.",
+        cards: [],
+        open: null,
+      };
+    }
+    return {
+      say: `Done on "${result.site.title}": ${result.applied} Want to see it, or keep going?`,
+      cards: [card("Website updated", result.site.title, result.applied, [openAction("Open in Websites", "sites")])],
       open: null,
     };
   }
@@ -755,7 +880,12 @@ function routeCommand(raw, settings) {
 
   /* --- media / content / video --- */
   if (/(video|reel|content|post|caption|shoot|media|creative|tiktok|short|thumbnail|image|photo|graphic)/.test(s)) {
-    if (/(plan|draft|create|make|new|idea|fix|edit|cinematic|better)/.test(s) || subject) {
+    /* A record is only created on an explicit creation verb aimed at a media
+       artifact. "our content could be better" or "I have an idea for a
+       video" is conversation/brainstorm — talking about media must never
+       silently mint pending-media records. */
+    const explicitMediaCreate = /\b(create|make|generate|draft|produce|design|shoot)\b[^.?!]{0,40}\b(video|reel|post|caption|thumbnail|image|photo|graphic|short|tiktok)\b/i.test(text);
+    if (explicitMediaCreate && !["brainstorm", "feedback", "question"].includes(intent.primaryIntent)) {
       const m = createPendingMedia(subject);
       return {
         say: `On it — starting a Media Lab edit for "${m.title}". I'll show a preview before anything's final.`,
@@ -763,16 +893,18 @@ function routeCommand(raw, settings) {
         open: "media",
       };
     }
-    return { say: "Media Lab is open — pending generations and generated outputs.", cards: [], open: "media" };
+    /* mentioning media in conversation never yanks the user out of chat —
+       only an explicit "open/show media lab" navigates */
+    return { say: "Media Lab is ready. Tell me exactly what to create — a video, a post, a thumbnail — and I'll start it.", cards: [], open: /\b(open|show|go to|take me to)\b[^.?!]{0,20}\b(media|lab)\b/.test(s) ? "media" : null };
   }
 
   /* --- store --- */
   if (/(store|shop|product|catalog|merch|sell|checkout)/.test(s)) {
     if (/(build|create|draft|make|new|add)/.test(s)) {
-      const d = createPageDraft(subject, "Store");
+      const { site: d } = createWebsiteRecord(text, subject, "Store");
       return {
-        say: `Website drafted "${d.title}". Open Websites and describe the store changes in the prompt.`,
-        cards: [card("Website draft", d.title, d.sections.join(" · "), [openAction("Open Websites", "sites")])],
+        say: `Built the first draft of "${d.title}" — ${d.sections.join(", ").toLowerCase()}. It's live in Websites; edit it there or keep telling me changes here.`,
+        cards: [card("Website draft", d.title, d.sections.join(" · "), [openAction("Open in Websites", "sites")])],
         open: "sites",
       };
     }
@@ -782,10 +914,10 @@ function routeCommand(raw, settings) {
   /* --- site / page --- */
   if (/(website|web ?page|landing|site|page)/.test(s)) {
     if (/(build|create|draft|make|new)/.test(s)) {
-      const d = createPageDraft(subject, /landing/.test(s) ? "Landing page" : "Website");
+      const { site: d } = createWebsiteRecord(text, subject, /landing/.test(s) ? "Landing page" : "Website");
       return {
-        say: `Website drafted "${d.title}". Open it and keep shaping it with the prompt.`,
-        cards: [card("Website draft", d.title, d.sections.join(" · "), [openAction("Open Websites", "sites")])],
+        say: `Built the first draft of "${d.title}" — ${d.sections.join(", ").toLowerCase()}. It's live in Websites; edit it there or keep telling me changes here.`,
+        cards: [card("Website draft", d.title, d.sections.join(" · "), [openAction("Open in Websites", "sites")])],
         open: "sites",
       };
     }
@@ -893,8 +1025,9 @@ function routeCommand(raw, settings) {
     };
   }
 
-  /* --- plan / today / status --- */
-  if (/(today|plan|what('| i)s next|priorit|status|morning|catch me up|summary)/.test(s)) {
+  /* --- plan / today / status — real status phrasing only; the bare words
+     "today" or "morning" inside a normal sentence never trigger a report --- */
+  if (/\b(today'?s plan|plan for today|my plan|the plan|what('| i)s next|priorit(y|ies)|status|catch me up|summary)\b/.test(s)) {
     const plan = todaysPlan();
     return {
       say: plan.length ? `${plan.length} thing${plan.length === 1 ? "" : "s"} on today's plan. Top of the list below.` : "No real tasks are loaded yet. Start by adding a lead, drafting a proposal, or generating media.",

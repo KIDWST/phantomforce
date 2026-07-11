@@ -59,7 +59,7 @@ const PROVIDERS = [
 
 const DEFAULT_SETTINGS = {
   provider: "claude",
-  brainMode: "local",
+  brainMode: "api",
   models: {
     claude: "Balanced",
     codex: "Balanced",
