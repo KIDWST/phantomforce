@@ -1,10 +1,31 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260710-140";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel } from "./store.js?v=phantom-live-20260710-140";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260710-141";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel } from "./store.js?v=phantom-live-20260710-141";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
+const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
+
+const SETTINGS_TABS = [
+  { id: "model", label: "Model" },
+  { id: "loop", label: "Loop routing" },
+  { id: "chat", label: "Chat behavior" },
+  { id: "media", label: "Media & social" },
+];
+
+function loadSettingsTab() {
+  try {
+    const saved = localStorage.getItem(SETTINGS_TAB_KEY);
+    return SETTINGS_TABS.some((tab) => tab.id === saved) ? saved : SETTINGS_TABS[0].id;
+  } catch {
+    return SETTINGS_TABS[0].id;
+  }
+}
+
+function saveSettingsTab(id) {
+  try { localStorage.setItem(SETTINGS_TAB_KEY, id); } catch {}
+}
 
 /* Display-only lane names — the real backend/vendor identity behind each
    lane never surfaces outside the owner-only Developer page. The `id`
@@ -331,23 +352,8 @@ function renderLoopAdvancedSection() {
     </div>`;
 }
 
-export function renderOperatorSettings(el, opts = {}) {
-  const settings = loadOperatorSettings();
-  const activeProvider = providerFor(settings.provider);
-  const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
-  const mediaMountId = `media-settings-${Math.random().toString(36).slice(2)}`;
-
-  el.innerHTML = `
-    <div class="settings settings-operator">
-      <div class="set-section set-ai-hero">
-        <div>
-          <p class="set-eyebrow">Operator brain</p>
-          <h3>Phantom AI settings</h3>
-          <p class="set-note">Choose the default brain, loop behavior, memory depth, and autopilot boundary for the admin console. These are local owner settings; the public demo chat still cannot send, upload, charge, or touch private systems.</p>
-        </div>
-        ${renderSafetySummary(settings)}
-      </div>
-
+function renderModelTab(settings, activeProvider, activeModel) {
+  return `
       <div class="set-section">
         <div class="set-sec-head">
           <div>
@@ -383,10 +389,11 @@ export function renderOperatorSettings(el, opts = {}) {
             ], settings.responseLength)}</select>
           </label>
         </div>
-      </div>
+      </div>`;
+}
 
-      ${renderLoopAdvancedSection()}
-
+function renderChatBehaviorTab(settings) {
+  return `
       <div class="set-section">
         <div class="set-sec-head">
           <div>
@@ -433,10 +440,49 @@ export function renderOperatorSettings(el, opts = {}) {
         <div class="record-actions">
           <button class="btn btn-quiet" type="button" data-ai-reset>Reset safe defaults</button>
         </div>
+      </div>`;
+}
+
+export function renderOperatorSettings(el, opts = {}) {
+  const settings = loadOperatorSettings();
+  const activeProvider = providerFor(settings.provider);
+  const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
+  const mediaMountId = `media-settings-${Math.random().toString(36).slice(2)}`;
+  const activeTab = loadSettingsTab();
+
+  const TAB_CONTENT = {
+    model: () => renderModelTab(settings, activeProvider, activeModel),
+    loop: () => renderLoopAdvancedSection(),
+    chat: () => renderChatBehaviorTab(settings),
+    media: () => `<div id="${mediaMountId}"></div>`,
+  };
+
+  el.innerHTML = `
+    <div class="settings settings-operator">
+      <div class="set-section set-ai-hero">
+        <div>
+          <p class="set-eyebrow">Operator brain</p>
+          <h3>Phantom AI settings</h3>
+          <p class="set-note">Choose the default brain, loop behavior, memory depth, and autopilot boundary for the admin console. These are local owner settings; the public demo chat still cannot send, upload, charge, or touch private systems.</p>
+        </div>
+        ${renderSafetySummary(settings)}
       </div>
 
-      <div id="${mediaMountId}"></div>
+      <nav class="ml-tabs set-tabs" role="tablist" aria-label="Settings sections">
+        ${SETTINGS_TABS.map((tab) => `<button class="ml-tab ${activeTab === tab.id ? "is-active" : ""}" type="button" role="tab" aria-selected="${activeTab === tab.id}" data-set-tab="${tab.id}">${esc(tab.label)}</button>`).join("")}
+      </nav>
+
+      <div class="set-tab-panel" data-set-panel role="tabpanel">
+        ${(TAB_CONTENT[activeTab] || TAB_CONTENT.model)()}
+      </div>
     </div>`;
+
+  el.querySelectorAll("[data-set-tab]").forEach((button) => {
+    button.onclick = () => {
+      saveSettingsTab(button.dataset.setTab);
+      renderOperatorSettings(el, opts);
+    };
+  });
 
   const saveAndRender = () => {
     saveOperatorSettings(settings);
