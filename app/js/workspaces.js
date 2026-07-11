@@ -6,9 +6,9 @@
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
-  PACKAGES, RETAINERS, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
+  PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-141";
+} from "./store.js?v=phantom-live-20260710-146";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -803,31 +803,248 @@ function renderProtect(el, rerender) {
 }
 
 /* =============================== MONEY =============================== */
+const moneySigned = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmtMoney(value);
+const financeCategoryOptions = (selected = "Uncategorized") =>
+  FINANCE_CATEGORIES.map((category) => `<option value="${esc(category)}" ${category === selected ? "selected" : ""}>${esc(category)}</option>`).join("");
+const todayInput = () => new Date().toISOString().slice(0, 10);
+function financeDate(value) {
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? todayInput() : d.toISOString().slice(0, 10);
+}
+function parseCurrency(value) {
+  const cleaned = String(value || "").replace(/[$,\s]/g, "").replace(/^\((.*)\)$/, "-$1");
+  const n = Number(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+function parseCsvLine(line) {
+  const cells = [];
+  let cell = "";
+  let quoted = false;
+  for (let i = 0; i < line.length; i += 1) {
+    const ch = line[i];
+    if (ch === '"' && line[i + 1] === '"') { cell += '"'; i += 1; continue; }
+    if (ch === '"') { quoted = !quoted; continue; }
+    if (ch === "," && !quoted) { cells.push(cell.trim()); cell = ""; continue; }
+    cell += ch;
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+function parseFinanceCsv(text, ws) {
+  const lines = String(text || "").split(/\r?\n/).filter((line) => line.trim());
+  if (lines.length < 2) return [];
+  const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase().replace(/[^a-z0-9]+/g, ""));
+  const idx = (...names) => headers.findIndex((h) => names.some((name) => h === name || h.includes(name)));
+  const dateIdx = idx("date", "posted", "transactiondate");
+  const descIdx = idx("description", "merchant", "name", "memo", "details");
+  const amountIdx = idx("amount");
+  const creditIdx = idx("credit", "deposit");
+  const debitIdx = idx("debit", "withdrawal", "charge");
+  const categoryIdx = idx("category", "type");
+  const accountIdx = idx("account", "card");
+  return lines.slice(1).map((line) => {
+    const cells = parseCsvLine(line);
+    let amount = amountIdx >= 0 ? parseCurrency(cells[amountIdx]) : 0;
+    if (!amount && (creditIdx >= 0 || debitIdx >= 0)) amount = parseCurrency(cells[creditIdx]) - parseCurrency(cells[debitIdx]);
+    const description = cells[descIdx] || "Imported transaction";
+    const account = cells[accountIdx] || "CSV import";
+    const category = FINANCE_CATEGORIES.includes(cells[categoryIdx]) ? cells[categoryIdx] : "Uncategorized";
+    const date = financeDate(cells[dateIdx]);
+    return {
+      id: uid("txn"),
+      ws,
+      date,
+      description: description.slice(0, 160),
+      amount,
+      category,
+      account: account.slice(0, 80),
+      source: "csv",
+      externalId: `csv:${date}:${amount}:${description}:${account}`.toLowerCase(),
+      createdAt: new Date().toISOString(),
+    };
+  }).filter((tx) => tx.amount !== 0);
+}
+function connectorLabel(connector) {
+  if (connector.status === "ready") return "Ready";
+  if (connector.status === "connected") return "Connected";
+  if (connector.status === "requested") return "Setup requested";
+  return "Not connected";
+}
+
 function renderMoney(el, rerender) {
   const m = moneyView();
-  const invoiceReady = visible(store.state.proposals).filter((p) => p.status === "invoice-ready");
+  const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  const recent = m.transactions.slice(0, 18);
+  const actualCount = m.transactions.length;
+  const proposalGoal = m.opportunity;
   el.innerHTML = `
-    <div class="stat-row">
-      <div class="stat"><span>Open pipeline</span><b>${fmtMoney(m.pipeline)}</b><i>${m.open.length} proposal${m.open.length === 1 ? "" : "s"}</i></div>
-      <div class="stat"><span>Won</span><b>${fmtMoney(m.wonValue)}</b><i>${m.won.length} closed</i></div>
-      <div class="stat"><span>Retainers attached</span><b>${fmtMoney(m.retainerMonthly)}/mo</b><i>recurring once live</i></div>
-      <div class="stat"><span>Invoice-ready</span><b>${invoiceReady.length}</b><i>payment connector not wired</i></div>
-    </div>
-    <h3 class="ws-subhead">Open proposals by value</h3>
-    <div class="stack">
-      ${m.open.slice().sort((a, b) => b.price - a.price).map((p) => `
-        <article class="record record-row">
-          ${wsTag(p.ws)}<h4>${esc(p.client)}</h4>${chip(p.status)}<b class="record-price">${fmtMoney(p.price)}</b>
-        </article>`).join("") || empty("No open proposals — pipeline is either closed or waiting to be built.")}
-    </div>
-    <h3 class="ws-subhead">Next money actions</h3>
-    ${m.open.length || m.won.length || invoiceReady.length ? `<ul class="record-list record-list-lg">
-      ${m.open.filter((p) => p.status === "sent-ready").map((p) => `<li>▸ ${esc(p.client)} is send-ready — get it in front of them and set the follow-up.</li>`).join("")}
-      ${m.won.filter((p) => !p.retainer).map((p) => `<li>▸ ${esc(p.client)} closed without a retainer — pitch Keeper ($150/mo) at delivery.</li>`).join("")}
-      ${invoiceReady.map((p) => `<li>▸ ${esc(p.client)} is invoice-ready — track payment manually until the connector exists.</li>`).join("")}
-      <li>▸ Price-tier check: anything scoped over 20 hours should quote at Pro ($2,500), not Core.</li>
-    </ul>` : empty("No money actions yet. Real proposals and invoices will appear here after you create them.")}
-    <p class="ws-note">Quote → approval → invoice-ready → payment-tracked. Real invoices and payment requests stay off until a payment connector is configured.</p>`;
+    <section class="finance-shell">
+      <div class="finance-truth">
+        <div>
+          <p class="overlay-kicker">ACTUAL TRANSACTIONS ONLY</p>
+          <h3>Business finance ledger</h3>
+          <p>Money reads bank/card imports, connected-account syncs, or manual entries. No proposal pipeline, no guessed revenue, no fake profit.</p>
+        </div>
+        <button class="btn" type="button" data-act="export">Export CSV</button>
+      </div>
+      <div class="stat-row finance-stats">
+        <div class="stat"><span>Cash in</span><b>${fmtMoney(m.cashIn)}</b><i>${actualCount ? "from real transactions" : "no income recorded"}</i></div>
+        <div class="stat"><span>Cash out</span><b>${fmtMoney(m.cashOut)}</b><i>${actualCount ? "expenses and withdrawals" : "no expenses recorded"}</i></div>
+        <div class="stat"><span>Net cashflow</span><b>${moneySigned(m.netCash)}</b><i>${actualCount ? "income minus outflow" : "ledger empty"}</i></div>
+        <div class="stat"><span>Ledger balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
+      </div>
+
+      <div class="finance-grid">
+        <section class="finance-panel">
+          <div class="finance-panel-head">
+            <h3>Connect or import</h3>
+            <span>${m.readySources} source${m.readySources === 1 ? "" : "s"} ready</span>
+          </div>
+          <div class="finance-connectors">
+            ${m.connectors.map((connector) => `
+              <article class="finance-connector finance-${esc(connector.status)}">
+                <span class="finance-connector-kind">${esc(connector.type)}</span>
+                <b>${esc(connector.name)}</b>
+                <p>${connector.id === "manual"
+                  ? "Manual entry and CSV import are active right now."
+                  : `Live sync uses ${esc(connector.provider)} once backend credentials and secure token storage are configured.`}</p>
+                <div class="finance-connector-foot">
+                  <i>${esc(connectorLabel(connector))}</i>
+                  ${connector.id === "manual"
+                    ? `<label class="btn btn-quiet finance-import">Import CSV<input type="file" accept=".csv,text/csv" data-finance-import hidden /></label>`
+                    : `<button class="btn btn-quiet" data-act="connector" data-id="${esc(connector.id)}" type="button">${connector.status === "requested" ? "Setup requested" : "Prepare setup"}</button>`}
+                </div>
+              </article>`).join("")}
+          </div>
+        </section>
+
+        <section class="finance-panel">
+          <div class="finance-panel-head">
+            <h3>Add transaction</h3>
+            <span>manual record</span>
+          </div>
+          <form class="finance-entry" data-finance-form>
+            <label><span>Date</span><input type="date" name="date" value="${todayInput()}" required /></label>
+            <label><span>Description</span><input type="text" name="description" placeholder="Stripe payout, Adobe, contractor..." required /></label>
+            <label><span>Direction</span><select name="direction"><option value="income">Money in</option><option value="expense">Money out</option></select></label>
+            <label><span>Amount</span><input type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required /></label>
+            <label><span>Category</span><select name="category">${financeCategoryOptions()}</select></label>
+            <label><span>Account</span><input type="text" name="account" placeholder="Business checking / card" /></label>
+            <button class="btn btn-primary" type="submit">Add transaction</button>
+          </form>
+        </section>
+      </div>
+
+      <section class="finance-panel">
+        <div class="finance-panel-head">
+          <h3>Transaction reader</h3>
+          <span>${actualCount} actual record${actualCount === 1 ? "" : "s"}</span>
+        </div>
+        <div class="finance-table" role="table" aria-label="Business transactions">
+          ${recent.map((tx) => `
+            <article class="finance-row ${tx.amount < 0 ? "is-out" : "is-in"}" role="row">
+              <time>${esc(fmtDate(tx.date))}</time>
+              <div>
+                <b>${esc(tx.description)}</b>
+                <i>${esc(tx.account)} · ${esc(tx.category)} · ${esc(tx.source)}</i>
+              </div>
+              <strong>${moneySigned(tx.amount)}</strong>
+              <button class="record-x" data-act="delete-tx" data-id="${esc(tx.id)}" type="button" aria-label="Delete transaction">×</button>
+            </article>`).join("") || empty("No transactions yet. Connect a bank/card, import a CSV export, or add the first one manually.")}
+        </div>
+      </section>
+
+      <section class="finance-goal-note">
+        <div>
+          <p class="overlay-kicker">GOALS, NOT MONEY</p>
+          <h3>Potential revenue belongs with missions.</h3>
+          <p>Open quotes and won proposals can guide goals, but they do not count as ledger cash until a bank/card/manual transaction confirms the money moved.</p>
+        </div>
+        <div class="finance-goal-stats">
+          <span><b>${fmtMoney(proposalGoal.pipeline)}</b><i>open quote potential</i></span>
+          <span><b>${fmtMoney(proposalGoal.wonValue)}</b><i>won proposal value</i></span>
+          <span><b>${fmtMoney(proposalGoal.retainerMonthly)}/mo</b><i>retainer goal</i></span>
+        </div>
+      </section>
+    </section>`;
+  const finance = store.state.finance;
+  const ensureAccount = (name) => {
+    const label = (name || "Manual ledger").trim().slice(0, 80);
+    if (!finance.accounts.some((account) => account.ws === ws && account.name.toLowerCase() === label.toLowerCase())) {
+      finance.accounts.unshift({ id: uid("acct"), ws, name: label, type: "manual", institution: "", status: "manual", lastSync: null });
+    }
+    return label;
+  };
+  const form = el.querySelector("[data-finance-form]");
+  if (form) {
+    form.onsubmit = (event) => {
+      event.preventDefault();
+      const data = new FormData(form);
+      const rawAmount = Number(data.get("amount"));
+      if (!Number.isFinite(rawAmount) || rawAmount <= 0) return;
+      const direction = data.get("direction") === "expense" ? -1 : 1;
+      const account = ensureAccount(String(data.get("account") || "Manual ledger"));
+      finance.transactions.unshift({
+        id: uid("txn"),
+        ws,
+        date: financeDate(data.get("date")),
+        description: String(data.get("description") || "Manual transaction").slice(0, 160),
+        amount: direction * rawAmount,
+        category: String(data.get("category") || "Uncategorized"),
+        account,
+        source: "manual",
+        externalId: null,
+        notes: "",
+        createdAt: new Date().toISOString(),
+      });
+      pushActivity("Finance Ledger", `added a ${direction > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(direction * rawAmount)}.`, ws);
+      store.save();
+      rerender();
+    };
+  }
+  const importInput = el.querySelector("[data-finance-import]");
+  if (importInput) {
+    importInput.onchange = async () => {
+      const file = importInput.files?.[0];
+      if (!file) return;
+      const rows = parseFinanceCsv(await file.text(), ws);
+      const existing = new Set((finance.transactions || []).map((tx) => tx.externalId).filter(Boolean));
+      const fresh = rows.filter((tx) => !tx.externalId || !existing.has(tx.externalId));
+      fresh.forEach((tx) => ensureAccount(tx.account));
+      finance.transactions.unshift(...fresh);
+      pushActivity("Finance Ledger", `imported ${fresh.length} transaction${fresh.length === 1 ? "" : "s"} from ${file.name}.`, ws);
+      store.save();
+      rerender();
+    };
+  }
+  el.querySelectorAll("[data-act='delete-tx']").forEach((button) => {
+    button.onclick = (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const id = event.currentTarget?.dataset?.id || button.getAttribute("data-id") || "";
+      const financeState = store.state.finance || finance;
+      financeState.transactions = (financeState.transactions || []).filter((tx) => String(tx.id) !== id);
+      store.state.finance = financeState;
+      store.save();
+      rerender();
+    };
+  });
+  bindActions(el, {
+    connector: (id) => {
+      const connector = finance.connectors.find((item) => item.id === id);
+      if (!connector) return;
+      connector.status = "requested";
+      connector.requestedAt = new Date().toISOString();
+      pushActivity("Finance Ledger", `${connector.name} setup requested. Sync will stay off until the secure connector backend is configured.`, ws);
+      store.save(); rerender();
+    },
+    export: (id, btn) => {
+      const header = "date,description,amount,category,account,source";
+      const rows = m.transactions.map((tx) => [tx.date, tx.description, tx.amount, tx.category, tx.account, tx.source]
+        .map((cell) => `"${String(cell ?? "").replace(/"/g, '""')}"`).join(","));
+      copyText(btn, [header, ...rows].join("\n"));
+    },
+  });
 }
 
 /* ============================= MEMORY ============================= */
@@ -1192,7 +1409,7 @@ const SWARM_SUBAGENT_TEMPLATES = [
     id: "draft",
     name: "Draft",
     title: "Draft Builder",
-    focus: "Turns the parent worker's lane into first-pass copy, plans, checklists, or packets.",
+    focus: "Turns the lead worker's lane into first-pass copy, plans, checklists, or packets.",
     skills: ["drafting", "structure", "packet prep", "copy pass"],
     status: "working",
     completedBoost: 13,
@@ -1397,7 +1614,7 @@ function buildEmployeeSubagents(employee) {
     title: template.title,
     department: employee.department,
     status: "mapped",
-    focus: `${template.focus} Parent worker: ${employee.name}.`,
+    focus: `${template.focus} Lead worker: ${employee.name}.`,
     skills: template.skills,
     completed: 0,
     productivity: null,
@@ -1490,7 +1707,7 @@ export function buildWorkerRoster() {
       productivity: null,
       workload: 0,
       response: "not live-measured",
-      metric_source: recent ? "local activity ledger" : "capability topology only",
+      metric_source: recent ? "local activity ledger" : "workforce map only",
       approvals_required: waitingOnApproval ? pendingApprovals : 0,
       client_visible: employee.employeeVisible !== false,
       worker_type: workerType,
@@ -1618,7 +1835,7 @@ function renderWorkerMesh(workers) {
         </div>
       </div>
       <div class="worker-mesh-readout">
-        <span><b>${mapped}</b> mapped nodes</span>
+        <span><b>${mapped}</b> workers mapped</span>
         <span><b>${observed}</b> ledger signals</span>
         <span><b>${subagentNodes.length}</b> subagents</span>
         <span><b>${departments}</b> departments</span>
@@ -1658,7 +1875,7 @@ function renderWorkerCard(worker, _unused = [], options = {}) {
       </div>
       <div class="worker-facts">
         <span>${worker.approvals_required ? "Waiting on approval" : "Approval-safe"}</span>
-        <span>${worker.worker_type === "subagent" ? "Swarm node" : "Parent worker"}</span>
+        <span>${worker.worker_type === "subagent" ? "Subagent" : "Lead worker"}</span>
         <span>No outside action alone</span>
       </div>
       ${showActions ? `
@@ -1766,8 +1983,8 @@ function renderWorkerNetworkPanel(worker, subagents, cellsBySubagent, rootCells)
   return `
     <div class="worker-network-panel">
       <div class="worker-network-head">
-        <b>${esc(worker.display_name)} neural map</b>
-        <span>${rootCells.length} cells · ${subagents.length} lanes · ${paths.length * 2} synapse paths</span>
+        <b>${esc(worker.display_name)} worker map</b>
+        <span>${rootCells.length} helper lanes · ${subagents.length} subagents · ${paths.length * 2} routes</span>
       </div>
       <div class="worker-layer-grid">
         ${layers.map((layer) => `<span><b>${layerCounts[layer] || 0}</b><i>${esc(layer)}</i></span>`).join("")}
@@ -1777,7 +1994,7 @@ function renderWorkerNetworkPanel(worker, subagents, cellsBySubagent, rootCells)
           <article>
             <b>${esc(subagent.display_name)}</b>
             <p>${esc(first)} -> ${esc(last)}</p>
-            <span>${count} specialist cells</span>
+            <span>${count} helper lanes</span>
           </article>`).join("")}
       </div>
     </div>`;
@@ -1792,7 +2009,7 @@ function workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeT
             <span class="wf-avatar wf-avatar-${esc(subagent.avatar?.tone || subagent.status)}">${esc(subagent.avatar?.initials || workerInitials(subagent.display_name))}</span>
             <div>
               <b>${esc(subagent.display_name)}</b>
-              <i>${esc(subagent.role)} · ${esc(workerStatusLabel(subagent.status))} · ${(cellsBySubagent.get(subagent.worker_id) || []).length} cells</i>
+              <i>${esc(subagent.role)} · ${esc(workerStatusLabel(subagent.status))} · ${(cellsBySubagent.get(subagent.worker_id) || []).length} helper lanes</i>
               <p>${esc(shortSubagentFocus(subagent))}</p>
             </div>
           </article>`).join("")}
@@ -1821,7 +2038,7 @@ function workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeT
         <p>${esc(worker.last_active_at || "No ledger activity")} · ${esc(workerStatusLabel(worker.status))}. This view shows mapped capability plus local activity signals only.</p>
         <div class="worker-detail-stats">
           <span><b>${subagents.length}</b><i>subagents attached</i></span>
-          <span><b>${rootCells.length}</b><i>neural cells mapped</i></span>
+          <span><b>${rootCells.length}</b><i>helper lanes mapped</i></span>
           <span><b>${worker.has_activity ? "live" : "ready"}</b><i>activity signal</i></span>
           <span><b>${worker.approvals_required || 0}</b><i>approvals waiting</i></span>
         </div>
@@ -1831,11 +2048,11 @@ function workerTabContent(worker, subagents, cellsBySubagent, rootCells, activeT
   return `
     <div class="worker-tab-copy">
       <b>${esc(worker.current_task)}</b>
-      <p>Phantom routes matching work to this parent worker, then uses mapped helper lanes for signal, research, planning, drafting, QA, relay, proof, ledger, and feedback. These lanes are contracts unless a real route or ledger event activates them.</p>
+      <p>Phantom routes matching work to this lead worker, then uses mapped helper lanes for signal, research, planning, drafting, QA, relay, proof, ledger, and feedback. These lanes are contracts unless a real route or ledger event activates them.</p>
       <div class="worker-detail-stats">
         <span><b>${esc(worker.department)}</b><i>department</i></span>
         <span><b>${subagents.length}</b><i>subagents</i></span>
-        <span><b>${rootCells.length}</b><i>neural cells</i></span>
+        <span><b>${rootCells.length}</b><i>helper lanes</i></span>
         <span><b>${esc(worker.metric_source || "topology")}</b><i>metric source</i></span>
       </div>
     </div>`;
@@ -1876,11 +2093,11 @@ function renderWorkerShell(worker, subagents, cellsBySubagent, rootCells) {
         </span>
         <span class="worker-shell-meta">
           <b>${rootCells.length}</b>
-          <i>cells</i>
+          <i>lanes</i>
         </span>
         <span class="worker-shell-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
       </button>
-      <div class="worker-shell-bar" aria-hidden="true" title="Topology density, not live workload"><i style="--worker-cap:${mapPct}%"></i></div>
+      <div class="worker-shell-bar" aria-hidden="true" title="Worker map density, not live workload"><i style="--worker-cap:${mapPct}%"></i></div>
       ${selected ? renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells) : ""}
     </article>`;
 }
@@ -1952,37 +2169,37 @@ function renderWorkforce(el, rerender) {
   const neuralCellCount = workers.filter((worker) => worker.worker_type === "cell").length;
   const departmentCount = new Set(workers.map((worker) => worker.department)).size;
   const filters = [
-    ["all", "All parents"],
+    ["all", "All workers"],
     ["employees", "Workers"],
     ["subagents", "Subagents"],
-    ["cells", "Neural cells"],
+    ["cells", "Helper lanes"],
     ...WORKFORCE_FILTERS.slice(1).map((dept) => [dept.toLowerCase().replace(/\s+/g, "-"), dept]),
     ["approval", "Approval"],
   ];
   el.innerHTML = `
     <section class="workers-hero">
       <div>
-        <p class="worker-kicker">Workforce topology</p>
+        <p class="worker-kicker">Workforce map</p>
         <h3>PhantomForce Workers</h3>
-        <p>Clean parent-worker view. Click a worker to expand mapped helper lanes, neural-cell contracts, and safety rules. Activity is shown only when a real local ledger signal exists.</p>
+        <p>Clean workforce view. Click a worker to see its subagents, helper lanes, and safety rules. Built to scale toward 1,000+ real workers without exposing tool names to clients.</p>
       </div>
       <div class="worker-scale">
-        <span><b>${mappedCount}</b> mapped nodes</span>
+        <span><b>${mappedCount}</b> workers mapped</span>
         <span><b>${ledgerSignalCount}</b> ledger signals</span>
-        <span><b>${parentCount}</b> parent workers</span>
+        <span><b>${parentCount}</b> lead workers</span>
         <span><b>${subagentCount}</b> subagents</span>
-        <span><b>${neuralCellCount}</b> neural cells</span>
+        <span><b>${neuralCellCount}</b> helper lanes</span>
         <span><b>${departmentCount}</b> departments mapped</span>
       </div>
     </section>
     ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount })}
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
     <div class="worker-metrics">
-      <div><span>Mapped Nodes</span><b>${mappedCount}</b></div>
+      <div><span>Workers Mapped</span><b>${mappedCount}</b></div>
       <div><span>Ledger Signals</span><b>${ledgerSignalCount}</b></div>
-      <div><span>Parent Workers</span><b>${parentCount}</b></div>
+      <div><span>Lead Workers</span><b>${parentCount}</b></div>
       <div><span>Subagents</span><b>${subagentCount}</b></div>
-      <div><span>Neural Cells</span><b>${neuralCellCount}</b></div>
+      <div><span>Helper Lanes</span><b>${neuralCellCount}</b></div>
       <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
       <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
       <div><span>Departments Mapped</span><b>${departmentCount}</b></div>
@@ -2157,7 +2374,7 @@ export const WORKSPACE_DEFS = {
   media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
   sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
-  money: { title: "Money", kicker: "Revenue phantom", render: renderMoney },
+  money: { title: "Money", kicker: "Finance ledger", render: renderMoney },
   memory: { title: "Memory", kicker: "Local context database", render: renderMemory },
   workforce: { title: "Workers", kicker: "Swarm network", render: renderWorkforce },
   approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
@@ -2185,14 +2402,14 @@ export function missionWidgets() {
 
   const w = [
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
-    { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} open`, alert: false },
+    { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
     { id: "media", icon: "▶", title: "Media Lab", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
     { id: "sites", icon: "▦", title: "Site Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
-    { id: "money", icon: "◈", title: "Money", stat: fmtMoney(m.pipeline), sub: `${fmtMoney(m.retainerMonthly)}/mo retainers`, alert: false },
-    { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} nodes`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} cells` : "your support swarm", alert: false },
+    { id: "money", icon: "◈", title: "Money", stat: m.transactions.length ? moneySigned(m.netCash) : "ledger", sub: m.transactions.length ? `${m.transactions.length} transaction${m.transactions.length === 1 ? "" : "s"}` : "add/import transactions", alert: false },
+    { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
     { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });

@@ -11,8 +11,8 @@ import {
   PACKAGES, RETAINERS, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig,
-} from "./store.js?v=phantom-live-20260710-141";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260710-141";
+} from "./store.js?v=phantom-live-20260710-146";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260710-146";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 const DAY = 86400000;
@@ -32,6 +32,7 @@ function card(kicker, name, body, actions = [], meta = "") {
   return { kicker, title: name, body, actions, meta };
 }
 const openAction = (label, ws) => ({ label, open: ws });
+const signedMoney = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmtMoney(value);
 
 function loadRuntimeAiSettings() {
   const defaults = {
@@ -291,6 +292,8 @@ function operatorSnapshot() {
     openProposals: m.open.length,
     wonValue: m.wonValue,
     retainerMonthly: m.retainerMonthly,
+    netCash: m.netCash,
+    transactionCount: m.transactions.length,
     approvals: approvalCount(),
     today: plan.length,
     topPlan: plan[0] || null,
@@ -300,7 +303,8 @@ function operatorSnapshot() {
 function readinessLine() {
   const snap = operatorSnapshot();
   const pieces = [
-    `${fmtMoney(snap.pipeline)} open pipeline`,
+    snap.transactionCount ? `${signedMoney(snap.netCash)} net cashflow` : "ledger empty",
+    `${fmtMoney(snap.pipeline)} quote potential`,
     `${snap.openProposals} open proposal${snap.openProposals === 1 ? "" : "s"}`,
     `${snap.approvals} approval${snap.approvals === 1 ? "" : "s"}`,
     `${snap.today} item${snap.today === 1 ? "" : "s"} on today's board`,
@@ -397,7 +401,7 @@ function localQuestionAnswer(text, settings = null) {
 
   const snap = operatorSnapshot();
   return {
-    say: `Right now: ${fmtMoney(snap.pipeline)} in pipeline, ${snap.approvals} approval${snap.approvals === 1 ? "" : "s"} waiting, ${snap.today} thing${snap.today === 1 ? "" : "s"} on today's plan. Ask me anything, or tell me what to build, post, automate, or check.`,
+    say: `Right now: ${snap.transactionCount ? `${signedMoney(snap.netCash)} net cashflow` : "ledger empty"}, ${fmtMoney(snap.pipeline)} in quote potential, ${snap.approvals} approval${snap.approvals === 1 ? "" : "s"} waiting, ${snap.today} thing${snap.today === 1 ? "" : "s"} on today's plan. Ask me anything, or tell me what to build, post, automate, or check.`,
     cards: [],
     open: null,
   };
@@ -565,7 +569,7 @@ function shapeResponse(response, settings) {
   if (settings.responseStyle === "coach" && !/^Here's the thinking/i.test(say)) {
     say = `Here's the thinking: ${say}`;
   } else if (settings.responseStyle === "sales" && !/pipeline|money|revenue|\$/.test(say)) {
-    say = `${say} Money angle: keep this pointed at revenue.`;
+    say = `${say} Business angle: keep this tied to a measurable outcome.`;
   } else if (settings.responseStyle === "technical" && response.intent?.reasonCode && isOwnerOperator()) {
     /* raw intent/lane diagnostics are owner-only — everyone else picking
        "Technical" style just gets a slightly more precise, less chatty tone */
@@ -589,15 +593,32 @@ function routeCommand(raw, settings) {
   const guarded = intentResponse(intent, text, settings);
   if (guarded) return { ...guarded, intent };
 
-  /* --- money / pipeline --- */
-  if (/pipeline|revenue|money|how much.*(made|worth|owed)|unpaid|invoice|cash/.test(s)) {
+  /* --- actual money / accounting ledger --- */
+  if (/\b(money|cash|cashflow|cash flow|transaction|transactions|expense|expenses|accounting|ledger|bank|credit card|card spend|unpaid|invoice|paid|payment)\b/.test(s)) {
+    const m = moneyView();
+    const line = m.transactions.length
+      ? `${signedMoney(m.netCash)} net cashflow across ${m.transactions.length} actual transaction${m.transactions.length === 1 ? "" : "s"}: ${fmtMoney(m.cashIn)} in, ${fmtMoney(m.cashOut)} out.`
+      : "Your finance ledger has no transactions yet. Add one manually or import a bank/card CSV; live bank sync should stay marked not connected until the secure connector backend is configured.";
+    return {
+      say: line,
+      cards: [card("Money", "Actual transaction ledger",
+        m.transactions.length
+          ? `${m.uncategorizedCount} uncategorized · latest: ${m.latestTransaction?.description || "none"}.`
+          : "Money only counts confirmed transaction records here. Potential revenue belongs in goals and quotes.",
+        [openAction("Open Money", "money")])],
+      open: "money",
+    };
+  }
+
+  /* --- opportunity / goals, not ledger cash --- */
+  if (/\b(pipeline|revenue goal|potential revenue|open quotes?|won proposals?|retainers?)\b/.test(s)) {
     const m = moneyView();
     return {
-      say: `Pipeline is ${fmtMoney(m.pipeline)} open across ${m.open.length} proposal${m.open.length === 1 ? "" : "s"}, ${fmtMoney(m.wonValue)} won, and ${fmtMoney(m.retainerMonthly)}/mo in retainers attached.`,
-      cards: [card("Money", "Pipeline snapshot",
+      say: `${fmtMoney(m.pipeline)} is open quote potential, ${fmtMoney(m.wonValue)} is won proposal value, and ${fmtMoney(m.retainerMonthly)}/mo is retainer goal value. None of that counts as Money until a real transaction confirms cash moved.`,
+      cards: [card("Goals", "Opportunity snapshot",
         `${m.open.length} open · ${m.won.length} won · ${m.lost.length} lost. Highest-value open: ${m.open[0] ? `${m.open[0].client} (${fmtMoney(m.open[0].price)})` : "none"}.`,
-        [openAction("Open Money", "money"), openAction("Open proposals", "proposals")])],
-      open: null,
+        [openAction("Open quotes", "proposals"), openAction("Open Money ledger", "money")])],
+      open: "proposals",
     };
   }
 

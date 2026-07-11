@@ -16,6 +16,7 @@
     "test:security-scanner": "tsx scripts/test-security-scanner-route.ts",
     "test:chicagoshots-crm": "tsx scripts/test-chicagoshots-nexprospex-crm.ts",
     "test:send-readiness-status": "tsx scripts/test-send-readiness-status.ts",
+    "test:finance-connector": "tsx scripts/test-finance-connector-status.ts",
     "test:agent-workforce": "tsx scripts/test-agent-workforce-status.ts",
     "test:neural-spine": "tsx scripts/test-neural-spine.ts",
     "test:internal-harness": "tsx scripts/test-internal-harness-router.ts",

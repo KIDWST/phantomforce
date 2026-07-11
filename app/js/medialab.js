@@ -6,12 +6,12 @@
  * instead of sending people out to another product.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260710-141";
+import { session as accessSession } from "./store.js?v=phantom-live-20260710-146";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260710-141";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-141";
-import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-141";
+} from "./contenthub.js?v=phantom-live-20260710-146";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-146";
+import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-146";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1056,7 +1056,7 @@ function consumePromptIntent(opts = {}) {
 }
 
 const NAV_TABS = [
-  ["generate", "Cockpit"],
+  ["generate", "Create"],
   ["library", "Media Pool"],
   ["pending", "Pending"],
   ["edit", "Edit"],
@@ -1074,29 +1074,25 @@ export function renderMediaStudio(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   if (session.tab === "briefs") session.tab = "pending";
-  const hasConfiguredEngine = providersFor(cfg, "image").length + providersFor(cfg, "video").length > 0;
   el.innerHTML = `
     <div class="ml">
       <div class="ml-topbar">
+        <button class="ml-back" data-ml-back type="button" aria-label="Go back"><span aria-hidden="true">&larr;</span><em>Back</em></button>
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
           ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
         </nav>
-        <div class="ml-topbar-tools">
-          ${NAV_DRAWERS.map(([id, label, ic]) => `<button class="ml-topbar-ic ${activeDrawer === id ? "is-active" : ""}" data-ml-drawer-open="${id}" title="${label}" aria-label="${label}">${svgIc(ic)}</button>`).join("")}
-          <button class="ml-topbar-ic" data-ml-open-settings-rail title="Settings" aria-label="Settings">${svgIc("gear")}</button>
-        </div>
-        <div class="ml-engine-mini ${hasConfiguredEngine ? "is-checking" : "is-down"}" data-ml-engine-mini title="${hasConfiguredEngine ? "Checking the media engine." : "No media engine is enabled."}">
-          <span class="ml-engine-mini-dot" aria-hidden="true"></span>
-          <span data-ml-engine-mini-label>${hasConfiguredEngine ? "Checking engine" : "Engine off"}</span>
-          <b>${svgIc("bolt")}${cfg.credits}</b>
-        </div>
+        <button class="ml-settings-gear ${activeDrawer === "settings" ? "is-active" : ""}" data-ml-open-local-settings type="button" title="Media Lab settings" aria-label="Media Lab settings">${svgIc("gear")}</button>
       </div>
       <div class="ml-body" data-ml-body></div>
       ${activeDrawer ? drawerHtml(activeDrawer, cfg, esc, opts) : ""}
     </div>`;
+  el.querySelector("[data-ml-back]")?.addEventListener("click", () => {
+    if (window.history.length > 1) window.history.back();
+    else opts.openWorkspace?.("home");
+  });
   el.querySelectorAll("[data-ml-tab]").forEach((b) => b.onclick = () => { session.tab = b.dataset.mlTab; activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelectorAll("[data-ml-drawer-open]").forEach((b) => b.onclick = () => { activeDrawer = activeDrawer === b.dataset.mlDrawerOpen ? null : b.dataset.mlDrawerOpen; renderMediaStudio(el, opts); });
-  el.querySelector("[data-ml-open-settings-rail]")?.addEventListener("click", () => opts.openSettings && opts.openSettings());
+  el.querySelector("[data-ml-open-local-settings]")?.addEventListener("click", () => { activeDrawer = activeDrawer === "settings" ? null : "settings"; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-drawer-close]")?.addEventListener("click", () => { activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-drawer-backdrop]")?.addEventListener("click", () => { activeDrawer = null; renderMediaStudio(el, opts); });
   wireDrawer(el, activeDrawer, cfg, opts, esc);
@@ -1105,17 +1101,16 @@ export function renderMediaStudio(el, opts = {}) {
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderLibrary(body, opts, el);
-  refreshEngineMini(el, cfg).catch(() => updateEngineMini(el, "down", "Engine offline", "Media engine did not answer."));
 }
 
-/* ---- drawers: Templates / History / Engine — real data, slide-over panel ---- */
+/* ---- drawers: Templates / History / Engine / Settings — local Media Lab only ---- */
 function drawerHtml(kind, cfg, esc, opts) {
-  const titleFor = { templates: "Templates", history: "History", engine: "Engine" };
+  const titleFor = { templates: "Templates", history: "History", engine: "Engine", settings: "Media Lab settings" };
   return `
     <div class="ml-drawer-backdrop" data-ml-drawer-backdrop></div>
     <aside class="ml-drawer" role="dialog" aria-label="${titleFor[kind]}">
       <header class="ml-drawer-head"><b>${titleFor[kind]}</b><button class="ml-drawer-x" data-ml-drawer-close aria-label="Close">${svgIc("close")}</button></header>
-      <div class="ml-drawer-body">${kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : engineDrawerHtml(cfg, esc)}</div>
+      <div class="ml-drawer-body">${kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : kind === "settings" ? mediaSettingsDrawerHtml(cfg, esc) : engineDrawerHtml(cfg, esc)}</div>
     </aside>`;
 }
 function templatesDrawerHtml(esc) {
@@ -1145,8 +1140,72 @@ function engineDrawerHtml(cfg, esc) {
       <span><b>Production credits</b><i>${cfg.credits} available</i></span>
       <span><b>Approval</b><i>${cfg.requireApproval ? "Required before paid renders" : "Owner-approved"}</i></span>
     </div>
-    ${provs.length > 1 ? `<p class="ml-drawer-note">${provs.length} engines available for ${genState.modality}. Switch from the Shot Builder's engine picker.</p>` : ""}
-    <button class="ml-generate ml-ghost ml-inline" data-ml-drawer-settings>${svgIc("gear")} Open full settings</button>`;
+    ${provs.length > 1 ? `<p class="ml-drawer-note">${provs.length} engines available for ${genState.modality}. Use the Media Lab gear to change creative defaults.</p>` : ""}`;
+}
+function mediaSettingsDrawerHtml(cfg, esc) {
+  const provs = providersFor(cfg, genState.modality);
+  const p = provider(cfg, genState.provider) || provs[0] || {};
+  const models = (p.models && p.models[genState.modality]) || [];
+  const aspects = genState.modality === "video" ? VID_ASPECTS : IMG_ASPECTS;
+  return `
+    <p class="ml-drawer-note">Local settings for this Media Lab session. This does not open the full app settings page.</p>
+    <div class="ml-drawer-settings">
+      <section class="ml-drawer-section">
+        <span class="ml-drawer-label">Create</span>
+        <div class="ml-seg ml-seg-sm" data-ml-set-modality>
+          <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
+          <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
+        </div>
+      </section>
+
+      <section class="ml-drawer-section">
+        <span class="ml-drawer-label">Format</span>
+        <div class="ml-settings-grid">
+          <label class="ml-field"><span>Ratio</span>
+            <select class="ml-select ml-select-pill" data-ml-set-aspect>${aspectOptions(aspectGroups(aspects), esc)}</select>
+          </label>
+          ${genState.modality === "video" ? `<label class="ml-field"><span>Length</span>
+            <div class="ml-chips" data-ml-set-dur>${DURATIONS.map((d) => `<button class="${genState.duration === d ? "is-on" : ""}" data-v="${d}">${d}s</button>`).join("")}</div></label>`
+          : `<label class="ml-field"><span>Takes</span>
+            <div class="ml-chips" data-ml-set-count>${[1, 2, 3, 4].map((n) => `<button class="${genState.count === n ? "is-on" : ""}" data-v="${n}">${n}</button>`).join("")}</div></label>`}
+        </div>
+        <label class="ml-field"><span>Style</span>
+          <select class="ml-select ml-select-pill" data-ml-set-style>${STYLES.map((s) => `<option value="${esc(s)}" ${genState.style === s ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
+        </label>
+      </section>
+
+      <section class="ml-drawer-section">
+        <span class="ml-drawer-label">Quality</span>
+        <div class="ml-seg ml-seg-sm" data-ml-set-quality>
+          <button class="${genState.quality === "standard" ? "is-on" : ""}" data-v="standard">Standard</button>
+          <button class="${genState.quality === "high" ? "is-on" : ""}" data-v="high">High</button>
+        </div>
+      </section>
+
+      <section class="ml-drawer-section">
+        <span class="ml-drawer-label">Engine</span>
+        ${provs.length ? `<label class="ml-field"><span>Lane</span>
+          <select class="ml-select ml-select-pill" data-ml-set-provider>${provs.map((x) => `<option value="${x.id}" ${genState.provider === x.id ? "selected" : ""}>${esc(x.name)}</option>`).join("")}</select>
+        </label>` : `<div class="ml-settings-empty">No Media Lab engine is connected yet.</div>`}
+        ${models.length ? `<label class="ml-field"><span>Model</span>
+          <select class="ml-select ml-select-pill" data-ml-set-model>${models.map((m) => `<option value="${esc(m)}" ${genState.model === m ? "selected" : ""}>${esc(laneLabel(m) || m)}</option>`).join("")}</select>
+        </label>` : ""}
+        <button class="ml-generate ml-ghost ml-inline" data-ml-set-recheck type="button">${svgIc("spark")} Re-check Media Lab</button>
+      </section>
+
+      <section class="ml-drawer-section">
+        <span class="ml-drawer-label">Avoid</span>
+        <textarea class="ml-prompt ml-settings-textarea" data-ml-set-neg rows="3" placeholder="Optional: words, styles, or details to avoid...">${esc(genState.negative)}</textarea>
+      </section>
+
+      <section class="ml-drawer-section">
+        <span class="ml-drawer-label">Status</span>
+        <div class="ml-engine-drawer-rows">
+          <span><b>Credits</b><i>${cfg.credits} available</i></span>
+          <span><b>Approval</b><i>${cfg.requireApproval ? "Required before paid renders" : "Owner-approved"}</i></span>
+        </div>
+      </section>
+    </div>`;
 }
 function wireDrawer(el, kind, cfg, opts, esc) {
   if (kind === "templates") {
@@ -1157,7 +1216,30 @@ function wireDrawer(el, kind, cfg, opts, esc) {
       renderMediaStudio(el, opts);
     });
   }
-  el.querySelector("[data-ml-drawer-settings]")?.addEventListener("click", () => opts.openSettings && opts.openSettings());
+  if (kind === "settings") {
+    el.querySelectorAll("[data-ml-set-modality] button").forEach((b) => b.onclick = () => { setModality(b.dataset.v); renderMediaStudio(el, opts); });
+    const aspect = el.querySelector("[data-ml-set-aspect]");
+    if (aspect) aspect.onchange = () => { genState.aspect = aspect.value; markCustomPreset(); renderMediaStudio(el, opts); };
+    el.querySelectorAll("[data-ml-set-count] button").forEach((b) => b.onclick = () => { genState.count = +b.dataset.v; markCustomPreset(); renderMediaStudio(el, opts); });
+    el.querySelectorAll("[data-ml-set-dur] button").forEach((b) => b.onclick = () => { genState.duration = +b.dataset.v; markCustomPreset(); renderMediaStudio(el, opts); });
+    const style = el.querySelector("[data-ml-set-style]");
+    if (style) style.onchange = () => { genState.style = style.value; markCustomPreset(); renderMediaStudio(el, opts); };
+    el.querySelectorAll("[data-ml-set-quality] button").forEach((b) => b.onclick = () => { genState.quality = b.dataset.v || "standard"; renderMediaStudio(el, opts); });
+    const prov = el.querySelector("[data-ml-set-provider]");
+    if (prov) prov.onchange = () => { genState.provider = prov.value; genState.model = ""; renderMediaStudio(el, opts); };
+    const model = el.querySelector("[data-ml-set-model]");
+    if (model) model.onchange = () => { genState.model = model.value; };
+    const neg = el.querySelector("[data-ml-set-neg]");
+    if (neg) neg.oninput = () => { genState.negative = neg.value; };
+    const recheck = el.querySelector("[data-ml-set-recheck]");
+    if (recheck) recheck.onclick = async () => {
+      recheck.disabled = true;
+      recheck.innerHTML = `${svgIc("spark")} Checking...`;
+      await checkEngineHealth(cfg, true).catch(() => null);
+      opts.notify?.("Media Lab", "Media Lab status refreshed.");
+      renderMediaStudio(el, opts);
+    };
+  }
 }
 
 function renderPending(body) {
@@ -1229,29 +1311,13 @@ function renderGenerate(body, cfg, opts, root) {
   if (!models.includes(genState.model)) genState.model = models[0] || "";
   const aspects = genState.modality === "video" ? VID_ASPECTS : IMG_ASPECTS;
   if (!aspects.find(([k]) => k === genState.aspect)) genState.aspect = aspects[0][0];
-  const aspectGrp = aspectGroups(aspects);
 
   body.innerHTML = `
-    <div class="ml-doctor" data-ml-doctor>
-      <span class="ml-doctor-badge" aria-hidden="true"><i class="ml-doctor-dot"></i></span>
-      <span class="ml-doctor-copy">
-        <b data-ml-doctor-title>Checking the media engine…</b>
-        <span class="ml-doctor-stats" data-ml-doctor-msg></span>
-      </span>
-      <details class="ml-doctor-details" data-ml-doctor-details hidden>
-        <summary>Details</summary>
-        <p data-ml-doctor-raw></p>
-      </details>
-      <button class="ml-doctor-retry" data-ml-doctor-retry type="button">${svgIc("spark")}Re-check</button>
-    </div>
     <div class="ml-workspace">
       <section class="ml-brief" aria-label="Shot Builder">
         <div class="ml-brief-head">
           <div class="ml-card-head"><b>Shot Builder</b></div>
-          <div class="ml-seg" data-ml-modality>
-            <button class="${genState.modality === "image" ? "is-on" : ""}" data-v="image">${svgIc("image")} Image</button>
-            <button class="${genState.modality === "video" ? "is-on" : ""}" data-v="video">${svgIc("film")} Video</button>
-          </div>
+          <button class="ml-setup-link" data-ml-open-settings type="button">${svgIc("gear")} ${genState.modality === "video" ? "Video" : "Image"} · ${genState.aspect} · ${esc(genState.style)}</button>
         </div>
 
         <label class="ml-field"><span>Reference</span>
@@ -1269,49 +1335,13 @@ function renderGenerate(body, cfg, opts, root) {
             <button class="ml-enhance" data-ml-enhance title="Improve prompt">${svgIc("spark")} Enhance</button>
           </div>
         </label>
-        <button class="ml-link" data-ml-toggleneg>${genState.showNeg ? "− Hide" : "+ Add"} negative prompt</button>
-        ${genState.showNeg ? `<label class="ml-field"><textarea class="ml-prompt" data-ml-neg rows="2" placeholder="What to avoid…">${esc(genState.negative)}</textarea></label>` : ""}
 
-        <div class="ml-brief-row">
-          <label class="ml-field"><span>Ratio</span>
-            <select class="ml-select ml-select-pill" data-ml-aspect-select>${aspectOptions(aspectGrp, esc)}</select>
-          </label>
-          ${genState.modality === "video" ? `<label class="ml-field"><span>Duration</span>
-            <div class="ml-chips" data-ml-dur>${DURATIONS.map((d) => `<button class="${genState.duration === d ? "is-on" : ""}" data-v="${d}">${d}s</button>`).join("")}</div></label>`
-          : `<label class="ml-field"><span>Takes</span>
-            <div class="ml-chips" data-ml-count>${[1, 2, 3, 4].map((n) => `<button class="${genState.count === n ? "is-on" : ""}" data-v="${n}">${n}</button>`).join("")}</div></label>`}
-          <label class="ml-field ml-grow"><span>Style</span>
-            <select class="ml-select ml-select-pill" data-ml-style-select>${STYLES.map((s) => `<option value="${esc(s)}" ${genState.style === s ? "selected" : ""}>${esc(s)}</option>`).join("")}</select>
-          </label>
-        </div>
-
-        <details class="ml-advanced">
-          <summary>${svgIc("gear")} Advanced settings</summary>
-          <div class="ml-advanced-body">
-            <label class="ml-field"><span>Quality</span>
-              <div class="ml-seg ml-seg-sm" data-ml-quality>
-                <button class="${genState.quality === "standard" ? "is-on" : ""}" data-v="standard">Standard</button>
-                <button class="${genState.quality === "high" ? "is-on" : ""}" data-v="high">High</button>
-              </div>
-            </label>
-            <p class="ml-advanced-note">High quality uses more production credits per take.</p>
-          </div>
-        </details>
-
-        <div class="ml-brief-engine">
-          <label class="ml-field"><span>Engine</span>
-            <div class="ml-provs" data-ml-provs>
-              ${provs.map((pr) => `<button class="ml-prov ${genState.provider === pr.id ? "is-on" : ""}" data-v="${pr.id}" style="--pb:${pr.brand}">
-                <i style="background:${pr.brand}"></i>${esc(pr.name)}</button>`).join("") || `<span class="ml-hint">No engine enabled for ${genState.modality}. <b data-ml-open-settings>Configure →</b></span>`}
-            </div>
-          </label>
-          ${models.length ? `<label class="ml-field"><span>Lane</span><select class="ml-select" data-ml-model title="Render lane">${models.map((m) => `<option value="${esc(m)}" ${genState.model === m ? "selected" : ""}>${esc(laneLabel(m))}</option>`).join("")}</select></label>` : ""}
-        </div>
+        ${!genState.provider ? `<button class="ml-settings-needed" data-ml-open-settings type="button">${svgIc("gear")} Connect Media Lab</button>` : ""}
 
         <button class="ml-generate ml-hero" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
           <span class="ml-generate-glow" aria-hidden="true"></span>
           <span class="ml-generate-main">${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality === "video" ? "cut" : "image"}`}</span>
-          <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : `~${estCredits()} credits · Phantom handles the rest`}</i>
+          <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : "Phantom handles the rest"}</i>
         </button>
       </section>
 
@@ -1333,7 +1363,6 @@ function renderGenerate(body, cfg, opts, root) {
       </section>
     </div>
     ${nextStepsHtml(esc)}
-    ${railHtml(cfg, esc)}
     ${jobLogHtml(esc)}`;
 
   wireGenerate(body, cfg, opts, root, esc);
@@ -1385,11 +1414,9 @@ function settingsChips(esc) {
   const chips = [
     preset ? preset.label : "Custom",
     genState.modality === "video" ? "Video" : "Image",
-    genState.model ? laneLabel(genState.model) : null,
     genState.style !== "None" ? genState.style : null,
     genState.aspect,
     genState.modality === "video" ? `${genState.duration}s` : `${genState.count} take${genState.count > 1 ? "s" : ""}`,
-    `≈ ${estCredits()} credits`,
   ].filter(Boolean);
   return `<div class="ml-brief-chips" aria-label="Current generation settings">${chips.map((c) => `<span>${esc(String(c))}</span>`).join("")}</div>`;
 }
@@ -1503,7 +1530,6 @@ function tileHtml(a, esc) {
 
 function wireGenerate(body, cfg, opts, root, esc) {
   const seg = (sel, fn) => body.querySelectorAll(`${sel} button`).forEach((b) => b.onclick = () => { fn(b.dataset.v); renderGenerate(body, cfg, opts, root); });
-  seg("[data-ml-modality]", setModality);
   seg("[data-ml-provs]", (v) => { genState.provider = v; });
   seg("[data-ml-quality]", (v) => { genState.quality = v; });
   if (body.querySelector("[data-ml-count]")) seg("[data-ml-count]", (v) => { genState.count = +v; markCustomPreset(); });
@@ -1517,7 +1543,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
   const pr = body.querySelector("[data-ml-prompt]"); if (pr) pr.oninput = () => { genState.prompt = pr.value; };
   const neg = body.querySelector("[data-ml-neg]"); if (neg) neg.oninput = () => { genState.negative = neg.value; };
   const tgl = body.querySelector("[data-ml-toggleneg]"); if (tgl) tgl.onclick = () => { genState.showNeg = !genState.showNeg; renderGenerate(body, cfg, opts, root); };
-  const os = body.querySelector("[data-ml-open-settings]"); if (os) os.onclick = () => opts.openSettings && opts.openSettings();
+  const os = body.querySelector("[data-ml-open-settings]"); if (os) os.onclick = () => { activeDrawer = "settings"; if (root) renderMediaStudio(root, opts); };
   body.querySelectorAll("[data-ml-hint]").forEach((b) => b.onclick = () => { genState.prompt = b.dataset.mlHint; renderGenerate(body, cfg, opts, root); });
 
   const enh = body.querySelector("[data-ml-enhance]");
@@ -2057,10 +2083,18 @@ export function renderMediaSettings(el, opts = {}) {
       <div class="set-section">
         <h3>Media generation</h3>
         <p class="set-note">Media Lab keeps generation inside PhantomForce. Pick the default lanes, set approval behavior, and let PhantomForce handle the routing behind the curtain.</p>
+        <div class="set-rembg-rows">
+          <div class="set-rembg-row"><span>Production credits</span><b>${esc(String(cfg.credits))}</b></div>
+          <div class="set-rembg-row"><span>Default quality</span><b>${esc(genState.quality === "high" ? "High" : "Standard")}</b></div>
+        </div>
         <div class="set-routes">
           ${routeRow("image", "Image engine")}
           ${routeRow("video", "Video engine")}
           ${routeRow("enhance", "Prompt intelligence")}
+        </div>
+        <div class="ml-seg ml-seg-sm set-quality-toggle" data-set-quality>
+          <button class="${genState.quality === "standard" ? "is-on" : ""}" data-v="standard">Standard</button>
+          <button class="${genState.quality === "high" ? "is-on" : ""}" data-v="high">High</button>
         </div>
         <label class="set-inline"><input type="checkbox" data-set-approval ${cfg.requireApproval ? "checked" : ""}/> Require approval before paid generation</label>
       </div>
@@ -2084,6 +2118,7 @@ export function renderMediaSettings(el, opts = {}) {
 
   // routing
   el.querySelectorAll("[data-route]").forEach((s) => s.onchange = () => { cfg.routing[s.dataset.route] = s.value; saveCfg(cfg); });
+  el.querySelectorAll("[data-set-quality] button").forEach((b) => b.onclick = () => { genState.quality = b.dataset.v || "standard"; renderMediaSettings(el, opts); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
   wireRembgEngineSection(el, opts);
 

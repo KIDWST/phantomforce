@@ -5,6 +5,7 @@ import { getBillingProviderStatus } from "./billing-provider.js";
 import { checkPangolinReadOnlyStatus } from "./pangolin-status.js";
 import { getAccessAuthConfiguration } from "./session.js";
 import { getSalesConnectorStatus } from "../connectors/sales-connector.js";
+import { getFinanceConnectorStatus } from "../connectors/finance-connector.js";
 
 export type ProductionReadinessGate = {
   id: string;
@@ -43,6 +44,7 @@ export async function buildProductionReadinessReport(): Promise<ProductionReadin
   const auth = getAccessAuthConfiguration();
   const billing = getBillingProviderStatus();
   const salesConnector = getSalesConnectorStatus();
+  const financeConnector = getFinanceConnectorStatus();
   const pangolinStatus = await checkPangolinReadOnlyStatus();
   const actionTypes = Object.keys(ACTION_SCHEMAS);
   const accessActionContractsReady = [
@@ -148,6 +150,13 @@ export async function buildProductionReadinessReport(): Promise<ProductionReadin
       "needs_config",
       "Sales connector is intentionally planned/disabled: no live CRM/lead provider, no credentials, no external send. Implement a typed connector + approval-gated import and explicitly enable before any live use.",
       `connector=${salesConnector.connector}; status=${salesConnector.status}; enabled=${salesConnector.enabled}; live=${salesConnector.live}; external_send=${salesConnector.external_send}`,
+    ),
+    gate(
+      "finance_connector_onboarding",
+      "Finance connector onboarding",
+      "needs_config",
+      "Manual transaction entry and CSV import are ready, but bank/card sync is intentionally disabled until Plaid-compatible server routes, encrypted token storage, and transaction normalization are implemented.",
+      `connector=${financeConnector.connector}; manual=${financeConnector.manual_entry_ready}; csv=${financeConnector.csv_import_ready}; liveBankSync=${financeConnector.live_bank_sync_enabled}; liveCardSync=${financeConnector.live_credit_card_sync_enabled}; providerRuntime=${financeConnector.provider_runtime}`,
     ),
   ];
 

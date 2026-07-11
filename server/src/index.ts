@@ -109,6 +109,7 @@ import {
   runAgentAction,
 } from "./phantom-ai/agent-actions.js";
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
+import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
 import {
   getHermesInteractionMemoryStoreStatus,
   normalizeHermesInteractionMemoryStoreLimit,
@@ -3145,6 +3146,18 @@ app.get("/phantom-ai/ops/sales-connector/status", async (request, reply) => {
   }
 
   return { ok: true, session, read_only: true, sales_connector: getSalesConnectorStatus() };
+});
+
+app.get("/phantom-ai/ops/finance-connector/status", async (request, reply) => {
+  // Admin-only. Manual/CSV finance ledger is ready; live bank/card sync is
+  // fail-closed until a real provider runtime and encrypted token store exist.
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return { ok: true, session, read_only: true, finance_connector: getFinanceConnectorStatus() };
 });
 
 app.get("/phantom-ai/ops/send-readiness/status", async (request, reply) => {
