@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-181";
+} from "./store.js?v=phantom-live-20260711-182";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -514,13 +514,17 @@ export function applyWebsitePrompt(site, promptText) {
   return changed || "I did not catch a site change yet. Try headline, store, color, premium, booking, product, or existing URL.";
 }
 
-export function renderWebsitePreview(site, products) {
+export function renderWebsitePreview(site, products, opts = {}) {
   const design = ensureSiteDesign(site);
   const theme = design.theme || "neon";
   const showProducts = design.storeEnabled || site.kind === "Store";
-  const sections = site.sections.slice(0, 6);
+  const sections = site.sections.slice(0, 8);
   const listedProducts = products.slice(0, 3);
   const gallery = Array.isArray(site.gallery) ? site.gallery.slice(0, 6) : [];
+  /* selectable: the editor passes selected (index) so a clicked section
+     highlights and gets its own toolbar — plain preview callers omit it and
+     get inert chips, exactly as before */
+  const selectable = Number.isInteger(opts.selected);
   return `
     <div class="site-live-preview theme-${esc(theme)}">
       <div class="site-browser-bar"><span></span><span></span><span></span><b>${esc(design.existingUrl || `${design.brand.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`)}</b><small>mockup preview</small></div>
@@ -536,7 +540,9 @@ export function renderWebsitePreview(site, products) {
           : `<div class="site-preview-orb" aria-hidden="true"><i></i></div>`}
       </div>
       <div class="site-preview-sections">
-        ${sections.map((section) => `<span>${esc(section)}</span>`).join("")}
+        ${sections.map((section, index) => selectable
+          ? `<button type="button" class="site-preview-section ${opts.selected === index ? "is-selected" : ""}" data-ss-sec="${index}">${esc(section)}</button>`
+          : `<span>${esc(section)}</span>`).join("")}
       </div>
       ${gallery.length ? `
         <div class="site-preview-gallery">
@@ -1266,7 +1272,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260711-181")
+      import("./brain.js?v=phantom-live-20260711-182")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
