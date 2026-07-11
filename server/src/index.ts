@@ -145,12 +145,18 @@ import {
 } from "./phantom-ai/external-security-monitor.js";
 import {
   activateVacationMode,
+  cancelVacationOperatorTask,
+  createVacationOperatorTask,
   deactivateVacationMode,
   decideVacationApproval,
   getVacationModeActivity,
   getVacationModeApprovals,
   getVacationModeStatus,
+  getVacationOperatorTasks,
+  runVacationModeCheckIn,
+  startVacationModeEngine,
   updateVacationModeSettings,
+  updateVacationOperatorTask,
 } from "./phantom-ai/vacation-mode.js";
 import {
   getAutonomousSecurityScanStatus,
@@ -2222,7 +2228,7 @@ app.post("/phantom-ai/approvals/queue/:queueId/status", async (request, reply) =
 });
 
 app.get("/api/vacation-mode/status", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2236,7 +2242,7 @@ app.get("/api/vacation-mode/status", async (request, reply) => {
 });
 
 app.post("/api/vacation-mode/activate", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2254,7 +2260,7 @@ app.post("/api/vacation-mode/activate", async (request, reply) => {
 });
 
 app.post("/api/vacation-mode/deactivate", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2272,7 +2278,7 @@ app.post("/api/vacation-mode/deactivate", async (request, reply) => {
 });
 
 app.patch("/api/vacation-mode/settings", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2290,7 +2296,7 @@ app.patch("/api/vacation-mode/settings", async (request, reply) => {
 });
 
 app.get("/api/vacation-mode/activity", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2307,7 +2313,7 @@ app.get("/api/vacation-mode/activity", async (request, reply) => {
 });
 
 app.get("/api/vacation-mode/approvals", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2325,7 +2331,7 @@ app.get("/api/vacation-mode/approvals", async (request, reply) => {
 });
 
 app.post("/api/vacation-mode/approvals/:id/decision", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2365,6 +2371,65 @@ app.post("/api/vacation-mode/approvals/:id/decision", async (request, reply) => 
     ...result,
     external_send_performed: false,
     provider_call_performed: false,
+  };
+});
+
+app.get("/api/vacation-mode/operator-tasks", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = request.query as { limit?: string } | undefined;
+  return {
+    ok: true,
+    session,
+    tasks: await getVacationOperatorTasks(session, Number(query?.limit ?? 40)),
+  };
+});
+
+app.post("/api/vacation-mode/operator-tasks", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const result = await createVacationOperatorTask(session, request.body ?? {});
+  if (!result) {
+    return reply.code(400).send({ ok: false, error: "A task type, title, and clear operator instructions are required." });
+  }
+  return {
+    ok: true,
+    session,
+    ...result,
+    ai_credits_used: 0,
+    human_work_executed: false,
+    external_action_executed: false,
+  };
+});
+
+app.post("/api/vacation-mode/operator-tasks/:id/cancel", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const result = params.id ? await cancelVacationOperatorTask(session, params.id.slice(0, 180)) : null;
+  if (!result) return reply.code(404).send({ ok: false, error: "Operator task was not found or is already closed." });
+  return { ok: true, session, ...result, external_action_executed: false };
+});
+
+app.patch("/api/vacation-mode/operator-tasks/:id/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const result = params.id
+    ? await updateVacationOperatorTask(session, params.id.slice(0, 180), request.body ?? {})
+    : null;
+  if (!result) return reply.code(400).send({ ok: false, error: "Operator task or status was invalid." });
+  return { ok: true, session, ...result, external_action_executed: false };
+});
+
+app.post("/api/vacation-mode/check-in", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return {
+    ...(await runVacationModeCheckIn("manual_admin")),
+    session,
+    provider_call_performed: false,
+    external_action_executed: false,
   };
 });
 
@@ -5460,12 +5525,15 @@ export { app };
 
 let stopAutonomousSecurityScanner: (() => void) | null = null;
 let stopAutomationEngine: (() => void) | null = null;
+let stopVacationModeEngine: (() => void) | null = null;
 
 app.addHook("onClose", async () => {
   stopAutonomousSecurityScanner?.();
   stopAutonomousSecurityScanner = null;
   stopAutomationEngine?.();
   stopAutomationEngine = null;
+  stopVacationModeEngine?.();
+  stopVacationModeEngine = null;
 });
 
 if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
@@ -5473,6 +5541,7 @@ if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
     await app.listen({ host, port });
     stopAutonomousSecurityScanner = startAutonomousSecurityScanScheduler(app.log);
     stopAutomationEngine = startAutomationEngine(app.log);
+    stopVacationModeEngine = startVacationModeEngine(app.log);
     app.log.info(`PhantomForce server listening on http://${host}:${port}`);
   } catch (error) {
     app.log.error(error);
