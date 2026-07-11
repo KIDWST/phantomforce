@@ -2127,10 +2127,13 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
   // how many subagents that employee actually has, and give every shell
   // generous room instead of fighting for space in a fixed band.
   const SUBAGENTS_PER_SHELL = 2;
-  const SHELL_BASE_RADIUS = 480;
+  const SHELL_BASE_RADIUS = 560;
   const SHELL_RADIUS_STEP = 190;
   const slicePerEmployee = 360 / Math.max(1, employeeNodes.length);
-  const sliceUsable = slicePerEmployee * 0.82; // leave a gap so neighboring clusters never touch
+  // 0.82 measured out to a ~45px arc-gap at the innermost shell - not enough
+  // room for two ~88px-wide subagent nodes on either side of the boundary,
+  // so neighboring employees' clusters overlapped at their shared edge.
+  const sliceUsable = slicePerEmployee * 0.55;
   const cappedSubagentIds = new Set(cappedSubagents.map((s) => s.worker_id));
   const subagentSlots = [];
   const claimedSubagentIds = new Set();
