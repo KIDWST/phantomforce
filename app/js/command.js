@@ -11,8 +11,8 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260711-179";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-179";
+} from "./store.js?v=phantom-live-20260711-180";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-180";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 const DAY = 86400000;

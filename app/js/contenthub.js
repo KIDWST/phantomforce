@@ -10,18 +10,18 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260711-179";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-179";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-179";
+} from "./imagefilters.js?v=phantom-live-20260711-180";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-180";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-180";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition,
-} from "./content-editor.js?v=phantom-live-20260711-179";
+} from "./content-editor.js?v=phantom-live-20260711-180";
 import {
   currentTenantId, currentWs, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260711-179";
+} from "./store.js?v=phantom-live-20260711-180";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -1296,7 +1296,8 @@ function freshLightbox(asset, extra = {}) {
     state: freshEditState(), bokehPicking: false, bokehCursor: null, showTutorial: false,
     selectedSpot: null, rememberBokehSize: true, _probed: false,
     layers: { image: true, cutout: true, bokeh: true, text: true, ...extraLayers },
-    openSections: { adjust: true, transform: false, presets: false, text: false },
+    openSections: { adjust: false, transform: false, presets: false, text: false },
+    layerMenuOpen: false,
     aiEdit: { status: "idle", message: "", provider: null },
     bg: { status: "idle", message: "" },
     bokehDetect: { status: "idle", message: "" },
@@ -1441,22 +1442,33 @@ function chTSlider(label, key, min, max, val, esc) {
 
 function aiEditBody(lb, esc) {
   const ai = lb.aiEdit || { mode: "unavailable", status: "idle" };
+  const target = selectedImageLayer(lb);
   const checking = ai.status === "checking";
   const loading = ai.status === "loading";
   const busy = checking || loading;
 
   if (ai.mode !== "connected") return "";
 
+  const presets = [
+    ["Auto enhance", "Improve lighting, color balance, clarity, and composition while keeping the subject natural."],
+    ["Relight", "Relight this image with clean professional studio lighting and realistic skin tones."],
+    ["Clean up", "Remove visual distractions and imperfections while preserving the main subject exactly."],
+    ["Headshot", "Polish this into a premium professional business headshot with a natural realistic finish."],
+    ["Product", "Polish this into a premium product image with crisp detail and commercially clean lighting."],
+  ];
   return `
+    <p class="ch-lb-ai-note">${target ? `Editing selected layer: <b>${esc(target.name)}</b>` : "Select one image layer to use AI tools."}</p>
+    <div class="ch-ai-quick-grid">
+      ${presets.map(([label, prompt]) => `<button type="button" data-ch-ai-preset="${esc(prompt)}" ${busy || !target ? "disabled" : ""}>${esc(label)}</button>`).join("")}
+    </div>
     <div class="ch-lb-ai-row">
-      <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="e.g. brighter, cinematic teal, remove background glow…"/>
-      <button class="btn btn-primary" type="button" data-ch-lb-ai-run ${busy ? "disabled" : ""}>${loading ? "Generating…" : checking ? "Checking…" : "Generate AI Edit"}</button>
+      <input class="ch-lb-ai-input" data-ch-lb-ai placeholder="Describe the finished result..."/>
+      <button class="btn btn-primary" type="button" data-ch-lb-ai-run ${busy || !target ? "disabled" : ""}>${loading ? "Generating..." : checking ? "Checking..." : "Edit selected"}</button>
     </div>
     ${ai.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(ai.message || "Edit failed.")}</p>` : ""}
-    ${ai.status === "success" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Edit applied — use Reset to go back to the original.</p>` : ""}
+    ${ai.status === "success" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">AI edit applied to the selected layer.</p>` : ""}
   `;
 }
-
 function removeBgBody(lb, esc) {
   const bg = lb.bg || { status: "idle" };
   const target = selectedImageLayer(lb);
@@ -1564,6 +1576,14 @@ function layerPropertySlider(label, key, value, min, max, step = 1) {
   return `<label class="ch-layer-prop"><span>${label}<b data-ch-layer-out="${key}">${value}</b></span><input type="range" min="${min}" max="${max}" step="${step}" value="${value}" data-ch-layer-prop="${key}"/></label>`;
 }
 
+const COLOR_LAYER_PALETTE = [
+  "#000000", "#ffffff", "#111827", "#334155", "#64748b", "#e2e8f0",
+  "#ef4444", "#f97316", "#f59e0b", "#eab308", "#84cc16", "#22c55e",
+  "#10b981", "#14b8a6", "#06b6d4", "#0ea5e9", "#3b82f6", "#6366f1",
+  "#8b5cf6", "#a855f7", "#d946ef", "#ec4899", "#f43f5e", "#7f1d1d",
+  "#78350f", "#14532d", "#134e4a", "#164e63", "#1e3a8a", "#4c1d95"
+];
+
 function selectedLayerInspector(lb, esc) {
   const layer = selectedLayers(lb.composition)[0];
   if (!layer || lb.composition.selectedIds.length !== 1) {
@@ -1594,7 +1614,13 @@ function selectedLayerInspector(lb, esc) {
       ${layerPropertySlider("Box fill", "backgroundOpacity", Math.round((layer.backgroundOpacity || 0) * 100), 0, 100)}
       <div class="ch-lb-chips"><button type="button" data-ch-layer-toggle="bold" class="${layer.bold ? "is-on" : ""}"><b>B</b></button><button type="button" data-ch-layer-toggle="shadow" class="${layer.shadow ? "is-on" : ""}">Shadow</button></div>`;
   } else if (layer.type === "color") {
-    typeFields = `<label class="ch-layer-field"><span>Fill color</span><input type="color" data-ch-layer-field="color" value="${esc(layer.color || "#10251c")}"/></label>${layerPropertySlider("Corner radius", "radius", Math.round((layer.radius || 0) * 100), 0, 50)}`;
+    const current = layer.color || "#10251c";
+    typeFields = `
+      <label class="ch-layer-field"><span>Fill color</span><input type="color" data-ch-layer-field="color" value="${esc(current)}"/></label>
+      <div class="ch-color-palette" aria-label="Color palette">
+        ${COLOR_LAYER_PALETTE.map((color) => `<button type="button" data-ch-layer-color="${color}" class="${color.toLowerCase() === current.toLowerCase() ? "is-selected" : ""}" style="--swatch:${color}" title="${color}" aria-label="Use ${color}"></button>`).join("")}
+      </div>
+      ${layerPropertySlider("Corner radius", "radius", Math.round((layer.radius || 0) * 100), 0, 50)}`;
   }
   return `
     <div class="ch-layer-inspector">
@@ -1615,22 +1641,31 @@ function layerStackBody(lb, esc) {
   return `
     <div class="ch-lb-layers" data-ch-lb-layers>
       <div class="ch-layer-head"><p class="ch-lb-ai-label">${svgIc("eye")} Layers</p><span>${lb.composition.layers.length}</span></div>
-      <div class="ch-layer-add-row">
-        <button type="button" data-ch-layer-add="image">+ Image</button>
-        <button type="button" data-ch-layer-add="background">+ Background</button>
-        <button type="button" data-ch-layer-add="text">+ Text</button>
-        <button type="button" data-ch-layer-add="color">+ Color</button>
-        <input type="file" accept="image/*" data-ch-layer-file hidden/>
+      <div class="ch-new-layer">
+        <button class="ch-new-layer-trigger" type="button" data-ch-layer-menu-toggle>
+          <span>+ New layer</span><small>${lb.layerMenuOpen ? "Close" : "Media, text, or color"}</small>
+        </button>
+        <div class="ch-new-layer-menu" ${lb.layerMenuOpen ? "" : "hidden"}>
+          <div class="ch-new-layer-actions">
+            <button type="button" data-ch-layer-add="image">Image</button>
+            <button type="button" data-ch-layer-add="text">Text</button>
+            <button type="button" data-ch-layer-add="color">Color</button>
+          </div>
+          <button class="ch-layer-dropzone" type="button" data-ch-layer-drop>
+            <b>Drop media here</b><span>or choose one or more images</span>
+          </button>
+          <input type="file" accept="image/*" multiple data-ch-layer-file hidden/>
+        </div>
       </div>
-      <div class="ch-lb-layer-list">
+      <div class="ch-lb-layer-list" data-ch-layer-list>
         ${compositionLayers.map((layer) => `
-          <div class="ch-lb-layer ch-compose-layer ${layer.visible ? "is-on" : "is-off"} ${selected.has(layer.id) ? "is-selected" : ""}" data-ch-layer-row="${esc(layer.id)}">
+          <div class="ch-lb-layer ch-compose-layer ${layer.visible ? "is-on" : "is-off"} ${selected.has(layer.id) ? "is-selected" : ""}" draggable="true" data-ch-layer-row="${esc(layer.id)}">
             <button type="button" data-ch-layer-visible="${esc(layer.id)}" title="${layer.visible ? "Hide layer" : "Show layer"}">${svgIc("eye")}</button>
-            <button class="ch-layer-name" type="button" data-ch-layer-select="${esc(layer.id)}"><b>${esc(layer.name)}</b><small>${esc(layer.type === "base" ? "adjusted source" : layer.hasTransparency ? `${layer.type} · cutout` : layer.type)}</small></button>
+            <button class="ch-layer-name" type="button" data-ch-layer-select="${esc(layer.id)}"><b>${esc(layer.name)}</b><small>${esc(layer.type === "base" ? "adjusted source" : layer.hasTransparency ? `${layer.type} / cutout` : layer.type)}</small></button>
             <span class="ch-layer-row-actions">
-              <button type="button" data-ch-layer-order="1" data-layer-id="${esc(layer.id)}" title="Move up">↑</button>
-              <button type="button" data-ch-layer-order="-1" data-layer-id="${esc(layer.id)}" title="Move down">↓</button>
-              ${layer.id === "base" ? "" : `<button type="button" data-ch-layer-duplicate="${esc(layer.id)}" title="Duplicate">⧉</button><button type="button" data-ch-layer-delete="${esc(layer.id)}" title="Delete">×</button>`}
+              <button type="button" data-ch-layer-order="1" data-layer-id="${esc(layer.id)}" title="Move up">&uarr;</button>
+              <button type="button" data-ch-layer-order="-1" data-layer-id="${esc(layer.id)}" title="Move down">&darr;</button>
+              ${layer.id === "base" ? "" : `<button type="button" data-ch-layer-duplicate="${esc(layer.id)}" title="Duplicate">&#x2398;</button><button type="button" data-ch-layer-delete="${esc(layer.id)}" title="Delete">&times;</button>`}
             </span>
           </div>`).join("")}
         ${effectRows.map((row) => `<div class="ch-lb-layer ch-effect-layer ${row.key === "subject" ? "is-subject-guide" : ""} ${row.active ? "is-on" : "is-off"}"><button type="button" data-ch-lb-layer-toggle="${esc(row.key)}">${svgIc("eye")}</button><span><b>${esc(row.label)}</b><small>${row.key === "subject" ? "editor-only selection guide" : "non-destructive effect"}</small></span></div>`).join("")}
@@ -1895,27 +1930,63 @@ function wireLightbox(root, opts) {
     if (rerenderAfter) rerender();
   };
   const layerFile = root.querySelector("[data-ch-layer-file]");
+  root.querySelector("[data-ch-layer-menu-toggle]")?.addEventListener("click", () => {
+    lb.layerMenuOpen = !lb.layerMenuOpen;
+    rerender();
+  });
   root.querySelectorAll("[data-ch-layer-add]").forEach((button) => button.onclick = () => {
     const type = button.dataset.chLayerAdd;
-    if (type === "image" || type === "background") {
-      if (layerFile) layerFile.dataset.mode = type;
+    if (type === "image") {
       layerFile?.click();
       return;
     }
     mutateLayer(() => type === "text" ? addTextLayer(lb.composition) : addColorLayer(lb.composition));
   });
-  if (layerFile) layerFile.onchange = async () => {
-    const file = layerFile.files?.[0];
-    if (!file) return;
+  const addMediaFiles = async (files, point = null) => {
+    const images = [...(files || [])].filter((file) => file.type?.startsWith("image/"));
+    if (!images.length) return;
     const before = editorSnapshot(lb);
-    const url = await readFileAsDataUrl(file);
-    const background = layerFile.dataset.mode === "background";
-    addImageLayer(lb.composition, url, file.name.replace(/\.[^.]+$/, "") || (background ? "Background" : "Image layer"), { background });
-    await loadCompositionImages(lb.composition, loadImageForEditing);
+    for (const file of images) {
+      const url = await readFileAsDataUrl(file);
+      const image = await loadImageForEditing(url);
+      const layer = addImageLayer(lb.composition, url, file.name.replace(/\.[^.]+$/, "") || "Image layer");
+      const ratio = (image.naturalWidth || image.width || 1) / (image.naturalHeight || image.height || 1);
+      if (ratio >= 1) { layer.w = 0.64; layer.h = Math.max(0.18, layer.w / ratio); }
+      else { layer.h = 0.64; layer.w = Math.max(0.18, layer.h * ratio); }
+      if (point) { layer.x = point.x; layer.y = point.y; }
+      lb.composition.imageCache.set(url, image);
+    }
     commitEditorChange(lb, before);
-    layerFile.value = "";
+    lb.layerMenuOpen = false;
+    if (layerFile) layerFile.value = "";
     rerender();
   };
+  if (layerFile) layerFile.onchange = () => addMediaFiles(layerFile.files);
+  const layerDrop = root.querySelector("[data-ch-layer-drop]");
+  layerDrop?.addEventListener("click", () => layerFile?.click());
+  [layerDrop, editorStage].filter(Boolean).forEach((target) => {
+    target.addEventListener("dragover", (event) => {
+      if (![...(event.dataTransfer?.items || [])].some((item) => item.kind === "file")) return;
+      event.preventDefault();
+      target.classList.add("is-drop-target");
+    });
+    target.addEventListener("dragleave", () => target.classList.remove("is-drop-target"));
+    target.addEventListener("drop", (event) => {
+      const files = event.dataTransfer?.files;
+      if (!files?.length) return;
+      event.preventDefault();
+      target.classList.remove("is-drop-target");
+      let point = null;
+      if (target === editorStage) {
+        const rect = canvas.getBoundingClientRect();
+        point = {
+          x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+          y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+        };
+      }
+      addMediaFiles(files, point);
+    });
+  });
   root.querySelectorAll("[data-ch-layer-select]").forEach((button) => button.onclick = (event) => {
     selectLayer(lb.composition, button.dataset.chLayerSelect, event.shiftKey || event.ctrlKey || event.metaKey);
     rerender();
@@ -1927,6 +1998,35 @@ function wireLightbox(root, opts) {
   root.querySelectorAll("[data-ch-layer-order]").forEach((button) => button.onclick = () => mutateLayer(() => {
     moveLayerOrder(lb.composition, button.dataset.layerId, Number(button.dataset.chLayerOrder));
   }));
+  root.querySelectorAll("[data-ch-layer-row]").forEach((row) => {
+    row.addEventListener("dragstart", (event) => {
+      event.dataTransfer?.setData("text/phantom-layer", row.dataset.chLayerRow);
+      row.classList.add("is-dragging");
+    });
+    row.addEventListener("dragend", () => row.classList.remove("is-dragging"));
+    row.addEventListener("dragover", (event) => {
+      if (!event.dataTransfer?.types?.includes("text/phantom-layer")) return;
+      event.preventDefault();
+      row.classList.add("is-drop-target");
+    });
+    row.addEventListener("dragleave", () => row.classList.remove("is-drop-target"));
+    row.addEventListener("drop", (event) => {
+      const sourceId = event.dataTransfer?.getData("text/phantom-layer");
+      const targetId = row.dataset.chLayerRow;
+      row.classList.remove("is-drop-target");
+      if (!sourceId || sourceId === targetId) return;
+      event.preventDefault();
+      mutateLayer(() => {
+        const sourceIndex = lb.composition.layers.findIndex((item) => item.id === sourceId);
+        const targetIndex = lb.composition.layers.findIndex((item) => item.id === targetId);
+        if (sourceIndex < 0 || targetIndex < 0) return;
+        const [layer] = lb.composition.layers.splice(sourceIndex, 1);
+        const nextTarget = lb.composition.layers.findIndex((item) => item.id === targetId);
+        lb.composition.layers.splice(nextTarget + (sourceIndex < targetIndex ? 1 : 0), 0, layer);
+        lb.composition.selectedIds = [sourceId];
+      });
+    });
+  });
   root.querySelectorAll("[data-ch-layer-duplicate]").forEach((button) => button.onclick = () => mutateLayer(() => duplicateLayer(lb.composition, button.dataset.chLayerDuplicate)));
   root.querySelectorAll("[data-ch-layer-delete]").forEach((button) => button.onclick = () => mutateLayer(() => {
     selectLayer(lb.composition, button.dataset.chLayerDelete);
@@ -1962,6 +2062,10 @@ function wireLightbox(root, opts) {
     field.addEventListener(field.type === "color" ? "input" : "change", apply);
     if (field.tagName === "TEXTAREA") field.addEventListener("input", apply);
   });
+  root.querySelectorAll("[data-ch-layer-color]").forEach((button) => button.onclick = () => mutateLayer(() => {
+    const layer = selectedLayers(lb.composition)[0];
+    if (layer?.type === "color") layer.color = button.dataset.chLayerColor;
+  }));
   root.querySelectorAll("[data-ch-layer-toggle]").forEach((button) => button.onclick = () => mutateLayer(() => {
     const layer = selectedLayers(lb.composition)[0];
     if (layer) layer[button.dataset.chLayerToggle] = !layer[button.dataset.chLayerToggle];
@@ -2193,50 +2297,61 @@ function wireLightbox(root, opts) {
   };
 
   const aiRun = root.querySelector("[data-ch-lb-ai-run]");
-  if (aiRun) aiRun.onclick = async () => {
-    const q = (root.querySelector("[data-ch-lb-ai]")?.value || "").trim();
-    if (!q || lb.aiEdit.mode !== "connected") return;
-    lb.aiEdit = { ...lb.aiEdit, status: "loading" };
-    rerender();
-    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
-    if (chLightbox !== lb) return;
+  const runAiEdit = async (promptOverride = "") => {
+    const q = (promptOverride || root.querySelector("[data-ch-lb-ai]")?.value || "").trim();
+    const target = selectedImageLayer(lb);
+    if (!q || !target || lb.aiEdit.mode !== "connected") return;
+    const source = await selectedImageSource(lb, canvas);
+    if (!source) {
+      lb.aiEdit = { ...lb.aiEdit, status: "error", message: "The selected image layer could not be read." };
+      rerender();
+      return;
+    }
+    const exported = await exportSourceImage(source.image);
     if (!exported.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: exported.error };
       rerender();
-      opts.notify?.("Creator Hub", `AI edit failed on "${asset.title}": ${exported.error}`);
       return;
     }
-    const result = await requestAiEdit({ dataUrl: exported.url, prompt: q, provider: lb.aiEdit.provider || "cinematic" });
-    if (chLightbox !== lb) return; // lightbox closed/reset while the request was in flight
+    const before = editorSnapshot(lb);
+    lb.aiEdit = { ...lb.aiEdit, status: "loading" };
+    rerender();
+    const width = source.image.naturalWidth || source.image.width || 1;
+    const height = source.image.naturalHeight || source.image.height || 1;
+    const ratio = width / height;
+    const aspect = ratio > 1.55 ? "16:9" : ratio > 1.15 ? "3:2" : ratio < 0.7 ? "9:16" : ratio < 0.9 ? "4:5" : "1:1";
+    const result = await requestAiEdit({ dataUrl: exported.url, prompt: q, provider: lb.aiEdit.provider || "cinematic", aspect });
+    if (chLightbox !== lb) return;
     if (!result.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: result.message };
       rerender();
       opts.notify?.("Creator Hub", `AI edit failed on "${asset.title}": ${result.message}`);
       return;
     }
-    // loadImageForEditing (not a raw new Image()) so a media-engine
-    // result without CORS headers doesn't silently taint the canvas —
-    // that would make every later Save/Download throw with no visible error.
-    loadImageForEditing(result.url)
-      .then((editedImg) => {
-        if (chLightbox !== lb) return;
+    try {
+      const editedImg = await loadImageForEditing(result.url);
+      if (chLightbox !== lb) return;
+      if (target.type === "base") {
         lb.baseUrl = result.url;
         lb.cutoutUrl = "";
         lb.hasTransparency = false;
-        lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), cutout: true };
         canvas._img = editedImg;
-        lb.aiEdit = { ...lb.aiEdit, status: "success", message: "" };
-        repaint();
-        rerender();
-        opts.notify?.("Creator Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
-      })
-      .catch(() => {
-        if (chLightbox !== lb) return;
-        lb.aiEdit = { ...lb.aiEdit, status: "error", message: "The media engine returned an image that could not be loaded." };
-        rerender();
-      });
+      } else {
+        replaceImageLayerSource(lb.composition, target.id, result.url, editedImg);
+      }
+      commitEditorChange(lb, before);
+      lb.aiEdit = { ...lb.aiEdit, status: "success", message: "" };
+      repaint();
+      rerender();
+      opts.notify?.("Creator Hub", `AI edited the selected layer in "${asset.title}".`);
+    } catch {
+      if (chLightbox !== lb) return;
+      lb.aiEdit = { ...lb.aiEdit, status: "error", message: "The media engine returned an image that could not be loaded." };
+      rerender();
+    }
   };
-
+  if (aiRun) aiRun.onclick = () => runAiEdit();
+  root.querySelectorAll("[data-ch-ai-preset]").forEach((button) => button.onclick = () => runAiEdit(button.dataset.chAiPreset));
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
   if (bgRun) bgRun.onclick = async () => {
     if (lb.bg.status === "unavailable") return;

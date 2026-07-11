@@ -8509,3 +8509,59 @@ body.overlay-open .buddy-canvas { pointer-events: none; }
     overflow-y: auto;
   }
 }
+
+
+/* Phantom smart layer system */
+.ch-new-layer { margin: 0 0 10px; }
+.ch-new-layer-trigger {
+  width: 100%; min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 9px 11px; border: 1px solid rgba(65,255,161,.38); border-radius: 10px;
+  background: linear-gradient(135deg, rgba(65,255,161,.13), rgba(65,255,161,.035)); color: var(--ink); cursor: pointer;
+}
+.ch-new-layer-trigger span { font: 700 12px "Space Grotesk"; }
+.ch-new-layer-trigger small { color: var(--dim); font: 650 9px "DM Mono", monospace; }
+.ch-new-layer-menu { margin-top: 7px; padding: 8px; border: 1px solid var(--line); border-radius: 11px; background: rgba(0,0,0,.25); }
+.ch-new-layer-menu[hidden] { display: none; }
+.ch-new-layer-actions { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; }
+.ch-new-layer-actions button {
+  min-height: 34px; border: 1px solid var(--line); border-radius: 8px; background: rgba(65,255,161,.06); color: #dcffee;
+  cursor: pointer; font: 700 10.5px "Space Grotesk";
+}
+.ch-new-layer-actions button:hover { border-color: var(--neon); background: rgba(65,255,161,.13); }
+.ch-layer-dropzone {
+  width: 100%; min-height: 68px; margin-top: 7px; display: grid; place-items: center; align-content: center; gap: 3px;
+  border: 1px dashed rgba(65,255,161,.42); border-radius: 10px; background: rgba(65,255,161,.035); color: #dfffee; cursor: pointer;
+}
+.ch-layer-dropzone b { font-size: 11.5px; }
+.ch-layer-dropzone span { color: var(--dim); font-size: 10px; }
+.ch-layer-dropzone.is-drop-target, .ch-editor-stage.is-drop-target { border-color: var(--neon); background: rgba(65,255,161,.12); box-shadow: inset 0 0 0 2px rgba(65,255,161,.16); }
+.ch-compose-layer[draggable="true"] { cursor: grab; }
+.ch-compose-layer.is-dragging { opacity: .35; }
+.ch-compose-layer.is-drop-target { border-color: #ffd166; box-shadow: inset 3px 0 #ffd166; }
+.ch-lb-layer .ch-layer-row-actions button { width: 27px; min-width: 27px; }
+.ch-color-palette { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); gap: 7px; margin: 3px 0 12px; }
+.ch-color-palette button {
+  aspect-ratio: 1; min-width: 0; border: 2px solid rgba(255,255,255,.12); border-radius: 7px; background: var(--swatch); cursor: pointer;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.2); transition: transform .12s ease, border-color .12s ease;
+}
+.ch-color-palette button:hover { transform: translateY(-1px) scale(1.05); border-color: rgba(255,255,255,.72); }
+.ch-color-palette button.is-selected { border-color: var(--neon); box-shadow: 0 0 0 2px rgba(65,255,161,.2), inset 0 0 0 1px rgba(0,0,0,.25); }
+@media (max-width: 720px) {
+  .ch-new-layer-trigger { min-height: 44px; }
+  .ch-layer-dropzone { min-height: 62px; }
+  .ch-color-palette { grid-template-columns: repeat(8, minmax(0,1fr)); gap: 6px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ch-color-palette button { transition: none; }
+}
+
+
+/* Phantom AI quick tools */
+.ch-ai-quick-grid { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 6px; margin: 9px 0; }
+.ch-ai-quick-grid button {
+  min-height: 32px; border: 1px solid var(--line); border-radius: 8px; background: rgba(65,255,161,.055); color: #dfffee;
+  cursor: pointer; font: 700 10px "Space Grotesk"; padding: 6px 8px;
+}
+.ch-ai-quick-grid button:hover:not(:disabled) { border-color: var(--neon); background: rgba(65,255,161,.13); }
+.ch-ai-quick-grid button:disabled { opacity: .42; cursor: not-allowed; }
+@media (max-width: 720px) { .ch-ai-quick-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }

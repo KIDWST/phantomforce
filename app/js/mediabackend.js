@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260711-179";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260711-179";
+import { currentTenantId, session, workspaceStorageGetItem } from "./store.js?v=phantom-live-20260711-180";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260711-180";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -211,14 +211,14 @@ export async function probeAiEditBackend() {
   }
 }
 
-export async function requestAiEdit({ dataUrl, prompt, provider = "cinematic" }) {
+export async function requestAiEdit({ dataUrl, prompt, provider = "cinematic", aspect = "1:1" }) {
   try {
     const r = await fetchWithTimeout(`${aiProxyBase()}/generate`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         provider, modality: "edit", prompt, ref: dataUrl, tenant_id: currentTenantId(),
-        params: { aspect: "1:1", count: 1 },
+        params: { aspect, count: 1 },
       }),
     }, 45000);
     const d = await r.json().catch(() => null);

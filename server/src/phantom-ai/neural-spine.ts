@@ -136,6 +136,7 @@ export type BrainContextPack = {
 export type BrainStoreOptions = {
   memoryPath?: string;
   eventsPath?: string;
+  tenantId?: string | null;
 };
 
 function resolveBrainMemoryPath(pathFromEnv = process.env.PHANTOM_BRAIN_MEMORY_PATH) {
@@ -153,8 +154,21 @@ function storePaths(options: BrainStoreOptions = {}) {
   };
 }
 
-function scopeForSession(session: AccessSession) {
-  const tenantId = session.canManageAccess ? OWNER_TENANT_ID : session.clientId || `client-${session.id}`;
+function cleanBrainScopeId(value: unknown, fallback = "") {
+  if (typeof value !== "string") return fallback;
+  const normalized = value
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9_.:-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80);
+  return normalized || fallback;
+}
+
+function scopeForSession(session: AccessSession, options: BrainStoreOptions = {}) {
+  const tenantId = session.canManageAccess
+    ? cleanBrainScopeId(options.tenantId, OWNER_TENANT_ID)
+    : cleanBrainScopeId(session.clientId, `client-${session.id}`);
   return {
     tenantId,
     actorUserId: session.id,
@@ -353,7 +367,7 @@ function bootstrapBrainMemories(scope: ReturnType<typeof scopeForSession>, now: 
 
 async function ensureBrainBootstrapMemories(session: AccessSession, options: BrainStoreOptions = {}) {
   const { memoryPath } = storePaths(options);
-  const scope = scopeForSession(session);
+  const scope = scopeForSession(session, options);
   const existing = await readJsonl(memoryPath, isMemoryRecord, 2000);
   const existingBootstrap = new Set(
     existing.records
@@ -372,7 +386,7 @@ export async function listBrainMemories(
 ) {
   await ensureBrainBootstrapMemories(session, options);
   const { memoryPath } = storePaths(options);
-  const scope = scopeForSession(session);
+  const scope = scopeForSession(session, options);
   const read = await readJsonl(memoryPath, isMemoryRecord, 5000);
   const latest = new Map<string, BrainMemoryRecord>();
   for (const record of read.records) {
@@ -412,7 +426,7 @@ export async function createBrainMemory(
   if (!text) throw new Error("memory_text_required");
   const record: BrainMemoryRecord = {
     id: `brain-memory-${randomUUID()}`,
-    scope: scopeForSession(session),
+    scope: scopeForSession(session, options),
     type: typeof input.type === "string" ? sanitizeMemoryType(input.type) : inferMemoryType(text),
     text,
     sourceEventId: typeof input.sourceEventId === "string" ? sanitizeText(input.sourceEventId, 120) : null,
@@ -499,7 +513,7 @@ export async function readBrainEvents(
   options: BrainStoreOptions & { limit?: number } = {},
 ) {
   const { eventsPath } = storePaths(options);
-  const scope = scopeForSession(session);
+  const scope = scopeForSession(session, options);
   const read = await readJsonl(eventsPath, isEventRecord, 1000);
   const limit = Math.min(Math.max(Math.floor(options.limit ?? MAX_EVENTS_RETURNED), 1), MAX_EVENTS_RETURNED);
   return {
@@ -532,7 +546,7 @@ export async function appendBrainEvent(
   const event: BrainEventRecord = {
     id: `brain-event-${randomUUID()}`,
     timestamp: now,
-    scope: scopeForSession(session),
+    scope: scopeForSession(session, options),
     surface: normalizeSurface(input.surface),
     type: sanitizeText(input.type || "event", 80) || "event",
     summary: sanitizeText(input.summary, MAX_SUMMARY_CHARS),

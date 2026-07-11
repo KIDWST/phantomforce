@@ -187,6 +187,7 @@ import {
   listBrainMemories,
   recordBrainFeedback,
   updateBrainMemory,
+  type BrainStoreOptions,
 } from "./phantom-ai/neural-spine.js";
 import { detectRembg, runRembgRemoveBackground } from "./phantom-ai/rembg-bridge.js";
 import {
@@ -261,6 +262,7 @@ const HiggsfieldDraftSchema = z.object({
 });
 
 const BrainMemoryCreateSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
   text: z.string().trim().min(1).max(1200),
   type: z.string().trim().max(40).optional(),
   confidence: z.number().min(0.05).max(1).optional(),
@@ -269,6 +271,7 @@ const BrainMemoryCreateSchema = z.object({
 });
 
 const BrainMemoryPatchSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
   text: z.string().trim().min(1).max(1200).optional(),
   type: z.string().trim().max(40).optional(),
   confidence: z.number().min(0.05).max(1).optional(),
@@ -277,6 +280,7 @@ const BrainMemoryPatchSchema = z.object({
 });
 
 const BrainFeedbackSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
   kind: z.string().trim().max(80).optional(),
   text: z.string().trim().max(1200).optional(),
   targetId: z.string().trim().max(160).optional(),
@@ -285,6 +289,7 @@ const BrainFeedbackSchema = z.object({
 });
 
 const BrainContextPreviewSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
   message: z.string().max(1600).optional(),
   surface: z.string().trim().max(60).optional(),
   proposedActionType: z.string().trim().max(80).optional(),
@@ -292,6 +297,7 @@ const BrainContextPreviewSchema = z.object({
 });
 
 const BrainEventSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
   surface: z.string().trim().max(60).optional(),
   type: z.string().trim().min(1).max(80),
   summary: z.string().trim().min(1).max(320),
@@ -774,8 +780,13 @@ const MAX_MEMORY_SCOPE_ID_CHARS = 80;
 
 function cleanMemoryScopeId(value: unknown, fallback = "") {
   if (typeof value !== "string") return fallback;
-  const trimmed = value.trim().replace(/\s+/g, "-");
-  return trimmed ? trimmed.slice(0, MAX_MEMORY_SCOPE_ID_CHARS) : fallback;
+  const trimmed = value
+    .trim()
+    .replace(/\s+/g, "-")
+    .replace(/[^a-zA-Z0-9_.:-]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, MAX_MEMORY_SCOPE_ID_CHARS);
+  return trimmed || fallback;
 }
 
 function tenantIdForAccessSession(session: AccessSession) {
@@ -885,6 +896,26 @@ function buildMemoryScopeProof(normalized: {
     requested_actor_user_id: normalized.requested_actor_user_id,
     tenant_override_blocked: normalized.tenant_override_blocked,
     actor_override_blocked: normalized.actor_override_blocked,
+  };
+}
+
+function brainStoreOptionsForSession(session: AccessSession, carrier?: { tenant_id?: unknown }): BrainStoreOptions {
+  const requestedTenantId = cleanMemoryScopeId(carrier?.tenant_id);
+  return {
+    tenantId: session.canManageAccess ? requestedTenantId || OWNER_MEMORY_TENANT_ID : tenantIdForAccessSession(session),
+  };
+}
+
+function brainScopeProofForSession(session: AccessSession, carrier?: { tenant_id?: unknown }) {
+  const requestedTenantId = cleanMemoryScopeId(carrier?.tenant_id);
+  const tenantId = session.canManageAccess ? requestedTenantId || OWNER_MEMORY_TENANT_ID : tenantIdForAccessSession(session);
+  return {
+    tenant_id: tenantId,
+    requested_tenant_id: requestedTenantId || null,
+    scope: session.canManageAccess
+      ? tenantId === OWNER_MEMORY_TENANT_ID ? "owner_private" : "owner_selected_tenant"
+      : "client_tenant_only",
+    tenant_override_blocked: !session.canManageAccess && Boolean(requestedTenantId && requestedTenantId !== tenantId),
   };
 }
 
@@ -2494,9 +2525,10 @@ app.post("/phantom-ai/hermes/interaction-memory/recall/preview", async (request,
     interaction_type?: unknown;
     limit?: unknown;
   };
+  const memoryScope = resolveMemoryScopeFromBody(body, session);
   const recall = await recallHermesInteractionMemory({
-    tenantId: typeof body.tenant_id === "string" ? body.tenant_id : session.id,
-    actorUserId: typeof body.actor_user_id === "string" ? body.actor_user_id : null,
+    tenantId: memoryScope.tenant_id,
+    actorUserId: memoryScope.actor_user_id,
     taskId: typeof body.task_id === "string" ? body.task_id : null,
     interactionType: typeof body.interaction_type === "string" ? body.interaction_type : null,
     limit: typeof body.limit === "string" || typeof body.limit === "number" ? body.limit : undefined,
@@ -2517,6 +2549,15 @@ app.post("/phantom-ai/hermes/interaction-memory/recall/preview", async (request,
     execution_disabled: true,
     ready_for_send: false,
     provider_transport_allowed: false,
+    memory_scope: buildMemoryScopeProof({
+      memory_scope: memoryScope.memory_scope,
+      tenant_id: memoryScope.tenant_id,
+      actor_user_id: memoryScope.actor_user_id,
+      requested_tenant_id: memoryScope.requested_tenant_id,
+      requested_actor_user_id: memoryScope.requested_actor_user_id,
+      tenant_override_blocked: memoryScope.tenant_override_blocked,
+      actor_override_blocked: memoryScope.actor_override_blocked,
+    }),
     recall,
   };
 });
@@ -2576,11 +2617,12 @@ app.get("/phantom-ai/hermes/interaction-memory/history", async (request, reply) 
     interaction_type?: string;
   } | undefined;
   const limit = normalizeHermesInteractionMemoryStoreLimit(query?.limit);
+  const memoryScope = resolveMemoryScopeFromBody(query ?? {}, session);
   const status = await getHermesInteractionMemoryStoreStatus();
   const history = await readHermesInteractionMemoryStoreRecords({
     limit,
-    tenantId: query?.tenant_id,
-    actorUserId: query?.actor_user_id,
+    tenantId: memoryScope.tenant_id,
+    actorUserId: memoryScope.actor_user_id,
     taskId: query?.task_id,
     interactionType: query?.interaction_type,
   });
@@ -2588,6 +2630,15 @@ app.get("/phantom-ai/hermes/interaction-memory/history", async (request, reply) 
   return {
     ok: true,
     session,
+    memory_scope: buildMemoryScopeProof({
+      memory_scope: memoryScope.memory_scope,
+      tenant_id: memoryScope.tenant_id,
+      actor_user_id: memoryScope.actor_user_id,
+      requested_tenant_id: memoryScope.requested_tenant_id,
+      requested_actor_user_id: memoryScope.requested_actor_user_id,
+      tenant_override_blocked: memoryScope.tenant_override_blocked,
+      actor_override_blocked: memoryScope.actor_override_blocked,
+    }),
     store: {
       path: status.store_path,
       exists: status.exists,
@@ -2982,13 +3033,16 @@ app.get("/phantom-ai/brain/status", async (request, reply) => {
     return reply;
   }
 
-  const brain = await buildBrainStatus(session);
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const brainOptions = brainStoreOptionsForSession(session, query);
+  const brain = await buildBrainStatus(session, brainOptions);
 
   return {
     ok: true,
     session,
     read_only: true,
     brain,
+    brain_scope: brainScopeProofForSession(session, query),
     provider_called: false,
     network_call_performed: false,
     approval_executed: false,
@@ -3003,12 +3057,14 @@ app.get("/phantom-ai/brain/memories", async (request, reply) => {
     return reply;
   }
 
-  const query = (request.query ?? {}) as { type?: unknown; limit?: unknown; include_inactive?: unknown };
+  const query = (request.query ?? {}) as { type?: unknown; limit?: unknown; include_inactive?: unknown; tenant_id?: unknown };
   const limit =
     typeof query.limit === "string" && Number.isFinite(Number(query.limit))
       ? Math.max(1, Math.min(200, Number(query.limit)))
       : 120;
+  const brainOptions = brainStoreOptionsForSession(session, query);
   const memories = await listBrainMemories(session, {
+    ...brainOptions,
     type: typeof query.type === "string" ? query.type : undefined,
     limit,
     includeInactive: query.include_inactive === "true",
@@ -3018,6 +3074,7 @@ app.get("/phantom-ai/brain/memories", async (request, reply) => {
     ok: true,
     session,
     memories,
+    brain_scope: brainScopeProofForSession(session, query),
     provider_called: false,
     network_call_performed: false,
     approval_executed: false,
@@ -3037,12 +3094,14 @@ app.post("/phantom-ai/brain/memories", async (request, reply) => {
     return reply.code(400).send({ ok: false, session, error: "Invalid memory payload.", issues: parsed.error.issues });
   }
 
-  const memory = await createBrainMemory(session, parsed.data);
+  const brainOptions = brainStoreOptionsForSession(session, parsed.data);
+  const memory = await createBrainMemory(session, parsed.data, brainOptions);
 
   return {
     ok: true,
     session,
     memory,
+    brain_scope: brainScopeProofForSession(session, parsed.data),
     provider_called: false,
     network_call_performed: false,
     approval_executed: false,
@@ -3063,9 +3122,10 @@ app.patch("/phantom-ai/brain/memories/:id", async (request, reply) => {
   }
 
   const params = request.params as { id: string };
+  const brainOptions = brainStoreOptionsForSession(session, parsed.data);
   let memory;
   try {
-    memory = await updateBrainMemory(session, params.id, parsed.data);
+    memory = await updateBrainMemory(session, params.id, parsed.data, brainOptions);
   } catch (error) {
     const message = error instanceof Error ? error.message : "memory_update_failed";
     if (message === "memory_not_found") {
@@ -3081,6 +3141,7 @@ app.patch("/phantom-ai/brain/memories/:id", async (request, reply) => {
     ok: true,
     session,
     memory,
+    brain_scope: brainScopeProofForSession(session, parsed.data),
     provider_called: false,
     network_call_performed: false,
     approval_executed: false,
@@ -3096,9 +3157,11 @@ app.delete("/phantom-ai/brain/memories/:id", async (request, reply) => {
   }
 
   const params = request.params as { id: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const brainOptions = brainStoreOptionsForSession(session, query);
   let memory;
   try {
-    memory = await forgetBrainMemory(session, params.id);
+    memory = await forgetBrainMemory(session, params.id, brainOptions);
   } catch (error) {
     const message = error instanceof Error ? error.message : "memory_forget_failed";
     if (message === "memory_not_found") {
@@ -3114,6 +3177,7 @@ app.delete("/phantom-ai/brain/memories/:id", async (request, reply) => {
     ok: true,
     session,
     memory,
+    brain_scope: brainScopeProofForSession(session, query),
     provider_called: false,
     network_call_performed: false,
     approval_executed: false,
@@ -3133,12 +3197,14 @@ app.post("/phantom-ai/brain/feedback", async (request, reply) => {
     return reply.code(400).send({ ok: false, session, error: "Invalid feedback payload.", issues: parsed.error.issues });
   }
 
-  const feedback = await recordBrainFeedback(session, parsed.data);
+  const brainOptions = brainStoreOptionsForSession(session, parsed.data);
+  const feedback = await recordBrainFeedback(session, parsed.data, brainOptions);
 
   return {
     ok: true,
     session,
     feedback,
+    brain_scope: brainScopeProofForSession(session, parsed.data),
     provider_called: false,
     network_call_performed: false,
     approval_executed: false,
@@ -3160,13 +3226,15 @@ app.post("/phantom-ai/brain/context-preview", async (request, reply) => {
       .send({ ok: false, session, error: "Invalid context preview payload.", issues: parsed.error.issues });
   }
 
-  const context = await composeBrainContext(session, { ...parsed.data, logEvent: false });
+  const brainOptions = brainStoreOptionsForSession(session, parsed.data);
+  const context = await composeBrainContext(session, { ...parsed.data, logEvent: false }, brainOptions);
 
   return {
     ok: true,
     session,
     read_only: true,
     context,
+    brain_scope: brainScopeProofForSession(session, parsed.data),
     provider_called: false,
     network_call_performed: false,
     approval_executed: false,
@@ -3186,12 +3254,14 @@ app.post("/phantom-ai/brain/events", async (request, reply) => {
     return reply.code(400).send({ ok: false, session, error: "Invalid brain event payload.", issues: parsed.error.issues });
   }
 
-  const event = await appendBrainEvent(session, parsed.data);
+  const brainOptions = brainStoreOptionsForSession(session, parsed.data);
+  const event = await appendBrainEvent(session, parsed.data, brainOptions);
 
   return {
     ok: true,
     session,
     event,
+    brain_scope: brainScopeProofForSession(session, parsed.data),
     provider_called: false,
     network_call_performed: false,
     approval_executed: false,
@@ -3828,17 +3898,17 @@ app.get("/phantom-ai/media-lab/proxy-image", async (request, reply) => {
    Content Hub's actual asset data (the image/video bytes) normally lives
    only in whichever browser created it — this is the real server-side
    store that lets a photo edited on one device show up on another. Scoped
-   to the caller's session (owner sessions always resolve to the same
-   scope regardless of device, so the same owner login on two devices sees
-   the same assets). Every asset auto-expires after 30 days — this is a
-   temporary sync/archive layer, not permanent storage; see
-   content-asset-storage.ts for the pluggable provider seam (local disk
-   today, a real Google Drive API/OAuth provider possible later). */
-function contentAssetOwnerScope(session: AccessSession) {
-  return session.clientId ?? session.id;
+   to the selected tenant for owner/admin sessions, and hard-locked to the
+   caller's own client tenant for client sessions. Every asset auto-expires
+   after 30 days — this is a temporary sync/archive layer, not permanent
+   storage; see content-asset-storage.ts for the pluggable provider seam. */
+function contentAssetOwnerScope(session: AccessSession, requestedTenantId?: unknown) {
+  if (session.canManageAccess) return cleanMemoryScopeId(requestedTenantId, OWNER_MEMORY_TENANT_ID);
+  return cleanMemoryScopeId(session.clientId, `client-${session.id}`);
 }
 
 const ContentAssetUploadSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
   image: z.string().trim().min(1).max(24_000_000),
   filename: z.string().trim().max(160).optional(),
 });
@@ -3853,8 +3923,9 @@ app.post("/phantom-ai/content/assets", { bodyLimit: 24 * 1024 * 1024 }, async (r
   }
 
   const provider = getContentAssetStorageProvider();
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
   const result = await provider.putAsset({
-    ownerScope: contentAssetOwnerScope(session),
+    ownerScope,
     dataUrl: parsed.data.image,
     originalName: parsed.data.filename,
   });
@@ -3863,16 +3934,18 @@ app.post("/phantom-ai/content/assets", { bodyLimit: 24 * 1024 * 1024 }, async (r
     return reply.code(400).send({ ok: false, error: result.error });
   }
 
-  return { ok: true, session, asset: result.asset };
+  return { ok: true, session, tenant_id: ownerScope, asset: result.asset };
 });
 
 app.get("/phantom-ai/content/assets", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
 
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
   const provider = getContentAssetStorageProvider();
-  const assets = await provider.listAssets(contentAssetOwnerScope(session));
-  return { ok: true, session, assets };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const assets = await provider.listAssets(ownerScope);
+  return { ok: true, session, tenant_id: ownerScope, assets };
 });
 
 app.get("/phantom-ai/content/assets/:id/file", async (request, reply) => {
@@ -3880,14 +3953,16 @@ app.get("/phantom-ai/content/assets/:id/file", async (request, reply) => {
   if (!session) return reply;
 
   const { id } = request.params as { id: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
   const provider = getContentAssetStorageProvider();
-  const result = await provider.getAssetFile(id, contentAssetOwnerScope(session));
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const result = await provider.getAssetFile(id, ownerScope);
 
   if (!result.ok) {
     return reply.code(404).send({ ok: false, error: result.error });
   }
 
-  return { ok: true, session, image: result.dataUrl, asset: result.asset };
+  return { ok: true, session, tenant_id: ownerScope, image: result.dataUrl, asset: result.asset };
 });
 
 app.delete("/phantom-ai/content/assets/:id", async (request, reply) => {
@@ -3895,16 +3970,17 @@ app.delete("/phantom-ai/content/assets/:id", async (request, reply) => {
   if (!session) return reply;
 
   const { id } = request.params as { id: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
   const provider = getContentAssetStorageProvider();
-  const deleted = await provider.deleteAsset(id, contentAssetOwnerScope(session));
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const deleted = await provider.deleteAsset(id, ownerScope);
 
   if (!deleted) {
     return reply.code(404).send({ ok: false, error: "not_found" });
   }
 
-  return { ok: true, session };
+  return { ok: true, session, tenant_id: ownerScope };
 });
-
 /* ---- Local background removal (rembg) ----
    A real local-process bridge, not a provider call: no key, no network, no
    credit spend. Status is a genuine `import rembg` probe through whichever
@@ -4590,13 +4666,14 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     return privacyFirstLocationReply;
   }
 
+  const brainOptions = brainStoreOptionsForSession(session, normalized);
   const brainContext = await composeBrainContext(session, {
     message: normalized.user_request,
     surface: "chat",
     proposedActionType: normalized.task_type,
     currentModule: normalized.task_type,
     logEvent: true,
-  });
+  }, brainOptions);
   const brainModule = buildBrainContextModule(brainContext);
   const brainAugmentedSummary = buildBrainAugmentedSummary(normalized, brainContext);
 
@@ -4753,7 +4830,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         providerCalled,
       },
       logToHermes: false,
-    });
+    }, brainOptions);
 
     return {
       ok: true,
@@ -4936,7 +5013,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         providerCalled: openrouter.provider_called,
       },
       logToHermes: false,
-    });
+    }, brainOptions);
 
     if (!openrouter.provider_called || !openrouter.output_text.trim()) {
       if (providerChoice === "openrouter_glm") {
@@ -5047,7 +5124,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       needsApproval: brainContext.needsApproval,
     },
     logToHermes: false,
-  });
+  }, brainOptions);
 
   return {
     ok: true,
