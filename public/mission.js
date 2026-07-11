@@ -121,33 +121,64 @@ function renderMissionCreate() {
   }
 }
 
+// Remembered so the workspace path only ever needs typing once, not per
+// mission. Falls back to wherever the "claude" profile already launches
+// into today, so a brand-new install still has a sane zero-config default.
+const MISSION_WORKSPACE_KEY = "termina.mission.workspaceRoot";
+
+function defaultWorkspaceRoot() {
+  try {
+    const saved = localStorage.getItem(MISSION_WORKSPACE_KEY);
+    if (saved) return saved;
+  } catch {
+    /* storage unavailable */
+  }
+  return profiles.find((p) => p.id === "claude")?.cwd || "";
+}
+
+function rememberWorkspaceRoot(root) {
+  try {
+    localStorage.setItem(MISSION_WORKSPACE_KEY, root);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+// The only truly required input is the objective — everything else
+// (mission name, worker count, provider per role) is inferred, and the
+// default path goes straight from "type the objective" to a running
+// mission with no intermediate review screen. Advanced controls (workspace
+// override, forced worker count, worktrees mode, reviewing roles before
+// launch) are available but collapsed, not required.
 function renderMissionCreateStepObjective(body) {
   const state = missionCreateState || {
-    name: "",
     objective: "",
-    workspaceRoot: "",
-    workerCount: 3,
+    workspaceRoot: defaultWorkspaceRoot(),
     workspaceStrategy: "audit",
   };
 
   const form = document.createElement("div");
   form.className = "mission-form";
   form.innerHTML = `
-    <label>Mission name<input id="mf-name" type="text" value="${escapeHtml(state.name)}" placeholder="e.g. Launch readiness audit" /></label>
-    <label>Objective<textarea id="mf-objective" rows="4" placeholder="Prepare PhantomForce for launch. Audit the frontend, backend, security...">${escapeHtml(state.objective)}</textarea></label>
-    <label>Workspace root (path)<input id="mf-workspace" type="text" value="${escapeHtml(state.workspaceRoot)}" placeholder="C:\\path\\to\\repo" /></label>
-    <div class="mission-form-row">
-      <label>Workers<input id="mf-count" type="number" min="2" max="10" value="${state.workerCount}" /></label>
-      <label>Workspace strategy
-        <select id="mf-strategy">
-          <option value="audit" ${state.workspaceStrategy === "audit" ? "selected" : ""}>Read-only audit (shared path, no edits)</option>
-          <option value="worktrees" ${state.workspaceStrategy === "worktrees" ? "selected" : ""}>Isolated git worktrees (workers can edit)</option>
-        </select>
-      </label>
-    </div>
+    <label>What's the objective?<textarea id="mf-objective" rows="3" placeholder="Prepare PhantomForce for launch. Audit the frontend, backend, security, tests, and deployment readiness.">${escapeHtml(state.objective)}</textarea></label>
+    <details class="mission-advanced">
+      <summary>Advanced</summary>
+      <label>Mission name (auto if blank)<input id="mf-name" type="text" placeholder="auto-generated from the objective" /></label>
+      <label>Workspace root<input id="mf-workspace" type="text" value="${escapeHtml(state.workspaceRoot)}" /></label>
+      <div class="mission-form-row">
+        <label>Workers (blank = let it decide)<input id="mf-count" type="number" min="2" max="10" placeholder="auto" /></label>
+        <label>Workspace strategy
+          <select id="mf-strategy">
+            <option value="audit" ${state.workspaceStrategy !== "worktrees" ? "selected" : ""}>Read-only audit (safe default)</option>
+            <option value="worktrees" ${state.workspaceStrategy === "worktrees" ? "selected" : ""}>Isolated git worktrees (workers can edit)</option>
+          </select>
+        </label>
+      </div>
+      <label class="mission-checkbox"><input type="checkbox" id="mf-review" /> Review generated roles before launching</label>
+    </details>
     <div class="mission-form-actions">
       <button type="button" id="mf-cancel" class="ghost">Cancel</button>
-      <button type="button" id="mf-decompose" class="primary">Analyze Objective →</button>
+      <button type="button" id="mf-go" class="primary">Launch Mission →</button>
     </div>
     <p id="mf-error" class="mission-error hidden"></p>
   `;
@@ -159,12 +190,14 @@ function renderMissionCreateStepObjective(body) {
     renderMissionView();
   });
 
-  document.getElementById("mf-decompose").addEventListener("click", async () => {
-    const name = document.getElementById("mf-name").value.trim() || "Untitled mission";
+  document.getElementById("mf-go").addEventListener("click", async () => {
     const objective = document.getElementById("mf-objective").value.trim();
     const workspaceRoot = document.getElementById("mf-workspace").value.trim();
-    const workerCount = Math.max(2, Math.min(10, parseInt(document.getElementById("mf-count").value, 10) || 3));
+    const name = document.getElementById("mf-name").value.trim();
+    const countRaw = document.getElementById("mf-count").value.trim();
+    const workerCount = countRaw ? Math.max(2, Math.min(10, parseInt(countRaw, 10) || 0)) : undefined;
     const workspaceStrategy = document.getElementById("mf-strategy").value;
+    const reviewFirst = document.getElementById("mf-review").checked;
     const errorEl = document.getElementById("mf-error");
     errorEl.classList.add("hidden");
 
@@ -173,10 +206,11 @@ function renderMissionCreateStepObjective(body) {
       errorEl.classList.remove("hidden");
       return;
     }
+    rememberWorkspaceRoot(workspaceRoot);
 
-    const btn = document.getElementById("mf-decompose");
+    const btn = document.getElementById("mf-go");
     btn.disabled = true;
-    btn.textContent = "Analyzing objective… (this runs a real claude -p call, can take up to ~30s)";
+    btn.textContent = "Analyzing objective… (real claude -p call, up to ~30s)";
 
     try {
       const res = await api("/api/missions/decompose", {
@@ -184,15 +218,53 @@ function renderMissionCreateStepObjective(body) {
         body: JSON.stringify({ objective, workerCount, workspaceRoot }),
       }).then((r) => r.json());
       if (!res.ok) throw new Error(res.error || "decomposition failed");
-      missionCreateState = { name, objective, workspaceRoot, workerCount, workspaceStrategy, roles: res.roles, decomposeCostUsd: res.costUsd };
-      renderMissionView();
+
+      const nextState = {
+        name: name || res.missionName,
+        objective,
+        workspaceRoot,
+        workspaceStrategy,
+        roles: res.roles,
+        decomposeCostUsd: res.costUsd,
+      };
+
+      if (reviewFirst) {
+        missionCreateState = nextState;
+        renderMissionView();
+        return;
+      }
+
+      btn.textContent = `Launching ${nextState.roles.length} workers…`;
+      await launchMissionNow(nextState);
     } catch (err) {
       btn.disabled = false;
-      btn.textContent = "Analyze Objective →";
+      btn.textContent = "Launch Mission →";
       errorEl.textContent = String(err.message || err);
       errorEl.classList.remove("hidden");
     }
   });
+}
+
+// Shared by both the fast (auto-launch) path and the "review roles first"
+// path — actually creates the mission's workers and attaches wall tiles to
+// the sessions the server just started.
+async function launchMissionNow(state) {
+  const res = await api("/api/missions", {
+    method: "POST",
+    body: JSON.stringify({
+      name: state.name,
+      objective: state.objective,
+      workspaceRoot: state.workspaceRoot,
+      workspaceStrategy: state.workspaceStrategy,
+      roles: state.roles,
+    }),
+  }).then((r) => r.json());
+  if (!res.ok) throw new Error(res.error || "mission launch failed");
+  attachMissionWorkerTiles(res.mission);
+  missionCreateState = null;
+  missionView = "detail";
+  missionDetailId = res.mission.id;
+  renderMissionView();
 }
 
 function renderMissionCreateStepRoles(body) {
@@ -257,22 +329,7 @@ function renderMissionCreateStepRoles(body) {
     btn.disabled = true;
     btn.textContent = "Launching…";
     try {
-      const res = await api("/api/missions", {
-        method: "POST",
-        body: JSON.stringify({
-          name: state.name,
-          objective: state.objective,
-          workspaceRoot: state.workspaceRoot,
-          workspaceStrategy: state.workspaceStrategy,
-          roles: state.roles,
-        }),
-      }).then((r) => r.json());
-      if (!res.ok) throw new Error(res.error || "mission launch failed");
-      attachMissionWorkerTiles(res.mission);
-      missionCreateState = null;
-      missionView = "detail";
-      missionDetailId = res.mission.id;
-      renderMissionView();
+      await launchMissionNow(state);
     } catch (err) {
       btn.disabled = false;
       btn.textContent = `Launch Mission (${state.roles.length} workers)`;

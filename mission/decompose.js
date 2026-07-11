@@ -9,6 +9,7 @@ import { runClaudePrint } from "./claude-print.js";
 const ROLE_SCHEMA = {
   type: "object",
   properties: {
+    missionName: { type: "string", description: "A short, punchy title for this mission, e.g. 'Launch Readiness Audit'" },
     roles: {
       type: "array",
       items: {
@@ -23,15 +24,24 @@ const ROLE_SCHEMA = {
       },
     },
   },
-  required: ["roles"],
+  required: ["missionName", "roles"],
 };
 
 const DECOMPOSE_BUDGET_USD = 2;
 
+// workerCount is optional — the whole point is "just give the objective and
+// it goes to work": if omitted, Claude itself decides how many distinct,
+// non-overlapping workstreams the objective actually calls for, rather than
+// making the user pick a number upfront.
 export async function decomposeObjective({ objective, workerCount, workspaceRoot, scratchDir }) {
+  const countInstruction = workerCount
+    ? `into exactly ${workerCount} distinct, non-overlapping worker roles`
+    : `into however many distinct, non-overlapping worker roles this objective actually calls for ` +
+      `(typically 2-6 — use your judgment; don't split into more roles than there is real independent work)`;
+
   const prompt =
-    `You are decomposing a mission objective into exactly ${workerCount} distinct, non-overlapping worker roles ` +
-    `for a team of parallel Claude Code agents.\n\n` +
+    `You are decomposing a mission objective ${countInstruction} for a team of parallel Claude Code agents. ` +
+    `Also give the overall mission a short, punchy name.\n\n` +
     `OBJECTIVE:\n${objective}\n\n` +
     `Tailor the roles to what this objective actually is — do not default to a hard-coded software-team template ` +
     `unless the objective is actually a software project. A content/marketing objective should get content/marketing ` +
@@ -51,5 +61,6 @@ export async function decomposeObjective({ objective, workerCount, workspaceRoot
   if (!Array.isArray(roles) || roles.length === 0) {
     throw new Error("decomposition did not return any roles");
   }
-  return { roles, costUsd: result.total_cost_usd ?? null };
+  const missionName = result.structured_output?.missionName || "Untitled mission";
+  return { roles, missionName, costUsd: result.total_cost_usd ?? null };
 }

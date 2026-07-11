@@ -520,12 +520,15 @@ const server = http.createServer((req, res) => {
     readJsonBody(req)
       .then(async (body) => {
         const objective = String(body.objective ?? "").trim();
-        const workerCount = Math.max(2, Math.min(10, parseInt(body.workerCount, 10) || 3));
+        // workerCount is optional — omit it to let Claude decide how many
+        // distinct workstreams the objective actually calls for.
+        const rawCount = parseInt(body.workerCount, 10);
+        const workerCount = Number.isFinite(rawCount) && rawCount > 0 ? Math.max(2, Math.min(10, rawCount)) : undefined;
         const workspaceRoot = String(body.workspaceRoot ?? "").trim();
         if (!objective) return sendJson(res, 400, { ok: false, error: "objective_required" });
         if (!workspaceRoot || !existsSync(workspaceRoot)) return sendJson(res, 400, { ok: false, error: "workspace_root_invalid" });
-        const { roles, costUsd } = await decomposeObjective({ objective, workerCount, workspaceRoot, scratchDir: missionScratchDir });
-        return sendJson(res, 200, { ok: true, roles, costUsd });
+        const { roles, missionName, costUsd } = await decomposeObjective({ objective, workerCount, workspaceRoot, scratchDir: missionScratchDir });
+        return sendJson(res, 200, { ok: true, roles, missionName, costUsd });
       })
       .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
     return;

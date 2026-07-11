@@ -1226,6 +1226,42 @@ body.broadcast-mode .tile.linked {
   margin-top: 4px;
 }
 
+.mission-advanced {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 4px 12px;
+  background: var(--panel-2);
+}
+
+.mission-advanced summary {
+  cursor: pointer;
+  padding: 8px 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 600;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+.mission-advanced[open] summary {
+  color: var(--soft);
+}
+
+.mission-advanced > label,
+.mission-advanced > .mission-form-row {
+  margin: 10px 0;
+}
+
+.mission-checkbox {
+  flex-direction: row !important;
+  align-items: center;
+  gap: 7px !important;
+}
+
+.mission-checkbox input {
+  width: auto;
+}
+
 .mission-error {
   color: #ff9aa7;
   font-size: 12.5px;
