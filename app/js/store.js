@@ -73,8 +73,9 @@ export const FINANCE_CONNECTORS = [
 
 /* ---------------- local memory ---------------- */
 export const MEMORY_RETENTION_DAYS = 30;
+export const CHAT_HISTORY_RETENTION_DAYS = 10;
 export const MEMORY_CATEGORY_LABELS = {
-  conversation: "Conversations",
+  conversation: "Saved chats",
   preference: "Preferences",
   business: "Business",
   client: "Clients",
@@ -86,6 +87,7 @@ export const MEMORY_CATEGORY_LABELS = {
   operations: "Operations",
 };
 const MEMORY_LIMIT = 300;
+const CHAT_HISTORY_LIMIT = 500;
 const SECRET_REDACTIONS = [
   [/\b(sk-[a-z0-9_-]{12,}|hf_[a-z0-9]{12,}|ghp_[a-z0-9_]{20,})\b/gi, "[redacted-key]"],
   [/\b(AKIA|ASIA)[A-Z0-9]{16}\b/g, "[redacted-aws-key]"],
@@ -141,9 +143,13 @@ export function shouldAiRemember(value = "") {
   return /\b(remember|make sure|from now on|always|never|i like|i don't like|important|owner|employee|policy|pricing|package|business|brand|client|customer|workspace)\b/i.test(String(value || ""));
 }
 
+function hasDurableMemorySignal(value = "") {
+  return /\b(remember|make sure|from now on|always|never|prefer|preference|i like|i don't like|i hate|i want|i wanted|i need|we need|should|shouldn't|must|do not|don't use|use this|important|save this|keep this|policy|pricing|package|business|brand|client|customer|workspace|domain|asset pack|local folder|bank account|credit card|authentication)\b/i.test(String(value || ""));
+}
+
 /* Greetings, thanks, acks — chatter that isn't actually about anything.
-   Gates auto-saved conversation memory (rememberConversation below) so
-   the Memory page stays a real record instead of every "hi" and "ok". */
+   Gates saved memory and temporary history so the app never spends storage
+   on "hi", "ok", and other non-context. */
 const TRIVIAL_MESSAGE_PATTERN = /^(hi|hello|hey|yo|sup|thanks|thank you|thx|ok|okay|sure|yes|no|yep|nope|nah|cool|nice|lol|test|testing|hmm|k|kk)[\s!.?]*$/i;
 
 function isMemoryWorthy(prompt, reply) {
@@ -151,10 +157,21 @@ function isMemoryWorthy(prompt, reply) {
   if (!cleanPrompt) return false;
   if (TRIVIAL_MESSAGE_PATTERN.test(cleanPrompt.trim())) return false;
   const wordCount = cleanPrompt.trim().split(/\s+/).filter(Boolean).length;
-  if (wordCount < 3 && !shouldAiRemember(cleanPrompt)) return false;
-  const category = classifyMemory(`${cleanPrompt} ${sanitizeMemoryText(reply)}`);
-  if (category !== "conversation") return true;
-  return shouldAiRemember(cleanPrompt) || shouldAiRemember(reply);
+  const cleanReply = sanitizeMemoryText(reply);
+  const combined = `${cleanPrompt} ${cleanReply}`;
+  if (wordCount < 3 && !hasDurableMemorySignal(combined)) return false;
+  const category = classifyMemory(cleanPrompt);
+  if (hasDurableMemorySignal(combined)) return true;
+  return ["preference", "business", "client", "security", "money"].includes(category) && wordCount >= 6;
+}
+
+function isTrivialChat(prompt = "", reply = "") {
+  const cleanPrompt = sanitizeMemoryText(prompt);
+  if (!cleanPrompt) return true;
+  if (TRIVIAL_MESSAGE_PATTERN.test(cleanPrompt.trim())) return true;
+  const cleanReply = sanitizeMemoryText(reply);
+  const wordCount = cleanPrompt.trim().split(/\s+/).filter(Boolean).length;
+  return wordCount < 3 && !hasDurableMemorySignal(`${cleanPrompt} ${cleanReply}`);
 }
 
 export function pruneMemory(entries = []) {
@@ -186,11 +203,46 @@ export function pruneMemory(entries = []) {
     .slice(0, MEMORY_LIMIT);
 }
 
+export function pruneChatHistory(entries = []) {
+  const cutoff = Date.now() - CHAT_HISTORY_RETENTION_DAYS * DAY;
+  return entries
+    .filter(Boolean)
+    .map((entry) => {
+      const createdAt = entry.createdAt || entry.at || new Date().toISOString();
+      const prompt = sanitizeMemoryText(entry.prompt || entry.text || entry.title || "");
+      const reply = sanitizeMemoryText(entry.reply || "");
+      const category = entry.category || classifyMemory(prompt);
+      return {
+        id: entry.id || uid("hist"),
+        ws: entry.ws || "phantomforce",
+        source: "temporary-chat",
+        category,
+        title: sanitizeMemoryText(entry.title || memoryTitle(prompt, category)).slice(0, 90),
+        summary: sanitizeMemoryText(entry.summary || reply || prompt).slice(0, 220),
+        prompt,
+        reply,
+        mode: sanitizeMemoryText(entry.mode || "ask").slice(0, 40),
+        route: sanitizeMemoryText(entry.route || "").slice(0, 50),
+        createdAt,
+        expiresAt: entry.expiresAt || new Date(new Date(createdAt).getTime() + CHAT_HISTORY_RETENTION_DAYS * DAY).toISOString(),
+      };
+    })
+    .filter((entry) => entry.prompt && !isTrivialChat(entry.prompt, entry.reply) && new Date(entry.createdAt).getTime() >= cutoff)
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    .slice(0, CHAT_HISTORY_LIMIT);
+}
+
 export function memoryRetention(entry) {
   if (entry?.pinnedByUser) return "remembered by you";
   if (entry?.pinnedByAi) return "remembered by Phantom";
   const ageDays = Math.floor((Date.now() - new Date(entry?.createdAt || Date.now()).getTime()) / DAY);
   return `${Math.max(0, MEMORY_RETENTION_DAYS - ageDays)}d left`;
+}
+
+export function chatHistoryRetention(entry) {
+  const createdAt = new Date(entry?.createdAt || Date.now()).getTime();
+  const ageDays = Math.floor((Date.now() - createdAt) / DAY);
+  return `${Math.max(0, CHAT_HISTORY_RETENTION_DAYS - ageDays)}d until shred`;
 }
 
 /* ---------------- internal tool spine ---------------- */
@@ -421,6 +473,7 @@ function seed() {
     agents: [],
     vacationRuns: [],
     memory: [],
+    chatHistory: [],
     toolSpine: TOOL_SPINE,
     activity: [],
   };
@@ -446,6 +499,7 @@ function normalizeData(data) {
   d.agents = Array.isArray(d.agents) ? d.agents : [];
   d.vacationRuns = Array.isArray(d.vacationRuns) ? d.vacationRuns : [];
   d.memory = pruneMemory(Array.isArray(d.memory) ? d.memory : []);
+  d.chatHistory = pruneChatHistory(Array.isArray(d.chatHistory) ? d.chatHistory : []);
   d.toolSpine = TOOL_SPINE.map((tool) => ({ ...((d.toolSpine || []).find((x) => x.id === tool.id) || {}), ...tool }));
   d.activity = Array.isArray(d.activity) ? d.activity : [];
   d.activity = d.activity.slice(0, 80);
@@ -468,7 +522,11 @@ const listeners = new Set();
 export const store = {
   state: load(),
   save() {
-    try { localStorage.setItem(DB_KEY, JSON.stringify(this.state)); } catch {}
+    try {
+      this.state.memory = pruneMemory(Array.isArray(this.state.memory) ? this.state.memory : []);
+      this.state.chatHistory = pruneChatHistory(Array.isArray(this.state.chatHistory) ? this.state.chatHistory : []);
+      localStorage.setItem(DB_KEY, JSON.stringify(this.state));
+    } catch {}
     listeners.forEach((fn) => fn());
   },
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
@@ -730,20 +788,43 @@ export function addMemory(entry = {}) {
 
 export function rememberConversation({ prompt = "", reply = "", mode = "ask", route = "" } = {}) {
   const cleanPrompt = sanitizeMemoryText(prompt);
-  if (!cleanPrompt) return null;
-  if (!isMemoryWorthy(cleanPrompt, reply)) return null;
   const cleanReply = sanitizeMemoryText(reply);
+  if (isTrivialChat(cleanPrompt, cleanReply)) return null;
+  const now = new Date().toISOString();
+  const category = classifyMemory(cleanPrompt);
+  const history = {
+    id: uid("hist"),
+    ws: currentWs(),
+    source: "temporary-chat",
+    category,
+    title: cleanPrompt,
+    summary: cleanReply || cleanPrompt,
+    prompt: cleanPrompt,
+    reply: cleanReply,
+    mode,
+    route,
+    createdAt: now,
+    expiresAt: days(CHAT_HISTORY_RETENTION_DAYS),
+  };
+  store.state.chatHistory = pruneChatHistory([history, ...(store.state.chatHistory || [])]);
+  let memory = null;
+  if (!isMemoryWorthy(cleanPrompt, cleanReply)) {
+    store.save();
+    return history;
+  }
   const combined = cleanReply ? `User: ${cleanPrompt}\nPhantom: ${cleanReply}` : `User: ${cleanPrompt}`;
-  const category = classifyMemory(`${cleanPrompt} ${cleanReply}`);
-  return addMemory({
-    source: "conversation",
+  memory = addMemory({
+    source: "saved-conversation",
     category,
     title: cleanPrompt,
     summary: cleanReply || cleanPrompt,
     text: combined,
     tags: [mode, route, category].filter(Boolean),
-    pinnedByAi: shouldAiRemember(cleanPrompt) || shouldAiRemember(cleanReply),
+    pinnedByAi: true,
+    createdAt: now,
   });
+  store.save();
+  return memory || history;
 }
 
 export function toggleMemoryRemember(id) {
@@ -761,6 +842,11 @@ export function forgetMemory(id) {
   store.save();
 }
 
+export function forgetChatHistory(id) {
+  store.state.chatHistory = (store.state.chatHistory || []).filter((item) => item.id !== id);
+  store.save();
+}
+
 export function memoryStats(list = visible(store.state.memory || [])) {
   const memories = Array.isArray(list) ? list : [];
   const remembered = memories.filter((item) => item.pinnedByUser || item.pinnedByAi).length;
@@ -770,6 +856,15 @@ export function memoryStats(list = visible(store.state.memory || [])) {
     return Date.now() - new Date(item.createdAt).getTime() > (MEMORY_RETENTION_DAYS - 5) * DAY;
   }).length;
   return { total: memories.length, remembered, categories, expiresSoon };
+}
+
+export function chatHistoryStats(list = visible(store.state.chatHistory || [])) {
+  const items = pruneChatHistory(Array.isArray(list) ? list : []);
+  const expiresSoon = items.filter((item) => {
+    return Date.now() - new Date(item.createdAt).getTime() > (CHAT_HISTORY_RETENTION_DAYS - 2) * DAY;
+  }).length;
+  const categories = new Set(items.map((item) => item.category)).size;
+  return { total: items.length, categories, expiresSoon };
 }
 
 /* ---------------- derived: money ---------------- */

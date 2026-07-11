@@ -32,6 +32,7 @@ type AdminAgentStatusResponse = {
       tasks_in_window: number;
       tokens_in_window: number;
       active_workers: number;
+      baseline_workers_online: number;
       runtime_active_workers: number;
       parent_workers: number;
       total_workers: number;
@@ -47,6 +48,8 @@ type AdminAgentStatusResponse = {
       neural_cells_mapped: number;
       generated_neural_cell_instances: number;
       automation_job_definitions: number;
+      enabled_automation_jobs: number;
+      automation_engine_enabled: boolean;
       template_definitions: number;
       template_generated_nodes: number;
       generated_nodes_independently_executable: false;
@@ -179,6 +182,13 @@ try {
   assert(adminBody.workforce.role === "admin", "Admin response should expose admin role.");
   assert(adminBody.workforce.summary.window_hours === 24, "Window should be honored.");
   assert(adminBody.workforce.summary.total_workers >= 8, "Admin should see the worker map.");
+  assert(adminBody.workforce.summary.baseline_workers_online >= 6, "Fresh accounts should show the verified core and scheduled service workers online.");
+  assert(adminBody.workforce.summary.enabled_automation_jobs >= 1, "The baseline worker count should be backed by enabled scheduled jobs.");
+  assert(adminBody.workforce.summary.automation_engine_enabled === true, "The test server should report its scheduler as enabled.");
+  assert(
+    adminBody.workforce.workers.filter((worker) => worker.id.startsWith("autopilot-")).every((worker) => worker.state === "active"),
+    "Enabled Autopilot categories should be baseline-active even before customer work exists.",
+  );
   assert(adminBody.workforce.summary.subagents_mapped >= 1000, "Admin should see the 1000+ subagent and neural-cell map.");
   assert(adminBody.workforce.summary.total_worker_nodes >= 1000, "Admin should see the 1000+ worker-node swarm.");
   assert(

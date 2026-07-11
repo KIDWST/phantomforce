@@ -8,11 +8,11 @@
 
 import {
   store, uid, visible, currentWs, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
-  PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats,
+  PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig,
-} from "./store.js?v=phantom-live-20260710-155";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260710-155";
+} from "./store.js?v=phantom-live-20260711-158";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-158";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 const DAY = 86400000;
@@ -843,12 +843,13 @@ function routeCommand(raw, settings) {
   /* --- memory --- */
   if (/(memory|remember|saved context|what do you know|knowledge|database|local data|past conversations)/.test(s)) {
     const mem = memoryStats();
+    const hist = chatHistoryStats();
     return {
       say: mem.total
-        ? `Memory has ${mem.total} saved item${mem.total === 1 ? "" : "s"} across ${mem.categories || 1} categor${mem.categories === 1 ? "y" : "ies"}.`
-        : "Memory is empty right now. New conversations start saving locally from here.",
+        ? `Memory has ${mem.total} saved item${mem.total === 1 ? "" : "s"} across ${mem.categories || 1} categor${mem.categories === 1 ? "y" : "ies"}. Temporary history has ${hist.total} item${hist.total === 1 ? "" : "s"} waiting for its 10-day shred.`
+        : `Saved memory is empty right now. Temporary history has ${hist.total} item${hist.total === 1 ? "" : "s"} and shreds after 10 days.`,
       cards: [card("Memory", "Local context database",
-        "Conversations auto-organize into categories. Normal memories expire after 30 days unless you or Phantom mark them to remember.",
+        "Saved memory is durable context. Temporary chat history is separate, expires after 10 days, and throwaway greetings are never stored.",
         [openAction("Open Memory", "memory")],
         mem.remembered ? `${mem.remembered} remembered` : "Private and local")],
       open: "memory",

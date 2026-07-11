@@ -6,9 +6,10 @@
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
-  PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
-  addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-155";
+  PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
+  addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
+  session,
+} from "./store.js?v=phantom-live-20260711-158";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -19,7 +20,30 @@ const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
+const workerRuntime = { state: "idle", workforce: null, error: "" };
 const MEMORY_DAY = 86400000;
+
+async function loadWorkerRuntime() {
+  if (workerRuntime.state === "loading") return;
+  workerRuntime.state = "loading";
+  workerRuntime.error = "";
+  try {
+    const token = session.token();
+    const response = await fetch("/phantom-ai/agents/status?window_hours=24", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok || !payload.workforce) {
+      throw new Error(payload?.error?.message || payload?.error || `Worker status failed (${response.status}).`);
+    }
+    workerRuntime.workforce = payload.workforce;
+    workerRuntime.state = "ready";
+  } catch (error) {
+    workerRuntime.workforce = null;
+    workerRuntime.state = "error";
+    workerRuntime.error = error instanceof Error ? error.message : "Worker status is unavailable.";
+  }
+}
 
 function bindActions(root, handlers) {
   root.querySelectorAll("[data-act]").forEach((el) => {
@@ -1047,20 +1071,39 @@ function categoryLabel(category) {
   return MEMORY_CATEGORY_LABELS[category] || title(category).replace(/-/g, " ");
 }
 
+function memorySourceLabel(source = "") {
+  return ({
+    "saved-conversation": "saved chat",
+    "history-promoted": "promoted history",
+    "temporary-chat": "temporary chat",
+  })[source] || String(source || "manual").replace(/-/g, " ");
+}
+
 function renderMemory(el, rerender) {
   const all = visible(store.state.memory || []);
+  const historyAll = visible(store.state.chatHistory || []);
   const stats = memoryStats(all);
+  const historyStats = chatHistoryStats(historyAll);
   const query = memoryUi.query.trim().toLowerCase();
   const counts = all.reduce((acc, item) => {
     acc[item.category] = (acc[item.category] || 0) + 1;
     return acc;
   }, {});
-  const categories = Object.keys(MEMORY_CATEGORY_LABELS).filter((category) => counts[category]);
+  const historyCounts = historyAll.reduce((acc, item) => {
+    acc[item.category] = (acc[item.category] || 0) + 1;
+    return acc;
+  }, {});
+  const categories = Object.keys(MEMORY_CATEGORY_LABELS).filter((category) => counts[category] || historyCounts[category]);
   const filtered = all.filter((item) => {
     const inCategory = memoryUi.category === "all" || item.category === memoryUi.category;
     const haystack = `${item.title} ${item.summary} ${item.text} ${(item.tags || []).join(" ")}`.toLowerCase();
     return inCategory && (!query || haystack.includes(query));
   });
+  const filteredHistory = historyAll.filter((item) => {
+    const inCategory = memoryUi.category === "all" || item.category === memoryUi.category;
+    const haystack = `${item.title} ${item.summary} ${item.prompt} ${item.reply} ${item.mode} ${item.route}`.toLowerCase();
+    return inCategory && (!query || haystack.includes(query));
+  }).slice(0, 20);
   const remembered = all.filter((item) => item.pinnedByUser || item.pinnedByAi).slice(0, 5);
   const expiring = all.filter((item) => {
     if (item.pinnedByUser || item.pinnedByAi) return false;
@@ -1072,23 +1115,24 @@ function renderMemory(el, rerender) {
       <section class="memory-hero">
         <div>
           <p class="overlay-kicker">LOCAL MEMORY</p>
-          <h3>Everything Phantom should know, organized for research.</h3>
-          <p>Conversations and manual notes stay in this browser. Normal memories auto-expire after ${MEMORY_RETENTION_DAYS} days unless you or Phantom mark them to remember.</p>
+          <h3>Saved memory stays valuable. Chat history shreds itself.</h3>
+          <p>Durable memory is for facts, preferences, rules, and business context useful later. Temporary chat history is separate and shredded after ${CHAT_HISTORY_RETENTION_DAYS} days. Trivial chatter is never saved.</p>
         </div>
         <div class="memory-score">
           <b>${stats.total}</b>
-          <span>saved</span>
+          <span>saved memories</span>
         </div>
       </section>
       <div class="stat-row memory-stats">
-        <div class="stat"><span>Categories</span><b>${stats.categories}</b><i>auto-organized</i></div>
-        <div class="stat"><span>Remembered</span><b>${stats.remembered}</b><i>kept past 30 days</i></div>
-        <div class="stat"><span>Expiring soon</span><b>${stats.expiresSoon}</b><i>normal cleanup</i></div>
+        <div class="stat"><span>Saved memory</span><b>${stats.total}</b><i>long-term context</i></div>
+        <div class="stat"><span>Remembered</span><b>${stats.remembered}</b><i>kept past ${MEMORY_RETENTION_DAYS} days</i></div>
+        <div class="stat"><span>Temporary history</span><b>${historyStats.total}</b><i>${CHAT_HISTORY_RETENTION_DAYS}d shred</i></div>
+        <div class="stat"><span>Shredding soon</span><b>${historyStats.expiresSoon}</b><i>history cleanup</i></div>
       </div>
       <div class="memory-controls">
         <label class="memory-search">
           <span>Search memory</span>
-          <input type="search" data-memory-search value="${esc(memoryUi.query)}" placeholder="Search conversations, clients, sites, security, money..." />
+          <input type="search" data-memory-search value="${esc(memoryUi.query)}" placeholder="Search saved memories and temporary history..." />
         </label>
       </div>
       <form class="memory-add" data-memory-add>
@@ -1114,20 +1158,39 @@ function renderMemory(el, rerender) {
                   <h4>${esc(item.title)}</h4>
                   <span class="memory-retention">${esc(memoryRetention(item))}</span>
                 </div>
-                <p class="record-sub">${esc(categoryLabel(item.category))} · ${esc(item.source)} · ${ago(item.createdAt)}</p>
+                <p class="record-sub">${esc(categoryLabel(item.category))} · ${esc(memorySourceLabel(item.source))} · ${ago(item.createdAt)}</p>
                 <p class="record-notes">${esc(item.summary)}</p>
                 <div class="memory-tags">${(item.tags || []).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>
                 <div class="record-actions">
                   <button class="btn ${item.pinnedByUser ? "btn-good" : ""}" data-act="pin-memory" data-id="${item.id}">${item.pinnedByUser ? "Unremember" : "Remember"}</button>
                   <button class="btn btn-quiet" data-act="forget-memory" data-id="${item.id}">Delete</button>
                 </div>
-              </article>`).join("") || empty(query ? "No memories matched that search." : "No memories yet. Ask Phantom something or capture a manual note.")}
+              </article>`).join("") || empty(query ? "No saved memories matched that search." : "No saved memories yet. Add a note or let Phantom promote durable context automatically.")}
+          </div>
+          <h3 class="ws-subhead">Temporary history</h3>
+          <p class="ws-note">Short-term chat context stays out of saved memory and shreds after ${CHAT_HISTORY_RETENTION_DAYS} days unless you explicitly save it.</p>
+          <div class="stack">
+            ${filteredHistory.map((item) => `
+              <article class="record memory-record memory-record-history">
+                <button class="record-x" data-act="forget-history" data-id="${item.id}" aria-label="Shred history">×</button>
+                <div class="record-top">
+                  ${wsTag(item.ws)}
+                  <h4>${esc(item.title)}</h4>
+                  <span class="memory-retention">${esc(chatHistoryRetention(item))}</span>
+                </div>
+                <p class="record-sub">${esc(categoryLabel(item.category))} · ${esc(item.mode)}${item.route ? ` · ${esc(item.route)}` : ""} · ${ago(item.createdAt)}</p>
+                <p class="record-notes">${esc(item.summary)}</p>
+                <div class="record-actions">
+                  <button class="btn btn-good" data-act="save-history-memory" data-id="${item.id}">Save as memory</button>
+                  <button class="btn btn-quiet" data-act="forget-history" data-id="${item.id}">Shred now</button>
+                </div>
+              </article>`).join("") || empty(query ? "No temporary history matched that search." : "No temporary history retained. Hellos, acks, and throwaway messages are shredded immediately.")}
           </div>
         </section>
         <aside class="memory-side">
           <article class="record">
             <h4>Research packages</h4>
-            <p class="record-notes">Phantom groups memory by topic so the database stays searchable instead of becoming a long chat log.</p>
+            <p class="record-notes">Saved memory is grouped by topic. Temporary history is visible below but kept out of long-term context unless promoted.</p>
             <div class="memory-package-grid">
               ${Object.entries(MEMORY_CATEGORY_LABELS).map(([category, label]) => `
                 <button class="memory-package" data-memory-cat="${esc(category)}">
@@ -1141,7 +1204,7 @@ function renderMemory(el, rerender) {
           </article>
           <article class="record">
             <h4>Cleanup watch</h4>
-            ${expiring.map((item) => `<p class="record-next">▸ ${esc(item.title)} <i>${esc(memoryRetention(item))}</i></p>`).join("") || `<p class="record-notes">Nothing is about to expire. Normal cleanup keeps the account lightweight.</p>`}
+            ${expiring.map((item) => `<p class="record-next">▸ ${esc(item.title)} <i>${esc(memoryRetention(item))}</i></p>`).join("") || `<p class="record-notes">Saved memory is stable. Temporary history shreds separately after ${CHAT_HISTORY_RETENTION_DAYS} days.</p>`}
           </article>
         </aside>
       </div>
@@ -1175,6 +1238,25 @@ function renderMemory(el, rerender) {
       if (confirm("Delete this local memory?")) { forgetMemory(id); rerender(); }
     },
     "remove-memory": (id) => { forgetMemory(id); rerender(); },
+    "save-history-memory": (id) => {
+      const item = (store.state.chatHistory || []).find((entry) => entry.id === id);
+      if (!item) return;
+      const text = item.reply ? `User: ${item.prompt}\nPhantom: ${item.reply}` : `User: ${item.prompt}`;
+      addMemory({
+        source: "history-promoted",
+        category: item.category,
+        title: item.prompt,
+        summary: item.summary || item.reply || item.prompt,
+        text,
+        tags: [item.mode, item.route, item.category].filter(Boolean),
+        pinnedByUser: true,
+        createdAt: item.createdAt,
+      });
+      forgetChatHistory(id);
+      pushActivity("Memory", "promoted temporary history into saved memory.", currentWs());
+      rerender();
+    },
+    "forget-history": (id) => { forgetChatHistory(id); rerender(); },
   });
 }
 
@@ -1784,7 +1866,18 @@ function workerMeshGroup(worker) {
   return "ops";
 }
 
-function renderWorkerMesh(workers) {
+function privateAdminRouteReached() {
+  return /(^|\.)admin\.phantomforce\.online$/i.test(location.hostname);
+}
+
+function baselineWorkerCount(runtime) {
+  const workers = Array.isArray(runtime?.workers) ? runtime.workers : [];
+  const reported = Number(runtime?.summary?.baseline_workers_online ?? runtime?.summary?.active_workers ?? 0);
+  const routeAlreadyCounted = workers.some((worker) => worker.id === "gatekeeper" && worker.state === "active");
+  return reported + (privateAdminRouteReached() && !routeAlreadyCounted ? 1 : 0);
+}
+
+function renderWorkerMesh(workers, runtime = null) {
   const employeeNodes = workers.filter((worker) => worker.worker_type === "employee");
   const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
   const cappedSubagents = subagentNodes.slice(0, 28);
@@ -1815,6 +1908,8 @@ function renderWorkerMesh(workers) {
   const waiting = workers.filter((worker) => worker.status === "waiting-approval").length;
   const mapped = workers.length;
   const departments = new Set(workers.map((worker) => worker.department)).size;
+  const baselineOnline = runtime ? baselineWorkerCount(runtime) : null;
+  const recentJobs = runtime?.summary?.tasks_in_window;
 
   return `
     <section class="worker-mesh" aria-label="Worker operations web">
@@ -1841,11 +1936,44 @@ function renderWorkerMesh(workers) {
           ${overflowSubagents > 0 ? `<span class="worker-legend-more">+${overflowSubagents} more subagents</span>` : ""}
         </div>
         <div class="worker-mesh-readout">
+          <span><b>${Number.isFinite(baselineOnline) ? baselineOnline : "—"}</b> baseline online</span>
+          <span><b>${Number.isFinite(recentJobs) ? recentJobs : "—"}</b> jobs logged</span>
           <span><b>${mapped}</b> workers mapped</span>
-          <span><b>${observed}</b> live signals</span>
           <span><b>${waiting}</b> waiting on you</span>
           <span><b>${departments}</b> departments</span>
         </div>
+      </div>
+    </section>`;
+}
+
+function renderBaselineWorkers(runtime) {
+  if (workerRuntime.state === "loading" || workerRuntime.state === "idle") {
+    return `<section class="worker-baseline"><div><p class="worker-kicker">Always-on crew</p><h4>Checking baseline services…</h4></div></section>`;
+  }
+  if (!runtime || workerRuntime.state === "error") {
+    return `<section class="worker-baseline worker-baseline-unavailable"><div><p class="worker-kicker">Always-on crew</p><h4>Status unavailable</h4><p>${esc(workerRuntime.error || "The worker status backend did not answer.")}</p></div><button class="btn btn-quiet" data-act="worker-runtime-retry">Retry</button></section>`;
+  }
+
+  const workers = Array.isArray(runtime.workers) ? runtime.workers : [];
+  const online = workers.filter((worker) => worker.state === "active");
+  const recentJobs = Number(runtime.summary?.tasks_in_window || 0);
+  const privateHostReached = privateAdminRouteReached();
+  const services = [
+    ...online.slice(0, 6).map((worker) => ({ name: worker.name, note: worker.role, live: true })),
+    ...(privateHostReached && !online.some((worker) => worker.id === "gatekeeper")
+      ? [{ name: "Private Route", note: "This admin session reached the protected host", live: true }]
+      : []),
+  ];
+
+  return `
+    <section class="worker-baseline">
+      <div class="worker-baseline-copy">
+        <p class="worker-kicker">Always-on crew</p>
+        <h4>${baselineWorkerCount(runtime)} baseline workers online</h4>
+        <p>${recentJobs ? `${recentJobs} real job${recentJobs === 1 ? "" : "s"} logged in the last 24 hours.` : "No customer jobs logged yet. Core services are still standing watch."}</p>
+      </div>
+      <div class="worker-baseline-grid">
+        ${services.map((service) => `<span class="worker-baseline-service"><i></i><b>${esc(service.name)}</b><small>${esc(service.note)}</small></span>`).join("")}
       </div>
     </section>`;
 }
@@ -2207,6 +2335,9 @@ function renderWorkforce(el, rerender) {
   const isMap = workerUi.view === "map";
   const selectedWorker = workerUi.selectedId ? workers.find((worker) => worker.worker_id === workerUi.selectedId) : null;
   const { subagentsByParent, cellsBySubagent, cellsByRoot } = buildWorkerGraph(workers);
+  const runtime = workerRuntime.workforce;
+  const baselineOnline = runtime ? baselineWorkerCount(runtime) : 0;
+  const jobsLogged = Number(runtime?.summary?.tasks_in_window || 0);
 
   el.innerHTML = `
     <section class="workers-hero">
@@ -2223,13 +2354,15 @@ function renderWorkforce(el, rerender) {
       </div>
     </section>
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
+    ${renderBaselineWorkers(runtime)}
     ${isMap ? `
-      ${renderWorkerMesh(workers)}
+      ${renderWorkerMesh(workers, runtime)}
       ${selectedWorker ? renderWorkerDrawer(selectedWorker, subagentsByParent.get(selectedWorker.worker_id) || [], cellsBySubagent, cellsByRoot.get(selectedWorker.worker_id) || []) : ""}
     ` : `
       <div class="worker-scale">
+        <span><b>${workerRuntime.state === "ready" ? baselineOnline : "—"}</b> baseline online</span>
+        <span><b>${workerRuntime.state === "ready" ? jobsLogged : "—"}</b> jobs logged</span>
         <span><b>${mappedCount}</b> workers mapped</span>
-        <span><b>${ledgerSignalCount}</b> ledger signals</span>
         <span><b>${parentCount}</b> lead workers</span>
         <span><b>${subagentCount}</b> subagents</span>
         <span><b>${neuralCellCount}</b> helper lanes</span>
@@ -2237,8 +2370,9 @@ function renderWorkforce(el, rerender) {
       </div>
       ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount })}
       <div class="worker-metrics">
+        <div><span>Baseline Online</span><b>${workerRuntime.state === "ready" ? baselineOnline : "—"}</b></div>
+        <div><span>Jobs Logged · 24h</span><b>${workerRuntime.state === "ready" ? jobsLogged : "—"}</b></div>
         <div><span>Workers Mapped</span><b>${mappedCount}</b></div>
-        <div><span>Ledger Signals</span><b>${ledgerSignalCount}</b></div>
         <div><span>Lead Workers</span><b>${parentCount}</b></div>
         <div><span>Subagents</span><b>${subagentCount}</b></div>
         <div><span>Helper Lanes</span><b>${neuralCellCount}</b></div>
@@ -2252,6 +2386,11 @@ function renderWorkforce(el, rerender) {
       ${renderWorkerDirectory(parentWorkers, workers)}
     `}`;
   bindActions(el, {
+    "worker-runtime-retry": () => {
+      workerRuntime.state = "idle";
+      workerRuntime.error = "";
+      rerender();
+    },
     "worker-view": (_id, button) => { workerUi.view = button.dataset.view === "list" ? "list" : "map"; workerUi.selectedId = ""; rerender(); },
     "worker-filter": (_id, button) => { workerUi.filter = button.dataset.filter || "all"; rerender(); },
     "worker-notice-close": () => { workerUi.notice = ""; rerender(); },
@@ -2278,6 +2417,9 @@ function renderWorkforce(el, rerender) {
       rerender();
     },
   });
+  if (workerRuntime.state === "idle") {
+    loadWorkerRuntime().finally(() => rerender());
+  }
 }
 
 /* ============================= APPROVALS ============================= */
