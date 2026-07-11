@@ -17,6 +17,7 @@ export function freshTextStyle() {
 export function freshEditState() {
   return {
     brightness: 100, contrast: 100, saturate: 100, hue: 0, blur: 0, rotate: 0, flip: false,
+    crop: { aspect: "original", x: 0.5, y: 0.5, zoom: 1 },
     text: "", textStyle: freshTextStyle(),
     bokeh: null, bokehBrush: 12,
   };
@@ -111,6 +112,14 @@ export function removeBokehSpotNear(state, x, y) {
   if (!state.bokeh.spots.length && !state.bokeh.maskImg) state.bokeh = null;
   return true;
 }
+
+export const CROP_ASPECTS = {
+  original: null,
+  "1:1": 1,
+  "4:5": 4 / 5,
+  "9:16": 9 / 16,
+  "16:9": 16 / 9,
+};
 export function removeBokehSpotAt(state, index) {
   if (!state.bokeh || !state.bokeh.spots[index]) return false;
   state.bokeh.spots.splice(index, 1);
@@ -178,16 +187,41 @@ export function estimateSubjectPoint(canvas) {
   return { x: bestX, y: bestY };
 }
 
+export function computeCropFrame(img, state) {
+  const imageW = img.naturalWidth || img.width || 1;
+  const imageH = img.naturalHeight || img.height || 1;
+  const crop = { aspect: "original", x: 0.5, y: 0.5, zoom: 1, ...(state.crop || {}) };
+  const targetAspect = CROP_ASPECTS[crop.aspect] || imageW / imageH;
+  let width = imageW;
+  let height = width / targetAspect;
+  if (height > imageH) { height = imageH; width = height * targetAspect; }
+  const zoom = Math.max(1, Math.min(4, Number(crop.zoom) || 1));
+  width /= zoom;
+  height /= zoom;
+  const halfX = width / imageW / 2;
+  const halfY = height / imageH / 2;
+  const centerX = Math.max(halfX, Math.min(1 - halfX, Number(crop.x) || 0.5));
+  const centerY = Math.max(halfY, Math.min(1 - halfY, Number(crop.y) || 0.5));
+  return {
+    sx: centerX * imageW - width / 2,
+    sy: centerY * imageH - height / 2,
+    sw: width,
+    sh: height,
+  };
+}
+
 function drawFrame(ctx, img, state, extraFilter = "") {
   const rot = state.rotate % 180 !== 0;
-  const w = img.naturalWidth, h = img.naturalHeight;
+  const frame = computeCropFrame(img, state);
+  const w = Math.max(1, Math.round(frame.sw));
+  const h = Math.max(1, Math.round(frame.sh));
   ctx.canvas.width = rot ? h : w; ctx.canvas.height = rot ? w : h;
   ctx.save();
   ctx.filter = `brightness(${state.brightness}%) contrast(${state.contrast}%) saturate(${state.saturate}%) hue-rotate(${state.hue}deg) blur(${state.blur}px)${extraFilter}`;
   ctx.translate(ctx.canvas.width / 2, ctx.canvas.height / 2);
   ctx.rotate(state.rotate * Math.PI / 180);
   ctx.scale(state.flip ? -1 : 1, 1);
-  ctx.drawImage(img, -w / 2, -h / 2, w, h);
+  ctx.drawImage(img, frame.sx, frame.sy, frame.sw, frame.sh, -w / 2, -h / 2, w, h);
   ctx.restore();
 }
 
@@ -239,9 +273,11 @@ export function paintEdit(canvas, img, state) {
     const feather = state.bokeh.feather ?? 0.45;
     if (hasMask) {
       const featherPx = Math.max(0, feather * 14);
+      const maskCanvas = document.createElement("canvas");
+      drawFrame(maskCanvas.getContext("2d"), state.bokeh.maskImg, state);
       bgCtx.save();
       bgCtx.filter = featherPx > 0.3 ? `blur(${featherPx}px)` : "none";
-      bgCtx.drawImage(state.bokeh.maskImg, 0, 0, w, h);
+      bgCtx.drawImage(maskCanvas, 0, 0, w, h);
       bgCtx.restore();
     }
     if (hasSpots) state.bokeh.spots.forEach((spot) => {
