@@ -207,7 +207,7 @@ export function planAssistantCustomization(message: string, current: Organizatio
   const lower = text.toLowerCase();
   const patch: ConfigurationPatch = {};
   const explanations: string[] = [];
-  const rename = text.match(/(?:rename|change)\s+(.+?)\s+to\s+(.+?)(?:\.|$)/i);
+  const rename = text.match(/(?:rename|change)\s+(.+?)\s+to\s+(.+?)(?:\s+and\s+|\.|$)/i);
   if (rename) {
     const source = rename[1].trim().toLowerCase();
     const target = rename[2].trim();

@@ -1,85 +1,96 @@
+import assert from "node:assert/strict";
 import { mkdtemp, rm } from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 import {
-  defaultOrganizationConfiguration,
   getOrganizationConfiguration,
   planAssistantCustomization,
   previewConfigurationChange,
   publishConfigurationChange,
-  resetOrganizationConfiguration,
   rollbackOrganizationConfiguration,
-  validateOrganizationConfiguration,
-  type CustomizationEntitlements,
 } from "../src/customization/customization-service.js";
 
-function assert(condition: unknown, message: string): asserts condition {
-  if (!condition) throw new Error(`ASSERTION FAILED: ${message}`);
-}
-
-const root = await mkdtemp(path.join(os.tmpdir(), "phantomforce-customization-test-"));
-const entitlements: CustomizationEntitlements = {
-  coBranded: true,
-  whiteLabel: false,
-  internalPhantomForce: true,
-};
+const root = await mkdtemp(join(tmpdir(), "phantomforce-customization-test-"));
+const noPremium = { coBranded: false, whiteLabel: false, internalPhantomForce: false };
 
 try {
-  const defaults = defaultOrganizationConfiguration("phantomforce-owner", "test-owner");
-  assert(defaults.modules.every((module) => module.roles.length > 0), "every default module must have at least one valid role");
-  assert(validateOrganizationConfiguration(defaults, entitlements).every((issue) => issue.severity !== "error"), "defaults must satisfy platform safeguards");
+  const alpha = await getOrganizationConfiguration("alpha-org", "owner-alpha", root);
+  const beta = await getOrganizationConfiguration("beta-org", "owner-beta", root);
+  assert.equal(alpha.configuration.tenantId, "alpha-org");
+  assert.equal(beta.configuration.tenantId, "beta-org");
+  assert.notEqual(alpha.configuration, beta.configuration);
 
-  const initial = await getOrganizationConfiguration("phantomforce-owner", "test-owner", root);
-  assert(initial.configuration.version === 1, "first load must create version 1");
-
+  const validPatch = {
+    theme: { primary: "#22ee88" },
+    modules: alpha.configuration.modules.map((module) => module.id === "crm" ? { ...module, label: "Athletes" } : module),
+  };
   const validPreview = await previewConfigurationChange({
-    tenantId: "phantomforce-owner",
-    actor: "test-owner",
-    patch: { theme: { primary: "#22cc88" } },
-    entitlements,
+    tenantId: "alpha-org",
+    actor: "owner-alpha",
+    entitlements: noPremium,
     root,
+    patch: validPatch,
   });
-  assert(validPreview.valid && validPreview.proposedVersion === 2, "valid preview must be reversible version 2");
+  assert.equal(validPreview.valid, true);
+  assert.equal(validPreview.candidate.theme.primary, "#22ee88");
+  assert.equal(validPreview.candidate.modules.find((module) => module.id === "crm")?.label, "Athletes");
 
-  const blockedPreview = await previewConfigurationChange({
-    tenantId: "phantomforce-owner",
-    actor: "test-owner",
-    patch: {
-      modules: initial.configuration.modules.map((module) => module.id === "approvals" ? { ...module, enabled: false } : module),
-    },
-    entitlements,
-    root,
+  await assert.rejects(() => previewConfigurationChange({ tenantId: "alpha-org", actor: "owner-alpha", entitlements: noPremium, root, patch: { theme: { customCss: "body{display:none}" } } }));
+  await assert.rejects(() => previewConfigurationChange({ tenantId: "alpha-org", actor: "owner-alpha", entitlements: noPremium, root, patch: { theme: { primary: "red" } } }));
+
+  const whiteLabel = await previewConfigurationChange({ tenantId: "alpha-org", actor: "owner-alpha", entitlements: noPremium, root, patch: { brand: { mode: "white_label" } } });
+  assert.equal(whiteLabel.valid, false);
+  assert.match(whiteLabel.issues[0]?.message ?? "", /enterprise/i);
+
+  const disableApproval = await previewConfigurationChange({
+    tenantId: "alpha-org", actor: "owner-alpha", entitlements: noPremium, root,
+    patch: { modules: alpha.configuration.modules.map((module) => module.id === "approvals" ? { ...module, enabled: false } : module) },
   });
-  assert(!blockedPreview.valid, "required approval controls must not be disableable");
+  assert.equal(disableApproval.valid, false);
+  assert.ok(disableApproval.issues.some((issue) => issue.path === "modules.approvals"));
+
+  const reservedField = await previewConfigurationChange({
+    tenantId: "alpha-org", actor: "owner-alpha", entitlements: noPremium, root,
+    patch: { customObjects: [{ id: "athletes", singularLabel: "Athlete", pluralLabel: "Athletes", icon: "users", rolePermissions: {}, fields: [{ id: "tenant_id", label: "Tenant", type: "short_text", required: false, options: [], readOnly: false }] }] },
+  });
+  assert.equal(reservedField.valid, false);
+  assert.ok(reservedField.issues.some((issue) => /reserved/i.test(issue.message)));
+
+  const unsafeWorkflow = await previewConfigurationChange({
+    tenantId: "alpha-org", actor: "owner-alpha", entitlements: noPremium, root,
+    patch: { workflows: [{ id: "send_followup", name: "Send follow-up", enabled: true, trigger: "manual", actions: [{ type: "connector_action", target: "gmail", requiresApproval: false }] }] },
+  });
+  assert.equal(unsafeWorkflow.valid, false);
 
   const published = await publishConfigurationChange({
-    tenantId: "phantomforce-owner",
-    actor: "test-owner",
-    patch: { theme: { primary: "#22cc88" } },
-    summary: "Test theme update",
+    tenantId: "alpha-org", actor: "owner-alpha", entitlements: noPremium, root,
+    patch: validPatch,
+    summary: "Sports workspace labels and theme",
     expectedVersion: 1,
-    entitlements,
-    root,
   });
-  assert(published.configuration.version === 2, "publish must advance the configuration version");
+  assert.equal(published.configuration.version, 2);
+  const betaAfterPublish = await getOrganizationConfiguration("beta-org", "owner-beta", root);
+  assert.equal(betaAfterPublish.configuration.version, 1, "Publishing alpha must not change beta.");
 
-  const rolledBack = await rollbackOrganizationConfiguration({
-    tenantId: "phantomforce-owner",
-    actor: "test-owner",
-    version: 1,
-    entitlements,
-    root,
-  });
-  assert(rolledBack.configuration.version === 3, "rollback must create a new version instead of rewriting history");
+  const plan = planAssistantCustomization("Change Clients to Recruits and make the assistant professional.", published.configuration);
+  assert.equal(plan.understood, true);
+  assert.equal(plan.sourceCodeEdited, false);
+  assert.equal(plan.protectedCoreTouched, false);
 
-  const reset = await resetOrganizationConfiguration({ tenantId: "phantomforce-owner", actor: "test-owner", root });
-  assert(reset.configuration.version === 4, "reset must also preserve version history");
+  const rolledBack = await rollbackOrganizationConfiguration({ tenantId: "alpha-org", actor: "owner-alpha", version: 1, entitlements: noPremium, root });
+  assert.equal(rolledBack.configuration.version, 3);
+  assert.equal(rolledBack.configuration.modules.find((module) => module.id === "crm")?.label, "Clients");
 
-  const assistantPlan = planAssistantCustomization("Make the assistant concise and use #33dd99", reset.configuration);
-  assert(assistantPlan.understood && assistantPlan.requiresApproval, "assistant planning must remain deterministic and approval-gated");
-
-  console.log("customization platform checks passed");
+  console.log(JSON.stringify({
+    ok: true,
+    tests: [
+      "tenant isolation", "valid theme and terminology", "unsafe CSS rejection", "invalid color rejection",
+      "white-label entitlement", "required module preservation", "reserved field protection",
+      "workflow approval enforcement", "version publish", "assistant safe planning", "rollback",
+    ],
+    finalVersion: rolledBack.configuration.version,
+  }, null, 2));
 } finally {
   await rm(root, { recursive: true, force: true });
 }

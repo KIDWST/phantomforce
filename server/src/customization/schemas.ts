@@ -20,7 +20,7 @@ export const OrganizationBrandSchema = z.object({
   faviconUrl: SafeAssetUrlSchema.default(""),
   loginBackgroundUrl: SafeAssetUrlSchema.default(""),
   poweredByPhantomForce: z.literal(true).default(true),
-});
+}).strict();
 
 export const OrganizationThemeSchema = z.object({
   colorMode: z.enum(["dark", "light", "system"]).default("dark"),
@@ -31,7 +31,7 @@ export const OrganizationThemeSchema = z.object({
   font: ApprovedFontSchema.default("Space Grotesk"),
   radius: z.number().int().min(4).max(20).default(12),
   density: DensitySchema.default("comfortable"),
-});
+}).strict();
 
 export const ModuleConfigurationSchema = z.object({
   id: z.string().trim().min(1).max(60),
@@ -44,14 +44,14 @@ export const ModuleConfigurationSchema = z.object({
 export const NavigationConfigurationSchema = z.object({
   homeModuleId: z.string().trim().min(1).max(60).default("dashboard"),
   compact: z.boolean().default(false),
-});
+}).strict();
 
 export const AssistantConfigurationSchema = z.object({
   displayName: SafeLabelSchema.default("Phantom"),
   tone: z.enum(["direct", "professional", "friendly", "energetic", "concise"]).default("direct"),
   detail: z.enum(["brief", "balanced", "detailed"]).default("balanced"),
   instructions: SafeTextSchema.default(""),
-});
+}).strict();
 
 export const CustomFieldTypeSchema = z.enum([
   "short_text", "long_text", "number", "currency", "percentage", "date", "datetime", "checkbox",
@@ -126,7 +126,7 @@ export const OrganizationPolicySchema = z.object({
   requireApprovalForOutbound: z.literal(true).default(true),
   requireApprovalForDestructive: z.literal(true).default(true),
   approvalThreshold: z.enum(["all_external", "medium_and_up", "high_and_up"]).default("all_external"),
-});
+}).strict();
 
 export const OrganizationConfigurationSchema = z.object({
   schemaVersion: z.literal(1),
