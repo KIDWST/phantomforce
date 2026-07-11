@@ -10,8 +10,8 @@ import { session as accessSession } from "./store.js?v=phantom-live-20260711-171
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
 } from "./contenthub.js?v=phantom-live-20260711-171";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260711-171";
-import { loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260711-171";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260711-171";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260711-171";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1826,6 +1826,29 @@ let mlEditResizeHandler = null;
 let mlBokehPicking = false;
 let mlShowTutorial = false;
 let mlEditLoadError = null;
+let mlEditHistory = [];
+let mlEditFuture = [];
+
+function cloneEditState(source = editState) {
+  return {
+    ...source,
+    crop: { ...(source.crop || {}) },
+    textStyle: { ...(source.textStyle || {}) },
+    bokeh: source.bokeh ? { ...source.bokeh, spots: (source.bokeh.spots || []).map((spot) => ({ ...spot })) } : null,
+  };
+}
+
+function rememberEdit() {
+  mlEditHistory.push(cloneEditState());
+  if (mlEditHistory.length > 30) mlEditHistory.shift();
+  mlEditFuture = [];
+}
+
+function restoreEdit(next) {
+  const loadedUrl = editState.loadedUrl;
+  editState = cloneEditState(next);
+  editState.loadedUrl = loadedUrl;
+}
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
   if (!session.edit) {
@@ -1844,42 +1867,73 @@ function renderEdit(body, cfg, opts, root) {
     <div class="ml-editor">
       <div class="ml-canvas-wrap">
         ${mlEditLoadError ? `<div class="ch-lb-load-error"><b>Couldn't load this image</b><span>${esc(mlEditLoadError)}</span></div>` : ""}
+        <div class="ml-edit-topbar" aria-label="Edit history and preview">
+          <button type="button" data-ml-undo ${mlEditHistory.length ? "" : "disabled"} title="Undo">${svgIc("undo")}</button>
+          <button type="button" data-ml-redo ${mlEditFuture.length ? "" : "disabled"} title="Redo">${svgIc("redo")}</button>
+          <button type="button" data-ml-before title="Hold to see original">Before</button>
+        </div>
         <canvas class="ml-canvas" data-ml-canvas></canvas>
         <div class="ch-lb-bokeh-markers" data-ml-bokeh-markers></div>
         <div class="ch-lb-pick-hint" data-ml-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
       </div>
       <div class="ml-tools">
-        <button class="ml-tutorial-btn" type="button" data-ml-tutorial>${svgIc("spark")} How to use this editor</button>
+        <div class="ml-edit-title"><div><span>Image editor</span><b>Make it ready to use.</b></div><button class="ml-tutorial-btn" type="button" data-ml-tutorial title="Help">?</button></div>
         ${mlShowTutorial ? tutorialMarkup() : ""}
-        <div class="ml-tool-head">Subject bokeh ${svgIc("spark")}${bSpots.length ? ` <i class="ch-lb-bokeh-count">${bSpots.length} spot${bSpots.length === 1 ? "" : "s"}</i>` : ""}</div>
-        <p class="ch-lb-bokeh-note">${bSpots.length ? "Click to add more focus, right-click a spot to remove it." : "Turn on and click the subject — click again to cover more of it."}</p>
-        <label class="ml-slider"><span>Brush size <b data-bout="r">${editState.bokehBrush || 24}</b></span><input type="range" min="8" max="45" value="${editState.bokehBrush || 24}" data-ml-bslider="r"/></label>
-        ${bSpots.length ? `<label class="ml-slider"><span>Background blur <b data-bout="strength">${editState.bokeh.strength}</b></span><input type="range" min="4" max="32" value="${editState.bokeh.strength}" data-ml-bslider="strength"/></label>` : ""}
-        <div class="ml-chips">
-          <button data-ml-bokeh-pick class="${mlBokehPicking ? "is-on" : ""}">${svgIc("spark")} ${mlBokehPicking ? "Adding focus… (click Done)" : "Add focus spots"}</button>
-          ${bSpots.length ? `<button data-ml-bokeh-off>Clear all</button>` : ""}
+        <div class="ml-quick-fixes">
+          <button type="button" data-ml-clean>${svgIc("spark")} Clean up</button>
+          <button type="button" data-ml-rembg>Remove background</button>
         </div>
-        <div class="ml-tool-head">Adjust</div>
-        ${slider("Brightness", "brightness", 0, 200, editState.brightness)}
-        ${slider("Contrast", "contrast", 0, 200, editState.contrast)}
-        ${slider("Saturation", "saturate", 0, 250, editState.saturate)}
-        ${slider("Hue", "hue", 0, 360, editState.hue)}
-        ${slider("Blur", "blur", 0, 12, editState.blur)}
-        <div class="ml-tool-head">Transform</div>
-        <div class="ml-chips"><button data-ml-rot="-90">${svgIc("undo")} 90°</button><button data-ml-rot="90">90° ${svgIc("redo")}</button><button data-ml-flip class="${editState.flip ? "is-on" : ""}">Flip</button></div>
-        <div class="ml-tool-head">Filters</div>
-        <div class="ml-chips ml-chips-wrap" data-ml-filter>
-          <button data-v="none">None</button><button data-v="noir">Noir</button><button data-v="emerald">Emerald</button>
-          <button data-v="warm">Warm</button><button data-v="cold">Cold</button><button data-v="vivid">Vivid</button>
-        </div>
-        <div class="ml-tool-head">Text overlay</div>
-        <input class="ml-text-in" data-ml-text placeholder="Add a caption / headline…" value="${esc(editState.text)}"/>
-        <div class="ml-tool-head">Quick style pass ${svgIc("spark")}</div>
-        <p class="ml-hint">Local mood/color nudge only — not a full AI-generated edit. For prompt-guided AI editing and background removal, use Creator Hub's editor by tapping an image in the library.</p>
-        <div class="ml-prompt-wrap">
-          <input class="ml-text-in" data-ml-aiedit placeholder="e.g. brighter, cinematic teal, moody night"/>
-          <button class="ml-enhance" data-ml-runai>Apply</button>
-        </div>
+        <details class="ml-edit-section" open>
+          <summary><span>Crop & frame</span><b>${esc(editState.crop?.aspect || "original")}</b></summary>
+          <div class="ml-edit-section-body">
+            <div class="ml-crop-presets" data-ml-crop-presets>
+              <button type="button" data-aspect="original" class="${editState.crop?.aspect === "original" ? "is-on" : ""}"><i class="ml-crop-shape is-original"></i>Original</button>
+              <button type="button" data-aspect="1:1" class="${editState.crop?.aspect === "1:1" ? "is-on" : ""}"><i class="ml-crop-shape is-square"></i>Square</button>
+              <button type="button" data-aspect="4:5" class="${editState.crop?.aspect === "4:5" ? "is-on" : ""}"><i class="ml-crop-shape is-portrait"></i>Post</button>
+              <button type="button" data-aspect="9:16" class="${editState.crop?.aspect === "9:16" ? "is-on" : ""}"><i class="ml-crop-shape is-story"></i>Story</button>
+              <button type="button" data-aspect="16:9" class="${editState.crop?.aspect === "16:9" ? "is-on" : ""}"><i class="ml-crop-shape is-wide"></i>Wide</button>
+            </div>
+            <button class="ml-smart-frame" type="button" data-ml-autoframe>${svgIc("spark")} Center on subject</button>
+            ${cropSlider("Zoom", "zoom", 100, 300, Math.round((editState.crop?.zoom || 1) * 100), "%")}
+            ${cropSlider("Left / right", "x", 0, 100, Math.round((editState.crop?.x ?? 0.5) * 100), "")}
+            ${cropSlider("Up / down", "y", 0, 100, Math.round((editState.crop?.y ?? 0.5) * 100), "")}
+          </div>
+        </details>
+        <details class="ml-edit-section">
+          <summary><span>Quick looks</span><b>6</b></summary>
+          <div class="ml-edit-section-body"><div class="ml-chips ml-chips-wrap" data-ml-filter>
+            <button data-v="none">Clean</button><button data-v="vivid">Pop</button><button data-v="warm">Warm</button>
+            <button data-v="cold">Cool</button><button data-v="noir">B&W</button><button data-v="emerald">Neon</button>
+          </div></div>
+        </details>
+        <details class="ml-edit-section">
+          <summary><span>Fine tune</span><b>Light + color</b></summary>
+          <div class="ml-edit-section-body">
+            ${slider("Brightness", "brightness", 0, 200, editState.brightness)}
+            ${slider("Contrast", "contrast", 0, 200, editState.contrast)}
+            ${slider("Color", "saturate", 0, 250, editState.saturate)}
+            ${slider("Hue", "hue", 0, 360, editState.hue)}
+            ${slider("Softness", "blur", 0, 12, editState.blur)}
+            <div class="ml-chips"><button data-ml-rot="-90">${svgIc("undo")} Rotate</button><button data-ml-rot="90">Rotate ${svgIc("redo")}</button><button data-ml-flip class="${editState.flip ? "is-on" : ""}">Flip</button></div>
+          </div>
+        </details>
+        <details class="ml-edit-section">
+          <summary><span>Focus blur</span><b>${bSpots.length ? `${bSpots.length} spots` : "Off"}</b></summary>
+          <div class="ml-edit-section-body">
+            <p class="ch-lb-bokeh-note">${bSpots.length ? "Add more sharp areas or clear the effect." : "Tap the subject to keep it sharp and soften the background."}</p>
+            <label class="ml-slider"><span>Brush size <b data-bout="r">${editState.bokehBrush || 24}</b></span><input type="range" min="8" max="45" value="${editState.bokehBrush || 24}" data-ml-bslider="r"/></label>
+            ${bSpots.length ? `<label class="ml-slider"><span>Background blur <b data-bout="strength">${editState.bokeh.strength}</b></span><input type="range" min="4" max="32" value="${editState.bokeh.strength}" data-ml-bslider="strength"/></label>` : ""}
+            <div class="ml-chips"><button data-ml-bokeh-pick class="${mlBokehPicking ? "is-on" : ""}">${svgIc("spark")} ${mlBokehPicking ? "Done" : "Choose subject"}</button>${bSpots.length ? `<button data-ml-bokeh-off>Clear</button>` : ""}</div>
+          </div>
+        </details>
+        <details class="ml-edit-section">
+          <summary><span>Text</span><b>${editState.text ? "Added" : "Optional"}</b></summary>
+          <div class="ml-edit-section-body"><input class="ml-text-in" data-ml-text placeholder="Add a headline…" value="${esc(editState.text)}"/></div>
+        </details>
+        <details class="ml-edit-section">
+          <summary><span>Ask Phantom to edit</span><b>${svgIc("spark")}</b></summary>
+          <div class="ml-edit-section-body"><p class="ml-hint">Describe a look, like “brighter product photo” or “moody night.”</p><div class="ml-prompt-wrap"><input class="ml-text-in" data-ml-aiedit placeholder="Describe the change…"/><button class="ml-enhance" data-ml-runai>Apply</button></div></div>
+        </details>
         <div class="ml-editor-actions">
           <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to library</button>
           <button class="ml-generate ml-ghost" data-ml-dledit>${svgIc("upload")} Download</button>
@@ -1890,6 +1944,7 @@ function renderEdit(body, cfg, opts, root) {
     </div>`;
   const canvas = body.querySelector("[data-ml-canvas]");
   const markerLayer = body.querySelector("[data-ml-bokeh-markers]");
+  const repaint = () => { if (canvas._img) { paintEdit(canvas, canvas._img, editState); positionMarkers(); } };
   const positionMarkers = () => {
     if (!markerLayer) return;
     const spots = editState.bokeh?.spots || [];
@@ -1906,7 +1961,7 @@ function renderEdit(body, cfg, opts, root) {
   // straight onto the canvas taints it, and every later toDataURL()/save then
   // throws with no visible error. Routes anything not same-origin through our
   // own backend proxy instead.
-  if (session.edit.url !== editState.loadedUrl) {
+  if (session.edit.url !== editState.loadedUrl || !canvas._img) {
     const targetUrl = session.edit.url;
     loadImageForEditing(targetUrl)
       .then((img) => {
@@ -1927,14 +1982,71 @@ function renderEdit(body, cfg, opts, root) {
   window.addEventListener("resize", mlEditResizeHandler);
   // wire tools
   body.querySelector("[data-ml-tutorial]")?.addEventListener("click", () => { mlShowTutorial = !mlShowTutorial; renderMediaStudio(root, opts); });
-  body.querySelectorAll("[data-ml-slider]").forEach((s) => s.oninput = () => { editState[s.dataset.mlSlider] = +s.value; if (canvas._img) paintEdit(canvas, canvas._img, editState); positionMarkers(); const o = body.querySelector(`[data-out="${s.dataset.mlSlider}"]`); if (o) o.textContent = s.value; });
-  body.querySelectorAll("[data-ml-rot]").forEach((b) => b.onclick = () => { editState.rotate = (editState.rotate + (+b.dataset.mlRot) + 360) % 360; if (canvas._img) paintEdit(canvas, canvas._img, editState); positionMarkers(); });
-  const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { editState.flip = !editState.flip; flip.classList.toggle("is-on"); if (canvas._img) paintEdit(canvas, canvas._img, editState); positionMarkers(); };
-  body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { applyFilterPreset(b.dataset.v, editState); syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img, editState); positionMarkers(); });
-  const tin = body.querySelector("[data-ml-text]"); if (tin) tin.oninput = () => { editState.text = tin.value; if (canvas._img) paintEdit(canvas, canvas._img, editState); };
+  body.querySelector("[data-ml-undo]")?.addEventListener("click", () => { if (!mlEditHistory.length) return; mlEditFuture.push(cloneEditState()); restoreEdit(mlEditHistory.pop()); renderMediaStudio(root, opts); });
+  body.querySelector("[data-ml-redo]")?.addEventListener("click", () => { if (!mlEditFuture.length) return; mlEditHistory.push(cloneEditState()); restoreEdit(mlEditFuture.pop()); renderMediaStudio(root, opts); });
+  const before = body.querySelector("[data-ml-before]");
+  const showBefore = () => { if (canvas._img) paintEdit(canvas, canvas._img, { ...freshEditState(), loadedUrl: editState.loadedUrl }); };
+  if (before) {
+    before.onpointerdown = (event) => { event.preventDefault(); showBefore(); before.classList.add("is-on"); };
+    before.onpointerup = before.onpointercancel = before.onpointerleave = () => { before.classList.remove("is-on"); repaint(); };
+  }
+  body.querySelectorAll("[data-ml-crop-presets] button").forEach((button) => button.onclick = () => {
+    rememberEdit();
+    editState.crop = { aspect: button.dataset.aspect || "original", x: 0.5, y: 0.5, zoom: 1 };
+    renderMediaStudio(root, opts);
+  });
+  body.querySelectorAll("[data-ml-crop-slider]").forEach((slider) => {
+    slider.onpointerdown = () => rememberEdit();
+    slider.oninput = () => {
+      const key = slider.dataset.mlCropSlider;
+      editState.crop[key] = key === "zoom" ? (+slider.value / 100) : (+slider.value / 100);
+      repaint();
+      const out = body.querySelector(`[data-crop-out="${key}"]`);
+      if (out) out.textContent = key === "zoom" ? `${slider.value}%` : slider.value;
+    };
+  });
+  body.querySelector("[data-ml-autoframe]")?.addEventListener("click", () => {
+    if (!canvas._img) return;
+    rememberEdit();
+    const original = document.createElement("canvas");
+    paintEdit(original, canvas._img, { ...freshEditState(), loadedUrl: editState.loadedUrl });
+    const focus = estimateSubjectPoint(original) || { x: 0.5, y: 0.45 };
+    editState.crop.x = focus.x;
+    editState.crop.y = focus.y;
+    editState.crop.zoom = Math.max(1.08, editState.crop.zoom || 1);
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-clean]")?.addEventListener("click", () => {
+    rememberEdit();
+    Object.assign(editState, { brightness: 103, contrast: 108, saturate: 108, hue: 0, blur: 0 });
+    syncSliders(body); repaint();
+    if (opts.notify) opts.notify("Media Lab", "Cleaned up light and color.");
+  });
+  body.querySelector("[data-ml-rembg]")?.addEventListener("click", async (event) => {
+    const button = event.currentTarget;
+    if (!canvas._img) return;
+    button.disabled = true; button.textContent = "Removing…";
+    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    const result = exported.ok ? await requestRemoveBackground(exported.url) : { ok: false, message: exported.error };
+    if (result.ok) {
+      rememberEdit();
+      session.edit = { ...session.edit, url: result.image };
+      editState = { ...freshEditState(), loadedUrl: null };
+      if (opts.notify) opts.notify("Media Lab", "Background removed.");
+      renderMediaStudio(root, opts);
+      return;
+    }
+    button.disabled = false; button.textContent = "Remove background";
+    if (opts.notify) opts.notify("Media Lab", result.message || "Background removal is not connected.");
+  });
+  body.querySelectorAll("[data-ml-slider]").forEach((s) => { s.onpointerdown = () => rememberEdit(); s.oninput = () => { editState[s.dataset.mlSlider] = +s.value; repaint(); const o = body.querySelector(`[data-out="${s.dataset.mlSlider}"]`); if (o) o.textContent = s.value; }; });
+  body.querySelectorAll("[data-ml-rot]").forEach((b) => b.onclick = () => { rememberEdit(); editState.rotate = (editState.rotate + (+b.dataset.mlRot) + 360) % 360; repaint(); });
+  const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { rememberEdit(); editState.flip = !editState.flip; flip.classList.toggle("is-on"); repaint(); };
+  body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { rememberEdit(); applyFilterPreset(b.dataset.v, editState); syncSliders(body); repaint(); });
+  const tin = body.querySelector("[data-ml-text]"); if (tin) { tin.onfocus = () => rememberEdit(); tin.oninput = () => { editState.text = tin.value; repaint(); }; }
   body.querySelectorAll("[data-ml-bokeh-pick]").forEach((b) => b.onclick = () => { mlBokehPicking = !mlBokehPicking; renderMediaStudio(root, opts); });
   const bokehOff = body.querySelector("[data-ml-bokeh-off]");
-  if (bokehOff) bokehOff.onclick = () => { editState.bokeh = null; if (canvas._img) paintEdit(canvas, canvas._img, editState); renderMediaStudio(root, opts); };
+  if (bokehOff) bokehOff.onclick = () => { rememberEdit(); editState.bokeh = null; repaint(); renderMediaStudio(root, opts); };
   body.querySelectorAll("[data-ml-bslider]").forEach((s) => s.oninput = () => {
     const key = s.dataset.mlBslider;
     if (key === "r") { editState.bokehBrush = +s.value; }
@@ -1947,7 +2059,7 @@ function renderEdit(body, cfg, opts, root) {
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
-    addBokehSpot(editState, x, y, (editState.bokehBrush || 24) / 100);
+    rememberEdit(); addBokehSpot(editState, x, y, (editState.bokehBrush || 24) / 100);
     if (canvas._img) paintEdit(canvas, canvas._img, editState);
     renderMediaStudio(root, opts);
   };
@@ -1957,14 +2069,14 @@ function renderEdit(body, cfg, opts, root) {
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
-    if (removeBokehSpotNear(editState, x, y)) { if (canvas._img) paintEdit(canvas, canvas._img, editState); renderMediaStudio(root, opts); }
+    rememberEdit(); if (removeBokehSpotNear(editState, x, y)) { repaint(); renderMediaStudio(root, opts); }
   };
   const runai = body.querySelector("[data-ml-runai]");
   if (runai) runai.onclick = async () => {
     const q = body.querySelector("[data-ml-aiedit]").value || "";
     runai.disabled = true; runai.textContent = "…";
     // local heuristic "AI edit" preview (real backend routes to provider edit)
-    heuristicAiEdit(q, editState);
+    rememberEdit(); heuristicAiEdit(q, editState);
     syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img, editState);
     runai.disabled = false; runai.textContent = "Apply";
     if (opts.notify) opts.notify("Media Factory", `applied an AI edit: "${q.slice(0, 30)}".`);
@@ -1996,12 +2108,16 @@ function slider(label, key, min, max, val) {
   return `<label class="ml-slider"><span>${label} <b data-out="${key}">${val}</b></span>
     <input type="range" min="${min}" max="${max}" value="${val}" data-ml-slider="${key}"/></label>`;
 }
+function cropSlider(label, key, min, max, val, suffix) {
+  return `<label class="ml-slider"><span>${label} <b data-crop-out="${key}">${val}${suffix}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ml-crop-slider="${key}"/></label>`;
+}
 function tutorialMarkup() {
   const rows = [
-    ["Adjust an image", "Generate one, pull your latest, or upload a file — then use the tools on this panel."],
-    ["Describe an edit", "Type what you want in the AI edit box and hit Apply for a quick style pass."],
-    ["Subject bokeh", "Turn on \"Add focus spots,\" click the subject (click again to cover more of it), right-click a spot to remove it, then adjust brush size and background blur."],
-    ["Save vs. Change image", "Save to library keeps this edit. Change image swaps to a different photo without losing your place."],
+    ["Crop first", "Pick Original, Square, Post, Story, or Wide. Center on subject finds a useful starting point, then Zoom and position finish the frame."],
+    ["Fix it fast", "Clean up balances light and color. Remove background uses the connected local media engine when it is available."],
+    ["Check your work", "Hold Before to compare with the original. Undo and redo are always above the image."],
+    ["Go deeper only when needed", "Open Quick looks, Fine tune, Focus blur, Text, or Ask Phantom. Closed sections stay out of your way."],
+    ["Keep the result", "Save to library keeps the edit inside PhantomForce. Download saves a WebP copy to your device."],
   ];
   return `
     <div class="ch-lb-tutorial">
@@ -2009,7 +2125,7 @@ function tutorialMarkup() {
     </div>`;
 }
 function syncSliders(body) { ["brightness", "contrast", "saturate", "hue", "blur"].forEach((k) => { const s = body.querySelector(`[data-ml-slider="${k}"]`); if (s) s.value = editState[k]; const o = body.querySelector(`[data-out="${k}"]`); if (o) o.textContent = editState[k]; }); }
-function resetEdit() { editState = { ...freshEditState(), loadedUrl: editState.loadedUrl }; mlBokehPicking = false; mlEditLoadError = null; }
+function resetEdit() { editState = { ...freshEditState(), loadedUrl: editState.loadedUrl }; mlBokehPicking = false; mlEditLoadError = null; mlEditHistory = []; mlEditFuture = []; }
 
 /* ---- helpers ---- */
 function readImage(fileObj, cb) { if (!fileObj) return; const r = new FileReader(); r.onload = () => cb(r.result); r.readAsDataURL(fileObj); }
