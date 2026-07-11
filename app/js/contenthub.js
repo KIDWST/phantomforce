@@ -891,6 +891,18 @@ async function exportSourceImage(img) {
   };
   return exportCanvas(c, repaintRaw, "image/png");
 }
+function waitForCanvasImage(canvas, timeoutMs = 2500) {
+  if (canvas._img) return Promise.resolve(canvas._img);
+  return new Promise((resolvePromise) => {
+    const started = Date.now();
+    const tick = () => {
+      if (canvas._img) { resolvePromise(canvas._img); return; }
+      if (Date.now() - started >= timeoutMs) { resolvePromise(null); return; }
+      setTimeout(tick, 50);
+    };
+    tick();
+  });
+}
 function chSlider(label, key, min, max, val) {
   return `<label class="ch-lb-slider"><span>${label} <b data-out="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-slider="${key}"/></label>`;
 }
@@ -1398,14 +1410,16 @@ function wireLightbox(root, opts) {
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
   if (bgRun) bgRun.onclick = async () => {
     if (lb.bg.status === "unavailable") return;
-    lb.bg = { ...lb.bg, status: "loading" };
-    rerender();
-    if (!canvas._img) {
+    const sourceImg = await waitForCanvasImage(canvas);
+    if (chLightbox !== lb) return;
+    if (!sourceImg) {
       lb.bg = { status: "error", message: "The image is still loading. Try again in a second." };
       rerender();
       return;
     }
-    const exported = await exportSourceImage(canvas._img);
+    lb.bg = { ...lb.bg, status: "loading" };
+    rerender();
+    const exported = await exportSourceImage(sourceImg);
     if (chLightbox !== lb) return;
     if (!exported.ok) {
       lb.bg = { status: "error", message: exported.error };
