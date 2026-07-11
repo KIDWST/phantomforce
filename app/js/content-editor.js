@@ -1,4 +1,4 @@
-import { paintEdit } from "./imagefilters.js?v=phantom-live-20260711-168";
+import { paintEdit } from "./imagefilters.js?v=phantom-live-20260711-169";
 
 let layerSequence = 0;
 
@@ -79,6 +79,16 @@ export function addImageLayer(composition, src, name = "Image layer", { backgrou
   const baseIndex = composition.layers.findIndex((item) => item.id === "base");
   if (background) composition.layers.splice(Math.max(0, baseIndex), 0, layer);
   else composition.layers.push(layer);
+  composition.selectedIds = [layer.id];
+  return layer;
+}
+
+export function replaceImageLayerSource(composition, layerId, src, image, { transparent = false } = {}) {
+  const layer = composition.layers.find((item) => item.id === layerId && item.type === "image");
+  if (!layer || !src) return null;
+  layer.src = src;
+  layer.hasTransparency = !!transparent;
+  if (image) composition.imageCache.set(src, image);
   composition.selectedIds = [layer.id];
   return layer;
 }

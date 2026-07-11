@@ -10,15 +10,15 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260711-168";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-168";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-168";
+} from "./imagefilters.js?v=phantom-live-20260711-169";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-169";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-169";
 import {
-  freshComposition, compositionSnapshot, restoreComposition, addImageLayer, addTextLayer, addColorLayer,
+  freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition,
-} from "./content-editor.js?v=phantom-live-20260711-168";
+} from "./content-editor.js?v=phantom-live-20260711-169";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -1339,6 +1339,14 @@ function layerVisible(lb, key) {
 function activeLightboxImageUrl(lb) {
   return lb.cutoutUrl && layerVisible(lb, "cutout") ? lb.cutoutUrl : (lb.baseUrl || lb.asset?.url || "");
 }
+function selectedImageLayer(lb) {
+  const selected = selectedLayers(lb.composition || freshComposition());
+  if (selected.length !== 1) return null;
+  return selected[0].type === "base" || selected[0].type === "image" ? selected[0] : null;
+}
+function selectedImageLabel(lb) {
+  return selectedImageLayer(lb)?.name || "";
+}
 function paintStateForLightbox(lb) {
   const s = lb.state;
   if (layerVisible(lb, "bokeh") && layerVisible(lb, "text")) return s;
@@ -1382,6 +1390,22 @@ function waitForCanvasImage(canvas, timeoutMs = 2500) {
     tick();
   });
 }
+async function selectedImageSource(lb, canvas) {
+  const layer = selectedImageLayer(lb);
+  if (!layer) return null;
+  if (layer.type === "base") {
+    const image = await waitForCanvasImage(canvas);
+    return image ? { layer, image } : null;
+  }
+  let image = lb.composition.imageCache.get(layer.src);
+  if (!image && layer.src) {
+    try {
+      image = await loadImageForEditing(layer.src);
+      lb.composition.imageCache.set(layer.src, image);
+    } catch { image = null; }
+  }
+  return image ? { layer, image } : null;
+}
 function chSlider(label, key, min, max, val) {
   return `<label class="ch-lb-slider"><span>${label} <b data-out="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-slider="${key}"/></label>`;
 }
@@ -1412,6 +1436,8 @@ function aiEditBody(lb, esc) {
 
 function removeBgBody(lb, esc) {
   const bg = lb.bg || { status: "idle" };
+  const target = selectedImageLayer(lb);
+  const targetName = bg.targetName || target?.name || "";
   const checking = bg.status === "checking";
   const loading = bg.status === "loading";
   const unavailable = bg.status === "unavailable";
@@ -1419,8 +1445,8 @@ function removeBgBody(lb, esc) {
     return `
       <div class="ch-lb-bg-preview">
         <div class="ch-lb-bg-preview-imgs">
-          <figure><img src="${esc(bg.beforeUrl)}" alt="Before"/><figcaption>Before</figcaption></figure>
-          <figure><img src="${esc(bg.afterUrl)}" alt="After"/><figcaption>After</figcaption></figure>
+          <figure><img src="${esc(bg.beforeUrl)}" alt="Before"/><figcaption>${esc(targetName || "Before")}</figcaption></figure>
+          <figure><img src="${esc(bg.afterUrl)}" alt="After"/><figcaption>Background removed</figcaption></figure>
         </div>
         <div class="ch-lb-chips">
           <button class="btn btn-primary" type="button" data-ch-lb-bg-apply>Apply</button>
@@ -1430,13 +1456,14 @@ function removeBgBody(lb, esc) {
   }
   return `
     <div class="ch-lb-chips">
-      <button class="btn btn-quiet" type="button" data-ch-lb-bg-run ${checking || loading || unavailable ? "disabled" : ""}>${loading ? "Removing…" : checking ? "Checking…" : "Remove Background"}</button>
+      <button class="btn btn-quiet" type="button" data-ch-lb-bg-run ${checking || loading || unavailable || !target ? "disabled" : ""}>${loading ? "Removing…" : checking ? "Checking…" : "Remove Background"}</button>
     </div>
+    ${targetName ? `<p class="ch-lb-ai-note">Selected layer: <b>${esc(targetName)}</b></p>` : `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Select one image layer first.</p>`}
     ${loading ? `<p class="ch-lb-ai-note">Working locally. Larger photos can take a moment.</p>` : ""}
     ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Background removal is not connected yet.</p>` : ""}
     ${bg.status === "idle" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Ready — background removal is available.</p>` : ""}
     ${bg.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "Background removal failed.")}</p>` : ""}
-    ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed — the Cutout layer is ready.</p>` : ""}
+    ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed from ${esc(targetName || "the selected layer")}.</p>` : ""}
   `;
 }
 
@@ -1576,7 +1603,7 @@ function layerStackBody(lb, esc) {
         ${compositionLayers.map((layer) => `
           <div class="ch-lb-layer ch-compose-layer ${layer.visible ? "is-on" : "is-off"} ${selected.has(layer.id) ? "is-selected" : ""}" data-ch-layer-row="${esc(layer.id)}">
             <button type="button" data-ch-layer-visible="${esc(layer.id)}" title="${layer.visible ? "Hide layer" : "Show layer"}">${svgIc("eye")}</button>
-            <button class="ch-layer-name" type="button" data-ch-layer-select="${esc(layer.id)}"><b>${esc(layer.name)}</b><small>${esc(layer.type === "base" ? "adjusted source" : layer.type)}</small></button>
+            <button class="ch-layer-name" type="button" data-ch-layer-select="${esc(layer.id)}"><b>${esc(layer.name)}</b><small>${esc(layer.type === "base" ? "adjusted source" : layer.hasTransparency ? `${layer.type} · cutout` : layer.type)}</small></button>
             <span class="ch-layer-row-actions">
               <button type="button" data-ch-layer-order="1" data-layer-id="${esc(layer.id)}" title="Move up">↑</button>
               <button type="button" data-ch-layer-order="-1" data-layer-id="${esc(layer.id)}" title="Move down">↓</button>
@@ -2157,16 +2184,16 @@ function wireLightbox(root, opts) {
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
   if (bgRun) bgRun.onclick = async () => {
     if (lb.bg.status === "unavailable") return;
-    const sourceImg = await waitForCanvasImage(canvas);
+    const source = await selectedImageSource(lb, canvas);
     if (chLightbox !== lb) return;
-    if (!sourceImg) {
-      lb.bg = { status: "error", message: "The image is still loading. Try again in a second." };
+    if (!source) {
+      lb.bg = { status: "error", message: "Select one loaded image layer first." };
       rerender();
       return;
     }
-    lb.bg = { ...lb.bg, status: "loading" };
+    lb.bg = { ...lb.bg, status: "loading", targetLayerId: source.layer.id, targetName: source.layer.name };
     rerender();
-    const exported = await exportSourceImage(sourceImg);
+    const exported = await exportSourceImage(source.image);
     if (chLightbox !== lb) return;
     if (!exported.ok) {
       lb.bg = { status: "error", message: exported.error };
@@ -2183,7 +2210,7 @@ function wireLightbox(root, opts) {
       opts.notify?.("Creator Hub", `Background removal failed on "${asset.title}": ${result.message}`);
       return;
     }
-    lb.bg = { status: "preview", beforeUrl, afterUrl: result.image };
+    lb.bg = { status: "preview", beforeUrl, afterUrl: result.image, targetLayerId: source.layer.id, targetName: source.layer.name };
     rerender();
   };
   const bgApply = root.querySelector("[data-ch-lb-bg-apply]");
@@ -2192,14 +2219,27 @@ function wireLightbox(root, opts) {
     if (!afterUrl) return;
     loadImageForEditing(afterUrl).then((afterImg) => {
       if (chLightbox !== lb) return;
-      lb.cutoutUrl = afterUrl;
-      lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), cutout: true };
-      canvas._img = afterImg;
-      lb.bg = { status: "applied", message: "" };
+      const targetId = lb.bg.targetLayerId || "base";
+      const target = lb.composition.layers.find((layer) => layer.id === targetId);
+      if (!target || (target.type !== "base" && target.type !== "image")) {
+        lb.bg = { status: "error", message: "That image layer no longer exists." };
+        rerender();
+        return;
+      }
+      const before = editorSnapshot(lb);
+      if (target.type === "base") {
+        lb.cutoutUrl = afterUrl;
+        lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), cutout: true };
+        canvas._img = afterImg;
+      } else {
+        replaceImageLayerSource(lb.composition, target.id, afterUrl, afterImg, { transparent: true });
+      }
+      lb.bg = { status: "applied", message: "", targetLayerId: target.id, targetName: target.name };
       lb.hasTransparency = true;
+      commitEditorChange(lb, before);
       repaint();
       rerender();
-      opts.notify?.("Creator Hub", `removed the background on "${asset.title}".`);
+      opts.notify?.("Creator Hub", `removed the background from "${target.name}".`);
     }).catch(() => {
       if (chLightbox !== lb) return;
       lb.bg = { status: "error", message: "The cutout image could not be loaded." };
@@ -2284,7 +2324,10 @@ function wireLightbox(root, opts) {
   }
 
   root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = freshLightbox(asset, { showTutorial: lb.showTutorial }); rerender(); };
-  const exportsTransparent = () => !!(lb.hasTransparency && lb.cutoutUrl && layerVisible(lb, "cutout"));
+  const exportsTransparent = () => !!(lb.hasTransparency && (
+    (lb.cutoutUrl && layerVisible(lb, "cutout"))
+    || lb.composition.layers.some((layer) => layer.type === "image" && layer.visible && layer.hasTransparency)
+  ));
   const exportFormat = () => exportsTransparent() ? "image/png" : "image/webp";
   const exportExt = () => exportsTransparent() ? "png" : "webp";
   const repaintWithImg = (img) => { canvas._img = img; repaint(); };
