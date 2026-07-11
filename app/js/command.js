@@ -11,8 +11,8 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig,
-} from "./store.js?v=phantom-live-20260711-162";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-162";
+} from "./store.js?v=phantom-live-20260711-163";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-163";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 const DAY = 86400000;
@@ -688,19 +688,19 @@ function routeCommand(raw, settings) {
   const guarded = intentResponse(intent, text, settings);
   if (guarded) return { ...guarded, intent };
 
-  /* --- actual money / accounting ledger --- */
+  /* --- actual accounting ledger --- */
   if (/\b(money|cash|cashflow|cash flow|transaction|transactions|expense|expenses|accounting|ledger|bank|credit card|card spend|unpaid|invoice|paid|payment)\b/.test(s)) {
     const m = moneyView();
     const line = m.transactions.length
       ? `${signedMoney(m.netCash)} net cashflow across ${m.transactions.length} actual transaction${m.transactions.length === 1 ? "" : "s"}: ${fmtMoney(m.cashIn)} in, ${fmtMoney(m.cashOut)} out.`
-      : "Your finance ledger has no transactions yet. Add one manually or import a bank/card CSV; live bank sync should stay marked not connected until the secure connector backend is configured.";
+      : "Your accounting ledger has no transactions yet. Add one manually or import a bank/card CSV; live bank sync should stay marked not connected until the secure connector backend is configured.";
     return {
       say: line,
-      cards: [card("Money", "Actual transaction ledger",
+      cards: [card("Accounting", "Actual transaction ledger",
         m.transactions.length
           ? `${m.uncategorizedCount} uncategorized · latest: ${m.latestTransaction?.description || "none"}.`
-          : "Money only counts confirmed transaction records here. Potential revenue belongs in goals and quotes.",
-        [openAction("Open Money", "money")])],
+          : "Accounting only counts confirmed transaction records here. Potential revenue belongs in goals and quotes.",
+        [openAction("Open Accounting", "money")])],
       open: "money",
     };
   }
@@ -709,10 +709,10 @@ function routeCommand(raw, settings) {
   if (/\b(pipeline|revenue goal|potential revenue|open quotes?|won proposals?|retainers?)\b/.test(s)) {
     const m = moneyView();
     return {
-      say: `${fmtMoney(m.pipeline)} is open quote potential, ${fmtMoney(m.wonValue)} is won proposal value, and ${fmtMoney(m.retainerMonthly)}/mo is retainer goal value. None of that counts as Money until a real transaction confirms cash moved.`,
+      say: `${fmtMoney(m.pipeline)} is open quote potential, ${fmtMoney(m.wonValue)} is won proposal value, and ${fmtMoney(m.retainerMonthly)}/mo is retainer goal value. None of that counts as Accounting until a real transaction confirms cash moved.`,
       cards: [card("Goals", "Opportunity snapshot",
         `${m.open.length} open · ${m.won.length} won · ${m.lost.length} lost. Highest-value open: ${m.open[0] ? `${m.open[0].client} (${fmtMoney(m.open[0].price)})` : "none"}.`,
-        [openAction("Open quotes", "proposals"), openAction("Open Money ledger", "money")])],
+        [openAction("Open quotes", "proposals"), openAction("Open Accounting", "money")])],
       open: "proposals",
     };
   }

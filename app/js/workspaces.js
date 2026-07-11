@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-162";
+} from "./store.js?v=phantom-live-20260711-163";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -20,6 +20,13 @@ const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
+// Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
+// not persisted, resets whenever the user leaves and re-enters Web view.
+// _needsFit is a one-shot flag: the actual fit measurement needs the web's
+// nodes to exist in the DOM, so it's consumed in wireWorkerWeb() after render,
+// not here.
+const workerWebUi = { pan: { x: 0, y: 0 }, zoom: 1, search: "", _needsFit: true };
+let workerWebEscapeHandler = null;
 const workerRuntime = { state: "idle", workforce: null, error: "" };
 const LOCAL_CORE_WORKERS = [
   { name: "Phantom Router", note: "Command and workspace routing loaded" },
@@ -178,7 +185,7 @@ function renderProposals(el, rerender) {
             ${p.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${p.id}">Mark send-ready</button>` : ""}
             ${p.status === "sent-ready" ? `<button class="btn btn-good" data-act="won" data-id="${p.id}">Mark won</button><button class="btn btn-quiet" data-act="lost" data-id="${p.id}">Mark lost</button>` : ""}
             ${p.status === "won" ? `<button class="btn" data-act="invoice" data-id="${p.id}">Mark invoice-ready</button>` : ""}
-            ${p.status === "invoice-ready" ? `<span class="hint-inline">Invoice-ready — payment connector not wired, tracked in Money.</span>` : ""}
+            ${p.status === "invoice-ready" ? `<span class="hint-inline">Invoice-ready — payment connector not wired, tracked in Accounting.</span>` : ""}
           </div>
         </article>`;
       }).join("") || empty("No proposals yet. Convert a lead or ask Phantom AI to draft one.")}
@@ -909,19 +916,19 @@ function renderMoney(el, rerender) {
   el.innerHTML = `
     <section class="finance-shell">
       <div class="finance-toolbar">
-        <button class="btn" type="button" data-act="export" aria-label="Export Money ledger as CSV">Export CSV</button>
+        <button class="btn" type="button" data-act="export" aria-label="Export Accounting ledger as CSV">Export CSV</button>
       </div>
       <div class="stat-row finance-stats">
-        <div class="stat"><span>Cash in</span><b>${fmtMoney(m.cashIn)}</b><i>${actualCount ? "from real transactions" : "no income recorded"}</i></div>
-        <div class="stat"><span>Cash out</span><b>${fmtMoney(m.cashOut)}</b><i>${actualCount ? "expenses and withdrawals" : "no expenses recorded"}</i></div>
+        <div class="stat"><span>Cash collected</span><b>${fmtMoney(m.cashIn)}</b><i>${actualCount ? "from real transactions" : "no income recorded"}</i></div>
+        <div class="stat"><span>Operating spend</span><b>${fmtMoney(m.cashOut)}</b><i>${actualCount ? "expenses and withdrawals" : "no expenses recorded"}</i></div>
         <div class="stat"><span>Net cashflow</span><b>${moneySigned(m.netCash)}</b><i>${actualCount ? "income minus outflow" : "ledger empty"}</i></div>
-        <div class="stat"><span>Ledger balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
+        <div class="stat"><span>Book balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
       </div>
 
       <div class="finance-grid">
         <section class="finance-panel">
           <div class="finance-panel-head">
-            <h3>Connect or import</h3>
+            <h3>Accounts & imports</h3>
             <span>${m.readySources} source${m.readySources === 1 ? "" : "s"} ready</span>
           </div>
           <div class="finance-connectors">
@@ -950,7 +957,7 @@ function renderMoney(el, rerender) {
           <form class="finance-entry" data-finance-form>
             <label><span>Date</span><input type="date" name="date" value="${todayInput()}" required /></label>
             <label><span>Description</span><input type="text" name="description" placeholder="Stripe payout, Adobe, contractor..." required /></label>
-            <label><span>Direction</span><select name="direction"><option value="income">Money in</option><option value="expense">Money out</option></select></label>
+            <label><span>Direction</span><select name="direction"><option value="income">Cash in</option><option value="expense">Cash out</option></select></label>
             <label><span>Amount</span><input type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required /></label>
             <label><span>Category</span><select name="category">${financeCategoryOptions()}</select></label>
             <label><span>Account</span><input type="text" name="account" placeholder="Business checking / card" /></label>
@@ -961,7 +968,7 @@ function renderMoney(el, rerender) {
 
       <section class="finance-panel">
         <div class="finance-panel-head">
-          <h3>Transaction reader</h3>
+          <h3>Accounting transaction reader</h3>
           <span>${actualCount} actual record${actualCount === 1 ? "" : "s"}</span>
         </div>
         <div class="finance-table" role="table" aria-label="Business transactions">
@@ -980,9 +987,9 @@ function renderMoney(el, rerender) {
 
       <section class="finance-goal-note">
         <div>
-          <p class="overlay-kicker">GOALS, NOT MONEY</p>
+          <p class="overlay-kicker">GOALS, NOT ACCOUNTING</p>
           <h3>Potential revenue belongs with missions.</h3>
-          <p>Open quotes and won proposals can guide goals, but they do not count as ledger cash until a bank/card/manual transaction confirms the money moved.</p>
+          <p>Open quotes and won proposals guide business goals, but they do not count as accounting cash until a bank/card/manual transaction confirms movement.</p>
         </div>
         <div class="finance-goal-stats">
           <span><b>${fmtMoney(proposalGoal.pipeline)}</b><i>open quote potential</i></span>
@@ -1883,6 +1890,146 @@ function baselineWorkerCount(runtime) {
   return reported + (privateAdminRouteReached() && !routeAlreadyCounted ? 1 : 0);
 }
 
+// Fullscreen Workers "web" canvas is desktop/tablet only - mobile keeps the
+// existing tap-to-select in-page box (just fixed for touch), so we never
+// touch that just-restored behavior.
+function workerWebEnabled() {
+  return !window.matchMedia("(max-width: 560px)").matches;
+}
+
+// Measures the actual rendered position of every node (post-layout, at the
+// world's current zoom=1 baseline) and returns a pan/zoom that centers and
+// fills the stage. Works regardless of node count, since it reads real
+// bounding boxes rather than assuming the fixed 118/208px radii fill any
+// particular stage size.
+function computeWorkerWebAutoFit(stageEl, worldEl) {
+  const stageRect = stageEl.getBoundingClientRect();
+  const nodes = worldEl.querySelectorAll(".worker-node");
+  if (!nodes.length || !stageRect.width || !stageRect.height) {
+    return { x: stageRect.width / 2, y: stageRect.height / 2, zoom: 1 };
+  }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  nodes.forEach((node) => {
+    const r = node.getBoundingClientRect();
+    minX = Math.min(minX, r.left); maxX = Math.max(maxX, r.right);
+    minY = Math.min(minY, r.top); maxY = Math.max(maxY, r.bottom);
+  });
+  const contentW = maxX - minX || 1;
+  const contentH = maxY - minY || 1;
+  const padding = 0.82; // breathing room around the edges
+  const zoom = Math.min((stageRect.width * padding) / contentW, (stageRect.height * padding) / contentH, 1.6);
+  const contentCenterX = (minX + maxX) / 2 - stageRect.left;
+  const contentCenterY = (minY + maxY) / 2 - stageRect.top;
+  return {
+    x: stageRect.width / 2 - contentCenterX * zoom,
+    y: stageRect.height / 2 - contentCenterY * zoom,
+    zoom,
+  };
+}
+
+function applyWorkerWebTransform(worldEl) {
+  worldEl.style.transform = `translate(${workerWebUi.pan.x}px, ${workerWebUi.pan.y}px) scale(${workerWebUi.zoom})`;
+}
+
+// Called once per real render (after el.innerHTML is set), not per pointer
+// event - drag/wheel handlers below mutate workerWebUi and repaint the
+// transform directly, skipping the full-page rerender() for smooth 60fps
+// interaction.
+function wireWorkerWeb(el, rerender) {
+  if (!workerWebEnabled()) return;
+  const stage = el.querySelector("[data-worker-web-stage]");
+  const world = el.querySelector("[data-worker-web-world]");
+  if (!stage || !world) return;
+
+  if (workerWebUi._needsFit) {
+    workerWebUi._needsFit = false;
+    const fit = computeWorkerWebAutoFit(stage, world);
+    workerWebUi.pan = { x: fit.x, y: fit.y };
+    workerWebUi.zoom = fit.zoom;
+  }
+  applyWorkerWebTransform(world);
+
+  const MIN_ZOOM = 0.4, MAX_ZOOM = 2.5;
+  let dragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0, dragMoved = false;
+
+  stage.onpointerdown = (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    if (event.target.closest(".worker-node, .worker-web-exit, .worker-web-search")) return;
+    dragging = true; dragMoved = false;
+    dragStartX = event.clientX; dragStartY = event.clientY;
+    panStartX = workerWebUi.pan.x; panStartY = workerWebUi.pan.y;
+    stage.setPointerCapture(event.pointerId);
+  };
+  stage.onpointermove = (event) => {
+    if (!dragging) return;
+    const dx = event.clientX - dragStartX, dy = event.clientY - dragStartY;
+    if (Math.abs(dx) > 4 || Math.abs(dy) > 4) dragMoved = true;
+    workerWebUi.pan = { x: panStartX + dx, y: panStartY + dy };
+    applyWorkerWebTransform(world);
+  };
+  stage.onpointerup = (event) => {
+    dragging = false;
+    stage.releasePointerCapture(event.pointerId);
+  };
+  stage.onclick = (event) => {
+    // a real drag shouldn't also register as a node-select click
+    if (dragMoved) { event.stopPropagation(); dragMoved = false; }
+  };
+  stage.onwheel = (event) => {
+    event.preventDefault();
+    const rect = stage.getBoundingClientRect();
+    const cursorX = event.clientX - rect.left, cursorY = event.clientY - rect.top;
+    const zoomFactor = Math.exp(-event.deltaY * 0.0015);
+    const nextZoom = Math.min(Math.max(workerWebUi.zoom * zoomFactor, MIN_ZOOM), MAX_ZOOM);
+    const ratio = nextZoom / workerWebUi.zoom;
+    // keep the point under the cursor visually fixed while zooming
+    workerWebUi.pan = {
+      x: cursorX - (cursorX - workerWebUi.pan.x) * ratio,
+      y: cursorY - (cursorY - workerWebUi.pan.y) * ratio,
+    };
+    workerWebUi.zoom = nextZoom;
+    applyWorkerWebTransform(world);
+  };
+
+  const searchInput = el.querySelector("[data-worker-web-search]");
+  if (searchInput) {
+    searchInput.oninput = () => {
+      workerWebUi.search = searchInput.value;
+      const query = workerWebUi.search.trim().toLowerCase();
+      world.querySelectorAll(".worker-node").forEach((node) => {
+        const label = (node.querySelector(".worker-node-label")?.textContent || "").toLowerCase();
+        const isMatch = query.length > 0 && label.includes(query);
+        node.classList.toggle("is-web-match", isMatch);
+        node.classList.toggle("is-web-dimmed", query.length > 0 && !isMatch);
+      });
+    };
+    searchInput.onkeydown = (event) => {
+      if (event.key !== "Enter") return;
+      const firstMatch = world.querySelector(".worker-node.is-web-match");
+      if (!firstMatch) return;
+      const stageRect = stage.getBoundingClientRect();
+      const nodeRect = firstMatch.getBoundingClientRect();
+      const nodeCenterX = (nodeRect.left + nodeRect.right) / 2 - stageRect.left;
+      const nodeCenterY = (nodeRect.top + nodeRect.bottom) / 2 - stageRect.top;
+      const worldCenterX = (nodeCenterX - workerWebUi.pan.x) / workerWebUi.zoom;
+      const worldCenterY = (nodeCenterY - workerWebUi.pan.y) / workerWebUi.zoom;
+      const targetZoom = Math.min(Math.max(1.4, MIN_ZOOM), MAX_ZOOM);
+      workerWebUi.zoom = targetZoom;
+      workerWebUi.pan = {
+        x: stageRect.width / 2 - worldCenterX * targetZoom,
+        y: stageRect.height / 2 - worldCenterY * targetZoom,
+      };
+      applyWorkerWebTransform(world);
+    };
+  }
+
+  if (workerWebEscapeHandler) document.removeEventListener("keydown", workerWebEscapeHandler);
+  workerWebEscapeHandler = (event) => {
+    if (event.key === "Escape" && workerUi.view === "map") { workerUi.view = "list"; rerender(); }
+  };
+  document.addEventListener("keydown", workerWebEscapeHandler);
+}
+
 function renderWorkerMesh(workers, runtime = null) {
   const employeeNodes = workers.filter((worker) => worker.worker_type === "employee");
   const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
@@ -1919,36 +2066,45 @@ function renderWorkerMesh(workers, runtime = null) {
   const baselineOnline = runtime ? baselineWorkerCount(runtime) : null;
   const recentJobs = runtime?.summary?.tasks_in_window;
 
+  const webEnabled = workerWebEnabled();
   return `
     <section class="worker-mesh" aria-label="Worker operations web">
-      <div class="worker-mesh-stage">
-        <div class="worker-mesh-rings" aria-hidden="true">
-          <span></span><span></span><span></span>
+      <div class="worker-mesh-stage ${webEnabled ? "is-web-active" : ""}" data-worker-web-stage>
+        <div class="worker-web-world" data-worker-web-world ${webEnabled ? `style="transform: translate(${workerWebUi.pan.x}px, ${workerWebUi.pan.y}px) scale(${workerWebUi.zoom})"` : ""}>
+          <div class="worker-mesh-rings" aria-hidden="true">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="worker-node-field">
+            ${coreRingNodes}
+            ${outerRingNodes}
+          </div>
+          <div class="worker-core">
+            <span>PF</span>
+            <b>Phantom</b>
+            <i>master router</i>
+          </div>
         </div>
-        <div class="worker-node-field">
-          ${coreRingNodes}
-          ${outerRingNodes}
-        </div>
-        <div class="worker-core">
-          <span>PF</span>
-          <b>Phantom</b>
-          <i>master router</i>
-        </div>
-      </div>
-      <div class="worker-mesh-foot">
-        <div class="worker-web-legend" aria-label="Legend">
-          <span><i class="worker-legend-dot worker-legend-live"></i>Active</span>
-          <span><i class="worker-legend-dot worker-legend-approval"></i>Waiting on you</span>
-          <span><i class="worker-legend-dot worker-legend-ready"></i>Mapped</span>
-          <span><i class="worker-legend-dot worker-legend-blocked"></i>Offline</span>
-          ${overflowSubagents > 0 ? `<span class="worker-legend-more">+${overflowSubagents} more subagents</span>` : ""}
-        </div>
-        <div class="worker-mesh-readout">
-          <span><b>${Number.isFinite(baselineOnline) ? baselineOnline : "—"}</b> baseline online</span>
-          <span><b>${Number.isFinite(recentJobs) ? recentJobs : "—"}</b> jobs logged</span>
-          <span><b>${mapped}</b> workers mapped</span>
-          <span><b>${waiting}</b> waiting on you</span>
-          <span><b>${departments}</b> departments</span>
+        ${webEnabled ? `
+        <button class="worker-web-exit" type="button" data-act="worker-web-exit" aria-label="Exit fullscreen web view">✕ Exit</button>
+        <label class="worker-web-search">
+          <input type="search" data-worker-web-search placeholder="Search workers…" value="${esc(workerWebUi.search)}" aria-label="Search workers" />
+        </label>
+        ` : ""}
+        <div class="worker-mesh-foot">
+          <div class="worker-web-legend" aria-label="Legend">
+            <span><i class="worker-legend-dot worker-legend-live"></i>Active</span>
+            <span><i class="worker-legend-dot worker-legend-approval"></i>Waiting on you</span>
+            <span><i class="worker-legend-dot worker-legend-ready"></i>Mapped</span>
+            <span><i class="worker-legend-dot worker-legend-blocked"></i>Offline</span>
+            ${overflowSubagents > 0 ? `<span class="worker-legend-more">+${overflowSubagents} more subagents</span>` : ""}
+          </div>
+          <div class="worker-mesh-readout">
+            <span><b>${Number.isFinite(baselineOnline) ? baselineOnline : "—"}</b> baseline online</span>
+            <span><b>${Number.isFinite(recentJobs) ? recentJobs : "—"}</b> jobs logged</span>
+            <span><b>${mapped}</b> workers mapped</span>
+            <span><b>${waiting}</b> waiting on you</span>
+            <span><b>${departments}</b> departments</span>
+          </div>
         </div>
       </div>
     </section>`;
@@ -2451,7 +2607,14 @@ function renderWorkforce(el, rerender) {
       workerRuntime.error = "";
       rerender();
     },
-    "worker-view": (_id, button) => { workerUi.view = button.dataset.view === "list" ? "list" : "map"; workerUi.selectedId = ""; rerender(); },
+    "worker-view": (_id, button) => {
+      const nextView = button.dataset.view === "list" ? "list" : "map";
+      if (nextView === "map" && workerUi.view !== "map") workerWebUi._needsFit = true;
+      workerUi.view = nextView;
+      workerUi.selectedId = "";
+      rerender();
+    },
+    "worker-web-exit": () => { workerUi.view = "list"; rerender(); },
     "worker-filter": (_id, button) => { workerUi.filter = button.dataset.filter || "all"; rerender(); },
     "worker-notice-close": () => { workerUi.notice = ""; rerender(); },
     "worker-preview-close": () => { workerUi.preview = null; rerender(); },
@@ -2478,6 +2641,7 @@ function renderWorkforce(el, rerender) {
       rerender();
     },
   });
+  if (isMap) wireWorkerWeb(el, rerender);
   if (workerRuntime.state === "idle") {
     loadWorkerRuntime().finally(() => rerender());
   }
@@ -2613,18 +2777,18 @@ function renderPhantom(el) {
 
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
-  phantom: { title: "Phantom AI", kicker: "Command surface", render: renderPhantom },
-  leads: { title: "Leads & Follow-Up", kicker: "Pipeline desk", render: renderLeads },
-  proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
+  phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
+  leads: { title: "Client Pipeline", kicker: "Lead desk & follow-up intelligence", render: renderLeads },
+  proposals: { title: "Offer Desk", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
-  media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
-  sites: { title: "Websites", kicker: "Websites by domain", render: renderSites },
+  media: { title: "Media Lab", kicker: "Creator production studio", render: renderMedia },
+  sites: { title: "Site Portfolio", kicker: "Websites by domain", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
-  money: { title: "Money", kicker: "Finance ledger", render: renderMoney },
-  memory: { title: "Memory", kicker: "Local context database", render: renderMemory },
-  workforce: { title: "Workers", kicker: "Swarm network", render: renderWorkforce },
-  approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
+  money: { title: "Accounting", kicker: "Books, transaction reader, and cash truth", render: renderMoney },
+  memory: { title: "Memory", kicker: "Context intelligence database", render: renderMemory },
+  workforce: { title: "Workforce", kicker: "Business ops network", render: renderWorkforce },
+  approvals: { title: "Decision Queue", kicker: "Waiting on your call", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
@@ -2648,16 +2812,16 @@ export function missionWidgets() {
   const neuralCellCount = workerRoster.filter((worker) => worker.worker_type === "cell").length;
 
   const w = [
-    { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
-    { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
-    { id: "media", icon: "▶", title: "Media Lab", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
-    { id: "sites", icon: "▦", title: "Websites", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },
+    { id: "leads", icon: "◉", title: "Client Pipeline", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
+    { id: "proposals", icon: "◆", title: "Offer Desk", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
+    { id: "media", icon: "▶", title: "Creator Studio", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
+    { id: "sites", icon: "▦", title: "Site Portfolio", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
-    { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
-    { id: "money", icon: "◈", title: "Money", stat: m.transactions.length ? moneySigned(m.netCash) : "ledger", sub: m.transactions.length ? `${m.transactions.length} transaction${m.transactions.length === 1 ? "" : "s"}` : "add/import transactions", alert: false },
-    { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
-    { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
+    { id: "protect", icon: "⬡", title: "Security Watch", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
+    { id: "money", icon: "◈", title: "Accounting", stat: m.transactions.length ? moneySigned(m.netCash) : "books", sub: m.transactions.length ? `${m.transactions.length} transaction${m.transactions.length === 1 ? "" : "s"}` : "add/import transactions", alert: false },
+    { id: "workforce", icon: "⬢", title: "Workforce", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
+    { id: "approvals", icon: "✓", title: "Decision Queue", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
   return w;

@@ -6,23 +6,23 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260711-162";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-162";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-162";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-162";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-162";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-162";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-162";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-162";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-162";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-162";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-162";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-162";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-162";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-162";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-162";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-162";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-162";
+} from "./store.js?v=phantom-live-20260711-163";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-163";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-163";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-163";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-163";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-163";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-163";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-163";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-163";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-163";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-163";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-163";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-163";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-163";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-163";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-163";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-163";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -138,8 +138,8 @@ function showGate() {
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
-          <b>Launch Admin Phantom</b>
-          <i>Backend session required. Owner login is enforced on this host.</i>
+          <b>Launch Business Manager</b>
+          <i>Owner brain session required. This host opens the full operating layer.</i>
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
@@ -182,16 +182,16 @@ function showGate() {
 
 /* ============================ sidebar nav ============================ */
 const NAV = [
-  { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
+  { id: "dashboard",  label: "Business HQ",  icon: "grid",  view: "main" },
   { id: "crm",        label: "CRM",          icon: "users", ws: "leads" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
-  { id: "money",      label: "Money",        icon: "dollar", ws: "money" },
-  { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
+  { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
+  { id: "content",    label: "Creator Hub",  icon: "doc",   ws: "content" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
   { id: "automation", label: "Automation",   icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
-  { id: "workers",    label: "Workers",      icon: "users", ws: "workforce" },
+  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
@@ -203,8 +203,9 @@ const NAV = [
 const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
   crm: "CRM",
+  money: "Accounting",
   sites: "Sites",
-  content: "Content",
+  content: "Creator",
   automation: "Auto",
   approvals: "Review",
   analytics: "Stats",
@@ -472,7 +473,7 @@ function renderUser() {
   const mobileAvatar = $("[data-mobile-user-avatar]");
   if (mobileAvatar) mobileAvatar.textContent = initials || "PF";
   $("[data-user-name]").textContent = name;
-  $("[data-user-role]").textContent = isAdmin() ? "Administrator" : "Employee";
+  $("[data-user-role]").textContent = isAdmin() ? "Business Manager" : "Team Member";
   const btn = $("[data-user-btn]");
   if (btn) {
     btn.classList.toggle("is-open", accountMenuOpen);
@@ -538,7 +539,7 @@ function accountInitials(name) {
   return initials || "PF";
 }
 function accountRoleLabel() {
-  return isAdmin() ? "Administrator" : "Employee";
+  return isAdmin() ? "Business Manager" : "Team Member";
 }
 function accountIdentityLine() {
   return ctx.session?.email || ctx.session?.label || `${accountRoleLabel()} - ${wsName(currentWs())}`;
@@ -576,7 +577,7 @@ function renderAccountMenu() {
       <span class="user-menu-avatar">${esc(accountInitials(owner))}</span>
       <span>
         <b>${esc(owner)}</b>
-        <i>${isAdmin() ? "Administrator" : "Employee"}</i>
+        <i>${isAdmin() ? "Business Manager" : "Team Member"}</i>
       </span>
     </div>
     <button class="user-menu-plan" data-user-menu-action="account" type="button">
@@ -704,7 +705,7 @@ const MODES = {
   admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260711-162";
+const POSE_VERSION = "phantom-live-20260711-163";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2188,12 +2189,12 @@ function renderDeveloperPage(body) {
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "Create with context", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
-  content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
-  analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
-  account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
-  developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
-  settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
-  automation: { title: "Automation", kicker: "Workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
+  content: { title: "Creator Hub", kicker: "Content intelligence, media library, and publishing workflow", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
+  analytics: { title: "Business Intelligence", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
+  account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
+  developer: { title: "Builder Ops", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
+  settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
+  automation: { title: "Automations", kicker: "Business workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
   vacation: { title: "Away Mode", kicker: "Your business stays covered while you are away", custom: true, wide: true, render: (body) => renderVacationMode(body, mediaOpts()) },
   promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
   /* The full worker roster + telemetry + live tail log — kept out of the

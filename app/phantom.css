@@ -1396,6 +1396,39 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     radial-gradient(circle at 20% 18%, rgba(30,240,255,0.1), transparent 24%),
     linear-gradient(145deg, rgba(3,14,11,0.92), rgba(0,5,8,0.95));
 }
+/* Fullscreen interactive canvas (desktop/tablet - see workerWebEnabled() in
+   workspaces.js, which keeps mobile on the existing small in-page box).
+   position: fixed here escapes .worker-mesh's normal flow entirely, so the
+   sidebar/topbar stay in the DOM (no state loss) but are visually covered. */
+.worker-mesh-stage.is-web-active {
+  position: fixed; inset: 0; z-index: 400; min-height: 0; border-radius: 0;
+  cursor: grab; touch-action: none;
+}
+.worker-mesh-stage.is-web-active:active { cursor: grabbing; }
+.worker-web-world {
+  position: absolute; inset: 0; transform-origin: 0 0;
+}
+.worker-mesh-stage.is-web-active .worker-web-world { will-change: transform; }
+.worker-web-exit {
+  position: absolute; top: 20px; right: 20px; z-index: 12; display: flex; align-items: center; gap: 6px;
+  padding: 9px 16px; border-radius: 999px; border: 1px solid rgba(65,255,161,0.3);
+  background: rgba(3,12,9,0.88); color: #dfffee; font: 700 12px "Space Grotesk", sans-serif; cursor: pointer;
+}
+.worker-web-exit:hover { border-color: rgba(65,255,161,0.6); background: rgba(65,255,161,0.08); }
+.worker-web-search { position: absolute; top: 20px; left: 20px; z-index: 12; display: block; }
+.worker-web-search input {
+  width: 280px; max-width: calc(100vw - 160px); padding: 10px 14px; border-radius: 999px;
+  border: 1px solid rgba(65,255,161,0.3); background: rgba(3,12,9,0.88);
+  color: #dfffee; font: 500 13px "Space Grotesk", sans-serif;
+}
+.worker-web-search input:focus { outline: none; border-color: var(--neon); }
+.worker-mesh-stage.is-web-active .worker-mesh-foot {
+  position: absolute; left: 20px; right: 20px; bottom: 20px; z-index: 11;
+  background: rgba(3,12,9,0.88); border: 1px solid rgba(65,255,161,0.22); border-radius: 16px;
+  padding: 14px 18px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+}
+.worker-node.is-web-dimmed { opacity: 0.15; }
+.worker-node.is-web-match { border-color: var(--neon); box-shadow: 0 0 0 2px rgba(65,255,161,0.4), 0 0 34px var(--node-glow); }
 .worker-mesh-rings { position: absolute; inset: 8%; pointer-events: none; }
 .worker-mesh-rings span {
   position: absolute; inset: calc(var(--ring, 0) * 11%); border: 1px solid rgba(65,255,161,0.12); border-radius: 50%;
@@ -2200,7 +2233,11 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   position: sticky; top: 0; z-index: 20;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-.status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; }
+/* Identity/status info is higher priority than the topbar-actions cluster
+   (search/clock/notif/user), which already declares its own shrink target
+   below (flex: 0 1 auto; min-width: 0) - let pills keep their natural width
+   and have that cluster give up space first. */
+.status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; flex-shrink: 0; }
 .topbar-actions {
   display: inline-flex;
   align-items: center;
@@ -4223,6 +4260,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ch-tab { padding: 8px 14px; border-radius: 10px; border: 1px solid transparent; background: none; color: var(--dim); cursor: pointer; font: 600 13px "Space Grotesk"; transition: background .18s, color .18s; }
 .ch-tab:hover { color: var(--ink); background: rgba(65,255,161,.05); }
 .ch-tab.is-active { color: #04160d; background: linear-gradient(120deg, var(--neon), #15d97f); }
+.ch-subtabs {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin-top: -10px; padding: 0 0 8px 2px; border-bottom: 1px solid rgba(150,176,190,.08);
+}
+.ch-subtab {
+  min-height: 32px; padding: 7px 12px; border: 1px solid rgba(150,176,190,.12); border-radius: 999px;
+  background: rgba(4,12,9,.5); color: #9fb7ad; cursor: pointer;
+  font: 700 11.5px "Space Grotesk"; transition: border-color .16s, color .16s, background .16s;
+}
+.ch-subtab:hover { color: var(--ink); border-color: rgba(65,255,161,.28); background: rgba(65,255,161,.07); }
+.ch-subtab.is-active { color: var(--neon); border-color: var(--neon); background: rgba(65,255,161,.1); }
 .ch-src { margin-left: auto; font: 500 11px "DM Mono", monospace; color: var(--dim); }
 .ch-body, .an { min-width: 0; }
 .ch-creator-head, .an-hero {
@@ -4623,6 +4671,9 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ch-draft, .ch-calendar-item { grid-template-columns: 1fr; }
   .ch-production, .an-trend-list, .an-reco-grid { grid-template-columns: 1fr; }
   .ch-tabs, .ch-chips { overflow-x: auto; flex-wrap: nowrap; }
+  .ch-subtabs { overflow-x: auto; flex-wrap: nowrap; margin-top: -8px; padding-bottom: 10px; scrollbar-width: none; }
+  .ch-subtabs::-webkit-scrollbar { display: none; }
+  .ch-subtab { flex: 0 0 auto; min-height: 38px; }
   .ch-library-head { flex-direction: column; }
   .ch-storage { width: 100%; align-items: stretch; }
   .ch-storage i { width: 100%; }
@@ -7392,7 +7443,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
      no definite ancestor height to resolve against, so it's ignored and a
      tall/portrait source image renders at its native pixel size and gets
      silently clipped by this shell's own overflow: hidden. */
-  position: relative; width: min(1320px, 100%); height: min(920px, 96dvh); display: flex; flex-direction: column;
+  position: relative; width: min(1540px, 100%); height: min(960px, 96dvh); display: flex; flex-direction: column;
   border: 1px solid var(--line-strong); border-radius: 26px; overflow: hidden;
   background: linear-gradient(165deg, rgba(10,22,17,0.92), rgba(3,8,7,0.97));
   box-shadow: 0 30px 90px rgba(0,0,0,0.55), 0 0 0 1px rgba(65,255,161,0.05), 0 0 60px rgba(65,255,161,0.06);
@@ -7424,26 +7475,46 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-tools .ch-lb-tutorial { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; max-height: none; }
 .ml-tools .ch-lb-tutorial-row { grid-template-columns: 1fr; gap: 2px; }
 
-.ch-lb-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 320px; }
+.ch-lb-body { flex: 1 1 auto; min-height: 0; display: grid; grid-template-columns: minmax(0, 1fr) 370px; }
 .ch-lb-canvas-wrap {
-  /* Explicit 1fr track (not implicit auto): with place-items: center the lone
-     grid item is sized to content instead of stretched, so an implicit auto
-     row would size itself to the canvas's native pixel height and overflow
-     this wrapper - pinning the track to 100% of the available area gives the
-     canvas a definite grid area to resolve max-width/max-height: 100% against. */
-  position: relative; min-height: 0; display: grid; grid-template-rows: minmax(0, 1fr); grid-template-columns: minmax(0, 1fr); place-items: center; padding: 22px;
-  background:
-    linear-gradient(rgba(65,255,161,0.03), rgba(65,255,161,0.03)) 0 0/22px 22px,
-    repeating-linear-gradient(45deg, rgba(255,255,255,0.015) 0 1px, transparent 1px 14px);
+  position: relative; min-height: 0; display: flex; flex-direction: column; overflow: hidden; background: #050a08;
 }
-.ch-lb-canvas { max-width: 100%; max-height: 100%; border-radius: 14px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }
+.ch-editor-toolbar {
+  flex: 0 0 auto; min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px; border-bottom: 1px solid var(--line); background: rgba(6,14,11,.96); overflow-x: auto; scrollbar-width: none;
+}
+.ch-editor-toolbar::-webkit-scrollbar { display: none; }
+.ch-editor-toolgroup { display: flex; align-items: center; gap: 6px; flex: 0 0 auto; }
+.ch-editor-toolgroup button {
+  min-width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 10px;
+  border: 1px solid var(--line); border-radius: 9px; color: #dfffee; background: rgba(255,255,255,.025); cursor: pointer;
+  font: 650 11px "Space Grotesk";
+}
+.ch-editor-toolgroup button:hover:not(:disabled) { border-color: var(--neon); background: rgba(65,255,161,.08); }
+.ch-editor-toolgroup button:disabled { opacity: .34; cursor: default; }
+.ch-editor-toolgroup button .ic { width: 14px; height: 14px; }
+.ch-editor-toolgroup span { min-width: 44px; text-align: center; color: var(--dim); font: 700 10px "DM Mono", monospace; }
+.ch-editor-stage {
+  position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; padding: 34px; display: flex; align-items: flex-start; justify-content: center;
+  background-color: #0a0f0d;
+  background-image: linear-gradient(45deg, rgba(255,255,255,.025) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,.025) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,.025) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,.025) 75%);
+  background-size: 24px 24px; background-position: 0 0, 0 12px, 12px -12px, -12px 0;
+}
+.ch-editor-surface {
+  position: relative; flex: 0 0 auto; width: 100%; max-width: none; margin: auto; line-height: 0; transform-origin: top center;
+  box-shadow: 0 24px 70px rgba(0,0,0,.68), 0 0 0 1px rgba(65,255,161,.11); transition: width .14s ease;
+}
+.ch-lb-canvas { display: block; width: 100%; height: auto; max-width: none; max-height: none; border-radius: 0; box-shadow: none; }
+.ch-editor-overlay { position: absolute; inset: 0; z-index: 3; width: 100%; height: 100%; cursor: move; touch-action: none; }
+.ch-editor-overlay.is-dragging { cursor: grabbing; }
+.ch-editor-overlay.is-picking { cursor: crosshair; outline: 2px dashed rgba(65,255,161,.72); outline-offset: 3px; }
 .ch-lb-load-error {
   position: absolute; inset: 22px; z-index: 2; display: flex; flex-direction: column; gap: 6px;
   align-items: center; justify-content: center; text-align: center; padding: 24px;
   border: 1px dashed rgba(255,209,102,0.4); border-radius: 16px; background: rgba(3,12,9,0.88); color: var(--warn);
 }
 .ch-lb-load-error span { color: #cfeedd; font-size: 12.5px; max-width: 340px; }
-.ch-lb-canvas.is-picking { cursor: crosshair; outline: 2px dashed rgba(65,255,161,0.65); outline-offset: 4px; border-radius: 14px; }
+.ch-lb-canvas.is-picking { cursor: crosshair; outline: 2px dashed rgba(65,255,161,0.65); outline-offset: 4px; }
 .ch-lb-bokeh-marker {
   position: absolute; min-width: 24px; min-height: 24px; transform: translate(-50%, -50%); border-radius: 50%;
   border: 2px solid var(--neon); box-shadow: 0 0 0 4px rgba(65,255,161,0.16), 0 0 18px rgba(65,255,161,0.55);
@@ -7470,6 +7541,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   padding: 12px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.1);
   background: linear-gradient(155deg, rgba(255,255,255,0.06), rgba(255,255,255,0.015));
 }
+.ch-layer-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 9px; }
+.ch-layer-head .ch-lb-ai-label { margin: 0; }
+.ch-layer-head > span { color: var(--dim); font: 700 10px "DM Mono", monospace; }
+.ch-layer-add-row { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 10px; }
+.ch-layer-add-row button {
+  min-height: 34px; border: 1px solid var(--line); border-radius: 9px; background: rgba(65,255,161,.055); color: #dfffee;
+  cursor: pointer; font: 650 11px "Space Grotesk";
+}
+.ch-layer-add-row button:hover { border-color: var(--neon); background: rgba(65,255,161,.11); }
 .ch-lb-layer-list { display: flex; flex-direction: column; gap: 7px; }
 .ch-lb-layer {
   display: grid; grid-template-columns: 32px minmax(0, 1fr); align-items: center; gap: 9px;
@@ -7487,6 +7567,30 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ch-lb-layer.is-off { opacity: 0.58; }
 .ch-lb-layer.is-off button { color: var(--dim); background: rgba(0,0,0,0.24); }
 .ch-lb-layer.is-off b { color: #b8cbbf; }
+.ch-compose-layer { grid-template-columns: 32px minmax(0, 1fr) auto; padding: 6px; }
+.ch-compose-layer.is-selected { border-color: rgba(65,255,161,.56); background: rgba(65,255,161,.09); box-shadow: inset 3px 0 var(--neon); }
+.ch-lb-layer .ch-layer-name { width: auto; height: auto; min-width: 0; display: flex; align-items: flex-start; padding: 3px 2px; border: 0; background: transparent; text-align: left; }
+.ch-lb-layer .ch-layer-name:hover { background: transparent; }
+.ch-layer-row-actions { display: flex !important; flex-direction: row !important; gap: 3px !important; }
+.ch-lb-layer .ch-layer-row-actions button { width: 25px; height: 25px; border-radius: 7px; font-size: 12px; }
+.ch-effect-layer { opacity: .72; }
+.ch-layer-inspector { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--line); }
+.ch-layer-inspector.is-empty { min-height: 54px; display: grid; place-items: center; color: var(--dim); font-size: 11px; }
+.ch-layer-inspector-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 10px; }
+.ch-layer-inspector-head b { color: #f0fff7; font-size: 12px; }
+.ch-layer-inspector-head span { color: var(--neon); font: 700 9px "DM Mono", monospace; text-transform: uppercase; }
+.ch-layer-prop-grid, .ch-layer-field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.ch-layer-prop { display: block; margin: 0 0 8px; min-width: 0; }
+.ch-layer-prop > span { display: flex; justify-content: space-between; gap: 8px; color: #cfeedd; font-size: 10.5px; }
+.ch-layer-prop b { color: var(--neon); font: 650 9.5px "DM Mono", monospace; }
+.ch-layer-prop input { width: 100%; accent-color: var(--neon); }
+.ch-layer-field { display: flex; flex-direction: column; gap: 5px; margin-bottom: 9px; color: var(--dim); font-size: 10px; }
+.ch-layer-field input, .ch-layer-field select, .ch-layer-field textarea {
+  width: 100%; min-width: 0; border: 1px solid var(--line); border-radius: 9px; background: rgba(0,0,0,.28); color: var(--ink);
+  padding: 8px; outline: none; resize: vertical; font: 500 11px "Space Grotesk";
+}
+.ch-layer-field input:focus, .ch-layer-field select:focus, .ch-layer-field textarea:focus { border-color: var(--neon); }
+.ch-layer-field input[type="color"] { height: 34px; padding: 3px; cursor: pointer; }
 .ch-lb-ai {
   padding: 12px; border-radius: 16px; border: 1px solid rgba(65,255,161,0.28);
   background: linear-gradient(155deg, rgba(65,255,161,0.1), rgba(65,255,161,0.02));
@@ -7505,7 +7609,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .ch-lb-bokeh .ch-lb-slider { margin-bottom: 8px; }
 .ch-lb-bokeh .ch-lb-chips { margin-top: 4px; }
-.ch-lb-bokeh-markers { position: absolute; inset: 0; pointer-events: none; transition: opacity 0.15s ease; }
+.ch-lb-bokeh-markers { position: absolute; inset: 0; z-index: 4; pointer-events: none; transition: opacity 0.15s ease; }
 .ch-lb-bokeh-markers.is-hidden { opacity: 0; pointer-events: none; }
 .ch-lb-bokeh-markers.is-hidden .ch-lb-bokeh-marker { pointer-events: none; }
 .ch-lb-ai-input, .ch-lb-tools input[type="text"] {
@@ -7572,9 +7676,10 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 
 @media (max-width: 900px) {
   .ch-lb-body { grid-template-columns: 1fr; grid-template-rows: minmax(260px, 52dvh) auto; overflow-y: auto; }
-  .ch-lb-canvas-wrap { min-height: 260px; padding: 14px; }
+  .ch-lb-canvas-wrap { min-height: 260px; }
   .ch-lb-tools { border-left: none; border-top: 1px solid var(--line); max-height: none; overflow: visible; }
   .ch-lb-shell { max-height: 96dvh; }
+  .ch-editor-presets { order: 3; }
 }
 @media (max-width: 767px) {
   .ch-lightbox { padding: 0; place-items: stretch; }
@@ -7600,9 +7705,12 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
   .ch-lb-canvas-wrap {
     flex: 0 0 min(54svh, 430px);
     min-height: 300px;
-    padding: 10px;
   }
-  .ch-lb-canvas { max-height: 100%; }
+  .ch-editor-toolbar { min-height: 48px; padding: 7px 8px; justify-content: flex-start; }
+  .ch-editor-toolgroup button { min-width: 38px; min-height: 38px; }
+  .ch-editor-presets button { white-space: nowrap; }
+  .ch-editor-stage { padding: 18px; }
+  .ch-lb-canvas { max-height: none; }
   .ch-lb-tools {
     padding: 12px;
     gap: 12px;
@@ -7621,6 +7729,12 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
     background: rgba(2,10,8,0.96);
   }
   .ch-lb-actions .btn { min-height: 44px; }
+  .ch-layer-add-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .ch-layer-add-row button { padding: 5px 3px; font-size: 10px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ch-lb-shell, .ch-editor-surface, .ch-lb-bokeh-marker { animation: none !important; transition: none !important; }
 }
 
 /* Mobile admin fit pass: keep the command cockpit and taskbar in one phone viewport. */
