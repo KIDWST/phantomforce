@@ -2084,7 +2084,7 @@ function wireWorkerWeb(el, rerender) {
   document.addEventListener("keydown", workerWebEscapeHandler);
 }
 
-function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()) {
+function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map(), cellsBySubagent = new Map()) {
   const employeeNodes = workers.filter((worker) => worker.worker_type === "employee");
   const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
   const cellNodes = workers.filter((worker) => worker.worker_type === "cell");
@@ -2139,20 +2139,47 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
     });
   }
 
-  const webNode = (worker, angle, radius, mobileRadius, isCore, index) => {
+  // A selected subagent additionally reveals its own connected tasks (the
+  // "cell"/helper-lane tier) - the thing actually asked for: click a worker,
+  // then a subagent, and see what it's connected to and whether it's live.
+  const cellSlots = [];
+  const CELLS_PER_SHELL = 3;
+  const CELL_SHELL_BASE = SHELL_BASE_RADIUS + 4 * SHELL_RADIUS_STEP;
+  const CELL_SHELL_STEP = 130;
+  if (selectedWorker?.worker_type === "subagent") {
+    const anchor = subagentSlots.find((slot) => slot.worker.worker_id === selectedWorker.worker_id);
+    if (anchor) {
+      const tasks = cellsBySubagent.get(selectedWorker.worker_id) || [];
+      const taskFanSpread = 80;
+      tasks.forEach((cell, i) => {
+        const shell = Math.floor(i / CELLS_PER_SHELL);
+        const shellStart = shell * CELLS_PER_SHELL;
+        const slotsInShell = Math.min(CELLS_PER_SHELL, tasks.length - shellStart);
+        const slotInShell = i - shellStart;
+        const withinShell = slotsInShell > 1 ? (slotInShell / (slotsInShell - 1) - 0.5) : 0;
+        const angle = anchor.angle + withinShell * taskFanSpread;
+        const radius = CELL_SHELL_BASE + shell * CELL_SHELL_STEP;
+        cellSlots.push({ worker: cell, angle, radius });
+      });
+    }
+  }
+
+  const webNode = (worker, angle, radius, mobileRadius, tier, index) => {
     const tone = workerMeshTone(worker);
     const group = workerMeshGroup(worker);
     // "Doing something right now" gets a visible pulse; idle nodes stay
     // still - motion should mean something, not run on every node all the
     // time regardless of whether there's anything actually happening.
-    const isLive = tone === "live" || tone === "approval";
+    const isLive = tone === "live" || tone === "approval" || worker.has_activity;
+    const isTask = tier === "task";
     const style = `--node-angle:${angle}deg; --node-radius:${radius}px; --node-mobile-radius:${mobileRadius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
+    const subLabel = isTask ? workerStatusLabel(worker.status) : (tier !== "core" ? "subagent" : worker.department);
     return `
       <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""}" style="${style}" aria-hidden="true"></div>
-      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${!isCore ? "is-subagent" : ""} ${isLive ? "is-live" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
+      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${tier !== "core" ? "is-subagent" : ""} ${isTask ? "is-task" : ""} ${isLive ? "is-live" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.current_task || worker.role)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
-        <i>${esc(!isCore ? "subagent" : worker.department)}</i>
+        <i>${esc(subLabel)}</i>
       </button>`;
   };
 
@@ -2168,8 +2195,9 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
     return `<span class="worker-cell-dot worker-cell-${esc(layer)} worker-cell-${esc(group)}" style="${style}" title="${esc(worker.display_name)} — ${esc(worker.role)}"></span>`;
   };
 
-  const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index * slicePerEmployee, CORE_RADIUS, MOBILE_CORE_RADIUS, true, index)).join("");
-  const outerRingNodes = subagentSlots.map((slot, index) => webNode(slot.worker, slot.angle, slot.radius, MOBILE_SUBAGENT_RADIUS, false, index)).join("");
+  const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index * slicePerEmployee, CORE_RADIUS, MOBILE_CORE_RADIUS, "core", index)).join("");
+  const outerRingNodes = subagentSlots.map((slot, index) => webNode(slot.worker, slot.angle, slot.radius, MOBILE_SUBAGENT_RADIUS, "subagent", index)).join("");
+  const taskRingNodes = cellSlots.map((slot, index) => webNode(slot.worker, slot.angle, slot.radius, MOBILE_SUBAGENT_RADIUS, "task", index)).join("");
   const helperLaneDots = paintedCells.map((worker, index) => cellDot(worker, index)).join("");
 
   const observed = workers.filter((worker) => worker.has_activity).length;
@@ -2192,6 +2220,7 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
           <div class="worker-node-field">
             ${coreRingNodes}
             ${outerRingNodes}
+            ${taskRingNodes}
           </div>
           <div class="worker-core">
             <span>PF</span>
@@ -2687,7 +2716,7 @@ function renderWorkforce(el, rerender) {
     ${isMap ? `
       <div class="worker-map-view">
         ${renderBaselineWorkers(runtime)}
-        ${renderWorkerMesh(workers, runtime, subagentsByParent)}
+        ${renderWorkerMesh(workers, runtime, subagentsByParent, cellsBySubagent)}
         ${renderWorkerMapDetail(selectedWorker, selectedSubagents, cellsBySubagent, selectedRootCells)}
       </div>
     ` : `
