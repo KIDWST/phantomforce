@@ -1,5 +1,5 @@
-import { session } from "./store.js?v=phantom-live-20260711-159";
-import { esc } from "./workspaces.js?v=phantom-live-20260711-159";
+import { session } from "./store.js?v=phantom-live-20260711-160";
+import { esc } from "./workspaces.js?v=phantom-live-20260711-160";
 
 const state = {
   loading: true,

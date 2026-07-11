@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-159";
+} from "./store.js?v=phantom-live-20260711-160";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -21,6 +21,11 @@ const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span cla
 const memoryUi = { query: "", category: "all" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 const workerRuntime = { state: "idle", workforce: null, error: "" };
+const LOCAL_CORE_WORKERS = [
+  { name: "Phantom Router", note: "Command and workspace routing loaded" },
+  { name: "Memory Keeper", note: "Local memory and receipts ready" },
+  { name: "Safety Guard", note: "Approval and security rules loaded" },
+];
 const MEMORY_DAY = 86400000;
 
 async function loadWorkerRuntime() {
@@ -1871,6 +1876,7 @@ function privateAdminRouteReached() {
 }
 
 function baselineWorkerCount(runtime) {
+  if (!runtime) return LOCAL_CORE_WORKERS.length + (privateAdminRouteReached() ? 1 : 0);
   const workers = Array.isArray(runtime?.workers) ? runtime.workers : [];
   const reported = Number(runtime?.summary?.baseline_workers_online ?? runtime?.summary?.active_workers ?? 0);
   const routeAlreadyCounted = workers.some((worker) => worker.id === "gatekeeper" && worker.state === "active");
@@ -1894,7 +1900,7 @@ function renderWorkerMesh(workers, runtime = null) {
     const style = `--node-angle:${angle}deg; --node-radius:${radius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
     return `
       <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""}" style="${style}" aria-hidden="true"></div>
-      <button class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ring === "outer" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" title="${esc(worker.display_name)} — ${esc(worker.role)}">
+      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ring === "outer" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
         <i>${esc(ring === "outer" ? "subagent" : worker.department)}</i>
@@ -1951,7 +1957,22 @@ function renderBaselineWorkers(runtime) {
     return `<section class="worker-baseline"><div><p class="worker-kicker">Always-on crew</p><h4>Checking baseline services…</h4></div></section>`;
   }
   if (!runtime || workerRuntime.state === "error") {
-    return `<section class="worker-baseline worker-baseline-unavailable"><div><p class="worker-kicker">Always-on crew</p><h4>Status unavailable</h4><p>${esc(workerRuntime.error || "The worker status backend did not answer.")}</p></div><button class="btn btn-quiet" data-act="worker-runtime-retry">Retry</button></section>`;
+    const services = [
+      ...LOCAL_CORE_WORKERS,
+      ...(privateAdminRouteReached() ? [{ name: "Private Route", note: "This session reached the protected admin host" }] : []),
+    ];
+    return `
+      <section class="worker-baseline worker-baseline-local">
+        <div class="worker-baseline-copy">
+          <p class="worker-kicker">Always-on crew</p>
+          <h4>${services.length} core workers ready</h4>
+          <p>Live job totals need the authenticated worker backend. Core local services are still available.</p>
+        </div>
+        <div class="worker-baseline-grid">
+          ${services.map((service) => `<span class="worker-baseline-service"><i></i><b>${esc(service.name)}</b><small>${esc(service.note)}</small></span>`).join("")}
+        </div>
+        <button class="btn btn-quiet" data-act="worker-runtime-retry">Re-check live status</button>
+      </section>`;
   }
 
   const workers = Array.isArray(runtime.workers) ? runtime.workers : [];
@@ -2301,6 +2322,34 @@ function renderWorkerDrawer(worker, subagents, cellsBySubagent, rootCells) {
     </aside>`;
 }
 
+function renderWorkerMapDetail(worker, subagents, cellsBySubagent, rootCells) {
+  if (!worker) {
+    return `
+      <section class="worker-map-detail is-empty" aria-label="Worker web instructions">
+        <div>
+          <p class="worker-kicker">Touch ready</p>
+          <h4>Tap any worker to inspect the lane.</h4>
+          <p>Mobile uses a clean worker grid so every node can be tapped. Desktop keeps the web view, and the detail panel opens here without blocking the screen.</p>
+        </div>
+        <span>No sends. No public action. Approval gates stay on.</span>
+      </section>`;
+  }
+
+  return `
+    <section class="worker-map-detail worker-${esc(worker.status)}" aria-label="${esc(worker.display_name)} selected worker details">
+      <div class="worker-map-detail-head">
+        <span class="wf-avatar wf-avatar-${esc(worker.avatar?.tone || worker.status)}">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
+        <div>
+          <p class="worker-kicker">Selected worker</p>
+          <h4>${esc(worker.display_name)}</h4>
+          <span>${esc(worker.role)} · ${esc(worker.department)} · ${esc(worker.worker_type === "subagent" ? "Subagent lane" : "Lead worker")}</span>
+        </div>
+        <span class="worker-shell-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
+      </div>
+      ${renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells)}
+    </section>`;
+}
+
 function renderWorkforce(el, rerender) {
   const allWorkers = buildWorkerRoster();
   const workers = isAdmin() ? allWorkers : allWorkers.filter((worker) => worker.client_visible);
@@ -2335,8 +2384,14 @@ function renderWorkforce(el, rerender) {
   const isMap = workerUi.view === "map";
   const selectedWorker = workerUi.selectedId ? workers.find((worker) => worker.worker_id === workerUi.selectedId) : null;
   const { subagentsByParent, cellsBySubagent, cellsByRoot } = buildWorkerGraph(workers);
+  const selectedSubagents = selectedWorker?.worker_type === "employee" ? (subagentsByParent.get(selectedWorker.worker_id) || []) : [];
+  const selectedRootCells = selectedWorker?.worker_type === "subagent"
+    ? (cellsBySubagent.get(selectedWorker.worker_id) || [])
+    : selectedWorker
+      ? (cellsByRoot.get(selectedWorker.worker_id) || [])
+      : [];
   const runtime = workerRuntime.workforce;
-  const baselineOnline = runtime ? baselineWorkerCount(runtime) : 0;
+  const baselineOnline = baselineWorkerCount(runtime);
   const jobsLogged = Number(runtime?.summary?.tasks_in_window || 0);
 
   el.innerHTML = `
@@ -2345,7 +2400,7 @@ function renderWorkforce(el, rerender) {
         <p class="worker-kicker">Workforce ${isMap ? "web" : "map"}</p>
         <h3>PhantomForce Workers</h3>
         <p>${isMap
-          ? "Every worker is a thread in the web. Watch the pulses — that's real work moving. Click a worker to see what it's doing."
+          ? "Every worker is a thread in the web. Watch the pulses — that's real work moving. Tap or click a worker to see what it's doing."
           : "Full directory — departments, subagents, helper lanes, and safety rules. Built to scale toward 1,000+ real workers without exposing tool names to clients."}</p>
       </div>
       <div class="worker-view-toggle" role="tablist" aria-label="Workers view">
@@ -2357,7 +2412,7 @@ function renderWorkforce(el, rerender) {
     ${renderBaselineWorkers(runtime)}
     ${isMap ? `
       ${renderWorkerMesh(workers, runtime)}
-      ${selectedWorker ? renderWorkerDrawer(selectedWorker, subagentsByParent.get(selectedWorker.worker_id) || [], cellsBySubagent, cellsByRoot.get(selectedWorker.worker_id) || []) : ""}
+      ${renderWorkerMapDetail(selectedWorker, selectedSubagents, cellsBySubagent, selectedRootCells)}
     ` : `
       <div class="worker-scale">
         <span><b>${workerRuntime.state === "ready" ? baselineOnline : "—"}</b> baseline online</span>
@@ -2398,6 +2453,7 @@ function renderWorkforce(el, rerender) {
     "worker-select": (id) => {
       workerUi.selectedId = workerUi.selectedId === id ? "" : (id || workerUi.selectedId);
       workerUi.tab = "overview";
+      workerUi.preview = null;
       rerender();
     },
     "worker-collapse": () => {
