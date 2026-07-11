@@ -2048,44 +2048,80 @@ function wireWorkerWeb(el, rerender) {
   document.addEventListener("keydown", workerWebEscapeHandler);
 }
 
-function renderWorkerMesh(workers, runtime = null) {
+function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()) {
   const employeeNodes = workers.filter((worker) => worker.worker_type === "employee");
   const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
   const cellNodes = workers.filter((worker) => worker.worker_type === "cell");
   const mobileWeb = window.matchMedia("(max-width: 560px)").matches;
   const webEnabled = workerWebEnabled();
-  const cappedSubagents = subagentNodes.slice(0, mobileWeb ? 12 : 28);
+  // Desktop's fullscreen pan/zoom canvas can hold the real subagent
+  // population (~100, not an arbitrary 28) - that was the actual complaint:
+  // "1000+ workers, I see 50 circles." Mobile's small in-page box keeps a
+  // modest cap since there's no pan/zoom room to escape into there.
+  const cappedSubagents = mobileWeb ? subagentNodes.slice(0, 12) : subagentNodes;
   const overflowSubagents = subagentNodes.length - cappedSubagents.length;
-  // The fullscreen web is meant to be informative, not decorative - hundreds
-  // of unlabeled ambient dots didn't convey anything a plain count doesn't,
-  // and they were the dominant cost behind the reported lag. Drop them
-  // entirely there; mobile's small non-fullscreen box keeps its existing cap.
   const paintedCells = webEnabled ? [] : cellNodes.slice(0, 360);
   const hiddenCells = cellNodes.length - paintedCells.length;
-  // Split subagents across two rings instead of cramming all of them onto one
-  // band - the fullscreen web has real pan/zoom room now (auto-fit just zooms
-  // out further to show a bigger layout), so use that room: fewer nodes per
-  // ring means more circumferential space per label, less overlap.
-  const innerSubagents = cappedSubagents.filter((_, i) => i % 2 === 0);
-  const farSubagents = cappedSubagents.filter((_, i) => i % 2 === 1);
+
+  const selectedWorker = workers.find((worker) => worker.worker_id === workerUi.selectedId);
+  // Clicking a worker should visibly connect it to what it's part of, not
+  // just restate the same info in a side panel: selecting an employee lights
+  // up its own subagents; selecting a subagent lights up its siblings and
+  // their shared parent. Everyone outside that family dims.
+  let familyEmployeeId = null;
+  let familySubagentIds = null;
+  if (selectedWorker?.worker_type === "employee") {
+    familyEmployeeId = selectedWorker.worker_id;
+    familySubagentIds = new Set((subagentsByParent.get(selectedWorker.worker_id) || []).map((s) => s.worker_id));
+  } else if (selectedWorker?.worker_type === "subagent") {
+    familyEmployeeId = selectedWorker.parent_id || null;
+    familySubagentIds = new Set((subagentsByParent.get(selectedWorker.parent_id) || []).map((s) => s.worker_id));
+  }
+  const hasFamily = familySubagentIds !== null;
+  const inFamily = (worker) => worker.worker_id === familyEmployeeId || (familySubagentIds && familySubagentIds.has(worker.worker_id));
+
   const RING = {
-    core: { radius: 260, spread: 360, offset: 0, mobileRadius: 96 },
-    inner: { radius: 430, spread: 340, offset: 18, mobileRadius: 150 },
-    // staggered offset so far-ring nodes fall in the gaps between inner-ring
-    // nodes (viewed from the core) instead of lining up radially behind them
-    far: { radius: 620, spread: 340, offset: 18 + 340 / Math.max(1, farSubagents.length) / 2, mobileRadius: 150 },
+    core: { radius: 260, mobileRadius: 96 },
+    inner: { radius: 430, mobileRadius: 150 },
+    far: { radius: 620, mobileRadius: 150 },
   };
 
-  const webNode = (worker, index, total, ringName) => {
+  // Each subagent sits within its own parent employee's angular slice
+  // (spread across the two radii tiers for density) instead of a flat ring
+  // unrelated to anyone - proximity is what makes "these belong to that
+  // worker" readable before you even click anything.
+  const slicePerEmployee = 360 / Math.max(1, employeeNodes.length);
+  const cappedSubagentIds = new Set(cappedSubagents.map((s) => s.worker_id));
+  const subagentSlots = [];
+  const claimedSubagentIds = new Set();
+  employeeNodes.forEach((employee, employeeIndex) => {
+    const employeeAngle = employeeIndex * slicePerEmployee;
+    const kids = (subagentsByParent.get(employee.worker_id) || []).filter((s) => cappedSubagentIds.has(s.worker_id));
+    kids.forEach((subagent, i) => {
+      claimedSubagentIds.add(subagent.worker_id);
+      const withinSlice = kids.length > 1 ? (i / (kids.length - 1) - 0.5) : 0;
+      const angle = employeeAngle + withinSlice * slicePerEmployee * 0.85;
+      subagentSlots.push({ worker: subagent, angle, ring: i % 2 === 0 ? "inner" : "far" });
+    });
+  });
+  // Fallback for any subagent whose parent isn't a rendered employee (should
+  // be rare) - spread those evenly so nothing silently disappears.
+  const orphanSubagents = cappedSubagents.filter((s) => !claimedSubagentIds.has(s.worker_id));
+  orphanSubagents.forEach((subagent, i) => {
+    subagentSlots.push({ worker: subagent, angle: (i / Math.max(1, orphanSubagents.length)) * 360, ring: i % 2 === 0 ? "inner" : "far" });
+  });
+
+  const webNode = (worker, angle, ringName, index) => {
     const tone = workerMeshTone(worker);
     const group = workerMeshGroup(worker);
     const ring = RING[ringName];
-    const angle = ring.offset + (total ? (index / total) * ring.spread : 0);
     const isLive = tone === "live" || tone === "approval";
+    const dimmed = hasFamily && !inFamily(worker);
+    const highlighted = hasFamily && worker.worker_id !== workerUi.selectedId && inFamily(worker);
     const style = `--node-angle:${angle}deg; --node-radius:${ring.radius}px; --node-mobile-radius:${ring.mobileRadius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
     return `
-      <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""}" style="${style}" aria-hidden="true"></div>
-      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ringName !== "core" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
+      <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""} ${dimmed ? "is-web-dimmed" : ""}" style="${style}" aria-hidden="true"></div>
+      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ringName !== "core" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""} ${dimmed ? "is-web-dimmed" : ""} ${highlighted ? "is-web-match" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
         <i>${esc(ringName !== "core" ? "subagent" : worker.department)}</i>
@@ -2104,9 +2140,8 @@ function renderWorkerMesh(workers, runtime = null) {
     return `<span class="worker-cell-dot worker-cell-${esc(layer)} worker-cell-${esc(group)}" style="${style}" title="${esc(worker.display_name)} — ${esc(worker.role)}"></span>`;
   };
 
-  const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index, employeeNodes.length, "core")).join("");
-  const outerRingNodes = innerSubagents.map((worker, index) => webNode(worker, index, innerSubagents.length, "inner")).join("")
-    + farSubagents.map((worker, index) => webNode(worker, index, farSubagents.length, "far")).join("");
+  const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index * slicePerEmployee, "core", index)).join("");
+  const outerRingNodes = subagentSlots.map((slot, index) => webNode(slot.worker, slot.angle, slot.ring, index)).join("");
   const helperLaneDots = paintedCells.map((worker, index) => cellDot(worker, index)).join("");
 
   const observed = workers.filter((worker) => worker.has_activity).length;
@@ -2538,21 +2573,14 @@ function renderWorkerDrawer(worker, subagents, cellsBySubagent, rootCells) {
 }
 
 function renderWorkerMapDetail(worker, subagents, cellsBySubagent, rootCells) {
+  // No instructional placeholder here - people click things to find out what
+  // they do; a permanent "tap a worker" panel just occupies space and says
+  // nothing. Show real content or nothing at all.
+  if (!worker) return "";
   // The fullscreen web (see workerWebEnabled()) covers the whole viewport, so
   // this panel has to float ON TOP of it (fixed + higher z-index) or its
   // otherwise-correct content just renders behind the canvas, invisible.
   const floating = workerWebEnabled() ? "worker-map-detail-floating" : "";
-  if (!worker) {
-    return `
-      <section class="worker-map-detail is-empty ${floating}" aria-label="Worker web instructions">
-        <div>
-          <p class="worker-kicker">Touch ready</p>
-          <h4>Tap any worker to inspect the lane.</h4>
-          <p>Tap or click any worker in the web to open its details here.</p>
-        </div>
-        <span>No sends. No public action. Approval gates stay on.</span>
-      </section>`;
-  }
 
   return `
     <section class="worker-map-detail ${floating} worker-${esc(worker.status)}" aria-label="${esc(worker.display_name)} selected worker details">
@@ -2631,7 +2659,7 @@ function renderWorkforce(el, rerender) {
     ${isMap ? `
       <div class="worker-map-view">
         ${renderBaselineWorkers(runtime)}
-        ${renderWorkerMesh(workers, runtime)}
+        ${renderWorkerMesh(workers, runtime, subagentsByParent)}
         ${renderWorkerMapDetail(selectedWorker, selectedSubagents, cellsBySubagent, selectedRootCells)}
       </div>
     ` : `
