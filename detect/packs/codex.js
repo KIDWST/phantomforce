@@ -35,11 +35,15 @@ export const codexPack = [
     // placeholder like "Implement {feature}". The update-nag menu reuses the
     // same glyph for its numbered choices ("› 1. Update now"), so exclude a
     // digit immediately following, same trick as Claude's idle-box rule.
+    // Also excludes an "esc to interrupt"-style active-work hint bar the
+    // same way — not confirmed live for Codex specifically, but Claude's
+    // equivalent hint reuses its idle glyph too, so this guards against the
+    // same class of false positive if Codex does something similar.
     id: "codex-idle-input-box",
     label: "Idle input prompt caret, no spinner",
     state: "waiting",
     confidence: 0.55,
-    pattern: /›\s+(?!\d)/,
+    pattern: /›\s+(?!\d)(?![^\n]{0,15}esc to interrupt)/i,
     describe: () => "idle input prompt caret (›) with no spinner active",
   },
 ];

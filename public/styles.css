@@ -1262,6 +1262,61 @@ body.broadcast-mode .tile.linked {
   width: auto;
 }
 
+.mission-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: -4px;
+}
+
+.mission-chip-label {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mission-chip {
+  display: inline-flex;
+  align-items: stretch;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--panel-2);
+}
+
+.mission-chip-pick {
+  border: 0;
+  background: transparent;
+  color: var(--soft);
+  font-size: 11.5px;
+  padding: 4px 8px;
+  cursor: pointer;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mission-chip-pick:hover {
+  color: var(--text);
+}
+
+.mission-chip-remove {
+  border: 0;
+  border-left: 1px solid var(--line);
+  background: transparent;
+  color: #5c6879;
+  font-size: 12px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.mission-chip-remove:hover {
+  color: #ff9aa7;
+  background: rgba(236, 66, 87, 0.1);
+}
+
 .mission-error {
   color: #ff9aa7;
   font-size: 12.5px;

@@ -158,6 +158,51 @@ function rememberWorkspaceRoot(root) {
   }
 }
 
+function forgetWorkspaceRoot(root) {
+  try {
+    localStorage.setItem(MISSION_WORKSPACE_HISTORY_KEY, JSON.stringify(workspaceHistory().filter((p) => p !== root)));
+    if (localStorage.getItem(MISSION_WORKSPACE_KEY) === root) localStorage.removeItem(MISSION_WORKSPACE_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
+// Renders the removable "recently used" chip row — the saved preset list
+// the user asked to be able to edit/remove, not just accumulate forever.
+function renderRecentChips() {
+  const row = document.getElementById("mf-recent-chips");
+  if (!row) return;
+  const history = workspaceHistory();
+  if (!history.length) {
+    row.innerHTML = "";
+    return;
+  }
+  row.innerHTML =
+    `<span class="mission-chip-label">Recent:</span>` +
+    history
+      .map(
+        (p) =>
+          `<span class="mission-chip" data-path="${escapeHtml(p)}" title="${escapeHtml(p)}">` +
+          `<button type="button" class="mission-chip-pick">${escapeHtml(p.split(/[\\/]/).pop() || p)}</button>` +
+          `<button type="button" class="mission-chip-remove" aria-label="Remove ${escapeHtml(p)} from recent">×</button>` +
+          `</span>`,
+      )
+      .join("");
+  row.querySelectorAll(".mission-chip-pick").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const path = btn.closest(".mission-chip").dataset.path;
+      const input = document.getElementById("mf-workspace");
+      if (input) input.value = path;
+    });
+  });
+  row.querySelectorAll(".mission-chip-remove").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      forgetWorkspaceRoot(btn.closest(".mission-chip").dataset.path);
+      renderRecentChips();
+    });
+  });
+}
+
 // Real git repos found on this machine, fetched once and cached — used to
 // build a pick-list instead of making someone hand-type a path.
 let repoScanPromise = null;
@@ -241,6 +286,7 @@ function renderMissionCreateStepObjective(body) {
       <select id="mf-workspace-select"><option value="">Loading recent + nearby folders…</option></select>
     </label>
     <input id="mf-workspace" type="text" value="${escapeHtml(state.workspaceRoot)}" placeholder="or type a full path" />
+    <div id="mf-recent-chips" class="mission-chip-row"></div>
     <details class="mission-advanced">
       <summary>Advanced</summary>
       <label>Mission name (auto if blank)<input id="mf-name" type="text" placeholder="auto-generated from the objective" /></label>
@@ -254,6 +300,7 @@ function renderMissionCreateStepObjective(body) {
     <p id="mf-error" class="mission-error hidden"></p>
   `;
   body.appendChild(form);
+  renderRecentChips();
 
   workspaceOptions().then((options) => {
     const select = document.getElementById("mf-workspace-select");

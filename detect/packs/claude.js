@@ -26,6 +26,18 @@ export const claudePack = [
     describe: () => "tool-call bullet (⏺) rendered",
   },
   {
+    // Confirmed live: while actively working, Claude shows a status bar
+    // like "❯   · esc to interrupt · ← for agents" — which itself contains
+    // the "❯" glyph, so without this rule (and the matching exclusion on
+    // claude-idle-input-box below) it can be misread as the idle prompt.
+    id: "claude-interrupt-hint",
+    label: "Active-work hint bar (esc to interrupt)",
+    state: "running",
+    confidence: 0.75,
+    pattern: /esc to interrupt/i,
+    describe: () => '"esc to interrupt" hint bar shown while actively working',
+  },
+  {
     id: "claude-approval-prompt",
     label: "Tool/edit approval prompt",
     state: "needs_approval",
@@ -35,15 +47,18 @@ export const claudePack = [
   },
   {
     // Confirmed live: Claude Code's idle input prompt uses the "❯" glyph
-    // (U+276F), not ASCII ">" — the original guess never matched. The
-    // trust/permission menus reuse the same glyph as a selection indicator
-    // (e.g. "❯ 1. Yes, I trust this folder"), so this excludes a digit
-    // immediately following, which only appears in those numbered menus.
+    // (U+276F), not ASCII ">" — the original guess never matched. Two
+    // things else confirmed live also reuse that exact glyph and must be
+    // excluded: the trust/permission menus' numbered selector (e.g. "❯ 1.
+    // Yes, I trust this folder" — excluded via the no-digit lookahead), and
+    // the active-work hint bar "❯   · esc to interrupt · ← for agents"
+    // shown WHILE Claude is still thinking (excluded explicitly — without
+    // this a real task in progress could be misread as idle).
     id: "claude-idle-input-box",
     label: "Idle input prompt caret, no spinner",
     state: "waiting",
     confidence: 0.55,
-    pattern: /❯\s+(?!\d)/,
+    pattern: /❯\s+(?!\d)(?![^\n]{0,15}esc to interrupt)/i,
     describe: () => "idle input prompt caret (❯) with no spinner active",
   },
   {
