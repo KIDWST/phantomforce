@@ -2538,20 +2538,24 @@ function renderWorkerDrawer(worker, subagents, cellsBySubagent, rootCells) {
 }
 
 function renderWorkerMapDetail(worker, subagents, cellsBySubagent, rootCells) {
+  // The fullscreen web (see workerWebEnabled()) covers the whole viewport, so
+  // this panel has to float ON TOP of it (fixed + higher z-index) or its
+  // otherwise-correct content just renders behind the canvas, invisible.
+  const floating = workerWebEnabled() ? "worker-map-detail-floating" : "";
   if (!worker) {
     return `
-      <section class="worker-map-detail is-empty" aria-label="Worker web instructions">
+      <section class="worker-map-detail is-empty ${floating}" aria-label="Worker web instructions">
         <div>
           <p class="worker-kicker">Touch ready</p>
           <h4>Tap any worker to inspect the lane.</h4>
-          <p>Mobile uses a clean worker grid so every node can be tapped. Desktop keeps the web view, and the detail panel opens here without blocking the screen.</p>
+          <p>Tap or click any worker in the web to open its details here.</p>
         </div>
         <span>No sends. No public action. Approval gates stay on.</span>
       </section>`;
   }
 
   return `
-    <section class="worker-map-detail worker-${esc(worker.status)}" aria-label="${esc(worker.display_name)} selected worker details">
+    <section class="worker-map-detail ${floating} worker-${esc(worker.status)}" aria-label="${esc(worker.display_name)} selected worker details">
       <div class="worker-map-detail-head">
         <span class="wf-avatar wf-avatar-${esc(worker.avatar?.tone || worker.status)}">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <div>

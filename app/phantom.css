@@ -1613,6 +1613,14 @@ body:has([data-worker-web-stage].is-web-active) .workspace-page-body {
 @media (prefers-reduced-motion: reduce) {
   .worker-node, .worker-cell-dot, .worker-mesh-rings span, .worker-thread.is-live::after { animation: none !important; }
 }
+/* Docked side panel over the fullscreen web (z-index above .worker-mesh-stage
+   .is-web-active's 400) - without this it renders in normal page flow, which
+   sits underneath and behind the fullscreen canvas, invisible. */
+.worker-map-detail-floating {
+  position: fixed; top: 90px; right: 20px; bottom: 90px; z-index: 410;
+  width: min(400px, calc(100vw - 40px)); margin: 0 !important; overflow-y: auto;
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+}
 .worker-map-detail {
   display: grid; gap: 14px; margin: 14px 0 0; padding: 16px;
   border: 1px solid rgba(65,255,161,0.24); border-radius: 18px;
