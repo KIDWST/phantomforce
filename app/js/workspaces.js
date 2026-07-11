@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-177";
+} from "./store.js?v=phantom-live-20260711-178";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -2053,9 +2053,14 @@ function renderWorkerMesh(workers, runtime = null) {
   const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
   const cellNodes = workers.filter((worker) => worker.worker_type === "cell");
   const mobileWeb = window.matchMedia("(max-width: 560px)").matches;
+  const webEnabled = workerWebEnabled();
   const cappedSubagents = subagentNodes.slice(0, mobileWeb ? 12 : 28);
   const overflowSubagents = subagentNodes.length - cappedSubagents.length;
-  const paintedCells = mobileWeb ? cellNodes.slice(0, 360) : cellNodes;
+  // The fullscreen web is meant to be informative, not decorative - hundreds
+  // of unlabeled ambient dots didn't convey anything a plain count doesn't,
+  // and they were the dominant cost behind the reported lag. Drop them
+  // entirely there; mobile's small non-fullscreen box keeps its existing cap.
+  const paintedCells = webEnabled ? [] : cellNodes.slice(0, 360);
   const hiddenCells = cellNodes.length - paintedCells.length;
   // Split subagents across two rings instead of cramming all of them onto one
   // band - the fullscreen web has real pan/zoom room now (auto-fit just zooms
@@ -2111,7 +2116,6 @@ function renderWorkerMesh(workers, runtime = null) {
   const baselineOnline = runtime ? baselineWorkerCount(runtime) : null;
   const recentJobs = runtime?.summary?.tasks_in_window;
 
-  const webEnabled = workerWebEnabled();
   return `
     <section class="worker-mesh" aria-label="Worker operations web">
       <div class="worker-mesh-stage ${webEnabled ? "is-web-active" : ""}" data-worker-web-stage>

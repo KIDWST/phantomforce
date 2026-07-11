@@ -1448,6 +1448,15 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .worker-node.is-web-dimmed { opacity: 0.15; }
 .worker-node.is-web-match { border-color: var(--neon); box-shadow: 0 0 0 2px rgba(65,255,161,0.4), 0 0 34px var(--node-glow); }
+/* This is meant to be read while dragging/zooming to find a specific
+   worker, not a decorative screensaver - constant motion here fights against
+   actually reading it, and was the source of the "laggy and ugly" feedback.
+   Everything stays put; color/selection is still how state reads. */
+.worker-mesh-stage.is-web-active .worker-node,
+.worker-mesh-stage.is-web-active .worker-thread.is-live::after,
+.worker-mesh-stage.is-web-active .worker-mesh-rings span {
+  animation: none;
+}
 .worker-mesh-rings { position: absolute; inset: 8%; pointer-events: none; }
 .worker-mesh-rings span {
   position: absolute; inset: calc(var(--ring, 0) * 11%); border: 1px solid rgba(65,255,161,0.12); border-radius: 50%;
@@ -4391,6 +4400,11 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   border: 1px solid var(--line); border-radius: 18px; padding: 18px; margin-bottom: 14px; background: var(--glass);
 }
 .ch-creator-head h3, .an-hero h3 { margin: 0; font-size: 22px; }
+.ch-tenant-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; justify-content: flex-end; }
+.ch-tenant-pill {
+  display: inline-flex; align-items: center; min-height: 32px; padding: 0 11px; border: 1px solid rgba(65,255,161,.22); border-radius: 999px;
+  background: rgba(65,255,161,.08); color: #bdf7d2; font: 700 10px "DM Mono", monospace; letter-spacing: .08em; text-transform: uppercase;
+}
 .ch-creator-head p, .an-hero p { margin: 6px 0 0; max-width: 720px; color: var(--dim); font-size: 13px; line-height: 1.55; }
 .ch-eyebrow { margin: 0 !important; font: 700 9px "DM Mono", monospace; letter-spacing: .16em; text-transform: uppercase; color: var(--neon) !important; }
 
@@ -4781,6 +4795,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 @media (max-width: 640px) {
   .ch-kpis { grid-template-columns: repeat(2, 1fr); }
   .ch-creator-head, .an-hero { flex-direction: column; align-items: stretch; }
+  .ch-tenant-actions { justify-content: flex-start; }
   .ch-draft, .ch-calendar-item { grid-template-columns: 1fr; }
   .ch-production, .an-trend-list, .an-reco-grid { grid-template-columns: 1fr; }
   .ch-tabs, .ch-chips { overflow-x: auto; flex-wrap: nowrap; }
@@ -7774,6 +7789,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ch-lb-bokeh-markers { position: absolute; inset: 0; z-index: 4; pointer-events: none; transition: opacity 0.15s ease; }
 .ch-lb-bokeh-markers.is-hidden { opacity: 0; pointer-events: none; }
 .ch-lb-bokeh-markers.is-hidden .ch-lb-bokeh-marker { pointer-events: none; }
+.ch-bokeh-brush-cursor {
+  position: absolute; z-index: 6; transform: translate(-50%, -50%); border-radius: 50%;
+  border: 2px solid #ffd166; background: rgba(255,209,102,.07);
+  box-shadow: 0 0 0 5px rgba(65,255,161,.1), 0 0 22px rgba(65,255,161,.38);
+  opacity: 0; pointer-events: none; transition: width .08s ease, height .08s ease, opacity .08s ease;
+}
+.ch-bokeh-brush-cursor::after {
+  content: ""; position: absolute; left: 50%; top: 50%; width: 5px; height: 5px; transform: translate(-50%, -50%);
+  border-radius: 50%; background: #ffd166; box-shadow: 0 0 8px rgba(255,209,102,.9);
+}
+.ch-bokeh-brush-cursor.is-visible { opacity: 1; }
 .ch-lb-ai-input, .ch-lb-tools input[type="text"] {
   flex: 1 1 auto; min-width: 0; border: 1px solid var(--line); border-radius: 10px; background: rgba(0,0,0,0.32);
   color: var(--ink); padding: 9px 11px; font-size: 12.5px; outline: none;
