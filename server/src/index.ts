@@ -177,6 +177,16 @@ import {
 } from "./phantom-ai/agent-runs.js";
 import { getContentAssetStorageProvider } from "./phantom-ai/content-asset-storage.js";
 import {
+  addAssetToCollection,
+  createCollection,
+  getAssetById as getVaultAssetById,
+  listAssetsInCollection,
+  listCollections,
+  listTagsForAsset,
+  tagAsset,
+  untagAsset,
+} from "./phantom-ai/asset-db.js";
+import {
   getProviderSetupStatus,
   previewModelRouterFoundation,
   runModelRouterFoundation,
@@ -4045,6 +4055,117 @@ app.delete("/phantom-ai/content/assets/:id", async (request, reply) => {
 
   return { ok: true, session, tenant_id: ownerScope };
 });
+
+/* ---- Asset Vault Stage 2: tags + collections ----
+   Additive routes only — nothing above this changes. Same owner_scope
+   resolution (contentAssetOwnerScope) as every other content-asset route,
+   so tags/collections are isolated the same way assets themselves are. */
+
+const AssetTagSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  name: z.string().trim().min(1).max(60),
+});
+
+app.post("/phantom-ai/content/assets/:id/tags", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = AssetTagSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  if (!getVaultAssetById(id, ownerScope)) return reply.code(404).send({ ok: false, error: "not_found" });
+
+  const tag = tagAsset(id, ownerScope, parsed.data.name);
+  return { ok: true, tenant_id: ownerScope, tag };
+});
+
+app.get("/phantom-ai/content/assets/:id/tags", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  if (!getVaultAssetById(id, ownerScope)) return reply.code(404).send({ ok: false, error: "not_found" });
+
+  return { ok: true, tenant_id: ownerScope, tags: listTagsForAsset(id) };
+});
+
+app.delete("/phantom-ai/content/assets/:id/tags/:name", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id, name } = request.params as { id: string; name: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  if (!getVaultAssetById(id, ownerScope)) return reply.code(404).send({ ok: false, error: "not_found" });
+
+  untagAsset(id, ownerScope, name);
+  return { ok: true, tenant_id: ownerScope };
+});
+
+const CreateCollectionSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(500).optional(),
+});
+
+app.post("/phantom-ai/collections", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = CreateCollectionSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const collection = createCollection(ownerScope, parsed.data.name, parsed.data.description);
+  return { ok: true, tenant_id: ownerScope, collection };
+});
+
+app.get("/phantom-ai/collections", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  return { ok: true, tenant_id: ownerScope, collections: listCollections(ownerScope) };
+});
+
+const AddToCollectionSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  asset_id: z.string().trim().min(1),
+});
+
+app.post("/phantom-ai/collections/:id/assets", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = AddToCollectionSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  try {
+    addAssetToCollection(id, parsed.data.asset_id, ownerScope);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "unknown_error";
+    return reply.code(404).send({ ok: false, error: message });
+  }
+  return { ok: true, tenant_id: ownerScope };
+});
+
+app.get("/phantom-ai/collections/:id/assets", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  return { ok: true, tenant_id: ownerScope, assets: listAssetsInCollection(id, ownerScope) };
+});
+
 /* ---- Local background removal (rembg) ----
    A real local-process bridge, not a provider call: no key, no network, no
    credit spend. Status is a genuine `import rembg` probe through whichever
