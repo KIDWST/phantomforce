@@ -8,7 +8,11 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260710-146";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260710-149";
+import {
+  dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
+  DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
+} from "./content-ideas.js?v=phantom-live-20260710-149";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -87,6 +91,7 @@ const RECIPES = [
 ];
 
 const TABS = [
+  ["configured", "Configured"],
   ["autopilot", "Autopilot"],
   ["active", "Active"],
   ["recipes", "Recipes"],
@@ -95,7 +100,7 @@ const TABS = [
   ["safety", "Safety rules"],
 ];
 
-let auTab = "autopilot";
+let auTab = "configured";
 
 function agentCard(a, opts) {
   const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
@@ -145,6 +150,67 @@ function autopilotJobCard(job) {
       <i>${job.last_run_at ? esc(ago(job.last_run_at)) : ""}</i>
     </div>
   </article>`;
+}
+
+function options(list, selected) {
+  return list.map((item) => `<option value="${esc(item)}" ${item === selected ? "selected" : ""}>${esc(item)}</option>`).join("");
+}
+
+function configuredAutomationTab(agents) {
+  const { config, ideas, savedIdeas, missingProfile } = dailyIdeaState();
+  const created = agents.filter((a) => a.kind === "automation");
+  return `<div class="au-config-wrap">
+    <section class="au-config-card">
+      <div class="au-config-head">
+        <div>
+          <p class="ch-eyebrow">Content Hub automation</p>
+          <h3>${esc(config.name)}</h3>
+          <p>Generates a fresh disposable idea batch every day. Today has ${ideas.length} active idea${ideas.length === 1 ? "" : "s"} and ${savedIdeas.length} saved idea${savedIdeas.length === 1 ? "" : "s"}.</p>
+        </div>
+        <label class="ap-switch au-big-switch" title="${config.enabled ? "Turn off" : "Turn on"}">
+          <input type="checkbox" data-di-enabled ${config.enabled ? "checked" : ""} />
+          <span class="ap-switch-track"><span class="ap-switch-thumb"></span></span>
+        </label>
+      </div>
+      <div class="au-config-grid">
+        <label>Number of ideas<input type="number" min="1" max="12" step="1" data-di-count value="${esc(config.count)}" /></label>
+        <label>Style<select data-di-style>${options(DAILY_IDEA_STYLES, config.style)}</select></label>
+        <label>Content focus<select data-di-focus>${options(DAILY_IDEA_FOCUS, config.focus)}</select></label>
+        <label>Refresh hour<input type="number" min="0" max="23" step="1" data-di-hour value="${esc(config.refreshHour)}" /></label>
+        <label class="au-config-wide">What content?<input data-di-content-types value="${esc(config.contentTypes.join(", "))}" placeholder="Short video, Carousel, Image post" /></label>
+        <label class="au-config-wide">Channels<input data-di-channels value="${esc(config.channels.join(", "))}" placeholder="Instagram, TikTok, LinkedIn" /></label>
+      </div>
+      <div class="au-profile-box ${missingProfile ? "needs-profile" : ""}">
+        <div>
+          <b>Business profile for this account</b>
+          <p>New accounts should answer these basics on setup so Phantom does not guess wrong. These fields guide the daily ideas only; no provider call happens here.</p>
+        </div>
+        <div class="au-profile-grid">
+          <label>Business name<input data-di-profile="businessName" value="${esc(config.profile.businessName)}" placeholder="e.g. Ultimate Treasures" /></label>
+          <label>Audience<input data-di-profile="audience" value="${esc(config.profile.audience)}" placeholder="Who are we trying to reach?" /></label>
+          <label>Offer<input data-di-profile="offer" value="${esc(config.profile.offer)}" placeholder="What do we sell or want booked?" /></label>
+          <label>Voice<input data-di-profile="voice" value="${esc(config.profile.voice)}" placeholder="Direct, premium, playful, local..." /></label>
+          <label class="au-config-wide">Goal<input data-di-profile="goal" value="${esc(config.profile.goal)}" placeholder="Bookings, awareness, sales, leads..." /></label>
+        </div>
+      </div>
+      <div class="au-config-actions">
+        <button class="btn btn-primary" data-di-save type="button">Save automation</button>
+        <button class="btn btn-quiet" data-di-refresh type="button">Regenerate today's ${esc(config.count)}</button>
+        <button class="btn btn-quiet" data-di-open-ideas data-open-ws="content" type="button">Open New Ideas</button>
+      </div>
+      <p class="bm-hint">Daily ideas are replaced each day. If the user saves an idea in Content Hub, that saved idea stays; the disposable batch does not.</p>
+    </section>
+    <section class="au-config-card">
+      <div class="au-config-head">
+        <div>
+          <p class="ch-eyebrow">User-created automations</p>
+          <h3>Workflow records</h3>
+          <p>Automations created through Phantom chat or recipes appear here, then move through approval before they run.</p>
+        </div>
+      </div>
+      <div class="au-list compact">${created.length ? created.map((a) => agentCard(a)).join("") : `<div class="au-empty"><b>No custom automations yet.</b><span>Ask Phantom to create a recurring workflow when you need one.</span></div>`}</div>
+    </section>
+  </div>`;
 }
 
 function autopilotTab() {
@@ -223,7 +289,8 @@ export function renderAutomation(el, opts = {}) {
   const running = agents.filter((a) => a.status === "active").length;
   const paused = agents.filter((a) => a.status === "paused" || a.status === "waiting").length;
 
-  const panel = auTab === "autopilot" ? autopilotTab()
+  const panel = auTab === "configured" ? configuredAutomationTab(agents)
+    : auTab === "autopilot" ? autopilotTab()
     : auTab === "active" ? activeTab(agents)
     : auTab === "recipes" ? recipesTab()
     : auTab === "drafts" ? draftsTab(agents)
@@ -246,6 +313,41 @@ export function renderAutomation(el, opts = {}) {
     </div>`;
 
   el.querySelectorAll("[data-au-tab]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auTab; paint(); });
+
+  el.querySelector("[data-di-save]")?.addEventListener("click", () => {
+    const current = dailyIdeaState().config;
+    const profile = { ...current.profile };
+    el.querySelectorAll("[data-di-profile]").forEach((input) => { profile[input.dataset.diProfile] = input.value || ""; });
+    const next = saveDailyIdeaAutomation({
+      ...current,
+      enabled: !!el.querySelector("[data-di-enabled]")?.checked,
+      count: Number(el.querySelector("[data-di-count]")?.value || current.count),
+      style: el.querySelector("[data-di-style]")?.value || current.style,
+      focus: el.querySelector("[data-di-focus]")?.value || current.focus,
+      refreshHour: Number(el.querySelector("[data-di-hour]")?.value || current.refreshHour),
+      contentTypes: String(el.querySelector("[data-di-content-types]")?.value || "").split(","),
+      channels: String(el.querySelector("[data-di-channels]")?.value || "").split(","),
+      autoClearDaily: true,
+      profile,
+    });
+    refreshDailyIdeas();
+    pushActivity("Automation", `updated ${next.name}: ${next.count} daily ideas, ${next.style} style, ${next.focus} focus.`, currentWs());
+    store.save();
+    notify("Automation", `Saved "${next.name}" and regenerated today's idea batch.`);
+    paint();
+  });
+
+  el.querySelector("[data-di-refresh]")?.addEventListener("click", () => {
+    const next = refreshDailyIdeas();
+    pushActivity("Automation", `refreshed ${next.name} for today's Content Hub ideas.`, currentWs());
+    store.save();
+    notify("Automation", `Refreshed today's ${next.count} ideas.`);
+    paint();
+  });
+
+  el.querySelector("[data-di-open-ideas]")?.addEventListener("click", () => {
+    try { localStorage.setItem("pf.contenthub.openTab.v1", "ideas"); } catch {}
+  });
 
   if (auTab === "autopilot" && !autopilotJobs && !autopilotLoading) {
     autopilotLoading = true;

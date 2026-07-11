@@ -183,6 +183,11 @@ import {
   updateBrainMemory,
 } from "./phantom-ai/neural-spine.js";
 import { detectRembg, runRembgRemoveBackground } from "./phantom-ai/rembg-bridge.js";
+import {
+  controlWindowsMedia,
+  getWindowsMediaStatus,
+  isWindowsMediaCommand,
+} from "./phantom-ai/windows-media-session.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
 import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
@@ -2964,6 +2969,56 @@ app.get("/phantom-ai/agents/status", async (request, reply) => {
     session,
     read_only: true,
     workforce,
+  };
+});
+
+app.get("/phantom-ai/desktop-media/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const media = await getWindowsMediaStatus();
+  return {
+    ok: media.ok,
+    session,
+    media,
+    privacy: {
+      playback_metadata_only: true,
+      browser_history_read: false,
+      files_read: false,
+      messages_read: false,
+      credentials_read: false,
+    },
+  };
+});
+
+const DesktopMediaControlSchema = z.object({
+  session_id: z.string().trim().max(300).optional().default(""),
+  command: z.string().trim().max(30),
+});
+
+app.post("/phantom-ai/desktop-media/control", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  const parsed = DesktopMediaControlSchema.safeParse(request.body ?? {});
+  if (!parsed.success || !isWindowsMediaCommand(parsed.data.command)) {
+    return reply.code(400).send({ ok: false, error: "unsupported_media_command" });
+  }
+
+  const media = await controlWindowsMedia(parsed.data.session_id, parsed.data.command);
+  return {
+    ok: media.ok,
+    session,
+    media,
+    process_started: false,
+    provider_called: false,
+    external_send: false,
   };
 });
 

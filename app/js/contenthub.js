@@ -10,13 +10,15 @@ import {
   freshEditState, applyFilterPreset, paintEdit, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260710-146";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260710-146";
+} from "./imagefilters.js?v=phantom-live-20260710-149";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260710-149";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260710-149";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
 const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
 const CH_MEDIA_EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
+const CH_OPEN_TAB_KEY = "pf.contenthub.openTab.v1";
 const DAY = 864e5;
 export const CONTENT_ASSET_LIMITS = Object.freeze({
   retentionDays: 30,
@@ -84,14 +86,6 @@ const COMMENTS = [
   ["mant_detail", "booked 3 jobs this week off this", "pos"], ["quiet_lurker", "commenting so i remember this", "neu"],
 ];
 const HASHTAGS = ["#AI", "#smallbusiness", "#automation", "#phantomforce", "#entrepreneur", "#marketing", "#solopreneur", "#contentcreation", "#business", "#productivity"];
-const IDEA_BANK = [
-  { id: "founder-proof", title: "Founder proof clip", angle: "Show one before/after operator win in 30 seconds.", format: "Reel", platforms: ["instagram", "tiktok", "youtube"], next: "Record screen capture plus owner voiceover." },
-  { id: "objection-carousel", title: "Client objection carousel", angle: "Turn the top sales objection into a five-card answer.", format: "Carousel", platforms: ["instagram", "linkedin"], next: "Pull the strongest objection from recent leads." },
-  { id: "behind-build", title: "Behind the build", angle: "Show the cockpit, autopilot lanes, and safety gates without naming tools.", format: "Short", platforms: ["youtube", "x"], next: "Clip the dashboard and write a plain-language hook." },
-  { id: "offer-breakdown", title: "Offer breakdown", angle: "Explain what the Pro Plan actually handles for a business owner.", format: "Post", platforms: ["linkedin", "facebook"], next: "Draft three outcomes and one proof point." },
-  { id: "trend-response", title: "Trend response", angle: "React to the current creator/business automation trend with a PhantomForce take.", format: "Text + image", platforms: ["x", "linkedin"], next: "Use Analytics trend signals before drafting." },
-  { id: "trust-safety", title: "Trust and safety note", angle: "Show that safe work runs automatically while risky sends or claims stop for review.", format: "Story", platforms: ["instagram", "facebook"], next: "Turn autopilot and risk gates into a simple visual sequence." },
-];
 const PRODUCTION_STEPS = [
   ["Idea", "Choose the hook and business outcome."],
   ["Draft", "Write caption, visual direction, and CTA."],
@@ -484,7 +478,10 @@ function isRemoved(id) {
 }
 function activeIdeas() {
   const removed = loadRemovedContent();
-  return IDEA_BANK.filter((idea) => !removed.has(`idea:${idea.id}`));
+  return dailyIdeaState().ideas.filter((idea) => !removed.has(`idea:${idea.id}`));
+}
+function savedIdeas() {
+  return dailyIdeaState().savedIdeas.filter((idea) => !isRemoved(`saved-idea:${idea.id}`));
 }
 function removeButton(id, label) {
   const safeLabel = String(label || "Remove item").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -582,6 +579,11 @@ let chLibraryKeyHandler = null;
 let chLastDeleted = null;
 
 export function renderContentHub(el, opts = {}) {
+  try {
+    const requestedTab = localStorage.getItem(CH_OPEN_TAB_KEY);
+    if (requestedTab && ["library", "ideas", "drafts", "calendar", "production"].includes(requestedTab)) chState.tab = requestedTab;
+    if (requestedTab) localStorage.removeItem(CH_OPEN_TAB_KEY);
+  } catch {}
   const esc = opts.esc || ((s) => String(s));
   const data = loadContent();
   const mediaAssets = loadContentAssets();
@@ -628,34 +630,54 @@ function ideaCard(idea, esc, i) {
     <p>${esc(idea.angle)}</p>
     <div class="ch-idea-platforms">${idea.platforms.map((id) => `<span><i class="ch-dot" style="background:${plat(id).color}"></i>${esc(plat(id).name)}</span>`).join("")}</div>
     <div class="ch-idea-next"><b>Next:</b> ${esc(idea.next)}</div>
-    <button class="btn btn-good" data-ch-action="draft" data-idea-i="${i}" data-idea-id="${idea.id}">Queue autopilot draft</button>
+    <div class="ch-idea-actions">
+      <button class="btn btn-good" data-ch-action="draft" data-idea-i="${i}" data-idea-id="${idea.id}">Draft from this</button>
+      <button class="btn btn-quiet" data-ch-idea-save="${idea.id}" type="button">Save idea</button>
+    </div>
   </article>`;
 }
 function renderCreatorIdeas(body, data, esc, root, opts) {
+  const ideaInfo = dailyIdeaState();
+  const auto = ideaInfo.config;
   const ideas = activeIdeas();
+  const saved = savedIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
+  const profileHint = ideaInfo.missingProfile
+    ? `<p class="ch-profile-hint">This batch is working from partial business context. Fill the business profile in Automation so each account gets ideas that fit their actual offer, audience, and voice.</p>`
+    : `<p class="ch-profile-hint">Using ${esc(auto.profile.businessName || "this workspace")} profile: ${esc(auto.profile.audience || "audience")} · ${esc(auto.profile.offer || "offer")}.</p>`;
   body.innerHTML = `
     <div class="ch-kpis">
-      ${kpi("Ideas ready", ideas.length, "creator backlog")}
-      ${kpi("Draft prompts", Math.min(4, ideas.length), "ready to shape")}
+      ${kpi("Today", ideas.length, `new idea${ideas.length === 1 ? "" : "s"}`)}
+      ${kpi("Saved", saved.length, "kept by user")}
       ${kpi("Autopilot queue", scheduled, "safe scheduled items")}
-      ${kpi("Risk checks", 3, "claims, spend, sends")}
-      ${kpi("Creator mode", "Active", "content planning", "good")}
+      ${kpi("Clears", "Daily", `refreshes at ${auto.refreshHour}:00`)}
+      ${kpi("Daily idea drop", auto.enabled ? "On" : "Off", "editable in Automation", auto.enabled ? "good" : "")}
     </div>
     <div class="ch-creator-layout">
       <section class="ch-card">
-        <div class="ch-card-h"><h3>Recommended next ideas</h3><span class="ch-src">AI-filtered for creator action</span></div>
-        <div class="ch-idea-grid">${ideas.slice(0, 4).map((idea, i) => ideaCard(idea, esc, i)).join("") || `<p class="empty-line">All queued ideas were removed locally.</p>`}</div>
+        <div class="ch-card-h">
+          <h3>Today's new ideas</h3>
+          <span class="ch-src">${esc(auto.style)} · ${esc(auto.focus)} · disposable daily batch</span>
+        </div>
+        <div class="ch-idea-grid">${ideas.map((idea, i) => ideaCard(idea, esc, i)).join("") || `<p class="empty-line">Daily ideas are off or all of today's ideas were removed. Turn the automation on or refresh from Automation.</p>`}</div>
       </section>
       <aside class="ch-card ch-creator-side">
-        <h3>Creator brief</h3>
-        <p>Make content that helps a business owner understand the outcome, trust the system, and know what autopilot should handle next.</p>
-        <div class="ch-brief-list">
-          <span><b>Hook</b>Outcome first</span>
-          <span><b>Proof</b>Show workflow, not tool names</span>
-          <span><b>CTA</b>Ask for discovery or next step</span>
-          <span><b>Guardrail</b>Review risky sends, claims, spend</span>
+        <h3>Daily idea automation</h3>
+        ${profileHint}
+        <div class="ch-idea-form">
+          <label>Quick add for today<input data-ch-custom-title placeholder="Add your own idea..." /></label>
+          <label>Angle<textarea data-ch-custom-angle placeholder="Optional detail, audience, or offer angle..."></textarea></label>
+          <button class="btn btn-primary" data-ch-add-idea type="button">Add idea</button>
+          <button class="btn btn-quiet" data-ch-refresh-ideas type="button">Refresh today's batch</button>
+          <button class="btn btn-quiet" data-open-ws="automation" type="button">Configure automation</button>
         </div>
+        <div class="ch-brief-list">
+          <span><b>Count</b>${auto.count} per day</span>
+          <span><b>Content</b>${esc(auto.contentTypes.join(", "))}</span>
+          <span><b>Channels</b>${esc(auto.channels.join(", "))}</span>
+          <span><b>Rule</b>Gone tomorrow unless saved</span>
+        </div>
+        ${saved.length ? `<div class="ch-saved-ideas"><b>Saved ideas</b>${saved.slice(0, 5).map((idea) => `<span>${esc(idea.title)}</span>`).join("")}</div>` : ""}
       </aside>
     </div>`;
   wireCreatorActions(body, opts, root);
@@ -815,16 +837,59 @@ function contentAssetCard(asset, esc) {
    imagefilters.js) but stays entirely local to Content Hub — its own isolated
    edit state per open, mounted right over the grid instead of navigating away. */
 function freshLightbox(asset, extra = {}) {
+  const extraLayers = extra.layers || {};
+  const cleanExtra = { ...extra };
+  delete cleanExtra.layers;
   return {
-    asset, state: freshEditState(), bokehPicking: false, showTutorial: false,
+    asset, originalUrl: asset.url, baseUrl: extra.baseUrl || asset.url, cutoutUrl: extra.cutoutUrl || "",
+    state: freshEditState(), bokehPicking: false, showTutorial: false,
     selectedSpot: null, rememberBokehSize: true, _probed: false,
+    layers: { image: true, cutout: true, bokeh: true, text: true, ...extraLayers },
     openSections: { adjust: true, transform: false, presets: false, text: false },
     aiEdit: { status: "idle", message: "", provider: null },
     bg: { status: "idle", message: "" },
     bokehDetect: { status: "idle", message: "" },
     text: { open: false },
-    ...extra,
+    ...cleanExtra,
   };
+}
+const REMBG_EDITOR_MAX_SIDE = 1800;
+function layerVisible(lb, key) {
+  return lb.layers?.[key] !== false;
+}
+function activeLightboxImageUrl(lb) {
+  return lb.cutoutUrl && layerVisible(lb, "cutout") ? lb.cutoutUrl : (lb.baseUrl || lb.asset?.url || "");
+}
+function paintStateForLightbox(lb) {
+  const s = lb.state;
+  if (layerVisible(lb, "bokeh") && layerVisible(lb, "text")) return s;
+  return {
+    ...s,
+    bokeh: layerVisible(lb, "bokeh") ? s.bokeh : null,
+    text: layerVisible(lb, "text") ? s.text : "",
+  };
+}
+function renderSourceCanvas(img, maxSide = REMBG_EDITOR_MAX_SIDE) {
+  const w = img.naturalWidth || img.width || 1;
+  const h = img.naturalHeight || img.height || 1;
+  const scale = Math.min(1, maxSide / Math.max(w, h));
+  const c = document.createElement("canvas");
+  c.width = Math.max(1, Math.round(w * scale));
+  c.height = Math.max(1, Math.round(h * scale));
+  c._img = img;
+  c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+  return c;
+}
+async function exportSourceImage(img) {
+  const c = renderSourceCanvas(img);
+  const repaintRaw = (rescued) => {
+    const fresh = renderSourceCanvas(rescued);
+    c.width = fresh.width;
+    c.height = fresh.height;
+    c._img = rescued;
+    c.getContext("2d").drawImage(fresh, 0, 0);
+  };
+  return exportCanvas(c, repaintRaw, "image/png");
 }
 function chSlider(label, key, min, max, val) {
   return `<label class="ch-lb-slider"><span>${label} <b data-out="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-slider="${key}"/></label>`;
@@ -876,10 +941,11 @@ function removeBgBody(lb, esc) {
     <div class="ch-lb-chips">
       <button class="btn btn-quiet" type="button" data-ch-lb-bg-run ${checking || loading || unavailable ? "disabled" : ""}>${loading ? "Removing…" : checking ? "Checking…" : "Remove Background"}</button>
     </div>
+    ${loading ? `<p class="ch-lb-ai-note">Working locally. Larger photos can take a moment.</p>` : ""}
     ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Background removal is not connected yet.</p>` : ""}
     ${bg.status === "idle" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Ready — background removal is available.</p>` : ""}
     ${bg.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "Background removal failed.")}</p>` : ""}
-    ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed — Save/Download now export a transparent PNG.</p>` : ""}
+    ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed — the Cutout layer is ready.</p>` : ""}
   `;
 }
 
@@ -953,6 +1019,26 @@ function textToolBody(s, esc) {
     ${st.outline ? chTSlider("Outline width", "outlineWidth", 0, 40, st.outlineWidth, esc) : ""}
   `;
 }
+function layerStackBody(lb, esc) {
+  const s = lb.state || {};
+  const rows = [
+    { key: "image", label: "Image", sub: lb.baseUrl !== lb.originalUrl ? "edited source" : "original source", locked: true, active: true },
+    ...(lb.cutoutUrl ? [{ key: "cutout", label: "Cutout", sub: "background removed", active: layerVisible(lb, "cutout") }] : []),
+    ...(s.bokeh ? [{ key: "bokeh", label: "Bokeh", sub: s.bokeh.maskImg ? "AI subject blur" : "focus spots", active: layerVisible(lb, "bokeh") }] : []),
+    ...((s.text || "").trim() ? [{ key: "text", label: "Text", sub: "caption overlay", active: layerVisible(lb, "text") }] : []),
+  ];
+  return `
+    <div class="ch-lb-layers" data-ch-lb-layers>
+      <p class="ch-lb-ai-label">${svgIc("eye")} Layers</p>
+      <div class="ch-lb-layer-list">
+        ${rows.map((row) => `
+          <div class="ch-lb-layer ${row.active ? "is-on" : "is-off"} ${row.locked ? "is-locked" : ""}">
+            <button type="button" ${row.locked ? "disabled" : ""} data-ch-lb-layer-toggle="${esc(row.key)}" title="${row.locked ? "Base image stays on" : row.active ? "Hide layer" : "Show layer"}">${svgIc("eye")}</button>
+            <span><b>${esc(row.label)}</b><small>${esc(row.sub)}</small></span>
+          </div>`).join("")}
+      </div>
+    </div>`;
+}
 function lightboxMarkup(lb, esc) {
   const asset = lb.asset;
   if (lb.viewOnly) {
@@ -985,10 +1071,11 @@ function lightboxMarkup(lb, esc) {
           <div class="ch-lb-canvas-wrap">
             ${lb.loadError ? `<div class="ch-lb-load-error"><b>Couldn't load this image</b><span>${esc(lb.loadError)}</span></div>` : ""}
             <canvas class="ch-lb-canvas" data-ch-lb-canvas></canvas>
-            <div class="ch-lb-bokeh-markers ${(lb.bokehPicking || lb.selectedSpot != null) ? "" : "is-hidden"}" data-ch-lb-bokeh-markers></div>
+            <div class="ch-lb-bokeh-markers ${(layerVisible(lb, "bokeh") && (lb.bokehPicking || lb.selectedSpot != null)) ? "" : "is-hidden"}" data-ch-lb-bokeh-markers></div>
             <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
           </div>
           <aside class="ch-lb-tools">
+            ${layerStackBody(lb, esc)}
             ${lb.aiEdit?.mode === "connected" ? `<div class="ch-lb-ai">
               <p class="ch-lb-ai-label">${svgIc("spark")} Describe an edit</p>
               ${aiEditBody(lb, esc)}
@@ -1100,16 +1187,29 @@ function wireLightbox(root, opts) {
   // taint the canvas — every later toDataURL() call (Save/Download) throws
   // with no visible error. loadImageForEditing() requests CORS, then falls
   // back to a same-origin media proxy so this never happens silently.
-  loadImageForEditing(asset.url)
-    .then((img) => { paintEdit(canvas, img, s); positionMarkers(); })
+  const requestedImageUrl = activeLightboxImageUrl(lb);
+  loadImageForEditing(requestedImageUrl)
+    .then((img) => {
+      if (chLightbox !== lb || activeLightboxImageUrl(lb) !== requestedImageUrl) return;
+      lb.loadError = "";
+      paintEdit(canvas, img, paintStateForLightbox(lb));
+      positionMarkers();
+    })
     .catch((error) => {
       if (chLightbox !== lb) return;
       lb.loadError = error.message || "Could not load this image.";
       rerender();
     });
-  const repaint = () => { if (canvas._img) paintEdit(canvas, canvas._img, s); positionMarkers(); };
+  const repaint = () => { if (canvas._img) paintEdit(canvas, canvas._img, paintStateForLightbox(lb)); positionMarkers(); };
   onResize = () => positionMarkers();
   window.addEventListener("resize", onResize);
+
+  root.querySelectorAll("[data-ch-lb-layer-toggle]").forEach((btn) => btn.onclick = () => {
+    const key = btn.dataset.chLbLayerToggle;
+    if (!key || key === "image") return;
+    lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), [key]: !layerVisible(lb, key) };
+    rerender();
+  });
 
   root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => slider.oninput = () => {
     s[slider.dataset.chLbSlider] = +slider.value;
@@ -1130,7 +1230,11 @@ function wireLightbox(root, opts) {
     repaint();
   });
   const textInput = root.querySelector("[data-ch-lb-text]");
-  if (textInput) textInput.oninput = () => { s.text = textInput.value; repaint(); };
+  if (textInput) textInput.oninput = () => {
+    s.text = textInput.value;
+    lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), text: true };
+    repaint();
+  };
   root.querySelectorAll("[data-ch-lb-text-field]").forEach((field) => {
     const apply = () => {
       const key = field.dataset.chLbTextField;
@@ -1163,6 +1267,7 @@ function wireLightbox(root, opts) {
   if (lb.bokehPicking) { canvas.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; }
   root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = () => {
     lb.bokehPicking = !lb.bokehPicking;
+    if (lb.bokehPicking) lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
     if (lb.bokehPicking && !s.bokeh?.spots?.length && !lb.subjectEstimated) {
       lb.subjectEstimated = true;
       const guess = estimateSubjectPoint(canvas);
@@ -1273,6 +1378,10 @@ function wireLightbox(root, opts) {
     loadImageForEditing(result.url)
       .then((editedImg) => {
         if (chLightbox !== lb) return;
+        lb.baseUrl = result.url;
+        lb.cutoutUrl = "";
+        lb.hasTransparency = false;
+        lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), cutout: true };
         canvas._img = editedImg;
         lb.aiEdit = { ...lb.aiEdit, status: "success", message: "" };
         repaint();
@@ -1291,7 +1400,12 @@ function wireLightbox(root, opts) {
     if (lb.bg.status === "unavailable") return;
     lb.bg = { ...lb.bg, status: "loading" };
     rerender();
-    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    if (!canvas._img) {
+      lb.bg = { status: "error", message: "The image is still loading. Try again in a second." };
+      rerender();
+      return;
+    }
+    const exported = await exportSourceImage(canvas._img);
     if (chLightbox !== lb) return;
     if (!exported.ok) {
       lb.bg = { status: "error", message: exported.error };
@@ -1313,17 +1427,23 @@ function wireLightbox(root, opts) {
   };
   const bgApply = root.querySelector("[data-ch-lb-bg-apply]");
   if (bgApply) bgApply.onclick = () => {
-    const afterImg = new Image();
-    afterImg.onload = () => {
+    const afterUrl = lb.bg.afterUrl;
+    if (!afterUrl) return;
+    loadImageForEditing(afterUrl).then((afterImg) => {
       if (chLightbox !== lb) return;
+      lb.cutoutUrl = afterUrl;
+      lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), cutout: true };
       canvas._img = afterImg;
       lb.bg = { status: "applied", message: "" };
       lb.hasTransparency = true;
       repaint();
       rerender();
       opts.notify?.("Content Hub", `removed the background on "${asset.title}".`);
-    };
-    afterImg.src = lb.bg.afterUrl;
+    }).catch(() => {
+      if (chLightbox !== lb) return;
+      lb.bg = { status: "error", message: "The cutout image could not be loaded." };
+      rerender();
+    });
   };
   const bgCancel = root.querySelector("[data-ch-lb-bg-cancel]");
   if (bgCancel) bgCancel.onclick = () => { lb.bg = { status: "idle", message: "" }; rerender(); };
@@ -1359,6 +1479,7 @@ function wireLightbox(root, opts) {
       const maskImg = await loadImage(result.image);
       if (chLightbox !== lb) return;
       setBokehMask(s, maskImg);
+      lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
       lb.bokehDetect = { status: "success", message: "" };
       repaint();
       rerender();
@@ -1397,8 +1518,9 @@ function wireLightbox(root, opts) {
   }
 
   root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = freshLightbox(asset, { showTutorial: lb.showTutorial }); rerender(); };
-  const exportFormat = () => lb.hasTransparency ? "image/png" : "image/webp";
-  const exportExt = () => lb.hasTransparency ? "png" : "webp";
+  const exportsTransparent = () => !!(lb.hasTransparency && lb.cutoutUrl && layerVisible(lb, "cutout"));
+  const exportFormat = () => exportsTransparent() ? "image/png" : "image/webp";
+  const exportExt = () => exportsTransparent() ? "png" : "webp";
   const repaintWithImg = (img) => { canvas._img = img; repaint(); };
   root.querySelector("[data-ch-lb-download]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.92);
@@ -1413,7 +1535,7 @@ function wireLightbox(root, opts) {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.9);
     if (chLightbox !== lb) return;
     if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save "${asset.title}": ${exported.error}`); return; }
-    registerContentAsset({ ...asset, url: exported.url, prompt: s.text || asset.prompt, saved: true, updatedAt: Date.now() });
+    registerContentAsset({ ...asset, url: exported.url, prompt: s.text || asset.prompt, saved: true, syncedId: "", trimmed: false, updatedAt: Date.now() });
     // close (and its rerender) must run before notify(), since notify() triggers a global
     // store-change listener that can fully remount this page and invalidate this closure's
     // DOM references — closing first ensures the lightbox-closed state lands on live DOM.
@@ -1425,7 +1547,7 @@ function wireLightbox(root, opts) {
     if (chLightbox !== lb) return;
     if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save a copy of "${asset.title}": ${exported.error}`); return; }
     const at = Date.now();
-    registerContentAsset({ ...asset, id: `edit-${at}-${Math.random().toString(36).slice(2, 6)}`, url: exported.url, title: `${asset.title} (edit)`, prompt: s.text || asset.prompt, createdAt: at, saved: true });
+    registerContentAsset({ ...asset, id: `edit-${at}-${Math.random().toString(36).slice(2, 6)}`, url: exported.url, title: `${asset.title} (edit)`, prompt: s.text || asset.prompt, createdAt: at, saved: true, syncedId: "", trimmed: false });
     close();
     opts.notify?.("Content Hub", `saved a copy of "${asset.title}" with your edits.`);
   };
@@ -1661,11 +1783,35 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
 }
 function wireCreatorActions(body, opts, root) {
   body.querySelectorAll("[data-ch-action]").forEach((btn) => btn.addEventListener("click", () => {
-    const idea = IDEA_BANK.find((row) => row.id === btn.dataset.ideaId) || activeIdeas()[Number(btn.dataset.ideaI || 0)] || IDEA_BANK[0];
-    const action = btn.dataset.chAction === "approve-draft" ? "Risk check prepared" : "Autopilot draft queued";
+    const idea = activeIdeas().find((row) => row.id === btn.dataset.ideaId) || savedIdeas().find((row) => row.id === btn.dataset.ideaId) || activeIdeas()[Number(btn.dataset.ideaI || 0)];
+    if (!idea) return;
+    const action = btn.dataset.chAction === "approve-draft" ? "Draft prep reviewed" : "Draft prep started";
     opts.notify?.("Content Hub", `${action} for ${idea.title}. Safe preparation can continue automatically; no live post was sent.`);
     if (root) renderContentHub(root, opts);
   }));
+  body.querySelectorAll("[data-ch-idea-save]").forEach((btn) => btn.addEventListener("click", () => {
+    const idea = activeIdeas().find((row) => row.id === btn.dataset.chIdeaSave);
+    if (!idea) return;
+    saveIdeaForLater(idea);
+    opts.notify?.("Content Hub", `Saved "${idea.title}" so tomorrow's refresh won't erase it.`);
+    if (root) renderContentHub(root, opts);
+  }));
+  body.querySelector("[data-ch-add-idea]")?.addEventListener("click", () => {
+    const title = body.querySelector("[data-ch-custom-title]")?.value || "";
+    const angle = body.querySelector("[data-ch-custom-angle]")?.value || "";
+    const idea = addCustomDailyIdea({ title, angle });
+    if (!idea) {
+      opts.notify?.("Content Hub", "Add a short idea title first.");
+      return;
+    }
+    opts.notify?.("Content Hub", `Added "${idea.title}" to today's ideas. It clears tomorrow unless saved.`);
+    if (root) renderContentHub(root, opts);
+  });
+  body.querySelector("[data-ch-refresh-ideas]")?.addEventListener("click", () => {
+    refreshDailyIdeas();
+    opts.notify?.("Content Hub", "Refreshed today's disposable idea batch.");
+    if (root) renderContentHub(root, opts);
+  });
 }
 function renderOverview(body, data, esc, root, opts) {
   const a = analyze(data.posts);

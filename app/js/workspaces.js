@@ -8,7 +8,7 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260710-146";
+} from "./store.js?v=phantom-live-20260710-149";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -2372,7 +2372,7 @@ export const WORKSPACE_DEFS = {
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
   media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
-  sites: { title: "Site & Store Studio", kicker: "Build surface", render: renderSites },
+  sites: { title: "Websites", kicker: "Websites by domain", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
   money: { title: "Money", kicker: "Finance ledger", render: renderMoney },
   memory: { title: "Memory", kicker: "Local context database", render: renderMemory },
@@ -2404,7 +2404,7 @@ export function missionWidgets() {
     { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
     { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
     { id: "media", icon: "▶", title: "Media Lab", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
-    { id: "sites", icon: "▦", title: "Site Studio", stat: `${pages.length} builds`, sub: pages.some((p) => p.status === "publish-ready") ? "1+ publish-ready" : "drafting", alert: false },
+    { id: "sites", icon: "▦", title: "Websites", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
     { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },

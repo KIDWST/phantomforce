@@ -11,8 +11,8 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig,
-} from "./store.js?v=phantom-live-20260710-146";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260710-146";
+} from "./store.js?v=phantom-live-20260710-149";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260710-149";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 const DAY = 86400000;
@@ -204,7 +204,7 @@ function createPageDraft(subject, kind) {
     url: null, updated: new Date().toISOString(),
   };
   store.state.sites.unshift(s);
-  pushActivity("Site Builder", `drafted ${s.title}.`, s.ws);
+  pushActivity("Websites", `drafted ${s.title}.`, s.ws);
   store.save();
   return s;
 }
@@ -764,12 +764,12 @@ function routeCommand(raw, settings) {
     if (/(build|create|draft|make|new|add)/.test(s)) {
       const d = createPageDraft(subject, "Store");
       return {
-        say: `Store Builder drafted "${d.title}" — storefront, product grid, and offer sections scaffolded. Checkout shows as not wired until a payment connector exists.`,
-        cards: [card("Store draft", d.title, d.sections.join(" · "), [openAction("Open in Site Studio", "sites")])],
+        say: `Website drafted "${d.title}". Open Websites and describe the store changes in the prompt.`,
+        cards: [card("Website draft", d.title, d.sections.join(" · "), [openAction("Open Websites", "sites")])],
         open: "sites",
       };
     }
-    return { say: "Site Studio is open — drafts, products, and publish readiness.", cards: [], open: "sites" };
+    return { say: "Websites is open. Pick a domain and describe the change in the prompt.", cards: [], open: "sites" };
   }
 
   /* --- site / page --- */
@@ -777,12 +777,12 @@ function routeCommand(raw, settings) {
     if (/(build|create|draft|make|new)/.test(s)) {
       const d = createPageDraft(subject, /landing/.test(s) ? "Landing page" : "Website");
       return {
-        say: `Site Builder drafted "${d.title}". Publishing stays approval-gated.`,
-        cards: [card("Page draft", d.title, d.sections.join(" · "), [openAction("Open in Site Studio", "sites")])],
+        say: `Website drafted "${d.title}". Open it and keep shaping it with the prompt.`,
+        cards: [card("Website draft", d.title, d.sections.join(" · "), [openAction("Open Websites", "sites")])],
         open: "sites",
       };
     }
-    return { say: "Site Studio is open.", cards: [], open: "sites" };
+    return { say: "Websites is open.", cards: [], open: "sites" };
   }
 
   /* --- security --- */
