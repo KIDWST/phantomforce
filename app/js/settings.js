@@ -1,8 +1,8 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260711-183";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-183";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260711-184";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-184";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
