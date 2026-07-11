@@ -24,11 +24,23 @@ presets, cloud sync, admin tools) are explicitly out of scope here.
   with real records on disk today. It was scoped for a narrow job (a 30-day
   cache behind Content Hub's social-post aggregator), not a tenant-isolated,
   taggable, cross-feature vault — hence this stage.
-- `store.js` already has real tenant/workspace plumbing
-  (`currentTenantId()`, `workspaceStorageKey()`) used across every other
-  feature, but it was never wired into the asset store: every asset today is
-  hardcoded to owner scope `owner-admin` regardless of which workspace
-  (phantomforce/chicagoshots) created it.
+- **Correction made during implementation, after direct code reading**: initial
+  research claimed asset scoping was hardcoded to `owner-admin` and that no
+  client code sent `currentTenantId()` to these routes. Reading the actual
+  code (`app/js/mediabackend.js`'s `syncAssetUpload`/`listSyncedAssets`/
+  `fetchSyncedAssetFile`, and `server/src/index.ts`'s `contentAssetOwnerScope`)
+  shows this is already correct for admin/workspace sessions: the client
+  already sends `tenant_id: currentTenantId()` on every call, and the server
+  already uses it to scope `owner_scope` for sessions with `canManageAccess`
+  (i.e. Jordan's own admin sessions). The narrower, real behavior: for
+  non-admin (restricted client) sessions, `owner_scope` is keyed by
+  `session.clientId` rather than the workspace tenant id — which isolates
+  different external clients from each other correctly, it just doesn't also
+  subdivide by internal workspace, and there's no evidence that's actually
+  needed for a client login. **There is no tenant-scoping bug to fix here.**
+  This stage preserves `owner_scope` and its existing derivation exactly as
+  the new model's partition key, rather than introducing a parallel
+  `tenant_id` concept that would misrepresent working access-control logic.
 - No database exists anywhere in this repo today — everything is local-disk
   JSON + localStorage.
 - `PhantomForce-App` (a separate, not-live rewrite) has a real Postgres/Prisma
@@ -57,8 +69,10 @@ routes only.
 ```sql
 CREATE TABLE assets (
   id TEXT PRIMARY KEY,               -- stable UUID, independent of file path
-  tenant_id TEXT NOT NULL,           -- 'phantomforce' | 'chicagoshots' | future workspaces
-  owner_scope TEXT NOT NULL,         -- session/user identity (kept as a second dimension)
+  owner_scope TEXT NOT NULL,         -- exactly what contentAssetOwnerScope() already
+                                     -- computes today: workspace tenant id for admin
+                                     -- sessions, session.clientId for restricted client
+                                     -- sessions. Reused as-is, not replaced.
   asset_type TEXT NOT NULL,          -- image | video | audio | ... (matches Content Hub's existing `type`)
   title TEXT,
   description TEXT,
@@ -84,14 +98,14 @@ CREATE TABLE assets (
   updated_at TEXT NOT NULL,
   expires_at TEXT                     -- only meaningful when tier = 'cache'
 );
-CREATE INDEX idx_assets_tenant ON assets(tenant_id);
+CREATE INDEX idx_assets_owner_scope ON assets(owner_scope);
 CREATE INDEX idx_assets_content_hash ON assets(content_hash);
 
 CREATE TABLE tags (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL,
+  owner_scope TEXT NOT NULL,
   name TEXT NOT NULL,
-  UNIQUE(tenant_id, name)
+  UNIQUE(owner_scope, name)
 );
 CREATE TABLE asset_tags (
   asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
@@ -101,7 +115,7 @@ CREATE TABLE asset_tags (
 
 CREATE TABLE collections (
   id TEXT PRIMARY KEY,
-  tenant_id TEXT NOT NULL,
+  owner_scope TEXT NOT NULL,
   name TEXT NOT NULL,
   description TEXT,
   created_at TEXT NOT NULL
@@ -118,21 +132,23 @@ versioning), thumbnails/proxies/waveforms (Stage 4 — ingestion pipeline),
 embeddings/semantic search (Stage 5), any cache eviction policy beyond the
 existing 30-day `cache` tier expiry (Stage 3 proper).
 
-## Tenant scoping fix
+## Access scoping (preserved, not fixed)
 
-Every asset route on the server must resolve a tenant id and filter/write
-by it — replacing the current hardcoded `owner-admin` scope. Client side,
-`contenthub.js`'s asset-registration calls must send `currentTenantId()`
-with every request. This closes the gap the discovery found: the
-plumbing (`store.js`) already exists and is used everywhere else; it just
-was never threaded into this one feature.
+No changes needed to `contentAssetOwnerScope()`, the three route handlers,
+or `mediabackend.js`'s sync calls — all already correctly resolve and send
+`owner_scope`/`tenant_id` today. The new SQLite model's `owner_scope` column
+is populated with exactly the same string those routes already compute, and
+every query (`listAssets`, tag/collection lookups) filters by it, the same
+way `listAssets(ownerScope)` already filters the JSON index today. A test
+proves this explicitly: an asset created under one `owner_scope` must not
+be visible when queried under another.
 
 ## Migration
 
 On first server start after this change, if the SQLite file doesn't exist
 yet, a migration step reads the existing JSON-index records (4 real ones
-today) and backfills them into `assets` with `tenant_id = 'phantomforce'`
-(the workspace they predate) and `tier = 'cache'` (preserving their current
+today) and backfills them into `assets`, carrying each record's existing
+`owner_scope` straight over unchanged, and `tier = 'cache'` (preserving their current
 expiry behavior — nothing that was subject to 30-day expiry before silently
 becomes permanent). Each row's `storage_key` points at the exact same file
 already on disk — no file is moved or copied, so there is zero data-loss
@@ -153,8 +169,8 @@ a hard stop, not a default-yes.
 This repo's convention is standalone `tsx scripts/test-*.ts` scripts (no
 vitest/jest configured) — `server/scripts/test-asset-vault.ts` follows that
 exact pattern rather than introducing a new one. Covers: schema creation,
-CRUD, tenant isolation (an asset created under one tenant is invisible when
-queried under another), migration correctness against real fixture JSON
+CRUD, owner_scope isolation (an asset created under one scope is invisible
+when queried under another), migration correctness against real fixture JSON
 records, tags/collections CRUD, and that existing routes' response shapes
 are unchanged (a regression check against what Content Hub/Media Lab
 actually read today).
