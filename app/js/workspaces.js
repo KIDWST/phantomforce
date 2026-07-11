@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-165";
+} from "./store.js?v=phantom-live-20260711-166";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -2045,28 +2045,39 @@ function renderWorkerMesh(workers, runtime = null) {
   const mobileWeb = window.matchMedia("(max-width: 560px)").matches;
   const cappedSubagents = subagentNodes.slice(0, mobileWeb ? 12 : 28);
   const overflowSubagents = subagentNodes.length - cappedSubagents.length;
+  // Split subagents across two rings instead of cramming all of them onto one
+  // band - the fullscreen web has real pan/zoom room now (auto-fit just zooms
+  // out further to show a bigger layout), so use that room: fewer nodes per
+  // ring means more circumferential space per label, less overlap.
+  const innerSubagents = cappedSubagents.filter((_, i) => i % 2 === 0);
+  const farSubagents = cappedSubagents.filter((_, i) => i % 2 === 1);
+  const RING = {
+    core: { radius: 260, spread: 360, offset: 0, mobileRadius: 96 },
+    inner: { radius: 430, spread: 340, offset: 18, mobileRadius: 150 },
+    // staggered offset so far-ring nodes fall in the gaps between inner-ring
+    // nodes (viewed from the core) instead of lining up radially behind them
+    far: { radius: 620, spread: 340, offset: 18 + 340 / Math.max(1, farSubagents.length) / 2, mobileRadius: 150 },
+  };
 
-  const webNode = (worker, index, total, ring) => {
+  const webNode = (worker, index, total, ringName) => {
     const tone = workerMeshTone(worker);
     const group = workerMeshGroup(worker);
-    const radius = ring === "core" ? 118 : 208;
-    const spread = ring === "core" ? 360 : 340;
-    const offset = ring === "core" ? 0 : 18;
-    const angle = offset + (total ? (index / total) * spread : 0);
+    const ring = RING[ringName];
+    const angle = ring.offset + (total ? (index / total) * ring.spread : 0);
     const isLive = tone === "live" || tone === "approval";
-    const mobileRadius = ring === "core" ? 96 : 150;
-    const style = `--node-angle:${angle}deg; --node-radius:${radius}px; --node-mobile-radius:${mobileRadius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
+    const style = `--node-angle:${angle}deg; --node-radius:${ring.radius}px; --node-mobile-radius:${ring.mobileRadius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
     return `
       <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""}" style="${style}" aria-hidden="true"></div>
-      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ring === "outer" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
+      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ringName !== "core" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
-        <i>${esc(ring === "outer" ? "subagent" : worker.department)}</i>
+        <i>${esc(ringName !== "core" ? "subagent" : worker.department)}</i>
       </button>`;
   };
 
   const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index, employeeNodes.length, "core")).join("");
-  const outerRingNodes = cappedSubagents.map((worker, index) => webNode(worker, index, cappedSubagents.length, "outer")).join("");
+  const outerRingNodes = innerSubagents.map((worker, index) => webNode(worker, index, innerSubagents.length, "inner")).join("")
+    + farSubagents.map((worker, index) => webNode(worker, index, farSubagents.length, "far")).join("");
 
   const observed = workers.filter((worker) => worker.has_activity).length;
   const waiting = workers.filter((worker) => worker.status === "waiting-approval").length;
@@ -2109,10 +2120,10 @@ function renderWorkerMesh(workers, runtime = null) {
           </div>
           <div class="worker-mesh-readout">
             <span><b>${Number.isFinite(baselineOnline) ? baselineOnline : "—"}</b> baseline online</span>
-            <span><b>${Number.isFinite(recentJobs) ? recentJobs : "—"}</b> jobs logged</span>
-            <span><b>${mapped}</b> workers mapped</span>
-            <span><b>${waiting}</b> waiting on you</span>
-            <span><b>${departments}</b> departments</span>
+            <span><b>${Number.isFinite(recentJobs) ? recentJobs : "—"}</b> jobs · 24h</span>
+            <span><b>${mapped}</b> capacity mapped</span>
+            <span><b>${waiting || "clear"}</b> approval queue</span>
+            <span><b>${departments}</b> departments covered</span>
           </div>
         </div>
       </div>
@@ -2145,20 +2156,21 @@ function renderBaselineWorkers(runtime) {
   const workers = Array.isArray(runtime.workers) ? runtime.workers : [];
   const online = workers.filter((worker) => worker.state === "active");
   const recentJobs = Number(runtime.summary?.tasks_in_window || 0);
+  const baselineOnline = baselineWorkerCount(runtime);
   const privateHostReached = privateAdminRouteReached();
   const services = [
-    ...online.slice(0, 6).map((worker) => ({ name: worker.name, note: worker.role, live: true })),
+    ...online.slice(0, 9).map((worker) => ({ name: worker.name, note: worker.role, live: true })),
     ...(privateHostReached && !online.some((worker) => worker.id === "gatekeeper")
-      ? [{ name: "Private Route", note: "This admin session reached the protected host", live: true }]
+      ? [{ name: "Private Route", note: "This session reached the protected Business Manager host", live: true }]
       : []),
   ];
 
   return `
     <section class="worker-baseline">
       <div class="worker-baseline-copy">
-        <p class="worker-kicker">Always-on crew</p>
-        <h4>${baselineWorkerCount(runtime)} baseline workers online</h4>
-        <p>${recentJobs ? `${recentJobs} real job${recentJobs === 1 ? "" : "s"} logged in the last 24 hours.` : "No customer jobs logged yet. Core services are still standing watch."}</p>
+        <p class="worker-kicker">Always-on force</p>
+        <h4>${baselineOnline} baseline workers online</h4>
+        <p>${recentJobs ? `${recentJobs} real job${recentJobs === 1 ? "" : "s"} logged in the last 24 hours. The rest stays mapped, guarded, and ready without pretending to run work.` : "No customer jobs logged yet. Core services are still scanning, guarding, remembering, and routing."}</p>
       </div>
       <div class="worker-baseline-grid">
         ${services.map((service) => `<span class="worker-baseline-service"><i></i><b>${esc(service.name)}</b><small>${esc(service.note)}</small></span>`).join("")}
@@ -2228,19 +2240,19 @@ function renderWorkforceFlow() {
     </section>`;
 }
 
-function renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount }) {
+function renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount, baselineOnline, jobsLogged, mappedCount, departmentCount }) {
   const cards = [
-    ["Route", "Phantom picks the right worker for the job.", "outcome first"],
-    ["Remember", "Workspace rules and preferences guide the answer.", "local memory"],
-    ["Prepare", "Workers draft, check, package, and organize the work.", `${realPrepared} ready`],
-    ["Prove", "Signals and approvals show what actually happened.", `${ledgerSignalCount} signals`],
+    ["Route", "Phantom picks the right worker for the job.", `${baselineOnline || "—"} online`],
+    ["Remember", "Workspace rules and preferences guide the answer.", `${mappedCount} mapped`],
+    ["Prepare", realPrepared ? "Workers have staged work waiting for review." : "Workers are standing by with clean queues.", realPrepared ? `${realPrepared} staged` : "clean queue"],
+    ["Prove", jobsLogged ? "The ledger shows real work moved in the last 24 hours." : "No fake motion. Signals appear only when work is logged.", jobsLogged ? `${jobsLogged} jobs · 24h` : "ledger quiet"],
   ];
   return `
     <section class="worker-routing-panel" aria-label="How Phantom routes work">
       <div>
         <p class="worker-kicker">PhantomOps</p>
-        <h4>Workers are where the intelligence shows up.</h4>
-        <p>Ask for an outcome, and Phantom routes it through workers, memory, approvals, and proof.</p>
+        <h4>The force is already assembled.</h4>
+        <p>Ask for an outcome and Phantom routes it through workers, memory, approvals, and proof. Capacity is mapped all the time; activity is counted only when the ledger proves it.</p>
       </div>
       <div class="worker-routing-cards">
         ${cards.map(([titleText, body, meta]) => `
@@ -2251,9 +2263,10 @@ function renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignal
           </article>`).join("")}
       </div>
       <div class="worker-routing-proof">
-        <span><b>${pendingApprovals}</b> approvals waiting</span>
-        <span><b>${ledgerSignalCount}</b> real signals</span>
-        <span><b>${realPrepared}</b> prepared items</span>
+        <span><b>${mappedCount}</b> mapped workers</span>
+        <span><b>${departmentCount}</b> departments covered</span>
+        <span><b>${pendingApprovals || "clear"}</b> approval queue</span>
+        <span><b>${ledgerSignalCount || "quiet"}</b> verified signals</span>
       </div>
     </section>`;
 }
@@ -2567,7 +2580,7 @@ function renderWorkforce(el, rerender) {
         <p class="worker-kicker">Workforce ${isMap ? "web" : "map"}</p>
         <h3>PhantomForce Workers</h3>
         <p>${isMap
-          ? "Every worker is a thread in the web. Watch the pulses — that's real work moving. Tap or click a worker to see what it's doing."
+          ? "The force map separates always-on capacity from real logged activity: baseline workers stay online, helper lanes stay mapped, and ledger-backed jobs light up when they happen."
           : "Full directory — departments, subagents, helper lanes, and safety rules. Built to scale toward 1,000+ real workers without exposing tool names to clients."}</p>
       </div>
       <div class="worker-view-toggle" role="tablist" aria-label="Workers view">
@@ -2591,19 +2604,19 @@ function renderWorkforce(el, rerender) {
         <span><b>${parentCount}</b> lead workers</span>
         <span><b>${subagentCount}</b> subagents</span>
         <span><b>${neuralCellCount}</b> helper lanes</span>
-        <span><b>${departmentCount}</b> departments mapped</span>
+        <span><b>${departmentCount}</b> departments covered</span>
       </div>
-      ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount })}
+      ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount, baselineOnline, jobsLogged, mappedCount, departmentCount })}
       <div class="worker-metrics">
-        <div><span>Baseline Online</span><b>${workerRuntime.state === "ready" ? baselineOnline : "—"}</b></div>
+        <div class="worker-metric-primary"><span>Force Online</span><b>${workerRuntime.state === "ready" ? baselineOnline : "—"}</b></div>
         <div><span>Jobs Logged · 24h</span><b>${workerRuntime.state === "ready" ? jobsLogged : "—"}</b></div>
         <div><span>Workers Mapped</span><b>${mappedCount}</b></div>
         <div><span>Lead Workers</span><b>${parentCount}</b></div>
         <div><span>Subagents</span><b>${subagentCount}</b></div>
         <div><span>Helper Lanes</span><b>${neuralCellCount}</b></div>
-        <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
-        <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
-        <div><span>Departments Mapped</span><b>${departmentCount}</b></div>
+        <div><span>Queue State</span><b>${realPrepared ? `${realPrepared} staged` : "Clear"}</b></div>
+        <div><span>Approval Queue</span><b>${pendingApprovals || "Clear"}</b></div>
+        <div><span>Departments Covered</span><b>${departmentCount}</b></div>
       </div>
       <div class="worker-filter-row">
         ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}

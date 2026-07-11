@@ -6,23 +6,23 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260711-165";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-165";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-165";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-165";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-165";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-165";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-165";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-165";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-165";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-165";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-165";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-165";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-165";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-165";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-165";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-165";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-165";
+} from "./store.js?v=phantom-live-20260711-166";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-166";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-166";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-166";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-166";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-166";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-166";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-166";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-166";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-166";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-166";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-166";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-166";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-166";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-166";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-166";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-166";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -705,7 +705,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260711-165";
+const POSE_VERSION = "phantom-live-20260711-166";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
