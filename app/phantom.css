@@ -3806,6 +3806,160 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-slider input[type=range]::-moz-range-thumb { width: 15px; height: 15px; border: 0; border-radius: 50%; background: var(--neon); cursor: pointer; }
 .ml-editor-actions { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
 
+/* Media Lab Create is a full-screen workbench on desktop: the page itself
+   stays locked to the viewport, while dense controls and result grids own
+   their internal overflow. This keeps 100% browser zoom feeling like an app
+   canvas instead of a half-height panel with dead space below it. */
+@media (min-width: 901px) {
+  .app-main:has(.workspace-page[data-workspace-page="media"]) {
+    height: 100dvh;
+    overflow: hidden;
+  }
+
+  .app-main:has(.workspace-page[data-workspace-page="media"]) .console-workspace {
+    min-height: 0;
+    height: 100%;
+    overflow: hidden;
+    padding: clamp(8px, 1vw, 14px);
+  }
+
+  .workspace-page[data-workspace-page="media"] {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .workspace-page[data-workspace-page="media"] .workspace-page-body {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+    padding: 0;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml {
+    height: 100%;
+    min-height: 0;
+    gap: 8px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-topbar {
+    flex: 0 0 auto;
+    min-height: 36px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-body {
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-workspace {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    grid-template-columns: minmax(260px, clamp(280px, 18vw, 340px)) minmax(0, 1fr);
+    gap: clamp(8px, 0.8vw, 12px);
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-brief {
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 10px clamp(12px, 1vw, 16px);
+    gap: 6px;
+    scrollbar-width: thin;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-card-head {
+    padding-bottom: 8px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-drop {
+    padding: 8px 10px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-field-brief .ml-prompt {
+    min-height: clamp(58px, 9dvh, 92px);
+    max-height: 17dvh;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-generate.ml-hero {
+    padding: 10px 14px 9px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage,
+  .workspace-page[data-workspace-page="media"] .ml-stage-frame {
+    min-height: 0;
+    height: 100%;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage-frame {
+    border-radius: 18px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage-top {
+    flex: 0 0 auto;
+    padding: 8px 13px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage-view {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    align-content: stretch;
+    place-items: stretch;
+    overflow: hidden;
+    padding: clamp(12px, 1.35vw, 18px);
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-idle {
+    min-height: 0;
+    height: 100%;
+    align-content: center;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage-grid {
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    scrollbar-width: thin;
+    align-content: start;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage-grid .ml-tile:first-child img {
+    max-height: min(72dvh, 100%);
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage-meta {
+    flex: 0 0 auto;
+    padding: 8px 13px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-next {
+    flex: 0 0 auto;
+    padding: 9px 10px;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-next-head {
+    margin-bottom: 6px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-next-card {
+    padding: 9px 10px;
+    gap: 4px;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-joblog {
+    flex: 0 0 auto;
+    margin-top: 0;
+    padding: 6px 10px;
+  }
+}
+
 /* ---------------- settings ---------------- */
 .settings { display: flex; flex-direction: column; gap: 22px; }
 .set-section { border: 1px solid var(--line); border-radius: 18px; padding: 20px; background: var(--glass); }
