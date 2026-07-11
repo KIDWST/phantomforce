@@ -28,6 +28,7 @@
           <button type="button" data-cols="4">4</button>
         </div>
         <button id="rescan" class="ghost" type="button" title="Rescan available terminal types">Re-scan</button>
+        <button id="missions-btn" class="ghost" type="button" title="Mission Mode — coordinate multiple Claude CLI workers on one objective">Missions</button>
         <button id="new-term" class="primary new-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="New terminal (Ctrl+N)" title="New terminal (Ctrl+N)">
           <span class="new-plus">+</span><span class="kbd">Ctrl N</span>
         </button>
@@ -62,8 +63,19 @@
       </div>
     </div>
 
+    <div id="mission-modal" class="overlay hidden" role="dialog" aria-modal="true" aria-label="Mission Mode">
+      <div class="overlay-panel mission-panel">
+        <div class="overlay-head">
+          <span id="mission-title">Missions</span>
+          <button type="button" id="mission-close" class="ghost">Close</button>
+        </div>
+        <div id="mission-body" class="mission-body"></div>
+      </div>
+    </div>
+
     <script src="/vendor/xterm.js"></script>
     <script src="/vendor/addon-fit.js"></script>
     <script src="/app.js"></script>
+    <script src="/mission.js"></script>
   </body>
 </html>

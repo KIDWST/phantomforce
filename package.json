@@ -4,12 +4,16 @@
   "private": true,
   "description": "Termina — a CCTV-style wall of live terminals for one local machine.",
   "type": "module",
+  "main": "electron-main.cjs",
   "bin": {
     "termina": "server.js"
   },
   "scripts": {
     "start": "node server.js",
-    "postinstall": "node scripts/vendor-xterm.js"
+    "test": "node --test",
+    "postinstall": "node scripts/vendor-xterm.js",
+    "app": "electron .",
+    "dist": "electron-builder"
   },
   "engines": {
     "node": ">=20"
@@ -20,6 +24,41 @@
   },
   "devDependencies": {
     "@xterm/addon-fit": "^0.10.0",
-    "@xterm/xterm": "^5.5.0"
+    "@xterm/xterm": "^5.5.0",
+    "electron": "^33.4.11",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.phantomforce.termina",
+    "productName": "Termina",
+    "asar": false,
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "electron-main.cjs",
+      "server.js",
+      "profiles.js",
+      "package.json",
+      "public/**/*",
+      "assets/termina.ico",
+      "!public/vendor/*.map",
+      "node_modules/node-pty/**/*",
+      "node_modules/node-addon-api/**/*",
+      "node_modules/ws/**/*"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/termina.ico"
+    },
+    "nsis": {
+      "oneClick": true,
+      "perMachine": false,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Termina"
+    }
   }
 }

@@ -1,6 +1,9 @@
 node_modules/
+training/captures/
+.termina/
 public/vendor/
 assets/termina.ico
 public/favicon.ico
 termina.config.json
 *.log
+scripts/Termina-Launch.vbs

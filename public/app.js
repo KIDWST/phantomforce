@@ -25,6 +25,53 @@ let columns = 3;
 let uidCounter = 0;
 let broadcastOn = false;
 let activeCardUid = null;
+let openTileMenu = null;
+
+// ---- provider identity + status language ------------------------------------
+
+const PROVIDER_ICON = {
+  claude: "✳",
+  codex: "◆",
+  pwsh: "❯",
+  cmd: "❯",
+  wsl: "🐧",
+  python: "🐍",
+  node: "⬢",
+};
+
+function providerIcon(profileId) {
+  return PROVIDER_ICON[profileId] || "❯";
+}
+
+function projectLabel(profileId) {
+  return profiles.find((p) => p.id === profileId)?.projectName ?? "";
+}
+
+// Icon + text always — never rely on color alone for status.
+const STATUS_META = {
+  unknown: { icon: "○", label: "Unknown" },
+  thinking: { icon: "●", label: "Thinking" },
+  running: { icon: "⚡", label: "Running" },
+  complete: { icon: "✓", label: "Complete" },
+  waiting: { icon: "⏸", label: "Waiting" },
+  needs_approval: { icon: "👤", label: "Needs Approval" },
+  failed: { icon: "❌", label: "Failed" },
+};
+
+function emptyStatus() {
+  return { state: "unknown", confidence: 0, ruleId: null, label: null, why: null, match: null };
+}
+
+function formatElapsed(ms) {
+  if (!Number.isFinite(ms) || ms < 0) return "";
+  const totalSeconds = Math.floor(ms / 1000);
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 
 // Each card: { uid, name, profileId, linked, sessionId, term, fit, ws, ro, disposed, lastAlert }
 const cards = [];
@@ -78,6 +125,7 @@ async function loadProfiles() {
     for (const card of cards) {
       const sel = document.querySelector(`.tile[data-uid="${card.uid}"] .instance-select`);
       if (sel) sel.innerHTML = optionHtml(card.profileId);
+      renderProject(card);
     }
   } catch (err) {
     tagline.textContent = "engine offline";
@@ -102,9 +150,15 @@ function addCard(init = {}, { save = true, start = false } = {}) {
   const card = {
     uid: uid(),
     name: init.name ?? "",
+    mission: init.mission ?? "",
+    role: init.role ?? null,
+    lastLedgerEvent: null,
     profileId: init.profileId ?? null,
     linked: Boolean(init.linked),
     sessionId: null,
+    startedAt: null,
+    status: emptyStatus(),
+    collapsed: false,
     term: null,
     fit: null,
     ws: null,
@@ -127,6 +181,7 @@ function updateWallEmptyState() {
 }
 
 function removeCard(card) {
+  if (openTileMenu?.card === card) closeTileMenu();
   disposeTerm(card);
   if (card.sessionId) api(`/api/sessions/${card.sessionId}/stop`, { method: "POST" }).catch(() => {});
   const idx = cards.indexOf(card);
@@ -144,6 +199,10 @@ function buildCard(card) {
   const head = document.createElement("div");
   head.className = "tile-head";
 
+  const icon = document.createElement("span");
+  icon.className = "tile-icon";
+  icon.textContent = card.profileId ? providerIcon(card.profileId) : "❯";
+
   const name = document.createElement("input");
   name.className = "tile-name";
   name.value = card.name;
@@ -160,6 +219,13 @@ function buildCard(card) {
   select.innerHTML = optionHtml(card.profileId);
   select.addEventListener("change", () => setCardProfile(card, select.value));
 
+  const pill = document.createElement("span");
+  pill.className = "status-pill";
+  pill.dataset.state = card.status.state;
+  pill.textContent = `${STATUS_META.unknown.icon} ${STATUS_META.unknown.label}`;
+
+  const menu = buildTileMenu(card);
+
   const remove = document.createElement("button");
   remove.className = "tile-remove";
   remove.type = "button";
@@ -168,7 +234,42 @@ function buildCard(card) {
   remove.textContent = "×";
   remove.addEventListener("click", () => removeCard(card));
 
-  head.append(name, select, remove);
+  head.append(icon, name, select, pill, menu.button, remove);
+
+  const meta = document.createElement("div");
+  meta.className = "tile-meta";
+
+  const mission = document.createElement("input");
+  mission.className = "tile-mission";
+  mission.placeholder = "Mission (optional)";
+  mission.value = card.mission;
+  mission.setAttribute("aria-label", "Mission");
+  mission.addEventListener("input", () => {
+    card.mission = mission.value;
+  });
+
+  const metaRight = document.createElement("span");
+  metaRight.className = "tile-meta-right";
+  if (card.role) {
+    const badge = document.createElement("button");
+    badge.type = "button";
+    badge.className = "tile-mission-badge";
+    badge.textContent = `▤ Worker ${card.role.index}`;
+    badge.title = "Open Mission Command Center";
+    badge.addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (typeof window.openMissionCenter === "function") window.openMissionCenter(card.role.missionId);
+    });
+    metaRight.appendChild(badge);
+  }
+  const project = document.createElement("span");
+  project.className = "tile-project";
+  project.textContent = projectLabel(card.profileId);
+  const runtime = document.createElement("span");
+  runtime.className = "tile-runtime";
+  metaRight.append(project, runtime);
+
+  meta.append(mission, metaRight);
 
   const alert = document.createElement("span");
   alert.className = "tile-alert";
@@ -191,6 +292,13 @@ function buildCard(card) {
     true,
   );
 
+  // A collapsed card re-expands on click anywhere except its own controls.
+  el.addEventListener("click", (e) => {
+    if (!card.collapsed) return;
+    if (e.target.closest("input,select,button")) return;
+    setCollapsed(card, false);
+  });
+
   const screen = document.createElement("div");
   screen.className = "screen";
   const host = document.createElement("div");
@@ -201,30 +309,136 @@ function buildCard(card) {
   placeholder.innerHTML = `<p class="big">EMPTY</p><p>Pick a terminal type to open one here.</p>`;
   screen.append(host, placeholder);
 
-  const actions = document.createElement("div");
-  actions.className = "tile-actions";
-  actions.appendChild(smallBtn("Restart", "", () => restartCard(card)));
-  actions.appendChild(smallBtn("Clear", "", () => card.term?.clear()));
-  actions.appendChild(smallBtn("Expand", "", () => expandCard(card)));
+  const inspector = document.createElement("div");
+  inspector.className = "tile-inspector hidden";
 
-  el.append(head, screen, actions);
+  el.append(head, meta, screen, inspector, menu.list);
   return el;
 }
 
-function smallBtn(label, cls, onClick) {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.textContent = label;
-  if (cls) b.className = cls;
-  b.addEventListener("click", onClick);
-  return b;
+// ---- overflow menu (Restart / Clear / Expand / Collapse / dev inspector) ----
+
+function closeTileMenu() {
+  if (!openTileMenu) return;
+  openTileMenu.list.classList.add("hidden");
+  openTileMenu.button.setAttribute("aria-expanded", "false");
+  openTileMenu = null;
 }
+
+function buildTileMenu(card) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "tile-menu-btn";
+  button.textContent = "⋯";
+  button.title = "More actions";
+  button.setAttribute("aria-haspopup", "true");
+  button.setAttribute("aria-expanded", "false");
+
+  const list = document.createElement("div");
+  list.className = "tile-menu-list hidden";
+
+  const entry = { button, list, card };
+
+  const addItem = (label, onClick) => {
+    const item = document.createElement("button");
+    item.type = "button";
+    item.textContent = label;
+    item.addEventListener("click", () => {
+      closeTileMenu();
+      onClick();
+    });
+    list.appendChild(item);
+    return item;
+  };
+
+  addItem("Restart", () => restartCard(card));
+  addItem("Clear", () => card.term?.clear());
+  addItem("Expand", () => expandCard(card));
+  const collapseItem = addItem("Collapse", () => setCollapsed(card, !card.collapsed));
+  addItem("Inspect detection", () => toggleInspector(card));
+
+  button.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (openTileMenu === entry) {
+      closeTileMenu();
+      return;
+    }
+    closeTileMenu();
+    // Collapse only makes sense once the card is already collapsed (to offer
+    // "Expand" back) or has reached a finished state.
+    collapseItem.textContent = card.collapsed ? "Expand" : "Collapse";
+    collapseItem.disabled = !card.collapsed && !["complete", "failed"].includes(card.status.state);
+    list.classList.remove("hidden");
+    button.setAttribute("aria-expanded", "true");
+    openTileMenu = entry;
+  });
+
+  return entry;
+}
+
+function setCollapsed(card, collapsed) {
+  card.collapsed = collapsed;
+  document.querySelector(`.tile[data-uid="${card.uid}"]`)?.classList.toggle("collapsed", collapsed);
+}
+
+function toggleInspector(card) {
+  const el = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-inspector`);
+  if (!el) return;
+  const willShow = el.classList.contains("hidden");
+  el.classList.toggle("hidden", !willShow);
+  if (willShow) renderInspector(card);
+}
+
+function renderInspector(card) {
+  const el = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-inspector`);
+  if (!el || el.classList.contains("hidden")) return;
+  const s = card.status;
+  el.innerHTML =
+    `<div><b>State</b> ${escapeHtml(s.state)}</div>` +
+    `<div><b>Confidence</b> ${Math.round((s.confidence ?? 0) * 100)}%</div>` +
+    `<div><b>Rule</b> ${escapeHtml(s.ruleId ?? "—")}</div>` +
+    `<div><b>Why</b> ${escapeHtml(s.why ?? "—")}</div>` +
+    `<div><b>Match</b> ${escapeHtml(s.match ?? "—")}</div>`;
+}
+
+// ---- status pill + project/runtime rendering --------------------------------
+
+function renderStatus(card) {
+  const pill = document.querySelector(`.tile[data-uid="${card.uid}"] .status-pill`);
+  if (pill) {
+    const meta = STATUS_META[card.status.state] || STATUS_META.unknown;
+    pill.dataset.state = card.status.state;
+    pill.textContent = `${meta.icon} ${meta.label}`;
+    pill.title = card.status.why || "";
+  }
+  renderInspector(card);
+}
+
+function renderProject(card) {
+  const el = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-project`);
+  if (el) el.textContent = projectLabel(card.profileId);
+}
+
+function renderRuntime(card) {
+  const el = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-runtime`);
+  if (!el) return;
+  el.textContent = card.startedAt ? formatElapsed(Date.now() - card.startedAt) : "";
+}
+
+setInterval(() => {
+  for (const card of cards) {
+    if (card.startedAt) renderRuntime(card);
+  }
+}, 1000);
 
 function setCardProfile(card, profileId) {
   card.profileId = profileId || null;
   // Update the name placeholder to the type if unnamed.
   const nameEl = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-name`);
   if (nameEl) nameEl.placeholder = card.profileId ? profileLabel(card.profileId) : "Name this window";
+  const iconEl = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-icon`);
+  if (iconEl) iconEl.textContent = card.profileId ? providerIcon(card.profileId) : "❯";
+  renderProject(card);
   saveWorkspace();
   if (card.profileId) startTerminal(card);
   else {
@@ -232,6 +446,10 @@ function setCardProfile(card, profileId) {
     disposeTerm(card);
     setCardStatus(card, false);
     resetPlaceholder(card);
+    card.startedAt = null;
+    card.status = emptyStatus();
+    renderStatus(card);
+    renderRuntime(card);
   }
 }
 
@@ -247,6 +465,10 @@ async function startTerminal(card) {
       flashCard(card, data.error || "failed to start");
       return;
     }
+    card.startedAt = data.session?.startedAt ? new Date(data.session.startedAt).getTime() : Date.now();
+    card.status = emptyStatus();
+    renderStatus(card);
+    renderRuntime(card);
     openTerminal(card, sessionId);
   } catch {
     flashCard(card, "start request failed");
@@ -290,6 +512,20 @@ function openTerminal(card, sessionId) {
       if (msg.type === "output") {
         term.write(msg.data);
         if (card.uid !== activeCardUid) markActivity(card, msg.data);
+      } else if (msg.type === "status") {
+        card.status = {
+          state: msg.state,
+          confidence: msg.confidence,
+          ruleId: msg.ruleId,
+          label: msg.label,
+          why: msg.why,
+          match: msg.match,
+        };
+        renderStatus(card);
+        if (card.role && typeof window.onMissionActivity === "function") window.onMissionActivity(card);
+      } else if (msg.type === "ledger") {
+        card.lastLedgerEvent = msg.event;
+        if (card.role && typeof window.onMissionActivity === "function") window.onMissionActivity(card);
       }
     } catch {
       /* ignore */
@@ -648,6 +884,9 @@ document.addEventListener("click", (e) => {
   if (!menu.classList.contains("hidden") && !menu.contains(e.target) && !btn.contains(e.target)) {
     closeNewMenu();
   }
+  if (openTileMenu && !openTileMenu.list.contains(e.target) && !openTileMenu.button.contains(e.target)) {
+    closeTileMenu();
+  }
 });
 
 document.getElementById("rescan").addEventListener("click", loadProfiles);
@@ -678,6 +917,7 @@ document.addEventListener("keydown", (e) => {
   if (e.key !== "Escape") return;
   if (!document.getElementById("overlay").classList.contains("hidden")) closeOverlay();
   else if (!document.getElementById("new-menu").classList.contains("hidden")) closeNewMenu();
+  else if (openTileMenu) closeTileMenu();
 });
 window.addEventListener("beforeunload", () => {
   for (const card of cards) {

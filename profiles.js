@@ -35,7 +35,7 @@ const BUILT_IN = isWin
         command: PWSH,
         args: ["-NoLogo", "-NoExit", "-Command", "codex"],
         cwd: HOME,
-        autoTrust: true,
+        detector: "codex",
         note: "Launches the Codex CLI in a shell. Drops to a prompt when Codex exits.",
       },
       {
@@ -44,7 +44,7 @@ const BUILT_IN = isWin
         command: PWSH,
         args: ["-NoLogo", "-NoExit", "-Command", "claude"],
         cwd: HOME,
-        autoTrust: true,
+        detector: "claude",
         note: "Launches the Claude CLI in a shell.",
       },
       {
@@ -127,27 +127,37 @@ export function terminalEnv() {
   return env;
 }
 
+// Auto-trust defaults to ON for every terminal type: whatever CLI a tile runs,
+// if it shows a "do you trust this folder?" prompt, Termina answers it. Set
+// "autoTrust": false on a profile to opt a specific one out.
+function withAutoTrustDefault(profile) {
+  return { ...profile, autoTrust: profile.autoTrust !== false };
+}
+
 export function loadProfiles() {
   const configPath = path.join(appDir, "termina.config.json");
   if (!existsSync(configPath)) {
-    return BUILT_IN;
+    return BUILT_IN.map(withAutoTrustDefault);
   }
   try {
     const parsed = JSON.parse(readFileSync(configPath, "utf8"));
     if (!Array.isArray(parsed.profiles)) {
-      return BUILT_IN;
+      return BUILT_IN.map(withAutoTrustDefault);
     }
-    return parsed.profiles.map((p, index) => ({
-      id: String(p.id ?? `custom-${index}`),
-      label: String(p.label ?? p.id ?? `Custom ${index}`),
-      command: String(p.command ?? PWSH),
-      args: Array.isArray(p.args) ? p.args.map(String) : [],
-      cwd: p.cwd ? path.resolve(String(p.cwd).replace(/^~/, HOME)) : HOME,
-      autoTrust: Boolean(p.autoTrust),
-      note: String(p.note ?? ""),
-    }));
+    return parsed.profiles.map((p, index) =>
+      withAutoTrustDefault({
+        id: String(p.id ?? `custom-${index}`),
+        label: String(p.label ?? p.id ?? `Custom ${index}`),
+        command: String(p.command ?? PWSH),
+        args: Array.isArray(p.args) ? p.args.map(String) : [],
+        cwd: p.cwd ? path.resolve(String(p.cwd).replace(/^~/, HOME)) : HOME,
+        autoTrust: p.autoTrust,
+        detector: p.detector ? String(p.detector) : undefined,
+        note: String(p.note ?? ""),
+      }),
+    );
   } catch (error) {
     console.warn(`termina.config.json ignored (${error.message}); using built-in profiles.`);
-    return BUILT_IN;
+    return BUILT_IN.map(withAutoTrustDefault);
   }
 }

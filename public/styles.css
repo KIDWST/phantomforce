@@ -18,6 +18,9 @@
   --accent-dim: rgba(95, 213, 140, 0.14);
   --red: #ec4257;
   --gold: #e5b54b;
+  --thinking: #b98ce8;
+  --running: #5b9dff;
+  --waiting: #8b96a6;
   --radius: 14px;
   --shadow: 0 10px 40px rgba(0, 0, 0, 0.45);
 }
@@ -289,9 +292,22 @@ input {
 .tile-head {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px 9px;
+  gap: 6px;
+  padding: 7px 8px;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.tile-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--soft);
+  font-size: 12px;
 }
 
 .tile-name {
@@ -305,6 +321,233 @@ input {
   font-size: 14px;
   font-weight: 600;
   letter-spacing: 0.01em;
+}
+
+/* Once a session is live, the type picker steps aside for the status pill —
+   the type was already chosen and shouldn't compete for header space. */
+.tile.live .instance-select {
+  display: none;
+}
+
+.status-pill {
+  display: none;
+  flex: none;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--line);
+  background: var(--panel-2);
+  color: var(--soft);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.tile.live .status-pill {
+  display: inline-flex;
+}
+
+.status-pill[data-state="thinking"] {
+  border-color: rgba(185, 140, 232, 0.5);
+  background: rgba(185, 140, 232, 0.12);
+  color: #d9bdf5;
+}
+.status-pill[data-state="running"] {
+  border-color: rgba(91, 157, 255, 0.5);
+  background: rgba(91, 157, 255, 0.12);
+  color: #a8caff;
+}
+.status-pill[data-state="complete"] {
+  border-color: rgba(95, 213, 140, 0.5);
+  background: rgba(95, 213, 140, 0.12);
+  color: var(--accent-bright);
+}
+.status-pill[data-state="waiting"] {
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--muted);
+}
+.status-pill[data-state="needs_approval"] {
+  border-color: rgba(229, 181, 75, 0.55);
+  background: rgba(229, 181, 75, 0.14);
+  color: var(--gold);
+  animation: pill-pulse 1.8s ease-in-out infinite;
+}
+.status-pill[data-state="failed"] {
+  border-color: rgba(236, 66, 87, 0.55);
+  background: rgba(236, 66, 87, 0.14);
+  color: #ff9aa7;
+}
+.status-pill[data-state="unknown"] {
+  border-color: var(--line-soft);
+  color: #5c6879;
+}
+
+@keyframes pill-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.tile-menu-btn {
+  flex: none;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border-radius: 8px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.tile-menu-btn:hover,
+.tile-menu-btn[aria-expanded="true"] {
+  border-color: var(--line);
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.tile-menu-list {
+  position: absolute;
+  top: 42px;
+  right: 40px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 152px;
+  padding: 5px;
+  gap: 1px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  box-shadow: var(--shadow);
+}
+
+.tile-menu-list.hidden {
+  display: none;
+}
+
+.tile-menu-list button {
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--soft);
+  font-size: 12.5px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tile-menu-list button:hover:not(:disabled) {
+  background: var(--panel-3);
+  color: var(--text);
+}
+
+.tile-menu-list button:disabled {
+  color: #4a5563;
+  cursor: default;
+}
+
+/* ---- mission / meta row ---- */
+
+.tile-meta {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px 7px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.tile.live .tile-meta {
+  display: flex;
+}
+
+.tile-mission {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 3px 7px;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--soft);
+  font-size: 12px;
+}
+
+.tile-mission:hover {
+  border-color: var(--line);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tile-mission:focus {
+  outline: none;
+  border-color: rgba(95, 213, 140, 0.5);
+  background: var(--panel-3);
+}
+
+.tile-mission::placeholder {
+  color: #4a5563;
+}
+
+.tile-meta-right {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #5c6879;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.tile-project:not(:empty)::after {
+  content: "·";
+  margin-left: 6px;
+  color: #3a4451;
+}
+
+.tile-runtime {
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- dev inspector drawer ---- */
+
+.tile-inspector {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line-soft);
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--muted);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.tile-inspector.hidden {
+  display: none;
+}
+
+.tile-inspector b {
+  color: var(--soft);
+  font-weight: 600;
+  margin-right: 5px;
+}
+
+/* ---- collapsed card ---- */
+
+.tile.collapsed {
+  align-self: start;
+}
+
+.tile.collapsed .screen,
+.tile.collapsed .tile-inspector {
+  display: none;
 }
 
 .tile-name:hover {
@@ -417,29 +660,6 @@ input {
 .placeholder p {
   margin: 0;
   max-width: 30ch;
-}
-
-.tile-actions {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 9px 12px;
-}
-
-.tile-actions button {
-  padding: 6px 13px;
-  border-radius: 9px;
-  border: 1px solid var(--line);
-  background: transparent;
-  color: var(--muted);
-  font-size: 12px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, color 0.15s ease;
-}
-
-.tile-actions button:hover {
-  border-color: rgba(95, 213, 140, 0.5);
-  color: var(--text);
 }
 
 /* ---- add-card ---- */
@@ -762,8 +982,8 @@ body.broadcast-mode .tile.linked {
 
 .tile-alert {
   position: absolute;
-  top: 10px;
-  left: 10px;
+  top: 6px;
+  left: 6px;
   z-index: 3;
   width: 9px;
   height: 9px;
@@ -890,5 +1110,256 @@ body.broadcast-mode .tile.linked {
 
 #palette-list li.sel em {
   color: var(--accent);
+}
+
+/* ============================================================= */
+/* Mission Mode                                                   */
+/* ============================================================= */
+
+.mission-panel {
+  width: min(880px, 100%);
+  height: min(84vh, 820px);
+}
+
+.mission-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 18px 22px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.mission-loading,
+.mission-empty,
+.mission-hint {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.mission-new-btn {
+  align-self: flex-start;
+}
+
+.mission-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mission-row {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 3px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mission-row:hover {
+  border-color: rgba(95, 213, 140, 0.5);
+}
+
+.mission-row-name {
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.mission-row-meta {
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mission-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mission-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.mission-form input,
+.mission-form textarea,
+.mission-form select {
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel-3);
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  resize: vertical;
+}
+
+.mission-form input:focus,
+.mission-form textarea:focus,
+.mission-form select:focus {
+  outline: none;
+  border-color: rgba(95, 213, 140, 0.6);
+}
+
+.mission-form-row {
+  display: flex;
+  gap: 14px;
+}
+
+.mission-form-row label {
+  flex: 1;
+}
+
+.mission-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.mission-error {
+  color: #ff9aa7;
+  font-size: 12.5px;
+}
+
+.mission-error.hidden {
+  display: none;
+}
+
+.mission-role-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mission-role-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+}
+
+.mission-role-card label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.mission-detail-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.mission-objective {
+  margin: 0;
+  font-size: 13px;
+  color: var(--soft);
+}
+
+.mission-roster {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mission-worker-row {
+  display: grid;
+  grid-template-columns: 1.2fr 0.8fr 1.6fr 1.2fr 0.6fr auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel-2);
+  font-size: 12px;
+}
+
+.mw-name {
+  font-weight: 600;
+  color: var(--text);
+}
+
+.mw-status {
+  color: var(--accent-bright);
+}
+
+.mw-activity,
+.mw-workspace {
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mw-runtime {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mw-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.mw-btn {
+  padding: 5px 9px;
+  border-radius: 7px;
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.mw-btn:hover {
+  border-color: rgba(95, 213, 140, 0.5);
+  color: var(--text);
+}
+
+.mission-detail-footer {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.mission-report {
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--soft);
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  max-height: 40vh;
+  overflow-y: auto;
+}
+
+.tile-mission-badge {
+  border: 0;
+  background: transparent;
+  color: #5c6879;
+  font-size: 11px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.tile-mission-badge:hover {
+  color: var(--accent-bright);
 }
 

@@ -1,0 +1,5 @@
+{"name": "error keyword", "raw": "bash: something went wrong\nError: cannot find module 'foo'\n", "expect": "failed"}
+{"name": "y/n prompt", "raw": "Overwrite existing file? (y/n) ", "expect": "needs_approval"}
+{"name": "spinner running", "raw": "⠋ working...\n", "expect": "running"}
+{"name": "idle prompt", "raw": "user@host:~/project$ ", "expect": "waiting"}
+{"name": "no signal", "raw": "hello world\n", "expect": "unknown"}

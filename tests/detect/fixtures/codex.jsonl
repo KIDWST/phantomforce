@@ -1,0 +1,3 @@
+{"name": "working spinner", "raw": "⠹ Working (34s)\n", "expect": "running"}
+{"name": "approval prompt", "raw": "Allow this command to run? [y/n]\n", "expect": "needs_approval"}
+{"name": "completion banner", "raw": "Task complete. Patch applied cleanly.\n", "expect": "complete"}

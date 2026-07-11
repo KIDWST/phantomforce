@@ -1,0 +1,6 @@
+{"name": "thinking spinner", "raw": "⠙ Percolating… (12s · esc to interrupt)\n", "expect": "thinking"}
+{"name": "tool call bullet", "raw": "⏺ Read(file.js)\n  ⎿  120 lines\n", "expect": "running"}
+{"name": "approval prompt", "raw": "Do you want to make this edit to file.js?\n1. Yes\n2. No\n", "expect": "needs_approval"}
+{"name": "idle box (real capture)", "raw": "────────────────────\n❯ Try \"fix typecheck errors\"\n────────────────────\n ⏸ plan mode on (shift+tab to cycle)\n", "expect": "waiting"}
+{"name": "completion banner", "raw": "All done! Ready for your next request.\n", "expect": "complete"}
+{"name": "trust-menu numbered caret is not misread as idle (real capture)", "raw": "Is this a project you created or one you trust? ❯ 1. Yes, I trust this folder 2. No, exit Enter to confirm\n", "expect": "needs_approval"}

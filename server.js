@@ -8,7 +8,8 @@
 // random web page) can reach your shells.
 
 import { randomBytes } from "node:crypto";
-import { createReadStream, existsSync, statSync } from "node:fs";
+import { createReadStream, existsSync, mkdirSync, statSync } from "node:fs";
+import { appendFile } from "node:fs/promises";
 import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -17,9 +18,19 @@ import pty from "node-pty";
 import { WebSocketServer } from "ws";
 
 import { loadProfiles, terminalEnv } from "./profiles.js";
+import { createDetector } from "./detect/index.js";
+import { stripAnsi } from "./detect/strip-ansi.js";
+import * as missionStore from "./mission/store.js";
+import { parseEvents } from "./mission/protocol.js";
+import { bracketedPaste, ENTER, SUBMIT_DELAY_MS } from "./mission/paste.js";
+import { buildWorkerPrompt } from "./mission/prompt.js";
+import { decomposeObjective } from "./mission/decompose.js";
+import { synthesizeMission, renderReportMarkdown } from "./mission/synthesize.js";
+import { isGitRepo, slugify, createWorktree, removeWorktree } from "./mission/worktree.js";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(appDir, "public");
+const missionScratchDir = path.join(appDir, ".termina", "tmp");
 
 const HOST = process.env.TERMINA_HOST ?? "127.0.0.1";
 const PORT = Number(process.env.TERMINA_PORT ?? 7420);
@@ -36,18 +47,90 @@ const MAX_BUFFER_BYTES = 256 * 1024;
 /** @type {Map<string, {proc:any,profileId:string,status:string,buffer:string,sockets:Set<any>,startedAt:number,exitCode:number|null}>} */
 const sessions = new Map();
 
-// Auto-trust: strip ANSI so we can scan a CLI's rendered text for its
-// "do you trust this folder/directory?" prompt, then confirm it once.
-const ANSI_CSI = /\x1b\[[0-9;?]*[ -/]*[@-~]/g;
-const ANSI_OSC = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
-function stripAnsi(s) {
-  return s
-    .replace(ANSI_OSC, "")
-    .replace(ANSI_CSI, "")
-    .replace(/\x1b[=>()][0-9A-Za-z]?/g, "")
-    .replace(/[\x00-\x09\x0b-\x1f\x7f]/g, " ");
+// ---- status detection --------------------------------------------------------
+
+const DETECTOR_TICK_MS = 200;
+const captureRoot = path.join(appDir, "training", "captures");
+
+function feedDetector(session, data) {
+  session.detector.feed(data);
+  if (session.detectorTimer) return; // a tick is already pending
+  session.detectorTimer = setTimeout(() => {
+    session.detectorTimer = null;
+    const result = session.detector.evaluate();
+    if (!result.raw) return; // nothing new fed since the last tick
+    session.lastDetected = result;
+    if (session.capture) captureDetection(session, result);
+    broadcastStatus(session, result);
+    if (session.missionId) feedMissionProtocol(session, result.raw);
+  }, DETECTOR_TICK_MS);
 }
-const TRUST_RE = /(do you trust|trust this folder|trust the contents of this|allow this folder)/i;
+
+// Parses this tick's new raw output (not the whole rolling window, so an
+// event line is never re-logged twice) for TERMINA_EVENT lines, appends them
+// to the mission ledger, and broadcasts them to this worker's own tile(s).
+function feedMissionProtocol(session, raw) {
+  const events = parseEvents(stripAnsi(raw));
+  for (const event of events) {
+    session.lastLedgerEvent = event;
+    const record = { workerId: session.workerId, source: "worker", type: event.type, detail: event.detail ?? null };
+    missionStore.appendLedger(appDir, session.missionId, record).catch(() => {});
+    const payload = JSON.stringify({ type: "ledger", event: record });
+    for (const socket of session.sockets) {
+      if (socket.readyState === socket.OPEN) socket.send(payload);
+    }
+  }
+}
+
+function statusPayload(result) {
+  return JSON.stringify({
+    type: "status",
+    state: result.state,
+    confidence: result.confidence,
+    ruleId: result.ruleId,
+    label: result.label,
+    why: result.why,
+    match: result.match ? result.match.slice(0, 160) : null,
+  });
+}
+
+function broadcastStatus(session, result) {
+  const payload = statusPayload(result);
+  for (const socket of session.sockets) {
+    if (socket.readyState === socket.OPEN) socket.send(payload);
+  }
+}
+
+// Best-effort, local-only capture for building future detector fixtures. Never
+// blocks the session if the write fails.
+function captureDetection(session, result) {
+  try {
+    const dir = path.join(captureRoot, session.profileId);
+    mkdirSync(dir, { recursive: true });
+    const file = path.join(dir, `${session.captureId}.jsonl`);
+    const line = JSON.stringify({
+      ts: Date.now(),
+      provider: session.profileId,
+      raw: result.raw,
+      stripped: result.stripped,
+      state: result.state,
+      confidence: result.confidence,
+      ruleId: result.ruleId,
+    });
+    appendFile(file, line + "\n", "utf8").catch(() => {});
+  } catch {
+    /* best effort only */
+  }
+}
+
+// Auto-trust: strip ANSI (shared with the status detector) so we can scan a
+// CLI's rendered text for its "do you trust this folder/directory?" prompt,
+// then confirm it once.
+const TRUST_RE =
+  /(do you trust|trust this folder|trust this director|trust this workspace|trust this repo|trust the (files|contents|code) (in|of) this|allow this folder|allow access to this folder|one you trust|you trust\?|quick safety check)/i;
+// Some CLIs use a y/n text prompt rather than an arrow-key menu; "(y/n)" or
+// "[y/N]" style prompts need an explicit "y", not just Enter.
+const YES_NO_RE = /\(y\/n\)|\[y\/n\]/i;
 
 function broadcast(session, frame) {
   session.buffer = (session.buffer + frame).slice(-MAX_BUFFER_BYTES);
@@ -59,16 +142,18 @@ function broadcast(session, frame) {
 }
 
 // If a CLI shows its folder-trust prompt, confirm it automatically (once).
-// These prompts default to the "Yes, trust" option, so pressing Enter accepts.
+// Arrow-key menu prompts default to the "Yes, trust" option, so Enter accepts
+// them; plain "(y/n)" text prompts need an explicit "y" first.
 function maybeAutoTrust(session, data) {
   if (!session.autoTrust || session.trustSent || !session.proc) return;
   session.trustScan = (session.trustScan + stripAnsi(data)).slice(-4000);
   if (TRUST_RE.test(session.trustScan)) {
     session.trustSent = true;
+    const reply = YES_NO_RE.test(session.trustScan) ? "y\r" : "\r";
     // Small delay so the prompt is fully interactive before we answer.
     setTimeout(() => {
       try {
-        session.proc.write("\r");
+        session.proc.write(reply);
       } catch {
         /* pty gone */
       }
@@ -99,6 +184,14 @@ function startSession(sessionId, profile, opts = {}) {
     autoTrust: Boolean(profile.autoTrust),
     trustScan: "",
     trustSent: false,
+    detector: createDetector(profile),
+    detectorTimer: null,
+    lastDetected: null,
+    capture: Boolean(opts.capture),
+    captureId: `${sessionId}-${Date.now().toString(36)}`,
+    missionId: opts.missionId ?? null,
+    workerId: opts.workerId ?? null,
+    lastLedgerEvent: null,
   };
   sessions.set(sessionId, session);
 
@@ -114,10 +207,12 @@ function startSession(sessionId, profile, opts = {}) {
     session.proc.onData((data) => {
       broadcast(session, data);
       maybeAutoTrust(session, data);
+      feedDetector(session, data);
     });
     session.proc.onExit(({ exitCode }) => {
       session.status = "exited";
       session.exitCode = exitCode;
+      clearTimeout(session.detectorTimer);
       broadcast(session, `\r\n\x1b[90m[${profile.label} exited: code ${exitCode}]\x1b[0m\r\n`);
     });
   } catch (error) {
@@ -135,6 +230,7 @@ function stopSession(sessionId) {
   } catch {
     /* already gone */
   }
+  clearTimeout(session.detectorTimer);
   sessions.delete(sessionId);
   return true;
 }
@@ -147,6 +243,154 @@ function sessionView(id, session) {
     startedAt: new Date(session.startedAt).toISOString(),
     exitCode: session.exitCode,
   };
+}
+
+// ---- mission orchestration ---------------------------------------------------
+// Mission state lives on disk (mission.json + ledger.jsonl via mission/store.js)
+// as the single source of truth; the API always reads it fresh rather than
+// keeping a separate in-memory copy that could drift.
+
+function waitForReady(sessionId, timeoutMs) {
+  return new Promise((resolve) => {
+    const start = Date.now();
+    const check = () => {
+      const session = sessions.get(sessionId);
+      if (!session) return resolve(false); // stopped mid-wait
+      if (session.lastDetected?.state === "waiting") return resolve(true);
+      if (Date.now() - start > timeoutMs) return resolve(false);
+      setTimeout(check, 500);
+    };
+    check();
+  });
+}
+
+// Pastes the prompt, then sends Enter as a separate write once the UI has
+// had a moment to finish collapsing the paste into its placeholder — see
+// mission/paste.js for why these can't be combined into one write.
+function submitPrompt(session, prompt) {
+  session.proc.write(bracketedPaste(prompt));
+  setTimeout(() => {
+    try {
+      session.proc.write(ENTER);
+    } catch {
+      /* pty gone */
+    }
+  }, SUBMIT_DELAY_MS);
+}
+
+const READY_TIMEOUT_MS = 90000; // cold Claude Code boot + trust-prompt round trip + MCP checks can take a while
+
+// Waits for each worker to signal readiness for input, then delivers its
+// individualized prompt as one bracketed paste + Enter. All workers are
+// waited on concurrently — they're booting independent PTYs at the same
+// time, so waiting on them one at a time would make each worker's timeout
+// clock start later than the last, for no reason. Runs detached from the
+// HTTP request that created the mission — the caller gets the mission object
+// back immediately and watches workers come alive over each tile's existing
+// WebSocket.
+async function dispatchMission(mission) {
+  await Promise.all(mission.workers.map((worker) => dispatchToWorker(mission, worker)));
+}
+
+async function dispatchToWorker(mission, worker) {
+  if (!sessions.has(worker.sessionId)) return;
+  const ready = await waitForReady(worker.sessionId, READY_TIMEOUT_MS);
+  if (!ready) {
+    const record = {
+      workerId: worker.id,
+      source: "termina",
+      type: "BLOCKER",
+      detail: `worker did not reach a ready-for-input state within ${READY_TIMEOUT_MS / 1000}s; prompt not sent`,
+    };
+    await missionStore.appendLedger(appDir, mission.id, record).catch(() => {});
+    await updateWorkerStatus(mission.id, worker.id, "blocked");
+    return;
+  }
+  const session = sessions.get(worker.sessionId);
+  if (!session) return;
+  const prompt = buildWorkerPrompt({ mission, worker });
+  try {
+    submitPrompt(session, prompt);
+    const record = { workerId: worker.id, source: "termina", type: "STARTED", detail: "individualized prompt dispatched" };
+    await missionStore.appendLedger(appDir, mission.id, record).catch(() => {});
+    await updateWorkerStatus(mission.id, worker.id, "running");
+  } catch {
+    const record = { workerId: worker.id, source: "termina", type: "FAILED", detail: "failed to write prompt to worker session" };
+    await missionStore.appendLedger(appDir, mission.id, record).catch(() => {});
+    await updateWorkerStatus(mission.id, worker.id, "failed");
+  }
+}
+
+// Persists a worker's status into mission.json — the source of truth once no
+// live session/card exists to show it (e.g. after a restart, per Phase 1's
+// "always show recovered missions as historical" rule).
+async function updateWorkerStatus(missionId, workerId, status) {
+  const mission = missionStore.readMission(appDir, missionId);
+  if (!mission) return;
+  const worker = mission.workers.find((w) => w.id === workerId);
+  if (!worker) return;
+  worker.status = status;
+  await missionStore.writeMission(appDir, missionId, mission).catch(() => {});
+}
+
+// If any worker fails partway through setup (e.g. createWorktree refuses a
+// dirty target directory), every session/worktree already created for this
+// mission is torn down before the error propagates — otherwise those would
+// be orphaned: never recorded in mission.json (only written after this
+// function returns) and never stoppable from the command center.
+async function createMissionWorkers({ mission, roles }) {
+  const claudeProfile = profileById.get("claude");
+  if (!claudeProfile) throw new Error("no 'claude' profile configured");
+
+  const workers = [];
+  try {
+    for (let i = 0; i < roles.length; i += 1) {
+      const role = roles[i];
+      const workerId = `w${i + 1}`;
+      const slug = slugify(role.name);
+      let cwd = mission.workspaceRoot;
+      let branch = null;
+      let permissionMode = "plan";
+
+      if (mission.workspaceStrategy === "worktrees") {
+        const wt = await createWorktree({ repoRoot: mission.workspaceRoot, missionId: mission.id, workerSlug: slug });
+        cwd = wt.path;
+        branch = wt.branch;
+        permissionMode = "default";
+      }
+
+      const workerProfile = {
+        ...claudeProfile,
+        cwd,
+        args: ["-NoLogo", "-NoExit", "-Command", `claude --permission-mode ${permissionMode}`],
+      };
+      const sessionId = `mission-${mission.id}-${workerId}`;
+      const session = startSession(sessionId, workerProfile, { cols: 100, rows: 28, missionId: mission.id, workerId });
+
+      workers.push({
+        id: workerId,
+        index: i + 1,
+        name: role.name,
+        scope: role.scope,
+        deliverables: role.deliverables,
+        prohibited: role.prohibited,
+        sessionId,
+        cwd,
+        branch,
+        permissionMode,
+        status: session.status === "error" ? "failed" : "starting",
+      });
+    }
+  } catch (error) {
+    for (const worker of workers) {
+      stopSession(worker.sessionId);
+      if (worker.branch) {
+        await removeWorktree({ repoRoot: mission.workspaceRoot, targetPath: worker.cwd, force: true }).catch(() => {});
+      }
+    }
+    throw error;
+  }
+  return workers;
 }
 
 // ---- helpers ----------------------------------------------------------------
@@ -239,18 +483,24 @@ const server = http.createServer((req, res) => {
   if (pathName === "/api/profiles" && req.method === "GET") {
     return sendJson(res, 200, {
       ok: true,
-      profiles: profiles.map((p) => ({ id: p.id, label: p.label, note: p.note })),
+      profiles: profiles.map((p) => ({
+        id: p.id,
+        label: p.label,
+        note: p.note,
+        cwd: p.cwd,
+        projectName: path.basename(p.cwd),
+      })),
       sessions: Array.from(sessions.entries()).map(([id, s]) => sessionView(id, s)),
     });
   }
 
-  // Start a terminal in a specific tile session. Body: { profile, cols, rows }
+  // Start a terminal in a specific tile session. Body: { profile, cols, rows, capture }
   const startMatch = pathName.match(/^\/api\/sessions\/([\w.-]+)\/start$/);
   if (startMatch && req.method === "POST") {
     readJsonBody(req).then((body) => {
       const profile = profileById.get(String(body.profile));
       if (!profile) return sendJson(res, 404, { ok: false, error: "unknown_profile" });
-      const session = startSession(startMatch[1], profile, { cols: body.cols, rows: body.rows });
+      const session = startSession(startMatch[1], profile, { cols: body.cols, rows: body.rows, capture: body.capture });
       return sendJson(res, 200, { ok: session.status !== "error", session: sessionView(startMatch[1], session) });
     });
     return;
@@ -260,6 +510,165 @@ const server = http.createServer((req, res) => {
   if (stopMatch && req.method === "POST") {
     stopSession(stopMatch[1]);
     return sendJson(res, 200, { ok: true });
+  }
+
+  // ---- mission API ------------------------------------------------------
+
+  if (pathName === "/api/missions/decompose" && req.method === "POST") {
+    readJsonBody(req)
+      .then(async (body) => {
+        const objective = String(body.objective ?? "").trim();
+        const workerCount = Math.max(2, Math.min(10, parseInt(body.workerCount, 10) || 3));
+        const workspaceRoot = String(body.workspaceRoot ?? "").trim();
+        if (!objective) return sendJson(res, 400, { ok: false, error: "objective_required" });
+        if (!workspaceRoot || !existsSync(workspaceRoot)) return sendJson(res, 400, { ok: false, error: "workspace_root_invalid" });
+        const { roles, costUsd } = await decomposeObjective({ objective, workerCount, workspaceRoot, scratchDir: missionScratchDir });
+        return sendJson(res, 200, { ok: true, roles, costUsd });
+      })
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
+  }
+
+  if (pathName === "/api/missions" && req.method === "GET") {
+    const list = missionStore
+      .listMissionIds(appDir)
+      .map((id) => missionStore.readMission(appDir, id))
+      .filter(Boolean)
+      .sort((a, b) => b.createdAt - a.createdAt);
+    return sendJson(res, 200, { ok: true, missions: list });
+  }
+
+  if (pathName === "/api/missions" && req.method === "POST") {
+    readJsonBody(req)
+      .then(async (body) => {
+        const name = String(body.name ?? "Untitled mission").trim();
+        const objective = String(body.objective ?? "").trim();
+        const workspaceRoot = String(body.workspaceRoot ?? "").trim();
+        const workspaceStrategy = body.workspaceStrategy === "worktrees" ? "worktrees" : "audit";
+        const roles = Array.isArray(body.roles) ? body.roles : [];
+        if (!objective || !roles.length) return sendJson(res, 400, { ok: false, error: "objective_and_roles_required" });
+        if (!workspaceRoot || !existsSync(workspaceRoot)) return sendJson(res, 400, { ok: false, error: "workspace_root_invalid" });
+        if (workspaceStrategy === "worktrees" && !(await isGitRepo(workspaceRoot))) {
+          return sendJson(res, 400, { ok: false, error: "workspace_root_not_a_git_repo" });
+        }
+
+        const missionId = randomBytes(6).toString("hex");
+        const mission = {
+          id: missionId,
+          name,
+          objective,
+          workspaceRoot,
+          workspaceStrategy,
+          status: "running",
+          createdAt: Date.now(),
+          workers: [],
+        };
+
+        try {
+          mission.workers = await createMissionWorkers({ mission, roles });
+        } catch (error) {
+          return sendJson(res, 500, { ok: false, error: `worker setup failed: ${error.message}` });
+        }
+
+        await missionStore.writeMission(appDir, missionId, mission);
+        for (const worker of mission.workers) {
+          await missionStore.appendLedger(appDir, missionId, {
+            workerId: worker.id,
+            source: "termina",
+            type: "STARTED",
+            detail: `session ${worker.sessionId} launched (${worker.cwd})`,
+          });
+        }
+
+        dispatchMission(mission).catch(() => {});
+
+        return sendJson(res, 200, { ok: true, mission });
+      })
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
+  }
+
+  const missionGetMatch = pathName.match(/^\/api\/missions\/([\w-]+)$/);
+  if (missionGetMatch && req.method === "GET") {
+    const mission = missionStore.readMission(appDir, missionGetMatch[1]);
+    if (!mission) return sendJson(res, 404, { ok: false, error: "mission_not_found" });
+    const ledger = missionStore.readLedger(appDir, missionGetMatch[1]);
+    return sendJson(res, 200, { ok: true, mission, ledger });
+  }
+
+  const workerActionMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/workers\/([\w-]+)\/(stop|retry)$/);
+  if (workerActionMatch && req.method === "POST") {
+    const [, missionId, workerId, action] = workerActionMatch;
+    const mission = missionStore.readMission(appDir, missionId);
+    if (!mission) return sendJson(res, 404, { ok: false, error: "mission_not_found" });
+    const worker = mission.workers.find((w) => w.id === workerId);
+    if (!worker) return sendJson(res, 404, { ok: false, error: "worker_not_found" });
+
+    if (action === "stop") {
+      stopSession(worker.sessionId);
+      worker.status = "stopped";
+      missionStore
+        .writeMission(appDir, missionId, mission)
+        .then(() => missionStore.appendLedger(appDir, missionId, { workerId, source: "termina", type: "FAILED", detail: "stopped by user" }))
+        .catch(() => {});
+      return sendJson(res, 200, { ok: true, worker });
+    }
+
+    // retry: same cwd/branch/permission mode, fresh session id so the client
+    // tile can cleanly re-attach (mirrors the existing single-tile Restart).
+    stopSession(worker.sessionId);
+    const claudeProfile = profileById.get("claude");
+    const newSessionId = `mission-${missionId}-${workerId}-r${Date.now().toString(36)}`;
+    const workerProfile = {
+      ...claudeProfile,
+      cwd: worker.cwd,
+      args: ["-NoLogo", "-NoExit", "-Command", `claude --permission-mode ${worker.permissionMode}`],
+    };
+    const session = startSession(newSessionId, workerProfile, { cols: 100, rows: 28, missionId, workerId });
+    worker.sessionId = newSessionId;
+    worker.status = session.status === "error" ? "failed" : "starting";
+    missionStore
+      .writeMission(appDir, missionId, mission)
+      .then(() => missionStore.appendLedger(appDir, missionId, { workerId, source: "termina", type: "STARTED", detail: "retried by user" }))
+      .catch(() => {});
+
+    (async () => {
+      const ready = await waitForReady(newSessionId, READY_TIMEOUT_MS);
+      if (!ready) return;
+      const s = sessions.get(newSessionId);
+      if (!s) return;
+      const prompt = buildWorkerPrompt({ mission, worker });
+      try {
+        submitPrompt(s, prompt);
+      } catch {
+        /* ignore */
+      }
+    })();
+
+    return sendJson(res, 200, { ok: true, worker });
+  }
+
+  const synthesizeMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/synthesize$/);
+  if (synthesizeMatch && req.method === "POST") {
+    const missionId = synthesizeMatch[1];
+    const mission = missionStore.readMission(appDir, missionId);
+    if (!mission) return sendJson(res, 404, { ok: false, error: "mission_not_found" });
+    const ledger = missionStore.readLedger(appDir, missionId);
+    synthesizeMission({ mission, ledger, scratchDir: missionScratchDir })
+      .then(async ({ report, costUsd }) => {
+        const markdown = renderReportMarkdown(mission, report, costUsd);
+        await missionStore.writeReport(appDir, missionId, markdown);
+        return sendJson(res, 200, { ok: true, report, markdown, costUsd });
+      })
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
+  }
+
+  const reportMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/report$/);
+  if (reportMatch && req.method === "GET") {
+    const markdown = missionStore.readReport(appDir, reportMatch[1]);
+    if (!markdown) return sendJson(res, 404, { ok: false, error: "report_not_found" });
+    return sendJson(res, 200, { ok: true, markdown });
   }
 
   return sendJson(res, 404, { ok: false, error: "not_found" });
@@ -292,6 +701,7 @@ function attachSocket(ws, sessionId) {
     return;
   }
   if (session.buffer) ws.send(JSON.stringify({ type: "output", data: session.buffer }));
+  if (session.lastDetected) ws.send(statusPayload(session.lastDetected));
   session.sockets.add(ws);
 
   ws.on("message", (raw) => {
