@@ -19,6 +19,7 @@
     "test:finance-connector": "tsx scripts/test-finance-connector-status.ts",
     "test:windows-media": "tsx scripts/test-windows-media-session.ts",
     "test:windows-media-route": "tsx scripts/test-windows-media-route.ts",
+    "test:vacation-operator": "tsx scripts/test-vacation-operator-coverage.ts",
     "test:agent-workforce": "tsx scripts/test-agent-workforce-status.ts",
     "test:neural-spine": "tsx scripts/test-neural-spine.ts",
     "test:internal-harness": "tsx scripts/test-internal-harness-router.ts",
