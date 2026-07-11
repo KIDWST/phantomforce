@@ -83,7 +83,7 @@ export const MEMORY_CATEGORY_LABELS = {
   media: "Media",
   website: "Websites",
   security: "Security",
-  money: "Money",
+  money: "Accounting",
   operations: "Operations",
 };
 const MEMORY_LIMIT = 300;

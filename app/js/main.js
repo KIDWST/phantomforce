@@ -508,16 +508,16 @@ const ACCOUNT_TIERS = [
     name: "Starter",
     price: "$750/mo",
     badge: "Launch",
-    copy: "Core cockpit, local approvals, and one active business workspace.",
-    features: ["Command Center", "Leads and tasks", "Manual proposal workflow"],
+    copy: "Business Manager foundation: command surface, approvals, and one focused workspace.",
+    features: ["Business command center", "Client pipeline", "Manual offer workflow"],
   },
   {
     id: "pro",
     name: "Pro Plan",
     price: "$2,500/mo",
     badge: "Growth",
-    copy: "Managed Phantom AI operations, content workflow, Media Lab, and owner controls.",
-    features: ["Phantom AI cockpit", "Content and Media Lab", "Approval-safe ops"],
+    copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
+    features: ["Phantom AI operator", "Creator Hub + Media Lab", "Accounting-aware ops"],
   },
   {
     id: "elite",
@@ -525,8 +525,8 @@ const ACCOUNT_TIERS = [
     price: "Custom",
     badge: "Current",
     current: true,
-    copy: "The full operating suite: advanced loop routing, multi-workspace ops, advanced automations, and launch support.",
-    features: ["Advanced loop routing", "Multi-workspace ops", "Advanced automation planning", "Launch support"],
+    copy: "The full business operating suite: deeper loop routing, multi-workspace control, automations, and launch support.",
+    features: ["Advanced loop routing", "Multi-workspace command", "Business automation planning", "Launch support"],
   },
 ];
 let accountNotice = "";

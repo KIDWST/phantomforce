@@ -378,7 +378,7 @@ function renderModelTab(settings, activeProvider, activeModel) {
               { id: "operator", label: "Operator - direct and decisive" },
               { id: "coach", label: "Coach - explain the move" },
               { id: "technical", label: "Technical - implementation detail" },
-              { id: "sales", label: "Sales - money-focused" },
+              { id: "sales", label: "Growth - revenue-aware" },
             ], settings.responseStyle)}</select>
           </label>
           <label class="set-control"><span>Response length</span>
@@ -463,7 +463,7 @@ export function renderOperatorSettings(el, opts = {}) {
         <div>
           <p class="set-eyebrow">Operator brain</p>
           <h3>Phantom AI settings</h3>
-          <p class="set-note">Choose the default brain, loop behavior, memory depth, and autopilot boundary for the admin console. These are local owner settings; the public demo chat still cannot send, upload, charge, or touch private systems.</p>
+          <p class="set-note">Choose the default brain, loop behavior, memory depth, and autopilot boundary for the Business Manager. These are local owner settings; the public demo chat still cannot send, upload, charge, or touch private systems.</p>
         </div>
         ${renderSafetySummary(settings)}
       </div>
