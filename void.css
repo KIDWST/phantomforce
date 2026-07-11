@@ -733,3 +733,147 @@ html::-webkit-scrollbar, body::-webkit-scrollbar { width: 0; height: 0; display:
   .wf-face-cloud { width: 152px; }
   .wf-more .wf-status { grid-column: auto; margin-left: 0; }
 }
+
+/* Mobile first impression: one complete Force screen.
+   No page scroll, no clipped ask box, no hunting below the fold. */
+@media (max-width: 640px) {
+  html,
+  body {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    min-height: 100%;
+    overflow: hidden;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+
+  .hero-void {
+    height: 100svh;
+    min-height: 0;
+    max-height: 100svh;
+    overflow: hidden;
+  }
+
+  .hero-void .presence {
+    position: absolute;
+    inset: 0;
+    height: 100%;
+    min-height: 0;
+    justify-content: flex-start;
+    gap: clamp(8px, 1.4svh, 12px);
+    padding: calc(env(safe-area-inset-top) + 10px) 14px calc(env(safe-area-inset-bottom) + 10px);
+  }
+
+  .crown { gap: 4px; flex: 0 0 auto; }
+  .wordmark {
+    gap: 7px;
+    font-size: 10px;
+    letter-spacing: 0.28em;
+  }
+  .mark-live { width: 28px; height: 28px; }
+  .status {
+    padding: 2px 7px;
+    font-size: 6.8px;
+    letter-spacing: 0.14em;
+  }
+
+  .phantom-zone {
+    flex: 0 0 clamp(78px, 13svh, 104px);
+    min-height: 68px;
+    max-height: 104px;
+  }
+
+  .converse {
+    flex: 0 1 auto;
+    width: 100vw;
+    max-width: 100vw;
+    gap: clamp(7px, 1.5svh, 11px);
+    margin-top: 0;
+  }
+
+  .say {
+    min-height: 2.5em;
+    max-width: min(94vw, 380px);
+    font-size: clamp(18px, 6vw, 24px);
+  }
+
+  .say-line { line-height: 1.08; }
+
+  .powers {
+    max-width: min(96vw, 390px);
+    gap: 6px;
+  }
+
+  .powers button {
+    min-height: 28px;
+    padding: 6px 9px;
+    gap: 6px;
+    font-size: 8.1px;
+    letter-spacing: 0.08em;
+  }
+
+  .speak {
+    width: min(calc(100vw - 48px), 342px) !important;
+    max-width: 342px;
+    min-height: 50px;
+    padding: 10px 15px;
+    gap: 9px;
+  }
+
+  .speak input { font-size: 14px; }
+
+  .cta-block {
+    gap: 7px;
+    margin-top: 0;
+    padding: 0;
+  }
+
+  .download-cta {
+    width: min(calc(100vw - 70px), 292px);
+    max-width: 292px;
+    min-height: 45px;
+    padding: 11px 18px;
+    font-size: 10px;
+    letter-spacing: 0.07em;
+  }
+
+  .cta-block .ops-line {
+    display: none;
+  }
+
+  .creed {
+    margin-top: auto;
+    max-width: 94vw;
+    justify-content: center;
+    gap: 5px;
+    font-size: 6.8px;
+    letter-spacing: 0.13em;
+    line-height: 1.4;
+  }
+
+  body > .sect,
+  body > .strip {
+    display: none;
+  }
+}
+
+@media (max-width: 640px) and (max-height: 700px) {
+  .hero-void .presence {
+    padding-top: calc(env(safe-area-inset-top) + 8px);
+    padding-bottom: calc(env(safe-area-inset-bottom) + 8px);
+  }
+
+  .wordmark { font-size: 9px; letter-spacing: 0.24em; }
+  .mark-live { width: 24px; height: 24px; }
+  .status { transform: scale(0.92); transform-origin: center top; }
+  .phantom-zone { flex-basis: clamp(72px, 14svh, 96px); min-height: 64px; max-height: 96px; }
+  .say { min-height: 2.25em; font-size: clamp(16px, 5.5vw, 20px); }
+  .powers { max-height: 68px; overflow: hidden; }
+  .powers button { min-height: 25px; padding: 5px 8px; font-size: 7.5px; }
+  .speak { min-height: 46px; padding: 9px 14px; }
+  .download-cta { min-height: 41px; padding: 10px 16px; }
+  .cta-block .ops-line,
+  .creed { display: none; }
+}

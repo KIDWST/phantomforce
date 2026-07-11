@@ -7736,3 +7736,81 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
     pointer-events: none;
   }
 }
+
+/* Final mobile dashboard fit: the home screen is the command console, not a
+   scroll page. Keep the upper nav and full chat visible in one phone viewport. */
+@media (max-width: 767px) {
+  html:has(.phantom .app-main > .console:not(.console-workspace)),
+  body:has(.phantom .app-main > .console:not(.console-workspace)) {
+    height: 100svh;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) {
+    height: 100svh;
+    min-height: 100svh;
+    overflow: hidden;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) .app-main {
+    height: calc(100svh - var(--mobile-admin-topbar));
+    min-height: 0;
+    overflow: hidden;
+    padding: 0 !important;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) .console {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden !important;
+    padding: 8px 10px calc(var(--mobile-admin-taskbar) + 10px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) .console-center {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) .hero2 {
+    height: 100%;
+    min-height: 0 !important;
+    display: flex !important;
+    overflow: hidden;
+    padding: 8px !important;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) .hero2-title,
+  .phantom:has(.app-main > .console:not(.console-workspace)) .hero2-sub,
+  .phantom:has(.app-main > .console:not(.console-workspace)) .cmd-chips,
+  .phantom:has(.app-main > .console:not(.console-workspace)) .hero2-stage {
+    display: none !important;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) .hero2-copy {
+    flex: 1 1 auto;
+    min-height: 0;
+    height: 100%;
+    display: flex;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) .chatbox {
+    flex: 1 1 auto;
+    height: 100%;
+    min-height: 0;
+    max-height: none;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) .chatbox-head,
+  .phantom:has(.app-main > .console:not(.console-workspace)) .chatbox-composer {
+    flex: 0 0 auto;
+  }
+
+  .phantom:has(.app-main > .console:not(.console-workspace)) .chatbox-log {
+    flex: 1 1 0;
+    min-height: 0;
+    max-height: none;
+    overflow-y: auto;
+  }
+}
