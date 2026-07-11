@@ -3,6 +3,10 @@
    progress. Shares globals from app.js (api, cards, addCard, openTerminal,
    escapeHtml, providerIcon, renderStatus, renderRuntime, emptyStatus). */
 
+// Mission Mode is not Claude-only — any agent CLI Termina knows how to run
+// in audit vs write mode is assignable per worker. Mirrors mission/adapters.js.
+const AGENT_PROVIDERS = ["claude", "codex"];
+
 let missionView = "list"; // "list" | "create" | "detail"
 let missionDetailId = null;
 let missionCreateState = null; // { objective, workerCount, workspaceRoot, workspaceStrategy, roles, name }
@@ -204,15 +208,22 @@ function renderMissionCreateStepRoles(body) {
   const roleList = document.createElement("div");
   roleList.className = "mission-role-list";
   state.roles.forEach((role, i) => {
+    if (!role.provider) role.provider = "claude";
     const card = document.createElement("div");
     card.className = "mission-role-card";
     card.innerHTML = `
       <label>Role name<input class="mr-name" type="text" value="${escapeHtml(role.name)}" /></label>
+      <label>Agent
+        <select class="mr-provider">
+          ${AGENT_PROVIDERS.map((p) => `<option value="${p}" ${role.provider === p ? "selected" : ""}>${escapeHtml(profileLabel(p) || p)}</option>`).join("")}
+        </select>
+      </label>
       <label>Scope<textarea class="mr-scope" rows="2">${escapeHtml(role.scope)}</textarea></label>
       <label>Deliverables<textarea class="mr-deliverables" rows="2">${escapeHtml(role.deliverables || "")}</textarea></label>
       <label>Prohibited<textarea class="mr-prohibited" rows="2">${escapeHtml(role.prohibited || "")}</textarea></label>
     `;
     card.querySelector(".mr-name").addEventListener("input", (e) => (role.name = e.target.value));
+    card.querySelector(".mr-provider").addEventListener("change", (e) => (role.provider = e.target.value));
     card.querySelector(".mr-scope").addEventListener("input", (e) => (role.scope = e.target.value));
     card.querySelector(".mr-deliverables").addEventListener("input", (e) => (role.deliverables = e.target.value));
     card.querySelector(".mr-prohibited").addEventListener("input", (e) => (role.prohibited = e.target.value));
@@ -278,7 +289,12 @@ function renderMissionCreateStepRoles(body) {
 function attachMissionWorkerTiles(mission) {
   for (const worker of mission.workers) {
     const card = addCard(
-      { name: worker.name, mission: worker.name, profileId: "claude", role: { missionId: mission.id, workerId: worker.id, index: worker.index, name: worker.name } },
+      {
+        name: worker.name,
+        mission: worker.name,
+        profileId: worker.provider,
+        role: { missionId: mission.id, workerId: worker.id, index: worker.index, name: worker.name, provider: worker.provider },
+      },
       { save: false, start: false },
     );
     card.startedAt = Date.now();
@@ -325,7 +341,7 @@ async function renderMissionDetail() {
     const row = document.createElement("div");
     row.className = "mission-worker-row";
     row.innerHTML = `
-      <div class="mw-name">Worker ${worker.index} — ${escapeHtml(worker.name)}</div>
+      <div class="mw-name">Worker ${worker.index} — ${escapeHtml(worker.name)} <span class="mw-provider">${escapeHtml(profileLabel(worker.provider) || worker.provider)}</span></div>
       <div class="mw-status">${escapeHtml(stateLabel)}</div>
       <div class="mw-activity">${lastEvent ? escapeHtml(`${lastEvent.type}${lastEvent.detail ? ": " + lastEvent.detail : ""}`) : "—"}</div>
       <div class="mw-workspace">${escapeHtml(worker.branch || worker.cwd)}</div>

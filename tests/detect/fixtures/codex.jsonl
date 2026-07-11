@@ -1,3 +1,5 @@
 {"name": "working spinner", "raw": "⠹ Working (34s)\n", "expect": "running"}
 {"name": "approval prompt", "raw": "Allow this command to run? [y/n]\n", "expect": "needs_approval"}
 {"name": "completion banner", "raw": "Task complete. Patch applied cleanly.\n", "expect": "complete"}
+{"name": "idle box (real capture)", "raw": "› Implement {feature}\n\n  gpt-5.5 xhigh · ~\n", "expect": "waiting"}
+{"name": "update-menu numbered caret is not misread as idle (real capture)", "raw": "Release notes: https://github.com/openai/codex/releases/latest\n› 1. Update now\n  2. Skip\n  3. Skip until next version\nPress enter to continue\n", "expect": "unknown"}

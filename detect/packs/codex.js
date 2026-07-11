@@ -1,5 +1,8 @@
-// Codex CLI heuristics — v0 best-guesses, same caveats as claude.js: replace
-// once training-mode captures give us real Codex output to test against.
+// Codex CLI heuristics. The idle-input rule below is confirmed live (Codex's
+// idle prompt reads "› Implement {feature}" — the "›" glyph, U+203A, is
+// distinct from Claude's "❯", U+276F). The rest are still v0 best-guesses;
+// replace once training-mode captures give more real Codex output to test
+// against, using `node scripts/replay-detector.mjs`.
 const SPINNER = /[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏]/;
 
 export const codexPack = [
@@ -26,5 +29,17 @@ export const codexPack = [
     confidence: 0.55,
     pattern: /\b(task complete|patch applied|done\.)\b/i,
     describe: (m) => `matched completion wording "${m[0]}"`,
+  },
+  {
+    // Confirmed live: Codex's idle input prompt uses "›" (U+203A) + a
+    // placeholder like "Implement {feature}". The update-nag menu reuses the
+    // same glyph for its numbered choices ("› 1. Update now"), so exclude a
+    // digit immediately following, same trick as Claude's idle-box rule.
+    id: "codex-idle-input-box",
+    label: "Idle input prompt caret, no spinner",
+    state: "waiting",
+    confidence: 0.55,
+    pattern: /›\s+(?!\d)/,
+    describe: () => "idle input prompt caret (›) with no spinner active",
   },
 ];

@@ -1294,6 +1294,16 @@ body.broadcast-mode .tile.linked {
   color: var(--text);
 }
 
+.mw-provider {
+  font-weight: 500;
+  color: var(--muted);
+  font-size: 11px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 1px 6px;
+  margin-left: 4px;
+}
+
 .mw-status {
   color: var(--accent-bright);
 }

@@ -27,6 +27,7 @@ import { buildWorkerPrompt } from "./mission/prompt.js";
 import { decomposeObjective } from "./mission/decompose.js";
 import { synthesizeMission, renderReportMarkdown } from "./mission/synthesize.js";
 import { isGitRepo, slugify, createWorktree, removeWorktree } from "./mission/worktree.js";
+import { AGENT_PROVIDERS, isAgentProvider } from "./mission/adapters.js";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(appDir, "public");
@@ -339,30 +340,30 @@ async function updateWorkerStatus(missionId, workerId, status) {
 // be orphaned: never recorded in mission.json (only written after this
 // function returns) and never stoppable from the command center.
 async function createMissionWorkers({ mission, roles }) {
-  const claudeProfile = profileById.get("claude");
-  if (!claudeProfile) throw new Error("no 'claude' profile configured");
-
   const workers = [];
   try {
     for (let i = 0; i < roles.length; i += 1) {
       const role = roles[i];
       const workerId = `w${i + 1}`;
       const slug = slugify(role.name);
+      const providerId = isAgentProvider(role.provider) ? role.provider : "claude";
+      const providerProfile = profileById.get(providerId);
+      if (!providerProfile) throw new Error(`no '${providerId}' profile configured`);
+
       let cwd = mission.workspaceRoot;
       let branch = null;
-      let permissionMode = "plan";
+      const mode = mission.workspaceStrategy === "worktrees" ? "write" : "audit";
 
       if (mission.workspaceStrategy === "worktrees") {
         const wt = await createWorktree({ repoRoot: mission.workspaceRoot, missionId: mission.id, workerSlug: slug });
         cwd = wt.path;
         branch = wt.branch;
-        permissionMode = "default";
       }
 
       const workerProfile = {
-        ...claudeProfile,
+        ...providerProfile,
         cwd,
-        args: ["-NoLogo", "-NoExit", "-Command", `claude --permission-mode ${permissionMode}`],
+        args: AGENT_PROVIDERS[providerId].buildArgs(mode),
       };
       const sessionId = `mission-${mission.id}-${workerId}`;
       const session = startSession(sessionId, workerProfile, { cols: 100, rows: 28, missionId: mission.id, workerId });
@@ -374,10 +375,11 @@ async function createMissionWorkers({ mission, roles }) {
         scope: role.scope,
         deliverables: role.deliverables,
         prohibited: role.prohibited,
+        provider: providerId,
+        mode,
         sessionId,
         cwd,
         branch,
-        permissionMode,
         status: session.status === "error" ? "failed" : "starting",
       });
     }
@@ -614,15 +616,16 @@ const server = http.createServer((req, res) => {
       return sendJson(res, 200, { ok: true, worker });
     }
 
-    // retry: same cwd/branch/permission mode, fresh session id so the client
+    // retry: same cwd/branch/provider/mode, fresh session id so the client
     // tile can cleanly re-attach (mirrors the existing single-tile Restart).
     stopSession(worker.sessionId);
-    const claudeProfile = profileById.get("claude");
+    const providerId = isAgentProvider(worker.provider) ? worker.provider : "claude";
+    const providerProfile = profileById.get(providerId);
     const newSessionId = `mission-${missionId}-${workerId}-r${Date.now().toString(36)}`;
     const workerProfile = {
-      ...claudeProfile,
+      ...providerProfile,
       cwd: worker.cwd,
-      args: ["-NoLogo", "-NoExit", "-Command", `claude --permission-mode ${worker.permissionMode}`],
+      args: AGENT_PROVIDERS[providerId].buildArgs(worker.mode),
     };
     const session = startSession(newSessionId, workerProfile, { cols: 100, rows: 28, missionId, workerId });
     worker.sessionId = newSessionId;
