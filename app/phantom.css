@@ -982,7 +982,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .workspace-page[data-workspace-page="sites"] {
   height: 100%; display: flex; flex-direction: column; min-height: 0; overflow: hidden;
 }
-.workspace-page[data-workspace-page="sites"] .workspace-page-head { flex: 0 0 auto; padding: 8px clamp(16px, 2vw, 26px) 6px; }
+.workspace-page[data-workspace-page="sites"] .workspace-page-head { flex: 0 0 auto; padding: 8px clamp(18px, 2vw, 28px) 6px; }
 .workspace-page[data-workspace-page="sites"] .workspace-page-kicker { margin-bottom: 1px; }
 .workspace-page[data-workspace-page="sites"] .workspace-page-body {
   flex: 1 1 auto; min-height: 0; overflow: hidden;
@@ -2911,9 +2911,11 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 /* ============================================================= */
 .overlay-wide .overlay-panel { width: min(1360px, 100%); }
 
-/* Compact, denser page head just for the Media Lab workspace */
-.workspace-page[data-workspace-page="media"] .workspace-page-head { padding: 7px clamp(18px, 2vw, 34px) 6px; }
-.workspace-page[data-workspace-page="media"] .workspace-page-head h1 { font-size: clamp(18px, 1.8vw, 22px); }
+/* Compact, denser page head just for the Media Lab workspace — same title
+   size as every other workspace page (.workspace-page-head h1's shared
+   default), only the padding shrinks to make room for Media Lab's own
+   Create/Media Pool/Pending/Edit tab row directly below it. */
+.workspace-page[data-workspace-page="media"] .workspace-page-head { padding: 8px clamp(18px, 2vw, 28px) 6px; }
 .workspace-page[data-workspace-page="media"] .workspace-page-kicker { margin-bottom: 1px; }
 .workspace-page[data-workspace-page="media"] .workspace-page-body { padding-top: 8px; }
 /* Media Lab is a working cockpit, not a feed — the scrolling system ticker
