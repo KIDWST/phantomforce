@@ -8249,6 +8249,106 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
   }
 }
 
+/* ============================================================= */
+/* =================  LIVING CONSOLE — magic pass  ============= */
+/* PhantomForce is a magical workforce environment, not a war    */
+/* room. This block adds the ambient life layer: drifting spark  */
+/* motes, the free-flying phantom buddy, page-enter transitions, */
+/* an aurora breath on the glow field, and micro-interactions.   */
+/* Every animation here is decorative and fully disabled under   */
+/* prefers-reduced-motion.                                       */
+/* ============================================================= */
+
+/* ---- ambient spark motes (canvas mounted by ambient.js) ---- */
+.ambient-motes {
+  position: fixed; inset: 0; z-index: -1;
+  width: 100%; height: 100%;
+  pointer-events: none;
+}
+
+/* ---- aurora breath: the glow field slowly drifts and dims ---- */
+@keyframes auroraDrift {
+  0%, 100% { transform: translate3d(0, 0, 0) scale(1); opacity: 1; }
+  50% { transform: translate3d(0, -16px, 0) scale(1.045); opacity: 0.8; }
+}
+.bg-glow { animation: auroraDrift 26s ease-in-out infinite; will-change: transform, opacity; }
+
+/* ---- the phantom buddy: a real companion, not a mascot decal ---- */
+/* z-index 46: above every page surface, below overlays (50), the  */
+/* notif menu (60), cmdk (80), and the mobile chrome (95) so it    */
+/* can never block a control that matters.                         */
+.buddy {
+  position: fixed; left: 0; top: 0; z-index: 46;
+  pointer-events: none; will-change: transform;
+  transition: opacity 0.35s ease;
+}
+.buddy-canvas {
+  display: block; pointer-events: auto; cursor: grab; touch-action: none;
+  filter: drop-shadow(0 12px 26px rgba(0, 0, 0, 0.42)) drop-shadow(0 0 22px rgba(65, 255, 161, 0.16));
+}
+.buddy.is-grabbed .buddy-canvas { cursor: grabbing; }
+.buddy-say {
+  position: absolute; left: 50%; bottom: calc(100% - 26px); transform: translateX(-50%);
+  width: max-content; max-width: 230px; padding: 8px 12px;
+  border: 1px solid var(--line-strong); border-radius: 14px 14px 14px 5px;
+  background: rgba(3, 16, 11, 0.92); color: #d9ffe9;
+  font: 500 12px "Space Grotesk", sans-serif; line-height: 1.4; text-align: center;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45), 0 0 24px rgba(65, 255, 161, 0.12);
+  backdrop-filter: blur(8px); pointer-events: none;
+}
+.buddy-say.pop { animation: buddyPop 0.34s cubic-bezier(0.34, 1.56, 0.64, 1); }
+@keyframes buddyPop {
+  0% { opacity: 0; transform: translateX(-50%) translateY(6px) scale(0.85); }
+  100% { opacity: 1; transform: translateX(-50%) translateY(0) scale(1); }
+}
+/* workspace overlays blur the whole console — the buddy ducks out too */
+body.overlay-open .buddy { opacity: 0; }
+body.overlay-open .buddy-canvas { pointer-events: none; }
+
+/* ---- page life: entering a tab feels like arriving somewhere ---- */
+@keyframes pageBloom { from { opacity: 0; } to { opacity: 1; } }
+@keyframes pageRise {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.workspace-page.page-enter { animation: pageBloom 0.3s ease both; }
+.workspace-page.page-enter .workspace-page-head { animation: pageRise 0.45s 0.04s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.workspace-page.page-enter .workspace-page-body { animation: pageRise 0.52s 0.1s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.console.console-enter { animation: pageBloom 0.32s ease both; }
+.console.console-enter .hero2 { animation: pageRise 0.5s 0.05s cubic-bezier(0.22, 1, 0.36, 1) both; }
+.console.console-enter .console-rail { animation: pageRise 0.55s 0.14s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ---- micro-interactions: the console answers your hand ---- */
+.nav-item { transition: background 0.18s, color 0.18s, border-color 0.18s, transform 0.18s; }
+.nav-item:hover { transform: translateX(2px); }
+.nav-item:active { transform: translateX(2px) scale(0.98); }
+.nav-item .ic { transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.nav-item:hover .ic { transform: scale(1.14) rotate(-5deg); }
+.plan-card, .queue-card, .quick-card, .desktop-context-card {
+  transition: transform 0.22s ease, border-color 0.22s ease, box-shadow 0.22s ease;
+}
+.plan-card:hover, .queue-card:hover, .quick-card:hover, .desktop-context-card:hover {
+  transform: translateY(-2px);
+  border-color: rgba(65, 255, 161, 0.3);
+  box-shadow: var(--edge-hi), var(--depth-2), 0 0 26px rgba(65, 255, 161, 0.07);
+}
+.ml-tab, .set-model-card, .cmd-chip, .chat-start-btn { transition: transform 0.16s ease, background 0.18s, color 0.18s, border-color 0.18s, box-shadow 0.2s; }
+.ml-tab:active, .cmd-chip:active, .chat-start-btn:active { transform: scale(0.97); }
+.set-model-card:hover { transform: translateY(-2px); }
+
+/* ---- stillness is a feature: kill every decorative motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  .bg-glow { animation: none; }
+  .buddy-say.pop { animation: none; }
+  .workspace-page.page-enter,
+  .workspace-page.page-enter .workspace-page-head,
+  .workspace-page.page-enter .workspace-page-body,
+  .console.console-enter,
+  .console.console-enter .hero2,
+  .console.console-enter .console-rail { animation: none !important; }
+  .nav-item:hover, .nav-item:active, .nav-item:hover .ic,
+  .plan-card:hover, .queue-card:hover, .quick-card:hover, .desktop-context-card:hover,
+  .set-model-card:hover, .ml-tab:active, .cmd-chip:active, .chat-start-btn:active { transform: none; }
 /* Final mobile dashboard fit: the home screen is the command console, not a
    scroll page. Keep the upper nav and full chat visible in one phone viewport. */
 @media (max-width: 767px) {

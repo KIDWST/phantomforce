@@ -23,6 +23,8 @@ import { mountCompanion, setCompanionState, setCompanionMode, companionMode } fr
 import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-171";
 import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-171";
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-171";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260711-171";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260711-171";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -224,6 +226,11 @@ const MOBILE_NAV = NAV.map((n) => ({
 }));
 let activeNav = "dashboard";
 let activePageId = null;
+/* which page last played its entrance animation — store-change rerenders
+   rebuild the same page's DOM constantly, and replaying the transition on
+   every save would make the UI feel broken instead of alive. Only a real
+   navigation (key change) re-triggers it. */
+let lastEnteredPageKey = null;
 let mobileNavOpen = false;
 
 const WORKSPACE_ALIASES = {
@@ -1196,10 +1203,17 @@ function ensureDashboardShell() {
   const root = $("[data-console]");
   if (!root) return null;
   if (root.dataset.consoleView !== "dashboard") {
-    root.className = "console";
+    root.className = "console console-enter";
     root.dataset.consoleView = "dashboard";
     delete root.dataset.pageWs;
     root.innerHTML = dashboardShellHtml;
+    lastEnteredPageKey = null;
+    const settle = (e) => {
+      if (e.target !== root) return;
+      root.classList.remove("console-enter");
+      root.removeEventListener("animationend", settle);
+    };
+    root.addEventListener("animationend", settle);
   }
   return root;
 }
@@ -1392,6 +1406,7 @@ function speak(text, cls = "", emotionOverride = null) {
     setGhostMood("thinking", { emotion: "bright" });
     renderEmotePose("think", 900);
     setCompanionState("thinking");
+    buddyReact("thinking", 1400);
     chatTypingOn(text && text !== "· · ·" ? text : "");
     return;
   }
@@ -1399,6 +1414,7 @@ function speak(text, cls = "", emotionOverride = null) {
     setGhostMood("listening", { emotion: "calm", ms: 1600 });
     renderEmotePose("listen", 1100);
     setCompanionState("listening");
+    buddyReact("listening", 1600);
     chatHistory.push({ who: "user", text });
     if (chatHistory.length > 40) chatHistory.shift();
     renderChatLog();
@@ -1407,6 +1423,7 @@ function speak(text, cls = "", emotionOverride = null) {
   setGhostMood("talking", { emotion, ms: speechHoldMs(text) });
   renderEmotePose(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talk", Math.min(2200, speechHoldMs(text)));
   setCompanionState(emotion === "alert" ? "warning" : emotion === "happy" || emotion === "excited" ? "success" : "speaking");
+  buddyReact(emotion === "alert" ? "alert" : emotion === "happy" || emotion === "excited" ? "happy" : "talking", Math.min(2600, speechHoldMs(text)));
   chatTypingOff();
   chatHistory.push({ who: "phantom", text: "" });
   if (chatHistory.length > 40) chatHistory.shift();
@@ -2250,8 +2267,10 @@ function renderWorkspacePage(id, pushHash = true) {
   root.className = `console console-workspace ${def.wide ? "console-workspace-wide" : ""}`.trim();
   root.dataset.consoleView = "workspace";
   root.dataset.pageWs = key;
+  const entering = lastEnteredPageKey !== key;
+  lastEnteredPageKey = key;
   root.innerHTML = `
-    <section class="workspace-page ${def.wide ? "workspace-page-wide" : ""}" data-workspace-page="${esc(key)}">
+    <section class="workspace-page ${def.wide ? "workspace-page-wide" : ""} ${entering ? "page-enter" : ""}" data-workspace-page="${esc(key)}">
       <header class="workspace-page-head">
         <div>
           <p class="workspace-page-kicker">${esc(def.kicker)}${!def.custom && isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
@@ -2474,7 +2493,13 @@ let ghostStarted = false;
 function enterPhantom() {
   gate.hidden = true;
   phantom.hidden = false;
-  if (!ghostStarted) { ghostStarted = true; initPhantom3D(); initGhost(); startClock(); }
+  if (!ghostStarted) {
+    ghostStarted = true;
+    initPhantom3D(); initGhost(); startClock();
+    mountAmbient();
+    // the buddy wakes after the boot reveal so it doesn't fight the intro
+    setTimeout(() => mountBuddy(), 1600);
+  }
   activeNav = "dashboard";
   renderConsole();
   requestAnimationFrame(() => phantom.classList.add("booted"));
