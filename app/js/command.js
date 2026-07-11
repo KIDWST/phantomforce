@@ -11,9 +11,9 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260711-182";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-182";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260711-182";
+} from "./store.js?v=phantom-live-20260711-183";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-183";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260711-183";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -1064,10 +1064,100 @@ function routeCommand(raw, settings) {
   };
 }
 
+/* Server agent runs — the real execution lifecycle behind "run a business
+   snapshot" / "run a provider health check". This POSTs to the backend run
+   engine (queued → executing → verifying → completed/failed/cancelled), polls
+   the run to its terminal state, and reports what ACTUALLY happened: the
+   states it walked, the artifact it produced, and the Hermes ledger proof id.
+   If the backend can't be reached or refuses, the reply says so — nothing is
+   ever shown as "running" unless the server says it is. */
+const TERMINAL_RUN_STATES = new Set(["completed", "failed", "cancelled"]);
+async function runAgentFromChat(text, intent) {
+  if (!isAdmin()) {
+    return {
+      say: "Server agent runs are owner/admin-only on this account. Nothing was started.",
+      cards: [], open: null,
+    };
+  }
+  if (typeof fetch !== "function") {
+    return { say: "This session has no backend connection, so I can't start a server run right now.", cards: [], open: null };
+  }
+  const token = typeof session?.token === "function" ? session.token() : "";
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const operation = intent.agentOperation || "business_snapshot";
+  let run = null;
+  try {
+    const res = await fetch("/phantom-ai/runs", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ operation, request: text.slice(0, 300), workspace: currentWs() }),
+    });
+    const payload = await res.json().catch(() => ({}));
+    if (!res.ok || !payload?.ok || !payload.run) {
+      const why = res.status === 401 || res.status === 403
+        ? "this session isn't authorized on the run engine"
+        : String(payload?.error || `the run engine answered ${res.status}`);
+      return {
+        say: `I couldn't start that run — ${why}. Nothing executed and nothing is pretending to run.`,
+        cards: [], open: null,
+      };
+    }
+    run = payload.run;
+    /* poll to a terminal state — executors are local reads, so this resolves
+       in a few seconds; the deadline keeps chat honest instead of hanging */
+    const deadline = Date.now() + 25000;
+    while (!TERMINAL_RUN_STATES.has(run.state) && Date.now() < deadline) {
+      await new Promise((resolve) => setTimeout(resolve, 700));
+      const poll = await fetch(`/phantom-ai/runs/${encodeURIComponent(run.id)}`, { headers });
+      const polled = await poll.json().catch(() => ({}));
+      if (poll.ok && polled?.run) run = polled.run;
+    }
+  } catch {
+    return {
+      say: run
+        ? `The run started (${run.id}) but I lost the connection while watching it. Check Developer → Agent runs for its real state.`
+        : "I couldn't reach the run engine, so nothing was started.",
+      cards: [], open: run ? "developer" : null,
+    };
+  }
+  const statesWalked = [...new Set((run.events || []).map((e) => e.state).filter(Boolean))].join(" → ");
+  const artifact = (run.artifacts || [])[0] || null;
+  if (run.state === "completed") {
+    return {
+      say: `Done — ${run.title.toLowerCase()} ran for real: ${statesWalked}. ${artifact ? `Result: ${artifact.summary}.` : ""} Proof is in the Hermes ledger under request ${run.proof_request_id || run.id}.`,
+      cards: [card(run.title, `Run ${run.id} — completed`, artifact ? artifact.summary : "Run completed and verified.", [openAction("Open Developer", "developer")], "Verified · ledger proof recorded")],
+      open: null,
+    };
+  }
+  if (run.state === "failed") {
+    return {
+      say: `That run failed for real — ${run.error || "verification did not pass"}. States walked: ${statesWalked}. Nothing was papered over; the full event trail is in Developer → Agent runs.`,
+      cards: [card(run.title, `Run ${run.id} — failed`, run.error || "See the event trail for details.", [openAction("Open Developer", "developer")], "Failed")],
+      open: null,
+    };
+  }
+  if (run.state === "cancelled") {
+    return {
+      say: `That run was cancelled mid-flight (${statesWalked}). Nothing was completed and no proof entry was written.`,
+      cards: [], open: null,
+    };
+  }
+  return {
+    say: `The run is still going (currently ${run.state}) — it kept working past my chat window. Watch it live in Developer → Agent runs; it will land as completed or failed with a full event trail.`,
+    cards: [card(run.title, `Run ${run.id} — ${run.state}`, "Still executing on the server.", [openAction("Open Developer", "developer")], "In progress")],
+    open: null,
+  };
+}
+
 export async function handleSmartCommand(raw) {
   const text = (raw || "").trim();
   const intent = classifyPhantomIntent(text);
   const settings = loadRuntimeAiSettings();
+
+  if (intent.primaryIntent === "run_agent") {
+    return runAgentFromChat(text, intent);
+  }
 
   if (canAskHermes(intent, settings)) {
     const backend = await askHermesBrain(text, intent, settings);

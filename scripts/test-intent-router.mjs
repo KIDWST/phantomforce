@@ -27,6 +27,11 @@ const CASES = [
   // explicit records
   ["create a task to update the pricing page", "create_task"],
   ["build me a campaign for next week", "looper_build"],
+  // server agent runs — explicit "run a …" only, questions stay questions
+  ["run a business snapshot", "run_agent"],
+  ["can you run a provider health check", "run_agent"],
+  ["run an ai health check", "run_agent"],
+  ["how do I run a business snapshot?", "question"],
   // risk always gates
   ["publish the site now", "approval_request"],
   ["send the invoice", "approval_request"],

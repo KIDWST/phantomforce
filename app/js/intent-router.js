@@ -26,6 +26,9 @@ const MEMORY = /\b(remember|save this memory|make sure you remember|from now on|
 const STATUS = /\b(status|catch me up|what'?s next|what is next|today'?s plan|plan for today|pipeline|queue|summary|report)\b/i;
 /* the user is venting, not filing a request — answer like a person */
 const VENT = /\b(i'?m|i am|im|feeling|been)\s+(so\s+|really\s+|pretty\s+)?(overwhelmed|stressed|burn(ed|t)?[\s-]*out|exhausted|drowning|swamped|frustrated|anxious|behind on everything)\b|\btoo much (going on|on my plate)\b|\blong (day|week)\b/i;
+/* server agent runs — explicit "run a …" phrasing for the real, safe
+   read-only operations the backend exposes (states + proof + artifact) */
+const AGENT_RUN = /\brun\s+(a\s+|an\s+|the\s+)?(business\s+snapshot|snapshot\s+report|operational\s+snapshot|provider\s+health\s*(check)?|ai\s+health\s*(check)?|system\s+health\s*(check)?)\b/i;
 /* live-world facts: these are QUESTIONS to answer (or route to a live brain),
    never tasks, plans, or board summaries — "what's the weather today" must
    not be hijacked by the \btoday\b status keyword */
@@ -131,6 +134,20 @@ export function classifyPhantomIntent(raw = "") {
   }
   if (WEBSITE_UPDATE.test(politeStripped) && !isHowWhatQuestion) {
     return { ...result, primaryIntent: "website_update", confidence: 0.86, reasonCode: "explicit_website_update" };
+  }
+
+  /* Server agent runs — explicit "run a …" phrasing only. These map to the
+     real read-only operations Hermes exposes; nothing else in chat is allowed
+     to claim an agent is "running". */
+  if (AGENT_RUN.test(politeStripped) && !isHowWhatQuestion) {
+    const wantsProviderHealth = /\b(provider|ai|system)\s+health\b/i.test(politeStripped);
+    return {
+      ...result,
+      primaryIntent: "run_agent",
+      confidence: 0.9,
+      reasonCode: "explicit_agent_run",
+      agentOperation: wantsProviderHealth ? "provider_health" : "business_snapshot",
+    };
   }
 
   /* Phantom Loop is a chat-routing toggle, checked before greeting/gratitude
@@ -329,7 +346,7 @@ const LANE_BY_INTENT = {
   brainstorm: "brainstorm", plan: "brainstorm",
   task_candidate: "clarification", automation_candidate: "clarification",
   create_task: "command", memory_update: "command", phantom_loop_on: "command", phantom_loop_off: "command",
-  create_website: "command", website_update: "command",
+  create_website: "command", website_update: "command", run_agent: "command",
   create_automation: "workflow", reminder: "workflow", termina_parallel: "workflow", vacation_mode: "workflow",
   looper_build: "workflow", approval_request: "approval",
 };
@@ -337,7 +354,7 @@ const AREA_BY_INTENT = {
   create_task: "workers", memory_update: "memory", create_automation: "automations", reminder: "automations",
   termina_parallel: "workers", vacation_mode: "vacation", approval_request: "approvals",
   phantom_loop_on: "settings", phantom_loop_off: "settings", looper_build: "sites",
-  create_website: "sites", website_update: "sites",
+  create_website: "sites", website_update: "sites", run_agent: "workers",
 };
 /* Only these lanes are allowed to show a card by default — conversation/
    answer/brainstorm/clarification stay text-only unless a specific response
