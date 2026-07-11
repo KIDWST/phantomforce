@@ -452,12 +452,31 @@ function normalizeFinance(finance) {
 }
 
 /* ---------------- seed ---------------- */
+const REQUIRED_WORKSPACES = [
+  {
+    id: "phantomforce",
+    name: "PhantomForce",
+    kind: "HQ",
+    brainKey: "phantomforce-owner-brain",
+    memoryNamespace: "phantomforce",
+    assetNamespace: "phantomforce",
+    tagline: "Brand-new workspace. Real records appear only after you create or connect them.",
+  },
+  {
+    id: "chicagoshots",
+    name: "ChicagoShots",
+    kind: "Business",
+    brainKey: "chicagoshots-business-brain",
+    memoryNamespace: "chicagoshots",
+    assetNamespace: "chicagoshots",
+    tagline: "Independent ChicagoShots business brain, memory, content, and media workspace.",
+  },
+];
+
 function seed() {
   return {
     version: 4,
-    workspaces: [
-      { id: "phantomforce", name: "PhantomForce", kind: "HQ", tagline: "Brand-new workspace. Real records appear only after you create or connect them." },
-    ],
+    workspaces: REQUIRED_WORKSPACES.map((workspace) => ({ ...workspace })),
     leads: [],
     proposals: [],
     tasks: [],
@@ -483,7 +502,16 @@ function seed() {
 function normalizeData(data) {
   const seeded = seed();
   const d = data && typeof data === "object" ? data : seeded;
-  d.workspaces = Array.isArray(d.workspaces) && d.workspaces.length ? d.workspaces : seeded.workspaces;
+  const savedWorkspaces = Array.isArray(d.workspaces) ? d.workspaces : [];
+  d.workspaces = REQUIRED_WORKSPACES.map((required) => ({
+    ...required,
+    ...(savedWorkspaces.find((workspace) => workspace?.id === required.id) || {}),
+    id: required.id,
+    name: required.name,
+    brainKey: required.brainKey,
+    memoryNamespace: required.memoryNamespace,
+    assetNamespace: required.assetNamespace,
+  }));
   d.leads = Array.isArray(d.leads) ? d.leads : [];
   d.proposals = Array.isArray(d.proposals) ? d.proposals : [];
   d.tasks = Array.isArray(d.tasks) ? d.tasks : [];
