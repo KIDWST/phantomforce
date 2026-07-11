@@ -8435,7 +8435,7 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 /* =================  LIVING CONSOLE — magic pass  ============= */
 /* PhantomForce is a magical workforce environment, not a war    */
 /* room. This block adds the ambient life layer: drifting spark  */
-/* motes, the free-flying phantom buddy, page-enter transitions, */
+/* motes, the sidebar-docked phantom companion, page-enter transitions, */
 /* an aurora breath on the glow field, and micro-interactions.   */
 /* Every animation here is decorative and fully disabled under   */
 /* prefers-reduced-motion.                                       */
@@ -8455,7 +8455,7 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 }
 .bg-glow { animation: auroraDrift 26s ease-in-out infinite; will-change: transform, opacity; }
 
-/* ---- the phantom buddy: a real companion, not a mascot decal ---- */
+/* ---- the phantom companion: docked in the console, not flying over work ---- */
 /* z-index 46: above every page surface, below overlays (50), the  */
 /* notif menu (60), cmdk (80), and the mobile chrome (95) so it    */
 /* can never block a control that matters.                         */

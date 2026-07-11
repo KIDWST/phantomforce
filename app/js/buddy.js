@@ -1,8 +1,8 @@
 /* PhantomForce companion.
-   One free Phantom system: docked by default, preference-aware, drag-safe,
-   double-click dockable, and tied to real chat/notification states. */
+   One sidebar-docked Phantom system: preference-aware, drag-safe, always
+   returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-188";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-189";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260711-188";
+} from "./companion-preferences.js?v=phantom-live-20260711-189";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -99,12 +99,19 @@ function createBuddyController() {
   function mobile() { return window.matchMedia("(max-width: 720px)").matches; }
   function reduceMotion() { return reduceMotionQuery.matches || prefs.motionLevel === "reduced" || prefs.motionLevel === "none"; }
   function motionAllowed() { return !reduceMotion() && prefs.motionLevel !== "none"; }
-  function roamingAllowed() { return prefs.roamingEnabled && !mobile() && motionAllowed(); }
+  function roamingAllowed() { return false; }
+
+  function sidebarRect() {
+    const sidebar = document.querySelector(".sidebar")?.getBoundingClientRect();
+    if (sidebar && sidebar.width > 120) return sidebar;
+    return { left: 0, width: window.innerWidth > 900 ? 212 : 0 };
+  }
 
   function safeInsets() {
     const hasSidebar = window.innerWidth > 900;
+    const inSidebarDock = hasSidebar && prefs.dockLocation === "sidebar";
     return {
-      left: hasSidebar ? 236 : 14,
+      left: inSidebarDock ? 10 : hasSidebar ? 236 : 14,
       right: 18,
       top: hasSidebar ? 88 : 72,
       bottom: mobile() ? 98 : 24,
@@ -125,7 +132,14 @@ function createBuddyController() {
     const half = size / 2;
     const dock = mobile() && prefs.dockLocation === "sidebar" ? "bottom-right" : prefs.dockLocation;
     if (dock === "bottom-left") return { x: inset.left + half, y: window.innerHeight - inset.bottom - half };
-    if (dock === "sidebar") return { x: Math.max(inset.left - 48, half + 14), y: Math.min(window.innerHeight - inset.bottom - half, inset.top + half + 92) };
+    if (dock === "sidebar") {
+      const side = sidebarRect();
+      const sideCenter = side.left + side.width / 2;
+      return {
+        x: Math.max(half + 10, Math.min(side.left + side.width - half - 10, sideCenter)),
+        y: window.innerHeight - inset.bottom - half,
+      };
+    }
     return { x: window.innerWidth - inset.right - half, y: window.innerHeight - inset.bottom - half };
   }
 
@@ -173,8 +187,7 @@ function createBuddyController() {
         <button type="button" data-buddy-action="notifications" role="menuitem">Show notifications</button>
         <button type="button" data-buddy-action="approvals" role="menuitem">Show approvals</button>
         <hr />
-        <button type="button" data-buddy-action="dock" role="menuitem">Dock</button>
-        <button type="button" data-buddy-action="roam" role="menuitem">Allow roaming</button>
+        <button type="button" data-buddy-action="dock" role="menuitem">Return to sidebar</button>
         <button type="button" data-buddy-action="quiet" role="menuitem">Quiet mode</button>
         <button type="button" data-buddy-action="hide" role="menuitem">Hide for this session</button>
         <button type="button" data-buddy-action="disable" role="menuitem">Disable companion</button>
@@ -191,8 +204,6 @@ function createBuddyController() {
           <option value="none">None</option>
         </select></label>
         <label>Dock <select data-buddy-pref="dockLocation">
-          <option value="bottom-right">Bottom right</option>
-          <option value="bottom-left">Bottom left</option>
           <option value="sidebar">Sidebar</option>
         </select></label>
         <label>Personality <select data-buddy-pref="personality">
@@ -235,7 +246,7 @@ function createBuddyController() {
   function applyPreferenceClasses() {
     if (!layer) return;
     layer.classList.toggle("is-docked", docked);
-    layer.classList.toggle("is-roaming", !docked && roamingAllowed());
+    layer.classList.toggle("is-roaming", false);
     layer.dataset.motion = prefs.motionLevel;
     layer.dataset.personality = prefs.personality;
     layer.dataset.dock = prefs.dockLocation;
@@ -250,7 +261,7 @@ function createBuddyController() {
     createLayer();
     configureCanvas();
     syncMenuControls();
-    if (prefs.startDocked || mobile() || !prefs.roamingEnabled) dock();
+    dock();
     applyPreferenceClasses();
     startLoop();
     maybeGreet();
@@ -340,12 +351,7 @@ function createBuddyController() {
   }
 
   function undock() {
-    if (mobile()) return dock();
-    docked = false;
-    try { localStorage.setItem(LEGACY_DOCK_KEY, "0"); } catch {}
-    setState("idle", 1400);
-    pickWanderTarget(performance.now(), true);
-    applyPreferenceClasses();
+    dock();
   }
 
   function pickWanderTarget(now, force = false) {
@@ -426,8 +432,7 @@ function createBuddyController() {
     if (action === "ask") focusChat();
     else if (action === "notifications") document.querySelector("[data-notif-btn]")?.click();
     else if (action === "approvals") openSurface("approvals");
-    else if (action === "dock") { updateCompanionPrefs({ roamingEnabled: false, startDocked: true }); dock(); say("Docked.", 1500); }
-    else if (action === "roam") { updateCompanionPrefs({ roamingEnabled: true, startDocked: false, motionLevel: prefs.motionLevel === "none" ? "subtle" : prefs.motionLevel }); undock(); say("Roaming carefully.", 1800); }
+    else if (action === "dock") { updateCompanionPrefs({ roamingEnabled: false, startDocked: true, dockLocation: "sidebar" }); dock(); say("I'm home.", 1500); }
     else if (action === "quiet") { updateCompanionPrefs({ personality: "quiet", motionLevel: "reduced", idleFrequency: "off", speechEnabled: false }); dock(); }
     else if (action === "hide") hideCompanionForSession();
     else if (action === "disable") updateCompanionPrefs({ enabled: false });
@@ -473,10 +478,9 @@ function createBuddyController() {
       layer.classList.remove("is-grabbed");
       if (event?.pointerId != null) { try { canvas.releasePointerCapture(event.pointerId); } catch {} }
       if (dragged) {
-        docked = false;
-        updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
-        setState("idle", 1200);
-        pickWanderTarget(performance.now(), true);
+        updateCompanionPrefs({ roamingEnabled: false, startDocked: true, dockLocation: "sidebar" });
+        dock();
+        say("I'll stay in the sidebar.", 1600);
       } else {
         setState("curious", 1200);
         const pool = QUIPS[prefs.personality] || QUIPS.friendly;
@@ -487,15 +491,9 @@ function createBuddyController() {
     canvas.addEventListener("pointerup", release, { signal });
     canvas.addEventListener("pointercancel", release, { signal });
     canvas.addEventListener("dblclick", () => {
-      if (docked) {
-        updateCompanionPrefs({ roamingEnabled: true, startDocked: false });
-        undock();
-        say("Back on patrol.", 1700);
-      } else {
-        updateCompanionPrefs({ roamingEnabled: false, startDocked: true });
-        dock();
-        say("Docked.", 1500);
-      }
+      updateCompanionPrefs({ roamingEnabled: false, startDocked: true, dockLocation: "sidebar" });
+      dock();
+      say("Back home.", 1500);
     }, { signal });
     canvas.addEventListener("contextmenu", (event) => {
       event.preventDefault();

@@ -1,9 +1,9 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260711-188";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-188";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260711-188";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260711-189";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-189";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260711-189";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -461,7 +461,6 @@ function renderCompanionTab() {
         <label class="set-inline"><input type="checkbox" data-companion-toggle="enabled" ${companion.enabled ? "checked" : ""}/> Enable companion</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="visible" ${companion.visible ? "checked" : ""}/> Visible</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="startDocked" ${companion.startDocked ? "checked" : ""}/> Start docked</label>
-        <label class="set-inline"><input type="checkbox" data-companion-toggle="roamingEnabled" ${companion.roamingEnabled ? "checked" : ""}/> Allow roaming</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="speechEnabled" ${companion.speechEnabled ? "checked" : ""}/> Speech bubbles</label>
         <label class="set-inline"><input type="checkbox" data-companion-toggle="notificationReactions" ${companion.notificationReactions ? "checked" : ""}/> Notification reactions</label>
         <label class="set-field">
@@ -482,10 +481,8 @@ function renderCompanionTab() {
           ], companion.size)}</select>
         </label>
         <label class="set-field">
-          <span>Dock location</span>
+          <span>Home dock</span>
           <select data-companion-field="dockLocation">${optionList([
-            { id: "bottom-right", label: "Bottom right" },
-            { id: "bottom-left", label: "Bottom left" },
             { id: "sidebar", label: "Sidebar" },
           ], companion.dockLocation)}</select>
         </label>
@@ -633,6 +630,7 @@ export function renderOperatorSettings(el, opts = {}) {
     visible: true,
     startDocked: true,
     roamingEnabled: false,
+    dockLocation: "sidebar",
     motionLevel: "reduced",
     personality: "quiet",
     speechEnabled: false,
