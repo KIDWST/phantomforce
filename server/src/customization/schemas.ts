@@ -165,4 +165,3 @@ export const ConfigurationPatchSchema = z.object({
 
 export type OrganizationConfiguration = z.infer<typeof OrganizationConfigurationSchema>;
 export type ConfigurationPatch = z.infer<typeof ConfigurationPatchSchema>;
-

@@ -238,6 +238,17 @@ import type {
   ProviderLiveReceiptLedgerOperation,
   SensitivityLevel,
 } from "./phantom-ai/types.js";
+import { PLATFORM_MODULES } from "./customization/module-registry.js";
+import {
+  getOrganizationConfiguration,
+  planAssistantCustomization,
+  previewConfigurationChange,
+  publicConfiguration,
+  publishConfigurationChange,
+  resetOrganizationConfiguration,
+  rollbackOrganizationConfiguration,
+  type CustomizationEntitlements,
+} from "./customization/customization-service.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -245,6 +256,33 @@ const port = Number(process.env.PORT ?? 5190);
 const app = Fastify({
   logger: process.env.PHANTOMFORCE_SERVER_LOGGER === "false" ? false : true,
 });
+
+const CustomizationTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
+const CustomizationPreviewBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
+const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ summary: z.string().trim().max(240).optional(), expected_version: z.number().int().positive().optional() });
+const CustomizationRollbackBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), version: z.number().int().positive() });
+const CustomizationAssistantBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), message: z.string().trim().min(1).max(1200) });
+
+function safeCustomizationTenantId(value: unknown, fallback: string) {
+  if (typeof value !== "string") return fallback;
+  return value.trim().replace(/\s+/g, "-").replace(/[^a-zA-Z0-9_.:-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80) || fallback;
+}
+
+function customizationTenantForSession(session: AccessSession, requestedTenantId?: string) {
+  if (session.canManageAccess) return safeCustomizationTenantId(requestedTenantId, "phantomforce-owner");
+  return safeCustomizationTenantId(session.clientId, `client-${session.id}`);
+}
+
+function customizationEntitlements(session: AccessSession, tenantId: string): CustomizationEntitlements {
+  const workspace = getWorkspaceAccess(tenantId);
+  const modules = new Set((workspace?.decision.modules ?? []).map((module) => module.trim().toLowerCase()));
+  const internalPhantomForce = session.canManageAccess && ["phantomforce", "phantomforce-owner"].includes(tenantId);
+  return {
+    internalPhantomForce,
+    coBranded: internalPhantomForce || modules.has("co-branded") || modules.has("white-label"),
+    whiteLabel: internalPhantomForce || modules.has("white-label"),
+  };
+}
 
 await app.register(cors, {
   origin: [
@@ -480,6 +518,128 @@ app.get("/contracts/actions", async () => {
     actionTypes: Object.keys(ACTION_SCHEMAS),
     falconJobTypes: Object.keys(FALCON_JOB_SCHEMAS),
   };
+});
+
+app.get("/phantom-ai/customization/modules", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  return {
+    ok: true,
+    modules: PLATFORM_MODULES.map((module) => ({
+      ...module,
+      visibleToCurrentSession: module.allowedRoles.includes(session.canManageAccess ? "owner" : "client"),
+    })),
+    protectedCore: true,
+    providerCalled: false,
+  };
+});
+
+app.get("/phantom-ai/customization/config", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    configuration: publicConfiguration(state.configuration),
+    entitlements: customizationEntitlements(session, tenantId),
+    version_count: state.versions.length,
+    platform_core_editable: false,
+    provider_called: false,
+  };
+});
+
+app.get("/phantom-ai/customization/versions", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    versions: state.versions.map(({ configuration: _configuration, ...version }) => version).reverse(),
+    audit: state.audit.slice().reverse(),
+    provider_called: false,
+  };
+});
+
+app.post("/phantom-ai/customization/preview", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationPreviewBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const preview = await previewConfigurationChange({ tenantId, actor: session.id, patch: parsed.data.patch, entitlements: customizationEntitlements(session, tenantId) });
+    return { ok: true, tenant_id: tenantId, preview, provider_called: false, source_code_edited: false };
+  } catch (error) {
+    if (error instanceof z.ZodError) return reply.status(400).send({ ok: false, error: error.flatten() });
+    throw error;
+  }
+});
+
+app.post("/phantom-ai/customization/publish", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationPublishBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await publishConfigurationChange({
+      tenantId,
+      actor: session.id,
+      patch: parsed.data.patch,
+      summary: parsed.data.summary ?? "Published workspace customization",
+      expectedVersion: parsed.data.expected_version,
+      entitlements: customizationEntitlements(session, tenantId),
+    });
+    return { ok: true, tenant_id: tenantId, result, outbound_action_executed: false, protected_core_modified: false };
+  } catch (error) {
+    if (error instanceof z.ZodError) return reply.status(400).send({ ok: false, error: error.flatten() });
+    return reply.status(409).send({ ok: false, error: error instanceof Error ? error.message : "Customization could not be published." });
+  }
+});
+
+app.post("/phantom-ai/customization/rollback", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationRollbackBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await rollbackOrganizationConfiguration({ tenantId, actor: session.id, version: parsed.data.version, entitlements: customizationEntitlements(session, tenantId) });
+    return { ok: true, tenant_id: tenantId, result, protected_core_modified: false };
+  } catch (error) {
+    return reply.status(409).send({ ok: false, error: error instanceof Error ? error.message : "Rollback failed." });
+  }
+});
+
+app.post("/phantom-ai/customization/reset", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const result = await resetOrganizationConfiguration({ tenantId, actor: session.id });
+  return { ok: true, tenant_id: tenantId, result, organization_data_deleted: false, protected_core_modified: false };
+});
+
+app.post("/phantom-ai/customization/assistant-plan", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationAssistantBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const plan = planAssistantCustomization(parsed.data.message, state.configuration);
+  if (!plan.understood) return reply.status(422).send({ ok: false, error: "I could not map that request to a safe workspace setting yet.", plan });
+  const preview = await previewConfigurationChange({ tenantId, actor: session.id, patch: plan.patch, entitlements: customizationEntitlements(session, tenantId) });
+  return { ok: true, tenant_id: tenantId, plan, preview, provider_called: false, source_code_edited: false, requires_approval: true };
 });
 
 function requestPublicHost(request: FastifyRequest) {

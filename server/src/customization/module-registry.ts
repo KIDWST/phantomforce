@@ -32,4 +32,3 @@ export const PLATFORM_MODULES: PlatformModuleDefinition[] = [
 export const MODULE_BY_ID = new Map(PLATFORM_MODULES.map((module) => [module.id, module]));
 export const REQUIRED_MODULE_IDS = new Set(PLATFORM_MODULES.filter((module) => module.required).map((module) => module.id));
 export const PROTECTED_MODULE_IDS = new Set(PLATFORM_MODULES.filter((module) => !module.customerConfigurable).map((module) => module.id));
-
