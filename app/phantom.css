@@ -2277,23 +2277,22 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   position: sticky; top: 0; z-index: 20;
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-/* Identity/status info is higher priority than the topbar-actions cluster
-   (search/clock/notif/user), which already declares its own shrink target
-   below (flex: 0 1 auto; min-width: 0) - let pills keep their natural width
-   and have that cluster give up space first. */
-.status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; flex-shrink: 0; }
+/* Browser zoom changes the effective CSS width, so every left-side topbar
+   group must be allowed to shrink before it crashes into clock/user controls. */
+.status-pills { display: flex; gap: 10px; flex-wrap: nowrap; align-items: center; min-width: 0; flex: 1 1 0; }
 .topbar-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 14px;
-  flex: 1 1 0;
+  gap: 10px;
+  flex: 0 1 auto;
   min-width: 0;
   margin-left: auto;
 }
 .topbar-actions .cmdk-open { flex: 0 1 240px; }
-.topbar-actions .topbar-clock { margin-left: clamp(14px, 1.5vw, 64px); }
+.topbar-actions .topbar-clock { margin-left: clamp(6px, 0.8vw, 18px); }
 .pill { display: flex; flex-direction: column; gap: 2px; padding: 7px 13px; border: 1px solid var(--line); border-radius: 12px; background: var(--glass); min-width: 0; }
+.status-pills .pill { flex: 0 1 178px; }
 .pill-link { cursor: pointer; transition: border-color 0.15s, background 0.15s; }
 .pill-link:hover, .pill-link:focus-visible { border-color: var(--line-strong); background: rgba(65,255,161,0.08); outline: none; }
 .pill-k { font: 500 8px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
@@ -2306,7 +2305,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .pill-warn .pill-v { color: var(--warn); }
 .pill-warn .dot { background: var(--warn); box-shadow: 0 0 8px var(--warn); }
 .pill-v .lock { font-size: 11px; }
-.ws-switch { display: inline-flex; min-width: 0; flex: 0 1 auto; }
+.ws-switch { display: inline-flex; min-width: 0; flex: 0 1 180px; }
 .ws-switch select {
   appearance: none; -webkit-appearance: none; cursor: pointer; max-width: 170px;
   padding: 8px 30px 8px 13px; border-radius: 12px; font-size: 12.5px;
@@ -2317,7 +2316,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .ws-switch select:focus { outline: none; border-color: var(--neon); }
 .ws-switch option { background: #04120c; color: var(--ink); }
-.topbar-clock { margin-left: auto; text-align: right; line-height: 1.2; flex-shrink: 0; }
+.topbar-clock { text-align: right; line-height: 1.2; flex-shrink: 0; }
 .topbar-clock b { display: block; font: 600 17px "Space Grotesk", sans-serif; letter-spacing: 0.02em; }
 .topbar-clock i { font: 400 11px "DM Mono", monospace; font-style: normal; color: var(--dim); }
 .user-menu-wrap { position: relative; display: inline-flex; align-items: center; flex-shrink: 0; }
@@ -3135,10 +3134,22 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .topbar-clock i { display: none; }
   .user-meta i { display: none; }
 }
+@media (max-width: 1700px) {
+  .topbar2 { gap: 10px; padding-inline: 16px; }
+  .status-pills { gap: 8px; }
+  .status-pills .pill { flex-basis: 150px; padding-inline: 10px; }
+  .status-pills .ws-switch { flex-basis: 158px; }
+  .desktop-context-top { flex: 0 1 330px; min-width: 260px; max-width: 360px; }
+  .topbar-actions { gap: 8px; }
+  .topbar-actions .cmdk-open { flex: 0 0 44px; width: 44px; padding-inline: 8px; justify-content: center; }
+  .cmdk-open-label, .cmdk-open-kbd { display: none; }
+  .topbar-actions .topbar-clock { margin-left: 4px; }
+  .topbar-clock i { display: none; }
+}
 @media (min-width: 1800px) {
   .topbar2 { justify-content: flex-start; }
   .topbar-actions { margin-left: auto; }
-  .topbar-actions .topbar-clock { margin-left: clamp(18px, 1.6vw, 86px); }
+  .topbar-actions .topbar-clock { margin-left: clamp(8px, 0.9vw, 22px); }
 }
 @media (max-width: 1320px) {
   .desktop-context-top { flex-basis: 320px; min-width: 240px; }
