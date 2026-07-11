@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-193";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-194";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260711-193";
+} from "./companion-preferences.js?v=phantom-live-20260711-194";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -596,9 +596,15 @@ function createBuddyController() {
         dock();
         say("I'll stay in the sidebar.", 1600);
       } else {
-        setState(prefs.personality === "quiet" ? "curious" : "playful", 1400);
-        pulse = Math.max(pulse, 0.85);
-        say(quipText(), 2400);
+        if (sidebarPortraitMode()) {
+          setState("curious", 1100);
+          pulse = Math.max(pulse, 0.18);
+          say(quipText(), 1900);
+        } else {
+          setState(prefs.personality === "quiet" ? "curious" : "playful", 1400);
+          pulse = Math.max(pulse, 0.85);
+          say(quipText(), 2400);
+        }
       }
       applyPreferenceClasses();
     };

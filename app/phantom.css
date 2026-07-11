@@ -8664,19 +8664,20 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 }
 .buddy[data-dock="sidebar"] .buddy-say {
   left: 50%;
-  top: -46px;
-  bottom: auto;
+  top: auto;
+  bottom: 12px;
   right: auto;
   transform: translateX(-50%);
-  width: min(196px, calc(var(--buddy-width, 136px) + 54px));
-  max-width: min(196px, calc(100vw - 28px));
+  width: calc(var(--buddy-width, 136px) - 26px);
+  max-width: calc(var(--buddy-width, 136px) - 26px);
   padding: 7px 10px;
   text-align: center;
-  font-size: 11px;
+  font-size: 10.5px;
   line-height: 1.28;
   overflow-wrap: anywhere;
-  border-radius: 13px;
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.42), 0 0 18px rgba(65, 255, 161, 0.1);
+  border-radius: 12px;
+  background: rgba(2, 12, 9, 0.78);
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34), 0 0 14px rgba(65, 255, 161, 0.08);
 }
 .buddy[data-state="notifying"] .buddy-canvas,
 .buddy[data-state="celebrating"] .buddy-canvas {
