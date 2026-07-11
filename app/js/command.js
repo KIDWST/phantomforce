@@ -13,6 +13,7 @@ import {
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
 } from "./store.js?v=phantom-live-20260711-183";
 import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-183";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260711-183";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
