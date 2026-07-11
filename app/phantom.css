@@ -3817,8 +3817,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   }
 
   .app-main:has(.workspace-page[data-workspace-page="media"]) .console-workspace {
+    flex: 1 1 auto;
     min-height: 0;
-    height: 100%;
     overflow: hidden;
     padding: clamp(8px, 1vw, 14px);
   }
@@ -4505,6 +4505,21 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .dev-stat-row { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .developer-lane-control { grid-template-columns: 1fr 1fr; }
   .developer-lane-copy, .developer-lane-control em { grid-column: 1 / -1; text-align: left; }
+}
+@media (min-width: 901px) and (max-width: 1080px) {
+  .workspace-page[data-workspace-page="media"] .ml-body {
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-workspace {
+    height: auto;
+  }
+
+  .workspace-page[data-workspace-page="media"] .ml-stage-frame {
+    min-height: clamp(360px, 56dvh, 620px);
+    height: auto;
+  }
 }
 @media (max-width: 900px) {
   .ml-engine-mini span { display: none; }
