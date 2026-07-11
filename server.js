@@ -28,6 +28,7 @@ import { decomposeObjective } from "./mission/decompose.js";
 import { synthesizeMission, renderReportMarkdown } from "./mission/synthesize.js";
 import { isGitRepo, slugify, createWorktree, removeWorktree } from "./mission/worktree.js";
 import { AGENT_PROVIDERS, isAgentProvider, isLaunchMode } from "./mission/adapters.js";
+import { findGitRepos } from "./mission/repos.js";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(appDir, "public");
@@ -515,6 +516,10 @@ const server = http.createServer((req, res) => {
   }
 
   // ---- mission API ------------------------------------------------------
+
+  if (pathName === "/api/repos" && req.method === "GET") {
+    return sendJson(res, 200, { ok: true, repos: findGitRepos() });
+  }
 
   if (pathName === "/api/missions/decompose" && req.method === "POST") {
     readJsonBody(req)

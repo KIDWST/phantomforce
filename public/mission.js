@@ -136,12 +136,55 @@ function defaultWorkspaceRoot() {
   return profiles.find((p) => p.id === "claude")?.cwd || "";
 }
 
+const MISSION_WORKSPACE_HISTORY_KEY = "termina.mission.workspaceHistory";
+
+function workspaceHistory() {
+  try {
+    const raw = localStorage.getItem(MISSION_WORKSPACE_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
 function rememberWorkspaceRoot(root) {
   try {
     localStorage.setItem(MISSION_WORKSPACE_KEY, root);
+    const history = workspaceHistory().filter((p) => p !== root);
+    history.unshift(root);
+    localStorage.setItem(MISSION_WORKSPACE_HISTORY_KEY, JSON.stringify(history.slice(0, 10)));
   } catch {
     /* storage unavailable */
   }
+}
+
+// Real git repos found on this machine, fetched once and cached — used to
+// build a pick-list instead of making someone hand-type a path.
+let repoScanPromise = null;
+function scanRepos() {
+  if (!repoScanPromise) {
+    repoScanPromise = api("/api/repos")
+      .then((r) => r.json())
+      .then((d) => (d.ok ? d.repos : []))
+      .catch(() => []);
+  }
+  return repoScanPromise;
+}
+
+// Plain-English messages for the server's error codes — never show a raw
+// snake_case code to the user.
+const FRIENDLY_ERRORS = {
+  objective_required: "Please describe the objective first.",
+  workspace_root_invalid: "That folder doesn't exist. Pick or enter a valid path.",
+  objective_and_roles_required: "Something went wrong preparing the mission — please try again.",
+  mission_not_found: "That mission could not be found.",
+  worker_not_found: "That worker could not be found.",
+};
+
+function friendlyError(code) {
+  if (FRIENDLY_ERRORS[code]) return FRIENDLY_ERRORS[code];
+  if (typeof code === "string" && /^[a-z_]+$/.test(code)) return "Something went wrong. Please try again.";
+  return String(code || "Something went wrong. Please try again.");
 }
 
 // The only truly required input is the objective — everything else
@@ -178,6 +221,7 @@ function renderMissionCreateStepObjective(body) {
       <summary>Advanced</summary>
       <label>Mission name (auto if blank)<input id="mf-name" type="text" placeholder="auto-generated from the objective" /></label>
       <label>Workspace root<input id="mf-workspace" type="text" value="${escapeHtml(state.workspaceRoot)}" /></label>
+      <div id="mf-repo-picker" class="mission-repo-picker hidden"></div>
       <label>Workers (blank = let it decide)<input id="mf-count" type="number" min="2" max="10" placeholder="auto" /></label>
       <label class="mission-checkbox"><input type="checkbox" id="mf-review" /> Review generated roles before launching</label>
     </details>
@@ -188,6 +232,7 @@ function renderMissionCreateStepObjective(body) {
     <p id="mf-error" class="mission-error hidden"></p>
   `;
   body.appendChild(form);
+  scanRepos(); // kick off in the background so it's likely ready if needed
 
   document.getElementById("mf-cancel").addEventListener("click", () => {
     missionCreateState = null;
@@ -205,17 +250,18 @@ function renderMissionCreateStepObjective(body) {
     const reviewFirst = document.getElementById("mf-review").checked;
     const errorEl = document.getElementById("mf-error");
     errorEl.classList.add("hidden");
+    document.getElementById("mf-repo-picker").classList.add("hidden");
 
     if (!objective || !workspaceRoot) {
-      errorEl.textContent = "Objective and workspace root are required.";
+      errorEl.textContent = "Please describe the objective and choose a workspace folder.";
       errorEl.classList.remove("hidden");
+      document.querySelector(".mission-advanced").open = true;
       return;
     }
-    rememberWorkspaceRoot(workspaceRoot);
 
     const btn = document.getElementById("mf-go");
     btn.disabled = true;
-    btn.textContent = "Analyzing objective… (real claude -p call, up to ~30s)";
+    btn.textContent = "Analyzing your objective…";
 
     try {
       const res = await api("/api/missions/decompose", {
@@ -223,6 +269,7 @@ function renderMissionCreateStepObjective(body) {
         body: JSON.stringify({ objective, workerCount, workspaceRoot }),
       }).then((r) => r.json());
       if (!res.ok) throw new Error(res.error || "decomposition failed");
+      rememberWorkspaceRoot(workspaceRoot);
 
       const nextState = {
         name: name || res.missionName,
@@ -244,9 +291,53 @@ function renderMissionCreateStepObjective(body) {
     } catch (err) {
       btn.disabled = false;
       btn.textContent = "Launch Mission →";
-      errorEl.textContent = String(err.message || err);
-      errorEl.classList.remove("hidden");
+      if (err.message === "workspace_root_not_a_git_repo") {
+        errorEl.textContent = "That folder isn't a repository, so Approval/Auto mode has nowhere safe to let a worker edit. Pick a repository below, or switch to Plan mode (read-only, works anywhere).";
+        errorEl.classList.remove("hidden");
+        document.querySelector(".mission-advanced").open = true;
+        await showRepoPicker();
+      } else {
+        errorEl.textContent = friendlyError(err.message);
+        errorEl.classList.remove("hidden");
+      }
     }
+  });
+}
+
+// Populates the (normally hidden) repo pick-list with previously-used
+// workspaces and real repos discovered on this machine, shown when the
+// chosen folder turns out not to be a repository.
+async function showRepoPicker() {
+  const picker = document.getElementById("mf-repo-picker");
+  if (!picker) return;
+  picker.innerHTML = `<label>Pick a repository<select id="mf-repo-select"><option value="">Scanning for repositories…</option></select></label>`;
+  picker.classList.remove("hidden");
+
+  const history = workspaceHistory();
+  const discovered = await scanRepos();
+  const seen = new Set();
+  const options = [];
+  for (const p of history) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    options.push({ path: p, label: `${p} (recently used)` });
+  }
+  for (const r of discovered) {
+    if (seen.has(r.path)) continue;
+    seen.add(r.path);
+    options.push({ path: r.path, label: `${r.name} — ${r.path}` });
+  }
+
+  const select = document.getElementById("mf-repo-select");
+  if (!select) return; // the form may have been replaced while scanning
+  select.innerHTML =
+    `<option value="">Choose a repository…</option>` +
+    (options.length ? options.map((o) => `<option value="${escapeHtml(o.path)}">${escapeHtml(o.label)}</option>`).join("") : "");
+  if (!options.length) {
+    select.innerHTML += `<option value="" disabled>No repositories found nearby — type a path above instead</option>`;
+  }
+  select.addEventListener("change", () => {
+    if (select.value) document.getElementById("mf-workspace").value = select.value;
   });
 }
 
@@ -341,7 +432,7 @@ function renderMissionCreateStepRoles(body) {
       btn.disabled = false;
       btn.textContent = `Launch Mission (${state.roles.length} workers)`;
       const el = document.getElementById("mf-launch-error");
-      el.textContent = String(err.message || err);
+      el.textContent = friendlyError(err.message);
       el.classList.remove("hidden");
     }
   });
@@ -443,13 +534,15 @@ async function renderMissionDetail() {
   synthBtn.textContent = "Trigger Final Synthesis";
   synthBtn.addEventListener("click", async () => {
     synthBtn.disabled = true;
-    synthBtn.textContent = "Synthesizing… (real claude -p call, can take a couple minutes)";
+    synthBtn.textContent = "Writing the final report… this can take a couple minutes";
     try {
       const r = await api(`/api/missions/${mission.id}/synthesize`, { method: "POST" }).then((x) => x.json());
       if (!r.ok) throw new Error(r.error);
       renderMissionReport(body, r.markdown);
+      synthBtn.textContent = "Trigger Final Synthesis";
+      synthBtn.disabled = false;
     } catch (err) {
-      synthBtn.textContent = `Synthesis failed: ${err.message}`;
+      synthBtn.textContent = `Couldn't write the report: ${friendlyError(err.message)}`;
     }
   });
   footer.appendChild(synthBtn);
