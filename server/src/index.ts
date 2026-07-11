@@ -38,14 +38,49 @@ import {
   AccessLoginSchema,
   SESSION_HEADER,
   assertAccessAuthConfiguration,
+  attachDatabaseSession,
+  databaseAuthEnabledForSessions,
   getAccessAuthConfiguration,
   getAccessSession,
   issueAccessSessionToken,
   listAccessSessions,
+  mintDatabaseSessionToken,
+  readBearerToken,
   requireAdminAccessSession,
   requireAccessSession,
   requireClientWorkspaceView,
+  verifyAccessSessionTokenSid,
 } from "./access/session.js";
+import {
+  DB_SESSION_PREFIX,
+  acceptInvitation,
+  asDatabaseSession,
+  canAccessOrg,
+  canManageOrg,
+  createInvitation,
+  createOrganization,
+  initializeDatabaseAuthState,
+  listInvitations,
+  listOrgAuditEvents,
+  listOrgMembers,
+  listOrganizationsForSession,
+  loginWithPassword,
+  removeMember,
+  resolveDatabaseSession,
+  revokeDatabaseSession,
+  revokeInvitation,
+  switchActiveOrg,
+  updateMemberRole,
+} from "./access/user-accounts.js";
+import {
+  assignOrgPlan,
+  checkSeatLimit,
+  consumeUsage,
+  getOrgEntitlements,
+  getUsageSummary,
+  listPlanDefinitions,
+  upgradeRequiredBody,
+} from "./access/entitlements.js";
 import type { AccessSession } from "./access/session.js";
 import {
   canUseSessionOnPublicHost,
@@ -256,6 +291,17 @@ await app.register(cors, {
   allowedHeaders: ["Content-Type", AUTHORIZATION_HEADER, SESSION_HEADER],
 });
 
+/* Database-auth sessions resolve from Postgres per request. This hook runs
+   BEFORE the paywall so the paywall sees the real entitlement-bearing
+   session. Signature and expiry are verified before any DB lookup. */
+app.addHook("preHandler", async (request) => {
+  if (!databaseAuthEnabledForSessions()) return;
+  const sid = verifyAccessSessionTokenSid(readBearerToken(request));
+  if (!sid || !sid.startsWith(DB_SESSION_PREFIX)) return;
+  const session = await resolveDatabaseSession(sid);
+  if (session) attachDatabaseSession(request, session);
+});
+
 // Un-bypassable paywall: free/anonymous sessions may view but not mutate.
 app.addHook("preHandler", paywallPreHandler);
 
@@ -457,6 +503,7 @@ try {
   assertAccessAuthConfiguration();
   await initializeClientAccessState();
   await initializeAccessIdentityState();
+  await initializeDatabaseAuthState();
   await initializeAccessWorkflowState();
 } catch (error) {
   app.log.error(error, "PhantomForce server startup failed while loading access state.");
@@ -592,6 +639,326 @@ app.get("/session", async (request, reply) => {
     ok: true,
     session,
   };
+});
+
+/* ============================================================================
+   DATABASE AUTH + ORGANIZATIONS
+   Real multi-user login (Postgres users, scrypt hashes, revocable sessions),
+   org memberships with distinct roles, invitations, org switching, audit.
+   All org routes enforce tenant isolation server-side: non-members are 403'd
+   regardless of what the frontend shows. */
+
+const DatabaseLoginSchema = z.object({
+  email: z.string().email().max(200),
+  password: z.string().min(1).max(200),
+});
+
+app.post("/auth/login", async (request, reply) => {
+  const authConfiguration = getAccessAuthConfiguration();
+  if (!authConfiguration.databaseAuthEnabled) {
+    return reply.code(403).send({ ok: false, error: "Database auth is disabled.", auth: authConfiguration });
+  }
+  const parsed = DatabaseLoginSchema.safeParse(request.body ?? {});
+  if (!parsed.success) {
+    return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  }
+  const session = await loginWithPassword(parsed.data.email, parsed.data.password);
+  if (!session) {
+    /* uniform delay-free refusal; no user-exists oracle */
+    return reply.code(401).send({ ok: false, error: "Invalid email or password." });
+  }
+  const token = mintDatabaseSessionToken(session.id);
+  if (!token) {
+    return reply.code(500).send({ ok: false, error: "Token minting unavailable." });
+  }
+  return { ok: true, ...token, session };
+});
+
+app.post("/auth/logout", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) {
+    return { ok: true, note: "Stateless session tokens expire on their own; nothing to revoke server-side." };
+  }
+  await revokeDatabaseSession(dbSession.authSessionId);
+  return { ok: true, revoked: true };
+});
+
+app.get("/auth/me", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) {
+    return { ok: true, session, database: false };
+  }
+  const entitlements = dbSession.orgId ? await getOrgEntitlements(dbSession.orgId).catch(() => null) : null;
+  return {
+    ok: true,
+    database: true,
+    user: {
+      id: dbSession.userId,
+      email: dbSession.email,
+      name: dbSession.label,
+      isSuperAdmin: dbSession.isSuperAdmin,
+    },
+    activeOrg: dbSession.orgId
+      ? {
+          id: dbSession.orgId,
+          name: dbSession.memberships.find((m) => m.orgId === dbSession.orgId)?.orgName ?? dbSession.orgId,
+          role: dbSession.orgRole,
+        }
+      : null,
+    memberships: dbSession.memberships,
+    entitlements: entitlements
+      ? {
+          plan: entitlements.planName,
+          planKey: entitlements.planKey,
+          status: entitlements.effectiveStatus,
+          canWrite: entitlements.canWrite,
+          features: entitlements.features,
+          limits: entitlements.limits,
+        }
+      : null,
+  };
+});
+
+const SwitchOrgSchema = z.object({ orgId: z.string().min(1).max(120) });
+
+app.post("/auth/switch-org", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return reply.code(400).send({ ok: false, error: "Org switching requires database auth." });
+  const parsed = SwitchOrgSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await switchActiveOrg(dbSession, parsed.data.orgId);
+  if (!result.ok) return reply.code(403).send({ ok: false, error: result.error });
+  return { ok: true, session: result.session };
+});
+
+const InvitationAcceptSchema = z.object({
+  token: z.string().min(10).max(200),
+  name: z.string().max(120).optional(),
+  password: z.string().min(8).max(200).optional(),
+});
+
+app.post("/auth/invitations/accept", async (request, reply) => {
+  const authConfiguration = getAccessAuthConfiguration();
+  if (!authConfiguration.databaseAuthEnabled) {
+    return reply.code(403).send({ ok: false, error: "Database auth is disabled." });
+  }
+  const parsed = InvitationAcceptSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await acceptInvitation(parsed.data);
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true, userId: result.userId, orgId: result.orgId, next: "Sign in at /auth/login." };
+});
+
+/* -- org routes: every one resolves membership server-side -- */
+
+function requireDatabaseSession(request: FastifyRequest, reply: FastifyReply) {
+  const session = requireAccessSession(request, reply);
+  if (!session) return undefined;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) {
+    reply.code(403).send({ ok: false, error: "This route requires database auth." });
+    return undefined;
+  }
+  return dbSession;
+}
+
+function requireOrgMember(request: FastifyRequest, reply: FastifyReply, orgId: string) {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return undefined;
+  if (!canAccessOrg(dbSession, orgId)) {
+    reply.code(403).send({ ok: false, error: "This session is not a member of the requested organization." });
+    return undefined;
+  }
+  return dbSession;
+}
+
+function requireOrgManager(request: FastifyRequest, reply: FastifyReply, orgId: string) {
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return undefined;
+  if (!canManageOrg(dbSession, orgId)) {
+    reply.code(403).send({ ok: false, error: "Managing this organization requires an owner or admin role." });
+    return undefined;
+  }
+  return dbSession;
+}
+
+function requireSuperAdmin(request: FastifyRequest, reply: FastifyReply) {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return undefined;
+  if (!dbSession.isSuperAdmin) {
+    reply.code(403).send({ ok: false, error: "Platform super-admin access required." });
+    return undefined;
+  }
+  return dbSession;
+}
+
+app.get("/orgs", async (request, reply) => {
+  const dbSession = requireDatabaseSession(request, reply);
+  if (!dbSession) return reply;
+  return { ok: true, organizations: await listOrganizationsForSession(dbSession) };
+});
+
+const OrgCreateSchema = z.object({ name: z.string().min(2).max(120) });
+
+app.post("/orgs", async (request, reply) => {
+  const dbSession = requireSuperAdmin(request, reply);
+  if (!dbSession) return reply;
+  const parsed = OrgCreateSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const org = await createOrganization({ name: parsed.data.name, actor: dbSession });
+  return { ok: true, org: { id: org.id, name: org.name } };
+});
+
+app.get("/orgs/:orgId/members", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  return { ok: true, members: await listOrgMembers(orgId) };
+});
+
+const MemberRoleSchema = z.object({ role: z.enum(["owner", "admin", "member", "client"]) });
+
+app.post("/orgs/:orgId/members/:userId/role", async (request, reply) => {
+  const { orgId, userId } = request.params as { orgId: string; userId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = MemberRoleSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await updateMemberRole({ orgId, targetUserId: userId, role: parsed.data.role, actor: dbSession });
+  if (!result.ok) return reply.code(403).send({ ok: false, error: result.error });
+  return { ok: true };
+});
+
+app.delete("/orgs/:orgId/members/:userId", async (request, reply) => {
+  const { orgId, userId } = request.params as { orgId: string; userId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const result = await removeMember({ orgId, targetUserId: userId, actor: dbSession });
+  if (!result.ok) return reply.code(403).send({ ok: false, error: result.error });
+  return { ok: true };
+});
+
+const InvitationCreateSchema = z.object({
+  email: z.string().email().max(200),
+  role: z.enum(["owner", "admin", "member", "client"]).default("member"),
+});
+
+app.post("/orgs/:orgId/invitations", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = InvitationCreateSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const seats = await checkSeatLimit(orgId);
+  if (!seats.allowed) {
+    const entitlements = await getOrgEntitlements(orgId);
+    return reply.code(403).send({ ...upgradeRequiredBody("seat_limit_reached", entitlements), seats });
+  }
+  const result = await createInvitation({ orgId, email: parsed.data.email, role: parsed.data.role, actor: dbSession });
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return {
+    ok: true,
+    invitation: { id: result.invitation.id, email: result.invitation.email, role: result.invitation.role, expiresAt: result.invitation.expiresAt.toISOString() },
+    /* shown exactly once — only the hash is stored */
+    token: result.token,
+    accept_endpoint: "/auth/invitations/accept",
+  };
+});
+
+app.get("/orgs/:orgId/invitations", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  return { ok: true, invitations: await listInvitations(orgId) };
+});
+
+app.post("/orgs/:orgId/invitations/:invitationId/revoke", async (request, reply) => {
+  const { orgId, invitationId } = request.params as { orgId: string; invitationId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const result = await revokeInvitation({ orgId, invitationId, actor: dbSession });
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error });
+  return { ok: true };
+});
+
+app.get("/orgs/:orgId/audit", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  return { ok: true, events: await listOrgAuditEvents(orgId) };
+});
+
+/* -- entitlements: current org for members; assignment is super-admin only -- */
+
+app.get("/orgs/:orgId/entitlements", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  return { ok: true, ...(await getUsageSummary(orgId)) };
+});
+
+app.get("/admin/plans", async (request, reply) => {
+  const dbSession = requireSuperAdmin(request, reply);
+  if (!dbSession) return reply;
+  return { ok: true, plans: listPlanDefinitions() };
+});
+
+const PlanAssignSchema = z.object({
+  planKey: z.string().min(1).max(60),
+  status: z.enum(["trial", "active", "grace", "suspended"]).optional(),
+  trialEndsAt: z.string().datetime().nullable().optional(),
+  graceUntil: z.string().datetime().nullable().optional(),
+  overrides: z
+    .object({ features: z.record(z.string(), z.unknown()).optional(), limits: z.record(z.string(), z.unknown()).optional() })
+    .nullable()
+    .optional(),
+  note: z.string().max(300).nullable().optional(),
+});
+
+app.post("/admin/orgs/:orgId/plan", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireSuperAdmin(request, reply);
+  if (!dbSession) return reply;
+  const parsed = PlanAssignSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await assignOrgPlan({
+    orgId,
+    planKey: parsed.data.planKey,
+    status: parsed.data.status,
+    trialEndsAt: parsed.data.trialEndsAt ?? undefined,
+    graceUntil: parsed.data.graceUntil ?? undefined,
+    overrides: parsed.data.overrides as Parameters<typeof assignOrgPlan>[0]["overrides"],
+    note: parsed.data.note ?? undefined,
+    assignedByUserId: dbSession.userId,
+  });
+  if (!result.ok) return reply.code(400).send({ ok: false, error: result.error, available: result.available });
+  await recordPlanAssignmentAudit(orgId, dbSession.email, parsed.data.planKey, parsed.data.status ?? "active");
+  return { ok: true, entitlements: await getOrgEntitlements(orgId) };
+});
+
+async function recordPlanAssignmentAudit(orgId: string, actor: string, planKey: string, status: string) {
+  const { recordOrgAuditEvent } = await import("./access/user-accounts.js");
+  await recordOrgAuditEvent({
+    orgId,
+    actor,
+    eventType: "plan.assigned",
+    targetType: "org_plan",
+    targetId: orgId,
+    payload: { planKey, status },
+  });
+}
+
+app.get("/admin/orgs/:orgId/usage", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireSuperAdmin(request, reply);
+  if (!dbSession) return reply;
+  return { ok: true, ...(await getUsageSummary(orgId)) };
 });
 
 app.get("/readiness", async (request, reply) => {
@@ -3434,6 +3801,19 @@ app.post("/phantom-ai/runs", async (request, reply) => {
   if (!parsed.success) {
     return reply.code(400).send({ ok: false, error: "bad_request", detail: parsed.error.flatten() });
   }
+  /* Entitlement gate (database-auth orgs only): agent runs metered per day. */
+  {
+    const dbSession = asDatabaseSession(session);
+    if (dbSession?.orgId && !dbSession.isSuperAdmin) {
+      const usage = await consumeUsage(dbSession.orgId, "agent_runs", 1, { operation: parsed.data.operation });
+      if (!usage.allowed) {
+        return reply.code(403).send({
+          ...upgradeRequiredBody(usage.reason, usage.entitlements),
+          usage: { metric: "agent_runs", used: usage.used, limit: usage.limit, resetAt: usage.resetAt },
+        });
+      }
+    }
+  }
   const result = await startAgentRun({
     operation: parsed.data.operation,
     workspace: parsed.data.workspace || "phantomforce",
@@ -4677,6 +5057,21 @@ app.post("/phantom-ai/chat", async (request, reply) => {
 
   if (!session) {
     return reply;
+  }
+
+  /* Entitlement gate (database-auth orgs only): chat is metered per org per
+     day. Legacy providers (demo/owner-production/gateway) are untouched. */
+  {
+    const dbSession = asDatabaseSession(session);
+    if (dbSession?.orgId && !dbSession.isSuperAdmin) {
+      const usage = await consumeUsage(dbSession.orgId, "chat_requests", 1, { route: "/phantom-ai/chat" });
+      if (!usage.allowed) {
+        return reply.code(403).send({
+          ...upgradeRequiredBody(usage.reason, usage.entitlements),
+          usage: { metric: "chat_requests", used: usage.used, limit: usage.limit, resetAt: usage.resetAt },
+        });
+      }
+    }
   }
 
   const body = (request.body ?? {}) as {

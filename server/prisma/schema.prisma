@@ -11,6 +11,35 @@ enum MembershipRole {
   owner
   admin
   member
+  client
+}
+
+enum PlanStatus {
+  trial
+  active
+  grace
+  suspended
+}
+
+enum SiteBuildStatus {
+  building
+  validated
+  failed
+}
+
+enum SiteDeploymentStatus {
+  published
+  rolled_back
+  superseded
+}
+
+enum DomainState {
+  domain_entered
+  verification_required
+  dns_records_pending
+  verified
+  misconfigured
+  failed
 }
 
 enum ActionStatus {
@@ -66,10 +95,168 @@ model User {
   email        String       @unique
   passwordHash String?
   name         String?
+  /* Platform super-admin (Jordan). Distinct from any per-org role — org
+     owners/admins are Membership.role, never this flag. */
+  isSuperAdmin Boolean      @default(false)
+  activeOrgId  String?
   createdAt    DateTime     @default(now())
   memberships  Membership[]
   chatThreads  ChatThread[]
   decisions    Approval[]   @relation("ApprovalDecider")
+  authSessions AuthSession[]
+  sentInvitations Invitation[] @relation("InvitationInviter")
+}
+
+/* Server-side login session for the database auth provider. Revocation is
+   real: a revoked or expired row can never resolve to an AccessSession. */
+model AuthSession {
+  id          String    @id @default(uuid())
+  userId      String
+  activeOrgId String?
+  createdAt   DateTime  @default(now())
+  expiresAt   DateTime
+  revokedAt   DateTime?
+  lastSeenAt  DateTime  @default(now())
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/* Org invitations. Only the SHA-256 hash of the invite token is stored —
+   the raw token is shown once at creation time. */
+model Invitation {
+  id               String         @id @default(uuid())
+  orgId            String
+  email            String
+  role             MembershipRole @default(member)
+  tokenHash        String         @unique
+  invitedByUserId  String
+  createdAt        DateTime       @default(now())
+  expiresAt        DateTime
+  acceptedAt       DateTime?
+  acceptedByUserId String?
+  revokedAt        DateTime?
+  org              Org            @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  invitedBy        User           @relation("InvitationInviter", fields: [invitedByUserId], references: [id])
+
+  @@index([orgId, email])
+}
+
+/* Provider-neutral plan catalog. Feature flags and limits are structured
+   JSON resolved by the entitlement engine; no billing provider implied. */
+model Plan {
+  key         String    @id
+  name        String
+  description String
+  isInternal  Boolean   @default(false)
+  features    Json
+  limits      Json
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  orgPlans    OrgPlan[]
+}
+
+model OrgPlan {
+  id               String     @id @default(uuid())
+  orgId            String     @unique
+  planKey          String
+  status           PlanStatus @default(trial)
+  trialEndsAt      DateTime?
+  graceUntil       DateTime?
+  /* Manual super-admin overrides: partial feature/limit patches. */
+  overrides        Json?
+  assignedByUserId String?
+  note             String?
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+  org              Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  plan             Plan       @relation(fields: [planKey], references: [key])
+
+  @@index([planKey])
+}
+
+/* Usage ledger — one row per consumed unit batch (chat request, media
+   credit, storage bytes…). Aggregated per reset period for limit checks. */
+model UsageEvent {
+  id        String   @id @default(uuid())
+  orgId     String
+  metric    String
+  amount    Float
+  at        DateTime @default(now())
+  meta      Json?
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+
+  @@index([orgId, metric, at])
+}
+
+/* Server-side website records for the publishing pipeline. The in-browser
+   builder remains the editor; publishing registers the site here. */
+model Site {
+  id          String           @id @default(uuid())
+  orgId       String
+  title       String
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  org         Org              @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  builds      SiteBuild[]
+  deployments SiteDeployment[]
+  domains     SiteDomain[]
+
+  @@index([orgId])
+}
+
+model SiteBuild {
+  id              String          @id @default(uuid())
+  siteId          String
+  orgId           String
+  version         Int
+  status          SiteBuildStatus @default(building)
+  contentPath     String
+  buildLog        String
+  createdByUserId String?
+  createdAt       DateTime        @default(now())
+  site            Site            @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  deployments     SiteDeployment[]
+
+  @@unique([siteId, version])
+  @@index([orgId])
+}
+
+model SiteDeployment {
+  id                String               @id @default(uuid())
+  siteId            String
+  orgId             String
+  buildId           String
+  status            SiteDeploymentStatus @default(published)
+  publishedAt       DateTime             @default(now())
+  publishedByUserId String?
+  approvedByUserId  String?
+  runId             String?
+  receipt           Json
+  site              Site                 @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  build             SiteBuild            @relation(fields: [buildId], references: [id])
+
+  @@index([siteId, status])
+  @@index([orgId])
+}
+
+model SiteDomain {
+  id                String      @id @default(uuid())
+  siteId            String
+  orgId             String
+  domain            String
+  state             DomainState @default(domain_entered)
+  verificationToken String
+  sslState          String      @default("unknown")
+  checkedAt         DateTime?
+  lastError         String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  site              Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
+  @@unique([siteId, domain])
+  @@index([orgId])
 }
 
 model Org {
@@ -88,6 +275,10 @@ model Org {
   falconJobs  FalconJob[]
   clientAccess ClientAccess?
   moduleEntitlements ModuleEntitlement[]
+  invitations Invitation[]
+  orgPlan     OrgPlan?
+  usageEvents UsageEvent[]
+  sites       Site[]
 }
 
 model Membership {
