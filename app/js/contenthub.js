@@ -19,6 +19,8 @@ const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
 const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
 const CH_MEDIA_EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const CH_OPEN_TAB_KEY = "pf.contenthub.openTab.v1";
+const CH_PUBLISH_STATE_KEY = "pf.contenthub.publish.state.v1";
+const CH_PUBLISH_DRAFTS_KEY = "pf.contenthub.publish.drafts.v1";
 const DAY = 864e5;
 export const CONTENT_ASSET_LIMITS = Object.freeze({
   retentionDays: 30,
@@ -45,6 +47,20 @@ const isVideo = (t) => ["reel", "short", "video"].includes(t);
    browser bridge — never a fabricated number. Analytics/Overview must not show any metric that
    isn't traceable to a real connected account. */
 const SOCIAL_KEY = "pf.social.accounts.v1";
+const PUBLISH_PRESETS = [
+  { id: "enabled", name: "Enabled", hint: "connected/manual accounts", platforms: null },
+  { id: "all", name: "Select all", hint: "every channel", platforms: PLATFORMS.map((p) => p.id) },
+  { id: "short-form", name: "Short-form", hint: "reels, shorts, TikTok", platforms: ["instagram", "tiktok", "youtube"] },
+  { id: "business", name: "Business", hint: "LinkedIn, Facebook, X", platforms: ["linkedin", "facebook", "x"] },
+  { id: "visual", name: "Visual push", hint: "IG, Pinterest, Facebook", platforms: ["instagram", "pinterest", "facebook"] },
+];
+const PUBLISH_TONES = [
+  ["clean", "Clean"],
+  ["hype", "Hype"],
+  ["coach", "Coach"],
+  ["premium", "Premium"],
+  ["local", "Local"],
+];
 function defaultSocialAccounts() {
   return PLATFORMS.map((p) => ({
     id: p.id, name: p.name, color: p.color, handle: "", url: "", loginIdentity: "",
@@ -64,6 +80,62 @@ export function socialStatus(account) {
   if (account.hermesProof || account.enabled) return "linked";
   if (account.lastConnectAt || account.loginIdentity) return "pending";
   return "empty";
+}
+function enabledPlatformIds(accounts = loadSocialAccounts()) {
+  return accounts.filter((account) => socialStatus(account) !== "empty").map((account) => account.id);
+}
+function normalizePlatformIds(ids = [], fallback = []) {
+  const valid = new Set(PLATFORMS.map((p) => p.id));
+  const clean = [...new Set((Array.isArray(ids) ? ids : []).filter((id) => valid.has(id)))];
+  return clean.length ? clean : (fallback.length ? fallback : ["instagram"]);
+}
+function defaultPublishPlatforms(accounts = loadSocialAccounts()) {
+  const enabled = enabledPlatformIds(accounts);
+  return enabled.length ? enabled : ["instagram", "facebook", "linkedin"];
+}
+function localDateTimeValue(value = Date.now() + 4 * 3600e3) {
+  const d = new Date(value);
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+function defaultPublishState() {
+  const accounts = loadSocialAccounts();
+  return {
+    platforms: defaultPublishPlatforms(accounts),
+    sourceKey: "",
+    brief: "",
+    tone: "clean",
+    cta: "Book a 15-minute setup call",
+    caption: "",
+    scheduleAt: localDateTimeValue(),
+    updatedAt: Date.now(),
+  };
+}
+function loadPublishState() {
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(CH_PUBLISH_STATE_KEY) || "{}") || {}; } catch {}
+  const base = defaultPublishState();
+  const merged = { ...base, ...saved };
+  merged.platforms = normalizePlatformIds(merged.platforms, base.platforms);
+  if (!PUBLISH_TONES.find(([id]) => id === merged.tone)) merged.tone = "clean";
+  if (!merged.scheduleAt) merged.scheduleAt = localDateTimeValue();
+  return merged;
+}
+function savePublishState(state = {}) {
+  const base = defaultPublishState();
+  const merged = { ...base, ...state, updatedAt: Date.now() };
+  merged.platforms = normalizePlatformIds(merged.platforms, base.platforms);
+  try { localStorage.setItem(CH_PUBLISH_STATE_KEY, JSON.stringify(merged)); } catch {}
+  return merged;
+}
+function loadPublishDrafts() {
+  let rows = [];
+  try { rows = JSON.parse(localStorage.getItem(CH_PUBLISH_DRAFTS_KEY) || "[]"); } catch {}
+  return (Array.isArray(rows) ? rows : []).filter(Boolean).slice(0, 50);
+}
+function savePublishDrafts(rows = []) {
+  const clean = rows.filter(Boolean).slice(0, 50);
+  try { localStorage.setItem(CH_PUBLISH_DRAFTS_KEY, JSON.stringify(clean)); } catch {}
+  return clean;
 }
 
 /* ---------------- seeded generation (stable across reloads) ---------------- */
@@ -146,6 +218,11 @@ export function loadContent() {
   const data = { posts: genPosts(), updatedAt: Date.now() };
   try { localStorage.setItem(CH_KEY, JSON.stringify(data)); } catch {}
   return data;
+}
+function saveContent(data = {}) {
+  const clean = { ...data, posts: Array.isArray(data.posts) ? data.posts : [], updatedAt: Date.now() };
+  try { localStorage.setItem(CH_KEY, JSON.stringify(clean)); } catch {}
+  return clean;
 }
 function dataBytes(url) {
   if (!url || typeof url !== "string") return 0;
@@ -581,7 +658,7 @@ let chLastDeleted = null;
 export function renderContentHub(el, opts = {}) {
   try {
     const requestedTab = localStorage.getItem(CH_OPEN_TAB_KEY);
-    if (requestedTab && ["library", "ideas", "drafts", "calendar", "production"].includes(requestedTab)) chState.tab = requestedTab;
+    if (requestedTab && ["library", "publish", "ideas", "drafts", "calendar", "production"].includes(requestedTab)) chState.tab = requestedTab;
     if (requestedTab) localStorage.removeItem(CH_OPEN_TAB_KEY);
   } catch {}
   const esc = opts.esc || ((s) => String(s));
@@ -590,7 +667,8 @@ export function renderContentHub(el, opts = {}) {
   const mediaStats = contentAssetStats(mediaAssets);
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
-  const tabs = [["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`], ["ideas", "New ideas"], ["drafts", "Draft queue"], ["calendar", "Calendar"], ["production", "Production"]];
+  const publishDrafts = loadPublishDrafts();
+  const tabs = [["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`], ["publish", "Post / Publish"], ["ideas", "New ideas"], ["drafts", "Draft queue"], ["calendar", "Calendar"], ["production", "Production"]];
   el.innerHTML = `
     <div class="ch">
       <section class="ch-creator-head">
@@ -603,7 +681,7 @@ export function renderContentHub(el, opts = {}) {
       </section>
       <div class="ch-tabs">
         ${tabs.map(([id, l]) => `<button class="ch-tab ${chState.tab === id ? "is-active" : ""}" data-ch-tab="${id}">${l}</button>`).join("")}
-        <span class="ch-src">${ideas.length} ideas · ${scheduled} queued · ${mediaAssets.length} media · ${formatBytes(mediaStats.bytes)}/${formatBytes(mediaStats.budgetBytes)}</span>
+        <span class="ch-src">${ideas.length} ideas · ${publishDrafts.length} publish drafts · ${scheduled} queued · ${mediaAssets.length} media · ${formatBytes(mediaStats.bytes)}/${formatBytes(mediaStats.budgetBytes)}</span>
       </div>
       <div class="ch-body" data-ch-body></div>
     </div>
@@ -613,6 +691,7 @@ export function renderContentHub(el, opts = {}) {
   const body = el.querySelector("[data-ch-body]");
   const t = chState.tab;
   if (t === "ideas") renderCreatorIdeas(body, data, esc, el, opts);
+  else if (t === "publish") renderPostPublish(body, data, esc, el, opts);
   else if (t === "drafts") renderDraftQueue(body, data, esc, el, opts);
   else if (t === "calendar") renderContentCalendar(body, data, esc, el, opts);
   else if (t === "production") renderProductionBoard(body, data, esc, el, opts);
@@ -745,6 +824,348 @@ function renderProductionBoard(body, data, esc, root, opts) {
       </div>
     </div>`;
   wireRemovals(body, opts, root);
+}
+function publishSources(data, assets) {
+  const assetRows = assets.slice(0, 10).map((asset) => ({
+    key: `asset:${asset.id}`,
+    kind: "asset",
+    asset,
+    title: asset.title || (asset.type === "video" ? "Generated video" : "Generated image"),
+    sub: `${asset.source || "Media Lab"} · ${asset.type}`,
+    copy: asset.prompt || "Generated media ready for a caption.",
+    type: asset.type,
+    hue: asset.hue || 155,
+  }));
+  const postRows = data.posts
+    .filter((post) => !isRemoved(`post:${post.id}`))
+    .slice(0, 8)
+    .map((post) => ({
+      key: `post:${post.id}`,
+      kind: "post",
+      post,
+      title: post.caption,
+      sub: `${plat(post.platform).name} · ${TYPES[post.type] || post.type}`,
+      copy: post.caption,
+      type: post.type,
+      hue: post.hue || 155,
+    }));
+  return [...assetRows, ...postRows];
+}
+function publishSourceFromState(data, assets, state) {
+  const sources = publishSources(data, assets);
+  return sources.find((source) => source.key === state.sourceKey) || sources[0] || null;
+}
+function sourceMediaMarkup(source, esc, size = "large") {
+  if (!source) return `<span class="ch-pub-media-empty">Choose or upload media</span>`;
+  if (source.kind === "asset") {
+    const asset = source.asset;
+    if (asset.url) {
+      return asset.type === "video"
+        ? `<video src="${esc(asset.url)}" muted playsinline preload="metadata"></video><span class="ch-post-play">▶</span>`
+        : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
+    }
+    return `<span class="ch-pub-media-empty" style="${assetBg(asset)}">${size === "tiny" ? "media" : "preview trimmed"}</span>`;
+  }
+  if (source.post) {
+    return `<span class="ch-pub-media-empty" style="${thumb(source.post)}"><span class="ch-post-plat" style="background:${plat(source.post.platform).color}">${PGLYPH[source.post.platform] || "●"}</span>${isVideo(source.post.type) ? `<span class="ch-post-play">▶</span>` : ""}</span>`;
+  }
+  return `<span class="ch-pub-media-empty">No source</span>`;
+}
+function publishTypeFor(platformId, source) {
+  const types = plat(platformId).types || ["text"];
+  const raw = source?.type || "text";
+  if (["video", "reel", "short"].includes(raw)) {
+    if (types.includes("reel")) return "reel";
+    if (types.includes("short")) return "short";
+    if (types.includes("video")) return "video";
+  }
+  if (["image", "carousel", "story"].includes(raw)) {
+    if (types.includes("image")) return "image";
+    if (types.includes("carousel")) return "carousel";
+    if (types.includes("story")) return "story";
+  }
+  return types.includes("text") ? "text" : (types[0] || "text");
+}
+function publishScheduleIso(value) {
+  const d = value ? new Date(value) : new Date(Date.now() + 4 * 3600e3);
+  return Number.isFinite(d.getTime()) ? d.toISOString() : new Date(Date.now() + 4 * 3600e3).toISOString();
+}
+function toneLead(tone) {
+  return ({
+    hype: "This is what it looks like when the busy work stops winning.",
+    coach: "Here is the simple way to get the work moving without chasing every task yourself.",
+    premium: "A cleaner operating layer for the business owners who cannot afford messy follow-up.",
+    local: "For the local business owner who needs leads, content, and follow-up handled without drama.",
+    clean: "PhantomForce turns content, follow-up, and daily operations into one controlled workflow.",
+  })[tone] || "PhantomForce turns content, follow-up, and daily operations into one controlled workflow.";
+}
+function suggestPublishCaption(state, source, platformIds) {
+  const sourceText = (state.brief || source?.copy || source?.title || "").trim();
+  const cta = (state.cta || "Book a 15-minute setup call").trim();
+  const platforms = platformIds.map((id) => plat(id).name).join(", ");
+  const detail = sourceText
+    ? `\n\nBuilt around: ${sourceText.replace(/\s+/g, " ").slice(0, 170)}`
+    : "";
+  const hashtagSet = new Set(["#PhantomForce", "#SmallBusiness", "#ContentWorkflow"]);
+  if (platformIds.includes("instagram") || platformIds.includes("tiktok")) hashtagSet.add("#AIContent");
+  if (platformIds.includes("linkedin")) hashtagSet.add("#Operations");
+  return `${toneLead(state.tone)}${detail}\n\nAI-assisted. Human-approved. Ready for ${platforms || "your channels"}.\n\n${cta}.\n\n${[...hashtagSet].join(" ")}`;
+}
+function captionForPlatform(caption, platformId) {
+  const clean = String(caption || "").trim();
+  if (platformId === "x" && clean.length > 260) return `${clean.slice(0, 253).trim()}...`;
+  if (platformId === "linkedin") return clean.replace(/#AIContent/g, "#AIForBusiness");
+  return clean;
+}
+function publishSourceRail(sources, state, esc) {
+  if (!sources.length) return `<p class="empty-line">No media yet. Upload local or create media first, then come back to Publish.</p>`;
+  const activeKey = state.sourceKey || sources[0].key;
+  return sources.map((source) => `<button type="button" class="ch-pub-source ${activeKey === source.key ? "is-on" : ""}" data-ch-pub-source="${esc(source.key)}">
+    <span class="ch-pub-source-thumb">${sourceMediaMarkup(source, esc, "tiny")}</span>
+    <span><b>${esc(source.title.slice(0, 54))}${source.title.length > 54 ? "..." : ""}</b><i>${esc(source.sub)}</i></span>
+  </button>`).join("");
+}
+function publishPlatformPreview(platformId, state, source, account, esc) {
+  const P = plat(platformId);
+  const status = socialStatus(account || {});
+  const handle = account?.handle || account?.loginIdentity || P.handle;
+  const caption = captionForPlatform(state.caption || suggestPublishCaption(state, source, [platformId]), platformId);
+  const type = publishTypeFor(platformId, source);
+  const statusCopy = status === "linked" ? "connector ready" : status === "pending" ? "manual review" : "manual setup";
+  return `<article class="ch-pub-preview-card" style="--pc:${P.color}">
+    <div class="ch-pub-preview-top">
+      <span class="ch-post-plat" style="background:${P.color}">${PGLYPH[platformId] || "●"}</span>
+      <span><b>${esc(P.name)}</b><i>${esc(handle)}</i></span>
+      <em>${esc(statusCopy)}</em>
+    </div>
+    <div class="ch-pub-preview-media">${sourceMediaMarkup(source, esc)}</div>
+    <div class="ch-pub-preview-actions"><span>${svgIc("heart")}</span><span>${svgIc("chat")}</span><span>${svgIc("share")}</span><span>${svgIc("save")}</span></div>
+    <p class="ch-pub-preview-caption"><b>${esc(handle)}</b> ${esc(caption)}</p>
+    <div class="ch-pub-preview-foot">${esc(TYPES[type] || type)} preview · local draft only</div>
+  </article>`;
+}
+function draftStatusLabel(status) {
+  if (status === "approval") return "Approval required";
+  if (status === "manual-posted") return "Manual posted";
+  return "Draft";
+}
+function buildPublishDraft(state, source, status) {
+  const createdAt = Date.now();
+  return {
+    id: `publish-${createdAt}-${Math.random().toString(36).slice(2, 7)}`,
+    status,
+    platforms: normalizePlatformIds(state.platforms, ["instagram"]),
+    caption: state.caption || suggestPublishCaption(state, source, state.platforms),
+    brief: state.brief || "",
+    tone: state.tone || "clean",
+    cta: state.cta || "",
+    sourceKey: source?.key || state.sourceKey || "",
+    sourceTitle: source?.title || "Manual post",
+    sourceKind: source?.kind || "text",
+    sourceType: source?.type || "text",
+    sourceHue: source?.hue || 155,
+    scheduleAt: state.scheduleAt,
+    scheduledFor: publishScheduleIso(state.scheduleAt),
+    localOnly: true,
+    externalSent: false,
+    createdAt,
+    updatedAt: createdAt,
+  };
+}
+function blankMetrics() {
+  return { reach: 0, impressions: 0, likes: 0, comments: 0, shares: 0, saves: 0, views: 0, watchAvg: 0, clicks: 0, followersGained: 0, engagementRate: 0, reactions: null };
+}
+function addPublishPosts(data, draft, status) {
+  const publishedAt = status === "published" ? new Date().toISOString() : draft.scheduledFor;
+  const rows = Array.isArray(data.posts) ? data.posts : [];
+  const existing = new Set(rows.map((post) => post.id));
+  draft.platforms.forEach((platformId) => {
+    const id = `${draft.id}-${platformId}-${status}`;
+    if (existing.has(id)) return;
+    const type = publishTypeFor(platformId, { type: draft.sourceType });
+    rows.unshift({
+      id,
+      platform: platformId,
+      type,
+      caption: captionForPlatform(draft.caption, platformId),
+      publishedAt,
+      status,
+      hue: draft.sourceHue || 155,
+      hashtags: (draft.caption.match(/#[A-Za-z0-9_]+/g) || ["#PhantomForce"]).slice(0, 6),
+      mentions: [],
+      metrics: blankMetrics(),
+      comments: [],
+      localOnly: true,
+      sourceDraftId: draft.id,
+    });
+  });
+  return saveContent({ ...data, posts: rows });
+}
+function publishQueueMarkup(drafts, esc) {
+  if (!drafts.length) return `<p class="empty-line">No publish drafts yet. Save one here and it will stay local for review.</p>`;
+  return drafts.slice(0, 6).map((draft) => `<article class="ch-pub-queue-item">
+    <span class="ch-pub-status ch-pub-status-${esc(draft.status)}">${esc(draftStatusLabel(draft.status))}</span>
+    <b>${esc(draft.sourceTitle || "Manual post")}</b>
+    <p>${esc((draft.caption || "").slice(0, 150))}${(draft.caption || "").length > 150 ? "..." : ""}</p>
+    <i>${draft.platforms.map((id) => esc(plat(id).name)).join(" · ")} · ${draft.status === "approval" ? "queued for Jordan" : draft.status === "manual-posted" ? "local ledger" : "local draft"}</i>
+  </article>`).join("");
+}
+function renderPostPublish(body, data, esc, root, opts) {
+  const assets = loadContentAssets();
+  const accounts = loadSocialAccounts();
+  const accountById = Object.fromEntries(accounts.map((account) => [account.id, account]));
+  const state = loadPublishState();
+  const selectedPlatforms = normalizePlatformIds(state.platforms, defaultPublishPlatforms(accounts));
+  state.platforms = selectedPlatforms;
+  const sources = publishSources(data, assets);
+  const source = publishSourceFromState(data, assets, state);
+  const drafts = loadPublishDrafts();
+  const linkedCount = enabledPlatformIds(accounts).length;
+  body.innerHTML = `
+    <section class="ch-publish-grid">
+      <div class="ch-card ch-pub-composer">
+        <div class="ch-card-h">
+          <div><h3>Post / Publish composer</h3><span class="ch-src">AI caption assist · platform preview · approval controlled</span></div>
+          <span class="ch-pub-safe">${linkedCount ? `${linkedCount} account${linkedCount === 1 ? "" : "s"} configured` : "Manual preview mode"}</span>
+        </div>
+        <div class="ch-pub-section">
+          <b class="ch-pub-label">Presets</b>
+          <div class="ch-pub-presets">
+            ${PUBLISH_PRESETS.map((preset) => {
+              const ids = preset.id === "enabled" ? defaultPublishPlatforms(accounts) : preset.platforms;
+              const on = ids && ids.length === selectedPlatforms.length && ids.every((id) => selectedPlatforms.includes(id));
+              return `<button type="button" class="ch-chip ${on ? "is-on" : ""}" data-ch-pub-preset="${preset.id}">${esc(preset.name)} <em>${esc(preset.hint)}</em></button>`;
+            }).join("")}
+          </div>
+        </div>
+        <div class="ch-pub-section">
+          <b class="ch-pub-label">Platforms</b>
+          <div class="ch-pub-platforms">
+            ${PLATFORMS.map((P) => {
+              const account = accountById[P.id] || {};
+              const status = socialStatus(account);
+              const copy = status === "linked" ? "enabled" : status === "pending" ? "pending" : "manual";
+              return `<button type="button" class="ch-pub-platform ${selectedPlatforms.includes(P.id) ? "is-on" : ""}" data-ch-pub-platform="${P.id}" style="--pc:${P.color}">
+                <span class="ch-post-plat" style="background:${P.color}">${PGLYPH[P.id] || "●"}</span>
+                <span><b>${esc(P.name)}</b><i>${esc(account.handle || account.loginIdentity || P.handle)} · ${copy}</i></span>
+              </button>`;
+            }).join("")}
+          </div>
+        </div>
+        <div class="ch-pub-section">
+          <b class="ch-pub-label">Source media / post</b>
+          <div class="ch-pub-source-grid">${publishSourceRail(sources, state, esc)}</div>
+        </div>
+        <div class="ch-pub-section ch-pub-ai-box">
+          <div class="ch-pub-row">
+            <label><span>Ask AI for the caption</span><textarea data-ch-pub-brief data-ch-pub-field rows="3" placeholder="Tell PhantomForce the vibe, offer, customer, or angle...">${esc(state.brief || "")}</textarea></label>
+            <label><span>Call to action</span><input data-ch-pub-cta data-ch-pub-field value="${esc(state.cta || "")}" placeholder="Book a 15-minute setup call"/></label>
+          </div>
+          <div class="ch-pub-tone-row">
+            ${PUBLISH_TONES.map(([id, label]) => `<button type="button" class="ch-chip ${state.tone === id ? "is-on" : ""}" data-ch-pub-tone="${id}">${esc(label)}</button>`).join("")}
+            <label class="ch-pub-schedule"><span>Target time</span><input type="datetime-local" data-ch-pub-schedule data-ch-pub-field value="${esc(state.scheduleAt || localDateTimeValue())}"/></label>
+          </div>
+          <label class="ch-pub-caption"><span>Caption</span><textarea data-ch-pub-caption data-ch-pub-field rows="7" placeholder="Generate or write the final caption here...">${esc(state.caption || "")}</textarea></label>
+          <div class="ch-action-row ch-pub-actions">
+            <button type="button" class="ch-tool is-on" data-ch-pub-ai>${svgIc("spark")} AI caption</button>
+            <button type="button" class="ch-tool" data-ch-pub-save>Save draft</button>
+            <button type="button" class="ch-tool" data-ch-pub-queue>Queue approval</button>
+            <button type="button" class="ch-tool" data-ch-pub-posted>Mark manually posted</button>
+            <button type="button" class="ch-tool" data-ch-pub-live disabled title="Live platform APIs are not enabled in this local build.">Publish live</button>
+          </div>
+          <p class="ch-pub-note">Live posting stays locked until platform connectors, account scopes, and Jordan approval are configured. This screen prepares, previews, queues, and records manual publishing locally.</p>
+        </div>
+      </div>
+      <aside class="ch-card ch-pub-preview">
+        <div class="ch-card-h"><h3>Post preview</h3><span class="ch-src">${selectedPlatforms.length} selected</span></div>
+        <div class="ch-pub-preview-stack">
+          ${selectedPlatforms.map((id) => publishPlatformPreview(id, state, source, accountById[id], esc)).join("")}
+        </div>
+      </aside>
+    </section>
+    <section class="ch-card ch-pub-queue">
+      <div class="ch-card-h"><h3>Publish queue</h3><span class="ch-src">local drafts · not externally sent</span></div>
+      <div class="ch-pub-queue-grid">${publishQueueMarkup(drafts, esc)}</div>
+    </section>`;
+  wirePostPublish(body, data, assets, esc, root, opts);
+}
+function readPublishForm(body, fallback = loadPublishState()) {
+  const selected = [...body.querySelectorAll("[data-ch-pub-platform].is-on")].map((button) => button.dataset.chPubPlatform);
+  const source = body.querySelector("[data-ch-pub-source].is-on")?.dataset.chPubSource || fallback.sourceKey || "";
+  const tone = body.querySelector("[data-ch-pub-tone].is-on")?.dataset.chPubTone || fallback.tone || "clean";
+  return savePublishState({
+    ...fallback,
+    platforms: normalizePlatformIds(selected, fallback.platforms || ["instagram"]),
+    sourceKey: source,
+    brief: body.querySelector("[data-ch-pub-brief]")?.value || "",
+    tone,
+    cta: body.querySelector("[data-ch-pub-cta]")?.value || "",
+    caption: body.querySelector("[data-ch-pub-caption]")?.value || "",
+    scheduleAt: body.querySelector("[data-ch-pub-schedule]")?.value || localDateTimeValue(),
+  });
+}
+function wirePostPublish(body, data, assets, esc, root, opts) {
+  const notify = (msg) => opts.notify?.("Content Hub", msg);
+  body.querySelectorAll("[data-ch-pub-field]").forEach((field) => {
+    field.oninput = () => readPublishForm(body);
+    field.onchange = () => readPublishForm(body);
+  });
+  body.querySelectorAll("[data-ch-pub-platform]").forEach((button) => {
+    button.onclick = () => {
+      const state = readPublishForm(body);
+      let next = state.platforms.includes(button.dataset.chPubPlatform)
+        ? state.platforms.filter((id) => id !== button.dataset.chPubPlatform)
+        : [...state.platforms, button.dataset.chPubPlatform];
+      if (!next.length) next = [button.dataset.chPubPlatform];
+      savePublishState({ ...state, platforms: next });
+      renderContentHub(root, opts);
+    };
+  });
+  body.querySelectorAll("[data-ch-pub-preset]").forEach((button) => {
+    button.onclick = () => {
+      const state = readPublishForm(body);
+      const preset = PUBLISH_PRESETS.find((item) => item.id === button.dataset.chPubPreset);
+      const next = preset?.id === "enabled" ? defaultPublishPlatforms(loadSocialAccounts()) : (preset?.platforms || state.platforms);
+      savePublishState({ ...state, platforms: normalizePlatformIds(next, state.platforms) });
+      renderContentHub(root, opts);
+    };
+  });
+  body.querySelectorAll("[data-ch-pub-source]").forEach((button) => {
+    button.onclick = () => {
+      const state = readPublishForm(body);
+      savePublishState({ ...state, sourceKey: button.dataset.chPubSource });
+      renderContentHub(root, opts);
+    };
+  });
+  body.querySelectorAll("[data-ch-pub-tone]").forEach((button) => {
+    button.onclick = () => {
+      const state = readPublishForm(body);
+      savePublishState({ ...state, tone: button.dataset.chPubTone });
+      renderContentHub(root, opts);
+    };
+  });
+  body.querySelector("[data-ch-pub-ai]")?.addEventListener("click", () => {
+    const state = readPublishForm(body);
+    const source = publishSourceFromState(data, assets, state);
+    const caption = suggestPublishCaption(state, source, state.platforms);
+    savePublishState({ ...state, caption });
+    notify("Caption drafted locally. Review before queueing.");
+    renderContentHub(root, opts);
+  });
+  const saveDraft = (status) => {
+    let state = readPublishForm(body);
+    const source = publishSourceFromState(data, assets, state);
+    if (!state.caption.trim()) state = savePublishState({ ...state, caption: suggestPublishCaption(state, source, state.platforms) });
+    const draft = buildPublishDraft(state, source, status);
+    savePublishDrafts([draft, ...loadPublishDrafts()]);
+    if (status === "approval") addPublishPosts(data, draft, "scheduled");
+    if (status === "manual-posted") addPublishPosts(data, draft, "published");
+    notify(status === "approval" ? "Publish draft queued for Jordan approval. Nothing was sent." : status === "manual-posted" ? "Manual post recorded locally. Nothing was sent by PhantomForce." : "Publish draft saved locally.");
+    renderContentHub(root, opts);
+  };
+  body.querySelector("[data-ch-pub-save]")?.addEventListener("click", () => saveDraft("draft"));
+  body.querySelector("[data-ch-pub-queue]")?.addEventListener("click", () => saveDraft("approval"));
+  body.querySelector("[data-ch-pub-posted]")?.addEventListener("click", () => saveDraft("manual-posted"));
 }
 function renderContentLibrary(body, data, esc, root, opts) {
   const assets = loadContentAssets();
