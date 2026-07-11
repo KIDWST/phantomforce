@@ -1,4 +1,4 @@
-import { freshEditState, paintEdit } from "./imagefilters.js?v=phantom-live-20260711-187";
+import { freshEditState, paintEdit } from "./imagefilters.js?v=phantom-live-20260711-189";
 
 let layerSequence = 0;
 
