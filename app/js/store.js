@@ -97,7 +97,12 @@ const SECRET_REDACTIONS = [
   [/\b(?:\d[ -]?){13,19}\b/g, "[redacted-card]"],
   [/\b(api[_ -]?key|token|secret|password|passcode|owner key|cookie|session)\s*[:=]\s*[^\s,;]+/gi, "$1: [redacted]"],
   [/\b(password|passcode|token|secret|api[_ -]?key|owner key)\s+(is|was|are)\s+[^\s,;]+/gi, "$1 $2 [redacted]"],
+  [/[A-Za-z]:\\Users\\[^\\\s]+\\AppData\\Local\\Temp\\[^\s,;]+/gi, "[redacted-temp-path]"],
 ];
+
+const EXPLICIT_MEMORY_SIGNAL_PATTERN = /\b(remember(?: this| that)?|make sure|from now on|always|never|prefer|preference|i like|i do not like|i don't like|i hate|do not|don't|should not|shouldn't|must not|save this|keep this|do it this way next time|next time)\b/i;
+const FAILED_INTERACTION_PATTERN = /(?:did not complete (?:this )?(?:phantom )?chat request|private brain error|command failed|run-codex\.ps1|powershell\.exe|appdata\\local\\temp|request failed before a usable answer|provider (?:is )?(?:unavailable|offline)|transport error|timed? out|stack trace|exit code\s*\d+)/i;
+const FAILED_HISTORY_REPLY = "Request failed before a usable answer was produced.";
 
 export function sanitizeMemoryText(value = "") {
   let text = String(value || "").replace(/\s+/g, " ").trim();
@@ -140,11 +145,20 @@ function memoryTags(value = "", category = "conversation") {
 }
 
 export function shouldAiRemember(value = "") {
-  return /\b(remember|make sure|from now on|always|never|i like|i don't like|important|owner|employee|policy|pricing|package|business|brand|client|customer|workspace)\b/i.test(String(value || ""));
+  return EXPLICIT_MEMORY_SIGNAL_PATTERN.test(String(value || ""));
 }
 
 function hasDurableMemorySignal(value = "") {
-  return /\b(remember|make sure|from now on|always|never|prefer|preference|i like|i don't like|i hate|i want|i wanted|i need|we need|should|shouldn't|must|do not|don't use|use this|important|save this|keep this|policy|pricing|package|business|brand|client|customer|workspace|domain|asset pack|local folder|bank account|credit card|authentication)\b/i.test(String(value || ""));
+  return EXPLICIT_MEMORY_SIGNAL_PATTERN.test(String(value || ""));
+}
+
+export function isFailedMemoryInteraction(prompt = "", reply = "") {
+  return FAILED_INTERACTION_PATTERN.test(`${String(prompt || "")} ${String(reply || "")}`);
+}
+
+function isInvalidAutoMemory(entry = {}) {
+  if (entry.pinnedByUser || entry.source === "manual") return false;
+  return isFailedMemoryInteraction(entry.title, `${entry.summary || ""} ${entry.text || ""}`);
 }
 
 /* Greetings, thanks, acks — chatter that isn't actually about anything.
@@ -156,22 +170,18 @@ function isMemoryWorthy(prompt, reply) {
   const cleanPrompt = sanitizeMemoryText(prompt);
   if (!cleanPrompt) return false;
   if (TRIVIAL_MESSAGE_PATTERN.test(cleanPrompt.trim())) return false;
+  if (isFailedMemoryInteraction(cleanPrompt, reply)) return false;
   const wordCount = cleanPrompt.trim().split(/\s+/).filter(Boolean).length;
-  const cleanReply = sanitizeMemoryText(reply);
-  const combined = `${cleanPrompt} ${cleanReply}`;
-  if (wordCount < 3 && !hasDurableMemorySignal(combined)) return false;
-  const category = classifyMemory(cleanPrompt);
-  if (hasDurableMemorySignal(combined)) return true;
-  return ["preference", "business", "client", "security", "money"].includes(category) && wordCount >= 6;
+  if (wordCount < 3 && !hasDurableMemorySignal(cleanPrompt)) return false;
+  return hasDurableMemorySignal(cleanPrompt);
 }
 
 function isTrivialChat(prompt = "", reply = "") {
   const cleanPrompt = sanitizeMemoryText(prompt);
   if (!cleanPrompt) return true;
   if (TRIVIAL_MESSAGE_PATTERN.test(cleanPrompt.trim())) return true;
-  const cleanReply = sanitizeMemoryText(reply);
   const wordCount = cleanPrompt.trim().split(/\s+/).filter(Boolean).length;
-  return wordCount < 3 && !hasDurableMemorySignal(`${cleanPrompt} ${cleanReply}`);
+  return wordCount < 3 && !hasDurableMemorySignal(cleanPrompt);
 }
 
 export function pruneMemory(entries = []) {
@@ -198,7 +208,7 @@ export function pruneMemory(entries = []) {
         pinnedByAi: !!entry.pinnedByAi,
       };
     })
-    .filter((entry) => entry.text && (entry.pinnedByUser || entry.pinnedByAi || new Date(entry.createdAt).getTime() >= cutoff))
+    .filter((entry) => entry.text && !isInvalidAutoMemory(entry) && (entry.pinnedByUser || entry.pinnedByAi || new Date(entry.createdAt).getTime() >= cutoff))
     .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
     .slice(0, MEMORY_LIMIT);
 }
@@ -210,7 +220,8 @@ export function pruneChatHistory(entries = []) {
     .map((entry) => {
       const createdAt = entry.createdAt || entry.at || new Date().toISOString();
       const prompt = sanitizeMemoryText(entry.prompt || entry.text || entry.title || "");
-      const reply = sanitizeMemoryText(entry.reply || "");
+      const sanitizedReply = sanitizeMemoryText(entry.reply || "");
+      const reply = isFailedMemoryInteraction(prompt, sanitizedReply) ? FAILED_HISTORY_REPLY : sanitizedReply;
       const category = entry.category || classifyMemory(prompt);
       return {
         id: entry.id || uid("hist"),
@@ -816,7 +827,9 @@ export function addMemory(entry = {}) {
 
 export function rememberConversation({ prompt = "", reply = "", mode = "ask", route = "" } = {}) {
   const cleanPrompt = sanitizeMemoryText(prompt);
-  const cleanReply = sanitizeMemoryText(reply);
+  const sanitizedReply = sanitizeMemoryText(reply);
+  const failed = isFailedMemoryInteraction(cleanPrompt, sanitizedReply);
+  const cleanReply = failed ? FAILED_HISTORY_REPLY : sanitizedReply;
   if (isTrivialChat(cleanPrompt, cleanReply)) return null;
   const now = new Date().toISOString();
   const category = classifyMemory(cleanPrompt);
@@ -836,7 +849,7 @@ export function rememberConversation({ prompt = "", reply = "", mode = "ask", ro
   };
   store.state.chatHistory = pruneChatHistory([history, ...(store.state.chatHistory || [])]);
   let memory = null;
-  if (!isMemoryWorthy(cleanPrompt, cleanReply)) {
+  if (failed || !isMemoryWorthy(cleanPrompt, cleanReply)) {
     store.save();
     return history;
   }
