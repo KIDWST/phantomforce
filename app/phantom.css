@@ -1000,7 +1000,9 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 
 .ss-simple {
   flex: 1 1 auto; min-height: 0; height: 100%;
-  display: grid; grid-template-rows: auto auto auto minmax(0, 1fr) auto auto;
+  /* rows: switcher · site cards · domain · editbar · PREVIEW (flex) ·
+     section toolbar/hint · prompt · status */
+  display: grid; grid-template-rows: auto auto auto auto minmax(0, 1fr) auto auto auto;
   gap: 10px;
 }
 .ss-simple-top,
@@ -8432,6 +8434,8 @@ body.overlay-open .buddy-canvas { pointer-events: none; }
   .nav-item:hover, .nav-item:active, .nav-item:hover .ic,
   .plan-card:hover, .queue-card:hover, .quick-card:hover, .desktop-context-card:hover,
   .set-model-card:hover, .ml-tab:active, .cmd-chip:active, .chat-start-btn:active { transform: none; }
+}
+
 /* Final mobile dashboard fit: the home screen is the command console, not a
    scroll page. Keep the upper nav and full chat visible in one phone viewport. */
 @media (max-width: 767px) {
@@ -8588,3 +8592,79 @@ body.overlay-open .buddy-canvas { pointer-events: none; }
 .ch-ai-quick-grid button:hover:not(:disabled) { border-color: var(--neon); background: rgba(65,255,161,.13); }
 .ch-ai-quick-grid button:disabled { opacity: .42; cursor: not-allowed; }
 @media (max-width: 720px) { .ch-ai-quick-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
+
+/* ---- Websites editor: device preview, history, sections, publish ---- */
+.ss-editbar {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  margin: 2px 0 8px;
+}
+.ss-devbar { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid var(--line); border-radius: 11px; background: rgba(0,0,0,0.24); }
+.ss-devbar button {
+  padding: 6px 13px; border: 1px solid transparent; border-radius: 8px; background: none; color: var(--dim);
+  cursor: pointer; font: 600 12px "Space Grotesk", sans-serif; transition: background 0.16s, color 0.16s;
+}
+.ss-devbar button:hover { color: var(--ink); background: rgba(65,255,161,0.07); }
+.ss-devbar button.is-active { color: #04160d; background: linear-gradient(120deg, var(--neon), #15d97f); }
+.ss-editbar-actions { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ss-history { position: relative; }
+.ss-history > summary {
+  cursor: pointer; list-style: none; padding: 7px 13px; border: 1px solid var(--line-strong); border-radius: 999px;
+  color: var(--ink); font-size: 12.5px; background: rgba(65,255,161,0.06);
+}
+.ss-history > summary::-webkit-details-marker { display: none; }
+.ss-history[open] > summary { border-color: var(--neon); }
+.ss-history-list {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 30; width: min(320px, 84vw);
+  max-height: 300px; overflow-y: auto; padding: 8px; border: 1px solid var(--line-strong); border-radius: 14px;
+  background: rgba(3, 14, 10, 0.97); box-shadow: 0 18px 50px rgba(0,0,0,0.55);
+  display: flex; flex-direction: column; gap: 4px;
+}
+.ss-history-list button {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; width: 100%;
+  padding: 8px 10px; border: 1px solid transparent; border-radius: 9px; background: none; color: var(--ink);
+  cursor: pointer; text-align: left; font-size: 12px;
+}
+.ss-history-list button:hover { border-color: var(--line-strong); background: rgba(65,255,161,0.07); }
+.ss-history-list button b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ss-history-list button span { color: var(--dim); font-size: 10.5px; white-space: nowrap; }
+.ss-history-list p { margin: 4px 6px; color: var(--dim); font-size: 11.5px; }
+.ss-publish-chip {
+  padding: 7px 13px; border-radius: 999px; font: 600 11.5px "Space Grotesk", sans-serif; white-space: nowrap;
+}
+.ss-publish-waiting { border: 1px solid rgba(255,209,102,0.4); color: var(--warn); background: rgba(255,209,102,0.08); }
+.ss-publish-approved { border: 1px solid rgba(65,255,161,0.4); color: var(--neon); background: rgba(65,255,161,0.08); }
+
+/* device preview: real constrained widths so layout is actually checked */
+.ss-simple-preview { transition: max-width 0.28s ease; }
+.ss-simple-preview.ss-device-tablet { max-width: 768px; margin-inline: auto; }
+.ss-simple-preview.ss-device-phone { max-width: 400px; margin-inline: auto; }
+
+/* selectable sections inside the preview */
+.site-preview-section {
+  cursor: pointer; border: 1px dashed transparent; border-radius: 8px;
+  background: rgba(255,255,255,0.05); color: inherit; font: inherit; padding: 6px 10px;
+  transition: border-color 0.15s, background 0.15s, transform 0.15s;
+}
+.site-preview-section:hover { border-color: rgba(65,255,161,0.5); transform: translateY(-1px); }
+.site-preview-section.is-selected {
+  border: 1px solid var(--neon); background: rgba(65,255,161,0.14); color: #eafff4;
+  box-shadow: 0 0 14px rgba(65,255,161,0.22);
+}
+.ss-section-toolbar {
+  display: flex; align-items: center; gap: 7px; flex-wrap: wrap;
+  margin: 8px 0; padding: 10px 12px; border: 1px solid rgba(65,255,161,0.3); border-radius: 13px;
+  background: rgba(65,255,161,0.05);
+}
+.ss-section-toolbar b { font-size: 12.5px; color: var(--neon); margin-right: 2px; }
+.ss-section-toolbar input {
+  flex: 1 1 130px; min-width: 110px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 9px;
+  background: rgba(0,0,0,0.3); color: var(--ink); font-size: 12.5px; outline: none;
+}
+.ss-section-toolbar input:focus { border-color: var(--neon); }
+.ss-section-remove { border-color: rgba(255,77,99,0.4); color: #ff97a4; }
+.ss-section-remove:hover { border-color: rgba(255,77,99,0.7); background: rgba(255,77,99,0.1); }
+.ss-select-hint { margin: 6px 2px; color: var(--dim); font-size: 11.5px; }
+@media (max-width: 720px) {
+  .ss-editbar { gap: 8px; }
+  .ss-history-list { right: auto; left: 0; }
+}
