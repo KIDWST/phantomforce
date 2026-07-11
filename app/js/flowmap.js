@@ -1,11 +1,11 @@
 /* PhantomForce Phantom — living systems map.
-   One deliberate operating path: Leads → Quotes → Money → Delivery → Site, with
+   One deliberate operating path: Leads → Quotes → Accounting → Delivery → Site, with
    Protect sweeping radar over the run. Pure SVG + SMIL + CSS: comet dashes
    and packet orbs travel the spine, nodes ping and spin, sparks drift in
    the field. Live stats from the store; every node opens its workspace.
    Two layouts: wide wave spine and phone snake. Reduced motion → static. */
 
-import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260711-151";
+import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260711-170";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NARROW_AT = 620;
@@ -43,7 +43,7 @@ function flowNodes() {
   return [
     { id: "leads", ws: "leads", icon: "◉", label: "Leads", stat: `${openLeads.length} open` },
     { id: "quotes", ws: "proposals", icon: "◆", label: "Quotes", stat: `${m.open.length} live` },
-    { id: "money", ws: "money", icon: "◈", label: "Money", stat: m.transactions.length ? signedMoney(m.netCash) : "ledger", size: 24 },
+    { id: "money", ws: "money", icon: "◈", label: "Accounting", stat: m.transactions.length ? signedMoney(m.netCash) : "books", size: 24 },
     { id: "delivery", ws: "media", icon: "▶", label: "Delivery", stat: `${moving.length} moving` },
     { id: "site", ws: "sites", icon: "▦", label: "Sites", stat: `${builds.length} live` },
     { id: "protect", ws: "protect", icon: "⬡", label: "Protect", stat: secClean ? "clean" : "attention", alert: !secClean },

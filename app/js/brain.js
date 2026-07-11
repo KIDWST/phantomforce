@@ -1,5 +1,5 @@
-import { session } from "./store.js?v=phantom-live-20260711-151";
-import { esc } from "./workspaces.js?v=phantom-live-20260711-151";
+import { session } from "./store.js?v=phantom-live-20260711-170";
+import { esc } from "./workspaces.js?v=phantom-live-20260711-170";
 
 const state = {
   loading: true,
@@ -72,14 +72,13 @@ function profileList(profile) {
   return rows.map(([key, value]) => `<div class="brain-kv"><span>${esc(key)}</span><b>${esc(value)}</b></div>`).join("");
 }
 
+/* Backend/vendor identity (Fastify, rembg's Python command, ai-proxy, n8n,
+   Higgsfield) is owner-only surface area — it lives exclusively in the
+   Developer tab (main.js buildDevPrograms). This tab only shows
+   business-facing operational counts, never implementation identity. */
 function healthRows(health) {
   const rows = [
-    ["Fastify", health?.fastifyBackend || "unknown"],
     ["Hermes ledger", health?.hermesLedger?.exists ? "ready" : "empty"],
-    ["rembg", health?.rembg?.available ? `local via ${health.rembg.pythonCommand || "python"}` : "not connected"],
-    ["ai-proxy", health?.aiProxy?.reachable ? "reachable" : "unreachable"],
-    ["Higgsfield", health?.higgsfield?.apiConnected ? "API configured" : "manual/subscription"],
-    ["n8n", health?.toolLane?.n8nRunning ? "running" : health?.toolLane?.n8nScaffolded ? "scaffolded" : "not running"],
     ["Automation", `${health?.automation?.enabledCount || 0}/${health?.automation?.jobCount || 0} enabled`],
     ["Workers", health?.workerLedger ? `${health.workerLedger.totalWorkers} mapped` : "status shell"],
     ["Approvals", `${health?.approvals?.pendingCount || 0} pending`],

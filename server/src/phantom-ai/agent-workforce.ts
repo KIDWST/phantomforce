@@ -2,7 +2,7 @@ import type { HermesLedgerRecord, ProviderRoute } from "./types.js";
 import { getHermesLedgerStatus, readHermesLedgerRecords } from "./hermes-ledger.js";
 import { inspectInternalHarnessReadiness } from "./internal-harness-router.js";
 import { buildToolLanePreview, loadToolRegistry } from "./tool-lane.js";
-import { getAutomationJobDefinitions } from "./automation-engine.js";
+import { getAutomationJobDefinitions, listAutomationJobs } from "./automation-engine.js";
 import { getAgentActionDefinitions } from "./agent-actions.js";
 
 const DEFAULT_WINDOW_HOURS = 24;
@@ -91,7 +91,7 @@ const workerDefinitions: WorkerDefinition[] = [
     tool_binding: "chicagoshots_pipeline",
     focus: "Organizes leads, proposal packets, quotes, and follow-up status.",
     taskMatch: /(lead|proposal|chicagoshots|sales|quote|follow)/i,
-    baseState: "active",
+    baseState: "standby",
   },
   {
     id: "sentinel",
@@ -946,15 +946,28 @@ export async function buildAgentWorkforceStatus(options: {
   windowHours?: number;
 }) {
   const windowHours = options.windowHours ?? DEFAULT_WINDOW_HOURS;
-  const [ledgerStatus, allRecords, registry, n8nPreview, internalHarness] = await Promise.all([
+  const [ledgerStatus, allRecords, registry, n8nPreview, internalHarness, automationJobs] = await Promise.all([
     getHermesLedgerStatus(),
     readHermesLedgerRecords({ limit: 1000 }),
     loadToolRegistry(),
     buildToolLanePreview({ toolId: "n8n" }),
     inspectInternalHarnessReadiness(),
+    listAutomationJobs(),
   ]);
   const recent = recordsSince(allRecords, windowHours);
   const workers = workerDefinitions.map((definition) => buildWorkerMetrics(definition, allRecords));
+  const automationEngineEnabled = process.env.PHANTOMFORCE_AUTOMATION_ENGINE_ENABLED !== "false";
+  const enabledAutomationCategories = new Set(
+    automationJobs.filter((job) => job.enabled).map((job) => job.category),
+  );
+  for (const worker of workers) {
+    const category = worker.id.startsWith("autopilot-") ? worker.id.slice("autopilot-".length) : null;
+    if (automationEngineEnabled && category && enabledAutomationCategories.has(category as "health" | "ops" | "content")) {
+      worker.state = "active";
+      worker.metric_source = "Enabled scheduled automation jobs + Hermes run records";
+      worker.data_source = "automation engine state + Hermes ledger";
+    }
+  }
   const safeActions = getAgentActionDefinitions();
   const subagents = subagentDefinitions.map((subagent) => {
     const parent = workers.find((worker) => worker.name === subagent.parent)
@@ -1040,6 +1053,7 @@ export async function buildAgentWorkforceStatus(options: {
     tokens_in_window: sumTokens(recent),
     estimated_cost_usd_in_window: Number(sumCost(recent).toFixed(6)),
     active_workers: workers.filter((worker) => worker.state === "active").length,
+    baseline_workers_online: workers.filter((worker) => worker.state === "active").length,
     runtime_active_workers: workers.filter((worker) => worker.tasks_last_24h > 0).length,
     parent_workers: workers.length,
     total_workers: workers.length,
@@ -1057,6 +1071,8 @@ export async function buildAgentWorkforceStatus(options: {
     neural_cells_mapped: generatedNeuralCellDefinitions.length,
     generated_neural_cell_instances: generatedNeuralCellDefinitions.length,
     automation_job_definitions: automationSubagentDefinitions.length,
+    enabled_automation_jobs: automationJobs.filter((job) => job.enabled).length,
+    automation_engine_enabled: automationEngineEnabled,
     template_definitions: swarmSubagentTemplates.length + neuralCellTemplates.length,
     template_generated_nodes: generatedSwarmSubagentDefinitions.length + generatedNeuralCellDefinitions.length,
     swarm_subagent_templates: swarmSubagentTemplates.length,

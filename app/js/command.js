@@ -8,11 +8,11 @@
 
 import {
   store, uid, visible, currentWs, isAdmin, isOwnerOperator, pushActivity, moneyView, todaysPlan,
-  PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats,
+  PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig,
-} from "./store.js?v=phantom-live-20260711-151";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-151";
+} from "./store.js?v=phantom-live-20260711-170";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-170";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 const DAY = 86400000;
@@ -75,10 +75,15 @@ function canAskHermes(intent, settings) {
     && !intent.shouldCreateAutomation;
 }
 
+/* The backend chat route can walk up to 4 providers (Codex, Claude CLI,
+   OpenRouter, local Ollama) before giving up, each capped at 20-30s server
+   side — worst case lands around 110s. This timeout must stay above that or
+   the UI aborts before the backend's own fallback chain finishes and silently
+   drops to the local canned responder in handleCommand() below. */
 async function askHermesBrain(raw, intent, settings) {
   if (typeof fetch !== "function" || typeof AbortController === "undefined") return null;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6500);
+  const timeout = setTimeout(() => controller.abort(), 140000);
   const token = typeof session?.token === "function" ? session.token() : "";
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -99,7 +104,7 @@ async function askHermesBrain(raw, intent, settings) {
         task_type: intent.primaryIntent,
         business_name: "PhantomForce",
         actor_user_id: ctx.session?.sessionId || ctx.session?.name || "owner-admin",
-        business_summary: "PhantomForce admin console. AI-assisted operations, media, leads, booking, content, quotes, follow-up, client dashboards, approval gates, and local owner memory.",
+        business_summary: "PhantomForce Business Manager. AI-assisted operations, Creator Hub, client pipeline, bookings, offer desk, accounting, follow-up, site portfolio, approval gates, and local owner memory.",
         module_data: {
           workspace: currentWs(),
           memory: memoryStats(),
@@ -264,7 +269,7 @@ function createAutomation(subject, raw) {
   const name = clean ? title(clean).slice(0, 72) : "New automation";
   const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
   const a = {
-    id: uid("agt"), ws, kind: "automation", source: "Phantom dashboard",
+    id: uid("agt"), ws, kind: "automation", source: "Business HQ",
     name, mission: raw, status: "idle",
     allowedDuringVacation: true, requiresApprovalDuringVacation: true,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -449,7 +454,7 @@ function localQuestionAnswer(text, settings = null) {
 
   if (/\b(website|site|landing|page|store|shop|checkout)\b/.test(s)) {
     return {
-      say: "Treat the site as the money path, not decoration — lead with the offer, show proof fast, make the CTA obvious. Say \"build\" and I'll start a draft; publishing still waits for your approval.",
+      say: "Treat the site as the offer path, not decoration — lead with the outcome, show proof fast, make the CTA obvious. Say \"build\" and I'll start a draft; publishing still waits for your approval.",
       cards: [],
       open: null,
     };
@@ -683,19 +688,19 @@ function routeCommand(raw, settings) {
   const guarded = intentResponse(intent, text, settings);
   if (guarded) return { ...guarded, intent };
 
-  /* --- actual money / accounting ledger --- */
+  /* --- actual accounting ledger --- */
   if (/\b(money|cash|cashflow|cash flow|transaction|transactions|expense|expenses|accounting|ledger|bank|credit card|card spend|unpaid|invoice|paid|payment)\b/.test(s)) {
     const m = moneyView();
     const line = m.transactions.length
       ? `${signedMoney(m.netCash)} net cashflow across ${m.transactions.length} actual transaction${m.transactions.length === 1 ? "" : "s"}: ${fmtMoney(m.cashIn)} in, ${fmtMoney(m.cashOut)} out.`
-      : "Your finance ledger has no transactions yet. Add one manually or import a bank/card CSV; live bank sync should stay marked not connected until the secure connector backend is configured.";
+      : "Your accounting ledger has no transactions yet. Add one manually or import a bank/card CSV; live bank sync should stay marked not connected until the secure connector backend is configured.";
     return {
       say: line,
-      cards: [card("Money", "Actual transaction ledger",
+      cards: [card("Accounting", "Actual transaction ledger",
         m.transactions.length
           ? `${m.uncategorizedCount} uncategorized · latest: ${m.latestTransaction?.description || "none"}.`
-          : "Money only counts confirmed transaction records here. Potential revenue belongs in goals and quotes.",
-        [openAction("Open Money", "money")])],
+          : "Accounting only counts confirmed transaction records here. Potential revenue belongs in goals and quotes.",
+        [openAction("Open Accounting", "money")])],
       open: "money",
     };
   }
@@ -704,10 +709,10 @@ function routeCommand(raw, settings) {
   if (/\b(pipeline|revenue goal|potential revenue|open quotes?|won proposals?|retainers?)\b/.test(s)) {
     const m = moneyView();
     return {
-      say: `${fmtMoney(m.pipeline)} is open quote potential, ${fmtMoney(m.wonValue)} is won proposal value, and ${fmtMoney(m.retainerMonthly)}/mo is retainer goal value. None of that counts as Money until a real transaction confirms cash moved.`,
+      say: `${fmtMoney(m.pipeline)} is open quote potential, ${fmtMoney(m.wonValue)} is won proposal value, and ${fmtMoney(m.retainerMonthly)}/mo is retainer goal value. None of that counts as Accounting until a real transaction confirms cash moved.`,
       cards: [card("Goals", "Opportunity snapshot",
         `${m.open.length} open · ${m.won.length} won · ${m.lost.length} lost. Highest-value open: ${m.open[0] ? `${m.open[0].client} (${fmtMoney(m.open[0].price)})` : "none"}.`,
-        [openAction("Open quotes", "proposals"), openAction("Open Money ledger", "money")])],
+        [openAction("Open quotes", "proposals"), openAction("Open Accounting", "money")])],
       open: "proposals",
     };
   }
@@ -838,12 +843,13 @@ function routeCommand(raw, settings) {
   /* --- memory --- */
   if (/(memory|remember|saved context|what do you know|knowledge|database|local data|past conversations)/.test(s)) {
     const mem = memoryStats();
+    const hist = chatHistoryStats();
     return {
       say: mem.total
-        ? `Memory has ${mem.total} saved item${mem.total === 1 ? "" : "s"} across ${mem.categories || 1} categor${mem.categories === 1 ? "y" : "ies"}.`
-        : "Memory is empty right now. New conversations start saving locally from here.",
+        ? `Memory has ${mem.total} saved item${mem.total === 1 ? "" : "s"} across ${mem.categories || 1} categor${mem.categories === 1 ? "y" : "ies"}. Temporary history has ${hist.total} item${hist.total === 1 ? "" : "s"} waiting for its 10-day shred.`
+        : `Saved memory is empty right now. Temporary history has ${hist.total} item${hist.total === 1 ? "" : "s"} and shreds after 10 days.`,
       cards: [card("Memory", "Local context database",
-        "Conversations auto-organize into categories. Normal memories expire after 30 days unless you or Phantom mark them to remember.",
+        "Saved memory is durable context. Temporary chat history is separate, expires after 10 days, and throwaway greetings are never stored.",
         [openAction("Open Memory", "memory")],
         mem.remembered ? `${mem.remembered} remembered` : "Private and local")],
       open: "memory",

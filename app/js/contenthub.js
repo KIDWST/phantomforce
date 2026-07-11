@@ -1,4 +1,4 @@
-/* PhantomForce — Content Hub: every social post, video, image, and its full
+/* PhantomForce — Creator Hub: every social post, video, image, and its full
    engagement, in one place. Tabs split by SOCIAL PLATFORM and by CONTENT/
    ENGAGEMENT type (images, videos, posts, likes, comments, reactions…).
 
@@ -7,12 +7,18 @@
    anything else) can fetch the same numbers with zero coupling. */
 
 import {
-  freshEditState, applyFilterPreset, paintEdit, renderBaseFrame,
+  freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
-  estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260711-151";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-151";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-151";
+  setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
+} from "./imagefilters.js?v=phantom-live-20260711-170";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-170";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-170";
+import {
+  freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
+  duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
+  loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
+  setCanvasPreset, zoomComposition,
+} from "./content-editor.js?v=phantom-live-20260711-170";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -349,7 +355,7 @@ async function queueAssetSync(assetId) {
 
 let assetPullState = { pulled: false, pulling: false };
 
-/* Runs once per Content Hub mount: pulls the list of server-synced assets
+/* Runs once per Creator Hub mount: pulls the list of server-synced assets
    and merges in any this device doesn't have locally yet (registered with
    skipSync so pulling never triggers a re-upload right back to the
    server). This is what makes a photo edited on one device show up on
@@ -571,7 +577,7 @@ function wireRemovals(body, opts, root) {
     const removed = loadRemovedContent();
     removed.add(btn.dataset.chRemove);
     saveRemovedContent(removed);
-    opts.notify?.("Content Hub", "Removed local queued item. No live post, task, or external action was touched.");
+    opts.notify?.("Creator Hub", "Removed local queued item. No live post, task, or external action was touched.");
     if (root) renderContentHub(root, opts);
   }));
 }
@@ -645,9 +651,10 @@ function svgIc(k) {
 }
 
 /* =========================================================================
-   CONTENT HUB
+   Creator Hub
    ========================================================================= */
 const chState = { tab: "library", platform: "all", ctype: "all", eng: "likes" };
+const CONTENT_TYPE_FILTERS = [["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]];
 const chSelection = new Set();
 let chLightbox = null;
 let chLbKeyHandler = null;
@@ -668,14 +675,14 @@ export function renderContentHub(el, opts = {}) {
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
   const publishDrafts = loadPublishDrafts();
-  const tabs = [["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`], ["publish", "Post / Publish"], ["ideas", "New ideas"], ["drafts", "Draft queue"], ["calendar", "Calendar"], ["production", "Production"]];
+  const tabs = [["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`], ["publish", "Publish"], ["ideas", "Idea Bank"], ["drafts", "Draft Queue"], ["calendar", "Calendar"], ["production", "Workflow"]];
   el.innerHTML = `
     <div class="ch">
       <section class="ch-creator-head">
         <div>
-          <p class="ch-eyebrow">Creator workspace</p>
-          <h3>Your content library, all in one place.</h3>
-          <p>Generated media, saved assets, posts, drafts, and scheduled content start here first. Planning tools are still one tab away.</p>
+          <p class="ch-eyebrow">Creator intelligence</p>
+          <h3>Your creator system, from asset to publish.</h3>
+          <p>Generated media, saved assets, post drafts, and campaign workflow live together so every idea can become content, offer, or launch material.</p>
         </div>
         <button class="btn btn-primary" data-open-ws="media">Create media</button>
       </section>
@@ -683,10 +690,14 @@ export function renderContentHub(el, opts = {}) {
         ${tabs.map(([id, l]) => `<button class="ch-tab ${chState.tab === id ? "is-active" : ""}" data-ch-tab="${id}">${l}</button>`).join("")}
         <span class="ch-src">${ideas.length} ideas · ${publishDrafts.length} publish drafts · ${scheduled} queued · ${mediaAssets.length} media · ${formatBytes(mediaStats.bytes)}/${formatBytes(mediaStats.budgetBytes)}</span>
       </div>
+      ${chState.tab === "library" ? `<div class="ch-subtabs" data-ch-type>
+        ${CONTENT_TYPE_FILTERS.map(([id, l]) => `<button class="ch-subtab ${chState.ctype === id ? "is-active" : ""}" data-v="${id}">${esc(l)}</button>`).join("")}
+      </div>` : ""}
       <div class="ch-body" data-ch-body></div>
     </div>
     ${chLightbox ? lightboxMarkup(chLightbox, esc) : ""}`;
   el.querySelectorAll("[data-ch-tab]").forEach((b) => b.onclick = () => { chState.tab = b.dataset.chTab; renderContentHub(el, opts); });
+  el.querySelectorAll("[data-ch-type] button").forEach((b) => b.onclick = () => { chState.ctype = b.dataset.v; renderContentHub(el, opts); });
   pullSyncedAssetsOnce(el, opts);
   const body = el.querySelector("[data-ch-body]");
   const t = chState.tab;
@@ -1105,7 +1116,7 @@ function readPublishForm(body, fallback = loadPublishState()) {
   });
 }
 function wirePostPublish(body, data, assets, esc, root, opts) {
-  const notify = (msg) => opts.notify?.("Content Hub", msg);
+  const notify = (msg) => opts.notify?.("Creator Hub", msg);
   body.querySelectorAll("[data-ch-pub-field]").forEach((field) => {
     field.oninput = () => readPublishForm(body);
     field.onchange = () => readPublishForm(body);
@@ -1194,7 +1205,7 @@ function renderContentLibrary(body, data, esc, root, opts) {
         ${chState.selectMode || chSelection.size ? `
         <div class="ch-select-summary">
           <b>${chSelection.size ? `${chSelection.size} selected` : "Selection tools"}</b>
-          <span>${selectedAssets} media · ${selectedPosts} posts · Shift+click for a range, Ctrl+click for one at a time</span>
+          <span>${selectedAssets} media · ${selectedPosts} posts · use Select for multi-select, Shift/Ctrl for desktop ranges</span>
         </div>
         <div class="ch-action-row">
           <button class="ch-tool is-on" data-ch-select-mode type="button">Done selecting</button>
@@ -1220,11 +1231,7 @@ function renderContentLibrary(body, data, esc, root, opts) {
       : `<p class="empty-line">No generated images or videos yet. Create media in Media Lab and it will land here automatically.</p>`}
       ${stats.trimmed ? `<p class="ch-src">Space saver active: ${stats.trimmed} older/heavier preview${stats.trimmed === 1 ? "" : "s"} kept as metadata only.</p>` : ""}
     </section>
-    <div class="ch-chips" data-ch-type>
-      ${[["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]].map(([id, l]) => `<button class="ch-chip ${chState.ctype === id ? "is-on" : ""}" data-v="${id}">${esc(l)}</button>`).join("")}
-    </div>
     <div class="ch-grid ch-grid-lg">${shownPosts.map((p) => postCard(p, esc, { creator: true })).join("")}</div>`;
-  body.querySelectorAll("[data-ch-type] button").forEach((b) => b.onclick = () => { chState.ctype = b.dataset.v; renderContentHub(root, opts); });
   wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts);
   wirePostCards(body, data, esc, root, opts);
 }
@@ -1236,7 +1243,7 @@ function contentAssetCard(asset, esc) {
   const key = selectionKey("asset", asset.id);
   const selected = chSelection.has(key);
   const flags = [asset.saved ? "saved" : "", asset.batchLabel ? asset.batchLabel : "", asset.aiEditPlan ? "AI edit plan" : ""].filter(Boolean);
-  return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}" data-ch-asset-id="${esc(asset.id)}" title="${hasUrl ? "Double-click to open" : ""}">
+  return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}" data-ch-asset-id="${esc(asset.id)}" title="${hasUrl ? "Click to open" : ""}">
     <button class="ch-remove ch-asset-x" data-ch-delete-asset="${esc(asset.id)}" aria-label="Remove ${esc(asset.title)}" title="Remove ${esc(asset.title)}" type="button">x</button>
     <span class="ch-select-box" data-ch-select-hit aria-hidden="true">${selected ? "✓" : ""}</span>
     <span class="ch-asset-thumb" style="${hasUrl ? "" : assetBg(asset)}">
@@ -1255,7 +1262,7 @@ function contentAssetCard(asset, esc) {
 }
 /* ---------------- inline lightbox: expand + AI-prompt image editor ----------------
    Reuses the same tested canvas filter engine as Media Lab's Edit tab (see
-   imagefilters.js) but stays entirely local to Content Hub — its own isolated
+   imagefilters.js) but stays entirely local to Creator Hub — its own isolated
    edit state per open, mounted right over the grid instead of navigating away. */
 function freshLightbox(asset, extra = {}) {
   const extraLayers = extra.layers || {};
@@ -1271,8 +1278,59 @@ function freshLightbox(asset, extra = {}) {
     bg: { status: "idle", message: "" },
     bokehDetect: { status: "idle", message: "" },
     text: { open: false },
+    composition: freshComposition(), editorUndo: [], editorRedo: [], editorGesture: null, subjectMaskUrl: "",
     ...cleanExtra,
   };
+}
+
+function editStateSnapshot(state) {
+  return {
+    brightness: state.brightness, contrast: state.contrast, saturate: state.saturate,
+    hue: state.hue, blur: state.blur, rotate: state.rotate, flip: state.flip,
+    text: state.text, textStyle: { ...state.textStyle }, bokehBrush: state.bokehBrush,
+    bokeh: state.bokeh ? {
+      spots: (state.bokeh.spots || []).map((spot) => ({ ...spot })),
+      strength: state.bokeh.strength,
+      feather: state.bokeh.feather,
+      maskImg: null,
+    } : null,
+  };
+}
+
+function editorSnapshot(lb) {
+  return { composition: compositionSnapshot(lb.composition), state: editStateSnapshot(lb.state) };
+}
+
+function restoreEditorSnapshot(lb, snapshot) {
+  const currentMask = lb.state?.bokeh?.maskImg || null;
+  restoreComposition(lb.composition, snapshot.composition);
+  lb.state = { ...freshEditState(), ...snapshot.state, textStyle: { ...freshTextStyle(), ...(snapshot.state?.textStyle || {}) } };
+  if (lb.state.bokeh && currentMask) lb.state.bokeh.maskImg = currentMask;
+}
+
+function commitEditorChange(lb, before) {
+  const after = editorSnapshot(lb);
+  if (JSON.stringify(before) === JSON.stringify(after)) return false;
+  lb.editorUndo.push(before);
+  if (lb.editorUndo.length > 60) lb.editorUndo.shift();
+  lb.editorRedo = [];
+  return true;
+}
+
+function editorUndo(lb) {
+  const snapshot = lb.editorUndo.pop();
+  if (!snapshot) return false;
+  lb.editorRedo.push(editorSnapshot(lb));
+  restoreEditorSnapshot(lb, snapshot);
+  return true;
+}
+
+function editorRedo(lb) {
+  const snapshot = lb.editorRedo.pop();
+  if (!snapshot) return false;
+  lb.editorUndo.push(editorSnapshot(lb));
+  restoreEditorSnapshot(lb, snapshot);
+  return true;
 }
 const REMBG_EDITOR_MAX_SIDE = 1800;
 function layerVisible(lb, key) {
@@ -1280,6 +1338,14 @@ function layerVisible(lb, key) {
 }
 function activeLightboxImageUrl(lb) {
   return lb.cutoutUrl && layerVisible(lb, "cutout") ? lb.cutoutUrl : (lb.baseUrl || lb.asset?.url || "");
+}
+function selectedImageLayer(lb) {
+  const selected = selectedLayers(lb.composition || freshComposition());
+  if (selected.length !== 1) return null;
+  return selected[0].type === "base" || selected[0].type === "image" ? selected[0] : null;
+}
+function selectedImageLabel(lb) {
+  return selectedImageLayer(lb)?.name || "";
 }
 function paintStateForLightbox(lb) {
   const s = lb.state;
@@ -1324,6 +1390,22 @@ function waitForCanvasImage(canvas, timeoutMs = 2500) {
     tick();
   });
 }
+async function selectedImageSource(lb, canvas) {
+  const layer = selectedImageLayer(lb);
+  if (!layer) return null;
+  if (layer.type === "base") {
+    const image = await waitForCanvasImage(canvas);
+    return image ? { layer, image } : null;
+  }
+  let image = lb.composition.imageCache.get(layer.src);
+  if (!image && layer.src) {
+    try {
+      image = await loadImageForEditing(layer.src);
+      lb.composition.imageCache.set(layer.src, image);
+    } catch { image = null; }
+  }
+  return image ? { layer, image } : null;
+}
 function chSlider(label, key, min, max, val) {
   return `<label class="ch-lb-slider"><span>${label} <b data-out="${key}">${val}</b></span><input type="range" min="${min}" max="${max}" value="${val}" data-ch-lb-slider="${key}"/></label>`;
 }
@@ -1354,6 +1436,8 @@ function aiEditBody(lb, esc) {
 
 function removeBgBody(lb, esc) {
   const bg = lb.bg || { status: "idle" };
+  const target = selectedImageLayer(lb);
+  const targetName = bg.targetName || target?.name || "";
   const checking = bg.status === "checking";
   const loading = bg.status === "loading";
   const unavailable = bg.status === "unavailable";
@@ -1361,8 +1445,8 @@ function removeBgBody(lb, esc) {
     return `
       <div class="ch-lb-bg-preview">
         <div class="ch-lb-bg-preview-imgs">
-          <figure><img src="${esc(bg.beforeUrl)}" alt="Before"/><figcaption>Before</figcaption></figure>
-          <figure><img src="${esc(bg.afterUrl)}" alt="After"/><figcaption>After</figcaption></figure>
+          <figure><img src="${esc(bg.beforeUrl)}" alt="Before"/><figcaption>${esc(targetName || "Before")}</figcaption></figure>
+          <figure><img src="${esc(bg.afterUrl)}" alt="After"/><figcaption>Background removed</figcaption></figure>
         </div>
         <div class="ch-lb-chips">
           <button class="btn btn-primary" type="button" data-ch-lb-bg-apply>Apply</button>
@@ -1372,13 +1456,14 @@ function removeBgBody(lb, esc) {
   }
   return `
     <div class="ch-lb-chips">
-      <button class="btn btn-quiet" type="button" data-ch-lb-bg-run ${checking || loading || unavailable ? "disabled" : ""}>${loading ? "Removing…" : checking ? "Checking…" : "Remove Background"}</button>
+      <button class="btn btn-quiet" type="button" data-ch-lb-bg-run ${checking || loading || unavailable || !target ? "disabled" : ""}>${loading ? "Removing…" : checking ? "Checking…" : "Remove Background"}</button>
     </div>
+    ${targetName ? `<p class="ch-lb-ai-note">Selected layer: <b>${esc(targetName)}</b></p>` : `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Select one image layer first.</p>`}
     ${loading ? `<p class="ch-lb-ai-note">Working locally. Larger photos can take a moment.</p>` : ""}
     ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Background removal is not connected yet.</p>` : ""}
     ${bg.status === "idle" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Ready — background removal is available.</p>` : ""}
     ${bg.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "Background removal failed.")}</p>` : ""}
-    ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed — the Cutout layer is ready.</p>` : ""}
+    ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed from ${esc(targetName || "the selected layer")}.</p>` : ""}
   `;
 }
 
@@ -1397,14 +1482,14 @@ function bokehBody(lb, s, esc) {
     ${detectUnavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">AI subject detection needs Local Background Removal connected — set it up in Settings → Media Engines.</p>` : ""}
     ${detect.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(detect.message || "Subject detection failed.")}</p>` : ""}
     ${hasMask && detect.status !== "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">AI detected the subject — the background blurs around its real shape, gaps included (e.g. between a cat's ears). Add focus spots below to touch it up.</p>` : ""}
-    <p class="ch-lb-bokeh-note">${esc(lb.subjectHint || (hasMask ? "Use \"Add focus spots\" for anything the AI missed." : spots.length ? "Click to add more focus, click a spot to select it, right-click to remove it." : "No subject detected yet — try \"AI detect subject\" above, or turn on \"Add focus spots\" to drop a manual point."))}</p>
-    ${chBSlider("Brush size", "r", 8, 45, s.bokehBrush || 24)}
+    <p class="ch-lb-bokeh-note">${esc(lb.subjectHint || (hasMask ? "The detected subject is protected from blur and outlined on canvas. Add a small touch-up only if part of the subject was missed." : spots.length ? "Manual touch-ups keep those circles sharp. AI Detect is better for a full person or object." : "Detect the full subject first. Manual touch-ups are only for small areas the detector misses."))}</p>
+    ${chBSlider("Touch-up size", "r", 4, 30, s.bokehBrush || 12)}
     ${s.bokeh ? chBSlider("Background blur", "strength", 4, 32, s.bokeh.strength) : ""}
     ${s.bokeh ? chBSlider("Feather", "feather", 5, 90, Math.round((s.bokeh.feather ?? 0.45) * 100)) : ""}
     <label class="ch-lb-check"><input type="checkbox" data-ch-lb-remember-size ${lb.rememberBokehSize ? "checked" : ""}/> Remember size for next point</label>
     <div class="ch-lb-chips">
-      <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Adding focus… (click Done)" : "Add focus spots"}</button>
-      ${s.bokeh ? `<button type="button" data-ch-lb-bokeh-off>Clear all</button>` : ""}
+      <button type="button" data-ch-lb-bokeh-pick class="${lb.bokehPicking ? "is-on" : ""}">${svgIc("spark")} ${lb.bokehPicking ? "Done" : spots.length ? "Edit touch-ups" : "Add touch-up"}</button>
+      ${s.bokeh ? `<button type="button" data-ch-lb-bokeh-off>Clear bokeh</button>` : ""}
     </div>
     ${selected ? `
     <div class="ch-lb-bokeh-selected">
@@ -1452,24 +1537,82 @@ function textToolBody(s, esc) {
     ${st.outline ? chTSlider("Outline width", "outlineWidth", 0, 40, st.outlineWidth, esc) : ""}
   `;
 }
+function layerPropertySlider(label, key, value, min, max, step = 1) {
+  return `<label class="ch-layer-prop"><span>${label}<b data-ch-layer-out="${key}">${value}</b></span><input type="range" min="${min}" max="${max}" step="${step}" value="${value}" data-ch-layer-prop="${key}"/></label>`;
+}
+
+function selectedLayerInspector(lb, esc) {
+  const layer = selectedLayers(lb.composition)[0];
+  if (!layer || lb.composition.selectedIds.length !== 1) {
+    return `<div class="ch-layer-inspector is-empty"><span>${lb.composition.selectedIds.length > 1 ? `${lb.composition.selectedIds.length} layers selected` : "Select a layer to edit it"}</span></div>`;
+  }
+  const common = `
+    <div class="ch-layer-prop-grid">
+      ${layerPropertySlider("X", "x", Math.round(layer.x * 100), 0, 100)}
+      ${layerPropertySlider("Y", "y", Math.round(layer.y * 100), 0, 100)}
+      ${layerPropertySlider("Width", "w", Math.round(layer.w * 100), 5, 200)}
+      ${layerPropertySlider("Height", "h", Math.round(layer.h * 100), 5, 200)}
+      ${layerPropertySlider("Rotate", "rotation", Math.round(layer.rotation || 0), -180, 180)}
+      ${layerPropertySlider("Opacity", "opacity", Math.round((layer.opacity ?? 1) * 100), 0, 100)}
+    </div>`;
+  let typeFields = "";
+  if (layer.type === "image" || layer.type === "base") {
+    typeFields = `<label class="ch-layer-field"><span>Image fit</span><select data-ch-layer-field="fit"><option value="cover" ${layer.fit === "cover" ? "selected" : ""}>Fill frame</option><option value="contain" ${layer.fit === "contain" ? "selected" : ""}>Fit inside</option></select></label>`;
+  } else if (layer.type === "text") {
+    typeFields = `
+      <label class="ch-layer-field"><span>Text</span><textarea rows="3" data-ch-layer-field="text">${esc(layer.text || "")}</textarea></label>
+      <div class="ch-layer-field-grid">
+        <label class="ch-layer-field"><span>Font</span><select data-ch-layer-field="font">${TEXT_FONTS.map((font) => `<option value="${esc(font)}" ${layer.font === font ? "selected" : ""}>${esc(font)}</option>`).join("")}</select></label>
+        <label class="ch-layer-field"><span>Align</span><select data-ch-layer-field="align"><option value="left" ${layer.align === "left" ? "selected" : ""}>Left</option><option value="center" ${layer.align === "center" ? "selected" : ""}>Center</option><option value="right" ${layer.align === "right" ? "selected" : ""}>Right</option></select></label>
+        <label class="ch-layer-field"><span>Text color</span><input type="color" data-ch-layer-field="color" value="${esc(layer.color || "#ffffff")}"/></label>
+        <label class="ch-layer-field"><span>Box color</span><input type="color" data-ch-layer-field="background" value="${esc(layer.background || "#000000")}"/></label>
+      </div>
+      ${layerPropertySlider("Type size", "fontSize", layer.fontSize || 8, 2, 22, 0.5)}
+      ${layerPropertySlider("Box fill", "backgroundOpacity", Math.round((layer.backgroundOpacity || 0) * 100), 0, 100)}
+      <div class="ch-lb-chips"><button type="button" data-ch-layer-toggle="bold" class="${layer.bold ? "is-on" : ""}"><b>B</b></button><button type="button" data-ch-layer-toggle="shadow" class="${layer.shadow ? "is-on" : ""}">Shadow</button></div>`;
+  } else if (layer.type === "color") {
+    typeFields = `<label class="ch-layer-field"><span>Fill color</span><input type="color" data-ch-layer-field="color" value="${esc(layer.color || "#10251c")}"/></label>${layerPropertySlider("Corner radius", "radius", Math.round((layer.radius || 0) * 100), 0, 50)}`;
+  }
+  return `
+    <div class="ch-layer-inspector">
+      <div class="ch-layer-inspector-head"><b>${esc(layer.name)}</b><span>${esc(layer.type)}</span></div>
+      ${typeFields}${common}
+    </div>`;
+}
+
 function layerStackBody(lb, esc) {
-  const s = lb.state || {};
-  const rows = [
-    { key: "image", label: "Image", sub: lb.baseUrl !== lb.originalUrl ? "edited source" : "original source", locked: true, active: true },
-    ...(lb.cutoutUrl ? [{ key: "cutout", label: "Cutout", sub: "background removed", active: layerVisible(lb, "cutout") }] : []),
-    ...(s.bokeh ? [{ key: "bokeh", label: "Bokeh", sub: s.bokeh.maskImg ? "AI subject blur" : "focus spots", active: layerVisible(lb, "bokeh") }] : []),
-    ...((s.text || "").trim() ? [{ key: "text", label: "Text", sub: "caption overlay", active: layerVisible(lb, "text") }] : []),
+  const compositionLayers = [...lb.composition.layers].reverse();
+  const selected = new Set(lb.composition.selectedIds);
+  const effectRows = [
+    ...(lb.state.bokeh?.maskImg ? [{ key: "subject", label: "Detected subject", active: layerVisible(lb, "subject") }] : []),
+    ...(lb.cutoutUrl ? [{ key: "cutout", label: "Background removal", active: layerVisible(lb, "cutout") }] : []),
+    ...(lb.state.bokeh ? [{ key: "bokeh", label: "Subject bokeh", active: layerVisible(lb, "bokeh") }] : []),
+    ...((lb.state.text || "").trim() ? [{ key: "text", label: "Legacy text overlay", active: layerVisible(lb, "text") }] : []),
   ];
   return `
     <div class="ch-lb-layers" data-ch-lb-layers>
-      <p class="ch-lb-ai-label">${svgIc("eye")} Layers</p>
-      <div class="ch-lb-layer-list">
-        ${rows.map((row) => `
-          <div class="ch-lb-layer ${row.active ? "is-on" : "is-off"} ${row.locked ? "is-locked" : ""}">
-            <button type="button" ${row.locked ? "disabled" : ""} data-ch-lb-layer-toggle="${esc(row.key)}" title="${row.locked ? "Base image stays on" : row.active ? "Hide layer" : "Show layer"}">${svgIc("eye")}</button>
-            <span><b>${esc(row.label)}</b><small>${esc(row.sub)}</small></span>
-          </div>`).join("")}
+      <div class="ch-layer-head"><p class="ch-lb-ai-label">${svgIc("eye")} Layers</p><span>${lb.composition.layers.length}</span></div>
+      <div class="ch-layer-add-row">
+        <button type="button" data-ch-layer-add="image">+ Image</button>
+        <button type="button" data-ch-layer-add="background">+ Background</button>
+        <button type="button" data-ch-layer-add="text">+ Text</button>
+        <button type="button" data-ch-layer-add="color">+ Color</button>
+        <input type="file" accept="image/*" data-ch-layer-file hidden/>
       </div>
+      <div class="ch-lb-layer-list">
+        ${compositionLayers.map((layer) => `
+          <div class="ch-lb-layer ch-compose-layer ${layer.visible ? "is-on" : "is-off"} ${selected.has(layer.id) ? "is-selected" : ""}" data-ch-layer-row="${esc(layer.id)}">
+            <button type="button" data-ch-layer-visible="${esc(layer.id)}" title="${layer.visible ? "Hide layer" : "Show layer"}">${svgIc("eye")}</button>
+            <button class="ch-layer-name" type="button" data-ch-layer-select="${esc(layer.id)}"><b>${esc(layer.name)}</b><small>${esc(layer.type === "base" ? "adjusted source" : layer.hasTransparency ? `${layer.type} · cutout` : layer.type)}</small></button>
+            <span class="ch-layer-row-actions">
+              <button type="button" data-ch-layer-order="1" data-layer-id="${esc(layer.id)}" title="Move up">↑</button>
+              <button type="button" data-ch-layer-order="-1" data-layer-id="${esc(layer.id)}" title="Move down">↓</button>
+              ${layer.id === "base" ? "" : `<button type="button" data-ch-layer-duplicate="${esc(layer.id)}" title="Duplicate">⧉</button><button type="button" data-ch-layer-delete="${esc(layer.id)}" title="Delete">×</button>`}
+            </span>
+          </div>`).join("")}
+        ${effectRows.map((row) => `<div class="ch-lb-layer ch-effect-layer ${row.key === "subject" ? "is-subject-guide" : ""} ${row.active ? "is-on" : "is-off"}"><button type="button" data-ch-lb-layer-toggle="${esc(row.key)}">${svgIc("eye")}</button><span><b>${esc(row.label)}</b><small>${row.key === "subject" ? "editor-only selection guide" : "non-destructive effect"}</small></span></div>`).join("")}
+      </div>
+      ${selectedLayerInspector(lb, esc)}
     </div>`;
 }
 function lightboxMarkup(lb, esc) {
@@ -1503,9 +1646,31 @@ function lightboxMarkup(lb, esc) {
         <div class="ch-lb-body">
           <div class="ch-lb-canvas-wrap">
             ${lb.loadError ? `<div class="ch-lb-load-error"><b>Couldn't load this image</b><span>${esc(lb.loadError)}</span></div>` : ""}
-            <canvas class="ch-lb-canvas" data-ch-lb-canvas></canvas>
-            <div class="ch-lb-bokeh-markers ${(layerVisible(lb, "bokeh") && (lb.bokehPicking || lb.selectedSpot != null)) ? "" : "is-hidden"}" data-ch-lb-bokeh-markers></div>
-            <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
+            <div class="ch-editor-toolbar" role="toolbar" aria-label="Canvas tools">
+              <div class="ch-editor-toolgroup">
+                <button type="button" data-ch-editor-undo ${lb.editorUndo.length ? "" : "disabled"} title="Undo (Ctrl+Z)">${svgIc("undo")}</button>
+                <button type="button" data-ch-editor-redo ${lb.editorRedo.length ? "" : "disabled"} title="Redo (Ctrl+R)">${svgIc("redo")}</button>
+              </div>
+              <div class="ch-editor-toolgroup ch-editor-presets">
+                <button type="button" data-ch-canvas-preset="1280x720">16:9 Thumbnail</button>
+                <button type="button" data-ch-canvas-preset="1080x1080">1:1 Headshot</button>
+                <button type="button" data-ch-canvas-preset="1080x1350">4:5 Portrait</button>
+              </div>
+              <div class="ch-editor-toolgroup">
+                <button type="button" data-ch-editor-zoom="-0.1" title="Zoom out">−</button>
+                <span data-ch-editor-zoom-label>${Math.round((lb.composition.zoom || 1) * 100)}%</span>
+                <button type="button" data-ch-editor-zoom="0.1" title="Zoom in">+</button>
+                <button type="button" data-ch-editor-fit title="Fit canvas">Fit</button>
+              </div>
+            </div>
+            <div class="ch-editor-stage" data-ch-editor-stage>
+              <div class="ch-editor-surface" data-ch-editor-surface>
+                <canvas class="ch-lb-canvas" data-ch-lb-canvas></canvas>
+                <canvas class="ch-editor-overlay ${lb.bokehPicking ? "is-picking" : ""}" data-ch-editor-overlay></canvas>
+              </div>
+              <div class="ch-lb-bokeh-markers ${(layerVisible(lb, "bokeh") && (lb.bokehPicking || lb.selectedSpot != null)) ? "" : "is-hidden"}" data-ch-lb-bokeh-markers></div>
+              <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add a sharp area · Done hides the guides</div>
+            </div>
           </div>
           <aside class="ch-lb-tools">
             ${layerStackBody(lb, esc)}
@@ -1561,13 +1726,14 @@ function lightboxMarkup(lb, esc) {
 }
 function tutorialMarkup() {
   const rows = [
-    ["Open an image", "Double-click any image in the library to open it here."],
+    ["Build in layers", "Add an image, background, text, or color from Layers. Reorder, hide, duplicate, or delete anything without flattening your work."],
+    ["Move and resize", "Click a layer on the canvas, drag to move it, and use the corner handles to resize. Shift-click selects more than one layer."],
+    ["Zoom and shortcuts", "Scroll over the canvas to zoom. Ctrl+Z undoes, Ctrl+R redoes, Ctrl+A selects all layers, and Delete removes selected layers."],
     ["Describe an edit", "Type what you want and hit Generate. This appears only when AI Edit is connected, so the editor never shows a dead control."],
     ["Remove background", "Runs for real when background removal is connected, shows a before/after, then Apply or Cancel."],
     ["Subject bokeh", "Click \"AI detect subject\" — it uses your local background-removal engine to find the real subject shape, so gaps like the space between a cat's ears blur correctly. Then use \"Add focus spots\" to touch up anything it missed; drag a spot to move it, click to select and resize, right-click to remove it."],
-    ["Adjust / Transform / Style presets / Text overlay", "Tucked into the sections below — click a heading to open it. Text overlay has fonts, color, outline, shadow, alignment, position, and layout presets."],
+    ["Camera controls", "Adjust, transform, presets, bokeh, and cutout remain non-destructive. Use layer text for movable headlines and labels."],
     ["Save vs. Save as copy", "Save updates this asset in place. Save as copy keeps the original and creates a new one."],
-    ["In the library grid", "Shift+click selects a range, Ctrl+click adds one at a time, Ctrl+A selects everything visible, Ctrl+Z undoes your last delete."],
   ];
   return `
     <div class="ch-lb-tutorial">
@@ -1588,7 +1754,32 @@ function wireLightbox(root, opts) {
   root.querySelectorAll("[data-ch-lb-close]").forEach((b) => b.addEventListener("click", close));
   root.querySelector("[data-ch-lb-tutorial]")?.addEventListener("click", () => { lb.showTutorial = !lb.showTutorial; rerender(); });
   if (chLbKeyHandler) document.removeEventListener("keydown", chLbKeyHandler);
-  chLbKeyHandler = (event) => { if (event.key === "Escape") close(); };
+  chLbKeyHandler = (event) => {
+    if (event.key === "Escape") { close(); return; }
+    if (lb.viewOnly) return;
+    const typing = event.target?.matches?.("input, textarea, select, [contenteditable='true']");
+    if (typing) return;
+    const mod = event.ctrlKey || event.metaKey;
+    const key = event.key.toLowerCase();
+    if (mod && key === "z") {
+      event.preventDefault();
+      const changed = event.shiftKey ? editorRedo(lb) : editorUndo(lb);
+      if (changed) rerender();
+    } else if (mod && key === "r") {
+      event.preventDefault();
+      if (editorRedo(lb)) rerender();
+    } else if (mod && key === "a") {
+      event.preventDefault();
+      selectAllLayers(lb.composition);
+      rerender();
+    } else if ((event.key === "Delete" || event.key === "Backspace") && lb.composition.selectedIds.some((id) => id !== "base")) {
+      event.preventDefault();
+      const before = editorSnapshot(lb);
+      removeSelectedLayers(lb.composition);
+      commitEditorChange(lb, before);
+      rerender();
+    }
+  };
   document.addEventListener("keydown", chLbKeyHandler);
   if (lb.viewOnly) return;
 
@@ -1602,19 +1793,39 @@ function wireLightbox(root, opts) {
   const asset = lb.asset;
   const s = lb.state;
   const canvas = root.querySelector("[data-ch-lb-canvas]");
+  const overlay = root.querySelector("[data-ch-editor-overlay]");
+  const editorStage = root.querySelector("[data-ch-editor-stage]");
+  const editorSurface = root.querySelector("[data-ch-editor-surface]");
   const markerLayer = root.querySelector("[data-ch-lb-bokeh-markers]");
+  const applyEditorZoom = () => {
+    if (!editorSurface) return;
+    const zoom = lb.composition.zoom || 1;
+    editorSurface.style.width = `${Math.max(25, zoom * 100)}%`;
+    const label = root.querySelector("[data-ch-editor-zoom-label]");
+    if (label) label.textContent = `${Math.round(zoom * 100)}%`;
+  };
   const positionMarkers = () => {
     if (!markerLayer) return;
     const spots = s.bokeh?.spots || [];
     markerLayer.innerHTML = spots.map((_, i) => `<div class="ch-lb-bokeh-marker ${i === lb.selectedSpot ? "is-selected" : ""}" data-spot-index="${i}"></div>`).join("");
+    const stageRect = editorStage?.getBoundingClientRect();
+    const canvasRect = canvas.getBoundingClientRect();
     [...markerLayer.children].forEach((el, i) => {
       const spot = spots[i];
-      const r = spot.r * Math.min(canvas.offsetWidth, canvas.offsetHeight);
-      el.style.left = `${canvas.offsetLeft + spot.x * canvas.offsetWidth}px`;
-      el.style.top = `${canvas.offsetTop + spot.y * canvas.offsetHeight}px`;
+      const r = spot.r * Math.min(canvasRect.width, canvasRect.height);
+      el.style.left = `${canvasRect.left - (stageRect?.left || 0) + spot.x * canvasRect.width}px`;
+      el.style.top = `${canvasRect.top - (stageRect?.top || 0) + spot.y * canvasRect.height}px`;
       el.style.width = `${r * 2}px`;
       el.style.height = `${r * 2}px`;
     });
+  };
+  const repaint = () => {
+    if (!canvas._img) return;
+    renderComposition(canvas, canvas._img, paintStateForLightbox(lb), lb.composition);
+    if (overlay) drawCompositionOverlay(overlay, canvas, lb.composition);
+    if (overlay && layerVisible(lb, "subject") && s.bokeh?.maskImg) drawDetectedSubjectOverlay(overlay, canvas, lb.composition, s.bokeh.maskImg);
+    applyEditorZoom();
+    positionMarkers();
   };
   // Cross-origin sources without CORS headers would otherwise silently
   // taint the canvas — every later toDataURL() call (Save/Download) throws
@@ -1622,20 +1833,157 @@ function wireLightbox(root, opts) {
   // back to a same-origin media proxy so this never happens silently.
   const requestedImageUrl = activeLightboxImageUrl(lb);
   loadImageForEditing(requestedImageUrl)
-    .then((img) => {
+    .then(async (img) => {
       if (chLightbox !== lb || activeLightboxImageUrl(lb) !== requestedImageUrl) return;
       lb.loadError = "";
-      paintEdit(canvas, img, paintStateForLightbox(lb));
-      positionMarkers();
+      canvas._img = img;
+      await loadCompositionImages(lb.composition, loadImageForEditing);
+      if (chLightbox !== lb) return;
+      repaint();
     })
     .catch((error) => {
       if (chLightbox !== lb) return;
       lb.loadError = error.message || "Could not load this image.";
       rerender();
     });
-  const repaint = () => { if (canvas._img) paintEdit(canvas, canvas._img, paintStateForLightbox(lb)); positionMarkers(); };
-  onResize = () => positionMarkers();
+  onResize = () => { repaint(); positionMarkers(); };
   window.addEventListener("resize", onResize);
+  applyEditorZoom();
+
+  const mutateLayer = (mutation, { rerenderAfter = true } = {}) => {
+    const before = editorSnapshot(lb);
+    mutation();
+    commitEditorChange(lb, before);
+    repaint();
+    if (rerenderAfter) rerender();
+  };
+  const layerFile = root.querySelector("[data-ch-layer-file]");
+  root.querySelectorAll("[data-ch-layer-add]").forEach((button) => button.onclick = () => {
+    const type = button.dataset.chLayerAdd;
+    if (type === "image" || type === "background") {
+      if (layerFile) layerFile.dataset.mode = type;
+      layerFile?.click();
+      return;
+    }
+    mutateLayer(() => type === "text" ? addTextLayer(lb.composition) : addColorLayer(lb.composition));
+  });
+  if (layerFile) layerFile.onchange = async () => {
+    const file = layerFile.files?.[0];
+    if (!file) return;
+    const before = editorSnapshot(lb);
+    const url = await readFileAsDataUrl(file);
+    const background = layerFile.dataset.mode === "background";
+    addImageLayer(lb.composition, url, file.name.replace(/\.[^.]+$/, "") || (background ? "Background" : "Image layer"), { background });
+    await loadCompositionImages(lb.composition, loadImageForEditing);
+    commitEditorChange(lb, before);
+    layerFile.value = "";
+    rerender();
+  };
+  root.querySelectorAll("[data-ch-layer-select]").forEach((button) => button.onclick = (event) => {
+    selectLayer(lb.composition, button.dataset.chLayerSelect, event.shiftKey || event.ctrlKey || event.metaKey);
+    rerender();
+  });
+  root.querySelectorAll("[data-ch-layer-visible]").forEach((button) => button.onclick = () => mutateLayer(() => {
+    const layer = lb.composition.layers.find((item) => item.id === button.dataset.chLayerVisible);
+    if (layer) layer.visible = !layer.visible;
+  }));
+  root.querySelectorAll("[data-ch-layer-order]").forEach((button) => button.onclick = () => mutateLayer(() => {
+    moveLayerOrder(lb.composition, button.dataset.layerId, Number(button.dataset.chLayerOrder));
+  }));
+  root.querySelectorAll("[data-ch-layer-duplicate]").forEach((button) => button.onclick = () => mutateLayer(() => duplicateLayer(lb.composition, button.dataset.chLayerDuplicate)));
+  root.querySelectorAll("[data-ch-layer-delete]").forEach((button) => button.onclick = () => mutateLayer(() => {
+    selectLayer(lb.composition, button.dataset.chLayerDelete);
+    removeSelectedLayers(lb.composition);
+  }));
+
+  root.querySelectorAll("[data-ch-layer-prop]").forEach((input) => {
+    let before = null;
+    const capture = () => { if (!before) before = editorSnapshot(lb); };
+    input.addEventListener("pointerdown", capture);
+    input.addEventListener("focus", capture);
+    input.oninput = () => {
+      const layer = selectedLayers(lb.composition)[0];
+      if (!layer || lb.composition.selectedIds.length !== 1) return;
+      const key = input.dataset.chLayerProp;
+      const raw = Number(input.value);
+      layer[key] = ["x", "y", "w", "h", "opacity", "backgroundOpacity", "radius"].includes(key) ? raw / 100 : raw;
+      const output = root.querySelector(`[data-ch-layer-out="${key}"]`);
+      if (output) output.textContent = input.value;
+      repaint();
+    };
+    input.onchange = () => { if (before) commitEditorChange(lb, before); before = null; };
+  });
+  root.querySelectorAll("[data-ch-layer-field]").forEach((field) => {
+    const apply = () => {
+      const layer = selectedLayers(lb.composition)[0];
+      if (!layer || lb.composition.selectedIds.length !== 1) return;
+      const before = editorSnapshot(lb);
+      layer[field.dataset.chLayerField] = field.value;
+      commitEditorChange(lb, before);
+      repaint();
+    };
+    field.addEventListener(field.type === "color" ? "input" : "change", apply);
+    if (field.tagName === "TEXTAREA") field.addEventListener("input", apply);
+  });
+  root.querySelectorAll("[data-ch-layer-toggle]").forEach((button) => button.onclick = () => mutateLayer(() => {
+    const layer = selectedLayers(lb.composition)[0];
+    if (layer) layer[button.dataset.chLayerToggle] = !layer[button.dataset.chLayerToggle];
+  }));
+
+  root.querySelector("[data-ch-editor-undo]")?.addEventListener("click", () => { if (editorUndo(lb)) rerender(); });
+  root.querySelector("[data-ch-editor-redo]")?.addEventListener("click", () => { if (editorRedo(lb)) rerender(); });
+  root.querySelectorAll("[data-ch-editor-zoom]").forEach((button) => button.onclick = () => {
+    zoomComposition(lb.composition, Number(button.dataset.chEditorZoom));
+    applyEditorZoom();
+    positionMarkers();
+  });
+  root.querySelector("[data-ch-editor-fit]")?.addEventListener("click", () => { lb.composition.zoom = 1; applyEditorZoom(); positionMarkers(); });
+  root.querySelectorAll("[data-ch-canvas-preset]").forEach((button) => button.onclick = () => mutateLayer(() => {
+    const [width, height] = button.dataset.chCanvasPreset.split("x").map(Number);
+    setCanvasPreset(lb.composition, width, height);
+  }));
+  if (editorStage) editorStage.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    zoomComposition(lb.composition, event.deltaY < 0 ? 0.1 : -0.1);
+    applyEditorZoom();
+    positionMarkers();
+  }, { passive: false });
+
+  if (overlay) overlay.onpointerdown = (event) => {
+    if (lb.bokehPicking) return;
+    const point = canvasPoint(event, canvas);
+    const rect = canvas.getBoundingClientRect();
+    const handle = hitTestResizeHandle(lb.composition, point, canvas, rect.width / canvas.width);
+    const hit = handle?.layer || hitTestLayer(lb.composition, point, canvas);
+    const before = editorSnapshot(lb);
+    if (hit) selectLayer(lb.composition, hit.id, !handle && (event.shiftKey || event.ctrlKey || event.metaKey));
+    else selectLayer(lb.composition, null);
+    const targets = selectedLayers(lb.composition).filter((layer) => !layer.locked);
+    const starts = targets.map((layer) => ({ layer, x: layer.x, y: layer.y, w: layer.w, h: layer.h }));
+    const start = point;
+    overlay.setPointerCapture?.(event.pointerId);
+    overlay.classList.add("is-dragging");
+    overlay.onpointermove = (moveEvent) => {
+      const next = canvasPoint(moveEvent, canvas);
+      const dx = next.x - start.x;
+      const dy = next.y - start.y;
+      if (handle && starts.length === 1) {
+        const item = starts[0];
+        item.layer.w = Math.max(0.05, item.w + dx * (handle.index === 0 || handle.index === 3 ? -2 : 2));
+        item.layer.h = Math.max(0.05, item.h + dy * (handle.index === 0 || handle.index === 1 ? -2 : 2));
+      } else {
+        starts.forEach((item) => { item.layer.x = item.x + dx; item.layer.y = item.y + dy; });
+      }
+      repaint();
+    };
+    overlay.onpointerup = () => {
+      overlay.classList.remove("is-dragging");
+      overlay.onpointermove = null;
+      overlay.onpointerup = null;
+      commitEditorChange(lb, before);
+      rerender();
+    };
+  };
 
   root.querySelectorAll("[data-ch-lb-layer-toggle]").forEach((btn) => btn.onclick = () => {
     const key = btn.dataset.chLbLayerToggle;
@@ -1644,30 +1992,44 @@ function wireLightbox(root, opts) {
     rerender();
   });
 
-  root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => slider.oninput = () => {
-    s[slider.dataset.chLbSlider] = +slider.value;
-    repaint();
-    const out = root.querySelector(`[data-out="${slider.dataset.chLbSlider}"]`);
-    if (out) out.textContent = slider.value;
+  root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => {
+    let before = null;
+    const capture = () => { if (!before) before = editorSnapshot(lb); };
+    slider.addEventListener("pointerdown", capture);
+    slider.addEventListener("focus", capture);
+    slider.oninput = () => {
+      s[slider.dataset.chLbSlider] = +slider.value;
+      repaint();
+      const out = root.querySelector(`[data-out="${slider.dataset.chLbSlider}"]`);
+      if (out) out.textContent = slider.value;
+    };
+    slider.onchange = () => { if (before) commitEditorChange(lb, before); before = null; };
   });
-  root.querySelectorAll("[data-ch-lb-rot]").forEach((b) => b.onclick = () => { s.rotate = (s.rotate + (+b.dataset.chLbRot) + 360) % 360; repaint(); });
+  root.querySelectorAll("[data-ch-lb-rot]").forEach((b) => b.onclick = () => mutateLayer(() => { s.rotate = (s.rotate + (+b.dataset.chLbRot) + 360) % 360; }));
   const flip = root.querySelector("[data-ch-lb-flip]");
-  if (flip) flip.onclick = () => { s.flip = !s.flip; flip.classList.toggle("is-on"); repaint(); };
+  if (flip) flip.onclick = () => mutateLayer(() => { s.flip = !s.flip; });
   root.querySelectorAll("[data-ch-lb-filter] button").forEach((b) => b.onclick = () => {
+    const before = editorSnapshot(lb);
     applyFilterPreset(b.dataset.v, s);
     root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => {
       slider.value = s[slider.dataset.chLbSlider];
       const out = root.querySelector(`[data-out="${slider.dataset.chLbSlider}"]`);
       if (out) out.textContent = slider.value;
     });
+    commitEditorChange(lb, before);
     repaint();
   });
   const textInput = root.querySelector("[data-ch-lb-text]");
-  if (textInput) textInput.oninput = () => {
-    s.text = textInput.value;
-    lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), text: true };
-    repaint();
-  };
+  if (textInput) {
+    let before = null;
+    textInput.onfocus = () => { before = editorSnapshot(lb); };
+    textInput.oninput = () => {
+      s.text = textInput.value;
+      lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), text: true };
+      repaint();
+    };
+    textInput.onchange = () => { if (before) commitEditorChange(lb, before); before = null; };
+  }
   root.querySelectorAll("[data-ch-lb-text-field]").forEach((field) => {
     const apply = () => {
       const key = field.dataset.chLbTextField;
@@ -1676,13 +2038,11 @@ function wireLightbox(root, opts) {
     };
     field.addEventListener(field.type === "color" ? "input" : "change", apply);
   });
-  root.querySelectorAll("[data-ch-lb-text-toggle]").forEach((btn) => btn.onclick = () => {
+  root.querySelectorAll("[data-ch-lb-text-toggle]").forEach((btn) => btn.onclick = () => mutateLayer(() => {
     const key = btn.dataset.chLbTextToggle;
     const st = { ...freshTextStyle(), ...(s.textStyle || {}) };
     s.textStyle = { ...st, [key]: !st[key], preset: "custom" };
-    repaint();
-    rerender();
-  });
+  }));
   root.querySelectorAll("[data-ch-lb-tslider]").forEach((slider) => slider.oninput = () => {
     const key = slider.dataset.chLbTslider;
     s.textStyle = { ...freshTextStyle(), ...(s.textStyle || {}), [key]: +slider.value, preset: "custom" };
@@ -1691,31 +2051,23 @@ function wireLightbox(root, opts) {
     if (out) out.textContent = slider.value;
   });
   root.querySelectorAll("[data-ch-lb-text-preset]").forEach((btn) => btn.onclick = () => {
+    const before = editorSnapshot(lb);
     applyTextPreset(s, btn.dataset.chLbTextPreset);
-    repaint();
+    commitEditorChange(lb, before);
     rerender();
   });
 
   const pickHint = root.querySelector("[data-ch-lb-pick-hint]");
-  if (lb.bokehPicking) { canvas.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; }
+  if (lb.bokehPicking) { overlay?.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; }
   root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = () => {
     lb.bokehPicking = !lb.bokehPicking;
     if (lb.bokehPicking) lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
-    if (lb.bokehPicking && !s.bokeh?.spots?.length && !lb.subjectEstimated) {
-      lb.subjectEstimated = true;
-      const guess = estimateSubjectPoint(canvas);
-      if (guess) {
-        const idx = addBokehSpot(s, guess.x, guess.y, (s.bokehBrush || 24) / 100);
-        lb.selectedSpot = idx;
-        lb.subjectHint = "Estimated focus point — drag it into place, or click elsewhere on the subject to add more.";
-        repaint();
-      }
-    }
+    else lb.selectedSpot = null;
     rerender();
   });
   const bokehOff = root.querySelector("[data-ch-lb-bokeh-off]");
   if (bokehOff) bokehOff.onclick = () => {
-    s.bokeh = null; lb.selectedSpot = null; lb.subjectHint = null; lb.subjectEstimated = false;
+    s.bokeh = null; lb.subjectMaskUrl = ""; lb.selectedSpot = null; lb.subjectHint = null; lb.subjectEstimated = false;
     lb.bokehDetect = { status: lb.bokehDetect.status === "unavailable" ? "unavailable" : "idle", message: "" };
     repaint(); rerender();
   };
@@ -1734,12 +2086,13 @@ function wireLightbox(root, opts) {
   if (removeSelected) removeSelected.onclick = () => {
     if (lb.selectedSpot != null) { removeBokehSpotAt(s, lb.selectedSpot); lb.selectedSpot = null; repaint(); rerender(); }
   };
-  canvas.onclick = (event) => {
+  const editHitSurface = overlay || canvas;
+  editHitSurface.onclick = (event) => {
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
     if (lb.bokehPicking) {
-      const brush = lb.rememberBokehSize ? (s.bokehBrush || 24) / 100 : 0.24;
+      const brush = lb.rememberBokehSize ? (s.bokehBrush || 12) / 100 : 0.12;
       const idx = addBokehSpot(s, x, y, brush);
       lb.selectedSpot = idx;
       repaint();
@@ -1750,7 +2103,7 @@ function wireLightbox(root, opts) {
     const near = nearestBokehSpot(s, x, y, 0.12);
     if (near !== lb.selectedSpot) { lb.selectedSpot = near === -1 ? null : near; rerender(); }
   };
-  canvas.oncontextmenu = (event) => {
+  editHitSurface.oncontextmenu = (event) => {
     if (!s.bokeh?.spots?.length) return;
     event.preventDefault();
     const rect = canvas.getBoundingClientRect();
@@ -1794,7 +2147,7 @@ function wireLightbox(root, opts) {
     if (!exported.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: exported.error };
       rerender();
-      opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${exported.error}`);
+      opts.notify?.("Creator Hub", `AI edit failed on "${asset.title}": ${exported.error}`);
       return;
     }
     const result = await requestAiEdit({ dataUrl: exported.url, prompt: q, provider: lb.aiEdit.provider || "cinematic" });
@@ -1802,7 +2155,7 @@ function wireLightbox(root, opts) {
     if (!result.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: result.message };
       rerender();
-      opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${result.message}`);
+      opts.notify?.("Creator Hub", `AI edit failed on "${asset.title}": ${result.message}`);
       return;
     }
     // loadImageForEditing (not a raw new Image()) so a media-engine
@@ -1819,7 +2172,7 @@ function wireLightbox(root, opts) {
         lb.aiEdit = { ...lb.aiEdit, status: "success", message: "" };
         repaint();
         rerender();
-        opts.notify?.("Content Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
+        opts.notify?.("Creator Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
       })
       .catch(() => {
         if (chLightbox !== lb) return;
@@ -1831,21 +2184,21 @@ function wireLightbox(root, opts) {
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
   if (bgRun) bgRun.onclick = async () => {
     if (lb.bg.status === "unavailable") return;
-    const sourceImg = await waitForCanvasImage(canvas);
+    const source = await selectedImageSource(lb, canvas);
     if (chLightbox !== lb) return;
-    if (!sourceImg) {
-      lb.bg = { status: "error", message: "The image is still loading. Try again in a second." };
+    if (!source) {
+      lb.bg = { status: "error", message: "Select one loaded image layer first." };
       rerender();
       return;
     }
-    lb.bg = { ...lb.bg, status: "loading" };
+    lb.bg = { ...lb.bg, status: "loading", targetLayerId: source.layer.id, targetName: source.layer.name };
     rerender();
-    const exported = await exportSourceImage(sourceImg);
+    const exported = await exportSourceImage(source.image);
     if (chLightbox !== lb) return;
     if (!exported.ok) {
       lb.bg = { status: "error", message: exported.error };
       rerender();
-      opts.notify?.("Content Hub", `Background removal failed on "${asset.title}": ${exported.error}`);
+      opts.notify?.("Creator Hub", `Background removal failed on "${asset.title}": ${exported.error}`);
       return;
     }
     const beforeUrl = exported.url;
@@ -1854,10 +2207,10 @@ function wireLightbox(root, opts) {
     if (!result.ok) {
       lb.bg = { status: "error", message: result.message };
       rerender();
-      opts.notify?.("Content Hub", `Background removal failed on "${asset.title}": ${result.message}`);
+      opts.notify?.("Creator Hub", `Background removal failed on "${asset.title}": ${result.message}`);
       return;
     }
-    lb.bg = { status: "preview", beforeUrl, afterUrl: result.image };
+    lb.bg = { status: "preview", beforeUrl, afterUrl: result.image, targetLayerId: source.layer.id, targetName: source.layer.name };
     rerender();
   };
   const bgApply = root.querySelector("[data-ch-lb-bg-apply]");
@@ -1866,14 +2219,27 @@ function wireLightbox(root, opts) {
     if (!afterUrl) return;
     loadImageForEditing(afterUrl).then((afterImg) => {
       if (chLightbox !== lb) return;
-      lb.cutoutUrl = afterUrl;
-      lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), cutout: true };
-      canvas._img = afterImg;
-      lb.bg = { status: "applied", message: "" };
+      const targetId = lb.bg.targetLayerId || "base";
+      const target = lb.composition.layers.find((layer) => layer.id === targetId);
+      if (!target || (target.type !== "base" && target.type !== "image")) {
+        lb.bg = { status: "error", message: "That image layer no longer exists." };
+        rerender();
+        return;
+      }
+      const before = editorSnapshot(lb);
+      if (target.type === "base") {
+        lb.cutoutUrl = afterUrl;
+        lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), cutout: true };
+        canvas._img = afterImg;
+      } else {
+        replaceImageLayerSource(lb.composition, target.id, afterUrl, afterImg, { transparent: true });
+      }
+      lb.bg = { status: "applied", message: "", targetLayerId: target.id, targetName: target.name };
       lb.hasTransparency = true;
+      commitEditorChange(lb, before);
       repaint();
       rerender();
-      opts.notify?.("Content Hub", `removed the background on "${asset.title}".`);
+      opts.notify?.("Creator Hub", `removed the background from "${target.name}".`);
     }).catch(() => {
       if (chLightbox !== lb) return;
       lb.bg = { status: "error", message: "The cutout image could not be loaded." };
@@ -1896,7 +2262,7 @@ function wireLightbox(root, opts) {
     if (!exported.ok) {
       lb.bokehDetect = { status: "error", message: exported.error };
       rerender();
-      opts.notify?.("Content Hub", `AI subject detection failed on "${asset.title}": ${exported.error}`);
+      opts.notify?.("Creator Hub", `AI subject detection failed on "${asset.title}": ${exported.error}`);
       return;
     }
     // Send the clean base frame (adjust/rotate/flip only, no existing bokeh
@@ -1907,18 +2273,23 @@ function wireLightbox(root, opts) {
     if (!result.ok) {
       lb.bokehDetect = { status: "error", message: result.message };
       rerender();
-      opts.notify?.("Content Hub", `AI subject detection failed on "${asset.title}": ${result.message}`);
+      opts.notify?.("Creator Hub", `AI subject detection failed on "${asset.title}": ${result.message}`);
       return;
     }
     try {
       const maskImg = await loadImage(result.image);
       if (chLightbox !== lb) return;
       setBokehMask(s, maskImg);
-      lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
+      s.bokeh.spots = [];
+      lb.subjectMaskUrl = result.image;
+      lb.selectedSpot = null;
+      lb.bokehPicking = false;
+      lb.subjectHint = "Subject selected. The mint silhouette is an editor-only guide; the clean edge and background blur are baked into Save or Download.";
+      lb.layers = { image: true, cutout: true, bokeh: true, text: true, subject: true, ...(lb.layers || {}), bokeh: true, subject: true };
       lb.bokehDetect = { status: "success", message: "" };
       repaint();
       rerender();
-      opts.notify?.("Content Hub", `AI-detected the subject on "${asset.title}" for bokeh.`);
+      opts.notify?.("Creator Hub", `AI-detected the subject on "${asset.title}" for bokeh.`);
     } catch {
       if (chLightbox !== lb) return;
       lb.bokehDetect = { status: "error", message: "The detected subject image could not be loaded." };
@@ -1953,14 +2324,17 @@ function wireLightbox(root, opts) {
   }
 
   root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = freshLightbox(asset, { showTutorial: lb.showTutorial }); rerender(); };
-  const exportsTransparent = () => !!(lb.hasTransparency && lb.cutoutUrl && layerVisible(lb, "cutout"));
+  const exportsTransparent = () => !!(lb.hasTransparency && (
+    (lb.cutoutUrl && layerVisible(lb, "cutout"))
+    || lb.composition.layers.some((layer) => layer.type === "image" && layer.visible && layer.hasTransparency)
+  ));
   const exportFormat = () => exportsTransparent() ? "image/png" : "image/webp";
   const exportExt = () => exportsTransparent() ? "png" : "webp";
   const repaintWithImg = (img) => { canvas._img = img; repaint(); };
   root.querySelector("[data-ch-lb-download]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.92);
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't download "${asset.title}": ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Creator Hub", `Couldn't download "${asset.title}": ${exported.error}`); return; }
     const link = document.createElement("a");
     link.href = exported.url;
     link.download = `phantomforce-${asset.id}.${exportExt()}`;
@@ -1969,22 +2343,22 @@ function wireLightbox(root, opts) {
   root.querySelector("[data-ch-lb-save]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.9);
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save "${asset.title}": ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Creator Hub", `Couldn't save "${asset.title}": ${exported.error}`); return; }
     registerContentAsset({ ...asset, url: exported.url, prompt: s.text || asset.prompt, saved: true, syncedId: "", trimmed: false, updatedAt: Date.now() });
     // close (and its rerender) must run before notify(), since notify() triggers a global
     // store-change listener that can fully remount this page and invalidate this closure's
     // DOM references — closing first ensures the lightbox-closed state lands on live DOM.
     close();
-    opts.notify?.("Content Hub", `saved your edit to "${asset.title}".`);
+    opts.notify?.("Creator Hub", `saved your edit to "${asset.title}".`);
   };
   root.querySelector("[data-ch-lb-save-copy]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.9);
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save a copy of "${asset.title}": ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Creator Hub", `Couldn't save a copy of "${asset.title}": ${exported.error}`); return; }
     const at = Date.now();
     registerContentAsset({ ...asset, id: `edit-${at}-${Math.random().toString(36).slice(2, 6)}`, url: exported.url, title: `${asset.title} (edit)`, prompt: s.text || asset.prompt, createdAt: at, saved: true, syncedId: "", trimmed: false });
     close();
-    opts.notify?.("Content Hub", `saved a copy of "${asset.title}" with your edits.`);
+    opts.notify?.("Creator Hub", `saved a copy of "${asset.title}" with your edits.`);
   };
 }
 function visibleLibraryItems(shownAssets, shownPosts) {
@@ -2022,7 +2396,7 @@ function undoLastDelete(root, opts) {
   const count = restoredAssets.length + postIds.length;
   chLastDeleted = null;
   renderContentHub(root, opts);
-  opts.notify?.("Content Hub", `Restored ${count} item${count === 1 ? "" : "s"}.`);
+  opts.notify?.("Creator Hub", `Restored ${count} item${count === 1 ? "" : "s"}.`);
 }
 function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts) {
   const shownItems = visibleLibraryItems(shownAssets, shownPosts);
@@ -2040,7 +2414,15 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     const isRangeClick = event.shiftKey;
     const isToggleClick = event.ctrlKey || event.metaKey;
     const isHitBox = !!event.target.closest("[data-ch-select-hit]");
-    if (!chState.selectMode && !isHitBox && !isRangeClick && !isToggleClick) return;
+    if (!chState.selectMode && !isHitBox && !isRangeClick && !isToggleClick) {
+      const asset = assets.find((a) => a.id === card.dataset.chAssetId);
+      if (!asset || !asset.url) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : freshLightbox(asset);
+      rerender();
+      return;
+    }
     event.preventDefault();
     event.stopImmediatePropagation();
     if (isRangeClick && chSelectAnchor && orderedKeys.includes(chSelectAnchor)) {
@@ -2063,7 +2445,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
 
   // Ctrl/Cmd+A selects everything currently visible (the OS convention — "select all in
   // this view"); Ctrl/Cmd+Z undoes the most recent delete. Self-removes once this render's
-  // body is no longer live, since there's no explicit "Content Hub unmounted" hook to hang
+  // body is no longer live, since there's no explicit "Creator Hub unmounted" hook to hang
   // cleanup off of.
   if (chLibraryKeyHandler) document.removeEventListener("keydown", chLibraryKeyHandler);
   chLibraryKeyHandler = (event) => {
@@ -2081,13 +2463,6 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     }
   };
   document.addEventListener("keydown", chLibraryKeyHandler);
-  body.querySelectorAll("[data-ch-asset-id]").forEach((card) => card.addEventListener("dblclick", (event) => {
-    if (event.target.closest("button")) return;
-    const asset = assets.find((a) => a.id === card.dataset.chAssetId);
-    if (!asset || !asset.url) return;
-    chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : freshLightbox(asset);
-    rerender();
-  }));
   body.querySelectorAll("[data-ch-delete-asset]").forEach((btn) => btn.addEventListener("click", (event) => {
     event.preventDefault();
     event.stopPropagation();
@@ -2099,7 +2474,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Content Hub", "Deleted the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
+    opts.notify?.("Creator Hub", "Deleted the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
   }));
   body.querySelector("[data-ch-select-mode]")?.addEventListener("click", () => {
     chState.selectMode = !chState.selectMode;
@@ -2113,7 +2488,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   body.querySelector("[data-ch-select-everything]")?.addEventListener("click", () => {
     allItems.forEach((item) => chSelection.add(selectionKey(item.kind, item.id)));
     chState.selectMode = true;
-    opts.notify?.("Content Hub", `Selected all ${allItems.length} local content item${allItems.length === 1 ? "" : "s"}.`);
+    opts.notify?.("Creator Hub", `Selected all ${allItems.length} local content item${allItems.length === 1 ? "" : "s"}.`);
     rerender();
   });
   body.querySelector("[data-ch-clear-selected]")?.addEventListener("click", () => {
@@ -2123,40 +2498,40 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   body.querySelector("[data-ch-download-selected]")?.addEventListener("click", () => {
     const selected = selectedLibraryItems(data, loadContentAssets());
     downloadLibraryItems(selected, "selected");
-    opts.notify?.("Content Hub", `Downloaded/exported ${selected.length} selected item${selected.length === 1 ? "" : "s"}.`);
+    opts.notify?.("Creator Hub", `Downloaded/exported ${selected.length} selected item${selected.length === 1 ? "" : "s"}.`);
   });
   body.querySelector("[data-ch-download-all]")?.addEventListener("click", () => {
     downloadLibraryItems(shownItems, "shown");
-    opts.notify?.("Content Hub", `Downloaded/exported ${shownItems.length} visible item${shownItems.length === 1 ? "" : "s"}.`);
+    opts.notify?.("Creator Hub", `Downloaded/exported ${shownItems.length} visible item${shownItems.length === 1 ? "" : "s"}.`);
   });
   body.querySelector("[data-ch-export-selected]")?.addEventListener("click", () => {
     const selected = selectedLibraryItems(data, loadContentAssets());
     exportLibraryItems(selected, "selected");
-    opts.notify?.("Content Hub", "Exported a local selected-content packet.");
+    opts.notify?.("Creator Hub", "Exported a local selected-content packet.");
   });
   body.querySelector("[data-ch-save-selected]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
     setSelectedAssetMetadata(ids, { saved: true });
-    opts.notify?.("Content Hub", `Saved ${ids.size} media item${ids.size === 1 ? "" : "s"} locally.`);
+    opts.notify?.("Creator Hub", `Saved ${ids.size} media item${ids.size === 1 ? "" : "s"} locally.`);
     rerender();
   });
   body.querySelector("[data-ch-batch-edit]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
     setSelectedAssetMetadata(ids, { batchLabel: "batch edit ready" });
-    opts.notify?.("Content Hub", `Marked ${ids.size} media item${ids.size === 1 ? "" : "s"} for batch edit.`);
+    opts.notify?.("Creator Hub", `Marked ${ids.size} media item${ids.size === 1 ? "" : "s"} for batch edit.`);
     rerender();
   });
   body.querySelector("[data-ch-batch-ai]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
     setSelectedAssetMetadata(ids, { aiEditPlan: "Local AI edit plan drafted; external generation still gated." });
     exportLibraryItems(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset" && ids.has(item.id)), "batch-ai-edit-plan");
-    opts.notify?.("Content Hub", "Created a local batch AI edit plan. No external generation ran.");
+    opts.notify?.("Creator Hub", "Created a local batch AI edit plan. No external generation ran.");
     rerender();
   });
   body.querySelector("[data-ch-edit-selected]")?.addEventListener("click", () => {
     const assetItem = selectedLibraryItems(data, loadContentAssets()).find((item) => item.kind === "asset" && item.asset.type === "image" && item.asset.url);
     if (!assetItem) {
-      opts.notify?.("Content Hub", "Select an image with a live preview to open it in the local editor.");
+      opts.notify?.("Creator Hub", "Select an image with a live preview to open it in the local editor.");
       return;
     }
     try {
@@ -2169,7 +2544,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
         at: Date.now(),
       }));
     } catch {}
-    opts.notify?.("Content Hub", `Opening ${assetItem.asset.title} in Media Lab edit.`);
+    opts.notify?.("Creator Hub", `Opening ${assetItem.asset.title} in Media Lab edit.`);
     opts.openWorkspace?.("media");
   });
   body.querySelector("[data-ch-delete-selected]")?.addEventListener("click", () => {
@@ -2189,7 +2564,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Content Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
+    opts.notify?.("Creator Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
   });
   const uploadInput = body.querySelector("[data-ch-upload-input]");
   body.querySelector("[data-ch-upload-local]")?.addEventListener("click", () => uploadInput?.click());
@@ -2202,7 +2577,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
         id: `upload-${Date.now()}-${i}`,
         type: file.type.startsWith("video/") ? "video" : "image",
         title: file.name.replace(/\.[^.]+$/, "") || "Local upload",
-        prompt: "Local file imported into Content Hub.",
+        prompt: "Local file imported into Creator Hub.",
         source: "Local upload",
         provider: "local",
         model: "browser-file",
@@ -2212,7 +2587,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
       });
     }
     uploadInput.value = "";
-    opts.notify?.("Content Hub", `Imported ${files.length} local file${files.length === 1 ? "" : "s"} into the library.`);
+    opts.notify?.("Creator Hub", `Imported ${files.length} local file${files.length === 1 ? "" : "s"} into the library.`);
     rerender();
   });
 }
@@ -2221,14 +2596,14 @@ function wireCreatorActions(body, opts, root) {
     const idea = activeIdeas().find((row) => row.id === btn.dataset.ideaId) || savedIdeas().find((row) => row.id === btn.dataset.ideaId) || activeIdeas()[Number(btn.dataset.ideaI || 0)];
     if (!idea) return;
     const action = btn.dataset.chAction === "approve-draft" ? "Draft prep reviewed" : "Draft prep started";
-    opts.notify?.("Content Hub", `${action} for ${idea.title}. Safe preparation can continue automatically; no live post was sent.`);
+    opts.notify?.("Creator Hub", `${action} for ${idea.title}. Safe preparation can continue automatically; no live post was sent.`);
     if (root) renderContentHub(root, opts);
   }));
   body.querySelectorAll("[data-ch-idea-save]").forEach((btn) => btn.addEventListener("click", () => {
     const idea = activeIdeas().find((row) => row.id === btn.dataset.chIdeaSave);
     if (!idea) return;
     saveIdeaForLater(idea);
-    opts.notify?.("Content Hub", `Saved "${idea.title}" so tomorrow's refresh won't erase it.`);
+    opts.notify?.("Creator Hub", `Saved "${idea.title}" so tomorrow's refresh won't erase it.`);
     if (root) renderContentHub(root, opts);
   }));
   body.querySelector("[data-ch-add-idea]")?.addEventListener("click", () => {
@@ -2236,15 +2611,15 @@ function wireCreatorActions(body, opts, root) {
     const angle = body.querySelector("[data-ch-custom-angle]")?.value || "";
     const idea = addCustomDailyIdea({ title, angle });
     if (!idea) {
-      opts.notify?.("Content Hub", "Add a short idea title first.");
+      opts.notify?.("Creator Hub", "Add a short idea title first.");
       return;
     }
-    opts.notify?.("Content Hub", `Added "${idea.title}" to today's ideas. It clears tomorrow unless saved.`);
+    opts.notify?.("Creator Hub", `Added "${idea.title}" to today's ideas. It clears tomorrow unless saved.`);
     if (root) renderContentHub(root, opts);
   });
   body.querySelector("[data-ch-refresh-ideas]")?.addEventListener("click", () => {
     refreshDailyIdeas();
-    opts.notify?.("Content Hub", "Refreshed today's disposable idea batch.");
+    opts.notify?.("Creator Hub", "Refreshed today's disposable idea batch.");
     if (root) renderContentHub(root, opts);
   });
 }
@@ -2456,7 +2831,7 @@ function openPost(p, esc) {
    ANALYTICS — real connections only. If no social account is actually
    linked, this shows nothing but a connect prompt: no KPIs, no charts, no
    modeled numbers. Once linked, it shows what's genuinely real (which
-   accounts, real Content Hub asset counts) and is honest that live
+   accounts, real Creator Hub asset counts) and is honest that live
    performance metrics need each platform's analytics API wired server-side
    before any reach/engagement number can be shown — never a placeholder.
    ========================================================================= */
@@ -2503,8 +2878,8 @@ export function renderAnalytics(el, opts = {}) {
       </div>
       ${assets.length ? `
       <div class="ch-card">
-        <div class="ch-card-h"><h3>Ready to publish</h3><span class="ch-src">from Content Hub</span></div>
-        <p class="an-assets-line">${assets.length} generated asset${assets.length === 1 ? "" : "s"} in Content Hub, ready once publishing is connected.</p>
+        <div class="ch-card-h"><h3>Ready to publish</h3><span class="ch-src">from Creator Hub</span></div>
+        <p class="an-assets-line">${assets.length} generated asset${assets.length === 1 ? "" : "s"} in Creator Hub, ready once publishing is connected.</p>
       </div>` : ""}
     </div>`;
 }

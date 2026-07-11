@@ -6,9 +6,10 @@
 import {
   store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
-  PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS,
-  addMemory, toggleMemoryRemember, forgetMemory, memoryStats, memoryRetention,
-} from "./store.js?v=phantom-live-20260711-151";
+  PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
+  addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
+  session,
+} from "./store.js?v=phantom-live-20260711-170";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -18,8 +19,43 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all" };
-const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null };
+const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
+// Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
+// not persisted, resets whenever the user leaves and re-enters Web view.
+// _needsFit is a one-shot flag: the actual fit measurement needs the web's
+// nodes to exist in the DOM, so it's consumed in wireWorkerWeb() after render,
+// not here.
+const workerWebUi = { pan: { x: 0, y: 0 }, zoom: 1, search: "", _needsFit: true };
+let workerWebEscapeHandler = null;
+const workerRuntime = { state: "idle", workforce: null, error: "" };
+const LOCAL_CORE_WORKERS = [
+  { name: "Phantom Router", note: "Command and workspace routing loaded" },
+  { name: "Memory Keeper", note: "Local memory and receipts ready" },
+  { name: "Safety Guard", note: "Approval and security rules loaded" },
+];
 const MEMORY_DAY = 86400000;
+
+async function loadWorkerRuntime() {
+  if (workerRuntime.state === "loading") return;
+  workerRuntime.state = "loading";
+  workerRuntime.error = "";
+  try {
+    const token = session.token();
+    const response = await fetch("/phantom-ai/agents/status?window_hours=24", {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok || !payload?.ok || !payload.workforce) {
+      throw new Error(payload?.error?.message || payload?.error || `Worker status failed (${response.status}).`);
+    }
+    workerRuntime.workforce = payload.workforce;
+    workerRuntime.state = "ready";
+  } catch (error) {
+    workerRuntime.workforce = null;
+    workerRuntime.state = "error";
+    workerRuntime.error = error instanceof Error ? error.message : "Worker status is unavailable.";
+  }
+}
 
 function bindActions(root, handlers) {
   root.querySelectorAll("[data-act]").forEach((el) => {
@@ -96,7 +132,7 @@ function renderLeads(el, rerender) {
       pushActivity("Proposal Forge", `opened a ${pkg.name} draft for ${l.company}.`, l.ws);
       store.save(); rerender();
     },
-    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Revenue Tracker", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
+    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Client Pipeline", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
     lost: (id) => { const l = find(id); l.status = "lost"; l.next = "Re-engage in 90 days"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "lost"; store.save(); rerender(); },
     revive: (id) => { const l = find(id); l.status = "follow-up"; l.next = "Warm re-engage with a proof point"; store.save(); rerender(); },
     review: (id) => {
@@ -149,7 +185,7 @@ function renderProposals(el, rerender) {
             ${p.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${p.id}">Mark send-ready</button>` : ""}
             ${p.status === "sent-ready" ? `<button class="btn btn-good" data-act="won" data-id="${p.id}">Mark won</button><button class="btn btn-quiet" data-act="lost" data-id="${p.id}">Mark lost</button>` : ""}
             ${p.status === "won" ? `<button class="btn" data-act="invoice" data-id="${p.id}">Mark invoice-ready</button>` : ""}
-            ${p.status === "invoice-ready" ? `<span class="hint-inline">Invoice-ready — payment connector not wired, tracked in Money.</span>` : ""}
+            ${p.status === "invoice-ready" ? `<span class="hint-inline">Invoice-ready — payment connector not wired, tracked in Accounting.</span>` : ""}
           </div>
         </article>`;
       }).join("") || empty("No proposals yet. Convert a lead or ask Phantom AI to draft one.")}
@@ -173,9 +209,9 @@ function renderProposals(el, rerender) {
       store.save(); rerender();
     },
     ready: (id) => { const p = find(id); p.status = "sent-ready"; p.updated = new Date().toISOString(); pushActivity("Proposal Forge", `moved ${p.client} to send-ready.`, p.ws); store.save(); rerender(); },
-    won: (id) => { const p = find(id); p.status = "won"; pushActivity("Revenue Tracker", `${p.client} proposal won — ${fmtMoney(p.price)}.`, p.ws); store.save(); rerender(); },
+    won: (id) => { const p = find(id); p.status = "won"; pushActivity("Offer Desk", `${p.client} proposal won — ${fmtMoney(p.price)}.`, p.ws); store.save(); rerender(); },
     lost: (id) => { const p = find(id); p.status = "lost"; store.save(); rerender(); },
-    invoice: (id) => { const p = find(id); p.status = "invoice-ready"; pushActivity("Revenue Tracker", `${p.client} marked invoice-ready.`, p.ws); store.save(); rerender(); },
+    invoice: (id) => { const p = find(id); p.status = "invoice-ready"; pushActivity("Accounting Ledger", `${p.client} marked invoice-ready.`, p.ws); store.save(); rerender(); },
   });
 }
 
@@ -879,25 +915,20 @@ function renderMoney(el, rerender) {
   const proposalGoal = m.opportunity;
   el.innerHTML = `
     <section class="finance-shell">
-      <div class="finance-truth">
-        <div>
-          <p class="overlay-kicker">ACTUAL TRANSACTIONS ONLY</p>
-          <h3>Business finance ledger</h3>
-          <p>Money reads bank/card imports, connected-account syncs, or manual entries. No proposal pipeline, no guessed revenue, no fake profit.</p>
-        </div>
-        <button class="btn" type="button" data-act="export">Export CSV</button>
+      <div class="finance-toolbar">
+        <button class="btn" type="button" data-act="export" aria-label="Export Accounting ledger as CSV">Export CSV</button>
       </div>
       <div class="stat-row finance-stats">
-        <div class="stat"><span>Cash in</span><b>${fmtMoney(m.cashIn)}</b><i>${actualCount ? "from real transactions" : "no income recorded"}</i></div>
-        <div class="stat"><span>Cash out</span><b>${fmtMoney(m.cashOut)}</b><i>${actualCount ? "expenses and withdrawals" : "no expenses recorded"}</i></div>
+        <div class="stat"><span>Cash collected</span><b>${fmtMoney(m.cashIn)}</b><i>${actualCount ? "from real transactions" : "no income recorded"}</i></div>
+        <div class="stat"><span>Operating spend</span><b>${fmtMoney(m.cashOut)}</b><i>${actualCount ? "expenses and withdrawals" : "no expenses recorded"}</i></div>
         <div class="stat"><span>Net cashflow</span><b>${moneySigned(m.netCash)}</b><i>${actualCount ? "income minus outflow" : "ledger empty"}</i></div>
-        <div class="stat"><span>Ledger balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
+        <div class="stat"><span>Book balance</span><b>${moneySigned(m.ledgerBalance)}</b><i>${m.uncategorizedCount} uncategorized</i></div>
       </div>
 
       <div class="finance-grid">
         <section class="finance-panel">
           <div class="finance-panel-head">
-            <h3>Connect or import</h3>
+            <h3>Accounts & imports</h3>
             <span>${m.readySources} source${m.readySources === 1 ? "" : "s"} ready</span>
           </div>
           <div class="finance-connectors">
@@ -926,7 +957,7 @@ function renderMoney(el, rerender) {
           <form class="finance-entry" data-finance-form>
             <label><span>Date</span><input type="date" name="date" value="${todayInput()}" required /></label>
             <label><span>Description</span><input type="text" name="description" placeholder="Stripe payout, Adobe, contractor..." required /></label>
-            <label><span>Direction</span><select name="direction"><option value="income">Money in</option><option value="expense">Money out</option></select></label>
+            <label><span>Direction</span><select name="direction"><option value="income">Cash in</option><option value="expense">Cash out</option></select></label>
             <label><span>Amount</span><input type="number" name="amount" min="0.01" step="0.01" placeholder="0.00" required /></label>
             <label><span>Category</span><select name="category">${financeCategoryOptions()}</select></label>
             <label><span>Account</span><input type="text" name="account" placeholder="Business checking / card" /></label>
@@ -937,7 +968,7 @@ function renderMoney(el, rerender) {
 
       <section class="finance-panel">
         <div class="finance-panel-head">
-          <h3>Transaction reader</h3>
+          <h3>Accounting transaction reader</h3>
           <span>${actualCount} actual record${actualCount === 1 ? "" : "s"}</span>
         </div>
         <div class="finance-table" role="table" aria-label="Business transactions">
@@ -956,9 +987,9 @@ function renderMoney(el, rerender) {
 
       <section class="finance-goal-note">
         <div>
-          <p class="overlay-kicker">GOALS, NOT MONEY</p>
+          <p class="overlay-kicker">GOALS, NOT ACCOUNTING</p>
           <h3>Potential revenue belongs with missions.</h3>
-          <p>Open quotes and won proposals can guide goals, but they do not count as ledger cash until a bank/card/manual transaction confirms the money moved.</p>
+          <p>Open quotes and won proposals guide business goals, but they do not count as accounting cash until a bank/card/manual transaction confirms movement.</p>
         </div>
         <div class="finance-goal-stats">
           <span><b>${fmtMoney(proposalGoal.pipeline)}</b><i>open quote potential</i></span>
@@ -997,7 +1028,7 @@ function renderMoney(el, rerender) {
         notes: "",
         createdAt: new Date().toISOString(),
       });
-      pushActivity("Finance Ledger", `added a ${direction > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(direction * rawAmount)}.`, ws);
+      pushActivity("Accounting Ledger", `added a ${direction > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(direction * rawAmount)}.`, ws);
       store.save();
       rerender();
     };
@@ -1012,7 +1043,7 @@ function renderMoney(el, rerender) {
       const fresh = rows.filter((tx) => !tx.externalId || !existing.has(tx.externalId));
       fresh.forEach((tx) => ensureAccount(tx.account));
       finance.transactions.unshift(...fresh);
-      pushActivity("Finance Ledger", `imported ${fresh.length} transaction${fresh.length === 1 ? "" : "s"} from ${file.name}.`, ws);
+      pushActivity("Accounting Ledger", `imported ${fresh.length} transaction${fresh.length === 1 ? "" : "s"} from ${file.name}.`, ws);
       store.save();
       rerender();
     };
@@ -1035,7 +1066,7 @@ function renderMoney(el, rerender) {
       if (!connector) return;
       connector.status = "requested";
       connector.requestedAt = new Date().toISOString();
-      pushActivity("Finance Ledger", `${connector.name} setup requested. Sync will stay off until the secure connector backend is configured.`, ws);
+      pushActivity("Accounting Ledger", `${connector.name} setup requested. Sync will stay off until the secure connector backend is configured.`, ws);
       store.save(); rerender();
     },
     export: (id, btn) => {
@@ -1052,20 +1083,39 @@ function categoryLabel(category) {
   return MEMORY_CATEGORY_LABELS[category] || title(category).replace(/-/g, " ");
 }
 
+function memorySourceLabel(source = "") {
+  return ({
+    "saved-conversation": "saved chat",
+    "history-promoted": "promoted history",
+    "temporary-chat": "temporary chat",
+  })[source] || String(source || "manual").replace(/-/g, " ");
+}
+
 function renderMemory(el, rerender) {
   const all = visible(store.state.memory || []);
+  const historyAll = visible(store.state.chatHistory || []);
   const stats = memoryStats(all);
+  const historyStats = chatHistoryStats(historyAll);
   const query = memoryUi.query.trim().toLowerCase();
   const counts = all.reduce((acc, item) => {
     acc[item.category] = (acc[item.category] || 0) + 1;
     return acc;
   }, {});
-  const categories = Object.keys(MEMORY_CATEGORY_LABELS).filter((category) => counts[category]);
+  const historyCounts = historyAll.reduce((acc, item) => {
+    acc[item.category] = (acc[item.category] || 0) + 1;
+    return acc;
+  }, {});
+  const categories = Object.keys(MEMORY_CATEGORY_LABELS).filter((category) => counts[category] || historyCounts[category]);
   const filtered = all.filter((item) => {
     const inCategory = memoryUi.category === "all" || item.category === memoryUi.category;
     const haystack = `${item.title} ${item.summary} ${item.text} ${(item.tags || []).join(" ")}`.toLowerCase();
     return inCategory && (!query || haystack.includes(query));
   });
+  const filteredHistory = historyAll.filter((item) => {
+    const inCategory = memoryUi.category === "all" || item.category === memoryUi.category;
+    const haystack = `${item.title} ${item.summary} ${item.prompt} ${item.reply} ${item.mode} ${item.route}`.toLowerCase();
+    return inCategory && (!query || haystack.includes(query));
+  }).slice(0, 20);
   const remembered = all.filter((item) => item.pinnedByUser || item.pinnedByAi).slice(0, 5);
   const expiring = all.filter((item) => {
     if (item.pinnedByUser || item.pinnedByAi) return false;
@@ -1077,23 +1127,24 @@ function renderMemory(el, rerender) {
       <section class="memory-hero">
         <div>
           <p class="overlay-kicker">LOCAL MEMORY</p>
-          <h3>Everything Phantom should know, organized for research.</h3>
-          <p>Conversations and manual notes stay in this browser. Normal memories auto-expire after ${MEMORY_RETENTION_DAYS} days unless you or Phantom mark them to remember.</p>
+          <h3>Saved memory stays valuable. Chat history shreds itself.</h3>
+          <p>Durable memory is for facts, preferences, rules, and business context useful later. Temporary chat history is separate and shredded after ${CHAT_HISTORY_RETENTION_DAYS} days. Trivial chatter is never saved.</p>
         </div>
         <div class="memory-score">
           <b>${stats.total}</b>
-          <span>saved</span>
+          <span>saved memories</span>
         </div>
       </section>
       <div class="stat-row memory-stats">
-        <div class="stat"><span>Categories</span><b>${stats.categories}</b><i>auto-organized</i></div>
-        <div class="stat"><span>Remembered</span><b>${stats.remembered}</b><i>kept past 30 days</i></div>
-        <div class="stat"><span>Expiring soon</span><b>${stats.expiresSoon}</b><i>normal cleanup</i></div>
+        <div class="stat"><span>Saved memory</span><b>${stats.total}</b><i>long-term context</i></div>
+        <div class="stat"><span>Remembered</span><b>${stats.remembered}</b><i>kept past ${MEMORY_RETENTION_DAYS} days</i></div>
+        <div class="stat"><span>Temporary history</span><b>${historyStats.total}</b><i>${CHAT_HISTORY_RETENTION_DAYS}d shred</i></div>
+        <div class="stat"><span>Shredding soon</span><b>${historyStats.expiresSoon}</b><i>history cleanup</i></div>
       </div>
       <div class="memory-controls">
         <label class="memory-search">
           <span>Search memory</span>
-          <input type="search" data-memory-search value="${esc(memoryUi.query)}" placeholder="Search conversations, clients, sites, security, money..." />
+          <input type="search" data-memory-search value="${esc(memoryUi.query)}" placeholder="Search saved memories and temporary history..." />
         </label>
       </div>
       <form class="memory-add" data-memory-add>
@@ -1119,20 +1170,39 @@ function renderMemory(el, rerender) {
                   <h4>${esc(item.title)}</h4>
                   <span class="memory-retention">${esc(memoryRetention(item))}</span>
                 </div>
-                <p class="record-sub">${esc(categoryLabel(item.category))} · ${esc(item.source)} · ${ago(item.createdAt)}</p>
+                <p class="record-sub">${esc(categoryLabel(item.category))} · ${esc(memorySourceLabel(item.source))} · ${ago(item.createdAt)}</p>
                 <p class="record-notes">${esc(item.summary)}</p>
                 <div class="memory-tags">${(item.tags || []).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>
                 <div class="record-actions">
                   <button class="btn ${item.pinnedByUser ? "btn-good" : ""}" data-act="pin-memory" data-id="${item.id}">${item.pinnedByUser ? "Unremember" : "Remember"}</button>
                   <button class="btn btn-quiet" data-act="forget-memory" data-id="${item.id}">Delete</button>
                 </div>
-              </article>`).join("") || empty(query ? "No memories matched that search." : "No memories yet. Ask Phantom something or capture a manual note.")}
+              </article>`).join("") || empty(query ? "No saved memories matched that search." : "No saved memories yet. Add a note or let Phantom promote durable context automatically.")}
+          </div>
+          <h3 class="ws-subhead">Temporary history</h3>
+          <p class="ws-note">Short-term chat context stays out of saved memory and shreds after ${CHAT_HISTORY_RETENTION_DAYS} days unless you explicitly save it.</p>
+          <div class="stack">
+            ${filteredHistory.map((item) => `
+              <article class="record memory-record memory-record-history">
+                <button class="record-x" data-act="forget-history" data-id="${item.id}" aria-label="Shred history">×</button>
+                <div class="record-top">
+                  ${wsTag(item.ws)}
+                  <h4>${esc(item.title)}</h4>
+                  <span class="memory-retention">${esc(chatHistoryRetention(item))}</span>
+                </div>
+                <p class="record-sub">${esc(categoryLabel(item.category))} · ${esc(item.mode)}${item.route ? ` · ${esc(item.route)}` : ""} · ${ago(item.createdAt)}</p>
+                <p class="record-notes">${esc(item.summary)}</p>
+                <div class="record-actions">
+                  <button class="btn btn-good" data-act="save-history-memory" data-id="${item.id}">Save as memory</button>
+                  <button class="btn btn-quiet" data-act="forget-history" data-id="${item.id}">Shred now</button>
+                </div>
+              </article>`).join("") || empty(query ? "No temporary history matched that search." : "No temporary history retained. Hellos, acks, and throwaway messages are shredded immediately.")}
           </div>
         </section>
         <aside class="memory-side">
           <article class="record">
             <h4>Research packages</h4>
-            <p class="record-notes">Phantom groups memory by topic so the database stays searchable instead of becoming a long chat log.</p>
+            <p class="record-notes">Saved memory is grouped by topic. Temporary history is visible below but kept out of long-term context unless promoted.</p>
             <div class="memory-package-grid">
               ${Object.entries(MEMORY_CATEGORY_LABELS).map(([category, label]) => `
                 <button class="memory-package" data-memory-cat="${esc(category)}">
@@ -1146,7 +1216,7 @@ function renderMemory(el, rerender) {
           </article>
           <article class="record">
             <h4>Cleanup watch</h4>
-            ${expiring.map((item) => `<p class="record-next">▸ ${esc(item.title)} <i>${esc(memoryRetention(item))}</i></p>`).join("") || `<p class="record-notes">Nothing is about to expire. Normal cleanup keeps the account lightweight.</p>`}
+            ${expiring.map((item) => `<p class="record-next">▸ ${esc(item.title)} <i>${esc(memoryRetention(item))}</i></p>`).join("") || `<p class="record-notes">Saved memory is stable. Temporary history shreds separately after ${CHAT_HISTORY_RETENTION_DAYS} days.</p>`}
           </article>
         </aside>
       </div>
@@ -1180,6 +1250,25 @@ function renderMemory(el, rerender) {
       if (confirm("Delete this local memory?")) { forgetMemory(id); rerender(); }
     },
     "remove-memory": (id) => { forgetMemory(id); rerender(); },
+    "save-history-memory": (id) => {
+      const item = (store.state.chatHistory || []).find((entry) => entry.id === id);
+      if (!item) return;
+      const text = item.reply ? `User: ${item.prompt}\nPhantom: ${item.reply}` : `User: ${item.prompt}`;
+      addMemory({
+        source: "history-promoted",
+        category: item.category,
+        title: item.prompt,
+        summary: item.summary || item.reply || item.prompt,
+        text,
+        tags: [item.mode, item.route, item.category].filter(Boolean),
+        pinnedByUser: true,
+        createdAt: item.createdAt,
+      });
+      forgetChatHistory(id);
+      pushActivity("Memory", "promoted temporary history into saved memory.", currentWs());
+      rerender();
+    },
+    "forget-history": (id) => { forgetChatHistory(id); rerender(); },
   });
 }
 
@@ -1242,11 +1331,11 @@ const WORKFORCE_EMPLOYEES = [
   {
     id: "nina-cross",
     name: "Nina Cross",
-    title: "Content Producer",
-    department: "Content",
+    title: "Creator Producer",
+    department: "Creator",
     status: "working",
     focus: "Turns ideas into captions, campaign media, generated assets, and approval-ready drafts.",
-    skills: ["captions", "media", "campaigns", "content queue"],
+    skills: ["captions", "media", "campaigns", "creator queue"],
     completed: 36,
     productivity: 89,
     workload: 58,
@@ -1287,11 +1376,11 @@ const WORKFORCE_EMPLOYEES = [
   {
     id: "eli-rhodes",
     name: "Eli Rhodes",
-    title: "Finance Assistant",
-    department: "Finance",
+    title: "Accounting Assistant",
+    department: "Accounting",
     status: "available",
-    focus: "Watches quote ranges, invoice readiness, unpaid items, and revenue follow-up opportunities.",
-    skills: ["pipeline", "quotes", "invoice prep", "retainers"],
+    focus: "Watches transactions, invoice readiness, unpaid items, and cash truth without pretending pipeline is money.",
+    skills: ["ledger review", "quotes", "invoice prep", "cashflow"],
     completed: 24,
     productivity: 86,
     workload: 29,
@@ -1302,11 +1391,11 @@ const WORKFORCE_EMPLOYEES = [
   {
     id: "sofia-lane",
     name: "Sofia Lane",
-    title: "Social Media Manager",
-    department: "Content",
+    title: "Creator Ops Manager",
+    department: "Creator",
     status: "reviewing",
-    focus: "Packages social drafts, post ideas, and campaign calendars for owner approval.",
-    skills: ["social drafts", "platform fit", "calendar prep", "reviews"],
+    focus: "Packages creator drafts, post ideas, and campaign calendars for owner approval.",
+    skills: ["creator drafts", "platform fit", "calendar prep", "reviews"],
     completed: 39,
     productivity: 90,
     workload: 47,
@@ -1378,7 +1467,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "owen-price",
     name: "Owen Price",
     title: "Media Systems Operator",
-    department: "Content",
+    department: "Creator",
     status: "available",
     focus: "Prepares image and video generation plans, credit estimates, and asset-library organization.",
     skills: ["media lab", "credit checks", "asset library", "render prep"],
@@ -1391,7 +1480,7 @@ const WORKFORCE_EMPLOYEES = [
   },
 ];
 
-const WORKFORCE_FILTERS = ["All", "Operations", "Sales", "Content", "Websites", "Finance", "Security", "Client Success"];
+const WORKFORCE_FILTERS = ["All", "Operations", "Sales", "Creator", "Websites", "Accounting", "Security", "Client Success"];
 
 const SWARM_SUBAGENT_TEMPLATES = [
   {
@@ -1781,65 +1870,341 @@ function workerMeshTone(worker) {
 
 function workerMeshGroup(worker) {
   const dept = String(worker.department || "").toLowerCase();
-  if (/content/.test(dept)) return "media";
+  if (/content|creator/.test(dept)) return "media";
   if (/websites/.test(dept)) return "build";
   if (/security/.test(dept)) return "protect";
-  if (/finance/.test(dept)) return "memory";
+  if (/finance|accounting/.test(dept)) return "memory";
   if (/sales/.test(dept)) return "brain";
   return "ops";
 }
 
-function renderWorkerMesh(workers) {
-  const employeeNodes = workers.filter((worker) => worker.worker_type !== "subagent");
+function privateAdminRouteReached() {
+  return /(^|\.)admin\.phantomforce\.online$/i.test(location.hostname);
+}
+
+function baselineWorkerCount(runtime) {
+  if (!runtime) return LOCAL_CORE_WORKERS.length + (privateAdminRouteReached() ? 1 : 0);
+  const workers = Array.isArray(runtime?.workers) ? runtime.workers : [];
+  const reported = Number(runtime?.summary?.baseline_workers_online ?? runtime?.summary?.active_workers ?? 0);
+  const routeAlreadyCounted = workers.some((worker) => worker.id === "gatekeeper" && worker.state === "active");
+  return reported + (privateAdminRouteReached() && !routeAlreadyCounted ? 1 : 0);
+}
+
+// Fullscreen Workers "web" canvas is desktop/tablet only - mobile keeps the
+// existing tap-to-select in-page box (just fixed for touch), so we never
+// touch that just-restored behavior.
+function workerWebEnabled() {
+  return !window.matchMedia("(max-width: 560px)").matches;
+}
+
+// Measures the actual rendered position of every node (post-layout, at the
+// world's current zoom=1 baseline) and returns a pan/zoom that centers and
+// fills the stage. Works regardless of node count, since it reads real
+// bounding boxes rather than assuming the fixed 118/208px radii fill any
+// particular stage size.
+function computeWorkerWebAutoFit(stageEl, worldEl) {
+  const stageRect = stageEl.getBoundingClientRect();
+  const nodes = worldEl.querySelectorAll(".worker-node, .worker-cell-dot");
+  if (!nodes.length || !stageRect.width || !stageRect.height) {
+    return { x: stageRect.width / 2, y: stageRect.height / 2, zoom: 1 };
+  }
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  nodes.forEach((node) => {
+    const r = node.getBoundingClientRect();
+    minX = Math.min(minX, r.left); maxX = Math.max(maxX, r.right);
+    minY = Math.min(minY, r.top); maxY = Math.max(maxY, r.bottom);
+  });
+  const contentW = maxX - minX || 1;
+  const contentH = maxY - minY || 1;
+  const padding = 0.82; // breathing room around the edges
+  const zoom = Math.min((stageRect.width * padding) / contentW, (stageRect.height * padding) / contentH, 1.6);
+  const contentCenterX = (minX + maxX) / 2 - stageRect.left;
+  const contentCenterY = (minY + maxY) / 2 - stageRect.top;
+  return {
+    x: stageRect.width / 2 - contentCenterX * zoom,
+    y: stageRect.height / 2 - contentCenterY * zoom,
+    zoom,
+  };
+}
+
+function applyWorkerWebTransform(worldEl) {
+  worldEl.style.transform = `translate(${workerWebUi.pan.x}px, ${workerWebUi.pan.y}px) scale(${workerWebUi.zoom})`;
+}
+
+// Called once per real render (after el.innerHTML is set), not per pointer
+// event - drag/wheel handlers below mutate workerWebUi and repaint the
+// transform directly, skipping the full-page rerender() for smooth 60fps
+// interaction.
+function wireWorkerWeb(el, rerender) {
+  if (!workerWebEnabled()) return;
+  const stage = el.querySelector("[data-worker-web-stage]");
+  const world = el.querySelector("[data-worker-web-world]");
+  if (!stage || !world) return;
+
+  if (workerWebUi._needsFit) {
+    workerWebUi._needsFit = false;
+    const fit = computeWorkerWebAutoFit(stage, world);
+    workerWebUi.pan = { x: fit.x, y: fit.y };
+    workerWebUi.zoom = fit.zoom;
+  }
+  applyWorkerWebTransform(world);
+
+  const MIN_ZOOM = 0.4, MAX_ZOOM = 2.5;
+  let dragging = false, dragStartX = 0, dragStartY = 0, panStartX = 0, panStartY = 0, dragMoved = false;
+
+  // Dragging can start anywhere on the canvas, including on top of a node -
+  // in a dense web, requiring an empty-pixel starting point turns every pan
+  // attempt into "click, drag, click" hunting for a gap. A stationary press
+  // still opens that node (dragMoved stays false); a press that moves is a
+  // pan, and the capture-phase click listener below swallows the resulting
+  // click before the node's own click handler ever sees it.
+  let captured = false;
+  stage.onpointerdown = (event) => {
+    if (event.button !== undefined && event.button !== 0) return;
+    if (event.target.closest(".worker-web-exit, .worker-web-search")) return;
+    dragging = true; dragMoved = false; captured = false;
+    dragStartX = event.clientX; dragStartY = event.clientY;
+    panStartX = workerWebUi.pan.x; panStartY = workerWebUi.pan.y;
+    // Pointer capture is NOT taken here - only once movement proves this is a
+    // real drag (below). Capturing immediately on every press would retarget
+    // the eventual click event to the stage itself, so a plain tap on a node
+    // (zero movement) would never reach that node's own click handler at all.
+  };
+  stage.onpointermove = (event) => {
+    if (!dragging) return;
+    const dx = event.clientX - dragStartX, dy = event.clientY - dragStartY;
+    if (!dragMoved && (Math.abs(dx) > 4 || Math.abs(dy) > 4)) {
+      dragMoved = true;
+      stage.setPointerCapture(event.pointerId);
+      captured = true;
+    }
+    if (!dragMoved) return;
+    workerWebUi.pan = { x: panStartX + dx, y: panStartY + dy };
+    applyWorkerWebTransform(world);
+  };
+  stage.onpointerup = (event) => {
+    dragging = false;
+    if (captured) { stage.releasePointerCapture(event.pointerId); captured = false; }
+  };
+  // Capture phase runs before the node button's own bubble-phase click
+  // handler, so stopping it here actually prevents the select - a bubble-
+  // phase listener on the stage would run too late (the button's handler
+  // already fired by then).
+  stage.addEventListener("click", (event) => {
+    if (dragMoved) { event.stopPropagation(); event.preventDefault(); dragMoved = false; }
+  }, true);
+  stage.onwheel = (event) => {
+    event.preventDefault();
+    const rect = stage.getBoundingClientRect();
+    const cursorX = event.clientX - rect.left, cursorY = event.clientY - rect.top;
+    const zoomFactor = Math.exp(-event.deltaY * 0.0015);
+    const nextZoom = Math.min(Math.max(workerWebUi.zoom * zoomFactor, MIN_ZOOM), MAX_ZOOM);
+    const ratio = nextZoom / workerWebUi.zoom;
+    // keep the point under the cursor visually fixed while zooming
+    workerWebUi.pan = {
+      x: cursorX - (cursorX - workerWebUi.pan.x) * ratio,
+      y: cursorY - (cursorY - workerWebUi.pan.y) * ratio,
+    };
+    workerWebUi.zoom = nextZoom;
+    applyWorkerWebTransform(world);
+  };
+
+  const searchInput = el.querySelector("[data-worker-web-search]");
+  if (searchInput) {
+    searchInput.oninput = () => {
+      workerWebUi.search = searchInput.value;
+      const query = workerWebUi.search.trim().toLowerCase();
+      world.querySelectorAll(".worker-node").forEach((node) => {
+        const label = (node.querySelector(".worker-node-label")?.textContent || "").toLowerCase();
+        const isMatch = query.length > 0 && label.includes(query);
+        node.classList.toggle("is-web-match", isMatch);
+        node.classList.toggle("is-web-dimmed", query.length > 0 && !isMatch);
+      });
+    };
+    searchInput.onkeydown = (event) => {
+      if (event.key !== "Enter") return;
+      const firstMatch = world.querySelector(".worker-node.is-web-match");
+      if (!firstMatch) return;
+      const stageRect = stage.getBoundingClientRect();
+      const nodeRect = firstMatch.getBoundingClientRect();
+      const nodeCenterX = (nodeRect.left + nodeRect.right) / 2 - stageRect.left;
+      const nodeCenterY = (nodeRect.top + nodeRect.bottom) / 2 - stageRect.top;
+      const worldCenterX = (nodeCenterX - workerWebUi.pan.x) / workerWebUi.zoom;
+      const worldCenterY = (nodeCenterY - workerWebUi.pan.y) / workerWebUi.zoom;
+      const targetZoom = Math.min(Math.max(1.4, MIN_ZOOM), MAX_ZOOM);
+      workerWebUi.zoom = targetZoom;
+      workerWebUi.pan = {
+        x: stageRect.width / 2 - worldCenterX * targetZoom,
+        y: stageRect.height / 2 - worldCenterY * targetZoom,
+      };
+      applyWorkerWebTransform(world);
+    };
+  }
+
+  if (workerWebEscapeHandler) document.removeEventListener("keydown", workerWebEscapeHandler);
+  workerWebEscapeHandler = (event) => {
+    if (event.key === "Escape" && workerUi.view === "map") { workerUi.view = "list"; rerender(); }
+  };
+  document.addEventListener("keydown", workerWebEscapeHandler);
+}
+
+function renderWorkerMesh(workers, runtime = null) {
+  const employeeNodes = workers.filter((worker) => worker.worker_type === "employee");
   const subagentNodes = workers.filter((worker) => worker.worker_type === "subagent");
-  const namedNodes = [...employeeNodes, ...subagentNodes.slice(0, 28)];
-  const rings = namedNodes.map((worker, index) => {
+  const cellNodes = workers.filter((worker) => worker.worker_type === "cell");
+  const mobileWeb = window.matchMedia("(max-width: 560px)").matches;
+  const cappedSubagents = subagentNodes.slice(0, mobileWeb ? 12 : 28);
+  const overflowSubagents = subagentNodes.length - cappedSubagents.length;
+  const paintedCells = mobileWeb ? cellNodes.slice(0, 360) : cellNodes;
+  const hiddenCells = cellNodes.length - paintedCells.length;
+  // Split subagents across two rings instead of cramming all of them onto one
+  // band - the fullscreen web has real pan/zoom room now (auto-fit just zooms
+  // out further to show a bigger layout), so use that room: fewer nodes per
+  // ring means more circumferential space per label, less overlap.
+  const innerSubagents = cappedSubagents.filter((_, i) => i % 2 === 0);
+  const farSubagents = cappedSubagents.filter((_, i) => i % 2 === 1);
+  const RING = {
+    core: { radius: 260, spread: 360, offset: 0, mobileRadius: 96 },
+    inner: { radius: 430, spread: 340, offset: 18, mobileRadius: 150 },
+    // staggered offset so far-ring nodes fall in the gaps between inner-ring
+    // nodes (viewed from the core) instead of lining up radially behind them
+    far: { radius: 620, spread: 340, offset: 18 + 340 / Math.max(1, farSubagents.length) / 2, mobileRadius: 150 },
+  };
+
+  const webNode = (worker, index, total, ringName) => {
     const tone = workerMeshTone(worker);
     const group = workerMeshGroup(worker);
-    const nodeY = (index % 3) * 7 - 7;
-    const style = `--node-index:${index}; --node-y:${nodeY}px; --node-delay:${(index % 7) * 0.28}s`;
+    const ring = RING[ringName];
+    const angle = ring.offset + (total ? (index / total) * ring.spread : 0);
+    const isLive = tone === "live" || tone === "approval";
+    const style = `--node-angle:${angle}deg; --node-radius:${ring.radius}px; --node-mobile-radius:${ring.mobileRadius}px; --node-delay:${(index % 7) * 0.28}s; --thread-delay:${(index % 9) * 0.4}s`;
     return `
-      <button class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${worker.worker_type === "subagent" ? "is-subagent" : ""}" style="${style}" data-act="worker-filter" data-filter="${esc(worker.department.toLowerCase().replace(/\s+/g, "-"))}" title="${esc(worker.display_name)}">
+      <div class="worker-thread worker-thread-${esc(tone)} ${isLive ? "is-live" : ""}" style="${style}" aria-hidden="true"></div>
+      <button type="button" class="worker-node worker-node-${esc(tone)} worker-node-${esc(group)} ${ringName !== "core" ? "is-subagent" : ""} ${workerUi.selectedId === worker.worker_id ? "is-selected" : ""}" style="${style}" data-act="worker-select" data-id="${esc(worker.worker_id)}" aria-pressed="${workerUi.selectedId === worker.worker_id ? "true" : "false"}" aria-label="Open ${esc(worker.display_name)} worker details" title="${esc(worker.display_name)} — ${esc(worker.role)}">
         <span class="worker-node-orb">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <span class="worker-node-label">${esc(worker.display_name)}</span>
-        <i>${esc(worker.worker_type === "subagent" ? "subagent" : worker.department)}</i>
+        <i>${esc(ringName !== "core" ? "subagent" : worker.department)}</i>
       </button>`;
-  }).join("");
-  const swarmDots = subagentNodes.map((worker, index) => {
-    const angle = (index * 37) % 360;
-    const orbit = 112 + (index % 5) * 10;
-    return `
-    <span class="worker-swarm-dot worker-swarm-${esc(workerMeshGroup(worker))}" style="--dot-index:${index}; --orbit-angle:${angle}deg; --orbit-size:${orbit}px; --dot-delay:${(index % 13) * 0.17}s" title="${esc(worker.display_name)}"></span>`;
-  }).join("");
+  };
+
+  const cellDot = (worker, index) => {
+    const layer = String(worker.neural_layer || "mapped").toLowerCase().replace(/[^a-z0-9_-]/g, "") || "mapped";
+    const group = workerMeshGroup(worker);
+    const ring = index % 12;
+    const angle = (index * 137.508 + ring * 9) % 360;
+    const radius = (mobileWeb ? 184 : 720) + ring * (mobileWeb ? 7 : 32) + ((index % 5) - 2) * (mobileWeb ? 2 : 6);
+    const size = mobileWeb ? 2 + (index % 3) : 2.4 + (index % 4) * 0.45;
+    const alpha = 0.32 + (index % 5) * 0.07;
+    const style = `--cell-angle:${angle}deg; --cell-radius:${radius}px; --cell-size:${size}px; --cell-alpha:${alpha}; --cell-delay:${(index % 17) * 0.18}s`;
+    return `<span class="worker-cell-dot worker-cell-${esc(layer)} worker-cell-${esc(group)}" style="${style}" title="${esc(worker.display_name)} — ${esc(worker.role)}"></span>`;
+  };
+
+  const coreRingNodes = employeeNodes.map((worker, index) => webNode(worker, index, employeeNodes.length, "core")).join("");
+  const outerRingNodes = innerSubagents.map((worker, index) => webNode(worker, index, innerSubagents.length, "inner")).join("")
+    + farSubagents.map((worker, index) => webNode(worker, index, farSubagents.length, "far")).join("");
+  const helperLaneDots = paintedCells.map((worker, index) => cellDot(worker, index)).join("");
+
   const observed = workers.filter((worker) => worker.has_activity).length;
+  const waiting = workers.filter((worker) => worker.status === "waiting-approval").length;
   const mapped = workers.length;
   const departments = new Set(workers.map((worker) => worker.department)).size;
-  const approvals = visible(store.state.approvals).filter((a) => a.status === "pending").length;
+  const baselineOnline = runtime ? baselineWorkerCount(runtime) : null;
+  const recentJobs = runtime?.summary?.tasks_in_window;
+
+  const webEnabled = workerWebEnabled();
   return `
-    <section class="worker-mesh" aria-label="Worker operations mesh">
-      <div class="worker-mesh-stage">
-        <div class="worker-swarm-dots" aria-hidden="true">${swarmDots}</div>
-        <div class="worker-mesh-rings" aria-hidden="true">
-          <span></span><span></span><span></span>
+    <section class="worker-mesh" aria-label="Worker operations web">
+      <div class="worker-mesh-stage ${webEnabled ? "is-web-active" : ""}" data-worker-web-stage>
+        <div class="worker-web-world" data-worker-web-world ${webEnabled ? `style="transform: translate(${workerWebUi.pan.x}px, ${workerWebUi.pan.y}px) scale(${workerWebUi.zoom})"` : ""}>
+          <div class="worker-mesh-rings" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span>
+          </div>
+          <div class="worker-cell-field" aria-hidden="true">
+            ${helperLaneDots}
+          </div>
+          <div class="worker-node-field">
+            ${coreRingNodes}
+            ${outerRingNodes}
+          </div>
+          <div class="worker-core">
+            <span>PF</span>
+            <b>Phantom</b>
+            <i>master router</i>
+          </div>
         </div>
-        <div class="worker-core">
-          <span>PF</span>
-          <b>Phantom</b>
-          <i>router</i>
-        </div>
-        <div class="worker-links" aria-hidden="true">
-          <span></span><span></span><span></span><span></span><span></span><span></span>
-        </div>
-        <div class="worker-node-field">
-          ${rings}
+        ${webEnabled ? `
+        <button class="worker-web-exit" type="button" data-act="worker-web-exit" aria-label="Exit fullscreen web view">✕ Exit</button>
+        <label class="worker-web-search">
+          <input type="search" data-worker-web-search placeholder="Search workers…" value="${esc(workerWebUi.search)}" aria-label="Search workers" />
+        </label>
+        ` : ""}
+        <div class="worker-mesh-foot">
+          <div class="worker-web-legend" aria-label="Legend">
+            <span><i class="worker-legend-dot worker-legend-live"></i>Active</span>
+            <span><i class="worker-legend-dot worker-legend-approval"></i>Waiting on you</span>
+            <span><i class="worker-legend-dot worker-legend-ready"></i>Mapped</span>
+            <span><i class="worker-legend-dot worker-legend-cell"></i>Helper lane</span>
+            <span><i class="worker-legend-dot worker-legend-blocked"></i>Offline</span>
+            ${overflowSubagents > 0 ? `<span class="worker-legend-more">+${overflowSubagents} more subagents</span>` : ""}
+            ${hiddenCells > 0 ? `<span class="worker-legend-more">+${hiddenCells.toLocaleString()} helper lanes beyond mobile view</span>` : `<span class="worker-legend-more">${cellNodes.length.toLocaleString()} helper lanes rendered</span>`}
+          </div>
+          <div class="worker-mesh-readout">
+            <span><b>${Number.isFinite(baselineOnline) ? baselineOnline : "—"}</b> baseline online</span>
+            <span><b>${Number.isFinite(recentJobs) ? recentJobs : "—"}</b> jobs · 24h</span>
+            <span><b>${mapped.toLocaleString()}</b> capacity mapped</span>
+            <span><b>${waiting || "clear"}</b> approval queue</span>
+            <span><b>${cellNodes.length.toLocaleString()}</b> helper lanes</span>
+            <span><b>${departments}</b> departments covered</span>
+          </div>
         </div>
       </div>
-      <div class="worker-mesh-readout">
-        <span><b>${mapped}</b> workers mapped</span>
-        <span><b>${observed}</b> ledger signals</span>
-        <span><b>${subagentNodes.length}</b> subagents</span>
-        <span><b>${departments}</b> departments</span>
-        <span><b>${approvals}</b> approvals waiting</span>
+    </section>`;
+}
+
+function renderBaselineWorkers(runtime) {
+  if (workerRuntime.state === "loading" || workerRuntime.state === "idle") {
+    return `<section class="worker-baseline"><div><p class="worker-kicker">Always-on crew</p><h4>Checking baseline services…</h4></div></section>`;
+  }
+  if (!runtime || workerRuntime.state === "error") {
+    const services = [
+      ...LOCAL_CORE_WORKERS,
+      ...(privateAdminRouteReached() ? [{ name: "Private Route", note: "This session reached the protected Business Manager host" }] : []),
+    ];
+    return `
+      <section class="worker-baseline worker-baseline-local">
+        <div class="worker-baseline-copy">
+          <p class="worker-kicker">Always-on crew</p>
+          <h4>${services.length} core workers ready</h4>
+          <p>Live job totals need the authenticated worker backend. Core local services are still available.</p>
+        </div>
+        <div class="worker-baseline-grid">
+          ${services.map((service) => `<span class="worker-baseline-service"><i></i><b>${esc(service.name)}</b><small>${esc(service.note)}</small></span>`).join("")}
+        </div>
+        <button class="btn btn-quiet" data-act="worker-runtime-retry">Re-check live status</button>
+      </section>`;
+  }
+
+  const workers = Array.isArray(runtime.workers) ? runtime.workers : [];
+  const online = workers.filter((worker) => worker.state === "active");
+  const recentJobs = Number(runtime.summary?.tasks_in_window || 0);
+  const baselineOnline = baselineWorkerCount(runtime);
+  const privateHostReached = privateAdminRouteReached();
+  const services = [
+    ...online.slice(0, 9).map((worker) => ({ name: worker.name, note: worker.role, live: true })),
+    ...(privateHostReached && !online.some((worker) => worker.id === "gatekeeper")
+      ? [{ name: "Private Route", note: "This session reached the protected Business Manager host", live: true }]
+      : []),
+  ];
+
+  return `
+    <section class="worker-baseline">
+      <div class="worker-baseline-copy">
+        <p class="worker-kicker">Always-on force</p>
+        <h4>${baselineOnline} baseline workers online</h4>
+        <p>${recentJobs ? `${recentJobs} real job${recentJobs === 1 ? "" : "s"} logged in the last 24 hours. The rest stays mapped, guarded, and ready without pretending to run work.` : "No customer jobs logged yet. Core services are still scanning, guarding, remembering, and routing."}</p>
+      </div>
+      <div class="worker-baseline-grid">
+        ${services.map((service) => `<span class="worker-baseline-service"><i></i><b>${esc(service.name)}</b><small>${esc(service.note)}</small></span>`).join("")}
       </div>
     </section>`;
 }
@@ -1906,19 +2271,19 @@ function renderWorkforceFlow() {
     </section>`;
 }
 
-function renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount }) {
+function renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount, baselineOnline, jobsLogged, mappedCount, departmentCount }) {
   const cards = [
-    ["Route", "Phantom picks the right worker for the job.", "outcome first"],
-    ["Remember", "Workspace rules and preferences guide the answer.", "local memory"],
-    ["Prepare", "Workers draft, check, package, and organize the work.", `${realPrepared} ready`],
-    ["Prove", "Signals and approvals show what actually happened.", `${ledgerSignalCount} signals`],
+    ["Route", "Phantom picks the right worker for the job.", `${baselineOnline || "—"} online`],
+    ["Remember", "Workspace rules and preferences guide the answer.", `${mappedCount} mapped`],
+    ["Prepare", realPrepared ? "Workers have staged work waiting for review." : "Workers are standing by with clean queues.", realPrepared ? `${realPrepared} staged` : "clean queue"],
+    ["Prove", jobsLogged ? "The ledger shows real work moved in the last 24 hours." : "No fake motion. Signals appear only when work is logged.", jobsLogged ? `${jobsLogged} jobs · 24h` : "ledger quiet"],
   ];
   return `
     <section class="worker-routing-panel" aria-label="How Phantom routes work">
       <div>
         <p class="worker-kicker">PhantomOps</p>
-        <h4>Workers are where the intelligence shows up.</h4>
-        <p>Ask for an outcome, and Phantom routes it through workers, memory, approvals, and proof.</p>
+        <h4>The force is already assembled.</h4>
+        <p>Ask for an outcome and Phantom routes it through workers, memory, approvals, and proof. Capacity is mapped all the time; activity is counted only when the ledger proves it.</p>
       </div>
       <div class="worker-routing-cards">
         ${cards.map(([titleText, body, meta]) => `
@@ -1929,9 +2294,10 @@ function renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignal
           </article>`).join("")}
       </div>
       <div class="worker-routing-proof">
-        <span><b>${pendingApprovals}</b> approvals waiting</span>
-        <span><b>${ledgerSignalCount}</b> real signals</span>
-        <span><b>${realPrepared}</b> prepared items</span>
+        <span><b>${mappedCount}</b> mapped workers</span>
+        <span><b>${departmentCount}</b> departments covered</span>
+        <span><b>${pendingApprovals || "clear"}</b> approval queue</span>
+        <span><b>${ledgerSignalCount || "quiet"}</b> verified signals</span>
       </div>
     </section>`;
 }
@@ -2102,7 +2468,7 @@ function renderWorkerShell(worker, subagents, cellsBySubagent, rootCells) {
     </article>`;
 }
 
-function renderWorkerDirectory(parentWorkers, allWorkers) {
+function buildWorkerGraph(allWorkers) {
   const subagentsByParent = new Map();
   const cellsBySubagent = new Map();
   const cellsByRoot = new Map();
@@ -2119,6 +2485,11 @@ function renderWorkerDirectory(parentWorkers, allWorkers) {
     cellsBySubagent.get(subagentKey).push(cell);
     cellsByRoot.get(rootKey).push(cell);
   });
+  return { subagentsByParent, cellsBySubagent, cellsByRoot };
+}
+
+function renderWorkerDirectory(parentWorkers, allWorkers) {
+  const { subagentsByParent, cellsBySubagent, cellsByRoot } = buildWorkerGraph(allWorkers);
   const filteredParents = parentWorkers.filter((worker) =>
     workerParentMatchesFilter(worker, subagentsByParent.get(worker.worker_id) || [], cellsByRoot.get(worker.worker_id) || []));
   if (!filteredParents.some((worker) => worker.worker_id === workerUi.selectedId)) {
@@ -2146,11 +2517,56 @@ function renderWorkerDirectory(parentWorkers, allWorkers) {
     </section>`;
 }
 
+function renderWorkerDrawer(worker, subagents, cellsBySubagent, rootCells) {
+  return `
+    <div class="worker-drawer-backdrop" data-act="worker-collapse" aria-hidden="true"></div>
+    <aside class="worker-drawer" role="dialog" aria-label="${esc(worker.display_name)} details">
+      <div class="worker-drawer-head">
+        <span class="wf-avatar wf-avatar-${esc(worker.avatar?.tone || worker.status)}">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
+        <div>
+          <b>${esc(worker.display_name)}</b>
+          <i>${esc(worker.role)} · ${esc(worker.department)}</i>
+        </div>
+        <span class="worker-shell-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
+      </div>
+      ${renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells)}
+    </aside>`;
+}
+
+function renderWorkerMapDetail(worker, subagents, cellsBySubagent, rootCells) {
+  if (!worker) {
+    return `
+      <section class="worker-map-detail is-empty" aria-label="Worker web instructions">
+        <div>
+          <p class="worker-kicker">Touch ready</p>
+          <h4>Tap any worker to inspect the lane.</h4>
+          <p>Mobile uses a clean worker grid so every node can be tapped. Desktop keeps the web view, and the detail panel opens here without blocking the screen.</p>
+        </div>
+        <span>No sends. No public action. Approval gates stay on.</span>
+      </section>`;
+  }
+
+  return `
+    <section class="worker-map-detail worker-${esc(worker.status)}" aria-label="${esc(worker.display_name)} selected worker details">
+      <div class="worker-map-detail-head">
+        <span class="wf-avatar wf-avatar-${esc(worker.avatar?.tone || worker.status)}">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
+        <div>
+          <p class="worker-kicker">Selected worker</p>
+          <h4>${esc(worker.display_name)}</h4>
+          <span>${esc(worker.role)} · ${esc(worker.department)} · ${esc(worker.worker_type === "subagent" ? "Subagent lane" : "Lead worker")}</span>
+        </div>
+        <span class="worker-shell-status"><span></span>${esc(workerStatusLabel(worker.status))}</span>
+      </div>
+      ${renderWorkerExpansion(worker, subagents, cellsBySubagent, rootCells)}
+    </section>`;
+}
+
 function renderWorkforce(el, rerender) {
   const allWorkers = buildWorkerRoster();
   const workers = isAdmin() ? allWorkers : allWorkers.filter((worker) => worker.client_visible);
   const validFilters = ["all", "employees", "subagents", "cells", "approval", ...WORKFORCE_FILTERS.slice(1).map((dept) => dept.toLowerCase().replace(/\s+/g, "-"))];
   if (!validFilters.includes(workerUi.filter)) workerUi.filter = "all";
+  if (workerUi.view !== "list" && workerUi.view !== "map") workerUi.view = "map";
   const parentWorkers = workers
     .filter((worker) => worker.worker_type === "employee")
     .sort((a, b) => workerSortScore(a) - workerSortScore(b) || a.display_name.localeCompare(b.display_name));
@@ -2176,45 +2592,89 @@ function renderWorkforce(el, rerender) {
     ...WORKFORCE_FILTERS.slice(1).map((dept) => [dept.toLowerCase().replace(/\s+/g, "-"), dept]),
     ["approval", "Approval"],
   ];
+  const isMap = workerUi.view === "map";
+  const selectedWorker = workerUi.selectedId ? workers.find((worker) => worker.worker_id === workerUi.selectedId) : null;
+  const { subagentsByParent, cellsBySubagent, cellsByRoot } = buildWorkerGraph(workers);
+  const selectedSubagents = selectedWorker?.worker_type === "employee" ? (subagentsByParent.get(selectedWorker.worker_id) || []) : [];
+  const selectedRootCells = selectedWorker?.worker_type === "subagent"
+    ? (cellsBySubagent.get(selectedWorker.worker_id) || [])
+    : selectedWorker
+      ? (cellsByRoot.get(selectedWorker.worker_id) || [])
+      : [];
+  const runtime = workerRuntime.workforce;
+  const baselineOnline = baselineWorkerCount(runtime);
+  const jobsLogged = Number(runtime?.summary?.tasks_in_window || 0);
+
   el.innerHTML = `
     <section class="workers-hero">
       <div>
-        <p class="worker-kicker">Workforce map</p>
+        <p class="worker-kicker">Workforce ${isMap ? "web" : "map"}</p>
         <h3>PhantomForce Workers</h3>
-        <p>Clean workforce view. Click a worker to see its subagents, helper lanes, and safety rules. Built to scale toward 1,000+ real workers without exposing tool names to clients.</p>
+        <p>${isMap
+          ? "The force map separates always-on capacity from real logged activity: baseline workers stay online, helper lanes stay mapped, and ledger-backed jobs light up when they happen."
+          : "Full directory — departments, subagents, helper lanes, and safety rules. Built to scale toward 1,000+ real workers without exposing tool names to clients."}</p>
       </div>
+      <div class="worker-view-toggle" role="tablist" aria-label="Workers view">
+        <button class="worker-view-btn ${isMap ? "is-active" : ""}" data-act="worker-view" data-view="map" role="tab" aria-selected="${isMap ? "true" : "false"}">Web view</button>
+        <button class="worker-view-btn ${!isMap ? "is-active" : ""}" data-act="worker-view" data-view="list" role="tab" aria-selected="${!isMap ? "true" : "false"}">List view</button>
+      </div>
+    </section>
+    ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
+    ${isMap ? `
+      <div class="worker-map-view">
+        ${renderBaselineWorkers(runtime)}
+        ${renderWorkerMesh(workers, runtime)}
+        ${renderWorkerMapDetail(selectedWorker, selectedSubagents, cellsBySubagent, selectedRootCells)}
+      </div>
+    ` : `
+      ${renderBaselineWorkers(runtime)}
       <div class="worker-scale">
+        <span><b>${workerRuntime.state === "ready" ? baselineOnline : "—"}</b> baseline online</span>
+        <span><b>${workerRuntime.state === "ready" ? jobsLogged : "—"}</b> jobs logged</span>
         <span><b>${mappedCount}</b> workers mapped</span>
-        <span><b>${ledgerSignalCount}</b> ledger signals</span>
         <span><b>${parentCount}</b> lead workers</span>
         <span><b>${subagentCount}</b> subagents</span>
         <span><b>${neuralCellCount}</b> helper lanes</span>
-        <span><b>${departmentCount}</b> departments mapped</span>
+        <span><b>${departmentCount}</b> departments covered</span>
       </div>
-    </section>
-    ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount })}
-    ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
-    <div class="worker-metrics">
-      <div><span>Workers Mapped</span><b>${mappedCount}</b></div>
-      <div><span>Ledger Signals</span><b>${ledgerSignalCount}</b></div>
-      <div><span>Lead Workers</span><b>${parentCount}</b></div>
-      <div><span>Subagents</span><b>${subagentCount}</b></div>
-      <div><span>Helper Lanes</span><b>${neuralCellCount}</b></div>
-      <div><span>Tasks Prepared</span><b>${realPrepared}</b></div>
-      <div><span>Awaiting Approval</span><b>${pendingApprovals}</b></div>
-      <div><span>Departments Mapped</span><b>${departmentCount}</b></div>
-    </div>
-    <div class="worker-filter-row">
-      ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
-    </div>
-    ${renderWorkerDirectory(parentWorkers, workers)}`;
+      ${renderWorkerRoutingPanel({ realPrepared, pendingApprovals, ledgerSignalCount, baselineOnline, jobsLogged, mappedCount, departmentCount })}
+      <div class="worker-metrics">
+        <div class="worker-metric-primary"><span>Force Online</span><b>${workerRuntime.state === "ready" ? baselineOnline : "—"}</b></div>
+        <div><span>Jobs Logged · 24h</span><b>${workerRuntime.state === "ready" ? jobsLogged : "—"}</b></div>
+        <div><span>Workers Mapped</span><b>${mappedCount}</b></div>
+        <div><span>Lead Workers</span><b>${parentCount}</b></div>
+        <div><span>Subagents</span><b>${subagentCount}</b></div>
+        <div><span>Helper Lanes</span><b>${neuralCellCount}</b></div>
+        <div><span>Queue State</span><b>${realPrepared ? `${realPrepared} staged` : "Clear"}</b></div>
+        <div><span>Approval Queue</span><b>${pendingApprovals || "Clear"}</b></div>
+        <div><span>Departments Covered</span><b>${departmentCount}</b></div>
+      </div>
+      <div class="worker-filter-row">
+        ${filters.map(([id, label]) => `<button class="worker-filter ${workerUi.filter === id ? "is-active" : ""}" data-act="worker-filter" data-filter="${esc(id)}" aria-pressed="${workerUi.filter === id ? "true" : "false"}">${esc(label)}</button>`).join("")}
+      </div>
+      ${renderWorkerDirectory(parentWorkers, workers)}
+    `}`;
   bindActions(el, {
+    "worker-runtime-retry": () => {
+      workerRuntime.state = "idle";
+      workerRuntime.error = "";
+      rerender();
+    },
+    "worker-view": (_id, button) => {
+      const nextView = button.dataset.view === "list" ? "list" : "map";
+      if (nextView === "map" && workerUi.view !== "map") workerWebUi._needsFit = true;
+      workerUi.view = nextView;
+      workerUi.selectedId = "";
+      rerender();
+    },
+    "worker-web-exit": () => { workerUi.view = "list"; rerender(); },
     "worker-filter": (_id, button) => { workerUi.filter = button.dataset.filter || "all"; rerender(); },
     "worker-notice-close": () => { workerUi.notice = ""; rerender(); },
     "worker-preview-close": () => { workerUi.preview = null; rerender(); },
     "worker-select": (id) => {
       workerUi.selectedId = workerUi.selectedId === id ? "" : (id || workerUi.selectedId);
       workerUi.tab = "overview";
+      workerUi.preview = null;
       rerender();
     },
     "worker-collapse": () => {
@@ -2234,6 +2694,10 @@ function renderWorkforce(el, rerender) {
       rerender();
     },
   });
+  if (isMap) wireWorkerWeb(el, rerender);
+  if (workerRuntime.state === "idle") {
+    loadWorkerRuntime().finally(() => rerender());
+  }
 }
 
 /* ============================= APPROVALS ============================= */
@@ -2336,8 +2800,8 @@ function renderAdmin(el, rerender) {
     <h3 class="ws-subhead">Access</h3>
     <div class="stack">
       <article class="record record-wide">
-        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full phantom, this view")}
-        ${kv("Employee host", "<code>app.phantomforce.online</code> — limited workspace view, permission-scoped")}
+        ${kv("Business Manager host", "<code>admin.phantomforce.online</code> — full PhantomForce operator view")}
+        ${kv("Team Workspace host", "<code>app.phantomforce.online</code> — focused workspace view, permission-scoped")}
         ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
       </article>
     </div>
@@ -2366,18 +2830,18 @@ function renderPhantom(el) {
 
 /* ============================ REGISTRY ============================ */
 export const WORKSPACE_DEFS = {
-  phantom: { title: "Phantom AI", kicker: "Command surface", render: renderPhantom },
-  leads: { title: "Leads & Follow-Up", kicker: "Pipeline desk", render: renderLeads },
-  proposals: { title: "Proposal Forge", kicker: "Quotes & offers", render: renderProposals },
+  phantom: { title: "Phantom AI", kicker: "Business command surface", render: renderPhantom },
+  leads: { title: "Client Pipeline", kicker: "Lead desk & follow-up intelligence", render: renderLeads },
+  proposals: { title: "Offer Desk", kicker: "Quotes, scopes, and deal math", render: renderProposals },
   reviews: { title: "Review Desk", kicker: "Reputation engine", render: renderReviews },
   bookings: { title: "Bookings", kicker: "Schedule desk", render: renderBookings },
-  media: { title: "Media Lab", kicker: "Production phantom", render: renderMedia },
-  sites: { title: "Websites", kicker: "Websites by domain", render: renderSites },
+  media: { title: "Media Lab", kicker: "Creator production studio", render: renderMedia },
+  sites: { title: "Site Portfolio", kicker: "Websites by domain", render: renderSites },
   protect: { title: "Protect", kicker: "Security watch", render: renderProtect },
-  money: { title: "Money", kicker: "Finance ledger", render: renderMoney },
-  memory: { title: "Memory", kicker: "Local context database", render: renderMemory },
-  workforce: { title: "Workers", kicker: "Swarm network", render: renderWorkforce },
-  approvals: { title: "Approvals", kicker: "Waiting on you", render: renderApprovals },
+  money: { title: "Accounting", kicker: "Books, transaction reader, and cash truth", render: renderMoney },
+  memory: { title: "Memory", kicker: "Context intelligence database", render: renderMemory },
+  workforce: { title: "Workforce", kicker: "Business ops network", render: renderWorkforce },
+  approvals: { title: "Decision Queue", kicker: "Waiting on your call", render: renderApprovals },
   adminos: { title: "PhantomOps", kicker: "Operator controls", render: renderAdmin, adminOnly: true },
 };
 
@@ -2401,16 +2865,16 @@ export function missionWidgets() {
   const neuralCellCount = workerRoster.filter((worker) => worker.worker_type === "cell").length;
 
   const w = [
-    { id: "leads", icon: "◉", title: "Handle Leads", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
-    { id: "proposals", icon: "◆", title: "Build Quotes", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
-    { id: "media", icon: "▶", title: "Media Lab", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
-    { id: "sites", icon: "▦", title: "Websites", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },
+    { id: "leads", icon: "◉", title: "Client Pipeline", stat: `${openLeads.length} open`, sub: dueLeads.length ? `${dueLeads.length} due today` : "pipeline current", alert: dueLeads.length > 0 },
+    { id: "proposals", icon: "◆", title: "Offer Desk", stat: `${m.open.length} live`, sub: `${fmtMoney(m.pipeline)} potential`, alert: false },
+    { id: "media", icon: "▶", title: "Creator Studio", stat: `${pendingMedia.length} pending`, sub: `${generatedMedia.length} generated`, alert: false },
+    { id: "sites", icon: "▦", title: "Site Portfolio", stat: `${pages.length} site${pages.length === 1 ? "" : "s"}`, sub: `${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length} domain${pages.filter((p) => p.domain || p.url || p.design?.existingUrl).length === 1 ? "" : "s"}`, alert: false },
     { id: "reviews", icon: "★", title: "Review Desk", stat: `${revs.length} in pipe`, sub: "request → publish", alert: false },
     { id: "bookings", icon: "◷", title: "Bookings", stat: `${bks.length} pending`, sub: "drafts & confirmations", alert: false },
-    { id: "protect", icon: "⬡", title: "Run Security Check", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
-    { id: "money", icon: "◈", title: "Money", stat: m.transactions.length ? moneySigned(m.netCash) : "ledger", sub: m.transactions.length ? `${m.transactions.length} transaction${m.transactions.length === 1 ? "" : "s"}` : "add/import transactions", alert: false },
-    { id: "workforce", icon: "⬢", title: "Workers", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
-    { id: "approvals", icon: "✓", title: "Approvals", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
+    { id: "protect", icon: "⬡", title: "Security Watch", stat: sec ? (sec.posture === "clean" ? "clean" : "attention") : "—", sub: sec ? `next scan ${daysUntil(sec.nextScan)}d` : "", alert: sec?.posture !== "clean" },
+    { id: "money", icon: "◈", title: "Accounting", stat: m.transactions.length ? moneySigned(m.netCash) : "books", sub: m.transactions.length ? `${m.transactions.length} transaction${m.transactions.length === 1 ? "" : "s"}` : "add/import transactions", alert: false },
+    { id: "workforce", icon: "⬢", title: "Workforce", stat: `${onlineWorkers.length} workers`, sub: isAdmin() ? `${subagentCount} subagents · ${neuralCellCount} helper lanes` : "your support team", alert: false },
+    { id: "approvals", icon: "✓", title: "Decision Queue", stat: `${pend.length} waiting`, sub: pend.length ? "needs your call" : "queue clear", alert: pend.length > 0 },
   ];
   if (isAdmin()) w.push({ id: "adminos", icon: "⌘", title: "PhantomOps", stat: "operator", sub: "workspaces · lanes · access", alert: false });
   return w;

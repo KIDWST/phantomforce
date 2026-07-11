@@ -8,8 +8,8 @@ const TICKER_REFRESH_MS = 12000;
 
 const workers = {
   command: { name: "Victor", role: "command desk", tone: "signal", crew: ["Lena", "Jules"] },
-  leads: { name: "Charles", role: "lead desk", tone: "money", crew: ["Ivy", "Marco"] },
-  proposals: { name: "Alexa", role: "proposal desk", tone: "build", crew: ["Reed", "June"] },
+  leads: { name: "Charles", role: "client pipeline", tone: "money", crew: ["Ivy", "Marco"] },
+  proposals: { name: "Alexa", role: "offer desk", tone: "build", crew: ["Reed", "June"] },
   memory: { name: "Selena", role: "memory desk", tone: "memory", crew: ["Noah", "Eli"] },
   model: { name: "Ollie", role: "private answer desk", tone: "signal", crew: ["Parker", "Sage"] },
   build: { name: "Cody", role: "build desk", tone: "build", crew: ["Miles", "Rae"] },
@@ -32,7 +32,7 @@ const agentMap = {
   "Security Watch": workers.protect,
   "Review Desk": workers.review,
   "Follow-Up Desk": workers.leads,
-  "Revenue Tracker": workers.proposals,
+  "Accounting Ledger": workers.proposals,
   "Booking Coordinator": workers.booking,
   "Delivery Manager": workers.delivery,
   "Data Cleaner": workers.memory,
@@ -108,8 +108,8 @@ function statusFromRecords() {
       activeProps.length
         ? `shaped ${plural(activeProps.length, "proposal")} into quote-ready next steps`
         : "kept proposal desk warm; no quote is blocked right now",
-      money.pipeline ? `${fmtMoney(money.pipeline)} visible pipeline in this workspace.` : "Pipeline wakes up when a real lead or quote appears.",
-      activeProps[0]?.client || "proposal desk",
+      money.pipeline ? `${fmtMoney(money.pipeline)} visible quote potential in this workspace.` : "Quote potential wakes up when a real lead or quote appears.",
+      activeProps[0]?.client || "offer desk",
     ),
     workerItem(
       workers.review,

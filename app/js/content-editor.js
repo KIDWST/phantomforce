@@ -1,0 +1,422 @@
+import { paintEdit } from "./imagefilters.js?v=phantom-live-20260711-170";
+
+let layerSequence = 0;
+
+function id(prefix = "layer") {
+  layerSequence += 1;
+  return `${prefix}-${Date.now().toString(36)}-${layerSequence.toString(36)}`;
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
+export function freshComposition() {
+  return {
+    width: 0,
+    height: 0,
+    zoom: 1,
+    layers: [{
+      id: "base",
+      type: "base",
+      name: "Main image",
+      visible: true,
+      locked: false,
+      x: 0.5,
+      y: 0.5,
+      w: 1,
+      h: 1,
+      rotation: 0,
+      opacity: 1,
+      fit: "cover",
+    }],
+    selectedIds: ["base"],
+    imageCache: new Map(),
+  };
+}
+
+export function compositionSnapshot(composition) {
+  return {
+    width: composition.width,
+    height: composition.height,
+    zoom: composition.zoom,
+    layers: composition.layers.map((layer) => {
+      const clean = { ...layer };
+      delete clean.image;
+      return clean;
+    }),
+    selectedIds: [...composition.selectedIds],
+  };
+}
+
+export function restoreComposition(composition, snapshot) {
+  composition.width = Number(snapshot?.width || 0);
+  composition.height = Number(snapshot?.height || 0);
+  composition.zoom = clamp(snapshot?.zoom ?? 1, 0.25, 4);
+  composition.layers = Array.isArray(snapshot?.layers) ? snapshot.layers.map((layer) => ({ ...layer })) : [];
+  if (!composition.layers.some((layer) => layer.id === "base")) composition.layers.push(freshComposition().layers[0]);
+  composition.selectedIds = Array.isArray(snapshot?.selectedIds) ? [...snapshot.selectedIds] : ["base"];
+  composition.imageCache = composition.imageCache instanceof Map ? composition.imageCache : new Map();
+  return composition;
+}
+
+export function addImageLayer(composition, src, name = "Image layer", { background = false } = {}) {
+  const layer = {
+    id: id(background ? "background" : "image"),
+    type: "image",
+    name,
+    src,
+    visible: true,
+    locked: false,
+    x: 0.5,
+    y: 0.5,
+    w: background ? 1 : 0.52,
+    h: background ? 1 : 0.52,
+    rotation: 0,
+    opacity: 1,
+    fit: background ? "cover" : "contain",
+  };
+  const baseIndex = composition.layers.findIndex((item) => item.id === "base");
+  if (background) composition.layers.splice(Math.max(0, baseIndex), 0, layer);
+  else composition.layers.push(layer);
+  composition.selectedIds = [layer.id];
+  return layer;
+}
+
+export function replaceImageLayerSource(composition, layerId, src, image, { transparent = false } = {}) {
+  const layer = composition.layers.find((item) => item.id === layerId && item.type === "image");
+  if (!layer || !src) return null;
+  layer.src = src;
+  layer.hasTransparency = !!transparent;
+  if (image) composition.imageCache.set(src, image);
+  composition.selectedIds = [layer.id];
+  return layer;
+}
+
+export function addTextLayer(composition, text = "Your headline") {
+  const layer = {
+    id: id("text"),
+    type: "text",
+    name: "Headline",
+    text,
+    visible: true,
+    locked: false,
+    x: 0.5,
+    y: 0.78,
+    w: 0.78,
+    h: 0.18,
+    rotation: 0,
+    opacity: 1,
+    font: "Space Grotesk",
+    fontSize: 8,
+    color: "#ffffff",
+    background: "#000000",
+    backgroundOpacity: 0,
+    bold: true,
+    align: "center",
+    shadow: true,
+  };
+  composition.layers.push(layer);
+  composition.selectedIds = [layer.id];
+  return layer;
+}
+
+export function addColorLayer(composition, color = "#10251c") {
+  const layer = {
+    id: id("color"),
+    type: "color",
+    name: "Color background",
+    color,
+    visible: true,
+    locked: false,
+    x: 0.5,
+    y: 0.5,
+    w: 1,
+    h: 1,
+    rotation: 0,
+    opacity: 1,
+    radius: 0,
+  };
+  const baseIndex = composition.layers.findIndex((item) => item.id === "base");
+  composition.layers.splice(Math.max(0, baseIndex), 0, layer);
+  composition.selectedIds = [layer.id];
+  return layer;
+}
+
+export function duplicateLayer(composition, layerId) {
+  const index = composition.layers.findIndex((layer) => layer.id === layerId);
+  if (index < 0) return null;
+  const source = composition.layers[index];
+  if (source.id === "base") return null;
+  const copy = { ...source, id: id(source.type), name: `${source.name} copy`, x: clamp(source.x + 0.03, 0, 1), y: clamp(source.y + 0.03, 0, 1) };
+  composition.layers.splice(index + 1, 0, copy);
+  composition.selectedIds = [copy.id];
+  return copy;
+}
+
+export function removeSelectedLayers(composition) {
+  const selected = new Set(composition.selectedIds);
+  const removed = composition.layers.filter((layer) => selected.has(layer.id) && layer.id !== "base" && !layer.locked);
+  composition.layers = composition.layers.filter((layer) => !removed.includes(layer));
+  composition.selectedIds = composition.layers.some((layer) => layer.id === "base") ? ["base"] : [];
+  return removed.length;
+}
+
+export function moveLayerOrder(composition, layerId, direction) {
+  const index = composition.layers.findIndex((layer) => layer.id === layerId);
+  if (index < 0) return false;
+  const next = clamp(index + direction, 0, composition.layers.length - 1);
+  if (next === index) return false;
+  const [layer] = composition.layers.splice(index, 1);
+  composition.layers.splice(next, 0, layer);
+  return true;
+}
+
+export function selectedLayers(composition) {
+  const selected = new Set(composition.selectedIds);
+  return composition.layers.filter((layer) => selected.has(layer.id));
+}
+
+export function selectLayer(composition, layerId, additive = false) {
+  if (!layerId) {
+    composition.selectedIds = [];
+    return;
+  }
+  if (!additive) composition.selectedIds = [layerId];
+  else if (composition.selectedIds.includes(layerId)) composition.selectedIds = composition.selectedIds.filter((idValue) => idValue !== layerId);
+  else composition.selectedIds = [...composition.selectedIds, layerId];
+}
+
+export function selectAllLayers(composition) {
+  composition.selectedIds = composition.layers.filter((layer) => layer.visible && !layer.locked).map((layer) => layer.id);
+}
+
+export async function loadCompositionImages(composition, loader) {
+  const imageLayers = composition.layers.filter((layer) => layer.type === "image" && layer.src);
+  await Promise.all(imageLayers.map(async (layer) => {
+    if (composition.imageCache.has(layer.src)) return;
+    try { composition.imageCache.set(layer.src, await loader(layer.src)); }
+    catch { composition.imageCache.set(layer.src, null); }
+  }));
+}
+
+function roundedRect(ctx, x, y, w, h, radius) {
+  const r = Math.min(Math.max(0, radius), Math.abs(w) / 2, Math.abs(h) / 2);
+  ctx.beginPath();
+  ctx.roundRect(x, y, w, h, r);
+}
+
+function drawImageFit(ctx, image, x, y, w, h, fit) {
+  const iw = image.naturalWidth || image.width || 1;
+  const ih = image.naturalHeight || image.height || 1;
+  const scale = fit === "cover" ? Math.max(w / iw, h / ih) : Math.min(w / iw, h / ih);
+  const dw = iw * scale;
+  const dh = ih * scale;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(x, y, w, h);
+  ctx.clip();
+  ctx.drawImage(image, x + (w - dw) / 2, y + (h - dh) / 2, dw, dh);
+  ctx.restore();
+}
+
+function wrapLines(ctx, text, maxWidth) {
+  const words = String(text || "").split(/\s+/).filter(Boolean);
+  const lines = [];
+  let current = "";
+  words.forEach((word) => {
+    const next = current ? `${current} ${word}` : word;
+    if (current && ctx.measureText(next).width > maxWidth) { lines.push(current); current = word; }
+    else current = next;
+  });
+  if (current) lines.push(current);
+  return lines.length ? lines : [""];
+}
+
+function drawText(ctx, layer, width, height) {
+  const boxW = layer.w * width;
+  const boxH = layer.h * height;
+  const fontSize = Math.max(12, width * (layer.fontSize / 100));
+  ctx.font = `${layer.bold ? 700 : 400} ${fontSize}px "${layer.font || "Space Grotesk"}", sans-serif`;
+  ctx.textAlign = layer.align || "center";
+  ctx.textBaseline = "middle";
+  if ((layer.backgroundOpacity || 0) > 0) {
+    ctx.save();
+    ctx.globalAlpha = clamp(layer.backgroundOpacity, 0, 1);
+    ctx.fillStyle = layer.background || "#000000";
+    roundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, Math.min(boxW, boxH) * 0.08);
+    ctx.fill();
+    ctx.restore();
+  }
+  if (layer.shadow) {
+    ctx.shadowColor = "rgba(0,0,0,.65)";
+    ctx.shadowBlur = fontSize * 0.22;
+    ctx.shadowOffsetY = fontSize * 0.06;
+  }
+  ctx.fillStyle = layer.color || "#ffffff";
+  const lines = wrapLines(ctx, layer.text, boxW * 0.92);
+  const lineHeight = fontSize * 1.12;
+  const start = -(lines.length - 1) * lineHeight / 2;
+  const tx = layer.align === "left" ? -boxW * 0.46 : layer.align === "right" ? boxW * 0.46 : 0;
+  lines.forEach((line, index) => ctx.fillText(line, tx, start + index * lineHeight));
+}
+
+export function renderComposition(canvas, baseImage, editState, composition) {
+  const base = document.createElement("canvas");
+  const state = { ...editState, text: editState.text || "" };
+  paintEdit(base, baseImage, state);
+  if (!composition.width || !composition.height) {
+    composition.width = base.width;
+    composition.height = base.height;
+  }
+  canvas.width = composition.width;
+  canvas.height = composition.height;
+  canvas._img = baseImage;
+  const ctx = canvas.getContext("2d");
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  composition.layers.forEach((layer) => {
+    if (!layer.visible) return;
+    const boxW = Math.max(1, layer.w * canvas.width);
+    const boxH = Math.max(1, layer.h * canvas.height);
+    ctx.save();
+    ctx.globalAlpha = clamp(layer.opacity ?? 1, 0, 1);
+    ctx.translate(layer.x * canvas.width, layer.y * canvas.height);
+    ctx.rotate((Number(layer.rotation || 0) * Math.PI) / 180);
+    if (layer.type === "base") drawImageFit(ctx, base, -boxW / 2, -boxH / 2, boxW, boxH, layer.fit || "cover");
+    else if (layer.type === "image") {
+      const image = composition.imageCache.get(layer.src);
+      if (image) drawImageFit(ctx, image, -boxW / 2, -boxH / 2, boxW, boxH, layer.fit || "contain");
+    } else if (layer.type === "color") {
+      ctx.fillStyle = layer.color || "#10251c";
+      roundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, Math.min(boxW, boxH) * clamp(layer.radius || 0, 0, 0.5));
+      ctx.fill();
+    } else if (layer.type === "text") drawText(ctx, layer, canvas.width, canvas.height);
+    ctx.restore();
+  });
+  return canvas;
+}
+
+function rotatedCorners(layer, width, height) {
+  const cx = layer.x * width;
+  const cy = layer.y * height;
+  const hw = layer.w * width / 2;
+  const hh = layer.h * height / 2;
+  const angle = (Number(layer.rotation || 0) * Math.PI) / 180;
+  const cos = Math.cos(angle);
+  const sin = Math.sin(angle);
+  return [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([x, y]) => ({ x: cx + x * cos - y * sin, y: cy + x * sin + y * cos }));
+}
+
+export function layerBounds(layer, width, height) {
+  const corners = rotatedCorners(layer, width, height);
+  const xs = corners.map((point) => point.x);
+  const ys = corners.map((point) => point.y);
+  return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs), bottom: Math.max(...ys), corners };
+}
+
+export function drawCompositionOverlay(overlay, canvas, composition) {
+  overlay.width = canvas.width;
+  overlay.height = canvas.height;
+  const ctx = overlay.getContext("2d");
+  ctx.clearRect(0, 0, overlay.width, overlay.height);
+  const selected = selectedLayers(composition).filter((layer) => layer.visible);
+  selected.forEach((layer) => {
+    const bounds = layerBounds(layer, canvas.width, canvas.height);
+    ctx.save();
+    ctx.strokeStyle = "#41ffa1";
+    ctx.lineWidth = Math.max(2, canvas.width / 700);
+    ctx.setLineDash(layer.locked ? [10, 8] : []);
+    ctx.beginPath();
+    bounds.corners.forEach((point, index) => index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y));
+    ctx.closePath();
+    ctx.stroke();
+    if (selected.length === 1 && !layer.locked) bounds.corners.forEach((point) => {
+      ctx.fillStyle = "#07130e";
+      ctx.strokeStyle = "#41ffa1";
+      ctx.lineWidth = Math.max(2, canvas.width / 700);
+      ctx.beginPath();
+      ctx.arc(point.x, point.y, Math.max(8, canvas.width / 140), 0, Math.PI * 2);
+      ctx.fill();
+      ctx.stroke();
+    });
+    ctx.restore();
+  });
+}
+
+/* Editor-only subject visualization. The segmentation cutout is transformed
+   through the same base-layer box/fit as the photo, then recolored into a
+   translucent mint silhouette with a bright contour. This is never painted
+   onto the export canvas. */
+export function drawDetectedSubjectOverlay(overlay, canvas, composition, maskImage) {
+  if (!overlay || !canvas || !maskImage) return;
+  const baseLayer = composition.layers.find((layer) => layer.id === "base");
+  if (!baseLayer || !baseLayer.visible) return;
+  const mask = document.createElement("canvas");
+  mask.width = canvas.width;
+  mask.height = canvas.height;
+  const ctx = mask.getContext("2d");
+  const boxW = Math.max(1, baseLayer.w * mask.width);
+  const boxH = Math.max(1, baseLayer.h * mask.height);
+  ctx.save();
+  ctx.translate(baseLayer.x * mask.width, baseLayer.y * mask.height);
+  ctx.rotate((Number(baseLayer.rotation || 0) * Math.PI) / 180);
+  drawImageFit(ctx, maskImage, -boxW / 2, -boxH / 2, boxW, boxH, baseLayer.fit || "cover");
+  ctx.restore();
+  ctx.globalCompositeOperation = "source-in";
+  ctx.fillStyle = "rgba(65,255,161,.14)";
+  ctx.fillRect(0, 0, mask.width, mask.height);
+
+  const out = overlay.getContext("2d");
+  out.save();
+  out.globalCompositeOperation = "source-over";
+  out.filter = `drop-shadow(0 0 ${Math.max(2, canvas.width / 420)}px rgba(65,255,161,.96)) drop-shadow(0 0 ${Math.max(5, canvas.width / 150)}px rgba(65,255,161,.68))`;
+  out.drawImage(mask, 0, 0);
+  out.restore();
+}
+
+export function canvasPoint(event, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: clamp((event.clientX - rect.left) / rect.width, 0, 1),
+    y: clamp((event.clientY - rect.top) / rect.height, 0, 1),
+    px: clamp((event.clientX - rect.left) / rect.width, 0, 1) * canvas.width,
+    py: clamp((event.clientY - rect.top) / rect.height, 0, 1) * canvas.height,
+  };
+}
+
+export function hitTestLayer(composition, point, canvas) {
+  for (let index = composition.layers.length - 1; index >= 0; index -= 1) {
+    const layer = composition.layers[index];
+    if (!layer.visible || layer.locked) continue;
+    const cx = layer.x * canvas.width;
+    const cy = layer.y * canvas.height;
+    const angle = -(Number(layer.rotation || 0) * Math.PI) / 180;
+    const dx = point.px - cx;
+    const dy = point.py - cy;
+    const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+    const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+    if (Math.abs(localX) <= layer.w * canvas.width / 2 && Math.abs(localY) <= layer.h * canvas.height / 2) return layer;
+  }
+  return composition.layers.find((layer) => layer.id === "base" && layer.visible) || null;
+}
+
+export function hitTestResizeHandle(composition, point, canvas, cssScale = 1) {
+  const selected = selectedLayers(composition);
+  if (selected.length !== 1 || selected[0].locked) return null;
+  const layer = selected[0];
+  const corners = rotatedCorners(layer, canvas.width, canvas.height);
+  const radius = Math.max(14 / Math.max(cssScale, 0.01), canvas.width / 120);
+  const index = corners.findIndex((corner) => Math.hypot(corner.x - point.px, corner.y - point.py) <= radius);
+  return index >= 0 ? { layer, index } : null;
+}
+
+export function setCanvasPreset(composition, width, height) {
+  composition.width = Math.max(240, Math.round(width));
+  composition.height = Math.max(240, Math.round(height));
+}
+
+export function zoomComposition(composition, delta) {
+  composition.zoom = clamp((composition.zoom || 1) + delta, 0.25, 4);
+  return composition.zoom;
+}

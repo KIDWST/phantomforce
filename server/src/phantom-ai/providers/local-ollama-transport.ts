@@ -14,8 +14,12 @@ type LocalOllamaFetch = (
     method: "GET" | "POST";
     headers?: Record<string, string>;
     body?: string;
+    signal?: AbortSignal;
   },
 ) => Promise<LocalOllamaFetchResponse>;
+
+const DEFAULT_OLLAMA_PROBE_TIMEOUT_MS = 4000;
+const DEFAULT_OLLAMA_CHAT_TIMEOUT_MS = 60000;
 
 export type LocalOllamaChatInput = {
   requestId: string;
@@ -178,12 +182,15 @@ function extractUsage(json: unknown): LocalOllamaChatResult["usage"] {
 }
 
 async function listInstalledOllamaModels(baseUrl: string, fetchImpl: LocalOllamaFetch) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), DEFAULT_OLLAMA_PROBE_TIMEOUT_MS);
   try {
     const response = await fetchImpl(`${baseUrl}/api/tags`, {
       method: "GET",
       headers: {
         Accept: "application/json",
       },
+      signal: controller.signal,
     });
     if (!response.ok) return null;
     const json = await response.json();
@@ -202,6 +209,8 @@ async function listInstalledOllamaModels(baseUrl: string, fetchImpl: LocalOllama
     );
   } catch {
     return null;
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -323,6 +332,13 @@ export async function callLocalOllamaChat(
     ],
   });
 
+  const chatTimeoutMs = Number(env.PHANTOM_OLLAMA_TIMEOUT_MS ?? DEFAULT_OLLAMA_CHAT_TIMEOUT_MS);
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(),
+    Number.isFinite(chatTimeoutMs) ? chatTimeoutMs : DEFAULT_OLLAMA_CHAT_TIMEOUT_MS,
+  );
+
   try {
     const response = await fetchImpl(endpoint, {
       method: "POST",
@@ -330,6 +346,7 @@ export async function callLocalOllamaChat(
         "Content-Type": "application/json",
       },
       body,
+      signal: controller.signal,
     });
     const json = await response.json().catch(async () => {
       const text = await response.text().catch(() => "");
@@ -373,6 +390,7 @@ export async function callLocalOllamaChat(
       usage: extractUsage(json),
     };
   } catch (error) {
+    const timedOut = error instanceof Error && error.name === "AbortError";
     return {
       provider_id: "local_ollama",
       model_id: modelId,
@@ -382,7 +400,9 @@ export async function callLocalOllamaChat(
       endpoint,
       status: "error",
       blocked_reason: null,
-      error_message: redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000),
+      error_message: timedOut
+        ? `Local Ollama did not respond within ${chatTimeoutMs}ms.`
+        : redactSensitiveText(error instanceof Error ? error.message : String(error)).slice(0, 1000),
       output_text: "Local Ollama transport failed before Phantom AI received a model response.",
       provider_called: false,
       network_call_performed: true,
@@ -401,5 +421,7 @@ export async function callLocalOllamaChat(
       response_status: null,
       usage: emptyUsage(),
     };
+  } finally {
+    clearTimeout(timer);
   }
 }

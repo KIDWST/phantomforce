@@ -18,6 +18,10 @@
   still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
+- **ChicagoShots workspace isolation (2026-07-11)** — the live Business Manager
+  now requires both `phantomforce` and `chicagoshots` workspaces. Existing browser
+  state is migrated without reset; each workspace has its own brain, memory, and
+  asset namespace identifiers.
 - **UNIFICATION (2026-07-06)** — main's `app/` is now the merge of BOTH forks:
   Codex's `client-sim/trainer-visible-truth-20260629` admin app (Memory, Workers,
   Developer, compact hero, page-based nav, mobile shell — their 233-commit line)
@@ -44,7 +48,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260710-150`**.
+- Current cache-bust build id: **`phantom-live-20260711-167`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

@@ -4,32 +4,20 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { AccessSession } from "../access/session.js";
-import {
-  appendApprovalQueueTransition,
-  readApprovalQueueWithTransitions,
-} from "./approval-queue.js";
-import {
-  appendHermesLedgerRecord,
-  getHermesLedgerStatus,
-  redactSensitiveText,
-} from "./hermes-ledger.js";
+import { appendApprovalQueueTransition, readApprovalQueueWithTransitions } from "./approval-queue.js";
+import { appendHermesLedgerRecord, getHermesLedgerStatus, redactSensitiveText } from "./hermes-ledger.js";
 import type { ApprovalQueueTransitionStatus, HermesLedgerRecord } from "./types.js";
 
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
-const VACATION_MODE_PATH = resolve(repoRoot, ".phantom", "vacation-mode.json");
+const storePath = process.env.PHANTOMFORCE_VACATION_MODE_PATH || resolve(repoRoot, ".phantom", "vacation-mode.json");
 
-export type VacationModeMode = "off" | "draft_only" | "approval_required" | "limited_autopilot";
+export type VacationModeMode = "off" | "hands_off";
 export type VacationApprovalDecision = "approve" | "reject" | "snooze";
 export type VacationRiskLevel = "low" | "medium" | "high" | "urgent";
-export type VacationEventType =
-  | "observed"
-  | "drafted"
-  | "queued_approval"
-  | "completed"
-  | "blocked"
-  | "needs_setup"
-  | "notification_sent";
+export type VacationEventType = "observed" | "drafted" | "queued_approval" | "completed" | "blocked" | "needs_setup" | "notification_sent";
+export type OperatorTaskType = "phone_call" | "attend_meeting" | "lead_follow_up" | "booking_coordination" | "client_message" | "research" | "exception_triage" | "other";
+export type OperatorTaskStatus = "needs_setup" | "blocked" | "queued" | "assigned" | "in_progress" | "completed" | "canceled";
 
 export type VacationPermissions = {
   watchInbox: boolean;
@@ -46,16 +34,16 @@ export type VacationPermissions = {
   requireApprovalForAllOutbound: boolean;
 };
 
-type VacationOutOfOffice = {
+type OutOfOffice = {
   enabled: boolean;
   template: string;
   startDate: string | null;
   endDate: string | null;
-  behavior: "draft_only" | "queue_for_approval" | "send_automatically";
+  behavior: "draft_only" | "queue_for_approval";
   providerStatus: "not_connected" | "connected_needs_permission" | "ready" | "blocked_by_policy";
 };
 
-type VacationNotifications = {
+type NotificationPreferences = {
   inApp: boolean;
   emailSummary: boolean;
   urgentOnly: boolean;
@@ -63,10 +51,33 @@ type VacationNotifications = {
   realTimeActivityFeed: boolean;
 };
 
+type OperatorCoverage = {
+  enabled: boolean;
+  ownerInterruptionPolicy: "emergencies_only" | "daily_digest";
+  allowCalls: boolean;
+  allowMeetings: boolean;
+  allowLeadFollowUps: boolean;
+  allowBookingCoordination: boolean;
+  allowClientMessages: boolean;
+  dailyCreditLimit: number;
+  handoffNotes: string;
+  awayStart: string | null;
+  awayEnd: string | null;
+  timezone: string;
+};
+
+type OperatorWallet = {
+  included: number;
+  used: number;
+  reserved: number;
+  unit: "operator_credit";
+  separateFromAiCredits: true;
+};
+
 export type VacationActivity = {
   id: string;
   workspaceId: string;
-  actor: "Phantom AI" | "Hermes" | "Workflow" | "User";
+  actor: "Phantom AI" | "Hermes" | "Workflow" | "User" | "Human Operator";
   eventType: VacationEventType;
   riskLevel: VacationRiskLevel;
   message: string;
@@ -88,6 +99,21 @@ export type VacationApproval = {
   metadata?: Record<string, unknown>;
 };
 
+export type OperatorTask = {
+  id: string;
+  workspaceId: string;
+  type: OperatorTaskType;
+  title: string;
+  instructions: string;
+  status: OperatorTaskStatus;
+  creditCost: number;
+  scheduledFor: string | null;
+  assignedTo: string | null;
+  outcome: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type VacationWorkspaceState = {
   workspaceId: string;
   enabled: boolean;
@@ -95,19 +121,21 @@ type VacationWorkspaceState = {
   startedAt: string | null;
   endedAt: string | null;
   lastActivityAt: string | null;
+  lastCheckInAt: string | null;
+  nextCheckInAt: string | null;
   permissions: VacationPermissions;
-  outOfOffice: VacationOutOfOffice;
-  notificationPreferences: VacationNotifications;
+  outOfOffice: OutOfOffice;
+  notificationPreferences: NotificationPreferences;
+  operatorCoverage: OperatorCoverage;
+  operatorWallet: OperatorWallet;
+  operatorTasks: OperatorTask[];
   activity: VacationActivity[];
   approvals: VacationApproval[];
   createdAt: string;
   updatedAt: string;
 };
 
-type VacationStore = {
-  version: 1;
-  workspaces: Record<string, VacationWorkspaceState>;
-};
+type VacationStore = { version: 2; workspaces: Record<string, VacationWorkspaceState> };
 
 const DEFAULT_PERMISSIONS: VacationPermissions = {
   watchInbox: false,
@@ -120,21 +148,20 @@ const DEFAULT_PERMISSIONS: VacationPermissions = {
   generateContentDrafts: true,
   monitorUrgentItems: true,
   notifyImportantChanges: true,
-  allowLowRiskAutomations: false,
+  allowLowRiskAutomations: true,
   requireApprovalForAllOutbound: true,
 };
 
-const DEFAULT_OUT_OF_OFFICE: VacationOutOfOffice = {
+const DEFAULT_OUT_OF_OFFICE: OutOfOffice = {
   enabled: false,
-  template:
-    "Thanks for reaching out. I am away right now, but PhantomForce is watching for urgent items. I will review anything that needs my approval.",
+  template: "Thanks for reaching out. I am away, but my PhantomForce team is covering the business and will route anything urgent.",
   startDate: null,
   endDate: null,
-  behavior: "draft_only",
+  behavior: "queue_for_approval",
   providerStatus: "not_connected",
 };
 
-const DEFAULT_NOTIFICATIONS: VacationNotifications = {
+const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
   inApp: true,
   emailSummary: false,
   urgentOnly: true,
@@ -142,93 +169,49 @@ const DEFAULT_NOTIFICATIONS: VacationNotifications = {
   realTimeActivityFeed: true,
 };
 
+const DEFAULT_COVERAGE: OperatorCoverage = {
+  enabled: true,
+  ownerInterruptionPolicy: "emergencies_only",
+  allowCalls: true,
+  allowMeetings: true,
+  allowLeadFollowUps: true,
+  allowBookingCoordination: true,
+  allowClientMessages: true,
+  dailyCreditLimit: 10,
+  handoffNotes: "Keep the business moving. Handle routine work and only interrupt me for a true emergency.",
+  awayStart: null,
+  awayEnd: null,
+  timezone: "America/Chicago",
+};
+
+const TASK_COST: Record<OperatorTaskType, number> = {
+  phone_call: 2,
+  attend_meeting: 4,
+  lead_follow_up: 1,
+  booking_coordination: 1,
+  client_message: 1,
+  research: 1,
+  exception_triage: 1,
+  other: 2,
+};
+
 const RISK_ORDER: Record<VacationRiskLevel, number> = { urgent: 4, high: 3, medium: 2, low: 1 };
 
-function nowIso() {
-  return new Date().toISOString();
+const now = () => new Date().toISOString();
+const text = (value: unknown, max = 800) => redactSensitiveText(String(value ?? "")).trim().slice(0, max);
+const workspaceIdFor = (session: AccessSession) => session.clientId || session.id || "owner-admin";
+const businessNameFor = (session: AccessSession) => session.clientId === "client-chicagoshots" ? "ChicagoShots" : session.clientId || "PhantomForce";
+const defaultCredits = (session: AccessSession) => Number(session.canManageAccess ? process.env.PHANTOMFORCE_OWNER_OPERATOR_CREDITS || 100 : process.env.PHANTOMFORCE_DEFAULT_OPERATOR_CREDITS || 0);
+const humanStaffingReady = () => process.env.PHANTOMFORCE_HUMAN_OPERATOR_ENABLED === "true";
+const checkIntervalMs = () => Math.max(30_000, Number(process.env.PHANTOMFORCE_VACATION_CHECK_INTERVAL_MS || 300_000));
+
+function activity(workspaceId: string, input: Omit<VacationActivity, "id" | "workspaceId" | "createdAt">): VacationActivity {
+  return { id: `vac-act-${randomUUID()}`, workspaceId, createdAt: now(), ...input, message: text(input.message, 900), relatedEntity: input.relatedEntity ? text(input.relatedEntity, 180) : undefined };
 }
 
-function safeString(value: unknown, max = 600) {
-  return redactSensitiveText(String(value ?? "")).trim().slice(0, max);
-}
-
-function workspaceIdFor(session: AccessSession) {
-  return session.clientId || session.id || "owner-admin";
-}
-
-function businessNameFor(session: AccessSession) {
-  if (session.clientId === "client-chicagoshots") return "ChicagoShots";
-  if (session.clientId === "client-sports-demo") return "Test Client";
-  if (session.clientId) return session.clientId;
-  return "PhantomForce";
-}
-
-async function readStore(): Promise<VacationStore> {
-  try {
-    const raw = await readFile(VACATION_MODE_PATH, "utf8");
-    const parsed = JSON.parse(raw) as VacationStore;
-    return {
-      version: 1,
-      workspaces: parsed?.workspaces && typeof parsed.workspaces === "object" ? parsed.workspaces : {},
-    };
-  } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, workspaces: {} };
-    throw error;
-  }
-}
-
-async function writeStore(store: VacationStore) {
-  await mkdir(dirname(VACATION_MODE_PATH), { recursive: true });
-  await writeFile(VACATION_MODE_PATH, JSON.stringify(store, null, 2), "utf8");
-}
-
-function createActivity(
-  workspaceId: string,
-  input: Omit<VacationActivity, "id" | "workspaceId" | "createdAt">,
-): VacationActivity {
-  return {
-    id: `vac-act-${randomUUID()}`,
-    workspaceId,
-    createdAt: nowIso(),
-    ...input,
-    message: safeString(input.message, 900),
-    relatedEntity: input.relatedEntity ? safeString(input.relatedEntity, 180) : undefined,
-  };
-}
-
-function seedApprovals(workspaceId: string): VacationApproval[] {
-  const ts = nowIso();
-  return [
-    {
-      id: `vac-appr-${randomUUID()}`,
-      workspaceId,
-      title: "Client asked for same-day booking",
-      source: "Vacation Mode local approval fallback",
-      riskLevel: "urgent",
-      suggestedAction: "Review the drafted response before anything is sent.",
-      reason: "Same-day booking changes can affect schedule, pricing, and client expectations.",
-      status: "pending",
-      timestamp: ts,
-      metadata: { fallback: true, external_send_allowed: false },
-    },
-    {
-      id: `vac-appr-${randomUUID()}`,
-      workspaceId,
-      title: "Lead follow-up drafted",
-      source: "Vacation Mode local approval fallback",
-      riskLevel: "medium",
-      suggestedAction: "Approve, edit, or reject the follow-up draft.",
-      reason: "Outbound messages remain gated until a real sender and approval flow are configured.",
-      status: "pending",
-      timestamp: ts,
-      metadata: { fallback: true, external_send_allowed: false },
-    },
-  ];
-}
-
-function createWorkspaceState(session: AccessSession): VacationWorkspaceState {
+function freshState(session: AccessSession): VacationWorkspaceState {
+  const createdAt = now();
   const workspaceId = workspaceIdFor(session);
-  const createdAt = nowIso();
   return {
     workspaceId,
     enabled: false,
@@ -236,89 +219,74 @@ function createWorkspaceState(session: AccessSession): VacationWorkspaceState {
     startedAt: null,
     endedAt: null,
     lastActivityAt: createdAt,
+    lastCheckInAt: null,
+    nextCheckInAt: null,
     permissions: { ...DEFAULT_PERMISSIONS },
     outOfOffice: { ...DEFAULT_OUT_OF_OFFICE },
     notificationPreferences: { ...DEFAULT_NOTIFICATIONS },
-    activity: [
-      createActivity(workspaceId, {
-        actor: "Hermes",
-        eventType: "observed",
-        riskLevel: "low",
-        message: "Vacation Mode workspace initialized. No external actions are enabled.",
-        relatedEntity: "Vacation Mode",
-      }),
-      createActivity(workspaceId, {
-        actor: "Workflow",
-        eventType: "needs_setup",
-        riskLevel: "medium",
-        message: "Email auto-reply is not connected. Phantom can draft replies, but cannot send automatically.",
-        relatedEntity: "Out-of-office auto reply",
-      }),
-    ],
-    approvals: seedApprovals(workspaceId),
+    operatorCoverage: { ...DEFAULT_COVERAGE },
+    operatorWallet: { included: Math.max(0, defaultCredits(session)), used: 0, reserved: 0, unit: "operator_credit", separateFromAiCredits: true },
+    operatorTasks: [],
+    activity: [activity(workspaceId, { actor: "Hermes", eventType: "observed", riskLevel: "low", message: "Away coverage is ready. No work has been invented or started.", relatedEntity: "Away Mode" })],
+    approvals: [],
     createdAt,
     updatedAt: createdAt,
   };
 }
 
-async function getWorkspaceState(session: AccessSession) {
-  const store = await readStore();
-  const workspaceId = workspaceIdFor(session);
-  if (!store.workspaces[workspaceId]) {
-    store.workspaces[workspaceId] = createWorkspaceState(session);
-    await writeStore(store);
-  }
-  return { store, state: store.workspaces[workspaceId] };
-}
-
-function normalizeMode(value: unknown): VacationModeMode {
-  if (value === "draft_only" || value === "approval_required" || value === "limited_autopilot") return value;
-  return "approval_required";
-}
-
-function normalizePermissions(value: unknown, previous: VacationPermissions): VacationPermissions {
-  const input = value && typeof value === "object" ? (value as Partial<Record<keyof VacationPermissions, unknown>>) : {};
-  const next = { ...previous };
-  for (const key of Object.keys(next) as Array<keyof VacationPermissions>) {
-    if (typeof input[key] === "boolean") next[key] = input[key];
-  }
-
-  if (next.scheduleSocialPosts || next.autoReplyToNewMessages || !next.sendEmailOnlyAfterApproval) {
-    next.requireApprovalForAllOutbound = true;
-    next.sendEmailOnlyAfterApproval = true;
-  }
-
-  return next;
-}
-
-function normalizeOutOfOffice(value: unknown, previous: VacationOutOfOffice): VacationOutOfOffice {
-  const input = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-  const behavior =
-    input.behavior === "queue_for_approval" || input.behavior === "send_automatically" || input.behavior === "draft_only"
-      ? input.behavior
-      : previous.behavior;
+function migrateState(raw: Record<string, unknown>, session: AccessSession): VacationWorkspaceState {
+  const base = freshState(session);
+  const enabled = raw.enabled === true;
+  const oldApprovals = Array.isArray(raw.approvals) ? raw.approvals as VacationApproval[] : [];
+  const oldActivity = Array.isArray(raw.activity) ? raw.activity as VacationActivity[] : base.activity;
   return {
-    ...previous,
-    enabled: typeof input.enabled === "boolean" ? input.enabled : previous.enabled,
-    template: typeof input.template === "string" ? safeString(input.template, 1600) : previous.template,
-    startDate: typeof input.startDate === "string" && input.startDate ? safeString(input.startDate, 40) : null,
-    endDate: typeof input.endDate === "string" && input.endDate ? safeString(input.endDate, 40) : null,
-    behavior: behavior === "send_automatically" ? "queue_for_approval" : behavior,
-    providerStatus: "not_connected",
-  };
+    ...base,
+    ...raw,
+    enabled,
+    mode: enabled ? "hands_off" : "off",
+    permissions: { ...base.permissions, ...(raw.permissions as Partial<VacationPermissions> || {}) },
+    outOfOffice: { ...base.outOfOffice, ...(raw.outOfOffice as Partial<OutOfOffice> || {}) },
+    notificationPreferences: { ...base.notificationPreferences, ...(raw.notificationPreferences as Partial<NotificationPreferences> || {}) },
+    operatorCoverage: { ...base.operatorCoverage, ...(raw.operatorCoverage as Partial<OperatorCoverage> || {}) },
+    operatorWallet: { ...base.operatorWallet, ...(raw.operatorWallet as Partial<OperatorWallet> || {}), unit: "operator_credit", separateFromAiCredits: true },
+    operatorTasks: Array.isArray(raw.operatorTasks) ? raw.operatorTasks as OperatorTask[] : [],
+    activity: oldActivity,
+    approvals: oldApprovals.filter((item) => item?.metadata?.fallback !== true),
+  } as VacationWorkspaceState;
 }
 
-function normalizeNotifications(value: unknown, previous: VacationNotifications): VacationNotifications {
-  const input = value && typeof value === "object" ? (value as Partial<Record<keyof VacationNotifications, unknown>>) : {};
-  const next = { ...previous };
-  for (const key of Object.keys(next) as Array<keyof VacationNotifications>) {
-    if (typeof input[key] === "boolean") next[key] = input[key];
+async function readStore(): Promise<VacationStore> {
+  try {
+    const parsed = JSON.parse(await readFile(storePath, "utf8")) as { workspaces?: Record<string, Record<string, unknown>> };
+    return { version: 2, workspaces: parsed.workspaces as Record<string, VacationWorkspaceState> || {} };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 2, workspaces: {} };
+    throw error;
   }
-  next.inApp = true;
-  return next;
 }
 
-async function recordLedger(session: AccessSession, state: VacationWorkspaceState, event: VacationActivity) {
+async function writeStore(store: VacationStore) {
+  await mkdir(dirname(storePath), { recursive: true });
+  await writeFile(storePath, JSON.stringify(store, null, 2), "utf8");
+}
+
+async function getState(session: AccessSession) {
+  const store = await readStore();
+  const id = workspaceIdFor(session);
+  const state = store.workspaces[id] ? migrateState(store.workspaces[id] as unknown as Record<string, unknown>, session) : freshState(session);
+  store.workspaces[id] = state;
+  await writeStore(store);
+  return { store, state };
+}
+
+function pushActivity(state: VacationWorkspaceState, event: VacationActivity) {
+  state.activity.unshift(event);
+  state.activity = state.activity.slice(0, 120);
+  state.lastActivityAt = event.createdAt;
+  state.updatedAt = event.createdAt;
+}
+
+async function ledger(session: AccessSession, state: VacationWorkspaceState, event: VacationActivity) {
   const record: HermesLedgerRecord = {
     timestamp: event.createdAt,
     tenant_id: state.workspaceId,
@@ -329,302 +297,293 @@ async function recordLedger(session: AccessSession, state: VacationWorkspaceStat
     task_type: `vacation_mode.${event.eventType}`,
     sensitivity_level: event.riskLevel === "urgent" || event.riskLevel === "high" ? "medium" : "low",
     provider_route: "router",
-    model_id: "phantomforce-vacation-mode",
+    model_id: "phantomforce-away-coverage",
     context_chars: event.message.length,
     estimated_tokens: 0,
     estimated_cost_usd: null,
-    user_request_summary: "Vacation Mode state change or activity.",
+    user_request_summary: "Away coverage activity.",
     result_summary: event.message,
     approval_required: event.riskLevel === "urgent" || event.riskLevel === "high",
     approval_status: event.riskLevel === "urgent" || event.riskLevel === "high" ? "pending" : "not_required",
-    risks: ["No external send/post/provider action was executed by this route."],
-    next_action: state.enabled ? "Monitor activity and review urgent approvals." : "Vacation Mode is off.",
+    risks: ["No external action was executed by this status route."],
+    next_action: state.enabled ? "Continue coverage and surface emergencies only." : "Away Mode is off.",
     agent_run_id: event.id,
   };
+  try { await appendHermesLedgerRecord(record); return true; } catch { return false; }
+}
 
-  try {
-    await appendHermesLedgerRecord(record);
-    return true;
-  } catch {
-    return false;
+function normalizeCoverage(value: unknown, previous: OperatorCoverage): OperatorCoverage {
+  const input = value && typeof value === "object" ? value as Record<string, unknown> : {};
+  const bool = (key: keyof OperatorCoverage) => typeof input[key] === "boolean" ? input[key] as boolean : previous[key] as boolean;
+  return {
+    enabled: true,
+    ownerInterruptionPolicy: input.ownerInterruptionPolicy === "daily_digest" ? "daily_digest" : "emergencies_only",
+    allowCalls: bool("allowCalls"),
+    allowMeetings: bool("allowMeetings"),
+    allowLeadFollowUps: bool("allowLeadFollowUps"),
+    allowBookingCoordination: bool("allowBookingCoordination"),
+    allowClientMessages: bool("allowClientMessages"),
+    dailyCreditLimit: Math.min(100, Math.max(0, Number(input.dailyCreditLimit ?? previous.dailyCreditLimit) || 0)),
+    handoffNotes: typeof input.handoffNotes === "string" ? text(input.handoffNotes, 1600) : previous.handoffNotes,
+    awayStart: typeof input.awayStart === "string" && input.awayStart ? text(input.awayStart, 50) : null,
+    awayEnd: typeof input.awayEnd === "string" && input.awayEnd ? text(input.awayEnd, 50) : null,
+    timezone: typeof input.timezone === "string" && input.timezone ? text(input.timezone, 80) : previous.timezone,
+  };
+}
+
+function normalizePermissions(value: unknown, previous: VacationPermissions): VacationPermissions {
+  const input = value && typeof value === "object" ? value as Partial<Record<keyof VacationPermissions, unknown>> : {};
+  const next = { ...previous };
+  for (const key of Object.keys(next) as Array<keyof VacationPermissions>) if (typeof input[key] === "boolean") next[key] = input[key] as boolean;
+  next.requireApprovalForAllOutbound = true;
+  next.sendEmailOnlyAfterApproval = true;
+  return next;
+}
+
+function normalizeSettings(state: VacationWorkspaceState, body: unknown) {
+  const input = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  state.operatorCoverage = normalizeCoverage(input.operatorCoverage, state.operatorCoverage);
+  state.permissions = normalizePermissions(input.permissions, state.permissions);
+  if (input.outOfOffice && typeof input.outOfOffice === "object") {
+    const ooo = input.outOfOffice as Record<string, unknown>;
+    state.outOfOffice = { ...state.outOfOffice, enabled: typeof ooo.enabled === "boolean" ? ooo.enabled : state.outOfOffice.enabled, template: typeof ooo.template === "string" ? text(ooo.template, 1600) : state.outOfOffice.template, startDate: typeof ooo.startDate === "string" && ooo.startDate ? text(ooo.startDate, 50) : null, endDate: typeof ooo.endDate === "string" && ooo.endDate ? text(ooo.endDate, 50) : null, behavior: "queue_for_approval", providerStatus: "not_connected" };
   }
 }
 
-function pushActivity(state: VacationWorkspaceState, activity: VacationActivity) {
-  state.activity.unshift(activity);
-  state.activity = state.activity.slice(0, 80);
-  state.lastActivityAt = activity.createdAt;
-  state.updatedAt = activity.createdAt;
-}
-
-async function readinessFor(state: VacationWorkspaceState, session: AccessSession) {
-  const ledger = await getHermesLedgerStatus().catch(() => ({ enabled: false, exists: false, bytes: 0 }));
+async function readiness(state: VacationWorkspaceState, session: AccessSession) {
+  const proof = await getHermesLedgerStatus().catch(() => ({ enabled: false, exists: false }));
+  const available = state.operatorWallet.included - state.operatorWallet.used - state.operatorWallet.reserved;
   return [
-    {
-      id: "owner-auth",
-      label: "Owner/admin authenticated",
-      status: session.canManageAccess ? "ready" : "needs_setup",
-      detail: session.canManageAccess ? "Owner control verified." : "Admin owner session required.",
-    },
-    {
-      id: "hermes-ledger",
-      label: "Hermes memory/proof ledger reachable",
-      status: ledger.enabled ? "ready" : "needs_setup",
-      detail: ledger.enabled ? (ledger.exists ? "Proof ledger is reachable." : "Ledger path ready; first write will create it.") : "Hermes ledger unavailable.",
-    },
-    {
-      id: "approval-queue",
-      label: "Approval queue reachable",
-      status: "ready",
-      detail: "Vacation approvals are stored locally and existing approval queue records are surfaced.",
-    },
-    {
-      id: "notifications",
-      label: "Notification channel configured",
-      status: "in_app_only",
-      detail: "In-app activity feed is ready. Email/push delivery is not connected.",
-    },
-    {
-      id: "email",
-      label: "Email integration configured",
-      status: "not_connected",
-      detail: "Email sending and auto-replies are blocked until a provider is connected and approved.",
-    },
-    {
-      id: "ooo-template",
-      label: "Out-of-office template configured",
-      status: state.outOfOffice.template ? "ready" : "needs_setup",
-      detail: state.outOfOffice.template ? "Template saved." : "Add the reply text before use.",
-    },
-    {
-      id: "calendar",
-      label: "Calendar access configured",
-      status: "not_connected",
-      detail: "Calendar writes are not connected in this Vacation Mode pass.",
-    },
-    {
-      id: "crm",
-      label: "CRM/task workspace configured",
-      status: "ready",
-      detail: "Internal task/CRM updates can be drafted or updated locally.",
-    },
-    {
-      id: "kill-switch",
-      label: "Kill switch available",
-      status: "ready",
-      detail: "Turn off Vacation Mode stops autonomous work immediately.",
-    },
+    { id: "workspace", label: "Private workspace", status: "ready", detail: session.canManageAccess ? "Owner workspace verified." : "Client workspace verified and isolated." },
+    { id: "coverage", label: "Digital coverage engine", status: "ready", detail: "Check-ins, drafts, safe internal work, exception routing, and proof are available." },
+    { id: "operator-queue", label: "Human operator desk", status: humanStaffingReady() ? "ready" : "needs_setup", detail: humanStaffingReady() ? "Human operator staffing is connected." : "Requests can be queued; a staffed operator service still needs to be connected." },
+    { id: "credits", label: "Operator Credits", status: available > 0 ? "ready" : "needs_setup", detail: available > 0 ? `${available} human-work credits available, separate from AI credits.` : "Add Operator Credits before requesting human work." },
+    { id: "proof", label: "Proof log", status: proof.enabled ? "ready" : "needs_setup", detail: proof.enabled ? "Coverage receipts are available." : "Proof ledger needs setup." },
+    { id: "email", label: "Email connector", status: "not_connected", detail: "Email can be planned and drafted, but a sender connector is not active here." },
+    { id: "calendar", label: "Calendar connector", status: "not_connected", detail: "Meeting requests can be queued; calendar writes need a connector." },
+    { id: "kill-switch", label: "Instant stop", status: "ready", detail: "Turn off Away Mode stops new autonomous coverage immediately." },
   ];
 }
 
-function metricsFor(state: VacationWorkspaceState) {
-  const events = state.activity;
+function metrics(state: VacationWorkspaceState) {
   return {
-    itemsObserved: events.filter((event) => event.eventType === "observed").length,
-    draftsCreated: events.filter((event) => event.eventType === "drafted").length,
-    approvalsPending: state.approvals.filter((approval) => approval.status === "pending").length,
-    automationsCompleted: events.filter((event) => event.eventType === "completed").length,
-    blockedActions: events.filter((event) => event.eventType === "blocked" || event.eventType === "needs_setup").length,
-    lastCheckIn: state.lastActivityAt,
+    itemsObserved: state.activity.filter((e) => e.eventType === "observed").length,
+    draftsCreated: state.activity.filter((e) => e.eventType === "drafted").length,
+    approvalsPending: state.approvals.filter((a) => a.status === "pending").length,
+    automationsCompleted: state.activity.filter((e) => e.eventType === "completed").length,
+    blockedActions: state.activity.filter((e) => e.eventType === "blocked" || e.eventType === "needs_setup").length,
+    operatorTasksOpen: state.operatorTasks.filter((task) => ["queued", "assigned", "in_progress", "needs_setup"].includes(task.status)).length,
+    lastCheckIn: state.lastCheckInAt,
   };
 }
 
-async function existingApprovalQueueRecords(workspaceId: string) {
-  const queue = await readApprovalQueueWithTransitions({ limit: 20 }).catch(() => ({ records: [] }));
+async function queueApprovals(workspaceId: string) {
+  const queue = await readApprovalQueueWithTransitions({ limit: 30 }).catch(() => ({ records: [] }));
   return queue.records
-    .filter((record) => record.queue_status === "pending")
-    .map((record) => {
-      const riskLevel: VacationRiskLevel =
-        record.approval.risk_level === "critical"
-          ? "urgent"
-          : record.approval.risk_level === "high"
-            ? "high"
-            : record.approval.risk_level === "medium"
-              ? "medium"
-              : "low";
-      return {
-        id: record.queue_id,
-        workspaceId,
-        title: record.approval.summary || record.approval.action_type || "Approval needed",
-        source: "Existing approval queue",
-        riskLevel,
-        suggestedAction: "Review this before anything leaves the system.",
-        reason: record.approval.approval_reason || "This action requires owner review.",
-        status: "pending" as const,
-        timestamp: record.queued_at,
-        metadata: { queue_id: record.queue_id, source: "hermes_approval_queue", execution_disabled: true },
-      };
-    });
+    .filter((record) => record.queue_status === "pending" && record.approval.tenant_context.tenant_id === workspaceId)
+    .map((record) => ({
+    id: record.queue_id,
+    workspaceId,
+    title: record.approval.summary || record.approval.action_type || "Owner decision needed",
+    source: "Approval queue",
+    riskLevel: (record.approval.risk_level === "critical" ? "urgent" : record.approval.risk_level || "low") as VacationRiskLevel,
+    suggestedAction: "Review only if this cannot safely wait for your return.",
+    reason: record.approval.approval_reason || "This action exceeds the active coverage boundary.",
+    status: "pending" as const,
+    timestamp: record.queued_at,
+    metadata: { queue_id: record.queue_id, execution_disabled: true },
+    }));
 }
 
 export async function getVacationModeStatus(session: AccessSession) {
-  const { state } = await getWorkspaceState(session);
-  const readiness = await readinessFor(state, session);
+  const { state } = await getState(session);
+  const available = Math.max(0, state.operatorWallet.included - state.operatorWallet.used - state.operatorWallet.reserved);
   return {
     enabled: state.enabled,
-    mode: state.enabled ? state.mode : "off",
+    mode: state.enabled ? "hands_off" : "off",
     startedAt: state.startedAt,
     endedAt: state.endedAt,
     lastActivityAt: state.lastActivityAt,
+    lastCheckInAt: state.lastCheckInAt,
+    nextCheckInAt: state.nextCheckInAt,
     permissions: state.permissions,
     outOfOffice: state.outOfOffice,
     notificationPreferences: state.notificationPreferences,
-    readiness,
-    metrics: metricsFor(state),
-    safety: {
-      external_send_performed: false,
-      provider_call_performed: false,
-      approval_required_for_outbound: true,
-      destructive_actions_allowed: false,
-    },
+    operatorCoverage: state.operatorCoverage,
+    operatorWallet: { ...state.operatorWallet, available, costs: TASK_COST },
+    readiness: await readiness(state, session),
+    metrics: metrics(state),
+    operatorQueueReady: true,
+    humanStaffingReady: humanStaffingReady(),
+    safety: { external_send_performed: false, provider_call_performed: false, high_risk_owner_exception: true, operator_credits_separate_from_ai: true },
   };
 }
 
 export async function activateVacationMode(session: AccessSession, body: unknown) {
-  const { store, state } = await getWorkspaceState(session);
-  const input = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-  let mode = normalizeMode(input.mode);
-  const permissions = normalizePermissions(input.permissions, state.permissions);
-
-  if (mode === "limited_autopilot" && !permissions.requireApprovalForAllOutbound) {
-    mode = "approval_required";
-  }
-
+  const { store, state } = await getState(session);
+  normalizeSettings(state, body);
   state.enabled = true;
-  state.mode = mode;
-  state.permissions = permissions;
-  state.outOfOffice = normalizeOutOfOffice(input.outOfOffice, state.outOfOffice);
-  state.notificationPreferences = normalizeNotifications(input.notificationPreferences, state.notificationPreferences);
-  state.startedAt = nowIso();
+  state.mode = "hands_off";
+  state.operatorCoverage.enabled = true;
+  state.startedAt = now();
   state.endedAt = null;
-  const activity = createActivity(state.workspaceId, {
-    actor: "User",
-    eventType: "completed",
-    riskLevel: mode === "limited_autopilot" ? "medium" : "low",
-    message:
-      mode === "limited_autopilot"
-        ? "Vacation Mode activated with limited autopilot. Outbound actions still require approval."
-        : "Vacation Mode activated. Phantom will observe, draft, update safe work, and queue approvals.",
-    relatedEntity: "Vacation Mode",
-  });
-  pushActivity(state, activity);
+  state.nextCheckInAt = new Date(Date.now() + checkIntervalMs()).toISOString();
+  const event = activity(state.workspaceId, { actor: "User", eventType: "completed", riskLevel: "low", message: "Away Mode is on. Phantom handles approved digital work, the operator desk handles queued human work, and only true exceptions interrupt the owner.", relatedEntity: "Away Mode" });
+  pushActivity(state, event);
   await writeStore(store);
-  const ledgerWritten = await recordLedger(session, state, activity);
-  return { status: await getVacationModeStatus(session), activity, ledgerWritten };
+  const ledgerWritten = await ledger(session, state, event);
+  return { status: await getVacationModeStatus(session), activity: event, ledgerWritten };
 }
 
 export async function deactivateVacationMode(session: AccessSession) {
-  const { store, state } = await getWorkspaceState(session);
+  const { store, state } = await getState(session);
   state.enabled = false;
   state.mode = "off";
-  state.endedAt = nowIso();
-  const activity = createActivity(state.workspaceId, {
-    actor: "User",
-    eventType: "blocked",
-    riskLevel: "low",
-    message: "Vacation Mode turned off. Autonomous work stopped immediately.",
-    relatedEntity: "Kill switch",
-  });
-  pushActivity(state, activity);
+  state.endedAt = now();
+  state.nextCheckInAt = null;
+  const event = activity(state.workspaceId, { actor: "User", eventType: "blocked", riskLevel: "low", message: "Away Mode stopped. No new coverage work will start.", relatedEntity: "Instant stop" });
+  pushActivity(state, event);
   await writeStore(store);
-  const ledgerWritten = await recordLedger(session, state, activity);
-  return { status: await getVacationModeStatus(session), activity, ledgerWritten };
+  const ledgerWritten = await ledger(session, state, event);
+  return { status: await getVacationModeStatus(session), activity: event, ledgerWritten };
 }
 
 export async function updateVacationModeSettings(session: AccessSession, body: unknown) {
-  const { store, state } = await getWorkspaceState(session);
-  const input = body && typeof body === "object" ? (body as Record<string, unknown>) : {};
-  state.permissions = normalizePermissions(input.permissions, state.permissions);
-  state.outOfOffice = normalizeOutOfOffice(input.outOfOffice, state.outOfOffice);
-  state.notificationPreferences = normalizeNotifications(input.notificationPreferences, state.notificationPreferences);
-  const activity = createActivity(state.workspaceId, {
-    actor: "User",
-    eventType: "completed",
-    riskLevel: "low",
-    message: "Vacation Mode settings saved. External sends and provider actions remain gated.",
-    relatedEntity: "Vacation Mode settings",
-  });
-  pushActivity(state, activity);
+  const { store, state } = await getState(session);
+  normalizeSettings(state, body);
+  const event = activity(state.workspaceId, { actor: "User", eventType: "completed", riskLevel: "low", message: "Away coverage plan updated.", relatedEntity: "Coverage plan" });
+  pushActivity(state, event);
   await writeStore(store);
-  const ledgerWritten = await recordLedger(session, state, activity);
-  return { status: await getVacationModeStatus(session), activity, ledgerWritten };
+  const ledgerWritten = await ledger(session, state, event);
+  return { status: await getVacationModeStatus(session), activity: event, ledgerWritten };
 }
 
-export async function getVacationModeActivity(session: AccessSession, limit = 30) {
-  const { state } = await getWorkspaceState(session);
-  const cleanLimit = Number.isFinite(limit) ? Math.min(Math.max(Math.floor(limit), 1), 80) : 30;
-  return state.activity.slice(0, cleanLimit);
+export async function getVacationModeActivity(session: AccessSession, limit = 40) {
+  const { state } = await getState(session);
+  return state.activity.slice(0, Math.min(100, Math.max(1, limit)));
 }
 
 export async function getVacationModeApprovals(session: AccessSession, limit = 30) {
-  const { state } = await getWorkspaceState(session);
-  const existing = await existingApprovalQueueRecords(state.workspaceId);
-  return [...state.approvals, ...existing]
-    .filter((approval) => approval.status === "pending")
-    .sort((a, b) => {
-      const risk = RISK_ORDER[b.riskLevel] - RISK_ORDER[a.riskLevel];
-      return risk || new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
-    })
-    .slice(0, Math.min(Math.max(Math.floor(limit), 1), 50));
+  const { state } = await getState(session);
+  const all = [...state.approvals, ...await queueApprovals(state.workspaceId)].filter((item) => item.status === "pending");
+  const visible = state.enabled ? all.filter((item) => item.riskLevel === "urgent" || item.riskLevel === "high") : all;
+  return visible.sort((a, b) => RISK_ORDER[b.riskLevel] - RISK_ORDER[a.riskLevel] || Date.parse(b.timestamp) - Date.parse(a.timestamp)).slice(0, Math.min(50, Math.max(1, limit)));
 }
 
-export async function decideVacationApproval(
-  session: AccessSession,
-  approvalId: string,
-  decision: VacationApprovalDecision,
-  note?: string,
-) {
-  const { store, state } = await getWorkspaceState(session);
-  const safeNote = safeString(note || "", 500);
-  const local = state.approvals.find((approval) => approval.id === approvalId);
+export async function getVacationOperatorTasks(session: AccessSession, limit = 50) {
+  const { state } = await getState(session);
+  return state.operatorTasks.slice().sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt)).slice(0, Math.min(100, Math.max(1, limit)));
+}
 
+export async function createVacationOperatorTask(session: AccessSession, body: unknown) {
+  const { store, state } = await getState(session);
+  const input = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const type = typeof input.type === "string" && Object.prototype.hasOwnProperty.call(TASK_COST, input.type)
+    ? input.type as OperatorTaskType
+    : "other";
+  const title = text(input.title, 180);
+  if (!title) throw new Error("Operator task title is required.");
+  const creditCost = TASK_COST[type];
+  const available = state.operatorWallet.included - state.operatorWallet.used - state.operatorWallet.reserved;
+  const status: OperatorTaskStatus = available < creditCost ? "blocked" : humanStaffingReady() ? "queued" : "needs_setup";
+  const timestamp = now();
+  const task: OperatorTask = { id: `vac-op-${randomUUID()}`, workspaceId: state.workspaceId, type, title, instructions: text(input.instructions, 1800), status, creditCost, scheduledFor: typeof input.scheduledFor === "string" && input.scheduledFor ? text(input.scheduledFor, 60) : null, assignedTo: null, outcome: null, createdAt: timestamp, updatedAt: timestamp };
+  if (status !== "blocked") state.operatorWallet.reserved += creditCost;
+  state.operatorTasks.unshift(task);
+  const message = status === "queued" ? `Queued human operator work: ${title}.` : status === "needs_setup" ? `Saved operator request: ${title}. Human staffing must be connected before assignment.` : `Blocked operator request: ${title}. Not enough Operator Credits.`;
+  const event = activity(state.workspaceId, { actor: "Workflow", eventType: status === "blocked" ? "blocked" : status === "needs_setup" ? "needs_setup" : "queued_approval", riskLevel: status === "blocked" ? "medium" : "low", message, relatedEntity: title, metadata: { operatorTaskId: task.id, operatorCredits: creditCost } });
+  pushActivity(state, event);
+  await writeStore(store);
+  await ledger(session, state, event);
+  return { task, wallet: (await getVacationModeStatus(session)).operatorWallet };
+}
+
+export async function cancelVacationOperatorTask(session: AccessSession, id: string) {
+  const { store, state } = await getState(session);
+  const task = state.operatorTasks.find((item) => item.id === id);
+  if (!task) return null;
+  if (["queued", "assigned", "in_progress", "needs_setup"].includes(task.status)) state.operatorWallet.reserved = Math.max(0, state.operatorWallet.reserved - task.creditCost);
+  task.status = "canceled";
+  task.updatedAt = now();
+  const event = activity(state.workspaceId, { actor: "User", eventType: "blocked", riskLevel: "low", message: `Canceled operator request: ${task.title}. Reserved credits were released.`, relatedEntity: task.title });
+  pushActivity(state, event);
+  await writeStore(store);
+  await ledger(session, state, event);
+  return task;
+}
+
+export async function updateVacationOperatorTask(session: AccessSession, id: string, body: unknown) {
+  const { store, state } = await getState(session);
+  const task = state.operatorTasks.find((item) => item.id === id);
+  if (!task) return null;
+  const input = body && typeof body === "object" ? body as Record<string, unknown> : {};
+  const status = input.status as OperatorTaskStatus;
+  if (!["assigned", "in_progress", "completed", "blocked"].includes(status)) throw new Error("Unsupported operator task status.");
+  const wasOpen = ["queued", "assigned", "in_progress", "needs_setup"].includes(task.status);
+  if (status === "completed" && wasOpen) {
+    state.operatorWallet.reserved = Math.max(0, state.operatorWallet.reserved - task.creditCost);
+    state.operatorWallet.used += task.creditCost;
+  } else if (status === "blocked" && wasOpen) state.operatorWallet.reserved = Math.max(0, state.operatorWallet.reserved - task.creditCost);
+  task.status = status;
+  task.assignedTo = typeof input.assignedTo === "string" ? text(input.assignedTo, 120) : task.assignedTo;
+  task.outcome = typeof input.outcome === "string" ? text(input.outcome, 1600) : task.outcome;
+  task.updatedAt = now();
+  const event = activity(state.workspaceId, { actor: "Human Operator", eventType: status === "completed" ? "completed" : status === "blocked" ? "blocked" : "observed", riskLevel: "low", message: `Operator request ${status.replaceAll("_", " ")}: ${task.title}.`, relatedEntity: task.title });
+  pushActivity(state, event);
+  await writeStore(store);
+  await ledger(session, state, event);
+  return task;
+}
+
+export async function decideVacationApproval(session: AccessSession, approvalId: string, decision: VacationApprovalDecision, note?: string) {
+  const { store, state } = await getState(session);
+  const local = state.approvals.find((item) => item.id === approvalId);
   if (local) {
     local.status = decision === "approve" ? "approved" : decision === "reject" ? "rejected" : "snoozed";
-    local.metadata = { ...(local.metadata || {}), last_note: safeNote, execution_disabled: true };
-    const activity = createActivity(state.workspaceId, {
-      actor: "User",
-      eventType: decision === "approve" ? "queued_approval" : decision === "reject" ? "blocked" : "observed",
-      riskLevel: local.riskLevel,
-      message:
-        decision === "approve"
-          ? `Reviewed approval: ${local.title}. It is marked approved for operator follow-up; no external action was executed.`
-          : decision === "reject"
-            ? `Rejected approval: ${local.title}. No external action was executed.`
-            : `Snoozed approval: ${local.title}. It remains paused.`,
-      relatedEntity: local.title,
-    });
-    pushActivity(state, activity);
+    local.metadata = { ...(local.metadata || {}), note: text(note, 500), execution_disabled: true };
     await writeStore(store);
-    const ledgerWritten = await recordLedger(session, state, activity);
-    return { approval: local, activity, ledgerWritten, execution_disabled: true };
+    return { approval: local, execution_disabled: true };
   }
-
-  const statusMap: Record<VacationApprovalDecision, ApprovalQueueTransitionStatus> = {
-    approve: "reviewed",
-    reject: "dismissed",
-    snooze: "needs_changes",
-  };
-  const transition = await appendApprovalQueueTransition({
-    queueId: approvalId,
-    toStatus: statusMap[decision],
-    requestedBy: {
-      actor_user_id: session.id,
-      actor_role: session.canManageAccess ? "platform_admin" : "business_owner",
-    },
-    note: safeNote || `Vacation Mode ${decision}. Execution remains disabled.`,
-  });
-
-  if (!transition) return null;
-
-  const activity = createActivity(state.workspaceId, {
-    actor: "User",
-    eventType: "queued_approval",
-    riskLevel: "medium",
-    message: `Recorded approval queue decision "${decision}" for ${approvalId}. No external action was executed.`,
-    relatedEntity: approvalId,
-  });
-  pushActivity(state, activity);
-  await writeStore(store);
-  const ledgerWritten = await recordLedger(session, state, activity);
-  return { transition, activity, ledgerWritten, execution_disabled: true };
+  const statusMap: Record<VacationApprovalDecision, ApprovalQueueTransitionStatus> = { approve: "reviewed", reject: "dismissed", snooze: "needs_changes" };
+  const transition = await appendApprovalQueueTransition({ queueId: approvalId, toStatus: statusMap[decision], requestedBy: { actor_user_id: session.id, actor_role: session.canManageAccess ? "platform_admin" : "business_owner" }, note: text(note || `Away Mode ${decision}. No automatic execution.`, 500) });
+  return transition ? { transition, execution_disabled: true } : null;
 }
+
+export async function runVacationModeCheckIn(reason = "scheduled") {
+  const store = await readStore();
+  const timestamp = now();
+  let checked = 0;
+  let active = 0;
+  for (const state of Object.values(store.workspaces)) {
+    checked += 1;
+    if (!state.enabled) continue;
+    active += 1;
+    if (state.operatorCoverage.awayEnd && Date.parse(state.operatorCoverage.awayEnd) <= Date.now()) {
+      state.enabled = false;
+      state.mode = "off";
+      state.endedAt = timestamp;
+      state.nextCheckInAt = null;
+      pushActivity(state, activity(state.workspaceId, { actor: "Workflow", eventType: "completed", riskLevel: "low", message: "Away Mode ended at the planned return time.", relatedEntity: "Coverage schedule" }));
+      continue;
+    }
+    const pending = await queueApprovals(state.workspaceId);
+    const urgent = pending.filter((item) => item.riskLevel === "urgent" || item.riskLevel === "high").length;
+    state.lastCheckInAt = timestamp;
+    state.nextCheckInAt = new Date(Date.now() + checkIntervalMs()).toISOString();
+    pushActivity(state, activity(state.workspaceId, { actor: "Phantom AI", eventType: "observed", riskLevel: urgent ? "high" : "low", message: urgent ? `Coverage check found ${urgent} owner exception${urgent === 1 ? "" : "s"}.` : "Coverage check complete. No owner emergency found.", relatedEntity: reason, metadata: { pendingApprovals: pending.length, ownerExceptions: urgent } }));
+  }
+  await writeStore(store);
+  return { checked, active, timestamp };
+}
+
+export function startVacationModeEngine(logger?: { info?: (value: unknown) => void; error?: (value: unknown) => void }) {
+  let stopped = false;
+  const tick = () => runVacationModeCheckIn("scheduled").catch((error) => logger?.error?.(error));
+  void tick();
+  const timer = setInterval(tick, checkIntervalMs());
+  timer.unref?.();
+  logger?.info?.({ vacationModeEngine: "started", intervalMs: checkIntervalMs() });
+  return () => { stopped = true; clearInterval(timer); return stopped; };
+}
+
+export { TASK_COST as VACATION_OPERATOR_CREDIT_COSTS };

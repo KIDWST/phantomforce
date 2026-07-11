@@ -6,25 +6,25 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260711-151";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-151";
-import { WORKSPACE_DEFS, missionWidgets, esc, buildWorkerRoster } from "./workspaces.js?v=phantom-live-20260711-151";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-151";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-151";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-151";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-151";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-151";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-151";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-151";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-151";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-151";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-151";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-151";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-151";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-151";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-151";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260711-151";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260711-151";
+} from "./store.js?v=phantom-live-20260711-170";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-170";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-170";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-170";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-170";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-170";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-170";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-170";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-170";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-170";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-170";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-170";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-170";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-170";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-170";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-170";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-170";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260711-170";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260711-170";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -140,8 +140,8 @@ function showGate() {
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
-          <b>Launch Admin Phantom</b>
-          <i>Backend session required. Owner login is enforced on this host.</i>
+          <b>Launch Business Manager</b>
+          <i>Owner brain session required. This host opens the full operating layer.</i>
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
@@ -175,7 +175,7 @@ function showGate() {
       if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
       ctx.session = kind === "admin"
         ? { role: "admin", name: "Jordan", label: "PhantomForce Owner", ws: "phantomforce", sessionId: "local-admin", canManageAccess: true }
-        : { role: "employee", name: "Employee", ws: "phantomforce" };
+        : { role: "employee", name: "Team Member", ws: "phantomforce" };
       session.set(ctx.session);
       enterPhantom();
     };
@@ -184,19 +184,19 @@ function showGate() {
 
 /* ============================ sidebar nav ============================ */
 const NAV = [
-  { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
-  { id: "crm",        label: "CRM",          icon: "users", ws: "leads" },
+  { id: "dashboard",  label: "Business HQ",  icon: "grid",  view: "main" },
+  { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
-  { id: "money",      label: "Money",        icon: "dollar", ws: "money" },
-  { id: "content",    label: "Content Hub",  icon: "doc",   ws: "content" },
+  { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
+  { id: "content",    label: "Creator Hub",  icon: "doc",   ws: "content" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
-  { id: "automation", label: "Automation",   icon: "auto",  ws: "automation" },
-  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
-  { id: "workers",    label: "Workers",      icon: "users", ws: "workforce" },
-  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
-  { id: "vacation",   label: "Vacation Mode", icon: "auto", ws: "vacation", adminOnly: true, statusPill: true },
-  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
+  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
+  { id: "approvals",  label: "Decisions",    icon: "check", ws: "approvals", badge: true },
+  { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
+  { id: "analytics",  label: "Intelligence", icon: "chart", ws: "analytics" },
+  { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true },
+  { id: "developer",  label: "Build Ops",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
@@ -204,14 +204,15 @@ const NAV = [
    horizontally scrollable strip instead of a vertical list. */
 const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
-  crm: "CRM",
+  crm: "Clients",
+  money: "Accounting",
   sites: "Sites",
-  content: "Content",
+  content: "Creator",
   automation: "Auto",
-  approvals: "Review",
-  analytics: "Stats",
+  approvals: "Decide",
+  analytics: "Intel",
   vacation: "Away",
-  developer: "Dev",
+  developer: "Ops",
 };
 const MOBILE_NAV = NAV.map((n) => ({
   id: n.id,
@@ -406,19 +407,36 @@ function renderFlowCompactSummary() {
 }
 
 /* ============================ topbar ============================ */
+let topbarWorkforce = null;
+let topbarWorkforceLoading = false;
+let topbarWorkforceChecked = false;
+
+function topbarBaselineWorkers() {
+  const summary = topbarWorkforce?.summary;
+  if (!summary) return null;
+  let count = Number(summary.baseline_workers_online ?? summary.active_workers ?? 0);
+  const workers = Array.isArray(topbarWorkforce?.workers) ? topbarWorkforce.workers : [];
+  const gatekeeperActive = workers.some((worker) => worker.id === "gatekeeper" && worker.state === "active");
+  if (/(^|\.)admin\.phantomforce\.online$/i.test(location.hostname) && !gatekeeperActive) count += 1;
+  return { count, jobs: Number(summary.tasks_in_window || 0) };
+}
+
+function topbarFallbackWorkers() {
+  return 3 + (/(^|\.)admin\.phantomforce\.online$/i.test(location.hostname) ? 1 : 0);
+}
+
 function renderStatusPills() {
   const attention = store.state.security.some((s) => s.posture && s.posture !== "clean");
-  const roster = buildWorkerRoster();
-  const activeWorkers = roster.filter((w) => w.status === "working" || w.status === "waiting-approval").length;
+  const workforce = topbarBaselineWorkers();
   const pills = [
     { label: "Phantom Status", value: "Online", tone: "ok", dot: true },
     { label: "System Status", value: attention ? "Attention needed" : "All Systems Operational", tone: attention ? "warn" : "ok", dot: true },
-    { label: "Active Workers", value: `${activeWorkers} of ${roster.length}`, tone: "ok", dot: true, open: "workforce" },
+    { label: "Workers Online", value: workforce ? `${workforce.count} baseline · ${workforce.jobs} jobs` : (topbarWorkforceChecked ? `${topbarFallbackWorkers()} core ready` : "Checking…"), tone: "ok", dot: true, open: "workforce" },
   ];
   $("[data-status-pills]").innerHTML = pills.map((p) => `
     <div class="pill pill-${p.tone} ${p.open ? "pill-link" : ""}" ${p.open ? `data-pill-open="${p.open}" role="button" tabindex="0"` : ""}>
       <span class="pill-k">${p.label}</span>
-      <span class="pill-v">${p.dot ? `<i class="dot"></i>` : ""}${p.lock ? `<i class="lock" aria-hidden="true">🔒</i>` : ""}${esc(p.value)}</span>
+      <span class="pill-v">${p.dot ? `<i class="dot"></i>` : ""}${p.lock ? `<i class="lock" aria-hidden="true">🔒</i>` : ""}<span class="pill-v-text" title="${esc(p.value)}">${esc(p.value)}</span></span>
     </div>`).join("")
     + (isAdmin() ? `
     <label class="ws-switch" title="Switch workspace">
@@ -431,6 +449,15 @@ function renderStatusPills() {
     el.onclick = go;
     el.onkeydown = (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); go(); } };
   });
+  if (!topbarWorkforceChecked && !topbarWorkforceLoading) {
+    topbarWorkforceLoading = true;
+    fetchAgentWorkforceStatus(24).then((result) => {
+      topbarWorkforceLoading = false;
+      topbarWorkforceChecked = true;
+      if (result.ok) topbarWorkforce = result.workforce;
+      renderStatusPills();
+    });
+  }
 }
 
 let clockTimer = 0;
@@ -453,7 +480,7 @@ function renderUser() {
   const mobileAvatar = $("[data-mobile-user-avatar]");
   if (mobileAvatar) mobileAvatar.textContent = initials || "PF";
   $("[data-user-name]").textContent = name;
-  $("[data-user-role]").textContent = isAdmin() ? "Administrator" : "Employee";
+  $("[data-user-role]").textContent = isAdmin() ? "Business Manager" : "Team Member";
   const btn = $("[data-user-btn]");
   if (btn) {
     btn.classList.toggle("is-open", accountMenuOpen);
@@ -488,16 +515,16 @@ const ACCOUNT_TIERS = [
     name: "Starter",
     price: "$750/mo",
     badge: "Launch",
-    copy: "Core cockpit, local approvals, and one active business workspace.",
-    features: ["Command Center", "Leads and tasks", "Manual proposal workflow"],
+    copy: "Business Manager foundation: command surface, approvals, and one focused workspace.",
+    features: ["Business command center", "Client pipeline", "Manual offer workflow"],
   },
   {
     id: "pro",
     name: "Pro Plan",
     price: "$2,500/mo",
     badge: "Growth",
-    copy: "Managed Phantom AI operations, content workflow, Media Lab, and owner controls.",
-    features: ["Phantom AI cockpit", "Content and Media Lab", "Approval-safe ops"],
+    copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
+    features: ["Phantom AI operator", "Creator Hub + Media Lab", "Accounting-aware ops"],
   },
   {
     id: "elite",
@@ -505,8 +532,8 @@ const ACCOUNT_TIERS = [
     price: "Custom",
     badge: "Current",
     current: true,
-    copy: "The full operating suite: advanced loop routing, multi-workspace ops, advanced automations, and launch support.",
-    features: ["Advanced loop routing", "Multi-workspace ops", "Advanced automation planning", "Launch support"],
+    copy: "The full business operating suite: deeper loop routing, multi-workspace control, automations, and launch support.",
+    features: ["Advanced loop routing", "Multi-workspace command", "Business automation planning", "Launch support"],
   },
 ];
 let accountNotice = "";
@@ -519,7 +546,7 @@ function accountInitials(name) {
   return initials || "PF";
 }
 function accountRoleLabel() {
-  return isAdmin() ? "Administrator" : "Employee";
+  return isAdmin() ? "Business Manager" : "Team Member";
 }
 function accountIdentityLine() {
   return ctx.session?.email || ctx.session?.label || `${accountRoleLabel()} - ${wsName(currentWs())}`;
@@ -557,7 +584,7 @@ function renderAccountMenu() {
       <span class="user-menu-avatar">${esc(accountInitials(owner))}</span>
       <span>
         <b>${esc(owner)}</b>
-        <i>${isAdmin() ? "Administrator" : "Employee"}</i>
+        <i>${isAdmin() ? "Business Manager" : "Team Member"}</i>
       </span>
     </div>
     <button class="user-menu-plan" data-user-menu-action="account" type="button">
@@ -682,10 +709,10 @@ const MODES = {
   image:   { label: "Image",   icon: "spark", placeholder: "Describe an image to create…", prefix: "Create an image for " },
   video:   { label: "Video",   icon: "film",  placeholder: "Describe a video to produce…", prefix: "Create a video for " },
   website: { label: "Website", icon: "grid",  placeholder: "Describe a page or site to build…", prefix: "Build a website for " },
-  admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
+  admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260711-151";
+const POSE_VERSION = "phantom-live-20260711-170";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2179,13 +2206,13 @@ function renderDeveloperPage(body) {
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "Create with context", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
-  content: { title: "Content Hub", kicker: "Posts, videos, images, and engagement", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
-  analytics: { title: "Analytics", kicker: "Trends, data, and business insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
-  account: { title: "Account & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
-  developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
-  settings: { title: "Settings", kicker: "Configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
-  automation: { title: "Automation", kicker: "Workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
-  vacation: { title: "Vacation Mode", kicker: "Your phantom workforce while you are away", custom: true, wide: true, adminOnly: true, render: (body) => renderVacationMode(body, mediaOpts()) },
+  content: { title: "Creator Hub", kicker: "Creator intelligence, media library, and publishing workflow", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
+  analytics: { title: "Business Intelligence", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
+  account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
+  developer: { title: "Builder Ops", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
+  settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
+  automation: { title: "Automations", kicker: "Business workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
+  vacation: { title: "Away Mode", kicker: "Your business stays covered while you are away", custom: true, wide: true, render: (body) => renderVacationMode(body, mediaOpts()) },
   promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
   /* The full worker roster + telemetry + live tail log — kept out of the
      dashboard's permanent layout (that only shows a compact summary) and
