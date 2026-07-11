@@ -11,9 +11,9 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260711-183";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-183";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260711-183";
+} from "./store.js?v=phantom-live-20260711-185";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-185";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260711-185";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -765,8 +765,8 @@ function intentResponse(intent, text, settings = null) {
     const loop = savePhantomLoop({ ...loadPhantomLoop(), enabled: true });
     pushActivity("Phantom Loop", `enabled — routing through ${loopProviderName(loop.targetProvider)}.`);
     return {
-      say: `Phantom Loop is on. Replies now route through ${loopProviderName(loop.targetProvider)} (${modelDisplayLabel(loop.targetModel)}) and bring the answer back here. Adjust routing anytime from the chat composer or Settings.`,
-      cards: [card("Phantom Loop", "Enabled", `${loopProviderName(loop.targetProvider)} · ${loop.depth === "one_pass" ? "1 pass" : loop.depth === "two_pass" ? "2 passes" : "Auto"} · ${loop.approvalMode === "manual" ? "Manual approval" : loop.approvalMode === "ask_external" ? "Ask before external calls" : "Auto for safe reads"}`, [openAction("Advanced routing", "settings")])],
+      say: "Phantom Loop is on. Give me the outcome and I'll handle the deeper pass here. Adjust it anytime from the gear.",
+      cards: [card("Phantom Loop", "Enabled", `${loop.depth === "one_pass" ? "Focused pass" : loop.depth === "two_pass" ? "Deep pass" : "Adaptive depth"} · ${loop.approvalMode === "manual" ? "Manual approval" : loop.approvalMode === "ask_external" ? "Ask before external actions" : "Auto for safe reads"}`, [openAction("Loop settings", "settings")])],
       open: null,
     };
   }

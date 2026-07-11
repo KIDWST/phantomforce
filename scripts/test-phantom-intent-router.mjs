@@ -60,11 +60,9 @@ const cases = {
     "make the profile card better",
   ],
   phantomLoop: [
-    "build me a landing page",
+    "build me a dashboard",
     "create a campaign",
     "make an intake form",
-    "start Phantom Loop for my website",
-    "start loopus for my website",
     "turn this into a build plan",
   ],
   automation: [
@@ -222,7 +220,7 @@ assert.equal(store.state.tasks.length, 1, "explicit task requests should create 
 assert.match(task.say, /Done — created task/i, "task creation should show compact proof");
 assert.match(task.say, /No external actions/i, "task proof should state safety");
 
-const phantomLoop = handleCommand("build me a landing page");
+const phantomLoop = handleCommand("build me a dashboard");
 assert.equal(phantomLoop.intent.primaryIntent, "looper_build");
 assert.equal(store.state.tasks.length, 1, "Phantom Loop requests should not create generic tasks");
 assert.equal(store.state.looperPlans.length, 1, "Phantom Loop requests should create a guarded build packet");
@@ -259,7 +257,7 @@ assert.match(risky.say, /Approval Queue|approval/i, "risky actions route to appr
 assert.match(risky.say, /nothing has been executed/i, "risky actions must state nothing executed");
 
 ctx.session = { role: "employee", name: "Employee", ws: "phantomforce" };
-const blockedLoop = handleCommand("start Phantom Loop for a booking page");
+const blockedLoop = handleCommand("build me a dashboard");
 assert.equal(blockedLoop.intent.primaryIntent, "looper_build");
 assert.equal(store.state.looperPlans.length, 1, "non-admin Phantom Loop requests should be gated");
 

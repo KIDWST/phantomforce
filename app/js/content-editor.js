@@ -1,4 +1,4 @@
-import { paintEdit } from "./imagefilters.js?v=phantom-live-20260711-183";
+import { freshEditState, paintEdit } from "./imagefilters.js?v=phantom-live-20260711-185";
 
 let layerSequence = 0;
 
@@ -261,10 +261,15 @@ function drawText(ctx, layer, width, height) {
   lines.forEach((line, index) => ctx.fillText(line, tx, start + index * lineHeight));
 }
 
-export function renderComposition(canvas, baseImage, editState, composition) {
-  const base = document.createElement("canvas");
-  const state = { ...editState, text: editState.text || "" };
-  paintEdit(base, baseImage, state);
+function renderImageLayerSource(image, state) {
+  const rendered = document.createElement("canvas");
+  paintEdit(rendered, image, { ...freshEditState(), ...(state || {}), textStyle: { ...freshEditState().textStyle, ...(state?.textStyle || {}) } });
+  return rendered;
+}
+
+export function renderComposition(canvas, baseImage, editState, composition, layerEditStates = null) {
+  const baseState = layerEditStates?.base || editState || freshEditState();
+  const base = renderImageLayerSource(baseImage, baseState);
   if (!composition.width || !composition.height) {
     composition.width = base.width;
     composition.height = base.height;
@@ -286,7 +291,10 @@ export function renderComposition(canvas, baseImage, editState, composition) {
     if (layer.type === "base") drawImageFit(ctx, base, -boxW / 2, -boxH / 2, boxW, boxH, layer.fit || "cover");
     else if (layer.type === "image") {
       const image = composition.imageCache.get(layer.src);
-      if (image) drawImageFit(ctx, image, -boxW / 2, -boxH / 2, boxW, boxH, layer.fit || "contain");
+      if (image) {
+        const rendered = renderImageLayerSource(image, layerEditStates?.[layer.id]);
+        drawImageFit(ctx, rendered, -boxW / 2, -boxH / 2, boxW, boxH, layer.fit || "contain");
+      }
     } else if (layer.type === "color") {
       ctx.fillStyle = layer.color || "#10251c";
       roundedRect(ctx, -boxW / 2, -boxH / 2, boxW, boxH, Math.min(boxW, boxH) * clamp(layer.radius || 0, 0, 0.5));
@@ -348,9 +356,9 @@ export function drawCompositionOverlay(overlay, canvas, composition) {
    through the same base-layer box/fit as the photo, then recolored into a
    translucent mint silhouette with a bright contour. This is never painted
    onto the export canvas. */
-export function drawDetectedSubjectOverlay(overlay, canvas, composition, maskImage) {
+export function drawDetectedSubjectOverlay(overlay, canvas, composition, maskImage, layerId = "base") {
   if (!overlay || !canvas || !maskImage) return;
-  const baseLayer = composition.layers.find((layer) => layer.id === "base");
+  const baseLayer = composition.layers.find((layer) => layer.id === layerId && (layer.type === "base" || layer.type === "image"));
   if (!baseLayer || !baseLayer.visible) return;
   const mask = document.createElement("canvas");
   mask.width = canvas.width;
@@ -373,6 +381,28 @@ export function drawDetectedSubjectOverlay(overlay, canvas, composition, maskIma
   out.filter = `drop-shadow(0 0 ${Math.max(2, canvas.width / 420)}px rgba(65,255,161,.96)) drop-shadow(0 0 ${Math.max(5, canvas.width / 150)}px rgba(65,255,161,.68))`;
   out.drawImage(mask, 0, 0);
   out.restore();
+}
+
+export function layerPointToCanvas(layer, point, canvas) {
+  const localX = (clamp(point.x, 0, 1) - 0.5) * layer.w * canvas.width;
+  const localY = (clamp(point.y, 0, 1) - 0.5) * layer.h * canvas.height;
+  const angle = (Number(layer.rotation || 0) * Math.PI) / 180;
+  return {
+    x: layer.x * canvas.width + localX * Math.cos(angle) - localY * Math.sin(angle),
+    y: layer.y * canvas.height + localX * Math.sin(angle) + localY * Math.cos(angle),
+  };
+}
+
+export function canvasPointToLayer(layer, point, canvas) {
+  const angle = -(Number(layer.rotation || 0) * Math.PI) / 180;
+  const dx = point.px - layer.x * canvas.width;
+  const dy = point.py - layer.y * canvas.height;
+  const localX = dx * Math.cos(angle) - dy * Math.sin(angle);
+  const localY = dx * Math.sin(angle) + dy * Math.cos(angle);
+  return {
+    x: clamp(localX / Math.max(1, layer.w * canvas.width) + 0.5, 0, 1),
+    y: clamp(localY / Math.max(1, layer.h * canvas.height) + 0.5, 0, 1),
+  };
 }
 
 export function canvasPoint(event, canvas) {
