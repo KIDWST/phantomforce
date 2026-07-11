@@ -11,8 +11,8 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig,
-} from "./store.js?v=phantom-live-20260711-163";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-163";
+} from "./store.js?v=phantom-live-20260711-164";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260711-164";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 const DAY = 86400000;
@@ -104,7 +104,7 @@ async function askHermesBrain(raw, intent, settings) {
         task_type: intent.primaryIntent,
         business_name: "PhantomForce",
         actor_user_id: ctx.session?.sessionId || ctx.session?.name || "owner-admin",
-        business_summary: "PhantomForce admin console. AI-assisted operations, media, leads, booking, content, quotes, follow-up, client dashboards, approval gates, and local owner memory.",
+        business_summary: "PhantomForce Business Manager. AI-assisted operations, Creator Hub, client pipeline, bookings, offer desk, accounting, follow-up, site portfolio, approval gates, and local owner memory.",
         module_data: {
           workspace: currentWs(),
           memory: memoryStats(),
@@ -269,7 +269,7 @@ function createAutomation(subject, raw) {
   const name = clean ? title(clean).slice(0, 72) : "New automation";
   const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
   const a = {
-    id: uid("agt"), ws, kind: "automation", source: "Phantom dashboard",
+    id: uid("agt"), ws, kind: "automation", source: "Business HQ",
     name, mission: raw, status: "idle",
     allowedDuringVacation: true, requiresApprovalDuringVacation: true,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -454,7 +454,7 @@ function localQuestionAnswer(text, settings = null) {
 
   if (/\b(website|site|landing|page|store|shop|checkout)\b/.test(s)) {
     return {
-      say: "Treat the site as the money path, not decoration — lead with the offer, show proof fast, make the CTA obvious. Say \"build\" and I'll start a draft; publishing still waits for your approval.",
+      say: "Treat the site as the offer path, not decoration — lead with the outcome, show proof fast, make the CTA obvious. Say \"build\" and I'll start a draft; publishing still waits for your approval.",
       cards: [],
       open: null,
     };

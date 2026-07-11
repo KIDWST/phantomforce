@@ -70,7 +70,7 @@ function mirrorHtml() {
         <p>Showing the app-owned agent map directly in PhantomForce. The localhost control app is optional and only works on the PC running it.</p>
         <div class="acc-proof-row">
           <b>Read-only</b>
-          <b>Admin only</b>
+          <b>Business Manager only</b>
           <b>No sends</b>
         </div>
       </article>
@@ -207,7 +207,7 @@ function render() {
 
         <section class="acc-command-board" aria-label="Operator stack summary">
           <article class="acc-command-main">
-            <span>Admin-only mirror</span>
+            <span>Business Manager mirror</span>
             <strong>See what is running without exposing the machinery to clients.</strong>
             <p>This embeds the local Agent Control Center. It stays on localhost, does not send, and does not expose client controls.</p>
             <p>Remote phone browsers cannot load a PC localhost iframe, so Phantom shows the agent mirror below by default.</p>
@@ -220,7 +220,7 @@ function render() {
           <article>
             <span>Blocked</span>
             <strong>No external action</strong>
-            <p>No uploads, no sends, no public hooks, no provider calls from this admin embed.</p>
+            <p>No uploads, no sends, no public hooks, no provider calls from this Business Manager embed.</p>
           </article>
         </section>
 

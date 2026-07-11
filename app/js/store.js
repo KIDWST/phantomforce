@@ -113,7 +113,7 @@ export function classifyMemory(value = "") {
   if (/(website|site|page|store|dashboard|ui|mobile|phantom deck|admin\.phantomforce|app\.phantomforce)/.test(text)) return "website";
   if (/(proposal|quote|pricing|estimate|package|scope|cover letter|resume|cv)/.test(text)) return "proposal";
   if (/(lead|client|customer|prospect|crm|contact|account|company|business|buyer|follow[- ]?up)/.test(text)) return "client";
-  if (/(money|revenue|invoice|payment|retainer|sale|deal|pipeline|cost|credits|subscription)/.test(text)) return "money";
+  if (/(money|accounting|ledger|cashflow|cash flow|bank|credit card|transaction|revenue|invoice|payment|retainer|sale|deal|pipeline|cost|credits|subscription)/.test(text)) return "money";
   if (/(automation|workflow|agent|worker|deploy|build|scan|daily check|gateway|vault|process note|private route|connector)/.test(text)) return "operations";
   if (/(phantomforce|business|company|brand|owner|employee|job|linkedin)/.test(text)) return "business";
   return "conversation";
@@ -254,9 +254,9 @@ export const TOOL_SPINE = [
     worker: "Access Sentinel",
     mode: "active",
     status: "watching",
-    role: "Keeps admin Phantom reachable through the private route while hiding raw local ports.",
+    role: "Keeps Business Manager Phantom reachable through the private route while hiding raw local ports.",
     ownerControl: "Owner access is live through the private route. Raw local ports stay hidden from everybody else.",
-    activity: "watching admin.phantomforce.online route and keeping backend ports private.",
+    activity: "watching the Business Manager route and keeping backend ports private.",
     path: "Private backend",
     visibleToClients: false,
   },
@@ -268,7 +268,7 @@ export const TOOL_SPINE = [
     mode: "active",
     status: "online",
     role: "Compiles context, receipts, redaction notes, and useful memory for Phantom AI.",
-    ownerControl: "Admin memory is on. Client workspaces keep their own separate memory unless you connect them.",
+    ownerControl: "Business Manager memory is on. Client workspaces keep their own separate memory unless you connect them.",
     activity: "compiled owner context, redacted receipts, and memory hints for Phantom AI.",
     path: "Private backend",
     visibleToClients: false,
@@ -614,14 +614,14 @@ export function resolveSession() {
     session.set(s); return s;
   }
   if (key === "employee" || key === "team" || key === "client") {
-    const s = { role: "employee", name: "Employee", ws: "phantomforce" };
+    const s = { role: "employee", name: "Team Member", ws: "phantomforce" };
     session.set(s); return s;
   }
   const saved = session.get();
   if (saved) {
     if (saved.role === "client") {
       saved.role = "employee";
-      saved.name = "Employee";
+      saved.name = "Team Member";
     }
     if (!store.state.workspaces.some((w) => w.id === saved.ws)) saved.ws = "phantomforce";
     session.set(saved);

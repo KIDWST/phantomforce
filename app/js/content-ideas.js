@@ -195,7 +195,7 @@ function generateDailyIdeas(config, date = new Date()) {
   ];
   const nextSteps = [
     "Draft the hook first, then attach one visual proof point.",
-    "Use a real asset from Content Hub or generate one in Media Lab.",
+    "Use a real asset from Creator Hub or generate one in Media Lab.",
     "Keep the copy short and make the CTA one obvious next step.",
     "Turn it into a saved draft only if the owner wants to use it.",
     "Avoid tool names; sell the outcome in human language.",

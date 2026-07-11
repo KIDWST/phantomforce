@@ -1,4 +1,4 @@
-/* PhantomForce — Content Hub: every social post, video, image, and its full
+/* PhantomForce — Creator Hub: every social post, video, image, and its full
    engagement, in one place. Tabs split by SOCIAL PLATFORM and by CONTENT/
    ENGAGEMENT type (images, videos, posts, likes, comments, reactions…).
 
@@ -10,15 +10,15 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   estimateSubjectPoint, setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260711-163";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-163";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-163";
+} from "./imagefilters.js?v=phantom-live-20260711-164";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-164";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-164";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition,
-} from "./content-editor.js?v=phantom-live-20260711-163";
+} from "./content-editor.js?v=phantom-live-20260711-164";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -355,7 +355,7 @@ async function queueAssetSync(assetId) {
 
 let assetPullState = { pulled: false, pulling: false };
 
-/* Runs once per Content Hub mount: pulls the list of server-synced assets
+/* Runs once per Creator Hub mount: pulls the list of server-synced assets
    and merges in any this device doesn't have locally yet (registered with
    skipSync so pulling never triggers a re-upload right back to the
    server). This is what makes a photo edited on one device show up on
@@ -577,7 +577,7 @@ function wireRemovals(body, opts, root) {
     const removed = loadRemovedContent();
     removed.add(btn.dataset.chRemove);
     saveRemovedContent(removed);
-    opts.notify?.("Content Hub", "Removed local queued item. No live post, task, or external action was touched.");
+    opts.notify?.("Creator Hub", "Removed local queued item. No live post, task, or external action was touched.");
     if (root) renderContentHub(root, opts);
   }));
 }
@@ -651,7 +651,7 @@ function svgIc(k) {
 }
 
 /* =========================================================================
-   CONTENT HUB
+   Creator Hub
    ========================================================================= */
 const chState = { tab: "library", platform: "all", ctype: "all", eng: "likes" };
 const CONTENT_TYPE_FILTERS = [["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]];
@@ -1116,7 +1116,7 @@ function readPublishForm(body, fallback = loadPublishState()) {
   });
 }
 function wirePostPublish(body, data, assets, esc, root, opts) {
-  const notify = (msg) => opts.notify?.("Content Hub", msg);
+  const notify = (msg) => opts.notify?.("Creator Hub", msg);
   body.querySelectorAll("[data-ch-pub-field]").forEach((field) => {
     field.oninput = () => readPublishForm(body);
     field.onchange = () => readPublishForm(body);
@@ -1262,7 +1262,7 @@ function contentAssetCard(asset, esc) {
 }
 /* ---------------- inline lightbox: expand + AI-prompt image editor ----------------
    Reuses the same tested canvas filter engine as Media Lab's Edit tab (see
-   imagefilters.js) but stays entirely local to Content Hub — its own isolated
+   imagefilters.js) but stays entirely local to Creator Hub — its own isolated
    edit state per open, mounted right over the grid instead of navigating away. */
 function freshLightbox(asset, extra = {}) {
   const extraLayers = extra.layers || {};
@@ -2127,7 +2127,7 @@ function wireLightbox(root, opts) {
     if (!exported.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: exported.error };
       rerender();
-      opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${exported.error}`);
+      opts.notify?.("Creator Hub", `AI edit failed on "${asset.title}": ${exported.error}`);
       return;
     }
     const result = await requestAiEdit({ dataUrl: exported.url, prompt: q, provider: lb.aiEdit.provider || "cinematic" });
@@ -2135,7 +2135,7 @@ function wireLightbox(root, opts) {
     if (!result.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: result.message };
       rerender();
-      opts.notify?.("Content Hub", `AI edit failed on "${asset.title}": ${result.message}`);
+      opts.notify?.("Creator Hub", `AI edit failed on "${asset.title}": ${result.message}`);
       return;
     }
     // loadImageForEditing (not a raw new Image()) so a media-engine
@@ -2152,7 +2152,7 @@ function wireLightbox(root, opts) {
         lb.aiEdit = { ...lb.aiEdit, status: "success", message: "" };
         repaint();
         rerender();
-        opts.notify?.("Content Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
+        opts.notify?.("Creator Hub", `applied an AI edit to "${asset.title}": "${q.slice(0, 40)}".`);
       })
       .catch(() => {
         if (chLightbox !== lb) return;
@@ -2178,7 +2178,7 @@ function wireLightbox(root, opts) {
     if (!exported.ok) {
       lb.bg = { status: "error", message: exported.error };
       rerender();
-      opts.notify?.("Content Hub", `Background removal failed on "${asset.title}": ${exported.error}`);
+      opts.notify?.("Creator Hub", `Background removal failed on "${asset.title}": ${exported.error}`);
       return;
     }
     const beforeUrl = exported.url;
@@ -2187,7 +2187,7 @@ function wireLightbox(root, opts) {
     if (!result.ok) {
       lb.bg = { status: "error", message: result.message };
       rerender();
-      opts.notify?.("Content Hub", `Background removal failed on "${asset.title}": ${result.message}`);
+      opts.notify?.("Creator Hub", `Background removal failed on "${asset.title}": ${result.message}`);
       return;
     }
     lb.bg = { status: "preview", beforeUrl, afterUrl: result.image };
@@ -2206,7 +2206,7 @@ function wireLightbox(root, opts) {
       lb.hasTransparency = true;
       repaint();
       rerender();
-      opts.notify?.("Content Hub", `removed the background on "${asset.title}".`);
+      opts.notify?.("Creator Hub", `removed the background on "${asset.title}".`);
     }).catch(() => {
       if (chLightbox !== lb) return;
       lb.bg = { status: "error", message: "The cutout image could not be loaded." };
@@ -2229,7 +2229,7 @@ function wireLightbox(root, opts) {
     if (!exported.ok) {
       lb.bokehDetect = { status: "error", message: exported.error };
       rerender();
-      opts.notify?.("Content Hub", `AI subject detection failed on "${asset.title}": ${exported.error}`);
+      opts.notify?.("Creator Hub", `AI subject detection failed on "${asset.title}": ${exported.error}`);
       return;
     }
     // Send the clean base frame (adjust/rotate/flip only, no existing bokeh
@@ -2240,7 +2240,7 @@ function wireLightbox(root, opts) {
     if (!result.ok) {
       lb.bokehDetect = { status: "error", message: result.message };
       rerender();
-      opts.notify?.("Content Hub", `AI subject detection failed on "${asset.title}": ${result.message}`);
+      opts.notify?.("Creator Hub", `AI subject detection failed on "${asset.title}": ${result.message}`);
       return;
     }
     try {
@@ -2251,7 +2251,7 @@ function wireLightbox(root, opts) {
       lb.bokehDetect = { status: "success", message: "" };
       repaint();
       rerender();
-      opts.notify?.("Content Hub", `AI-detected the subject on "${asset.title}" for bokeh.`);
+      opts.notify?.("Creator Hub", `AI-detected the subject on "${asset.title}" for bokeh.`);
     } catch {
       if (chLightbox !== lb) return;
       lb.bokehDetect = { status: "error", message: "The detected subject image could not be loaded." };
@@ -2293,7 +2293,7 @@ function wireLightbox(root, opts) {
   root.querySelector("[data-ch-lb-download]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.92);
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't download "${asset.title}": ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Creator Hub", `Couldn't download "${asset.title}": ${exported.error}`); return; }
     const link = document.createElement("a");
     link.href = exported.url;
     link.download = `phantomforce-${asset.id}.${exportExt()}`;
@@ -2302,22 +2302,22 @@ function wireLightbox(root, opts) {
   root.querySelector("[data-ch-lb-save]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.9);
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save "${asset.title}": ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Creator Hub", `Couldn't save "${asset.title}": ${exported.error}`); return; }
     registerContentAsset({ ...asset, url: exported.url, prompt: s.text || asset.prompt, saved: true, syncedId: "", trimmed: false, updatedAt: Date.now() });
     // close (and its rerender) must run before notify(), since notify() triggers a global
     // store-change listener that can fully remount this page and invalidate this closure's
     // DOM references — closing first ensures the lightbox-closed state lands on live DOM.
     close();
-    opts.notify?.("Content Hub", `saved your edit to "${asset.title}".`);
+    opts.notify?.("Creator Hub", `saved your edit to "${asset.title}".`);
   };
   root.querySelector("[data-ch-lb-save-copy]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, exportFormat(), 0.9);
     if (chLightbox !== lb) return;
-    if (!exported.ok) { opts.notify?.("Content Hub", `Couldn't save a copy of "${asset.title}": ${exported.error}`); return; }
+    if (!exported.ok) { opts.notify?.("Creator Hub", `Couldn't save a copy of "${asset.title}": ${exported.error}`); return; }
     const at = Date.now();
     registerContentAsset({ ...asset, id: `edit-${at}-${Math.random().toString(36).slice(2, 6)}`, url: exported.url, title: `${asset.title} (edit)`, prompt: s.text || asset.prompt, createdAt: at, saved: true, syncedId: "", trimmed: false });
     close();
-    opts.notify?.("Content Hub", `saved a copy of "${asset.title}" with your edits.`);
+    opts.notify?.("Creator Hub", `saved a copy of "${asset.title}" with your edits.`);
   };
 }
 function visibleLibraryItems(shownAssets, shownPosts) {
@@ -2355,7 +2355,7 @@ function undoLastDelete(root, opts) {
   const count = restoredAssets.length + postIds.length;
   chLastDeleted = null;
   renderContentHub(root, opts);
-  opts.notify?.("Content Hub", `Restored ${count} item${count === 1 ? "" : "s"}.`);
+  opts.notify?.("Creator Hub", `Restored ${count} item${count === 1 ? "" : "s"}.`);
 }
 function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts) {
   const shownItems = visibleLibraryItems(shownAssets, shownPosts);
@@ -2404,7 +2404,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
 
   // Ctrl/Cmd+A selects everything currently visible (the OS convention — "select all in
   // this view"); Ctrl/Cmd+Z undoes the most recent delete. Self-removes once this render's
-  // body is no longer live, since there's no explicit "Content Hub unmounted" hook to hang
+  // body is no longer live, since there's no explicit "Creator Hub unmounted" hook to hang
   // cleanup off of.
   if (chLibraryKeyHandler) document.removeEventListener("keydown", chLibraryKeyHandler);
   chLibraryKeyHandler = (event) => {
@@ -2433,7 +2433,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Content Hub", "Deleted the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
+    opts.notify?.("Creator Hub", "Deleted the selected local media item — Ctrl+Z to undo. No external file or post was touched.");
   }));
   body.querySelector("[data-ch-select-mode]")?.addEventListener("click", () => {
     chState.selectMode = !chState.selectMode;
@@ -2447,7 +2447,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   body.querySelector("[data-ch-select-everything]")?.addEventListener("click", () => {
     allItems.forEach((item) => chSelection.add(selectionKey(item.kind, item.id)));
     chState.selectMode = true;
-    opts.notify?.("Content Hub", `Selected all ${allItems.length} local content item${allItems.length === 1 ? "" : "s"}.`);
+    opts.notify?.("Creator Hub", `Selected all ${allItems.length} local content item${allItems.length === 1 ? "" : "s"}.`);
     rerender();
   });
   body.querySelector("[data-ch-clear-selected]")?.addEventListener("click", () => {
@@ -2457,40 +2457,40 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
   body.querySelector("[data-ch-download-selected]")?.addEventListener("click", () => {
     const selected = selectedLibraryItems(data, loadContentAssets());
     downloadLibraryItems(selected, "selected");
-    opts.notify?.("Content Hub", `Downloaded/exported ${selected.length} selected item${selected.length === 1 ? "" : "s"}.`);
+    opts.notify?.("Creator Hub", `Downloaded/exported ${selected.length} selected item${selected.length === 1 ? "" : "s"}.`);
   });
   body.querySelector("[data-ch-download-all]")?.addEventListener("click", () => {
     downloadLibraryItems(shownItems, "shown");
-    opts.notify?.("Content Hub", `Downloaded/exported ${shownItems.length} visible item${shownItems.length === 1 ? "" : "s"}.`);
+    opts.notify?.("Creator Hub", `Downloaded/exported ${shownItems.length} visible item${shownItems.length === 1 ? "" : "s"}.`);
   });
   body.querySelector("[data-ch-export-selected]")?.addEventListener("click", () => {
     const selected = selectedLibraryItems(data, loadContentAssets());
     exportLibraryItems(selected, "selected");
-    opts.notify?.("Content Hub", "Exported a local selected-content packet.");
+    opts.notify?.("Creator Hub", "Exported a local selected-content packet.");
   });
   body.querySelector("[data-ch-save-selected]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
     setSelectedAssetMetadata(ids, { saved: true });
-    opts.notify?.("Content Hub", `Saved ${ids.size} media item${ids.size === 1 ? "" : "s"} locally.`);
+    opts.notify?.("Creator Hub", `Saved ${ids.size} media item${ids.size === 1 ? "" : "s"} locally.`);
     rerender();
   });
   body.querySelector("[data-ch-batch-edit]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
     setSelectedAssetMetadata(ids, { batchLabel: "batch edit ready" });
-    opts.notify?.("Content Hub", `Marked ${ids.size} media item${ids.size === 1 ? "" : "s"} for batch edit.`);
+    opts.notify?.("Creator Hub", `Marked ${ids.size} media item${ids.size === 1 ? "" : "s"} for batch edit.`);
     rerender();
   });
   body.querySelector("[data-ch-batch-ai]")?.addEventListener("click", () => {
     const ids = new Set(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset").map((item) => item.id));
     setSelectedAssetMetadata(ids, { aiEditPlan: "Local AI edit plan drafted; external generation still gated." });
     exportLibraryItems(selectedLibraryItems(data, loadContentAssets()).filter((item) => item.kind === "asset" && ids.has(item.id)), "batch-ai-edit-plan");
-    opts.notify?.("Content Hub", "Created a local batch AI edit plan. No external generation ran.");
+    opts.notify?.("Creator Hub", "Created a local batch AI edit plan. No external generation ran.");
     rerender();
   });
   body.querySelector("[data-ch-edit-selected]")?.addEventListener("click", () => {
     const assetItem = selectedLibraryItems(data, loadContentAssets()).find((item) => item.kind === "asset" && item.asset.type === "image" && item.asset.url);
     if (!assetItem) {
-      opts.notify?.("Content Hub", "Select an image with a live preview to open it in the local editor.");
+      opts.notify?.("Creator Hub", "Select an image with a live preview to open it in the local editor.");
       return;
     }
     try {
@@ -2503,7 +2503,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
         at: Date.now(),
       }));
     } catch {}
-    opts.notify?.("Content Hub", `Opening ${assetItem.asset.title} in Media Lab edit.`);
+    opts.notify?.("Creator Hub", `Opening ${assetItem.asset.title} in Media Lab edit.`);
     opts.openWorkspace?.("media");
   });
   body.querySelector("[data-ch-delete-selected]")?.addEventListener("click", () => {
@@ -2523,7 +2523,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
     // rerender before notify(): notify() triggers a global store-change listener that can
     // fully remount this page and invalidate this closure's DOM references.
     rerender();
-    opts.notify?.("Content Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
+    opts.notify?.("Creator Hub", `Deleted ${selected.length} local content item${selected.length === 1 ? "" : "s"} — Ctrl+Z to undo. No external post or file was touched.`);
   });
   const uploadInput = body.querySelector("[data-ch-upload-input]");
   body.querySelector("[data-ch-upload-local]")?.addEventListener("click", () => uploadInput?.click());
@@ -2536,7 +2536,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
         id: `upload-${Date.now()}-${i}`,
         type: file.type.startsWith("video/") ? "video" : "image",
         title: file.name.replace(/\.[^.]+$/, "") || "Local upload",
-        prompt: "Local file imported into Content Hub.",
+        prompt: "Local file imported into Creator Hub.",
         source: "Local upload",
         provider: "local",
         model: "browser-file",
@@ -2546,7 +2546,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
       });
     }
     uploadInput.value = "";
-    opts.notify?.("Content Hub", `Imported ${files.length} local file${files.length === 1 ? "" : "s"} into the library.`);
+    opts.notify?.("Creator Hub", `Imported ${files.length} local file${files.length === 1 ? "" : "s"} into the library.`);
     rerender();
   });
 }
@@ -2555,14 +2555,14 @@ function wireCreatorActions(body, opts, root) {
     const idea = activeIdeas().find((row) => row.id === btn.dataset.ideaId) || savedIdeas().find((row) => row.id === btn.dataset.ideaId) || activeIdeas()[Number(btn.dataset.ideaI || 0)];
     if (!idea) return;
     const action = btn.dataset.chAction === "approve-draft" ? "Draft prep reviewed" : "Draft prep started";
-    opts.notify?.("Content Hub", `${action} for ${idea.title}. Safe preparation can continue automatically; no live post was sent.`);
+    opts.notify?.("Creator Hub", `${action} for ${idea.title}. Safe preparation can continue automatically; no live post was sent.`);
     if (root) renderContentHub(root, opts);
   }));
   body.querySelectorAll("[data-ch-idea-save]").forEach((btn) => btn.addEventListener("click", () => {
     const idea = activeIdeas().find((row) => row.id === btn.dataset.chIdeaSave);
     if (!idea) return;
     saveIdeaForLater(idea);
-    opts.notify?.("Content Hub", `Saved "${idea.title}" so tomorrow's refresh won't erase it.`);
+    opts.notify?.("Creator Hub", `Saved "${idea.title}" so tomorrow's refresh won't erase it.`);
     if (root) renderContentHub(root, opts);
   }));
   body.querySelector("[data-ch-add-idea]")?.addEventListener("click", () => {
@@ -2570,15 +2570,15 @@ function wireCreatorActions(body, opts, root) {
     const angle = body.querySelector("[data-ch-custom-angle]")?.value || "";
     const idea = addCustomDailyIdea({ title, angle });
     if (!idea) {
-      opts.notify?.("Content Hub", "Add a short idea title first.");
+      opts.notify?.("Creator Hub", "Add a short idea title first.");
       return;
     }
-    opts.notify?.("Content Hub", `Added "${idea.title}" to today's ideas. It clears tomorrow unless saved.`);
+    opts.notify?.("Creator Hub", `Added "${idea.title}" to today's ideas. It clears tomorrow unless saved.`);
     if (root) renderContentHub(root, opts);
   });
   body.querySelector("[data-ch-refresh-ideas]")?.addEventListener("click", () => {
     refreshDailyIdeas();
-    opts.notify?.("Content Hub", "Refreshed today's disposable idea batch.");
+    opts.notify?.("Creator Hub", "Refreshed today's disposable idea batch.");
     if (root) renderContentHub(root, opts);
   });
 }
@@ -2790,7 +2790,7 @@ function openPost(p, esc) {
    ANALYTICS — real connections only. If no social account is actually
    linked, this shows nothing but a connect prompt: no KPIs, no charts, no
    modeled numbers. Once linked, it shows what's genuinely real (which
-   accounts, real Content Hub asset counts) and is honest that live
+   accounts, real Creator Hub asset counts) and is honest that live
    performance metrics need each platform's analytics API wired server-side
    before any reach/engagement number can be shown — never a placeholder.
    ========================================================================= */
@@ -2837,8 +2837,8 @@ export function renderAnalytics(el, opts = {}) {
       </div>
       ${assets.length ? `
       <div class="ch-card">
-        <div class="ch-card-h"><h3>Ready to publish</h3><span class="ch-src">from Content Hub</span></div>
-        <p class="an-assets-line">${assets.length} generated asset${assets.length === 1 ? "" : "s"} in Content Hub, ready once publishing is connected.</p>
+        <div class="ch-card-h"><h3>Ready to publish</h3><span class="ch-src">from Creator Hub</span></div>
+        <p class="an-assets-line">${assets.length} generated asset${assets.length === 1 ? "" : "s"} in Creator Hub, ready once publishing is connected.</p>
       </div>` : ""}
     </div>`;
 }

@@ -6,23 +6,23 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260711-163";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-163";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-163";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-163";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-163";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-163";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-163";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-163";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-163";
-import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-163";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-163";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-163";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-163";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-163";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-163";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-163";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-163";
+} from "./store.js?v=phantom-live-20260711-164";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-164";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-164";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-164";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-164";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-164";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-164";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-164";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-164";
+import { renderAutomation } from "./brandops.js?v=phantom-live-20260711-164";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-164";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-164";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-164";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-164";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-164";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-164";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-164";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -173,7 +173,7 @@ function showGate() {
       if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
       ctx.session = kind === "admin"
         ? { role: "admin", name: "Jordan", label: "PhantomForce Owner", ws: "phantomforce", sessionId: "local-admin", canManageAccess: true }
-        : { role: "employee", name: "Employee", ws: "phantomforce" };
+        : { role: "employee", name: "Team Member", ws: "phantomforce" };
       session.set(ctx.session);
       enterPhantom();
     };
@@ -183,18 +183,18 @@ function showGate() {
 /* ============================ sidebar nav ============================ */
 const NAV = [
   { id: "dashboard",  label: "Business HQ",  icon: "grid",  view: "main" },
-  { id: "crm",        label: "CRM",          icon: "users", ws: "leads" },
+  { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
   { id: "content",    label: "Creator Hub",  icon: "doc",   ws: "content" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
-  { id: "automation", label: "Automation",   icon: "auto",  ws: "automation" },
-  { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
+  { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
+  { id: "approvals",  label: "Decisions",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
-  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
+  { id: "analytics",  label: "Intelligence", icon: "chart", ws: "analytics" },
   { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true },
-  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
+  { id: "developer",  label: "Build Ops",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
@@ -702,10 +702,10 @@ const MODES = {
   image:   { label: "Image",   icon: "spark", placeholder: "Describe an image to create…", prefix: "Create an image for " },
   video:   { label: "Video",   icon: "film",  placeholder: "Describe a video to produce…", prefix: "Create a video for " },
   website: { label: "Website", icon: "grid",  placeholder: "Describe a page or site to build…", prefix: "Build a website for " },
-  admin:   { label: "Admin",   icon: "cog",   placeholder: "", open: "adminos" },
+  admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260711-163";
+const POSE_VERSION = "phantom-live-20260711-164";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2189,7 +2189,7 @@ function renderDeveloperPage(body) {
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "Create with context", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
-  content: { title: "Creator Hub", kicker: "Content intelligence, media library, and publishing workflow", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
+  content: { title: "Creator Hub", kicker: "Creator intelligence, media library, and publishing workflow", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   analytics: { title: "Business Intelligence", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Builder Ops", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },

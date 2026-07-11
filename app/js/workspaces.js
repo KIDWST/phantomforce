@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-163";
+} from "./store.js?v=phantom-live-20260711-164";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -132,7 +132,7 @@ function renderLeads(el, rerender) {
       pushActivity("Proposal Forge", `opened a ${pkg.name} draft for ${l.company}.`, l.ws);
       store.save(); rerender();
     },
-    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Revenue Tracker", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
+    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Client Pipeline", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
     lost: (id) => { const l = find(id); l.status = "lost"; l.next = "Re-engage in 90 days"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "lost"; store.save(); rerender(); },
     revive: (id) => { const l = find(id); l.status = "follow-up"; l.next = "Warm re-engage with a proof point"; store.save(); rerender(); },
     review: (id) => {
@@ -209,9 +209,9 @@ function renderProposals(el, rerender) {
       store.save(); rerender();
     },
     ready: (id) => { const p = find(id); p.status = "sent-ready"; p.updated = new Date().toISOString(); pushActivity("Proposal Forge", `moved ${p.client} to send-ready.`, p.ws); store.save(); rerender(); },
-    won: (id) => { const p = find(id); p.status = "won"; pushActivity("Revenue Tracker", `${p.client} proposal won — ${fmtMoney(p.price)}.`, p.ws); store.save(); rerender(); },
+    won: (id) => { const p = find(id); p.status = "won"; pushActivity("Offer Desk", `${p.client} proposal won — ${fmtMoney(p.price)}.`, p.ws); store.save(); rerender(); },
     lost: (id) => { const p = find(id); p.status = "lost"; store.save(); rerender(); },
-    invoice: (id) => { const p = find(id); p.status = "invoice-ready"; pushActivity("Revenue Tracker", `${p.client} marked invoice-ready.`, p.ws); store.save(); rerender(); },
+    invoice: (id) => { const p = find(id); p.status = "invoice-ready"; pushActivity("Accounting Ledger", `${p.client} marked invoice-ready.`, p.ws); store.save(); rerender(); },
   });
 }
 
@@ -1028,7 +1028,7 @@ function renderMoney(el, rerender) {
         notes: "",
         createdAt: new Date().toISOString(),
       });
-      pushActivity("Finance Ledger", `added a ${direction > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(direction * rawAmount)}.`, ws);
+      pushActivity("Accounting Ledger", `added a ${direction > 0 ? "cash-in" : "cash-out"} transaction: ${moneySigned(direction * rawAmount)}.`, ws);
       store.save();
       rerender();
     };
@@ -1043,7 +1043,7 @@ function renderMoney(el, rerender) {
       const fresh = rows.filter((tx) => !tx.externalId || !existing.has(tx.externalId));
       fresh.forEach((tx) => ensureAccount(tx.account));
       finance.transactions.unshift(...fresh);
-      pushActivity("Finance Ledger", `imported ${fresh.length} transaction${fresh.length === 1 ? "" : "s"} from ${file.name}.`, ws);
+      pushActivity("Accounting Ledger", `imported ${fresh.length} transaction${fresh.length === 1 ? "" : "s"} from ${file.name}.`, ws);
       store.save();
       rerender();
     };
@@ -1066,7 +1066,7 @@ function renderMoney(el, rerender) {
       if (!connector) return;
       connector.status = "requested";
       connector.requestedAt = new Date().toISOString();
-      pushActivity("Finance Ledger", `${connector.name} setup requested. Sync will stay off until the secure connector backend is configured.`, ws);
+      pushActivity("Accounting Ledger", `${connector.name} setup requested. Sync will stay off until the secure connector backend is configured.`, ws);
       store.save(); rerender();
     },
     export: (id, btn) => {
@@ -1331,11 +1331,11 @@ const WORKFORCE_EMPLOYEES = [
   {
     id: "nina-cross",
     name: "Nina Cross",
-    title: "Content Producer",
-    department: "Content",
+    title: "Creator Producer",
+    department: "Creator",
     status: "working",
     focus: "Turns ideas into captions, campaign media, generated assets, and approval-ready drafts.",
-    skills: ["captions", "media", "campaigns", "content queue"],
+    skills: ["captions", "media", "campaigns", "creator queue"],
     completed: 36,
     productivity: 89,
     workload: 58,
@@ -1376,11 +1376,11 @@ const WORKFORCE_EMPLOYEES = [
   {
     id: "eli-rhodes",
     name: "Eli Rhodes",
-    title: "Finance Assistant",
-    department: "Finance",
+    title: "Accounting Assistant",
+    department: "Accounting",
     status: "available",
-    focus: "Watches quote ranges, invoice readiness, unpaid items, and revenue follow-up opportunities.",
-    skills: ["pipeline", "quotes", "invoice prep", "retainers"],
+    focus: "Watches transactions, invoice readiness, unpaid items, and cash truth without pretending pipeline is money.",
+    skills: ["ledger review", "quotes", "invoice prep", "cashflow"],
     completed: 24,
     productivity: 86,
     workload: 29,
@@ -1391,11 +1391,11 @@ const WORKFORCE_EMPLOYEES = [
   {
     id: "sofia-lane",
     name: "Sofia Lane",
-    title: "Social Media Manager",
-    department: "Content",
+    title: "Creator Ops Manager",
+    department: "Creator",
     status: "reviewing",
-    focus: "Packages social drafts, post ideas, and campaign calendars for owner approval.",
-    skills: ["social drafts", "platform fit", "calendar prep", "reviews"],
+    focus: "Packages creator drafts, post ideas, and campaign calendars for owner approval.",
+    skills: ["creator drafts", "platform fit", "calendar prep", "reviews"],
     completed: 39,
     productivity: 90,
     workload: 47,
@@ -1467,7 +1467,7 @@ const WORKFORCE_EMPLOYEES = [
     id: "owen-price",
     name: "Owen Price",
     title: "Media Systems Operator",
-    department: "Content",
+    department: "Creator",
     status: "available",
     focus: "Prepares image and video generation plans, credit estimates, and asset-library organization.",
     skills: ["media lab", "credit checks", "asset library", "render prep"],
@@ -1480,7 +1480,7 @@ const WORKFORCE_EMPLOYEES = [
   },
 ];
 
-const WORKFORCE_FILTERS = ["All", "Operations", "Sales", "Content", "Websites", "Finance", "Security", "Client Success"];
+const WORKFORCE_FILTERS = ["All", "Operations", "Sales", "Creator", "Websites", "Accounting", "Security", "Client Success"];
 
 const SWARM_SUBAGENT_TEMPLATES = [
   {
@@ -1870,10 +1870,10 @@ function workerMeshTone(worker) {
 
 function workerMeshGroup(worker) {
   const dept = String(worker.department || "").toLowerCase();
-  if (/content/.test(dept)) return "media";
+  if (/content|creator/.test(dept)) return "media";
   if (/websites/.test(dept)) return "build";
   if (/security/.test(dept)) return "protect";
-  if (/finance/.test(dept)) return "memory";
+  if (/finance|accounting/.test(dept)) return "memory";
   if (/sales/.test(dept)) return "brain";
   return "ops";
 }
@@ -2117,7 +2117,7 @@ function renderBaselineWorkers(runtime) {
   if (!runtime || workerRuntime.state === "error") {
     const services = [
       ...LOCAL_CORE_WORKERS,
-      ...(privateAdminRouteReached() ? [{ name: "Private Route", note: "This session reached the protected admin host" }] : []),
+      ...(privateAdminRouteReached() ? [{ name: "Private Route", note: "This session reached the protected Business Manager host" }] : []),
     ];
     return `
       <section class="worker-baseline worker-baseline-local">
@@ -2747,8 +2747,8 @@ function renderAdmin(el, rerender) {
     <h3 class="ws-subhead">Access</h3>
     <div class="stack">
       <article class="record record-wide">
-        ${kv("Admin host", "<code>admin.phantomforce.online</code> — full phantom, this view")}
-        ${kv("Employee host", "<code>app.phantomforce.online</code> — limited workspace view, permission-scoped")}
+        ${kv("Business Manager host", "<code>admin.phantomforce.online</code> — full PhantomForce operator view")}
+        ${kv("Team Workspace host", "<code>app.phantomforce.online</code> — focused workspace view, permission-scoped")}
         ${kv("Gateway", "private access gateway sits in front of both — auth is enforced there, never weakened here")}
       </article>
     </div>

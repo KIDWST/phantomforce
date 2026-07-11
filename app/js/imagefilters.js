@@ -1,7 +1,7 @@
 /* PhantomForce — shared canvas image-filter engine: adjust/rotate/flip/text
    overlay, subject bokeh, plus a local, honest "AI edit" heuristic that maps
    a text prompt to filter presets. Pure functions, no network calls, no
-   module-level state — Media Lab's Edit tab and Content Hub's inline image
+   module-level state — Media Lab's Edit tab and Creator Hub's inline image
    editor both import this so the actual pixel work only lives in one tested
    place. */
 

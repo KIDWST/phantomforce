@@ -6,12 +6,12 @@
  * instead of sending people out to another product.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260711-163";
+import { session as accessSession } from "./store.js?v=phantom-live-20260711-164";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260711-163";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260711-163";
-import { loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260711-163";
+} from "./contenthub.js?v=phantom-live-20260711-164";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260711-164";
+import { loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260711-164";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1034,13 +1034,13 @@ function consumeEditIntent(opts = {}) {
     type: "image",
     url: intent.url,
     saved: true,
-    meta: { prompt: intent.prompt || "", title: intent.title || "Content Hub edit" },
+    meta: { prompt: intent.prompt || "", title: intent.title || "Creator Hub edit" },
   };
   if (!session.assets.some((item) => item.id === asset.id)) session.assets.unshift(asset);
   session.edit = { url: asset.url, type: "image", id: asset.id };
   session.tab = "edit";
   resetEdit();
-  opts.notify?.("Media Factory", `loaded ${intent.title || "Content Hub asset"} for local edit.`);
+  opts.notify?.("Media Factory", `loaded ${intent.title || "Creator Hub asset"} for local edit.`);
 }
 
 function consumePromptIntent(opts = {}) {
@@ -1381,7 +1381,7 @@ function nextStepsHtml(esc) {
           ${svgIc("check")}<b>Save to library</b><span>${unsavedCount ? `${unsavedCount} unsaved` : "All saved"}</span>
         </button>
         <button class="ml-next-card is-cyan" data-ml-next="hub">
-          ${svgIc("hub")}<b>Open in Content Hub</b><span>Auto-captured already</span>
+          ${svgIc("hub")}<b>Open in Creator Hub</b><span>Auto-captured already</span>
         </button>
         <button class="ml-next-card is-gold" data-ml-next="ref">
           ${svgIc("image")}<b>Use as reference</b><span>Continuity for the next take</span>
@@ -1434,7 +1434,7 @@ function railHtml(cfg, esc) {
           ${svgIc("bolt")}<b>${cfg.credits}</b><span>credits</span>
           <span class="ml-rail-credit-meter"><i style="width:${meterPct}%"></i></span>
         </div>
-        <span class="ml-chip is-ready" title="Every finished render is captured to your Content Hub automatically.">${svgIc("hub")} Auto-capture on</span>
+        <span class="ml-chip is-ready" title="Every finished render is captured to your Creator Hub automatically.">${svgIc("hub")} Auto-capture on</span>
         <details class="ml-queue-drop">
           <summary>${svgIc("play")} Queue <b>${queue.length}</b></summary>
           <div class="ml-queue-pop">
@@ -1502,7 +1502,7 @@ function resultsHtml(esc) {
     <div class="ml-idle">
       <div class="ml-idle-orb" aria-hidden="true"><span></span><span></span><span></span></div>
       <b>Create with context</b>
-      <i>Phantom preps the brief, creates the media, reviews the output, and turns it into campaigns, sites, and follow-ups. Finished media lands here — and in Content Hub.</i>
+      <i>Phantom preps the brief, creates the media, reviews the output, and turns it into campaigns, sites, and follow-ups. Finished media lands here — and in Creator Hub.</i>
       <div class="ml-board" aria-hidden="true">
         ${["1:1", "4:5", "16:9", "9:16", "3:2"].map((r, i) => `<span class="ml-board-cell" style="--d:${(i * 0.4).toFixed(1)}s" data-ratio="${r}"></span>`).join("")}
       </div>
@@ -1616,7 +1616,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
         setDoctor("warn", "Media Lab — Sign-in expired", ["Sign out, sign back in, then re-check"],
           "Your admin session needs a refresh. Sign out, sign back in, and hit Re-check.");
       } else if (ready) {
-        setDoctor("ok", "Media Lab — Ready", ["Owner-approved", "Auto-saved to Content Hub"], adminTail);
+        setDoctor("ok", "Media Lab — Ready", ["Owner-approved", "Auto-saved to Creator Hub"], adminTail);
       } else if (e.status === "not_configured") {
         setDoctor("warn", "Media Lab — Offline", ["Generation needs attention"], adminTail);
       } else {
@@ -1627,7 +1627,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
     } else if (h.bridge && !h.bridgeAuth) {
       setDoctor("warn", "Media Lab — Sign-in expired", ["Sign out, sign back in, then re-check"]);
     } else if (h.bridge) {
-      setDoctor("ok", "Media Lab — Ready", ["Auto-saved to Content Hub"]);
+      setDoctor("ok", "Media Lab — Ready", ["Auto-saved to Creator Hub"]);
     } else if (h.proxy) {
       setDoctor("warn", "Media Lab — Needs setup", ["Offline sketches only until connected"]);
     } else if (h.studio && prov === PRIMARY_MEDIA_LANE) {
@@ -1875,7 +1875,7 @@ function renderEdit(body, cfg, opts, root) {
         <div class="ml-tool-head">Text overlay</div>
         <input class="ml-text-in" data-ml-text placeholder="Add a caption / headline…" value="${esc(editState.text)}"/>
         <div class="ml-tool-head">Quick style pass ${svgIc("spark")}</div>
-        <p class="ml-hint">Local mood/color nudge only — not a full AI-generated edit. For prompt-guided AI editing and background removal, use Content Hub's editor by tapping an image in the library.</p>
+        <p class="ml-hint">Local mood/color nudge only — not a full AI-generated edit. For prompt-guided AI editing and background removal, use Creator Hub's editor by tapping an image in the library.</p>
         <div class="ml-prompt-wrap">
           <input class="ml-text-in" data-ml-aiedit placeholder="e.g. brighter, cinematic teal, moody night"/>
           <button class="ml-enhance" data-ml-runai>Apply</button>

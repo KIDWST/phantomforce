@@ -8,11 +8,11 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260711-163";
+import { store, uid, visible, pushActivity, ago, currentWs, session } from "./store.js?v=phantom-live-20260711-164";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260711-163";
+} from "./content-ideas.js?v=phantom-live-20260711-164";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -115,7 +115,7 @@ function agentCard(a, opts) {
     <span class="au-item-main">
       <b>${esc(a.name)}</b>
       <i>${esc(a.mission || a.role || "")}</i>
-      <em>Created ${esc(ago(a.createdAt))} · Updated ${esc(ago(a.updatedAt))} · ${esc(a.source || "Phantom dashboard")}</em>
+      <em>Created ${esc(ago(a.createdAt))} · Updated ${esc(ago(a.updatedAt))} · ${esc(a.source || "Business HQ")}</em>
       <em class="au-vacation-flag ${allowedDuringVacation ? "au-vacation-flag-on" : "au-vacation-flag-off"}">${allowedDuringVacation ? "Allowed during Vacation Mode" : "Blocked during Vacation Mode"} · requires approval to run</em>
     </span>
     <span class="aops-agent-mode aops-m-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}">${st.label}</span>
@@ -204,7 +204,7 @@ function dailyIdeaEditPanel(config, missingProfile) {
       <button class="btn btn-quiet" data-di-refresh type="button">Regenerate today's ${esc(config.count)}</button>
       <button class="btn btn-quiet" data-di-open-ideas data-open-ws="content" type="button">Open New Ideas</button>
     </div>
-    <p class="bm-hint">Daily ideas are replaced each day. If the user saves an idea in Content Hub, that saved idea stays; the disposable batch does not.</p>
+    <p class="bm-hint">Daily ideas are replaced each day. If the user saves an idea in Creator Hub, that saved idea stays; the disposable batch does not.</p>
   </div>`;
 }
 
@@ -215,7 +215,7 @@ function customAutomationEditPanel(a, pendingApproval, allowedDuringVacation) {
       <label>Name<input data-au-edit-name="${esc(a.id)}" value="${esc(a.name)}" /></label>
       <label>Status<input value="${esc(st.label)}" disabled /></label>
       <label class="au-config-wide">Mission<textarea data-au-edit-mission="${esc(a.id)}">${esc(a.mission || a.role || "")}</textarea></label>
-      <label>Source<input value="${esc(a.source || "Phantom dashboard")}" disabled /></label>
+      <label>Source<input value="${esc(a.source || "Business HQ")}" disabled /></label>
       <label>Updated<input value="${esc(ago(a.updatedAt))}" disabled /></label>
     </div>
     <div class="au-config-actions">
@@ -240,7 +240,7 @@ function configuredAutomationTab(agents) {
     `<div class="au-automation-block">
       ${automationRow({
         id: DAILY_IDEA_AUTOMATION_ID,
-        kicker: "Content Hub automation",
+        kicker: "Creator Hub automation",
         name: config.name,
         summary: `Fresh disposable idea batch every day. Today: ${ideas.length} active, ${savedIdeas.length} saved.`,
         meta: `${config.count}/day · ${config.style} · ${config.focus} · ${config.refreshHour}:00`,
@@ -374,7 +374,7 @@ export function renderAutomation(el, opts = {}) {
 
   el.innerHTML = `
     <div class="au">
-      <div class="bm-note au-note"><i></i>Automations help your team move faster — they appear here after Phantom drafts them from the dashboard chat, or you pick a recipe, and nothing runs until you approve it. Vacation Mode is a separate system with its own page: automations can be used during Vacation Mode if allowed, but Vacation Mode never turns your automations on or off.</div>
+      <div class="bm-note au-note"><i></i>Automations help your team move faster — they appear here after Phantom drafts them from Business HQ chat, or you pick a recipe, and nothing runs until you approve it. Vacation Mode is a separate system with its own page: automations can be used during Vacation Mode if allowed, but Vacation Mode never turns your automations on or off.</div>
       <div class="au-summary" aria-label="Automation summary">
         <span><b>${count}</b><i>Total</i></span>
         <span><b>${pending}</b><i>Needs approval</i></span>
@@ -482,7 +482,7 @@ export function renderAutomation(el, opts = {}) {
 
   el.querySelector("[data-di-refresh]")?.addEventListener("click", () => {
     const next = refreshDailyIdeas();
-    pushActivity("Automation", `refreshed ${next.name} for today's Content Hub ideas.`, currentWs());
+    pushActivity("Automation", `refreshed ${next.name} for today's Creator Hub ideas.`, currentWs());
     store.save();
     notify("Automation", `Refreshed today's ${next.count} ideas.`);
     paint();

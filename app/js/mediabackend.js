@@ -2,7 +2,7 @@
    removal and AI Edit. Every call here is a real network request —
    no fabricated success, no fake progress. Unreachable/unconfigured always
    resolves to an honest unavailable/error result, never a silent pretend
-   success. Content Hub's lightbox, Media Lab's Edit tab, and Settings all
+   success. Creator Hub's lightbox, Media Lab's Edit tab, and Settings all
    use this so "is a real media engine connected" is answered the same way
    everywhere.
 
@@ -14,8 +14,8 @@
    2. ai-proxy (ai-proxy/server.mjs) — the lighter self-hosted proxy, useful
       for local/dev setups that don't run the full server. */
 
-import { session } from "./store.js?v=phantom-live-20260711-163";
-import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260711-163";
+import { session } from "./store.js?v=phantom-live-20260711-164";
+import { safeCanvasDataUrl } from "./imagefilters.js?v=phantom-live-20260711-164";
 
 function authHeaders(extra = {}) {
   const token = session.token();
@@ -122,7 +122,7 @@ export async function getRembgStatus(opts = {}) {
         available: false,
         pythonCommand: null,
         version: null,
-        error: "Admin session expired. Sign in again, then re-check background removal.",
+        error: "Business Manager session expired. Sign in again, then re-check background removal.",
         checkedAt: new Date().toISOString(),
       };
     }
@@ -182,7 +182,7 @@ export async function requestRemoveBackground(dataUrl) {
 const EDIT_CAPABLE_PROVIDERS = ["cinematic"];
 
 /* Raw ai-proxy /health passthrough — every provider key's real state (not
-   just the edit-capable ones Content Hub cares about), plus the configured
+   just the edit-capable ones Creator Hub cares about), plus the configured
    chat brain. Used by the Developer tab so every integration shows its
    actual status, not a filtered subset. Never throws; unreachable reads as
    ok:false, never a guessed "connected". */
@@ -230,7 +230,7 @@ export async function requestAiEdit({ dataUrl, prompt, provider = "cinematic" })
 }
 
 /* ---------------- content asset sync (cross-device photos) ----------------
-   Content Hub's actual photo/video data normally lives only in whichever
+   Creator Hub's actual photo/video data normally lives only in whichever
    browser created it (localStorage). These calls back it up to the real
    Fastify server (server/src/phantom-ai/content-asset-storage.ts) so the
    same asset shows up on any device logged into the same owner session.
