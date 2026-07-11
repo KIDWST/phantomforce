@@ -181,6 +181,26 @@ const FRIENDLY_ERRORS = {
   worker_not_found: "That worker could not be found.",
 };
 
+// Builds the combined, deduped option list for the workspace picker:
+// previously-used folders first (most recent first), then repos discovered
+// nearby. Not gated on git existing — CLIs run fine in any real folder;
+// git just gets you real per-worker isolation in Approval/Auto mode.
+async function workspaceOptions() {
+  const seen = new Set();
+  const options = [];
+  for (const p of workspaceHistory()) {
+    if (seen.has(p)) continue;
+    seen.add(p);
+    options.push({ path: p, label: `${p} (recently used)` });
+  }
+  for (const r of await scanRepos()) {
+    if (seen.has(r.path)) continue;
+    seen.add(r.path);
+    options.push({ path: r.path, label: `${r.name} — ${r.path}` });
+  }
+  return options;
+}
+
 function friendlyError(code) {
   if (FRIENDLY_ERRORS[code]) return FRIENDLY_ERRORS[code];
   if (typeof code === "string" && /^[a-z_]+$/.test(code)) return "Something went wrong. Please try again.";
@@ -217,11 +237,13 @@ function renderMissionCreateStepObjective(body) {
           .join("")}
       </select>
     </label>
+    <label>Workspace
+      <select id="mf-workspace-select"><option value="">Loading recent + nearby folders…</option></select>
+    </label>
+    <input id="mf-workspace" type="text" value="${escapeHtml(state.workspaceRoot)}" placeholder="or type a full path" />
     <details class="mission-advanced">
       <summary>Advanced</summary>
       <label>Mission name (auto if blank)<input id="mf-name" type="text" placeholder="auto-generated from the objective" /></label>
-      <label>Workspace root<input id="mf-workspace" type="text" value="${escapeHtml(state.workspaceRoot)}" /></label>
-      <div id="mf-repo-picker" class="mission-repo-picker hidden"></div>
       <label>Workers (blank = let it decide)<input id="mf-count" type="number" min="2" max="10" placeholder="auto" /></label>
       <label class="mission-checkbox"><input type="checkbox" id="mf-review" /> Review generated roles before launching</label>
     </details>
@@ -232,7 +254,18 @@ function renderMissionCreateStepObjective(body) {
     <p id="mf-error" class="mission-error hidden"></p>
   `;
   body.appendChild(form);
-  scanRepos(); // kick off in the background so it's likely ready if needed
+
+  workspaceOptions().then((options) => {
+    const select = document.getElementById("mf-workspace-select");
+    if (!select) return; // form may have been replaced already
+    const current = document.getElementById("mf-workspace")?.value ?? "";
+    select.innerHTML =
+      `<option value="">Choose a recent or nearby folder…</option>` +
+      options.map((o) => `<option value="${escapeHtml(o.path)}" ${o.path === current ? "selected" : ""}>${escapeHtml(o.label)}</option>`).join("");
+  });
+  document.getElementById("mf-workspace-select").addEventListener("change", (e) => {
+    if (e.target.value) document.getElementById("mf-workspace").value = e.target.value;
+  });
 
   document.getElementById("mf-cancel").addEventListener("click", () => {
     missionCreateState = null;
@@ -250,12 +283,10 @@ function renderMissionCreateStepObjective(body) {
     const reviewFirst = document.getElementById("mf-review").checked;
     const errorEl = document.getElementById("mf-error");
     errorEl.classList.add("hidden");
-    document.getElementById("mf-repo-picker").classList.add("hidden");
 
     if (!objective || !workspaceRoot) {
       errorEl.textContent = "Please describe the objective and choose a workspace folder.";
       errorEl.classList.remove("hidden");
-      document.querySelector(".mission-advanced").open = true;
       return;
     }
 
@@ -291,53 +322,9 @@ function renderMissionCreateStepObjective(body) {
     } catch (err) {
       btn.disabled = false;
       btn.textContent = "Launch Mission →";
-      if (err.message === "workspace_root_not_a_git_repo") {
-        errorEl.textContent = "That folder isn't a repository, so Approval/Auto mode has nowhere safe to let a worker edit. Pick a repository below, or switch to Plan mode (read-only, works anywhere).";
-        errorEl.classList.remove("hidden");
-        document.querySelector(".mission-advanced").open = true;
-        await showRepoPicker();
-      } else {
-        errorEl.textContent = friendlyError(err.message);
-        errorEl.classList.remove("hidden");
-      }
+      errorEl.textContent = friendlyError(err.message);
+      errorEl.classList.remove("hidden");
     }
-  });
-}
-
-// Populates the (normally hidden) repo pick-list with previously-used
-// workspaces and real repos discovered on this machine, shown when the
-// chosen folder turns out not to be a repository.
-async function showRepoPicker() {
-  const picker = document.getElementById("mf-repo-picker");
-  if (!picker) return;
-  picker.innerHTML = `<label>Pick a repository<select id="mf-repo-select"><option value="">Scanning for repositories…</option></select></label>`;
-  picker.classList.remove("hidden");
-
-  const history = workspaceHistory();
-  const discovered = await scanRepos();
-  const seen = new Set();
-  const options = [];
-  for (const p of history) {
-    if (seen.has(p)) continue;
-    seen.add(p);
-    options.push({ path: p, label: `${p} (recently used)` });
-  }
-  for (const r of discovered) {
-    if (seen.has(r.path)) continue;
-    seen.add(r.path);
-    options.push({ path: r.path, label: `${r.name} — ${r.path}` });
-  }
-
-  const select = document.getElementById("mf-repo-select");
-  if (!select) return; // the form may have been replaced while scanning
-  select.innerHTML =
-    `<option value="">Choose a repository…</option>` +
-    (options.length ? options.map((o) => `<option value="${escapeHtml(o.path)}">${escapeHtml(o.label)}</option>`).join("") : "");
-  if (!options.length) {
-    select.innerHTML += `<option value="" disabled>No repositories found nearby — type a path above instead</option>`;
-  }
-  select.addEventListener("change", () => {
-    if (select.value) document.getElementById("mf-workspace").value = select.value;
   });
 }
 

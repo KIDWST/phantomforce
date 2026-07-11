@@ -355,7 +355,12 @@ async function createMissionWorkers({ mission, roles }) {
       let branch = null;
       const mode = mission.launchMode; // "plan" | "approval" | "auto"
 
-      if (mode !== "plan") {
+      // Real per-worker isolation only when the workspace is actually a git
+      // repo (worktrees are a git feature). Elsewhere, workers in
+      // approval/auto mode share the one folder directly — a real
+      // collision risk with 2+ writers, but not gated on git existing,
+      // since the CLI itself runs fine in any plain folder.
+      if (mission.isolated) {
         const wt = await createWorktree({ repoRoot: mission.workspaceRoot, missionId: mission.id, workerSlug: slug });
         cwd = wt.path;
         branch = wt.branch;
@@ -558,9 +563,10 @@ const server = http.createServer((req, res) => {
         const roles = Array.isArray(body.roles) ? body.roles : [];
         if (!objective || !roles.length) return sendJson(res, 400, { ok: false, error: "objective_and_roles_required" });
         if (!workspaceRoot || !existsSync(workspaceRoot)) return sendJson(res, 400, { ok: false, error: "workspace_root_invalid" });
-        if (launchMode !== "plan" && !(await isGitRepo(workspaceRoot))) {
-          return sendJson(res, 400, { ok: false, error: "workspace_root_not_a_git_repo" });
-        }
+        // A git repo gets real per-worker isolation (worktrees); anywhere
+        // else still works, workers just share the one folder directly —
+        // not gated on git, since the CLIs themselves don't need a repo.
+        const canIsolate = launchMode !== "plan" && (await isGitRepo(workspaceRoot));
 
         const missionId = randomBytes(6).toString("hex");
         const mission = {
@@ -569,6 +575,7 @@ const server = http.createServer((req, res) => {
           objective,
           workspaceRoot,
           launchMode,
+          isolated: canIsolate,
           status: "running",
           createdAt: Date.now(),
           workers: [],

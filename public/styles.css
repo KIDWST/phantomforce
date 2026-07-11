@@ -1262,17 +1262,6 @@ body.broadcast-mode .tile.linked {
   width: auto;
 }
 
-.mission-repo-picker {
-  border: 1px solid rgba(229, 181, 75, 0.45);
-  background: rgba(229, 181, 75, 0.08);
-  border-radius: 9px;
-  padding: 8px 10px;
-}
-
-.mission-repo-picker.hidden {
-  display: none;
-}
-
 .mission-error {
   color: #ff9aa7;
   font-size: 12.5px;

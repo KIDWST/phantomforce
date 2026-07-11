@@ -25,12 +25,17 @@ export function findGitRepos(roots = SCAN_ROOTS) {
     } catch {
       return;
     }
-    if (entries.some((e) => e.isDirectory() && e.name === ".git")) {
+    // A git *worktree* checkout has a ".git" FILE (pointing back at the main
+    // repo's .git/worktrees/<name>), not a ".git" directory — a plain
+    // `isDirectory()` check misses every worktree. Accept either.
+    if (entries.some((e) => e.name === ".git")) {
       if (!seen.has(dir)) {
         seen.add(dir);
         found.push({ path: dir, name: path.basename(dir) });
       }
-      return; // don't hunt for nested repos inside a repo
+      // Keep descending: worktrees are commonly nested under a repo (e.g.
+      // <repo>/worktrees/<branch>, or this app's own .termina-worktrees/),
+      // so stopping at the first repo found would miss them.
     }
     for (const e of entries) {
       if (found.length >= MAX_RESULTS || Date.now() > deadline) return;

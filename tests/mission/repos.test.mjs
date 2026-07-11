@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, rm } from "node:fs/promises";
+import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
@@ -9,6 +9,15 @@ import { findGitRepos } from "../../mission/repos.js";
 async function makeFakeRepo(root, ...segments) {
   const dir = path.join(root, ...segments);
   await mkdir(path.join(dir, ".git"), { recursive: true });
+  return dir;
+}
+
+// A real git worktree checkout has a ".git" FILE (pointing back at the main
+// repo), not a ".git" directory.
+async function makeFakeWorktree(root, ...segments) {
+  const dir = path.join(root, ...segments);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, ".git"), "gitdir: ../../.git/worktrees/fake\n", "utf8");
   return dir;
 }
 
@@ -26,15 +35,26 @@ test("finds a repo at the scan root and in a nested folder", async () => {
   }
 });
 
-test("does not hunt for a nested repo inside another repo", async () => {
+test("finds a worktree checkout, which has a .git FILE rather than a directory", async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), "termina-repos-test-"));
   try {
-    const outer = await makeFakeRepo(root, "outer");
-    await makeFakeRepo(root, "outer", "vendor", "inner");
+    const wt = await makeFakeWorktree(root, "project-a-worktree");
+    const found = findGitRepos([root]);
+    assert.ok(found.some((r) => r.path === wt));
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+test("finds a worktree nested inside its own main repo's folder", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "termina-repos-test-"));
+  try {
+    const mainRepo = await makeFakeRepo(root, "main-repo");
+    const worktree = await makeFakeWorktree(root, "main-repo", "worktrees", "feature-branch");
     const found = findGitRepos([root]);
     const paths = found.map((r) => r.path);
-    assert.ok(paths.includes(outer));
-    assert.ok(!paths.some((p) => p.includes("vendor")));
+    assert.ok(paths.includes(mainRepo));
+    assert.ok(paths.includes(worktree));
   } finally {
     await rm(root, { recursive: true, force: true });
   }
