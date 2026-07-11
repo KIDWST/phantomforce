@@ -19,7 +19,8 @@ export function buildWorkerPrompt({ mission, worker }) {
   lines.push("WORKSPACE");
   lines.push(`Path: ${worker.cwd}`);
   if (worker.branch) lines.push(`Branch: ${worker.branch} (isolated git worktree — your changes here do not affect other workers)`);
-  if (mission.workspaceStrategy === "audit") lines.push("Mode: read-only audit. Do not modify any files.");
+  if (mission.launchMode === "plan") lines.push("Mode: read-only. Do not modify any files.");
+  else if (mission.launchMode === "auto") lines.push("Mode: fully autonomous — no approval prompts will interrupt you, act within your scope.");
   lines.push("");
 
   if (worker.deliverables) {

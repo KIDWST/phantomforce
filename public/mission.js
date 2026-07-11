@@ -9,7 +9,7 @@ const AGENT_PROVIDERS = ["claude", "codex"];
 
 let missionView = "list"; // "list" | "create" | "detail"
 let missionDetailId = null;
-let missionCreateState = null; // { objective, workerCount, workspaceRoot, workspaceStrategy, roles, name }
+let missionCreateState = null; // { objective, workerCount, workspaceRoot, launchMode, roles, name }
 let missionListCache = [];
 let missionRefreshTimer = null;
 
@@ -97,7 +97,7 @@ function renderMissionList() {
     const workerCount = m.workers?.length ?? 0;
     row.innerHTML =
       `<span class="mission-row-name">${escapeHtml(m.name)}</span>` +
-      `<span class="mission-row-meta">${workerCount} worker${workerCount === 1 ? "" : "s"} · ${escapeHtml(m.workspaceStrategy)} · ${escapeHtml(m.status)}</span>`;
+      `<span class="mission-row-meta">${workerCount} worker${workerCount === 1 ? "" : "s"} · ${escapeHtml(m.launchMode)} · ${escapeHtml(m.status)}</span>`;
     row.addEventListener("click", () => {
       missionView = "detail";
       missionDetailId = m.id;
@@ -150,30 +150,35 @@ function rememberWorkspaceRoot(root) {
 // mission with no intermediate review screen. Advanced controls (workspace
 // override, forced worker count, worktrees mode, reviewing roles before
 // launch) are available but collapsed, not required.
+const LAUNCH_MODE_LABELS = {
+  plan: "Plan — read-only, safest",
+  approval: "Approval — can edit, asks before risky actions",
+  auto: "Auto — can edit, fully unattended (no approval stops)",
+};
+
 function renderMissionCreateStepObjective(body) {
   const state = missionCreateState || {
     objective: "",
     workspaceRoot: defaultWorkspaceRoot(),
-    workspaceStrategy: "audit",
+    launchMode: "approval",
   };
 
   const form = document.createElement("div");
   form.className = "mission-form";
   form.innerHTML = `
     <label>What's the objective?<textarea id="mf-objective" rows="3" placeholder="Prepare PhantomForce for launch. Audit the frontend, backend, security, tests, and deployment readiness.">${escapeHtml(state.objective)}</textarea></label>
+    <label>How should it launch?
+      <select id="mf-launchmode">
+        ${Object.entries(LAUNCH_MODE_LABELS)
+          .map(([v, label]) => `<option value="${v}" ${state.launchMode === v ? "selected" : ""}>${escapeHtml(label)}</option>`)
+          .join("")}
+      </select>
+    </label>
     <details class="mission-advanced">
       <summary>Advanced</summary>
       <label>Mission name (auto if blank)<input id="mf-name" type="text" placeholder="auto-generated from the objective" /></label>
       <label>Workspace root<input id="mf-workspace" type="text" value="${escapeHtml(state.workspaceRoot)}" /></label>
-      <div class="mission-form-row">
-        <label>Workers (blank = let it decide)<input id="mf-count" type="number" min="2" max="10" placeholder="auto" /></label>
-        <label>Workspace strategy
-          <select id="mf-strategy">
-            <option value="audit" ${state.workspaceStrategy !== "worktrees" ? "selected" : ""}>Read-only audit (safe default)</option>
-            <option value="worktrees" ${state.workspaceStrategy === "worktrees" ? "selected" : ""}>Isolated git worktrees (workers can edit)</option>
-          </select>
-        </label>
-      </div>
+      <label>Workers (blank = let it decide)<input id="mf-count" type="number" min="2" max="10" placeholder="auto" /></label>
       <label class="mission-checkbox"><input type="checkbox" id="mf-review" /> Review generated roles before launching</label>
     </details>
     <div class="mission-form-actions">
@@ -196,7 +201,7 @@ function renderMissionCreateStepObjective(body) {
     const name = document.getElementById("mf-name").value.trim();
     const countRaw = document.getElementById("mf-count").value.trim();
     const workerCount = countRaw ? Math.max(2, Math.min(10, parseInt(countRaw, 10) || 0)) : undefined;
-    const workspaceStrategy = document.getElementById("mf-strategy").value;
+    const launchMode = document.getElementById("mf-launchmode").value;
     const reviewFirst = document.getElementById("mf-review").checked;
     const errorEl = document.getElementById("mf-error");
     errorEl.classList.add("hidden");
@@ -223,7 +228,7 @@ function renderMissionCreateStepObjective(body) {
         name: name || res.missionName,
         objective,
         workspaceRoot,
-        workspaceStrategy,
+        launchMode,
         roles: res.roles,
         decomposeCostUsd: res.costUsd,
       };
@@ -246,8 +251,11 @@ function renderMissionCreateStepObjective(body) {
 }
 
 // Shared by both the fast (auto-launch) path and the "review roles first"
-// path — actually creates the mission's workers and attaches wall tiles to
-// the sessions the server just started.
+// path — actually creates the mission's workers, attaches wall tiles to the
+// sessions the server just started, and immediately closes the modal so you
+// land on the wall watching your CLIs work instead of stuck behind a dialog.
+// Reopen the roster/synthesis view any time via the "Missions" button or a
+// worker tile's "▤ Worker N" badge.
 async function launchMissionNow(state) {
   const res = await api("/api/missions", {
     method: "POST",
@@ -255,16 +263,15 @@ async function launchMissionNow(state) {
       name: state.name,
       objective: state.objective,
       workspaceRoot: state.workspaceRoot,
-      workspaceStrategy: state.workspaceStrategy,
+      launchMode: state.launchMode,
       roles: state.roles,
     }),
   }).then((r) => r.json());
   if (!res.ok) throw new Error(res.error || "mission launch failed");
   attachMissionWorkerTiles(res.mission);
   missionCreateState = null;
-  missionView = "detail";
   missionDetailId = res.mission.id;
-  renderMissionView();
+  closeMissionModal();
 }
 
 function renderMissionCreateStepRoles(body) {
@@ -383,7 +390,7 @@ async function renderMissionDetail() {
   head.className = "mission-detail-head";
   head.innerHTML = `
     <p class="mission-objective"><b>Objective:</b> ${escapeHtml(mission.objective)}</p>
-    <p class="mission-hint">${escapeHtml(mission.workspaceStrategy)} · ${escapeHtml(mission.workspaceRoot)}</p>
+    <p class="mission-hint">${escapeHtml(mission.launchMode)} · ${escapeHtml(mission.workspaceRoot)}</p>
   `;
   body.appendChild(head);
 

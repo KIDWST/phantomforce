@@ -27,7 +27,7 @@ import { buildWorkerPrompt } from "./mission/prompt.js";
 import { decomposeObjective } from "./mission/decompose.js";
 import { synthesizeMission, renderReportMarkdown } from "./mission/synthesize.js";
 import { isGitRepo, slugify, createWorktree, removeWorktree } from "./mission/worktree.js";
-import { AGENT_PROVIDERS, isAgentProvider } from "./mission/adapters.js";
+import { AGENT_PROVIDERS, isAgentProvider, isLaunchMode } from "./mission/adapters.js";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(appDir, "public");
@@ -352,9 +352,9 @@ async function createMissionWorkers({ mission, roles }) {
 
       let cwd = mission.workspaceRoot;
       let branch = null;
-      const mode = mission.workspaceStrategy === "worktrees" ? "write" : "audit";
+      const mode = mission.launchMode; // "plan" | "approval" | "auto"
 
-      if (mission.workspaceStrategy === "worktrees") {
+      if (mode !== "plan") {
         const wt = await createWorktree({ repoRoot: mission.workspaceRoot, missionId: mission.id, workerSlug: slug });
         cwd = wt.path;
         branch = wt.branch;
@@ -549,11 +549,11 @@ const server = http.createServer((req, res) => {
         const name = String(body.name ?? "Untitled mission").trim();
         const objective = String(body.objective ?? "").trim();
         const workspaceRoot = String(body.workspaceRoot ?? "").trim();
-        const workspaceStrategy = body.workspaceStrategy === "worktrees" ? "worktrees" : "audit";
+        const launchMode = isLaunchMode(body.launchMode) ? body.launchMode : "approval";
         const roles = Array.isArray(body.roles) ? body.roles : [];
         if (!objective || !roles.length) return sendJson(res, 400, { ok: false, error: "objective_and_roles_required" });
         if (!workspaceRoot || !existsSync(workspaceRoot)) return sendJson(res, 400, { ok: false, error: "workspace_root_invalid" });
-        if (workspaceStrategy === "worktrees" && !(await isGitRepo(workspaceRoot))) {
+        if (launchMode !== "plan" && !(await isGitRepo(workspaceRoot))) {
           return sendJson(res, 400, { ok: false, error: "workspace_root_not_a_git_repo" });
         }
 
@@ -563,7 +563,7 @@ const server = http.createServer((req, res) => {
           name,
           objective,
           workspaceRoot,
-          workspaceStrategy,
+          launchMode,
           status: "running",
           createdAt: Date.now(),
           workers: [],

@@ -1,29 +1,45 @@
-// Per-agent-CLI adapter: how to launch a given provider in audit (read-only)
-// vs write (isolated worktree) mode. Mission Mode is not Claude-only — any
-// agentic CLI with a real audit/write enforcement mechanism can be added
-// here. Providers without a defined adapter are not offered as mission
-// workers, since Termina can't guarantee audit-mode safety for them (a plain
-// shell has no equivalent of "--permission-mode plan").
+// Per-agent-CLI adapter: how to launch a given provider under one of three
+// launch modes. Mission Mode is not Claude-only — any agentic CLI with a
+// real enforcement mechanism for these three can be added here. Providers
+// without a defined adapter are not offered as mission workers, since
+// Termina can't guarantee "plan" mode's safety for them (a plain shell has
+// no equivalent of "--permission-mode plan").
+//
+// - "plan": read-only, cannot write. Safest; use when you just want
+//   findings, not changes.
+// - "approval": can edit (in an isolated worktree), stops to ask before
+//   risky actions — the CLI's own normal interactive behavior.
+// - "auto": can edit (in an isolated worktree), runs fully unattended with
+//   no approval stops. Confirmed against each CLI's own documented flags
+//   (Claude's `--permission-mode auto`, Codex's `--ask-for-approval never`)
+//   — not `bypassPermissions`/`--dangerously-bypass-approvals-and-sandbox`,
+//   which both CLIs describe as unsafe outside an externally-sandboxed
+//   environment. Choosing this mode is the user's own explicit call per
+//   mission; Termina doesn't default to it.
 export const AGENT_PROVIDERS = {
   claude: {
     label: "Claude CLI",
-    // Confirmed live: `claude --permission-mode plan` blocks writes for
-    // audit missions; `default` keeps Claude's own interactive approval
-    // prompts for write-mode (worktree) missions.
-    buildArgs: (mode) => ["-NoLogo", "-NoExit", "-Command", `claude --permission-mode ${mode === "audit" ? "plan" : "default"}`],
+    buildArgs: (mode) => {
+      const flag = mode === "plan" ? "plan" : mode === "auto" ? "auto" : "manual";
+      return ["-NoLogo", "-NoExit", "-Command", `claude --permission-mode ${flag}`];
+    },
   },
   codex: {
     label: "Codex CLI",
-    // Codex's own sandbox flag enforces read-only at the OS level for audit
-    // missions (stronger than an application-level guard); workspace-write
-    // plus on-request approval mirrors Claude's write-mode behavior.
-    buildArgs: (mode) =>
-      mode === "audit"
-        ? ["-NoLogo", "-NoExit", "-Command", "codex --sandbox read-only --ask-for-approval on-request"]
-        : ["-NoLogo", "-NoExit", "-Command", "codex --sandbox workspace-write --ask-for-approval on-request"],
+    buildArgs: (mode) => {
+      if (mode === "plan") return ["-NoLogo", "-NoExit", "-Command", "codex --sandbox read-only --ask-for-approval on-request"];
+      const approval = mode === "auto" ? "never" : "on-request";
+      return ["-NoLogo", "-NoExit", "-Command", `codex --sandbox workspace-write --ask-for-approval ${approval}`];
+    },
   },
 };
 
 export function isAgentProvider(id) {
   return Object.prototype.hasOwnProperty.call(AGENT_PROVIDERS, id);
+}
+
+export const LAUNCH_MODES = ["plan", "approval", "auto"];
+
+export function isLaunchMode(mode) {
+  return LAUNCH_MODES.includes(mode);
 }

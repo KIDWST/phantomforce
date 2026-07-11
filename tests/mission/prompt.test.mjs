@@ -8,7 +8,7 @@ function sampleMission() {
     { id: "w1", index: 1, name: "Frontend Auditor", scope: "Audit the UI layer only.", cwd: "C:\\repo\\wt-frontend", branch: "termina/mission-abc/frontend", deliverables: "A list of UI issues.", prohibited: "Do not touch backend code." },
     { id: "w2", index: 2, name: "Backend Auditor", scope: "Audit the API layer only.", cwd: "C:\\repo\\wt-backend", branch: "termina/mission-abc/backend", deliverables: "A list of API issues.", prohibited: "Do not touch frontend code." },
   ];
-  return { objective: "Prepare the app for launch.", workspaceStrategy: "worktrees", workers };
+  return { objective: "Prepare the app for launch.", launchMode: "approval", workers };
 }
 
 test("each worker gets a prompt containing its own role, scope, and workspace", () => {
@@ -45,12 +45,19 @@ test("mentions other workers by name so scopes stay non-duplicative", () => {
   assert.ok(!promptA.includes("Worker 1 (Frontend Auditor)")); // doesn't list itself as an "other worker"
 });
 
-test("audit-mode missions tell the worker not to modify files", () => {
+test("plan-mode missions tell the worker not to modify files", () => {
   const mission = sampleMission();
-  mission.workspaceStrategy = "audit";
+  mission.launchMode = "plan";
   mission.workers[0].branch = null;
   const prompt = buildWorkerPrompt({ mission, worker: mission.workers[0] });
-  assert.ok(/read-only audit/i.test(prompt));
+  assert.ok(/read-only/i.test(prompt));
+});
+
+test("auto-mode missions tell the worker no approval prompts will interrupt it", () => {
+  const mission = sampleMission();
+  mission.launchMode = "auto";
+  const prompt = buildWorkerPrompt({ mission, worker: mission.workers[0] });
+  assert.ok(/fully autonomous/i.test(prompt));
 });
 
 test("includes the reporting protocol instructions", () => {
