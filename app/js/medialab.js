@@ -6,12 +6,12 @@
  * instead of sending people out to another product.
  */
 
-import { session as accessSession } from "./store.js?v=phantom-live-20260710-145";
+import { session as accessSession } from "./store.js?v=phantom-live-20260710-146";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260710-145";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-145";
-import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-145";
+} from "./contenthub.js?v=phantom-live-20260710-146";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear } from "./imagefilters.js?v=phantom-live-20260710-146";
+import { getRembgStatus, loadImageForEditing, exportCanvas } from "./mediabackend.js?v=phantom-live-20260710-146";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
