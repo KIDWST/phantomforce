@@ -379,7 +379,9 @@ function metrics(state: VacationWorkspaceState) {
 
 async function queueApprovals(workspaceId: string) {
   const queue = await readApprovalQueueWithTransitions({ limit: 30 }).catch(() => ({ records: [] }));
-  return queue.records.filter((record) => record.queue_status === "pending").map((record) => ({
+  return queue.records
+    .filter((record) => record.queue_status === "pending" && record.approval.tenant_context.tenant_id === workspaceId)
+    .map((record) => ({
     id: record.queue_id,
     workspaceId,
     title: record.approval.summary || record.approval.action_type || "Owner decision needed",
@@ -390,7 +392,7 @@ async function queueApprovals(workspaceId: string) {
     status: "pending" as const,
     timestamp: record.queued_at,
     metadata: { queue_id: record.queue_id, execution_disabled: true },
-  }));
+    }));
 }
 
 export async function getVacationModeStatus(session: AccessSession) {
