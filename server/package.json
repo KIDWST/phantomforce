@@ -20,6 +20,7 @@
     "test:windows-media": "tsx scripts/test-windows-media-session.ts",
     "test:windows-media-route": "tsx scripts/test-windows-media-route.ts",
     "test:agent-workforce": "tsx scripts/test-agent-workforce-status.ts",
+    "test:vacation-operator": "tsx scripts/test-vacation-operator-coverage.ts",
     "test:neural-spine": "tsx scripts/test-neural-spine.ts",
     "test:internal-harness": "tsx scripts/test-internal-harness-router.ts",
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",

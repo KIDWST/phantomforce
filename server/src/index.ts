@@ -145,11 +145,17 @@ import {
 } from "./phantom-ai/external-security-monitor.js";
 import {
   activateVacationMode,
+  cancelVacationOperatorTask,
+  createVacationOperatorTask,
   deactivateVacationMode,
   decideVacationApproval,
   getVacationModeActivity,
   getVacationModeApprovals,
   getVacationModeStatus,
+  getVacationOperatorTasks,
+  runVacationModeCheckIn,
+  startVacationModeEngine,
+  updateVacationOperatorTask,
   updateVacationModeSettings,
 } from "./phantom-ai/vacation-mode.js";
 import {
@@ -2222,7 +2228,7 @@ app.post("/phantom-ai/approvals/queue/:queueId/status", async (request, reply) =
 });
 
 app.get("/api/vacation-mode/status", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2236,7 +2242,7 @@ app.get("/api/vacation-mode/status", async (request, reply) => {
 });
 
 app.post("/api/vacation-mode/activate", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2254,7 +2260,7 @@ app.post("/api/vacation-mode/activate", async (request, reply) => {
 });
 
 app.post("/api/vacation-mode/deactivate", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2272,7 +2278,7 @@ app.post("/api/vacation-mode/deactivate", async (request, reply) => {
 });
 
 app.patch("/api/vacation-mode/settings", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2290,7 +2296,7 @@ app.patch("/api/vacation-mode/settings", async (request, reply) => {
 });
 
 app.get("/api/vacation-mode/activity", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2307,7 +2313,7 @@ app.get("/api/vacation-mode/activity", async (request, reply) => {
 });
 
 app.get("/api/vacation-mode/approvals", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2325,7 +2331,7 @@ app.get("/api/vacation-mode/approvals", async (request, reply) => {
 });
 
 app.post("/api/vacation-mode/approvals/:id/decision", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
 
   if (!session) {
     return reply;
@@ -2366,6 +2372,49 @@ app.post("/api/vacation-mode/approvals/:id/decision", async (request, reply) => 
     external_send_performed: false,
     provider_call_performed: false,
   };
+});
+
+app.get("/api/vacation-mode/operator-tasks", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = request.query as { limit?: string } | undefined;
+  return { ok: true, session, tasks: await getVacationOperatorTasks(session, Number(query?.limit ?? 50)) };
+});
+
+app.post("/api/vacation-mode/operator-tasks", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  try {
+    return { ok: true, session, ...(await createVacationOperatorTask(session, request.body ?? {})) };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Operator request could not be saved." });
+  }
+});
+
+app.post("/api/vacation-mode/operator-tasks/:id/cancel", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const task = params.id ? await cancelVacationOperatorTask(session, params.id.slice(0, 180)) : null;
+  return task ? { ok: true, session, task } : reply.code(404).send({ ok: false, error: "Operator request was not found." });
+});
+
+app.patch("/api/vacation-mode/operator-tasks/:id/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const task = params.id ? await updateVacationOperatorTask(session, params.id.slice(0, 180), request.body ?? {}) : null;
+    return task ? { ok: true, session, task } : reply.code(404).send({ ok: false, error: "Operator request was not found." });
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Operator status could not be updated." });
+  }
+});
+
+app.post("/api/vacation-mode/check-in", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return { ok: true, session, ...(await runVacationModeCheckIn("owner_requested")) };
 });
 
 function buildHermesInteractionMemoryPreviewFromBody(
@@ -5460,12 +5509,15 @@ export { app };
 
 let stopAutonomousSecurityScanner: (() => void) | null = null;
 let stopAutomationEngine: (() => void) | null = null;
+let stopVacationModeEngine: (() => boolean) | null = null;
 
 app.addHook("onClose", async () => {
   stopAutonomousSecurityScanner?.();
   stopAutonomousSecurityScanner = null;
   stopAutomationEngine?.();
   stopAutomationEngine = null;
+  stopVacationModeEngine?.();
+  stopVacationModeEngine = null;
 });
 
 if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
@@ -5473,6 +5525,7 @@ if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
     await app.listen({ host, port });
     stopAutonomousSecurityScanner = startAutonomousSecurityScanScheduler(app.log);
     stopAutomationEngine = startAutomationEngine(app.log);
+    stopVacationModeEngine = startVacationModeEngine(app.log);
     app.log.info(`PhantomForce server listening on http://${host}:${port}`);
   } catch (error) {
     app.log.error(error);
