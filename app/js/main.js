@@ -6,25 +6,25 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260711-183";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-183";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-183";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-183";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-183";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-183";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-183";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-183";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-183";
-import { renderAutomation, renderDeveloperAutopilotPanel } from "./brandops.js?v=phantom-live-20260711-183";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-183";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-183";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-183";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-183";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-183";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-183";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-183";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260711-183";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260711-183";
+} from "./store.js?v=phantom-live-20260711-184";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-184";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-184";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-184";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-184";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-184";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-184";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-184";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-184";
+import { renderAutomation, renderDeveloperAutopilotPanel } from "./brandops.js?v=phantom-live-20260711-184";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-184";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-184";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-184";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-184";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-184";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-184";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-184";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260711-184";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260711-184";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -1310,7 +1310,7 @@ function applyCompanionMode(mode) {
   const input = $("[data-command-input]");
   if (!input) return;
   input.placeholder = mode === "loop"
-    ? "Phantom Loop is on - this reply will route through another model..."
+    ? "Phantom Loop is on - give Phantom the outcome..."
     : "Ask PhantomForce anything...";
 }
 
@@ -1332,7 +1332,7 @@ function renderChatSettingsPanel(target) {
       else if (loop.enabled && companionMode() !== "loop") setCompanionMode("loop");
       applyCompanionMode(companionMode());
       const caption = document.querySelector("[data-pc-caption]");
-      if (caption) caption.textContent = loop.enabled ? `Phantom Loop on — routing through ${loopProviderName(loop.targetProvider)}` : "Phantom Loop off";
+      if (caption) caption.textContent = loop.enabled ? "Phantom Loop on — deeper pass ready" : "Phantom Loop off";
     },
   });
 }
@@ -1348,7 +1348,7 @@ const CHAT_STARTERS = [
 function starterHtml() {
   return `<div class="chat-start" data-chat-start>
     <p class="chat-start-t">Build with Phantom.</p>
-    <p class="chat-start-s">Ask normally. Use the gear for Loop, model, and backend settings.</p>
+    <p class="chat-start-s">Ask normally. Use the gear for Loop and chat preferences.</p>
     <div class="chat-start-grid">${CHAT_STARTERS.map((st, i) => `<button class="chat-start-btn" data-starter="${i}">${esc(st.label)}</button>`).join("")}</div>
   </div>`;
 }
@@ -1361,6 +1361,32 @@ function bindStarters(log) {
       runCommand(starter.run);
     };
   });
+}
+
+function progressStepsForCommand(text = "") {
+  const value = String(text).toLowerCase();
+  if (/\b(image|video|media|photo|content|asset|thumbnail|reel)\b/.test(value)) {
+    return ["Understanding the creative brief...", "Checking your workspace...", "Preparing the result..."];
+  }
+  if (/\b(build|create|draft|plan|proposal|campaign|site|page|workflow)\b/.test(value)) {
+    return ["Understanding the outcome...", "Checking related work...", "Building the response..."];
+  }
+  if (/\b(memory|remember|previous|history|client|lead|business)\b/.test(value)) {
+    return ["Checking your context...", "Connecting the relevant details...", "Preparing the answer..."];
+  }
+  return ["Thinking it through...", "Checking the details...", "Preparing the answer..."];
+}
+
+function startChatProgress(text) {
+  const steps = progressStepsForCommand(text);
+  let index = 0;
+  speak(steps[index], "thinking");
+  const timer = window.setInterval(() => {
+    index = Math.min(index + 1, steps.length - 1);
+    speak(steps[index], "thinking");
+    if (index === steps.length - 1) window.clearInterval(timer);
+  }, reduceMotion ? 2200 : 4200);
+  return () => window.clearInterval(timer);
 }
 
 function chatTypingOn(label = "") {
@@ -1523,7 +1549,7 @@ function runCommand(raw) {
   ghostFlare("listening");
   stageReact("listen", 620);
   setTimeout(() => {
-    speak(loopArmed ? `Looping through ${loopProviderName(loop.targetProvider)}…` : "", "thinking");
+    const stopProgress = startChatProgress(text);
     if (loopArmed) setCompanionState("looping");
     stageReact("think", 780);
     setTimeout(async () => {
@@ -1532,9 +1558,11 @@ function runCommand(raw) {
         r = await handleSmartCommand(text);
       } catch {
         r = handleCommand(text);
+      } finally {
+        stopProgress();
       }
       if (loopArmed) {
-        speak("Bringing the answer back to Phantom…", "thinking");
+        speak("Finishing the response...", "thinking");
         await new Promise((resolve) => setTimeout(resolve, reduceMotion ? 0 : 420));
       }
       speak(r.say);
@@ -1754,6 +1782,39 @@ async function fetchAgentWorkforceStatus(windowHours = 24) {
   } catch (e) {
     return { ok: false, error: e?.name === "AbortError" ? "Agent status request timed out." : "Could not reach the agent status backend." };
   }
+}
+
+async function fetchProviderManagerStatus() {
+  try {
+    const token = session.token();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const response = await fetch("/phantom-ai/provider-status", { headers, signal: ctrl.signal });
+    clearTimeout(timer);
+    const payload = await response.json().catch(() => null);
+    const manager = payload?.status?.provider_manager;
+    return response.ok && manager ? manager : null;
+  } catch {
+    return null;
+  }
+}
+
+function providerManagerMarkup(manager) {
+  if (!manager?.providers?.length) return `<p class="dev-provider-empty">Provider state is waiting for the local backend.</p>`;
+  const labels = { codex_cli: "Codex", claude_cli: "Claude", openrouter_glm: "OpenRouter", local_ollama: "Local" };
+  return `<div class="dev-provider-monitor">
+    ${manager.providers.map((provider) => {
+      const tone = provider.status === "online" ? "on" : provider.status === "offline" ? "off" : "warn";
+      return `<article class="dev-provider-row dev-tone-${tone}">
+        <span class="dev-state-pill dev-tone-${tone}">${devDot()}${esc(provider.status)}</span>
+        <div><b>${esc(labels[provider.provider_id] || provider.provider_id)}</b><i>${provider.preferred ? "Preferred" : manager.active_provider_id === provider.provider_id ? "Active fallback" : "Standby"}</i></div>
+        <span><b>${provider.latency_ms == null ? "—" : `${provider.latency_ms}ms`}</b><i>Latency</i></span>
+        <span><b>${esc(provider.quota || "unknown")}</b><i>Quota</i></span>
+        <span><b>${provider.last_success_at ? esc(ago(provider.last_success_at)) : "—"}</b><i>Last success</i></span>
+      </article>`;
+    }).join("")}
+  </div>`;
 }
 
 function devAgentCard(worker, subs, esc) {
@@ -2005,7 +2066,7 @@ function wireDeveloperSection(body, opts) {
   });
 }
 
-function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaHealth }, opts) {
+function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaHealth, providerManager }, opts) {
   const s = ctx.session || {};
   const w = workforce;
   const summary = w?.summary;
@@ -2113,6 +2174,14 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
 
       <section class="dev-section">
         <div class="dev-section-head">
+          <h4>${svg("brain")} Provider monitor</h4>
+          <p>Stateful failover, background recovery, last health, and latency. This telemetry stays behind the owner curtain.</p>
+        </div>
+        ${providerManagerMarkup(providerManager)}
+      </section>
+
+      <section class="dev-section">
+        <div class="dev-section-head">
           <h4>${svg("cog")} Scheduled server jobs</h4>
           <p>Developer-only curtain pull for internal health checks, scheduled job controls, and evidence from the automation engine.</p>
         </div>
@@ -2182,16 +2251,17 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
 }
 
 async function loadDeveloperData(body, opts) {
-  const [wfResult, rembg, mediaHealth] = await Promise.all([
+  const [wfResult, rembg, mediaHealth, providerManager] = await Promise.all([
     fetchAgentWorkforceStatus(24),
     getRembgStatus(),
     getMediaEngineHealth(),
+    fetchProviderManagerStatus(),
   ]);
   if (!document.body.contains(body)) return;
   renderDeveloperContent(body, {
     workforce: wfResult.ok ? wfResult.workforce : null,
     workforceError: wfResult.ok ? null : wfResult.error,
-    rembg, mediaHealth,
+    rembg, mediaHealth, providerManager,
   }, opts);
 }
 
@@ -2295,15 +2365,16 @@ function renderWorkspacePage(id, pushHash = true) {
   root.dataset.consoleView = "workspace";
   root.dataset.pageWs = key;
   const entering = lastEnteredPageKey !== key;
+  const workspaceFirst = !!(def.custom && def.wide);
   lastEnteredPageKey = key;
   root.innerHTML = `
-    <section class="workspace-page ${def.wide ? "workspace-page-wide" : ""} ${entering ? "page-enter" : ""}" data-workspace-page="${esc(key)}">
-      <header class="workspace-page-head">
+    <section class="workspace-page ${def.wide ? "workspace-page-wide" : ""} ${workspaceFirst ? "workspace-page-first" : ""} ${entering ? "page-enter" : ""}" data-workspace-page="${esc(key)}">
+      ${workspaceFirst ? "" : `<header class="workspace-page-head">
         <div>
           <p class="workspace-page-kicker">${esc(def.kicker)}${!def.custom && isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
           <h1>${esc(def.title)}</h1>
         </div>
-      </header>
+      </header>`}
       <div class="workspace-page-body" data-workspace-page-body></div>
     </section>`;
   renderNav();

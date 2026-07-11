@@ -10,18 +10,18 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260711-183";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-183";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-183";
+} from "./imagefilters.js?v=phantom-live-20260711-184";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-184";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-184";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
-  setCanvasPreset, zoomComposition,
-} from "./content-editor.js?v=phantom-live-20260711-183";
+  setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
+} from "./content-editor.js?v=phantom-live-20260711-184";
 import {
   currentTenantId, currentWs, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260711-183";
+} from "./store.js?v=phantom-live-20260711-184";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -701,12 +701,8 @@ export function renderContentHub(el, opts = {}) {
   const tabs = [["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`], ["publish", "Publish"], ["ideas", "Idea Bank"], ["drafts", "Draft Queue"], ["calendar", "Calendar"], ["production", "Workflow"]];
   el.innerHTML = `
     <div class="ch">
-      <section class="ch-creator-head">
-        <div>
-          <p class="ch-eyebrow">Creator intelligence · ${esc(wsName(currentWs()))}</p>
-          <h3>Your creator system, from asset to publish.</h3>
-          <p>Generated media, saved assets, post drafts, and campaign workflow live together so every idea can become content, offer, or launch material.</p>
-        </div>
+      <section class="ch-workbar">
+        <div><h3>Creator Hub</h3><span>${esc(wsName(currentWs()))} · ${esc(tabs.find(([id]) => id === chState.tab)?.[1] || "Library")}</span></div>
         <div class="ch-tenant-actions"><span class="ch-tenant-pill">Isolated workspace</span><button class="btn btn-primary" data-open-ws="media">Create media</button></div>
       </section>
       <div class="ch-tabs">
@@ -1291,9 +1287,10 @@ function freshLightbox(asset, extra = {}) {
   const extraLayers = extra.layers || {};
   const cleanExtra = { ...extra };
   delete cleanExtra.layers;
+  const baseEffects = freshEditState();
   return {
     asset, originalUrl: asset.url, baseUrl: extra.baseUrl || asset.url, cutoutUrl: extra.cutoutUrl || "",
-    state: freshEditState(), bokehPicking: false, bokehCursor: null, showTutorial: false,
+    state: baseEffects, layerEffects: { base: baseEffects }, bokehPicking: false, bokehCursor: null, showTutorial: false,
     selectedSpot: null, rememberBokehSize: true, _probed: false,
     layers: { image: true, cutout: true, bokeh: true, text: true, ...extraLayers },
     openSections: { adjust: false, transform: false, presets: false, text: false },
@@ -1302,7 +1299,7 @@ function freshLightbox(asset, extra = {}) {
     bg: { status: "idle", message: "" },
     bokehDetect: { status: "idle", message: "" },
     text: { open: false },
-    composition: freshComposition(), editorUndo: [], editorRedo: [], editorGesture: null, subjectMaskUrl: "",
+    composition: freshComposition(), editorUndo: [], editorRedo: [], editorGesture: null, subjectMaskUrls: {},
     ...cleanExtra,
   };
 }
@@ -1311,7 +1308,7 @@ function editStateSnapshot(state) {
   return {
     brightness: state.brightness, contrast: state.contrast, saturate: state.saturate,
     hue: state.hue, blur: state.blur, rotate: state.rotate, flip: state.flip,
-    text: state.text, textStyle: { ...state.textStyle }, bokehBrush: state.bokehBrush,
+    crop: { ...(state.crop || {}) }, text: state.text, textStyle: { ...state.textStyle }, bokehBrush: state.bokehBrush,
     bokeh: state.bokeh ? {
       spots: (state.bokeh.spots || []).map((spot) => ({ ...spot })),
       strength: state.bokeh.strength,
@@ -1322,14 +1319,23 @@ function editStateSnapshot(state) {
 }
 
 function editorSnapshot(lb) {
-  return { composition: compositionSnapshot(lb.composition), state: editStateSnapshot(lb.state) };
+  return {
+    composition: compositionSnapshot(lb.composition),
+    layerEffects: Object.fromEntries(Object.entries(lb.layerEffects || {}).map(([id, state]) => [id, editStateSnapshot(state)])),
+  };
 }
 
 function restoreEditorSnapshot(lb, snapshot) {
-  const currentMask = lb.state?.bokeh?.maskImg || null;
+  const masks = Object.fromEntries(Object.entries(lb.layerEffects || {}).map(([id, state]) => [id, state?.bokeh?.maskImg || null]));
   restoreComposition(lb.composition, snapshot.composition);
-  lb.state = { ...freshEditState(), ...snapshot.state, textStyle: { ...freshTextStyle(), ...(snapshot.state?.textStyle || {}) } };
-  if (lb.state.bokeh && currentMask) lb.state.bokeh.maskImg = currentMask;
+  const source = snapshot.layerEffects || (snapshot.state ? { base: snapshot.state } : {});
+  lb.layerEffects = Object.fromEntries(Object.entries(source).map(([id, state]) => {
+    const restored = { ...freshEditState(), ...state, crop: { ...freshEditState().crop, ...(state?.crop || {}) }, textStyle: { ...freshTextStyle(), ...(state?.textStyle || {}) } };
+    if (restored.bokeh && masks[id]) restored.bokeh.maskImg = masks[id];
+    return [id, restored];
+  }));
+  if (!lb.layerEffects.base) lb.layerEffects.base = freshEditState();
+  lb.state = lb.layerEffects.base;
 }
 
 function commitEditorChange(lb, before) {
@@ -1368,17 +1374,23 @@ function selectedImageLayer(lb) {
   if (selected.length !== 1) return null;
   return selected[0].type === "base" || selected[0].type === "image" ? selected[0] : null;
 }
+function layerEditState(lb, layerId = "base") {
+  lb.layerEffects ||= {};
+  if (!lb.layerEffects[layerId]) lb.layerEffects[layerId] = freshEditState();
+  return lb.layerEffects[layerId];
+}
+function selectedImageEditState(lb) {
+  const layer = selectedImageLayer(lb);
+  return layer ? layerEditState(lb, layer.id) : null;
+}
 function selectedImageLabel(lb) {
   return selectedImageLayer(lb)?.name || "";
 }
-function paintStateForLightbox(lb) {
-  const s = lb.state;
-  if (layerVisible(lb, "bokeh") && layerVisible(lb, "text")) return s;
-  return {
-    ...s,
-    bokeh: layerVisible(lb, "bokeh") ? s.bokeh : null,
-    text: layerVisible(lb, "text") ? s.text : "",
-  };
+function effectsForRender(lb) {
+  return Object.fromEntries(Object.entries(lb.layerEffects || {}).map(([id, state]) => [id, {
+    ...state,
+    bokeh: layerVisible(lb, `bokeh:${id}`) ? state.bokeh : null,
+  }]));
 }
 function renderSourceCanvas(img, maxSide = REMBG_EDITOR_MAX_SIDE) {
   const w = img.naturalWidth || img.width || 1;
@@ -1490,15 +1502,11 @@ function removeBgBody(lb, esc) {
       </div>`;
   }
   return `
-    <div class="ch-lb-chips">
-      <button class="btn btn-quiet" type="button" data-ch-lb-bg-run ${checking || loading || unavailable || !target ? "disabled" : ""}>${loading ? "Removing…" : checking ? "Checking…" : "Remove Background"}</button>
-    </div>
-    ${targetName ? `<p class="ch-lb-ai-note">Selected layer: <b>${esc(targetName)}</b></p>` : `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Select one image layer first.</p>`}
-    ${loading ? `<p class="ch-lb-ai-note">Working locally. Larger photos can take a moment.</p>` : ""}
-    ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Background removal is not connected yet.</p>` : ""}
-    ${bg.status === "idle" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Ready — background removal is available.</p>` : ""}
+    <button class="btn btn-primary ch-lb-bg-one" type="button" data-ch-lb-bg-run ${checking || loading || unavailable || !target ? "disabled" : ""}>${loading ? "Removing…" : "Remove"}</button>
+    ${!target ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Select an image layer.</p>` : ""}
+    ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Unavailable.</p>` : ""}
     ${bg.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "Background removal failed.")}</p>` : ""}
-    ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Background removed from ${esc(targetName || "the selected layer")}.</p>` : ""}
+    ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Applied to ${esc(targetName || "selected layer")}.</p>` : ""}
   `;
 }
 
@@ -1629,15 +1637,19 @@ function selectedLayerInspector(lb, esc) {
     </div>`;
 }
 
+function layerEffectLabel(lb, layer) {
+  if (layer.type !== "base" && layer.type !== "image") return layer.type;
+  const state = layerEditState(lb, layer.id);
+  const effects = [];
+  if (state.bokeh) effects.push("bokeh");
+  if (state.blur || state.brightness !== 100 || state.contrast !== 100 || state.saturate !== 100 || state.hue) effects.push("adjusted");
+  if (layer.hasTransparency || (layer.id === "base" && lb.cutoutUrl)) effects.push("cutout");
+  return [layer.type === "base" ? "image" : layer.type, ...effects].join(" · ");
+}
+
 function layerStackBody(lb, esc) {
   const compositionLayers = [...lb.composition.layers].reverse();
   const selected = new Set(lb.composition.selectedIds);
-  const effectRows = [
-    ...(lb.state.bokeh?.maskImg ? [{ key: "subject", label: "Detected subject", active: layerVisible(lb, "subject") }] : []),
-    ...(lb.cutoutUrl ? [{ key: "cutout", label: "Background removal", active: layerVisible(lb, "cutout") }] : []),
-    ...(lb.state.bokeh ? [{ key: "bokeh", label: "Subject bokeh", active: layerVisible(lb, "bokeh") }] : []),
-    ...((lb.state.text || "").trim() ? [{ key: "text", label: "Legacy text overlay", active: layerVisible(lb, "text") }] : []),
-  ];
   return `
     <div class="ch-lb-layers" data-ch-lb-layers>
       <div class="ch-layer-head"><p class="ch-lb-ai-label">${svgIc("eye")} Layers</p><span>${lb.composition.layers.length}</span></div>
@@ -1661,14 +1673,13 @@ function layerStackBody(lb, esc) {
         ${compositionLayers.map((layer) => `
           <div class="ch-lb-layer ch-compose-layer ${layer.visible ? "is-on" : "is-off"} ${selected.has(layer.id) ? "is-selected" : ""}" draggable="true" data-ch-layer-row="${esc(layer.id)}">
             <button type="button" data-ch-layer-visible="${esc(layer.id)}" title="${layer.visible ? "Hide layer" : "Show layer"}">${svgIc("eye")}</button>
-            <button class="ch-layer-name" type="button" data-ch-layer-select="${esc(layer.id)}"><b>${esc(layer.name)}</b><small>${esc(layer.type === "base" ? "adjusted source" : layer.hasTransparency ? `${layer.type} / cutout` : layer.type)}</small></button>
+            <button class="ch-layer-name" type="button" data-ch-layer-select="${esc(layer.id)}"><b>${esc(layer.name)}</b><small>${esc(layerEffectLabel(lb, layer))}</small></button>
             <span class="ch-layer-row-actions">
               <button type="button" data-ch-layer-order="1" data-layer-id="${esc(layer.id)}" title="Move up">&uarr;</button>
               <button type="button" data-ch-layer-order="-1" data-layer-id="${esc(layer.id)}" title="Move down">&darr;</button>
               ${layer.id === "base" ? "" : `<button type="button" data-ch-layer-duplicate="${esc(layer.id)}" title="Duplicate">&#x2398;</button><button type="button" data-ch-layer-delete="${esc(layer.id)}" title="Delete">&times;</button>`}
             </span>
           </div>`).join("")}
-        ${effectRows.map((row) => `<div class="ch-lb-layer ch-effect-layer ${row.key === "subject" ? "is-subject-guide" : ""} ${row.active ? "is-on" : "is-off"}"><button type="button" data-ch-lb-layer-toggle="${esc(row.key)}">${svgIc("eye")}</button><span><b>${esc(row.label)}</b><small>${row.key === "subject" ? "editor-only selection guide" : "non-destructive effect"}</small></span></div>`).join("")}
       </div>
       ${selectedLayerInspector(lb, esc)}
     </div>`;
@@ -1688,7 +1699,8 @@ function lightboxMarkup(lb, esc) {
         </div>
       </div>`;
   }
-  const s = lb.state;
+  const selectedImage = selectedImageLayer(lb);
+  const s = selectedImageEditState(lb) || freshEditState();
   return `
     <div class="ch-lightbox" data-ch-lightbox>
       <div class="ch-lb-backdrop" data-ch-lb-close></div>
@@ -1726,17 +1738,18 @@ function lightboxMarkup(lb, esc) {
                 <canvas class="ch-lb-canvas" data-ch-lb-canvas></canvas>
                 <canvas class="ch-editor-overlay ${lb.bokehPicking ? "is-picking" : ""}" data-ch-editor-overlay></canvas>
               </div>
-              <div class="ch-lb-bokeh-markers ${(layerVisible(lb, "bokeh") && (lb.bokehPicking || lb.selectedSpot != null)) ? "" : "is-hidden"}" data-ch-lb-bokeh-markers></div>
+              <div class="ch-lb-bokeh-markers ${(selectedImage && layerVisible(lb, `bokeh:${selectedImage.id}`) && (lb.bokehPicking || lb.selectedSpot != null)) ? "" : "is-hidden"}" data-ch-lb-bokeh-markers></div>
               <div class="ch-lb-pick-hint" data-ch-lb-pick-hint hidden>${svgIc("spark")} Click to add a sharp area · Done hides the guides</div>
             </div>
           </div>
           <aside class="ch-lb-tools">
             ${layerStackBody(lb, esc)}
-            ${lb.aiEdit?.mode === "connected" ? `<div class="ch-lb-ai">
+            ${selectedImage && lb.aiEdit?.mode === "connected" ? `<div class="ch-lb-ai">
               <p class="ch-lb-ai-label">${svgIc("spark")} Describe an edit</p>
               ${aiEditBody(lb, esc)}
             </div>` : ""}
-            <div class="ch-lb-ai">
+            ${selectedImage ? `<div class="ch-image-tools">
+            <div class="ch-lb-ai ch-lb-ai-compact">
               <p class="ch-lb-ai-label">${svgIc("spark")} Remove background</p>
               ${removeBgBody(lb, esc)}
             </div>
@@ -1751,14 +1764,6 @@ function lightboxMarkup(lb, esc) {
               ${chSlider("Hue", "hue", 0, 360, s.hue)}
               ${chSlider("Blur", "blur", 0, 12, s.blur)}
             </details>
-            <details class="ch-lb-section" data-ch-lb-section="transform" ${lb.openSections?.transform ? "open" : ""}>
-              <summary>Transform</summary>
-              <div class="ch-lb-chips">
-                <button type="button" data-ch-lb-rot="-90">${svgIc("undo")} 90°</button>
-                <button type="button" data-ch-lb-rot="90">90° ${svgIc("redo")}</button>
-                <button type="button" data-ch-lb-flip class="${s.flip ? "is-on" : ""}">Flip</button>
-              </div>
-            </details>
             <details class="ch-lb-section" data-ch-lb-section="presets" ${lb.openSections?.presets ? "open" : ""}>
               <summary>Style presets</summary>
               <div class="ch-lb-chips ch-lb-chips-wrap" data-ch-lb-filter>
@@ -1767,10 +1772,7 @@ function lightboxMarkup(lb, esc) {
                 <button type="button" data-v="cold">Cold</button><button type="button" data-v="vivid">Vivid</button>
               </div>
             </details>
-            <details class="ch-lb-section" data-ch-lb-section="text" ${lb.openSections?.text ? "open" : ""}>
-              <summary>Text overlay</summary>
-              ${textToolBody(s, esc)}
-            </details>
+            </div>` : `<div class="ch-layer-tool-empty">Select an image layer to use Effects and AI.</div>`}
             <div class="ch-lb-actions">
               <button class="btn btn-primary" type="button" data-ch-lb-save>${svgIc("check")} Save</button>
               <button class="btn btn-quiet" type="button" data-ch-lb-save-copy>Save as copy</button>
@@ -1849,7 +1851,8 @@ function wireLightbox(root, opts) {
   });
 
   const asset = lb.asset;
-  const s = lb.state;
+  const selectedLayer = selectedImageLayer(lb);
+  const s = selectedImageEditState(lb) || freshEditState();
   const canvas = root.querySelector("[data-ch-lb-canvas]");
   const overlay = root.querySelector("[data-ch-editor-overlay]");
   const editorStage = root.querySelector("[data-ch-editor-stage]");
@@ -1865,27 +1868,32 @@ function wireLightbox(root, opts) {
   const positionBrushCursor = () => {
     const brush = markerLayer?.querySelector("[data-ch-bokeh-brush-cursor]");
     if (!brush) return;
-    if (!lb.bokehPicking || !lb.bokehCursor) { brush.classList.remove("is-visible"); return; }
+    if (!selectedLayer || !lb.bokehPicking || !lb.bokehCursor) { brush.classList.remove("is-visible"); return; }
     const stageRect = editorStage?.getBoundingClientRect();
     const canvasRect = canvas.getBoundingClientRect();
-    const radius = (s.bokehBrush || 12) / 100 * Math.min(canvasRect.width, canvasRect.height);
-    brush.style.left = `${canvasRect.left - (stageRect?.left || 0) + lb.bokehCursor.x * canvasRect.width}px`;
-    brush.style.top = `${canvasRect.top - (stageRect?.top || 0) + lb.bokehCursor.y * canvasRect.height}px`;
+    const local = canvasPointToLayer(selectedLayer, lb.bokehCursor, canvas);
+    const point = layerPointToCanvas(selectedLayer, local, canvas);
+    const radius = (s.bokehBrush || 12) / 100 * Math.min(selectedLayer.w * canvasRect.width, selectedLayer.h * canvasRect.height);
+    brush.style.left = `${canvasRect.left - (stageRect?.left || 0) + (point.x / canvas.width) * canvasRect.width}px`;
+    brush.style.top = `${canvasRect.top - (stageRect?.top || 0) + (point.y / canvas.height) * canvasRect.height}px`;
     brush.style.width = `${radius * 2}px`;
     brush.style.height = `${radius * 2}px`;
     brush.classList.add("is-visible");
   };
   const positionMarkers = () => {
     if (!markerLayer) return;
-    const spots = s.bokeh?.spots || [];
+    const spots = selectedLayer ? (s.bokeh?.spots || []) : [];
     markerLayer.innerHTML = `${spots.map((_, i) => `<div class="ch-lb-bokeh-marker ${i === lb.selectedSpot ? "is-selected" : ""}" data-spot-index="${i}"></div>`).join("")}<div class="ch-bokeh-brush-cursor" data-ch-bokeh-brush-cursor></div>`;
     const stageRect = editorStage?.getBoundingClientRect();
     const canvasRect = canvas.getBoundingClientRect();
     [...markerLayer.querySelectorAll("[data-spot-index]")].forEach((el) => {
       const spot = spots[Number(el.dataset.spotIndex)];
-      const r = spot.r * Math.min(canvasRect.width, canvasRect.height);
-      el.style.left = `${canvasRect.left - (stageRect?.left || 0) + spot.x * canvasRect.width}px`;
-      el.style.top = `${canvasRect.top - (stageRect?.top || 0) + spot.y * canvasRect.height}px`;
+      const point = layerPointToCanvas(selectedLayer, spot, canvas);
+      const cssX = canvasRect.left - (stageRect?.left || 0) + (point.x / canvas.width) * canvasRect.width;
+      const cssY = canvasRect.top - (stageRect?.top || 0) + (point.y / canvas.height) * canvasRect.height;
+      const r = spot.r * Math.min(selectedLayer.w * canvasRect.width, selectedLayer.h * canvasRect.height);
+      el.style.left = `${cssX}px`;
+      el.style.top = `${cssY}px`;
       el.style.width = `${r * 2}px`;
       el.style.height = `${r * 2}px`;
     });
@@ -1893,9 +1901,11 @@ function wireLightbox(root, opts) {
   };
   const repaint = () => {
     if (!canvas._img) return;
-    renderComposition(canvas, canvas._img, paintStateForLightbox(lb), lb.composition);
+    renderComposition(canvas, canvas._img, lb.layerEffects?.base || lb.state, lb.composition, effectsForRender(lb));
     if (overlay) drawCompositionOverlay(overlay, canvas, lb.composition);
-    if (overlay && layerVisible(lb, "subject") && s.bokeh?.maskImg) drawDetectedSubjectOverlay(overlay, canvas, lb.composition, s.bokeh.maskImg);
+    if (overlay && selectedLayer && layerVisible(lb, `bokeh:${selectedLayer.id}`) && s.bokeh?.maskImg) {
+      drawDetectedSubjectOverlay(overlay, canvas, lb.composition, s.bokeh.maskImg, selectedLayer.id);
+    }
     applyEditorZoom();
     positionMarkers();
   };
@@ -1950,6 +1960,7 @@ function wireLightbox(root, opts) {
       const url = await readFileAsDataUrl(file);
       const image = await loadImageForEditing(url);
       const layer = addImageLayer(lb.composition, url, file.name.replace(/\.[^.]+$/, "") || "Image layer");
+      lb.layerEffects[layer.id] = freshEditState();
       const ratio = (image.naturalWidth || image.width || 1) / (image.naturalHeight || image.height || 1);
       if (ratio >= 1) { layer.w = 0.64; layer.h = Math.max(0.18, layer.w / ratio); }
       else { layer.h = 0.64; layer.w = Math.max(0.18, layer.h * ratio); }
@@ -1989,6 +2000,8 @@ function wireLightbox(root, opts) {
   });
   root.querySelectorAll("[data-ch-layer-select]").forEach((button) => button.onclick = (event) => {
     selectLayer(lb.composition, button.dataset.chLayerSelect, event.shiftKey || event.ctrlKey || event.metaKey);
+    lb.selectedSpot = null;
+    lb.bokehPicking = false;
     rerender();
   });
   root.querySelectorAll("[data-ch-layer-visible]").forEach((button) => button.onclick = () => mutateLayer(() => {
@@ -2027,7 +2040,11 @@ function wireLightbox(root, opts) {
       });
     });
   });
-  root.querySelectorAll("[data-ch-layer-duplicate]").forEach((button) => button.onclick = () => mutateLayer(() => duplicateLayer(lb.composition, button.dataset.chLayerDuplicate)));
+  root.querySelectorAll("[data-ch-layer-duplicate]").forEach((button) => button.onclick = () => mutateLayer(() => {
+    const sourceId = button.dataset.chLayerDuplicate;
+    const copy = duplicateLayer(lb.composition, sourceId);
+    if (copy && lb.layerEffects[sourceId]) lb.layerEffects[copy.id] = { ...editStateSnapshot(lb.layerEffects[sourceId]), bokeh: lb.layerEffects[sourceId].bokeh ? { ...lb.layerEffects[sourceId].bokeh, spots: lb.layerEffects[sourceId].bokeh.spots.map((spot) => ({ ...spot })) } : null };
+  }));
   root.querySelectorAll("[data-ch-layer-delete]").forEach((button) => button.onclick = () => mutateLayer(() => {
     selectLayer(lb.composition, button.dataset.chLayerDelete);
     removeSelectedLayers(lb.composition);
@@ -2126,13 +2143,6 @@ function wireLightbox(root, opts) {
     };
   };
 
-  root.querySelectorAll("[data-ch-lb-layer-toggle]").forEach((btn) => btn.onclick = () => {
-    const key = btn.dataset.chLbLayerToggle;
-    if (!key || key === "image") return;
-    lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), [key]: !layerVisible(lb, key) };
-    rerender();
-  });
-
   root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => {
     let before = null;
     const capture = () => { if (!before) before = editorSnapshot(lb); };
@@ -2202,8 +2212,8 @@ function wireLightbox(root, opts) {
   if (lb.bokehPicking) { overlay?.classList.add("is-picking"); if (pickHint) pickHint.hidden = false; }
   root.querySelectorAll("[data-ch-lb-bokeh-pick]").forEach((b) => b.onclick = () => {
     lb.bokehPicking = !lb.bokehPicking;
-    if (lb.bokehPicking) {
-      lb.layers = { image: true, cutout: true, bokeh: true, text: true, ...(lb.layers || {}), bokeh: true };
+    if (lb.bokehPicking && selectedLayer) {
+      lb.layers = { ...(lb.layers || {}), [`bokeh:${selectedLayer.id}`]: true };
     } else {
       lb.selectedSpot = null;
       lb.bokehCursor = null;
@@ -2212,7 +2222,7 @@ function wireLightbox(root, opts) {
   });
   const bokehOff = root.querySelector("[data-ch-lb-bokeh-off]");
   if (bokehOff) bokehOff.onclick = () => {
-    s.bokeh = null; lb.subjectMaskUrl = ""; lb.selectedSpot = null; lb.subjectHint = null; lb.subjectEstimated = false;
+    s.bokeh = null; if (selectedLayer) delete lb.subjectMaskUrls[selectedLayer.id]; lb.selectedSpot = null; lb.subjectHint = null; lb.subjectEstimated = false;
     lb.bokehDetect = { status: lb.bokehDetect.status === "unavailable" ? "unavailable" : "idle", message: "" };
     repaint(); rerender();
   };
@@ -2248,9 +2258,9 @@ function wireLightbox(root, opts) {
     positionBrushCursor();
   });
   editHitSurface.onclick = (event) => {
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
+    if (!selectedLayer) return;
+    const local = canvasPointToLayer(selectedLayer, canvasPoint(event, canvas), canvas);
+    const { x, y } = local;
     if (lb.bokehPicking) {
       const brush = lb.rememberBokehSize ? (s.bokehBrush || 12) / 100 : 0.12;
       const idx = addBokehSpot(s, x, y, brush);
@@ -2264,11 +2274,9 @@ function wireLightbox(root, opts) {
     if (near !== lb.selectedSpot) { lb.selectedSpot = near === -1 ? null : near; rerender(); }
   };
   editHitSurface.oncontextmenu = (event) => {
-    if (!s.bokeh?.spots?.length) return;
+    if (!selectedLayer || !s.bokeh?.spots?.length) return;
     event.preventDefault();
-    const rect = canvas.getBoundingClientRect();
-    const x = (event.clientX - rect.left) / rect.width;
-    const y = (event.clientY - rect.top) / rect.height;
+    const { x, y } = canvasPointToLayer(selectedLayer, canvasPoint(event, canvas), canvas);
     if (removeBokehSpotNear(s, x, y)) { lb.selectedSpot = null; repaint(); rerender(); }
   };
   // drag an existing marker to reposition its spot. repaint() is safe to call
@@ -2283,8 +2291,9 @@ function wireLightbox(root, opts) {
     event.preventDefault();
     lb.selectedSpot = index;
     const move = (e) => {
-      const rect = canvas.getBoundingClientRect();
-      moveBokehSpot(s, index, (e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
+      if (!selectedLayer) return;
+      const point = canvasPointToLayer(selectedLayer, canvasPoint(e, canvas), canvas);
+      moveBokehSpot(s, index, point.x, point.y);
       repaint();
     };
     const up = () => {
@@ -2307,7 +2316,9 @@ function wireLightbox(root, opts) {
       rerender();
       return;
     }
-    const exported = await exportSourceImage(source.image);
+    const sourceFrame = renderBaseFrame(source.image, layerEditState(lb, target.id));
+    const exported = await exportCanvas(sourceFrame, () => {}, "image/png");
+    if (chLightbox !== lb) return;
     if (!exported.ok) {
       lb.aiEdit = { ...lb.aiEdit, status: "error", message: exported.error };
       rerender();
@@ -2422,24 +2433,25 @@ function wireLightbox(root, opts) {
 
   const bokehDetect = root.querySelector("[data-ch-lb-bokeh-detect]");
   if (bokehDetect) bokehDetect.onclick = async () => {
-    if (lb.bokehDetect.status === "unavailable") return;
+    if (!selectedLayer || lb.bokehDetect.status === "unavailable") return;
     lb.bokehDetect = { status: "loading", message: "" };
     rerender();
-    // Confirms (and if needed, rescues) a readable canvas before building the
-    // base frame — renderBaseFrame draws the same canvas._img, so it would
-    // hit the same taint the main canvas would.
-    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    const source = await selectedImageSource(lb, canvas);
     if (chLightbox !== lb) return;
+    if (!source) {
+      lb.bokehDetect = { status: "error", message: "Select one loaded image layer first." };
+      rerender();
+      return;
+    }
+    const sourceFrame = renderBaseFrame(source.image, s);
+    const exported = await exportCanvas(sourceFrame, () => {}, "image/png");
     if (!exported.ok) {
       lb.bokehDetect = { status: "error", message: exported.error };
       rerender();
       opts.notify?.("Creator Hub", `AI subject detection failed on "${asset.title}": ${exported.error}`);
       return;
     }
-    // Send the clean base frame (adjust/rotate/flip only, no existing bokeh
-    // or text) so the segmentation isn't confused by a prior mask/overlay.
-    const baseUrl = renderBaseFrame(canvas._img, s).toDataURL("image/png");
-    const result = await requestRemoveBackground(baseUrl);
+    const result = await requestRemoveBackground(exported.url);
     if (chLightbox !== lb) return;
     if (!result.ok) {
       lb.bokehDetect = { status: "error", message: result.message };
@@ -2452,11 +2464,11 @@ function wireLightbox(root, opts) {
       if (chLightbox !== lb) return;
       setBokehMask(s, maskImg);
       s.bokeh.spots = [];
-      lb.subjectMaskUrl = result.image;
+      lb.subjectMaskUrls[selectedLayer.id] = result.image;
       lb.selectedSpot = null;
       lb.bokehPicking = false;
       lb.subjectHint = "Subject selected. The mint silhouette is an editor-only guide; the clean edge and background blur are baked into Save or Download.";
-      lb.layers = { image: true, cutout: true, bokeh: true, text: true, subject: true, ...(lb.layers || {}), bokeh: true, subject: true };
+      lb.layers = { ...(lb.layers || {}), [`bokeh:${selectedLayer.id}`]: true };
       lb.bokehDetect = { status: "success", message: "" };
       repaint();
       rerender();

@@ -199,6 +199,14 @@ import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.j
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
 import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
+import {
+  adminProviderAttemptOrder,
+  getAdminProviderManagerStatus,
+  recordAdminProviderFailure,
+  recordAdminProviderSuccess,
+  startAdminProviderHealthMonitor,
+  type AdminProviderId,
+} from "./phantom-ai/admin-provider-manager.js";
 import { evaluateProviderLiveReceiptLedgerContract } from "./phantom-ai/provider-live-receipt-ledger-contract.js";
 import {
   evaluateProviderBudgetPolicy,
@@ -974,13 +982,11 @@ function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
 }
 
 /* Admin Phantom AI chat fallback chain -----------------------------------
-   Jordan picks a lane (Codex/Claude/GLM) in Settings, but a single dead
-   provider (Codex out of usage, Claude CLI missing, Ollama not pulled)
-   should never leave the chat silent when three other configured brains
-   could answer. Every attempt below shares the same request context, so
-   Phantom auto-retries the remaining providers in a fixed order until one
-   actually answers, then tells Jordan which brain it fell back to. */
-type AdminPhantomAiProviderId = "codex_cli" | "claude_cli" | "openrouter_glm" | "local_ollama";
+   Jordan picks a lane in Settings, but a dead provider should not leave the
+   chat silent or get retried on every prompt. The provider manager keeps
+   failures offline, prefers the last healthy lane, and restores the chosen
+   lane after background health recovery. Provider details stay in Developer. */
+type AdminPhantomAiProviderId = AdminProviderId;
 
 function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPhantomAiProviderId {
   if (lane === "claude_cli") return "claude_cli";
@@ -999,11 +1005,6 @@ function adminPhantomAiProviderLabel(providerId: AdminPhantomAiProviderId) {
   if (providerId === "claude_cli") return "Claude CLI";
   if (providerId === "openrouter_glm") return "OpenRouter GLM 5.2";
   return "Local GLM (Ollama)";
-}
-
-function adminPhantomAiFallbackOrder(primary: AdminPhantomAiProviderId): AdminPhantomAiProviderId[] {
-  const all: AdminPhantomAiProviderId[] = ["codex_cli", "claude_cli", "openrouter_glm", "local_ollama"];
-  return [primary, ...all.filter((id) => id !== primary)];
 }
 
 type AdminPhantomAiChatContext = {
@@ -1141,17 +1142,19 @@ async function callAdminPhantomAiProviderSafe(providerId: AdminPhantomAiProvider
 
 async function runAdminPhantomAiChatWithFallback(requestedLane: AdminPhantomAiModelLane, ctx: AdminPhantomAiChatContext) {
   const primaryProviderId = adminPhantomAiProviderIdForLane(requestedLane);
-  const order = adminPhantomAiFallbackOrder(primaryProviderId);
+  const order = adminProviderAttemptOrder(primaryProviderId);
   const attempts: AdminPhantomAiChatAttempt[] = [];
   let providerId = primaryProviderId;
-  let result: any = await callAdminPhantomAiProviderSafe(providerId, ctx);
+  let result: any = null;
 
   for (const candidate of order) {
-    if (candidate !== primaryProviderId) {
-      providerId = candidate;
-      result = await callAdminPhantomAiProviderSafe(providerId, ctx);
-    }
+    providerId = candidate;
+    const startedAt = Date.now();
+    result = await callAdminPhantomAiProviderSafe(providerId, ctx);
     const usable = isAdminPhantomAiResultUsable(result as { status: string });
+    const latencyMs = Date.now() - startedAt;
+    if (usable) recordAdminProviderSuccess(providerId, latencyMs);
+    else recordAdminProviderFailure(providerId, adminPhantomAiResultErrorMessage(result as Record<string, unknown>), latencyMs);
     attempts.push({
       provider_id: providerId,
       status: (result as { status: string }).status,
@@ -1162,20 +1165,11 @@ async function runAdminPhantomAiChatWithFallback(requestedLane: AdminPhantomAiMo
     }
   }
 
-  return { providerId, result, attempts, primaryProviderId, fallbackUsed: true, allFailed: true };
+  return { providerId, result: result ?? { status: "error", output_text: "", model_id: "phantom" }, attempts, primaryProviderId, fallbackUsed: true, allFailed: true };
 }
 
-function buildAdminPhantomAiAllProvidersFailedMessage(attempts: AdminPhantomAiChatAttempt[]) {
-  const lines = attempts.map(
-    (attempt) => `- ${adminPhantomAiProviderLabel(attempt.provider_id)}: ${attempt.error_message ?? "no response"}`,
-  );
-  return [
-    "Phantom couldn't reach any configured AI provider just now.",
-    "",
-    ...lines,
-    "",
-    "Check Codex usage limits, Claude CLI auth, OpenRouter key/flags, and whether Ollama is running, then try again.",
-  ].join("\n");
+function buildAdminPhantomAiAllProvidersFailedMessage() {
+  return "I couldn't complete that just now. Your request is still here — try again in a moment.";
 }
 
 type PendingPrivacyIntent = {
@@ -1628,6 +1622,7 @@ app.get("/phantom-ai/provider-status", async (request, reply) => {
     session,
     status: {
       ...providerStatus,
+      provider_manager: getAdminProviderManagerStatus(),
       hermes: {
         ...providerStatus.hermes,
         ledger_path: ledgerStatus.ledgerPath,
@@ -4844,12 +4839,8 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       message: {
         role: "assistant",
         content: allProvidersFailed
-          ? buildAdminPhantomAiAllProvidersFailedMessage(fallbackChat.attempts)
-          : fallbackSwitched
-            ? `_(${adminPhantomAiProviderLabel(fallbackChat.primaryProviderId)} was unavailable — auto-switched to ${respondingLabel}.)_\n\n${resultOutput}`
-            : resultError
-              ? `${resultOutput}\n\n${respondingLabel} error: ${resultError}`
-              : resultOutput,
+          ? buildAdminPhantomAiAllProvidersFailedMessage()
+          : resultOutput,
       },
       operator:
         respondingProviderId === "codex_cli" && "tool_requested" in modelResult
@@ -5587,6 +5578,7 @@ export { app };
 let stopAutonomousSecurityScanner: (() => void) | null = null;
 let stopAutomationEngine: (() => void) | null = null;
 let stopVacationModeEngine: (() => boolean) | null = null;
+let stopAdminProviderMonitor: (() => void) | null = null;
 
 app.addHook("onClose", async () => {
   stopAutonomousSecurityScanner?.();
@@ -5595,6 +5587,8 @@ app.addHook("onClose", async () => {
   stopAutomationEngine = null;
   stopVacationModeEngine?.();
   stopVacationModeEngine = null;
+  stopAdminProviderMonitor?.();
+  stopAdminProviderMonitor = null;
 });
 
 if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
@@ -5603,6 +5597,7 @@ if (process.env.PHANTOMFORCE_SERVER_LISTEN !== "false") {
     stopAutonomousSecurityScanner = startAutonomousSecurityScanScheduler(app.log);
     stopAutomationEngine = startAutomationEngine(app.log);
     stopVacationModeEngine = startVacationModeEngine(app.log);
+    stopAdminProviderMonitor = startAdminProviderHealthMonitor(app.log);
     app.log.info(`PhantomForce server listening on http://${host}:${port}`);
   } catch (error) {
     app.log.error(error);
