@@ -1,8 +1,8 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260711-171";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel } from "./store.js?v=phantom-live-20260711-171";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260711-178";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel } from "./store.js?v=phantom-live-20260711-178";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -59,7 +59,7 @@ const PROVIDERS = [
 
 const DEFAULT_SETTINGS = {
   provider: "claude",
-  brainMode: "local",
+  brainMode: "api",
   models: {
     claude: "Balanced",
     codex: "Balanced",
