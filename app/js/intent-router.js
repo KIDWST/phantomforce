@@ -20,7 +20,12 @@ const REMINDER = /\b(remind me|reminder|schedule (this|that|it)\b|check this eve
 const AUTOMATION = /\b(automation|automate|workflow|autopilot|recurring|auto[- ]?follow|auto[- ]?post)\b/i;
 const APPROVAL = /\b(approve|approval|sign off|waiting on me|pending|review queue|needs my call)\b/i;
 const MEMORY = /\b(remember|save this memory|make sure you remember|from now on|always remember|forget this)\b/i;
-const STATUS = /\b(status|catch me up|what's next|what is next|today|pipeline|queue|summary|report)\b/i;
+/* "today" alone is NOT a status request — "I'm overwhelmed by everything
+   today" is a person talking, not a report query. Only real status phrasing
+   counts. */
+const STATUS = /\b(status|catch me up|what'?s next|what is next|today'?s plan|plan for today|pipeline|queue|summary|report)\b/i;
+/* the user is venting, not filing a request — answer like a person */
+const VENT = /\b(i'?m|i am|im|feeling|been)\s+(so\s+|really\s+|pretty\s+)?(overwhelmed|stressed|burn(ed|t)?[\s-]*out|exhausted|drowning|swamped|frustrated|anxious|behind on everything)\b|\btoo much (going on|on my plate)\b|\blong (day|week)\b/i;
 /* live-world facts: these are QUESTIONS to answer (or route to a live brain),
    never tasks, plans, or board summaries — "what's the weather today" must
    not be hijacked by the \btoday\b status keyword */
@@ -30,8 +35,20 @@ const CURRENT_INFO = /\b(weather|forecast|temperature|rain|snow|humidity|news|he
    or Site Studio action — explicit enable/disable phrasing only. */
 const LOOP_ENABLE = /\b(start|enable|turn on|activate)\s+(phantom\s+loop|loopus|looper)\b|\bphantom\s+loop\s+on\b|\bloop\s+this\s+(through|with)\b|\broute\s+this\s+through\b/i;
 const LOOP_DISABLE = /\b(stop|disable|turn off|deactivate)\s+(phantom\s+loop|loopus|looper)\b|\bphantom\s+loop\s+off\b/i;
-const LOOPER_BUILD = /\b(start\s+(phantom\s+loop|loopus|looper)\s+for\s+.+|build\s+me\s+(a|an)\s+.+|create\s+(a|an)\s+(campaign|intake form|landing page|booking page|website|site|dashboard|portal|funnel)|make\s+(a|an)\s+(intake form|landing page|booking page|website|site|dashboard|portal|funnel)|turn\s+this\s+into\s+a\s+build\s+plan)\b/i;
-const BUILD_TARGET = /\b(landing page|booking page|website|site|campaign|intake form|build plan|dashboard|portal|funnel)\b/i;
+/* looper packets now own only NON-website builds — website/site/landing/
+   booking-page requests are real Websites projects (create_website below)
+   and never become packets. */
+const LOOPER_BUILD = /\b(start\s+(phantom\s+loop|loopus|looper)\s+for\s+.+|build\s+me\s+(a|an)\s+.+|create\s+(a|an)\s+(campaign|intake form|dashboard|portal|funnel)|make\s+(a|an)\s+(intake form|dashboard|portal|funnel)|turn\s+this\s+into\s+a\s+build\s+plan)\b/i;
+const BUILD_TARGET = /\b(campaign|intake form|build plan|dashboard|portal|funnel)\b/i;
+/* Websites are a REAL product surface (store.state.sites + the Websites
+   page), not a guarded build packet. Any explicit "make/build/create a
+   website/site/landing page [for X]" — including "build me a…" — creates
+   the same record the Websites page edits, so chat and the builder are two
+   doors into one project. Checked BEFORE looper_build so site requests
+   never fall into the packet lane. */
+const WEBSITE_CREATE = /\b(build|create|make|draft|design|spin up|start)\s+(me\s+|us\s+)?(a|an|another|new)\s+[^.?!]{0,40}?\b(website|web ?site|site|landing page|web ?page|home ?page|store ?front|online store)\b/i;
+/* editing an existing site from chat: explicit site nouns + change verbs */
+const WEBSITE_UPDATE = /\b(update|change|edit|redo|rework|improve|adjust|tweak|refresh)\b[^.?!]{0,40}\b(website|site|landing page|home ?page|hero|headline)\b|\bmake\s+(the\s+)?(site|website|hero|headline|page)\b[^.?!]{0,50}\b(premium|simpler|cleaner|shorter|better|blue|red|gold|purple|green|neon)\b|\b(site|website)\b[^.?!]{0,40}\b(more premium|cleaner|simpler)\b/i;
 const EXPLICIT_ARTIFACT = /\b(create|draft|build|make|prepare|write|new)\b/i;
 /* Termina (multi-agent command wall) — EXPLICIT phrasing only. A bare mention
    of "termina" in a question stays conversation. */
@@ -103,10 +120,24 @@ export function classifyPhantomIntent(raw = "") {
 
   if (!text) return { ...result, primaryIntent: "chat", confidence: 0.9, reasonCode: "empty_chat" };
 
+  /* Website work routes to the real Websites surface first — one project,
+     two doors (chat + builder). "Can you / could you / please" is a polite
+     command, not a question; real questions ("how do I make a website?")
+     stay questions. */
+  const politeStripped = text.replace(/^(hey\s+|ok\s+|yo\s+)?(phantom[,\s]+)?(can|could|will|would)\s+you\s+(please\s+)?|^please\s+/i, "");
+  const isHowWhatQuestion = /^(how|what|why|when|where|who|should|do|does|did|is|are)\b/i.test(politeStripped);
+  if (WEBSITE_CREATE.test(politeStripped) && !isHowWhatQuestion) {
+    return { ...result, primaryIntent: "create_website", confidence: 0.93, reasonCode: "explicit_website_create" };
+  }
+  if (WEBSITE_UPDATE.test(politeStripped) && !isHowWhatQuestion) {
+    return { ...result, primaryIntent: "website_update", confidence: 0.86, reasonCode: "explicit_website_update" };
+  }
+
   /* Phantom Loop is a chat-routing toggle, checked before greeting/gratitude
      so "turn off phantom loop" isn't swallowed, but it never fires on plain
-     conversation — only this exact enable/disable phrasing. */
-  if (LOOPER_BUILD.test(text) && BUILD_TARGET.test(text) && !loopTargetIsOnlyGreeting(text)) {
+     conversation — only this exact enable/disable phrasing. "How do I make a
+     campaign?" is a question, never a build packet. */
+  if (LOOPER_BUILD.test(politeStripped) && BUILD_TARGET.test(text) && !loopTargetIsOnlyGreeting(text) && !isHowWhatQuestion) {
     return { ...result, primaryIntent: "looper_build", confidence: 0.91, shouldStartLooper: true, reasonCode: "explicit_looper_build_request" };
   }
   if (loopTargetIsOnlyGreeting(text)) {
@@ -124,6 +155,11 @@ export function classifyPhantomIntent(raw = "") {
   }
   if (GRATITUDE.test(text)) {
     return { ...result, primaryIntent: "gratitude", confidence: 0.94, reasonCode: "simple_gratitude" };
+  }
+  if (VENT.test(text) && !EXPLICIT_TASK.test(text)) {
+    /* a person under pressure gets a person back — never a status dump,
+       never an auto-generated task list */
+    return { ...result, primaryIntent: "vent", confidence: 0.88, reasonCode: "user_is_venting" };
   }
   if (IDENTITY.test(text)) {
     return { ...result, primaryIntent: "identity", confidence: 0.9, reasonCode: "identity_question" };
@@ -287,12 +323,13 @@ export function classifyPhantomIntent(raw = "") {
    this before building a response. */
 const LANE_BY_INTENT = {
   greeting: "conversation", gratitude: "conversation", chat: "conversation", unknown: "conversation",
-  feedback: "conversation",
+  feedback: "conversation", vent: "conversation",
   identity: "answer", capability: "answer", question: "answer", status_check: "answer",
   internal_operator_handoff: "answer",
   brainstorm: "brainstorm", plan: "brainstorm",
   task_candidate: "clarification", automation_candidate: "clarification",
   create_task: "command", memory_update: "command", phantom_loop_on: "command", phantom_loop_off: "command",
+  create_website: "command", website_update: "command",
   create_automation: "workflow", reminder: "workflow", termina_parallel: "workflow", vacation_mode: "workflow",
   looper_build: "workflow", approval_request: "approval",
 };
@@ -300,6 +337,7 @@ const AREA_BY_INTENT = {
   create_task: "workers", memory_update: "memory", create_automation: "automations", reminder: "automations",
   termina_parallel: "workers", vacation_mode: "vacation", approval_request: "approvals",
   phantom_loop_on: "settings", phantom_loop_off: "settings", looper_build: "sites",
+  create_website: "sites", website_update: "sites",
 };
 /* Only these lanes are allowed to show a card by default — conversation/
    answer/brainstorm/clarification stay text-only unless a specific response

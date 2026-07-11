@@ -4,12 +4,12 @@
    of widgets without changing the shell. */
 
 import {
-  store, uid, visible, isAdmin, currentWs, wsName, pushActivity, resolveApproval,
+  store, uid, visible, isAdmin, isOwnerOperator, currentWs, wsName, pushActivity, resolveApproval,
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-180";
+} from "./store.js?v=phantom-live-20260711-181";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -18,7 +18,7 @@ const chip = (status) => `<span class="chip chip-${esc(status)}">${esc(statusLab
 const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
-const memoryUi = { query: "", category: "all" };
+const memoryUi = { query: "", category: "all", brainOpen: false };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -1220,6 +1220,16 @@ function renderMemory(el, rerender) {
           </article>
         </aside>
       </div>
+      ${isOwnerOperator() ? `
+      <details class="memory-brain-panel" data-memory-brain-panel ${memoryUi.brainOpen ? "open" : ""}>
+        <summary>
+          <b>Phantom Brain — server memory vault</b>
+          <span>What the live brain actually knows and injects into chat: editable memories, operator profile, and a context preview. Owner-only.</span>
+        </summary>
+        <div class="memory-brain-mount" data-memory-brain-mount>
+          <p class="ws-note">Loading the brain panel…</p>
+        </div>
+      </details>` : ""}
     </div>`;
 
   const search = el.querySelector("[data-memory-search]");
@@ -1244,6 +1254,26 @@ function renderMemory(el, rerender) {
     pushActivity("Memory", "saved a private workspace memory.", currentWs());
     rerender();
   });
+  /* Phantom Brain (server vault): brain.js is a complete UI over the real
+     /phantom-ai/brain/* endpoints — the editable memory that composeBrainContext
+     injects into every live chat reply. Mounted lazily on expand so the page
+     stays instant, and dynamic-imported because brain.js imports esc from
+     this module (a static import would be a cycle). */
+  const brainPanel = el.querySelector("[data-memory-brain-panel]");
+  if (brainPanel) {
+    brainPanel.addEventListener("toggle", () => {
+      memoryUi.brainOpen = brainPanel.open;
+      if (!brainPanel.open || brainPanel.dataset.mounted) return;
+      brainPanel.dataset.mounted = "1";
+      const mount = brainPanel.querySelector("[data-memory-brain-mount]");
+      import("./brain.js?v=phantom-live-20260711-181")
+        .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
+        .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
+    });
+    if (brainPanel.open && !brainPanel.dataset.mounted) {
+      brainPanel.dispatchEvent(new Event("toggle"));
+    }
+  }
   bindActions(el, {
     "pin-memory": (id) => { toggleMemoryRemember(id); rerender(); },
     "forget-memory": (id) => {
