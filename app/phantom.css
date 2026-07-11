@@ -1459,6 +1459,7 @@ body:has([data-worker-web-stage].is-web-active) .workspace-page-body {
   padding: 14px 18px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
 .worker-node.is-web-dimmed { opacity: 0.15; }
+.worker-thread.is-web-dimmed { opacity: 0.08; }
 .worker-node.is-web-match { border-color: var(--neon); box-shadow: 0 0 0 2px rgba(65,255,161,0.4), 0 0 34px var(--node-glow); }
 /* This is meant to be read while dragging/zooming to find a specific
    worker, not a decorative screensaver - constant motion here fights against

@@ -729,7 +729,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260711-183";
+const POSE_VERSION = "phantom-live-20260711-184";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
