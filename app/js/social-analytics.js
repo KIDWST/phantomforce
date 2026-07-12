@@ -75,6 +75,15 @@ function valueFor(row, aliases) {
   return 0;
 }
 
+function labelFor(row, index) {
+  const entries = Object.entries(row || {});
+  for (const alias of ["date", "day", "period", "published at", "published_at", "timestamp"]) {
+    const match = entries.find(([key]) => normalizedKey(key) === alias);
+    if (match && String(match[1] || "").trim()) return String(match[1]).trim().slice(0, 32);
+  }
+  return `Row ${index + 1}`;
+}
+
 export function parseAnalyticsReport(text, options = {}) {
   const sourceText = String(text || "").trim();
   if (!sourceText) throw new Error("The report is empty.");
@@ -90,8 +99,9 @@ export function parseAnalyticsReport(text, options = {}) {
   if (!rows.length) throw new Error("No analytics rows were found in that report.");
 
   const totals = { reach: 0, impressions: 0, likes: 0, comments: 0, shares: 0, saves: 0, followers: 0, followersGained: 0, engagement: 0 };
+  const series = [];
   let recognized = 0;
-  for (const row of rows) {
+  rows.forEach((row, index) => {
     const values = Object.fromEntries(Object.entries(METRIC_ALIASES).map(([metric, aliases]) => [metric, valueFor(row, aliases)]));
     if (Object.values(values).some((value) => value > 0)) recognized += 1;
     totals.reach += values.reach;
@@ -103,7 +113,14 @@ export function parseAnalyticsReport(text, options = {}) {
     totals.followers = Math.max(totals.followers, values.followers);
     totals.followersGained += values.followersGained;
     totals.engagement += values.engagement || values.likes + values.comments + values.shares + values.saves;
-  }
+    series.push({
+      label: labelFor(row, index),
+      reach: values.reach,
+      impressions: values.impressions,
+      engagement: values.engagement || values.likes + values.comments + values.shares + values.saves,
+      followers: values.followers || values.followersGained,
+    });
+  });
   if (!recognized) {
     throw new Error("No recognized metrics were found. Include reach, views, impressions, followers, likes, comments, shares, or saves.");
   }
@@ -114,5 +131,6 @@ export function parseAnalyticsReport(text, options = {}) {
     syncedAt: options.syncedAt || new Date().toISOString(),
     importedRows: rows.length,
     fileName: String(options.fileName || "analytics report").slice(0, 120),
+    series: series.slice(-90),
   };
 }

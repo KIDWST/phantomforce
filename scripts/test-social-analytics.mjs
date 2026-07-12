@@ -11,6 +11,8 @@ assert.equal(csvResult.impressions, 4000);
 assert.equal(csvResult.engagement, 250);
 assert.equal(csvResult.followers, 5425);
 assert.equal(csvResult.importedRows, 2);
+assert.equal(csvResult.series.length, 2);
+assert.equal(csvResult.series[0].reach, 1200);
 
 const jsonResult = parseAnalyticsReport(JSON.stringify({ data: [
   { metrics: { views: "2.5k", likes: 200, comments: 20, shares: 15, subscribers: 900 } },
@@ -23,4 +25,9 @@ assert.throws(() => parseAnalyticsReport("Name,Title\nA,B"), /No recognized metr
 const contentHubSource = readFileSync(new URL("../app/js/contenthub.js", import.meta.url), "utf8");
 assert.match(contentHubSource, /social-analytics\.js/);
 assert.match(contentHubSource, /parseAnalyticsReport/);
+assert.match(contentHubSource, /PhantomForce local site\/content signals/);
+assert.match(contentHubSource, /Import official report/);
+assert.match(contentHubSource, /Auto · CSV · TSV · JSON/);
+assert.match(contentHubSource, /an-channel-line/);
+assert.match(contentHubSource, /an-coverage-ring/);
 console.log("Social analytics import checks passed.");
