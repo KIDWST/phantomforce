@@ -1940,16 +1940,31 @@ function workerWebEnabled() {
 // particular stage size.
 function computeWorkerWebAutoFit(stageEl, worldEl) {
   const stageRect = stageEl.getBoundingClientRect();
-  const nodes = worldEl.querySelectorAll(".worker-node, .worker-cell-dot");
+  // .worker-cell-dot (decorative helper-lane dust) deliberately excluded -
+  // it extends much further out than the actual interactive nodes, and
+  // including it just zooms everything out to make room for decoration.
+  const nodes = worldEl.querySelectorAll(".worker-node");
   if (!nodes.length || !stageRect.width || !stageRect.height) {
     return { x: stageRect.width / 2, y: stageRect.height / 2, zoom: 1 };
   }
+  // getBoundingClientRect() returns already-transformed screen coordinates.
+  // Measuring while a prior pan/zoom is still applied compounds the error on
+  // every re-fit after the first one (which happened to run at the identity
+  // transform, so it looked correct) - selecting a subagent to reveal its
+  // task tier, for example, would compute a wildly wrong pan/zoom because it
+  // measured positions already skewed by the previous fit. Reset to identity
+  // before measuring so every fit reads the same true, untransformed layout;
+  // the caller overwrites this transform with the freshly computed one
+  // immediately after, so there's no visible flicker.
+  const previousTransform = worldEl.style.transform;
+  worldEl.style.transform = "none";
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   nodes.forEach((node) => {
     const r = node.getBoundingClientRect();
     minX = Math.min(minX, r.left); maxX = Math.max(maxX, r.right);
     minY = Math.min(minY, r.top); maxY = Math.max(maxY, r.bottom);
   });
+  worldEl.style.transform = previousTransform;
   const contentW = maxX - minX || 1;
   const contentH = maxY - minY || 1;
   const padding = 0.82; // breathing room around the edges
