@@ -324,7 +324,8 @@ export function classifyPhantomIntent(raw = "") {
       automationDraft: automationDraft(text),
     };
   }
-  if (/handoff|operator|codex|claude|internal/i.test(text)) {
+  if (/\b(handoff|operator|codex|claude|glm|qwen|ollama|openrouter|local model|backend)\b/i.test(text)
+    || (/\b(connection|disconnected|offline|down|fallback)\b/i.test(text) && /\b(ai|model|brain|hermes|phantom|codex|claude|glm|qwen|backend|server)\b/i.test(text))) {
     return { ...result, primaryIntent: "internal_operator_handoff", confidence: 0.76, reasonCode: "operator_keyword" };
   }
 

@@ -9397,19 +9397,19 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 .buddy[data-dock="sidebar"] .buddy-say {
   left: 50%;
   top: auto;
-  bottom: 12px;
+  bottom: calc(100% + 8px);
   right: auto;
   transform: translateX(-50%);
-  width: calc(var(--buddy-width, 136px) - 26px);
-  max-width: calc(var(--buddy-width, 136px) - 26px);
-  padding: 7px 10px;
+  width: max-content;
+  max-width: min(190px, calc(100vw - 24px));
+  padding: 6px 9px;
   text-align: center;
   font-size: 10.5px;
-  line-height: 1.28;
+  line-height: 1.22;
   overflow-wrap: anywhere;
-  border-radius: 12px;
-  background: rgba(2, 12, 9, 0.78);
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.34), 0 0 14px rgba(65, 255, 161, 0.08);
+  border-radius: 12px 12px 12px 4px;
+  background: rgba(2, 12, 9, 0.94);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.48), 0 0 14px rgba(65, 255, 161, 0.08);
 }
 .buddy[data-state="notifying"] .buddy-canvas,
 .buddy[data-state="celebrating"] .buddy-canvas {
@@ -9423,12 +9423,12 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 .buddy-menu {
   position: fixed;
   z-index: 61;
-  width: min(270px, calc(100vw - 20px));
-  max-height: min(520px, calc(100vh - 20px));
+  width: min(220px, calc(100vw - 20px));
+  max-height: min(360px, calc(100vh - 20px));
   overflow-y: auto;
   display: grid;
-  gap: 6px;
-  padding: 10px;
+  gap: 4px;
+  padding: 8px;
   border: 1px solid var(--line-strong);
   border-radius: 16px;
   background: linear-gradient(180deg, rgba(6,18,13,0.98), rgba(2,8,10,0.98));
@@ -9462,7 +9462,7 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 }
 .buddy-menu button {
   cursor: pointer;
-  padding: 9px 10px;
+  padding: 7px 8px;
 }
 .buddy-menu button:hover,
 .buddy-menu button:focus-visible {
@@ -9473,7 +9473,7 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 .buddy-menu label {
   display: grid;
   gap: 5px;
-  padding: 8px 10px;
+  padding: 7px 8px;
   color: var(--dim);
 }
 .buddy-menu select {

@@ -6,36 +6,36 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-208";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-208";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-208";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-208";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-208";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-208";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-208";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-208";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-208";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-208";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-208";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-208";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-208";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-208";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-208";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-208";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-208";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-208";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-208";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-208";
+} from "./store.js?v=phantom-live-20260712-209";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-209";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-209";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-209";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-209";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-209";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-209";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-209";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-209";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-209";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-209";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-209";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-209";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-209";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-209";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-209";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-209";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-209";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-209";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-209";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-208";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-208";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-208";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-208";
+} from "./orgs.js?v=phantom-live-20260712-209";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-209";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-209";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-209";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260712-208";
+} from "./customization.js?v=phantom-live-20260712-209";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -274,7 +274,7 @@ function maybeUpgradeGateToDatabaseLogin(card) {
 
 /* ============================ sidebar nav ============================ */
 const BASE_NAV = [
-  { id: "dashboard",  label: "Business HQ",  icon: "grid",  view: "main" },
+  { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
@@ -900,7 +900,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-208";
+const POSE_VERSION = "phantom-live-20260712-209";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
