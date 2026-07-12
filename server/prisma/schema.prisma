@@ -42,6 +42,22 @@ enum DomainState {
   failed
 }
 
+enum AssetKind {
+  image
+  video
+  audio
+  font
+  document
+  element
+  other
+}
+
+enum AssetState {
+  ready
+  processing
+  failed
+}
+
 enum ActionStatus {
   proposed
   pending
@@ -279,6 +295,128 @@ model Org {
   orgPlan     OrgPlan?
   usageEvents UsageEvent[]
   sites       Site[]
+  mediaAssets MediaAsset[]
+  assetFolders AssetFolder[]
+  assetCollections AssetCollection[]
+}
+
+/* ============================ ASSET CLOUD ============================
+   Permanent, org-isolated creative library. Blobs are content-addressed
+   on disk (sha256) so identical uploads share storage; records here are
+   the metadata layer. Distinct from the 30-day ContentAsset scratch
+   store, which remains the ephemeral sync tier. */
+
+model MediaAsset {
+  id             String     @id @default(uuid())
+  orgId          String
+  folderId       String?
+  title          String
+  originalName   String
+  mimeType       String
+  kind           AssetKind  @default(other)
+  sizeBytes      Int
+  sha256         String
+  /* blob + derived-preview locations on the storage provider */
+  contentPath    String
+  thumbnailPath  String?
+  width          Int?
+  height         Int?
+  durationSec    Float?
+  source         String     @default("upload")
+  createdByUserId String?
+  tags           String[]
+  favorite       Boolean    @default(false)
+  brand          Boolean    @default(false)
+  /* brand/governance flags: official, approved, deprecated, internalOnly,
+     clientFacing, locked, downloadAllowed, aiReferenceAllowed */
+  flags          Json?
+  state          AssetState @default(processing)
+  processingError String?
+  version        Int        @default(1)
+  archivedAt     DateTime?
+  trashedAt      DateTime?
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+  org            Org        @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  folder         AssetFolder? @relation(fields: [folderId], references: [id], onDelete: SetNull)
+  versions       MediaAssetVersion[]
+  collectionItems AssetCollectionItem[]
+  usages         AssetUsage[]
+
+  @@index([orgId, createdAt])
+  @@index([orgId, kind])
+  @@index([orgId, sha256])
+  @@index([orgId, trashedAt, archivedAt])
+}
+
+model MediaAssetVersion {
+  id              String   @id @default(uuid())
+  assetId         String
+  orgId           String
+  versionNumber   Int
+  contentPath     String
+  sha256          String
+  sizeBytes       Int
+  mimeType        String
+  width           Int?
+  height          Int?
+  note            String?
+  createdByUserId String?
+  createdAt       DateTime @default(now())
+  asset           MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, versionNumber])
+  @@index([orgId, sha256])
+}
+
+model AssetFolder {
+  id        String   @id @default(uuid())
+  orgId     String
+  name      String
+  parentId  String?
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  assets    MediaAsset[]
+
+  @@index([orgId, parentId])
+}
+
+model AssetCollection {
+  id        String   @id @default(uuid())
+  orgId     String
+  name      String
+  createdAt DateTime @default(now())
+  org       Org      @relation(fields: [orgId], references: [id], onDelete: Cascade)
+  items     AssetCollectionItem[]
+
+  @@index([orgId])
+}
+
+model AssetCollectionItem {
+  id           String          @id @default(uuid())
+  collectionId String
+  assetId      String
+  addedAt      DateTime        @default(now())
+  collection   AssetCollection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  asset        MediaAsset      @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([collectionId, assetId])
+}
+
+/* Where an asset is used (site hero, timeline clip, template…) so deletes
+   can warn about real dependencies instead of breaking projects. */
+model AssetUsage {
+  id        String   @id @default(uuid())
+  orgId     String
+  assetId   String
+  surface   String
+  refId     String
+  refLabel  String
+  createdAt DateTime @default(now())
+  asset     MediaAsset @relation(fields: [assetId], references: [id], onDelete: Cascade)
+
+  @@unique([assetId, surface, refId])
+  @@index([orgId, surface, refId])
 }
 
 model Membership {
