@@ -274,3 +274,103 @@ export async function fetchSyncedAssetFile(id) {
     return { ok: false, error: "Could not reach the sync backend." };
   }
 }
+
+/* ---------------- Asset Vault: search + tags + favorites ----------------
+   The server-side vault has no 30-item/3MB local-cache limit — these calls
+   query it directly so Creator Hub can search/browse everything that has
+   ever synced, not just whatever's currently pulled into this browser's
+   local cache. Same honest-failure convention as the sync calls above:
+   never a fabricated result, always a real error message on failure. */
+export async function searchVaultAssets(query = {}) {
+  const params = new URLSearchParams({ tenant_id: currentTenantId() });
+  if (query.text) params.set("text", query.text);
+  if (query.assetType) params.set("asset_type", query.assetType);
+  if (query.tags && query.tags.length) params.set("tags", query.tags.join(","));
+  if (query.favorite !== undefined) params.set("favorite", String(query.favorite));
+  if (query.sort) params.set("sort", query.sort);
+  if (query.limit) params.set("limit", String(query.limit));
+  if (query.offset) params.set("offset", String(query.offset));
+  try {
+    const r = await fetchWithTimeout(`/phantom-ai/content/assets/search?${params.toString()}`, { headers: authHeaders() }, 15000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok && Array.isArray(d.assets)) return { ok: true, assets: d.assets, total: d.total };
+    return { ok: false, error: (d && d.error) || `Search failed (${r.status}).`, assets: [], total: 0 };
+  } catch {
+    return { ok: false, error: "Could not reach the vault search backend.", assets: [], total: 0 };
+  }
+}
+
+export async function fetchAssetDerivative(id, kind) {
+  try {
+    const r = await fetchWithTimeout(
+      `/phantom-ai/content/assets/${encodeURIComponent(id)}/derivatives/${encodeURIComponent(kind)}?tenant_id=${encodeURIComponent(currentTenantId())}`,
+      { headers: authHeaders() },
+      15000,
+    );
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok && d.image) return { ok: true, dataUrl: d.image, derivative: d.derivative };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the vault backend." };
+  }
+}
+
+export async function setVaultAssetFavorite(id, favorite) {
+  try {
+    const r = await fetchWithTimeout(`/phantom-ai/content/assets/${encodeURIComponent(id)}/favorite`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ favorite, tenant_id: currentTenantId() }),
+    }, 10000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok) return { ok: true, asset: d.asset };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the vault backend." };
+  }
+}
+
+export async function tagVaultAsset(id, name) {
+  try {
+    const r = await fetchWithTimeout(`/phantom-ai/content/assets/${encodeURIComponent(id)}/tags`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ name, tenant_id: currentTenantId() }),
+    }, 10000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok) return { ok: true, tag: d.tag };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the vault backend." };
+  }
+}
+
+export async function untagVaultAsset(id, name) {
+  try {
+    const r = await fetchWithTimeout(
+      `/phantom-ai/content/assets/${encodeURIComponent(id)}/tags/${encodeURIComponent(name)}?tenant_id=${encodeURIComponent(currentTenantId())}`,
+      { method: "DELETE", headers: authHeaders() },
+      10000,
+    );
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok) return { ok: true };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the vault backend." };
+  }
+}
+
+export async function listVaultAssetTags(id) {
+  try {
+    const r = await fetchWithTimeout(
+      `/phantom-ai/content/assets/${encodeURIComponent(id)}/tags?tenant_id=${encodeURIComponent(currentTenantId())}`,
+      { headers: authHeaders() },
+      10000,
+    );
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok && Array.isArray(d.tags)) return { ok: true, tags: d.tags };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).`, tags: [] };
+  } catch {
+    return { ok: false, error: "Could not reach the vault backend.", tags: [] };
+  }
+}

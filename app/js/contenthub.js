@@ -11,7 +11,7 @@ import {
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
 } from "./imagefilters.js?v=phantom-live-20260711-189";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-189";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, searchVaultAssets, fetchAssetDerivative, setVaultAssetFavorite, tagVaultAsset, untagVaultAsset, listVaultAssetTags } from "./mediabackend.js?v=phantom-live-20260711-189";
 import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-189";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
@@ -678,6 +678,16 @@ function svgIc(k) {
 const chState = { tab: "library", platform: "all", ctype: "all", eng: "likes" };
 const CONTENT_TYPE_FILTERS = [["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]];
 const chSelection = new Set();
+/* ---------------- Asset Vault search (Stage 6) ----------------
+   The "Created media" grid above is a small rolling local cache (30 items,
+   3MB budget). This searches the real server-side vault directly — every
+   asset that has ever synced to this account, not just what's currently
+   cached in this browser. Thumbnails are loaded lazily per-card from the
+   real ffmpeg-generated derivative (Stage 4); a missing derivative renders
+   as an honest "no preview" placeholder, never a fabricated image. */
+const chVault = { query: "", type: "all", favoriteOnly: false, loading: false, searchedOnce: false, error: "", results: [], total: 0 };
+const chVaultThumbCache = new Map(); // asset id -> dataUrl | "unavailable", so re-renders don't re-fetch
+const chVaultTagsOpen = new Set(); // asset ids with the inline tag editor expanded
 let chLightbox = null;
 let chLbKeyHandler = null;
 let chSelectAnchor = null;
@@ -1250,10 +1260,224 @@ function renderContentLibrary(body, data, esc, root, opts) {
       : `<p class="empty-line">No generated images or videos yet. Create media in Media Lab and it will land here automatically.</p>`}
       ${stats.trimmed ? `<p class="ch-src">Space saver active: ${stats.trimmed} older/heavier preview${stats.trimmed === 1 ? "" : "s"} kept as metadata only.</p>` : ""}
     </section>
+    ${vaultSearchSection(esc)}
     <div class="ch-grid ch-grid-lg">${shownPosts.map((p) => postCard(p, esc, { creator: true })).join("")}</div>`;
   wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts);
   wirePostCards(body, data, esc, root, opts);
+  wireVaultSearch(body, esc, root, opts);
 }
+
+function vaultSearchSection(esc) {
+  return `<section class="ch-card ch-vault-search">
+    <div class="ch-card-h">
+      <div>
+        <h3>Search the full vault</h3>
+        <span class="ch-src">every photo/video ever synced to this account — not just the ${CONTENT_ASSET_LIMITS.maxItems} shown above</span>
+      </div>
+    </div>
+    <div class="ch-vault-controls">
+      <input type="text" data-ch-vault-query placeholder="Search title, prompt, source, provider..." value="${esc(chVault.query)}" />
+      <select data-ch-vault-type>
+        <option value="all" ${chVault.type === "all" ? "selected" : ""}>All types</option>
+        <option value="image" ${chVault.type === "image" ? "selected" : ""}>Image</option>
+        <option value="video" ${chVault.type === "video" ? "selected" : ""}>Video</option>
+        <option value="audio" ${chVault.type === "audio" ? "selected" : ""}>Audio</option>
+      </select>
+      <label class="ch-vault-fav"><input type="checkbox" data-ch-vault-favorite ${chVault.favoriteOnly ? "checked" : ""}/> Favorites only</label>
+      <button class="ch-tool" data-ch-vault-search type="button">${chVault.loading ? "Searching…" : "Search"}</button>
+    </div>
+    ${chVault.error ? `<p class="ch-src ch-error">${esc(chVault.error)}</p>` : ""}
+    ${chVault.searchedOnce && !chVault.loading
+      ? (chVault.results.length
+          ? `<div class="ch-asset-grid">${chVault.results.map((asset) => vaultAssetCard(asset, esc)).join("")}</div>
+             <p class="ch-src">${chVault.total} match${chVault.total === 1 ? "" : "es"} in the vault${chVault.results.length < chVault.total ? ` · showing first ${chVault.results.length}` : ""}.</p>`
+          : `<p class="empty-line">No vault assets match this search.</p>`)
+      : ""}
+  </section>`;
+}
+
+function vaultAssetCard(asset, esc) {
+  const typeLabel = asset.asset_type === "video" ? "Video" : asset.asset_type === "audio" ? "Audio" : "Image";
+  const cachedThumb = chVaultThumbCache.get(asset.id);
+  const tagsOpen = chVaultTagsOpen.has(asset.id);
+  const canAddToLocal = asset.asset_type === "image" || asset.asset_type === "video";
+  return `<article class="ch-asset-card ch-vault-card" data-ch-vault-asset-id="${esc(asset.id)}">
+    <button class="ch-vault-fav-btn ${asset.favorite ? "is-on" : ""}" data-ch-vault-fav="${esc(asset.id)}" data-favorite="${asset.favorite ? "0" : "1"}" title="${asset.favorite ? "Remove favorite" : "Mark favorite"}" type="button">${asset.favorite ? "★" : "☆"}</button>
+    <span class="ch-asset-thumb" data-ch-vault-thumb="${esc(asset.id)}">
+      ${cachedThumb && cachedThumb !== "unavailable" ? `<img src="${esc(cachedThumb)}" alt="${esc(asset.original_name || "")}" loading="lazy"/>` : `<em>${cachedThumb === "unavailable" ? "no preview" : "loading…"}</em>`}
+      <b>${typeLabel}</b>
+    </span>
+    <span class="ch-asset-body">
+      <strong>${esc(asset.title || asset.original_name || "Untitled")}</strong>
+      <small>${esc(asset.provider || asset.source || "vault")} · ${formatBytes(asset.file_size_bytes || 0)}${asset.width ? ` · ${asset.width}×${asset.height}` : ""}</small>
+      <span class="ch-vault-actions">
+        ${canAddToLocal ? `<button class="ch-tool" data-ch-vault-use="${esc(asset.id)}" type="button">Add to My Recent</button>` : ""}
+        <button class="ch-tool" data-ch-vault-tags-toggle="${esc(asset.id)}" type="button">Tags</button>
+      </span>
+      ${tagsOpen ? `<span class="ch-vault-tag-editor" data-ch-vault-tag-editor="${esc(asset.id)}">
+        <span class="ch-vault-tag-list" data-ch-vault-tag-list="${esc(asset.id)}">Loading tags…</span>
+        <span class="ch-vault-tag-add">
+          <input type="text" data-ch-vault-tag-input="${esc(asset.id)}" placeholder="add tag" maxlength="60"/>
+          <button class="ch-tool" data-ch-vault-tag-add="${esc(asset.id)}" type="button">Add</button>
+        </span>
+      </span>` : ""}
+    </span>
+  </article>`;
+}
+async function runVaultSearch(root, opts) {
+  chVault.loading = true;
+  chVault.error = "";
+  renderContentHub(root, opts);
+  const result = await searchVaultAssets({
+    text: chVault.query,
+    assetType: chVault.type === "all" ? undefined : chVault.type,
+    favorite: chVault.favoriteOnly ? true : undefined,
+    limit: 24,
+    sort: "created_desc",
+  });
+  chVault.loading = false;
+  chVault.searchedOnce = true;
+  if (result.ok) {
+    chVault.results = result.assets;
+    chVault.total = result.total;
+    chVault.error = "";
+  } else {
+    chVault.results = [];
+    chVault.total = 0;
+    chVault.error = result.error || "Vault search failed.";
+  }
+  renderContentHub(root, opts);
+}
+
+function wireVaultSearch(body, esc, root, opts) {
+  const queryInput = body.querySelector("[data-ch-vault-query]");
+  const typeSelect = body.querySelector("[data-ch-vault-type]");
+  const favCheckbox = body.querySelector("[data-ch-vault-favorite]");
+  const searchBtn = body.querySelector("[data-ch-vault-search]");
+  if (queryInput) {
+    queryInput.onkeydown = (e) => { if (e.key === "Enter") { chVault.query = queryInput.value; runVaultSearch(root, opts); } };
+    queryInput.onblur = () => { chVault.query = queryInput.value; };
+  }
+  if (typeSelect) typeSelect.onchange = () => { chVault.type = typeSelect.value; runVaultSearch(root, opts); };
+  if (favCheckbox) favCheckbox.onchange = () => { chVault.favoriteOnly = favCheckbox.checked; runVaultSearch(root, opts); };
+  if (searchBtn) searchBtn.onclick = () => { chVault.query = queryInput ? queryInput.value : chVault.query; runVaultSearch(root, opts); };
+
+  body.querySelectorAll("[data-ch-vault-fav]").forEach((btn) => {
+    btn.onclick = async () => {
+      const id = btn.dataset.chVaultFav;
+      const nextFavorite = btn.dataset.favorite === "1";
+      btn.disabled = true;
+      const result = await setVaultAssetFavorite(id, nextFavorite);
+      btn.disabled = false;
+      if (result.ok) {
+        const target = chVault.results.find((a) => a.id === id);
+        if (target) target.favorite = nextFavorite;
+        renderContentHub(root, opts);
+      }
+    };
+  });
+
+  body.querySelectorAll("[data-ch-vault-use]").forEach((btn) => {
+    btn.onclick = async () => {
+      const id = btn.dataset.chVaultUse;
+      const asset = chVault.results.find((a) => a.id === id);
+      if (!asset) return;
+      btn.disabled = true;
+      btn.textContent = "Adding…";
+      const fileResult = await fetchSyncedAssetFile(id);
+      if (fileResult.ok) {
+        registerContentAsset({
+          id: `synced-${id}`,
+          type: asset.asset_type === "video" ? "video" : "image",
+          title: asset.title || (asset.original_name || "Vault asset").replace(/\.[^.]+$/, ""),
+          prompt: asset.description || "Loaded from the asset vault.",
+          source: "Asset Vault",
+          url: fileResult.dataUrl,
+          createdAt: Date.parse(asset.created_at) || Date.now(),
+          saved: true,
+          syncedId: id,
+        }, { skipSync: true });
+        renderContentHub(root, opts);
+      } else {
+        btn.disabled = false;
+        btn.textContent = "Add to My Recent";
+        chVault.error = fileResult.error || "Could not fetch this asset.";
+        renderContentHub(root, opts);
+      }
+    };
+  });
+
+  body.querySelectorAll("[data-ch-vault-tags-toggle]").forEach((btn) => {
+    btn.onclick = () => {
+      const id = btn.dataset.chVaultTagsToggle;
+      if (chVaultTagsOpen.has(id)) chVaultTagsOpen.delete(id); else chVaultTagsOpen.add(id);
+      renderContentHub(root, opts);
+    };
+  });
+
+  body.querySelectorAll("[data-ch-vault-tag-editor]").forEach((editorEl) => {
+    loadVaultTagList(editorEl.dataset.chVaultTagEditor, editorEl);
+  });
+
+  body.querySelectorAll("[data-ch-vault-tag-add]").forEach((btn) => {
+    btn.onclick = async () => {
+      const id = btn.dataset.chVaultTagAdd;
+      const input = body.querySelector(`[data-ch-vault-tag-input="${id}"]`);
+      const name = (input?.value || "").trim();
+      if (!name) return;
+      btn.disabled = true;
+      const result = await tagVaultAsset(id, name);
+      btn.disabled = false;
+      if (result.ok && input) {
+        input.value = "";
+        const editorEl = body.querySelector(`[data-ch-vault-tag-editor="${id}"]`);
+        if (editorEl) loadVaultTagList(id, editorEl);
+      }
+    };
+  });
+
+  loadVaultThumbnails(body);
+}
+
+async function loadVaultTagList(id, editorEl) {
+  const listEl = editorEl.querySelector(`[data-ch-vault-tag-list="${id}"]`);
+  if (!listEl) return;
+  const result = await listVaultAssetTags(id);
+  if (!editorEl.isConnected) return;
+  if (!result.ok) { listEl.textContent = "Could not load tags."; return; }
+  if (!result.tags.length) { listEl.innerHTML = `<em>no tags yet</em>`; return; }
+  listEl.innerHTML = result.tags.map((tag) => `<span class="ch-vault-tag-chip">${tag.name}<button type="button" data-ch-vault-tag-remove="${id}" data-tag-name="${tag.name}">×</button></span>`).join("");
+  listEl.querySelectorAll("[data-ch-vault-tag-remove]").forEach((removeBtn) => {
+    removeBtn.onclick = async () => {
+      removeBtn.disabled = true;
+      const removeResult = await untagVaultAsset(id, removeBtn.dataset.tagName);
+      if (removeResult.ok) loadVaultTagList(id, editorEl); else removeBtn.disabled = false;
+    };
+  });
+}
+
+async function loadVaultThumbnails(body) {
+  const placeholders = body.querySelectorAll("[data-ch-vault-thumb]");
+  for (const el of placeholders) {
+    const id = el.dataset.chVaultThumb;
+    if (chVaultThumbCache.has(id)) continue;
+    fetchAssetDerivative(id, "thumbnail").then((result) => {
+      chVaultThumbCache.set(id, result.ok ? result.dataUrl : "unavailable");
+      if (!el.isConnected) return;
+      const em = el.querySelector("em");
+      if (result.ok) {
+        const img = document.createElement("img");
+        img.loading = "lazy";
+        img.alt = "";
+        img.src = result.dataUrl;
+        if (em) el.replaceChild(img, em); else el.prepend(img);
+      } else if (em) {
+        em.textContent = "no preview";
+      }
+    });
+  }
+}
+
 function contentAssetCard(asset, esc) {
   const hasUrl = !!asset.url;
   const typeLabel = asset.type === "video" ? "Video" : "Image";

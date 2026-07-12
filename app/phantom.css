@@ -4742,6 +4742,25 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ch-asset-body strong { color: #f0fff7; font-size: 13.5px; }
 .ch-asset-body small { color: var(--dim); font-size: 11px; line-height: 1.35; }
 .ch-asset-body span { color: #b8d3c2; font-size: 12px; line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* Asset Vault search (Stage 6) */
+.ch-vault-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 14px; }
+.ch-vault-controls input[type="text"], .ch-vault-controls select { background: rgba(4,12,9,.62); border: 1px solid var(--line); border-radius: 10px; color: #eafff2; padding: 8px 10px; font: 500 12.5px "DM Mono", monospace; }
+.ch-vault-controls input[type="text"] { flex: 1 1 220px; min-width: 160px; }
+.ch-vault-fav { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--dim); }
+.ch-error { color: #ffb0bb; }
+.ch-vault-card { position: relative; }
+.ch-vault-fav-btn { position: absolute; top: 8px; left: 8px; z-index: 3; width: 26px; height: 26px; border-radius: 999px; border: 1px solid var(--line); background: rgba(2,10,8,.72); color: #cfeeda; font-size: 14px; cursor: pointer; display: grid; place-items: center; }
+.ch-vault-fav-btn.is-on { color: #ffd76a; border-color: rgba(255,215,106,.5); }
+.ch-vault-fav-btn:hover { border-color: var(--neon); }
+.ch-vault-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.ch-vault-tag-editor { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; padding-top: 8px; border-top: 1px solid var(--line); }
+.ch-vault-tag-list { display: flex; flex-wrap: wrap; gap: 5px; }
+.ch-vault-tag-list em { color: var(--dim); font-style: normal; font-size: 11px; }
+.ch-vault-tag-chip { display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 999px; background: rgba(65,255,161,.1); border: 1px solid rgba(65,255,161,.25); color: #cfeeda; font-size: 11px; }
+.ch-vault-tag-chip button { background: none; border: none; color: inherit; cursor: pointer; padding: 0; font-size: 12px; line-height: 1; }
+.ch-vault-tag-add { display: flex; gap: 6px; }
+.ch-vault-tag-add input { flex: 1; background: rgba(4,12,9,.62); border: 1px solid var(--line); border-radius: 8px; color: #eafff2; padding: 5px 8px; font-size: 11.5px; }
 .ch-post { display: flex; flex-direction: column; gap: 7px; padding: 0 0 12px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: #050b09; cursor: pointer; text-align: left; transition: border-color .2s, transform .15s; }
 .ch-post:hover { border-color: var(--line-strong); transform: translateY(-2px); }
 .ch-post-thumb { position: relative; display: block; aspect-ratio: 16/10; }
