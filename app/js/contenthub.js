@@ -10,24 +10,26 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260712-186";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-186";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-186";
+} from "./imagefilters.js?v=phantom-live-20260712-199";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-199";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-199";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
-} from "./content-editor.js?v=phantom-live-20260712-186";
+  imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
+} from "./content-editor.js?v=phantom-live-20260712-199";
 import {
   currentTenantId, currentWs, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-186";
+} from "./store.js?v=phantom-live-20260712-199";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
 const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
 const CH_MEDIA_EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const CH_OPEN_TAB_KEY = "pf.contenthub.openTab.v1";
+const CH_OPEN_ASSET_KEY = "pf.contenthub.openAsset.v1";
 const CH_PUBLISH_STATE_KEY = "pf.contenthub.publish.state.v1";
 const CH_PUBLISH_DRAFTS_KEY = "pf.contenthub.publish.drafts.v1";
 const DAY = 864e5;
@@ -686,14 +688,25 @@ let chLastDeleted = null;
 
 export function renderContentHub(el, opts = {}) {
   syncCreatorTenant();
+  let requestedAssetId = "";
   try {
     const requestedTab = workspaceStorageGetItem(CH_OPEN_TAB_KEY, { migrateGlobal: false });
     if (requestedTab && ["library", "publish", "ideas", "drafts", "calendar", "production"].includes(requestedTab)) chState.tab = requestedTab;
     if (requestedTab) workspaceStorageRemoveItem(CH_OPEN_TAB_KEY);
+    requestedAssetId = workspaceStorageGetItem(CH_OPEN_ASSET_KEY, { migrateGlobal: false }) || "";
+    if (requestedAssetId) workspaceStorageRemoveItem(CH_OPEN_ASSET_KEY);
   } catch {}
   const esc = opts.esc || ((s) => String(s));
   const data = loadContent();
   const mediaAssets = loadContentAssets();
+  if (requestedAssetId) {
+    const requestedAsset = mediaAssets.find((asset) => asset.id === requestedAssetId && asset.type === "image" && asset.url);
+    if (requestedAsset) {
+      chState.tab = "library";
+      chState.ctype = "all";
+      chLightbox = freshLightbox(requestedAsset);
+    }
+  }
   const mediaStats = contentAssetStats(mediaAssets);
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
@@ -1305,17 +1318,7 @@ function freshLightbox(asset, extra = {}) {
 }
 
 function editStateSnapshot(state) {
-  return {
-    brightness: state.brightness, contrast: state.contrast, saturate: state.saturate,
-    hue: state.hue, blur: state.blur, rotate: state.rotate, flip: state.flip,
-    crop: { ...(state.crop || {}) }, text: state.text, textStyle: { ...state.textStyle }, bokehBrush: state.bokehBrush,
-    bokeh: state.bokeh ? {
-      spots: (state.bokeh.spots || []).map((spot) => ({ ...spot })),
-      strength: state.bokeh.strength,
-      feather: state.bokeh.feather,
-      maskImg: null,
-    } : null,
-  };
+  return imageEditSnapshot(state);
 }
 
 function editorSnapshot(lb) {
@@ -1330,9 +1333,7 @@ function restoreEditorSnapshot(lb, snapshot) {
   restoreComposition(lb.composition, snapshot.composition);
   const source = snapshot.layerEffects || (snapshot.state ? { base: snapshot.state } : {});
   lb.layerEffects = Object.fromEntries(Object.entries(source).map(([id, state]) => {
-    const restored = { ...freshEditState(), ...state, crop: { ...freshEditState().crop, ...(state?.crop || {}) }, textStyle: { ...freshTextStyle(), ...(state?.textStyle || {}) } };
-    if (restored.bokeh && masks[id]) restored.bokeh.maskImg = masks[id];
-    return [id, restored];
+    return [id, restoreImageEditSnapshot(state, { maskImg: masks[id] })];
   }));
   if (!lb.layerEffects.base) lb.layerEffects.base = freshEditState();
   lb.state = lb.layerEffects.base;
@@ -1341,8 +1342,7 @@ function restoreEditorSnapshot(lb, snapshot) {
 function commitEditorChange(lb, before) {
   const after = editorSnapshot(lb);
   if (JSON.stringify(before) === JSON.stringify(after)) return false;
-  lb.editorUndo.push(before);
-  if (lb.editorUndo.length > 60) lb.editorUndo.shift();
+  pushEditorSnapshot(lb.editorUndo, before, 60);
   lb.editorRedo = [];
   return true;
 }
@@ -3011,13 +3011,64 @@ function openPost(p, esc) {
 }
 
 /* =========================================================================
-   ANALYTICS — real connections only. If no social account is actually
-   linked, this shows nothing but a connect prompt: no KPIs, no charts, no
-   modeled numbers. Once linked, it shows what's genuinely real (which
-   accounts, real Creator Hub asset counts) and is honest that live
-   performance metrics need each platform's analytics API wired server-side
-   before any reach/engagement number can be shown — never a placeholder.
+   ANALYTICS — real connections only. A connected profile proves identity; it
+   is not the same thing as a metrics feed. KPIs render only from explicit
+   account analytics payloads. No Creator Hub inventory, seeded posts, or
+   modeled estimates leak into this page.
    ========================================================================= */
+function numericMetric(source = {}, keys = []) {
+  const key = keys.find((name) => Number.isFinite(Number(source?.[name])));
+  return key ? Number(source[key]) : 0;
+}
+function analyticsFeedForAccount(account = {}) {
+  const raw = account.analytics || account.insights || account.metrics || null;
+  if (!raw || typeof raw !== "object") return null;
+  const reach = numericMetric(raw, ["reach", "accountsReached", "account_reach"]);
+  const impressions = numericMetric(raw, ["impressions", "views", "profileViews"]);
+  const likes = numericMetric(raw, ["likes", "likeCount"]);
+  const comments = numericMetric(raw, ["comments", "commentCount"]);
+  const shares = numericMetric(raw, ["shares", "shareCount"]);
+  const saves = numericMetric(raw, ["saves", "saveCount"]);
+  const followers = numericMetric(raw, ["followers", "followersGained", "followerCount"]);
+  const engagement = numericMetric(raw, ["engagement", "engagements"]) || likes + comments + shares + saves;
+  const hasMetrics = [reach, impressions, engagement, followers].some((value) => value > 0);
+  if (!hasMetrics) return null;
+  return {
+    reach, impressions, engagement, followers,
+    source: raw.source || raw.provider || "platform analytics",
+    syncedAt: raw.syncedAt || raw.lastSyncedAt || raw.updatedAt || account.analyticsLastSyncAt || "",
+  };
+}
+function analyticsTotals(feeds = []) {
+  return feeds.reduce((sum, row) => ({
+    reach: sum.reach + row.feed.reach,
+    impressions: sum.impressions + row.feed.impressions,
+    engagement: sum.engagement + row.feed.engagement,
+    followers: sum.followers + row.feed.followers,
+  }), { reach: 0, impressions: 0, engagement: 0, followers: 0 });
+}
+function accountAnalyticsCard(row, esc) {
+  const account = row.account;
+  const feed = row.feed;
+  if (!feed) {
+    return `<article class="an-feed-card is-missing">
+      <div><span class="ch-dot" style="background:${account.color}"></span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile connected")}</i></div>
+      <strong>No analytics feed</strong>
+      <p>Profile identity is connected, but reach, impressions, followers, and engagement are not available until that platform's insights API is wired server-side.</p>
+    </article>`;
+  }
+  return `<article class="an-feed-card">
+    <div><span class="ch-dot" style="background:${account.color}"></span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile connected")}</i></div>
+    <strong>${esc(feed.source)}</strong>
+    <p>${feed.syncedAt ? `Last sync ${esc(ago(feed.syncedAt))}` : "Live metrics feed connected."}</p>
+    <div class="an-feed-metrics">
+      <span><b>${K(feed.reach)}</b>reach</span>
+      <span><b>${K(feed.impressions)}</b>impressions</span>
+      <span><b>${K(feed.engagement)}</b>engagement</span>
+      <span><b>${K(feed.followers)}</b>followers</span>
+    </div>
+  </article>`;
+}
 export function renderAnalytics(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const accounts = loadSocialAccounts();
@@ -3041,28 +3092,33 @@ export function renderAnalytics(el, opts = {}) {
     return;
   }
 
-  const assets = loadContentAssets();
+  const feedRows = linked.map((account) => ({ account, feed: analyticsFeedForAccount(account) }));
+  const liveRows = feedRows.filter((row) => row.feed);
+  const totals = analyticsTotals(liveRows);
   el.innerHTML = `
     <div class="an">
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Business intelligence</p>
-          <h3>Connected — real accounts only.</h3>
-          <p>Analytics only shows data pulled from accounts you've actually connected. Nothing here is modeled or estimated.</p>
+          <h3>${liveRows.length ? "Real analytics feed live." : "Accounts connected. Metrics feed missing."}</h3>
+          <p>${liveRows.length ? "These numbers come from explicit platform analytics payloads only." : "The profiles below are connected, but PhantomForce has not received real reach, engagement, follower, or impression data from the platform APIs yet."}</p>
         </div>
-        <span class="an-src">${svgIc("up")} ${linked.length} account${linked.length === 1 ? "" : "s"} connected</span>
+        <span class="an-src">${svgIc("up")} ${liveRows.length}/${linked.length} metrics feed${linked.length === 1 ? "" : "s"} live</span>
       </section>
       <div class="an-connected-grid">
         ${linked.map((acct) => `<div class="an-account-chip"><span class="ch-dot" style="background:${acct.color}"></span><b>${esc(acct.name)}</b><i>${esc(acct.handle || acct.loginIdentity || "connected")}</i></div>`).join("")}
       </div>
-      <div class="ch-card an-notice">
-        <b>Live performance metrics aren't wired up yet.</b>
-        <p>PhantomForce confirmed the signed-in profile above, but reach, engagement, and pipeline numbers need each platform's real analytics API connected server-side. Nothing shows here until that's actually live — no modeled estimates in the meantime.</p>
-      </div>
-      ${assets.length ? `
-      <div class="ch-card">
-        <div class="ch-card-h"><h3>Ready to publish</h3><span class="ch-src">from Creator Hub</span></div>
-        <p class="an-assets-line">${assets.length} generated asset${assets.length === 1 ? "" : "s"} in Creator Hub, ready once publishing is connected.</p>
-      </div>` : ""}
+      ${liveRows.length ? `<div class="ch-kpis">
+        ${kpi("Reach", K(totals.reach), "real platform feed")}
+        ${kpi("Impressions", K(totals.impressions), "real platform feed")}
+        ${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}
+        ${kpi("Followers", K(totals.followers), "reported by platform")}
+      </div>` : `<div class="ch-card an-notice">
+        <b>Connected profile does not equal analytics data.</b>
+        <p>Instagram, TikTok, YouTube, and Facebook identity checks are present, but no server-side insights feed is returning real metrics yet. This page will stay empty of numbers until those APIs are actually connected.</p>
+      </div>`}
+      <section class="an-feed-grid">
+        ${feedRows.map((row) => accountAnalyticsCard(row, esc)).join("")}
+      </section>
     </div>`;
 }

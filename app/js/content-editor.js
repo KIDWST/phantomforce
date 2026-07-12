@@ -1,4 +1,4 @@
-import { freshEditState, paintEdit } from "./imagefilters.js?v=phantom-live-20260712-186";
+import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260712-199";
 
 let layerSequence = 0;
 
@@ -9,6 +9,41 @@ function id(prefix = "layer") {
 
 function clamp(value, min, max) {
   return Math.max(min, Math.min(max, Number(value) || 0));
+}
+
+export function cloneImageEditState(source = {}, opts = {}) {
+  const base = freshEditState();
+  const state = { ...base, ...(source || {}) };
+  const includeMask = opts.includeMask !== false;
+  const bokeh = state.bokeh ? {
+    ...state.bokeh,
+    spots: (state.bokeh.spots || []).map((spot) => ({ ...spot })),
+    maskImg: includeMask ? (opts.maskImg ?? state.bokeh.maskImg ?? null) : null,
+  } : null;
+  return {
+    ...state,
+    crop: { ...base.crop, ...(state.crop || {}) },
+    textStyle: { ...freshTextStyle(), ...(state.textStyle || {}) },
+    bokeh,
+  };
+}
+
+export function imageEditSnapshot(source = {}) {
+  return cloneImageEditState(source, { includeMask: false });
+}
+
+export function restoreImageEditSnapshot(snapshot = {}, opts = {}) {
+  return cloneImageEditState(snapshot, {
+    includeMask: !!opts.maskImg,
+    maskImg: opts.maskImg || null,
+  });
+}
+
+export function pushEditorSnapshot(stack, snapshot, limit = 60) {
+  if (!Array.isArray(stack)) return [snapshot];
+  stack.push(snapshot);
+  if (stack.length > limit) stack.shift();
+  return stack;
 }
 
 export function freshComposition() {

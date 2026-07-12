@@ -6,28 +6,33 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-186";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-186";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-186";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-186";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-186";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-186";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-186";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-186";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-186";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-186";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-186";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-186";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-186";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-186";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-186";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-186";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-186";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-186";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-186";
+} from "./store.js?v=phantom-live-20260712-199";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-199";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-199";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-199";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-199";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-199";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-199";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-199";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-199";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-199";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-199";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-199";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-199";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-199";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-199";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-199";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-199";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-199";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-199";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-186";
+} from "./orgs.js?v=phantom-live-20260712-199";
+import {
+  customizeNavigation,
+  loadOrganizationCustomization,
+  renderCustomizationStudio,
+} from "./customization.js?v=phantom-live-20260712-199";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -238,7 +243,7 @@ function maybeUpgradeGateToDatabaseLogin(card) {
 }
 
 /* ============================ sidebar nav ============================ */
-const NAV = [
+const BASE_NAV = [
   { id: "dashboard",  label: "Business HQ",  icon: "grid",  view: "main" },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
@@ -249,11 +254,13 @@ const NAV = [
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
-  { id: "analytics",  label: "Intelligence", icon: "chart", ws: "analytics" },
+  { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true },
+  { id: "customize",  label: "Workspace Studio", icon: "spark", ws: "customize", adminOnly: true },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
+let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
    same items, same ownerOnly/adminOnly gates, just a compact label and a
    horizontally scrollable strip instead of a vertical list. */
@@ -265,11 +272,11 @@ const MOBILE_LABEL_OVERRIDES = {
   content: "Creator",
   automation: "Auto",
   approvals: "Approvals",
-  analytics: "Intel",
+  analytics: "Analytics",
   vacation: "Away",
   developer: "Developer",
 };
-const MOBILE_NAV = NAV.map((n) => ({
+let MOBILE_NAV = NAV.map((n) => ({
   id: n.id,
   label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
   icon: n.icon,
@@ -279,6 +286,20 @@ const MOBILE_NAV = NAV.map((n) => ({
   ownerOnly: n.ownerOnly,
   badge: n.badge,
 }));
+
+function refreshCustomizedNavigation() {
+  NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
+  MOBILE_NAV = NAV.map((n) => ({
+    id: n.id,
+    label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
+    icon: n.icon,
+    route: "nav",
+    target: n.id,
+    adminOnly: n.adminOnly,
+    ownerOnly: n.ownerOnly,
+    badge: n.badge,
+  }));
+}
 let activeNav = "dashboard";
 let activePageId = null;
 /* which page last played its entrance animation — store-change rerenders
@@ -515,13 +536,14 @@ function renderStatusPills() {
   }
 }
 
-function switchWorkspace(id) {
+async function switchWorkspace(id) {
   const before = currentWs();
   if (!isAdmin()) {
     renderStatusPills();
     return;
   }
   if (!setWorkspace(id)) { renderStatusPills(); return; }
+  await loadOrganizationCustomization({ onApplied: refreshCustomizedNavigation });
   accountMenuOpen = false;
   notifOpen = false;
   clearOverlayOnly();
@@ -841,7 +863,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-186";
+const POSE_VERSION = "phantom-live-20260712-199";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2429,13 +2451,14 @@ const CUSTOM = {
   media: { title: "Media Lab", kicker: "Create with context", custom: true, wide: true, render: (body) => renderMediaStudio(body, mediaOpts()) },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
   content: { title: "Creator Hub", kicker: "Creator intelligence, media library, and publishing workflow", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
-  analytics: { title: "Business Intelligence", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
+  analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
   automation: { title: "Automations", kicker: "Business workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
   vacation: { title: "Away Mode", kicker: "Your business stays covered while you are away", custom: true, wide: true, render: (body) => renderVacationMode(body, mediaOpts()) },
   promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
+  customize: { title: "Workspace Studio", kicker: "Make this organization feel purpose-built", custom: true, wide: true, adminOnly: true, render: (body) => renderCustomizationStudio(body, { onApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
   /* The full worker roster + telemetry + live tail log — kept out of the
      dashboard's permanent layout (that only shows a compact summary) and
      opened on demand from "View all activity". */
@@ -2725,6 +2748,15 @@ function enterPhantom() {
   }
   activeNav = "dashboard";
   renderConsole();
+  loadOrganizationCustomization({
+    onApplied: () => {
+      refreshCustomizedNavigation();
+      renderNav();
+      renderMobileBottomNav();
+      renderStatusPills();
+      renderUser();
+    },
+  });
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();

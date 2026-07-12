@@ -1,8 +1,9 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260712-186";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-186";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260712-199";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-199";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260712-199";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -11,6 +12,7 @@ const SETTINGS_TABS = [
   { id: "model", label: "Model" },
   { id: "loop", label: "Loop routing" },
   { id: "chat", label: "Chat behavior" },
+  { id: "companion", label: "Companion" },
   { id: "media", label: "Media & social" },
 ];
 
@@ -443,6 +445,82 @@ function renderChatBehaviorTab(settings) {
       </div>`;
 }
 
+function renderCompanionTab() {
+  const companion = loadCompanionPrefs();
+  return `
+    <div class="set-section">
+      <div class="set-section-head">
+        <div>
+          <p class="set-eyebrow">Living Phantom</p>
+          <h3>Companion controls</h3>
+          <p class="set-note">The Phantom starts docked, stays out of controls, and only reacts to real assistant states. These settings are local UI preferences.</p>
+        </div>
+        <button class="btn btn-quiet" type="button" data-companion-reset>Reset companion</button>
+      </div>
+      <div class="set-grid set-grid-two">
+        <label class="set-inline"><input type="checkbox" data-companion-toggle="enabled" ${companion.enabled ? "checked" : ""}/> Enable companion</label>
+        <label class="set-inline"><input type="checkbox" data-companion-toggle="visible" ${companion.visible ? "checked" : ""}/> Visible</label>
+        <label class="set-inline"><input type="checkbox" data-companion-toggle="startDocked" ${companion.startDocked ? "checked" : ""}/> Start docked</label>
+        <label class="set-inline"><input type="checkbox" data-companion-toggle="speechEnabled" ${companion.speechEnabled ? "checked" : ""}/> Speech bubbles</label>
+        <label class="set-inline"><input type="checkbox" data-companion-toggle="notificationReactions" ${companion.notificationReactions ? "checked" : ""}/> Notification reactions</label>
+        <label class="set-field">
+          <span>Motion</span>
+          <select data-companion-field="motionLevel">${optionList([
+            { id: "full", label: "Full motion" },
+            { id: "subtle", label: "Subtle motion" },
+            { id: "reduced", label: "Reduced motion" },
+            { id: "none", label: "No idle motion" },
+          ], companion.motionLevel)}</select>
+        </label>
+        <label class="set-field">
+          <span>Size</span>
+          <select data-companion-field="size">${optionList([
+            { id: "compact", label: "Compact" },
+            { id: "standard", label: "Standard" },
+            { id: "large", label: "Large" },
+          ], companion.size)}</select>
+        </label>
+        <label class="set-field">
+          <span>Home dock</span>
+          <select data-companion-field="dockLocation">${optionList([
+            { id: "sidebar", label: "Sidebar" },
+          ], companion.dockLocation)}</select>
+        </label>
+        <label class="set-field">
+          <span>Personality</span>
+          <select data-companion-field="personality">${optionList([
+            { id: "professional", label: "Professional" },
+            { id: "friendly", label: "Friendly" },
+            { id: "playful", label: "Playful" },
+            { id: "quiet", label: "Quiet" },
+          ], companion.personality)}</select>
+        </label>
+        <label class="set-field">
+          <span>Idle frequency</span>
+          <select data-companion-field="idleFrequency">${optionList([
+            { id: "low", label: "Low" },
+            { id: "normal", label: "Normal" },
+            { id: "off", label: "Off" },
+          ], companion.idleFrequency)}</select>
+        </label>
+        <label class="set-field">
+          <span>Greeting</span>
+          <select data-companion-field="greetingFrequency">${optionList([
+            { id: "session", label: "Once per session" },
+            { id: "daily", label: "Once per day" },
+            { id: "off", label: "Off" },
+          ], companion.greetingFrequency)}</select>
+        </label>
+      </div>
+      <div class="set-actions-row">
+        <button class="btn btn-quiet" type="button" data-companion-clear-hide>Show again this session</button>
+        <button class="btn btn-quiet" type="button" data-companion-quiet>Quiet docked mode</button>
+        <button class="btn btn-quiet" type="button" data-companion-disable>Disable companion</button>
+      </div>
+      <p class="set-note">Essential notifications still stay in the normal notification menu if the companion is hidden or disabled.</p>
+    </div>`;
+}
+
 export function renderOperatorSettings(el, opts = {}) {
   const settings = loadOperatorSettings();
   const activeProvider = providerFor(settings.provider);
@@ -454,6 +532,7 @@ export function renderOperatorSettings(el, opts = {}) {
     model: () => renderModelTab(settings, activeProvider, activeModel),
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
+    companion: () => renderCompanionTab(),
     media: () => `<div id="${mediaMountId}"></div>`,
   };
 
@@ -521,6 +600,44 @@ export function renderOperatorSettings(el, opts = {}) {
     saveOperatorSettings(DEFAULT_SETTINGS);
     renderOperatorSettings(el, opts);
   };
+
+  const saveCompanionAndRender = (patch) => {
+    saveCompanionPrefs({ ...DEFAULT_COMPANION_PREFS, ...loadCompanionPrefs(), ...(patch || {}) });
+    renderOperatorSettings(el, opts);
+  };
+
+  el.querySelectorAll("[data-companion-toggle]").forEach((input) => {
+    input.onchange = () => saveCompanionAndRender({ [input.dataset.companionToggle]: input.checked });
+  });
+
+  el.querySelectorAll("[data-companion-field]").forEach((field) => {
+    field.onchange = () => saveCompanionAndRender({ [field.dataset.companionField]: field.value });
+  });
+
+  const companionReset = el.querySelector("[data-companion-reset]");
+  if (companionReset) companionReset.onclick = () => {
+    resetCompanionPrefs();
+    renderOperatorSettings(el, opts);
+  };
+  const companionClearHide = el.querySelector("[data-companion-clear-hide]");
+  if (companionClearHide) companionClearHide.onclick = () => {
+    clearCompanionSessionHide();
+    renderOperatorSettings(el, opts);
+  };
+  const companionQuiet = el.querySelector("[data-companion-quiet]");
+  if (companionQuiet) companionQuiet.onclick = () => saveCompanionAndRender({
+    enabled: true,
+    visible: true,
+    startDocked: true,
+    roamingEnabled: false,
+    dockLocation: "sidebar",
+    motionLevel: "reduced",
+    personality: "quiet",
+    speechEnabled: false,
+    idleFrequency: "off",
+  });
+  const companionDisable = el.querySelector("[data-companion-disable]");
+  if (companionDisable) companionDisable.onclick = () => saveCompanionAndRender({ enabled: false });
 
   const loop = loadPhantomLoop();
   const saveLoopAndRender = (patch, advPatch) => {
