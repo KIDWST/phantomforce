@@ -3336,7 +3336,7 @@ function accountAnalyticsRow(row, esc) {
     : `<div class="an-channel-empty"><b>${canSync ? "Ready to sync" : saved ? "Profile saved" : "Not connected"}</b><span>${canSync ? "Official read-only analytics are ready." : "Connect this account in Settings to start live data."}</span></div>`}
     <div class="an-channel-actions">
       ${canSync ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up live connection</button>`}
-      <details class="an-import-backup"><summary>Use a report file</summary><small>Auto · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import official report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
+      <details class="an-import-backup"><summary aria-label="More data options">More</summary><small>Backup only · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import official report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
       ${feed ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear data</button>` : ""}
     </div>
   </article>`;
