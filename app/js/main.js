@@ -23,7 +23,7 @@ import { mountCompanion, setCompanionState, setCompanionMode, companionMode } fr
 import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-212";
 import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-212";
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-212";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-212";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-214";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-212";
 import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-212";
 import {

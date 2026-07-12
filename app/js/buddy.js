@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-212";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-214";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260712-212";
+} from "./companion-preferences.js?v=phantom-live-20260712-214";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -105,6 +105,7 @@ function createBuddyController() {
   let stateUntil = 0;
   let pulse = 0;
   let lastPointer = { x: -9999, y: -9999 };
+  let lastHitTestAt = 0;
   let sayTimer = 0;
   let nextIdleAt = 0;
   let nextWanderAt = 0;
@@ -127,23 +128,24 @@ function createBuddyController() {
     const side = sidebarRect();
     const sidebar = document.querySelector(".sidebar");
     const nav = sidebar?.querySelector(".side-nav");
-    const navRect = nav?.getBoundingClientRect();
-    const items = nav ? [...nav.querySelectorAll(".nav-item")].filter((item) => {
-      const rect = item.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    }) : [];
-    const lastItem = items.length ? items[items.length - 1].getBoundingClientRect() : null;
+    const navItems = nav ? [...nav.querySelectorAll(".nav-item")].map((item) => item.getBoundingClientRect()).filter((rect) => (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > 0 &&
+      rect.top < window.innerHeight
+    )) : [];
     const sideTop = Math.max(0, side.top || 0);
     const sideBottom = Math.min(window.innerHeight, side.bottom || window.innerHeight);
-    const navBottom = lastItem?.bottom || navRect?.bottom || (sideTop + 420);
-    const top = Math.min(sideBottom - 118, Math.max(navBottom + 12, sideTop + 250));
-    const bottom = Math.max(top + 108, sideBottom - 14);
+    const lastNavBottom = navItems.length ? Math.max(...navItems.map((rect) => rect.bottom)) : (sideTop + 420);
+    const bottom = Math.max(sideTop + 120, sideBottom - 12);
+    const top = Math.min(Math.max(lastNavBottom + 14, sideTop + 250), Math.max(sideTop + 120, bottom - 76));
     return {
       left: side.left,
       top,
       bottom,
       width: side.width,
-      height: Math.max(108, bottom - top),
+      height: Math.max(76, bottom - top),
+      cramped: false,
     };
   }
 
@@ -172,10 +174,18 @@ function createBuddyController() {
     if (!sidebarPortraitMode()) return { width: base, height: base };
     const zone = sidebarDockZone();
     const width = Math.round(Math.min(Math.max(base, 68), Math.max(68, Math.min(100, zone.width - 30))));
-    const height = Math.round(Math.min(Math.max(base + 8, 76), Math.max(76, Math.min(110, zone.height - 14))));
+    const height = Math.round(Math.min(Math.max(base + 46, 118), Math.max(76, Math.min(168, zone.height - 8))));
     return {
       width,
       height,
+    };
+  }
+
+  function bottomRightPoint() {
+    const inset = safeInsets();
+    return {
+      x: window.innerWidth - inset.right - buddyWidth / 2,
+      y: window.innerHeight - inset.bottom - buddyHeight / 2,
     };
   }
 
@@ -549,6 +559,32 @@ function createBuddyController() {
     closeMenu();
   }
 
+  /* The canvas is a big rectangle but the ghost only fills part of it. Keep the
+     canvas click-through by default and only accept the pointer while it is over
+     an actually painted pixel — otherwise the companion silently eats clicks on
+     whatever nav buttons it happens to float across. */
+  function updatePointerHitState(force = false) {
+    if (!canvas || !ctx2) return;
+    if (dragging || (menu && !menu.hidden)) { canvas.style.pointerEvents = "auto"; return; }
+    const now = performance.now();
+    if (!force && now - lastHitTestAt < 30) return;
+    lastHitTestAt = now;
+    const rect = canvas.getBoundingClientRect();
+    let over = false;
+    if (rect.width > 0 && rect.height > 0 &&
+        lastPointer.x >= rect.left && lastPointer.x <= rect.right &&
+        lastPointer.y >= rect.top && lastPointer.y <= rect.bottom &&
+        !document.body.classList.contains("overlay-open") &&
+        getComputedStyle(layer).opacity !== "0") {
+      try {
+        const sx = Math.max(0, Math.min(canvas.width - 1, Math.floor((lastPointer.x - rect.left) * (canvas.width / rect.width))));
+        const sy = Math.max(0, Math.min(canvas.height - 1, Math.floor((lastPointer.y - rect.top) * (canvas.height / rect.height))));
+        over = ctx2.getImageData(sx, sy, 1, 1).data[3] > 8;
+      } catch { over = true; }
+    }
+    canvas.style.pointerEvents = over ? "auto" : "none";
+  }
+
   function bindEvents() {
     eventAbort = new AbortController();
     const signal = eventAbort.signal;
@@ -561,7 +597,7 @@ function createBuddyController() {
         if (docked || mobile()) setTargetToDock();
       });
     };
-    window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; }, { passive: true, signal });
+    window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; updatePointerHitState(); }, { passive: true, signal });
     window.addEventListener("resize", () => { configureCanvas({ snap: true }); if (docked || mobile()) dock(); }, { passive: true, signal });
     document.addEventListener("scroll", scheduleGeometryRefresh, { passive: true, capture: true, signal });
     document.addEventListener("click", (event) => {
@@ -730,6 +766,7 @@ function createBuddyController() {
         moodAge: stateUntil ? Math.max(0, (stateUntil - now) * 0.001) : 2,
       });
       if (portrait) ctx2.restore();
+      updatePointerHitState(true);
     };
     requestAnimationFrame(frame);
   }
