@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-212";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-213";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260712-212";
+} from "./companion-preferences.js?v=phantom-live-20260712-213";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -151,7 +151,7 @@ function createBuddyController() {
     const hasSidebar = window.innerWidth > 900;
     const inSidebarDock = hasSidebar && prefs.dockLocation === "sidebar";
     return {
-      left: inSidebarDock ? 10 : hasSidebar ? 236 : 14,
+      left: inSidebarDock ? 10 : hasSidebar ? 214 : 14,
       right: 18,
       top: hasSidebar ? 88 : 72,
       bottom: mobile() ? 98 : 24,
@@ -160,9 +160,9 @@ function createBuddyController() {
 
   function sizeForPrefs() {
     const map = {
-      compact: mobile() ? 68 : 72,
-      standard: mobile() ? 76 : 84,
-      large: mobile() ? 90 : 98,
+      compact: mobile() ? 60 : 58,
+      standard: mobile() ? 68 : 64,
+      large: mobile() ? 78 : 74,
     };
     return map[prefs.size] || map.standard;
   }
@@ -171,8 +171,8 @@ function createBuddyController() {
     const base = sizeForPrefs();
     if (!sidebarPortraitMode()) return { width: base, height: base };
     const zone = sidebarDockZone();
-    const width = Math.round(Math.min(Math.max(base, 68), Math.max(68, Math.min(100, zone.width - 30))));
-    const height = Math.round(Math.min(Math.max(base + 8, 76), Math.max(76, Math.min(110, zone.height - 14))));
+    const width = Math.round(Math.min(Math.max(base, 54), Math.max(54, Math.min(76, zone.width - 42))));
+    const height = Math.round(Math.min(Math.max(base + 4, 60), Math.max(60, Math.min(82, zone.height - 18))));
     return {
       width,
       height,

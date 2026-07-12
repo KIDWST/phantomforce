@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-212";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-213";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -62,6 +62,9 @@ export function customizeNavigation(baseItems, role = "owner") {
     })
     .map((item) => {
       const state = states.get(item.id);
+      /* Dashboard is the platform home. Older org customizations may still
+         carry "Business HQ"; keep the new product language stable here. */
+      if (item.id === "dashboard") return { ...item, label: item.label, customizationOrder: state?.order };
       return state ? { ...item, label: state.label, customizationOrder: state.order } : item;
     })
     .sort((left, right) => (left.customizationOrder ?? 999) - (right.customizationOrder ?? 999));

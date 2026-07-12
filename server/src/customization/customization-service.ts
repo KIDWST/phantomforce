@@ -36,7 +36,7 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     brand: {
       mode: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "internal_phantomforce" : "standard",
       organizationName: tenantId === "phantomforce-owner" || tenantId === "phantomforce" ? "PhantomForce" : "My Business",
-      workspaceName: "Business HQ",
+      workspaceName: "Dashboard",
       poweredByPhantomForce: true,
     },
     theme: {},
@@ -52,7 +52,7 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     })),
     navigation: {},
     assistant: {},
-    dashboards: [{ id: "owner_home", name: "Business HQ", scope: "owner", widgets: [
+    dashboards: [{ id: "owner_home", name: "Dashboard", scope: "owner", widgets: [
       { id: "daily_brief", type: "ai_briefing", title: "Daily brief", source: "phantom.briefing" },
       { id: "approval_queue", type: "approvals", title: "Needs attention", source: "approvals.pending" },
     ] }],

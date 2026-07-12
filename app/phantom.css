@@ -2612,25 +2612,25 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 
 /* ---------------- sidebar ---------------- */
 .sidebar {
-  flex: 0 0 236px; width: 236px; position: sticky; top: 0; align-self: flex-start;
-  height: 100vh; display: flex; flex-direction: column; gap: 16px; padding: 20px 14px;
+  flex: 0 0 214px; width: 214px; position: sticky; top: 0; align-self: flex-start;
+  height: 100vh; display: flex; flex-direction: column; gap: 10px; padding: 14px 10px;
   border-right: 1px solid var(--line);
   background: linear-gradient(180deg, rgba(6, 18, 13, 0.7), rgba(2, 8, 10, 0.6));
   -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
 }
-.side-brand { display: flex; align-items: center; gap: 11px; padding: 4px 8px 10px; border-bottom: 1px solid var(--line); }
-.side-brand .brand-ghost { width: 30px; height: 30px; }
-.side-brand-text b { display: block; font: 600 13px "Space Grotesk", sans-serif; letter-spacing: 0.12em; }
-.side-brand-text i { display: block; margin-top: 2px; font: 500 8px "DM Mono", monospace; font-style: normal; letter-spacing: 0.16em; color: var(--dim); }
+.side-brand { display: flex; align-items: center; gap: 9px; padding: 3px 7px 8px; border-bottom: 1px solid var(--line); }
+.side-brand .brand-ghost { width: 27px; height: 27px; }
+.side-brand-text b { display: block; font: 600 11.5px "Space Grotesk", sans-serif; letter-spacing: 0.11em; }
+.side-brand-text i { display: block; margin-top: 1px; font: 500 7px "DM Mono", monospace; font-style: normal; letter-spacing: 0.14em; color: var(--dim); }
 .side-toggle { display: none; }
-.side-nav { display: flex; flex-direction: column; gap: 4px; flex: 1 1 auto; }
+.side-nav { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-height: 0; }
 .nav-item {
-  display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; cursor: pointer;
-  padding: 10px 12px; border-radius: 12px; border: 1px solid transparent; background: none;
-  color: var(--dim); font: 500 13.5px "Space Grotesk", sans-serif;
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
+  min-height: 38px; padding: 7px 9px; border-radius: 10px; border: 1px solid transparent; background: none;
+  color: var(--dim); font: 600 12.25px "Space Grotesk", sans-serif;
   transition: background 0.18s, color 0.18s, border-color 0.18s;
 }
-.nav-item .ic { width: 17px; height: 17px; }
+.nav-item .ic { width: 15px; height: 15px; flex: 0 0 15px; }
 .nav-item:hover { background: rgba(65, 255, 161, 0.06); color: var(--ink); }
 .nav-item-bottom:first-of-type,
 .nav-item:not(.nav-item-bottom) + .nav-item-bottom {
@@ -2642,13 +2642,16 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   position: absolute;
   left: 10px;
   right: 10px;
-  top: -10px;
+  top: -6px;
   height: 1px;
   background: linear-gradient(90deg, transparent, rgba(65,255,161,0.22), transparent);
 }
 .nav-item-bottom {
   background: rgba(255,255,255,0.018);
   color: rgba(210, 235, 222, 0.72);
+  min-height: 34px;
+  padding-top: 6px;
+  padding-bottom: 6px;
 }
 .nav-item-quiet {
   opacity: 0.78;
@@ -2666,8 +2669,8 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .nav-item.is-active .nav-badge { background: rgba(4, 22, 13, 0.35); color: #04160d; }
 .nav-pill {
-  margin-left: auto; font: 700 9px "DM Mono", monospace; letter-spacing: 0.05em; min-width: 22px; text-align: center;
-  padding: 2px 6px; border-radius: 999px; border: 1px solid var(--line); background: rgba(0,0,0,0.3); color: var(--dim);
+  margin-left: auto; font: 700 8px "DM Mono", monospace; letter-spacing: 0.04em; min-width: 18px; text-align: center;
+  padding: 1px 5px; border-radius: 999px; border: 1px solid var(--line); background: rgba(0,0,0,0.3); color: var(--dim);
 }
 .nav-pill.is-on { color: #04160d; background: var(--neon); border-color: transparent; box-shadow: 0 0 10px rgba(65,255,161,0.5); animation: navPillPulse 2.4s ease-in-out infinite; }
 .nav-pill.is-off { color: var(--dim); }

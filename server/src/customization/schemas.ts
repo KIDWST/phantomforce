@@ -15,7 +15,7 @@ const SafeAssetUrlSchema = z.string().trim().max(500).refine((value) => value ==
 export const OrganizationBrandSchema = z.object({
   mode: BrandModeSchema.default("standard"),
   organizationName: SafeLabelSchema.default("My Business"),
-  workspaceName: SafeLabelSchema.default("Business HQ"),
+  workspaceName: SafeLabelSchema.default("Dashboard"),
   logoUrl: SafeAssetUrlSchema.default(""),
   faviconUrl: SafeAssetUrlSchema.default(""),
   loginBackgroundUrl: SafeAssetUrlSchema.default(""),
