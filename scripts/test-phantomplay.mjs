@@ -12,6 +12,7 @@ const appFiles = [index, main, module, ...games];
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
 assert.match(main, /renderPhantomPlay/u, "The workspace must use the PhantomPlay renderer.");
+assert.match(read("../app/js/customization.js"), /canAccessConfiguredModule[\s\S]*module\.id !== "phantomplay"[\s\S]*selected_members/u, "PhantomPlay nav access must be controlled by the workspace module configuration.");
 assert.match(main, /sessionId:\s*kind === "admin" \? "admin-jordan" : "client-sports-demo"/u, "Local UI tests must obtain a real protected demo session when the local backend is available.");
 assert.match(index, /phantomplay\.css\?v=phantom-live-/u, "The dedicated PhantomPlay stylesheet must be loaded.");
 assert.match(module, /sandbox="allow-scripts"/u, "Games must launch in a script-only sandbox.");
@@ -19,6 +20,7 @@ assert.doesNotMatch(module, /allow-same-origin|allow-forms|allow-popups/u, "The 
 assert.match(module, /event\.source !== frame\.contentWindow/u, "Game messages must be bound to the active frame.");
 assert.match(module, /data\.source !== "phantomplay-game"/u, "Game messages must use the PhantomPlay protocol marker.");
 assert.match(module, /Offline mode/u, "An honest offline state must exist.");
+assert.match(module, /not enabled for this workspace|optional workspace module/u, "Direct PhantomPlay URLs need a clear unavailable state.");
 assert.match(module, /No matching games/u, "A real search empty state must exist.");
 assert.match(module, /Edit release/u, "Developers must be able to revise releases.");
 assert.match(module, /Request changes/u, "Admin moderation controls must exist.");

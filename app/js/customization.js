@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-217";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-221";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -30,6 +30,39 @@ export function currentCustomization() {
   return activeConfiguration;
 }
 
+function currentActorIds() {
+  const raw = session.get?.() || {};
+  return [
+    raw.userId,
+    raw.id,
+    raw.email,
+    raw.authSessionId,
+  ].filter(Boolean).map((value) => String(value).trim());
+}
+
+function roleForCustomization(role = "owner") {
+  const raw = session.get?.() || {};
+  return raw.orgRole || role;
+}
+
+export function canAccessConfiguredModule(moduleId, role = "owner") {
+  if (!activeConfiguration) return true;
+  const module = activeConfiguration.modules.find((item) => item.id === moduleId);
+  if (!module) return true;
+  if (!module.enabled) return false;
+  const effectiveRole = roleForCustomization(role);
+  if (!module.roles.includes(effectiveRole)) return false;
+  if (module.id !== "phantomplay") return true;
+  if (module.accessMode === "entire_organization") return true;
+  if (module.accessMode === "owner_only") return ["owner", "admin"].includes(effectiveRole) || session.get?.()?.canManageAccess === true;
+  if (module.accessMode === "selected_members") {
+    if (["owner", "admin"].includes(effectiveRole) || session.get?.()?.canManageAccess === true) return true;
+    const actorIds = currentActorIds();
+    return actorIds.some((id) => module.allowedMemberIds?.includes(id));
+  }
+  return false;
+}
+
 export function applyOrganizationCustomization(configuration = activeConfiguration) {
   if (!configuration) return;
   activeConfiguration = configuration;
@@ -52,13 +85,13 @@ export function applyOrganizationCustomization(configuration = activeConfigurati
 }
 
 export function customizeNavigation(baseItems, role = "owner") {
-  if (!activeConfiguration) return baseItems;
+  if (!activeConfiguration) return baseItems.filter((item) => item.optionalModule !== true);
   const states = new Map(activeConfiguration.modules.map((module) => [module.id, module]));
   return baseItems
     .filter((item) => {
       const state = states.get(item.id);
       if (!state) return true;
-      return state.enabled && state.roles.includes(role);
+      return canAccessConfiguredModule(item.id, role);
     })
     .map((item) => {
       const state = states.get(item.id);

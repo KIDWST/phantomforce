@@ -4675,6 +4675,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-field { display: flex; flex-direction: column; gap: 6px; }
 .set-field span { font: 600 9.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
 .set-field em { font-size: 11px; color: var(--dim-2); font-style: normal; }
+.set-field textarea { min-height: 96px; resize: vertical; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,0.3); color: var(--ink); font: inherit; outline: none; }
+.set-field textarea:focus { border-color: var(--neon); box-shadow: 0 0 0 3px rgba(65,255,161,0.08); }
+.set-field.is-muted { opacity: .62; }
+.set-status-pill { align-self: flex-start; border: 1px solid rgba(255,209,102,.28); border-radius: 999px; padding: 8px 12px; color: var(--warn); background: rgba(255,209,102,.08); font: 700 10px "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
+.set-status-pill.is-on { border-color: rgba(65,255,161,.35); color: var(--neon); background: rgba(65,255,161,.1); }
+.set-module-card { display: grid; gap: 16px; border: 1px solid rgba(65,255,161,.18); border-radius: 16px; padding: 18px; background: linear-gradient(135deg, rgba(4,28,20,.72), rgba(6,14,18,.82)); }
+.set-module-card-main { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 14px; align-items: start; }
+.set-module-card h3 { margin: 0 0 6px; }
+.set-actions-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 @media (max-width: 760px) {
   .set-settings-layout { grid-template-columns: 1fr; }
   .set-category-nav { grid-template-columns: 1fr; }

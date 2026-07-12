@@ -27,6 +27,16 @@ export type CustomizationEntitlements = {
 
 export type ValidationIssue = { path: string; message: string; severity: "error" | "warning" };
 
+function defaultModuleEnabled(moduleId: string, tenantId: string) {
+  if (moduleId === "developer") return tenantId === "phantomforce-owner" || tenantId === "phantomforce";
+  // Migration rule: existing configuration documents keep their current
+  // PhantomPlay setting. Only newly created/reset organization configs start
+  // with PhantomPlay disabled so business workspaces never see games unless an
+  // owner deliberately enables the optional module.
+  if (moduleId === "phantomplay") return false;
+  return true;
+}
+
 export function defaultOrganizationConfiguration(tenantId: string, actor = "system"): OrganizationConfiguration {
   const now = new Date().toISOString();
   return OrganizationConfigurationSchema.parse({
@@ -44,11 +54,15 @@ export function defaultOrganizationConfiguration(tenantId: string, actor = "syst
     modules: PLATFORM_MODULES.map((module, order) => ({
       id: module.id,
       label: module.displayName,
-      enabled: module.id !== "developer" || tenantId === "phantomforce-owner" || tenantId === "phantomforce",
+      enabled: defaultModuleEnabled(module.id, tenantId),
       order,
       roles: module.allowedRoles.includes("platform_owner")
         ? ["owner"]
         : module.allowedRoles,
+      accessMode: module.id === "phantomplay" ? "owner_only" : "entire_organization",
+      allowedMemberIds: [],
+      activityEnabled: false,
+      challengesEnabled: false,
     })),
     navigation: {},
     assistant: {},

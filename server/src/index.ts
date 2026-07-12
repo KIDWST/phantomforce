@@ -405,6 +405,15 @@ const CustomizationPreviewBodySchema = z.object({ tenant_id: z.string().trim().m
 const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ summary: z.string().trim().max(240).optional(), expected_version: z.number().int().positive().optional() });
 const CustomizationRollbackBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), version: z.number().int().positive() });
 const CustomizationAssistantBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), message: z.string().trim().min(1).max(1200) });
+const WorkspaceModuleUpdateBodySchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  module_id: z.literal("phantomplay"),
+  enabled: z.boolean(),
+  accessMode: z.enum(["owner_only", "selected_members", "entire_organization"]).default("owner_only"),
+  allowedMemberIds: z.array(z.string().trim().min(1).max(120)).max(200).default([]),
+  activityEnabled: z.boolean().default(false),
+  challengesEnabled: z.boolean().default(false),
+});
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok"]),
 });
@@ -427,6 +436,53 @@ function customizationEntitlements(session: AccessSession, tenantId: string): Cu
     internalPhantomForce,
     coBranded: internalPhantomForce || modules.has("co-branded") || modules.has("white-label"),
     whiteLabel: internalPhantomForce || modules.has("white-label"),
+  };
+}
+
+function customizationActorRole(session: AccessSession) {
+  if (session.canManageAccess || session.isSuperAdmin) return "owner";
+  return session.orgRole || session.role || "client";
+}
+
+function actorModuleIds(session: AccessSession) {
+  return [session.userId, session.id, session.email, session.authSessionId].filter(Boolean).map((value) => String(value));
+}
+
+function canManageWorkspaceModules(session: AccessSession, tenantId: string) {
+  if (session.canManageAccess || session.isSuperAdmin) return true;
+  const ownTenant = session.orgId || session.clientId;
+  return ownTenant === tenantId && (session.orgRole === "owner" || session.orgRole === "admin");
+}
+
+async function moduleAccessForSession(session: AccessSession, moduleId: string, requestedTenantId?: unknown) {
+  const tenantId = customizationTenantForSession(session, typeof requestedTenantId === "string" ? requestedTenantId : undefined);
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const module = state.configuration.modules.find((item) => item.id === moduleId);
+  const role = customizationActorRole(session);
+  const canManage = canManageWorkspaceModules(session, tenantId);
+  const allowedMemberIds = module?.allowedMemberIds ?? [];
+  let allowed = Boolean(module?.enabled && module.roles.includes(role));
+  if (moduleId === "phantomplay" && allowed) {
+    const accessMode = module?.accessMode ?? "owner_only";
+    if (accessMode === "owner_only") allowed = canManage;
+    else if (accessMode === "selected_members") {
+      allowed = canManage || actorModuleIds(session).some((id) => allowedMemberIds.includes(id));
+    }
+  }
+  return {
+    tenantId,
+    module,
+    role,
+    canManage,
+    allowed,
+    reason: !module?.enabled
+      ? "module_disabled"
+      : !module.roles.includes(role)
+        ? "role_not_allowed"
+        : allowed
+          ? "allowed"
+          : "member_not_allowed",
+    configurationVersion: state.configuration.version,
   };
 }
 
@@ -716,6 +772,81 @@ app.get("/phantom-ai/customization/config", async (request, reply) => {
     platform_core_editable: false,
     provider_called: false,
   };
+});
+
+app.get("/phantom-ai/customization/workspace-modules", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const phantomPlayAccess = await moduleAccessForSession(session, "phantomplay", tenantId);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    can_manage: canManageWorkspaceModules(session, tenantId),
+    modules: state.configuration.modules
+      .filter((module) => module.id === "phantomplay")
+      .map((module) => ({
+        id: module.id,
+        label: module.label,
+        enabled: module.enabled,
+        accessMode: module.accessMode ?? "owner_only",
+        allowedMemberIds: module.allowedMemberIds ?? [],
+        activityEnabled: module.activityEnabled ?? false,
+        challengesEnabled: module.challengesEnabled ?? false,
+        canAccess: phantomPlayAccess.allowed,
+        accessReason: phantomPlayAccess.reason,
+      })),
+    version: state.configuration.version,
+    provider_called: false,
+  };
+});
+
+app.patch("/phantom-ai/customization/workspace-modules", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = WorkspaceModuleUpdateBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.code(403).send({ ok: false, error: "Managing workspace modules requires an organization owner or administrator." });
+  }
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const patch = {
+    modules: state.configuration.modules.map((module) => module.id === parsed.data.module_id
+      ? {
+          ...module,
+          enabled: parsed.data.enabled,
+          accessMode: parsed.data.accessMode,
+          allowedMemberIds: parsed.data.accessMode === "selected_members" ? parsed.data.allowedMemberIds : [],
+          activityEnabled: parsed.data.enabled && parsed.data.activityEnabled,
+          challengesEnabled: parsed.data.enabled && parsed.data.challengesEnabled,
+        }
+      : module),
+  };
+  try {
+    const result = await publishConfigurationChange({
+      tenantId,
+      actor: session.id,
+      patch,
+      summary: parsed.data.enabled ? "Updated PhantomPlay workspace module access" : "Disabled PhantomPlay workspace module",
+      expectedVersion: state.configuration.version,
+      entitlements: customizationEntitlements(session, tenantId),
+    });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      result,
+      organization_data_deleted: false,
+      notifications_sent: false,
+      provider_called: false,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) return reply.status(400).send({ ok: false, error: error.flatten() });
+    return reply.status(409).send({ ok: false, error: error instanceof Error ? error.message : "Workspace module could not be updated." });
+  }
 });
 
 app.get("/phantom-ai/customization/versions", async (request, reply) => {
@@ -3464,9 +3595,19 @@ app.post("/api/vacation-mode/check-in", async (request, reply) => {
    platform moderation. Games run in a browser sandbox; these routes never
    proxy game traffic or expose internal infrastructure. */
 
-async function phantomPlayAccess(session: AccessSession) {
-  if (session.canManageAccess || session.isSuperAdmin) {
-    return { entitled: true, dailyMinuteLimit: 1_000_000, submissionLimit: 100_000, reason: "platform_admin" };
+async function phantomPlayAccess(session: AccessSession, requestedTenantId?: unknown) {
+  const moduleAccess = await moduleAccessForSession(session, "phantomplay", requestedTenantId);
+  if (!moduleAccess.allowed) {
+    return {
+      entitled: false,
+      dailyMinuteLimit: 0,
+      submissionLimit: 0,
+      reason: moduleAccess.reason,
+      moduleAccess,
+    };
+  }
+  if (session.canManageAccess || session.isSuperAdmin || moduleAccess.canManage) {
+    return { entitled: true, dailyMinuteLimit: 1_000_000, submissionLimit: 100_000, reason: "workspace_module", moduleAccess };
   }
   if (session.orgId) {
     try {
@@ -3476,9 +3617,10 @@ async function phantomPlayAccess(session: AccessSession) {
         dailyMinuteLimit: decision.entitlements.limits.phantomPlayMinutesPerDay,
         submissionLimit: decision.entitlements.limits.gameSubmissions,
         reason: decision.reason,
+        moduleAccess,
       };
     } catch {
-      return { entitled: false, dailyMinuteLimit: 0, submissionLimit: 0, reason: "entitlements_unavailable" };
+      return { entitled: false, dailyMinuteLimit: 0, submissionLimit: 0, reason: "entitlements_unavailable", moduleAccess };
     }
   }
   return {
@@ -3486,6 +3628,7 @@ async function phantomPlayAccess(session: AccessSession) {
     dailyMinuteLimit: session.subscriptionActive === false ? 0 : 60,
     submissionLimit: 0,
     reason: session.subscriptionActive === false ? "subscription_inactive" : "legacy_session",
+    moduleAccess,
   };
 }
 
@@ -3493,11 +3636,26 @@ app.get("/api/phantomplay", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const query = (request.query ?? {}) as { tenant_id?: unknown };
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, query.tenant_id);
+  if (!access.entitled) {
+    return reply.code(403).send({
+      ok: false,
+      error: access.reason === "module_disabled"
+        ? "PhantomPlay is not enabled for this workspace."
+        : "PhantomPlay is not available to this account.",
+      reason: access.reason,
+      tenant_id: access.moduleAccess.tenantId,
+      module: {
+        enabled: access.moduleAccess.module?.enabled ?? false,
+        accessMode: access.moduleAccess.module?.accessMode ?? "owner_only",
+      },
+      provider_called: false,
+    });
+  }
   return {
     ok: true,
     session,
-    ...(await getPhantomPlaySnapshot(session, { tenantId: query.tenant_id, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 })),
+    ...(await getPhantomPlaySnapshot(session, { tenantId: access.moduleAccess.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 })),
     subscription: access,
     storage: session.canManageAccess ? await getPhantomPlayStoreStatus() : undefined,
   };
@@ -3506,7 +3664,7 @@ app.get("/api/phantomplay", async (request, reply) => {
 app.patch("/api/phantomplay/profile", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available for this plan.", reason: access.reason });
   return { ok: true, session, ...(await updatePhantomPlayProfile(session, (request.body ?? {}) as Record<string, unknown>)) };
 });
@@ -3514,7 +3672,7 @@ app.patch("/api/phantomplay/profile", async (request, reply) => {
 app.post("/api/phantomplay/plays", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   try {
     return { ok: true, session, ...(await startPhantomPlaySession(session, (request.body ?? {}) as Record<string, unknown>, { entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit })) };
   } catch (error) {
@@ -3526,6 +3684,8 @@ app.patch("/api/phantomplay/plays/:id", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const params = request.params as { id?: string };
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
   const play = params.id ? await updatePhantomPlaySession(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
   return play ? { ok: true, session, play } : reply.code(404).send({ ok: false, error: "Play session was not found." });
 });
@@ -3533,9 +3693,10 @@ app.patch("/api/phantomplay/plays/:id", async (request, reply) => {
 app.post("/api/phantomplay/submissions", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
   const body = (request.body ?? {}) as Record<string, unknown>;
-  const snapshot = await getPhantomPlaySnapshot(session, { tenantId: body.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 });
+  const access = await phantomPlayAccess(session, body.tenantId);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or workspace.", reason: access.reason });
+  const snapshot = await getPhantomPlaySnapshot(session, { tenantId: access.moduleAccess.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 });
   if (!access.entitled || !snapshot.access.canSubmitGames || access.submissionLimit < 1) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or plan." });
   if (snapshot.submissions.length >= access.submissionLimit && !session.canManageAccess) return reply.code(403).send({ ok: false, error: "This plan's game submission limit has been reached." });
   try {
@@ -3548,7 +3709,7 @@ app.post("/api/phantomplay/submissions", async (request, reply) => {
 app.patch("/api/phantomplay/submissions/:id", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   if (!access.entitled || access.submissionLimit < 1) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or plan." });
   const params = request.params as { id?: string };
   try {

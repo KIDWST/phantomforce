@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260712-220";
+} from "./store.js?v=phantom-live-20260712-221";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -243,7 +243,7 @@ function render() {
     ${ui.error && !ui.offline ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
     <nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav>
-    <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "Ask your business owner to enable PhantomPlay for this plan.")}</main>
+    <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "This optional workspace module is separate from core PhantomForce operations. Ask a workspace owner to enable access if your team uses it.")}</main>
     ${settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
