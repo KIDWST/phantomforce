@@ -2878,7 +2878,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   letter-spacing: -0.01em;
 }
 .workspace-page-body {
-  padding: clamp(14px, 1.8vw, 22px);
+  padding: clamp(10px, 1.2vw, 16px);
   overflow: visible;
 }
 .workspace-page-wide .workspace-page-body {
@@ -10533,6 +10533,7 @@ body:has([data-workspace-page="workforce"]) .buddy-canvas {
   .ac-detail-panel { grid-template-columns: 1fr; grid-template-rows: auto 1fr; max-height: 92vh; }
   .ac-detail-preview { max-height: 40vh; }
   .ac-detail-facts, .ac-detail-flags { grid-template-columns: 1fr; }
+}
 /* Final hard override: keep the Phantom pet compact with speech above its head. */
 body .phantom .console .chatbox-head,
 body .phantom .chatbox-head {
@@ -10604,4 +10605,58 @@ body .phantom .pc .pc-caption {
   .an-channel-actions { width: 100%; justify-content: flex-start; }
   .an-channel-actions .btn { min-height: 42px; }
   .an-import-backup > summary { min-height: 42px; }
+}
+
+/* Final workspace cleanup: tab content starts with action, not repeated title blocks. */
+body .workspace-page[data-workspace-page="analytics"] .an-hero {
+  display: none !important;
+}
+
+body .workspace-page :where(
+  .ch-creator-head,
+  .workers-hero,
+  .memory-hero,
+  .brain-hero,
+  .developer-hero,
+  .account-hero,
+  .set-ai-hero,
+  .ap-curtain-hero,
+  .vm-hero,
+  .cust-hero
+) {
+  min-height: 0 !important;
+  padding: clamp(12px, 1.3vw, 16px) !important;
+  margin-bottom: 12px !important;
+}
+
+body .workspace-page :where(
+  .ch-creator-head,
+  .workers-hero,
+  .memory-hero,
+  .brain-hero,
+  .developer-hero,
+  .account-hero,
+  .set-ai-hero,
+  .ap-curtain-hero,
+  .vm-hero,
+  .cust-hero
+) :where(h2, h3) {
+  font-size: clamp(18px, 1.5vw, 24px) !important;
+}
+
+body .workspace-page :where(
+  .ch-creator-head,
+  .workers-hero,
+  .memory-hero,
+  .brain-hero,
+  .developer-hero,
+  .account-hero,
+  .set-ai-hero,
+  .ap-curtain-hero,
+  .vm-hero,
+  .cust-hero
+) p:not(.ch-eyebrow):not(.cust-kicker):not(.overlay-kicker):not(.developer-kicker) {
+  font-size: 12px !important;
+  line-height: 1.38 !important;
+  max-width: 720px !important;
 }

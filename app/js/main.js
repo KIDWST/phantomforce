@@ -905,7 +905,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-213";
+const POSE_VERSION = "phantom-live-20260712-214";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2598,12 +2598,6 @@ function renderWorkspacePage(id, pushHash = true) {
   lastEnteredPageKey = key;
   root.innerHTML = `
     <section class="workspace-page ${def.wide ? "workspace-page-wide" : ""} ${workspaceFirst ? "workspace-page-first" : ""} ${entering ? "page-enter" : ""}" data-workspace-page="${esc(key)}">
-      ${workspaceFirst ? "" : `<header class="workspace-page-head">
-        <div>
-          <p class="workspace-page-kicker">${esc(def.kicker)}${!def.custom && isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
-          <h1>${esc(def.title)}</h1>
-        </div>
-      </header>`}
       <div class="workspace-page-body" data-workspace-page-body></div>
     </section>`;
   renderNav();
