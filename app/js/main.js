@@ -25,13 +25,13 @@ import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.j
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-214";
 import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-214";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-214";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-215";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-216";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
 } from "./orgs.js?v=phantom-live-20260712-214";
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-214";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-214";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-215";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-216";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
@@ -905,7 +905,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-215";
+const POSE_VERSION = "phantom-live-20260712-216";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
