@@ -13,6 +13,7 @@
     "test:intent": "node scripts/test-phantom-intent-router.mjs",
     "test:memory": "node scripts/test-memory-retention.mjs",
     "test:content-planner": "node scripts/test-content-planner.mjs",
+    "test:phantomplay": "node scripts/test-phantomplay.mjs && npm run test:phantomplay --workspace @phantomforce/server",
     "typecheck": "npm run build --workspace @phantomforce/contracts && npm run typecheck --workspace @phantomforce/server",
     "prisma:generate": "npm run prisma:generate --workspace @phantomforce/server"
   },

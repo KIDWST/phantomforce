@@ -119,6 +119,7 @@ function shouldProxy(urlPath) {
     || urlPath === "/orgs"
     || urlPath.startsWith("/auth/")
     || urlPath.startsWith("/api/vacation-mode")
+    || urlPath.startsWith("/api/phantomplay")
     || urlPath.startsWith("/phantom-ai/")
     /* multi-tenant org APIs + published-site hosting live on Hermes */
     || urlPath.startsWith("/orgs/")
