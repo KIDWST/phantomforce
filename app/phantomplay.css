@@ -34,3 +34,23 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
 .pp-spotlight h2,.pp-dev-guide h2{font-size:20px!important}
 .pp-dev-guide{gap:12px!important}
 .pp-dev-guide p:not(.pp-kicker),.pp-dev-guide li{font-size:11px!important}
+
+/* Creator-first PhantomPlay: games are by indie creators, not bundled corporate filler. */
+.pp-banner.is-notice{border-color:#42e9ff66!important;background:#42e9ff0d!important}
+.pp-banner.is-notice b{color:var(--pp-cyan)!important}
+.pp-game-actions{display:grid;grid-template-columns:1fr;gap:7px}
+.pp-support{min-height:34px;border:1px solid #42e9ff3d;border-radius:9px;background:#42e9ff0b;color:#bdf8ff;font-weight:800;cursor:pointer}
+.pp-support:hover,.pp-support:focus-visible{border-color:#42e9ff88;color:#effcff;outline:none}
+.pp-leaderboard{display:grid;gap:12px;padding:14px;border:1px solid var(--line);border-radius:13px;background:linear-gradient(145deg,#05120ef5,#020807fa)}
+.pp-leaderboard ol{display:grid;gap:7px;margin:0;padding:0;list-style:none}
+.pp-leaderboard li{display:grid;grid-template-columns:42px minmax(0,1fr) auto;gap:9px;align-items:center;min-height:38px;padding:8px 10px;border:1px solid #ffffff0c;border-radius:10px;background:#ffffff05}
+.pp-leaderboard li.is-you{border-color:#41ffa166;background:#41ffa111}
+.pp-leaderboard li b{color:var(--neon);font:800 10px "DM Mono",monospace}
+.pp-leaderboard li span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pp-leaderboard li strong{color:var(--ink)}
+.pp-leaderboard li em{grid-column:2/-1;color:var(--dim);font-size:10px;font-style:normal}
+.pp-leaderboard li.is-empty{grid-template-columns:1fr;color:var(--dim)}
+.pp-board-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+.pp-board-grid article{padding:12px;border:1px solid var(--line);border-radius:11px;background:#020907}
+.pp-board-grid h3{margin:0 0 9px;font-size:15px}
+@media(max-width:767px){.pp-board-grid{grid-template-columns:1fr}.pp-leaderboard li{grid-template-columns:34px minmax(0,1fr) auto}}

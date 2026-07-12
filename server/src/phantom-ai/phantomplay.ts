@@ -87,21 +87,23 @@ type PhantomPlayStore = {
   submissions: PhantomPlaySubmission[];
 };
 
+const TAK_CREATOR = "Tak";
+
 export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "neon-drift",
     title: "Neon Drift",
-    summary: "Dodge the signal storm and keep your streak alive.",
-    description: "A fast one-button reaction game built for a two-minute reset between focused work blocks.",
+    summary: "Hard-mode signal drifting with levels, music, and animated hazards.",
+    description: "A harder arcade run with ten escalating levels, original synth tones, animated mines, slicers, sweepers, splitters, shields, pause, restart, touch, and keyboard controls.",
     category: "Arcade",
     tags: ["quick", "reaction", "keyboard", "touch"],
     contentRating: "everyone",
-    developer: "Phantom Labs",
+    developer: TAK_CREATOR,
     kind: "built_in",
-    launchUrl: "/app/games/neon-drift.html?v=1.1.0",
+    launchUrl: "/app/games/neon-drift.html?v=1.2.0",
     thumbnail: "/app/assets/poses/mode-dark-video.webp",
     featured: true,
-    version: "1.1.0",
+    version: "1.2.0",
     controls: "Arrow keys, A/D, or hold left/right",
     progressSupport: true,
     scoreSupport: true,
@@ -109,17 +111,17 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "signal-match",
     title: "Signal Match",
-    summary: "Find the matching signals before the grid resets.",
-    description: "A calm memory game with short rounds, keyboard support, and saved best scores.",
+    summary: "Watch the flash, memorize positions, then match every pair.",
+    description: "A real memory round: the full grid flashes first, then hides so players match symbols from memory with moves, pause, restart, touch, and keyboard support.",
     category: "Puzzle",
-    tags: ["memory", "calm", "puzzle", "touch"],
+    tags: ["memory", "flash", "puzzle", "touch"],
     contentRating: "everyone",
-    developer: "Phantom Labs",
+    developer: TAK_CREATOR,
     kind: "built_in",
-    launchUrl: "/app/games/signal-match.html?v=1.1.0",
+    launchUrl: "/app/games/signal-match.html?v=1.2.0",
     thumbnail: "/app/assets/poses/mode-dark-image.webp",
     featured: true,
-    version: "1.1.0",
+    version: "1.2.0",
     controls: "Click, tap, or use Tab + Enter",
     progressSupport: true,
     scoreSupport: true,
@@ -132,7 +134,7 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     category: "Focus",
     tags: ["timing", "focus", "quick", "touch"],
     contentRating: "everyone",
-    developer: "Phantom Labs",
+    developer: TAK_CREATOR,
     kind: "built_in",
     launchUrl: "/app/games/focus-stack.html?v=1.1.0",
     thumbnail: "/app/assets/poses/mode-dark-website.webp",
@@ -145,63 +147,63 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "reflex-grid", title: "Reflex Grid", summary: "Hit the lit cell before the fuse burns out.",
     description: "A nine-cell reaction test that speeds up as you score. Three misses ends the run.",
-    category: "Arcade", tags: ["reaction", "quick", "keyboard", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in",
+    category: "Arcade", tags: ["reaction", "quick", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
     launchUrl: "/app/games/reflex-grid.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: true, version: "1.0.0",
     controls: "Tap/click a cell or press 1-9", progressSupport: true, scoreSupport: true,
   },
   {
     id: "penalty-kick", title: "Penalty Kick", summary: "Beat the keeper — time your shot past the moving save zone.",
     description: "Read the sweeping reticle and the keeper's reach, then strike. The keeper gets faster every round.",
-    category: "Sports", tags: ["sports", "timing", "keyboard", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in",
+    category: "Sports", tags: ["sports", "timing", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
     launchUrl: "/app/games/penalty-kick.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.0",
     controls: "Space or tap to shoot", progressSupport: true, scoreSupport: true,
   },
   {
     id: "color-rush", title: "Color Rush", summary: "Catch only the target color as the tiles fall faster.",
     description: "Four falling columns and a rotating target color. Catch the right hue, ignore the rest, keep three lives.",
-    category: "Arcade", tags: ["reaction", "color", "keyboard", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in",
+    category: "Arcade", tags: ["reaction", "color", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
     launchUrl: "/app/games/color-rush.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
     controls: "A/S/D/F or tap a column", progressSupport: true, scoreSupport: true,
   },
   {
     id: "word-weld", title: "Word Weld", summary: "Weld the letters into as many words as you can before time runs out.",
     description: "A 90-second word builder with a real dictionary. Longer words score exponentially higher.",
-    category: "Puzzle", tags: ["word", "vocabulary", "keyboard", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in",
+    category: "Puzzle", tags: ["word", "vocabulary", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
     launchUrl: "/app/games/word-weld.html", thumbnail: "/app/assets/poses/mode-dark-write.webp", featured: true, version: "1.0.0",
     controls: "Type letters, Enter to submit, Space to shuffle", progressSupport: true, scoreSupport: true,
   },
   {
     id: "tile-flow", title: "Tile Flow", summary: "Rotate the pipes to connect the signal end to end.",
     description: "Eight hand-verified solvable levels. Turn each tile until the flow reaches the exit.",
-    category: "Puzzle", tags: ["logic", "calm", "keyboard", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in",
+    category: "Puzzle", tags: ["logic", "calm", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
     launchUrl: "/app/games/tile-flow.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0",
     controls: "Click/tap to rotate, arrows to move", progressSupport: true, scoreSupport: true,
   },
   {
     id: "tower-tactics", title: "Tower Tactics", summary: "Slide and merge matching tiles to build the highest number.",
     description: "A tight 4x4 merge puzzle. Plan your slides — the board fills fast when you stop thinking ahead.",
-    category: "Strategy", tags: ["merge", "strategy", "keyboard", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in",
+    category: "Strategy", tags: ["merge", "strategy", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
     launchUrl: "/app/games/tower-tactics.html", thumbnail: "/app/assets/poses/mode-dark-admin.webp", featured: false, version: "1.0.0",
     controls: "Arrow keys or swipe", progressSupport: true, scoreSupport: true,
   },
   {
     id: "breath-pacer", title: "Breath Pacer", summary: "Match your breath to the pacer and reset in two minutes.",
     description: "A box-breathing companion. Follow the expanding ring through inhale, hold, exhale, hold and score your timing.",
-    category: "Focus", tags: ["calm", "breathing", "wellness", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in",
+    category: "Focus", tags: ["calm", "breathing", "wellness", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
     launchUrl: "/app/games/breath-pacer.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: false, version: "1.0.0",
     controls: "Tap or press Space on each phase", progressSupport: true, scoreSupport: true,
   },
   {
     id: "court-vision", title: "Court Vision", summary: "Read the arc and power to sink the free throw.",
     description: "A physics free-throw shooter. The distance and rim grow with every make; three misses ends the game.",
-    category: "Sports", tags: ["sports", "physics", "timing", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in",
+    category: "Sports", tags: ["sports", "physics", "timing", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
     launchUrl: "/app/games/court-vision.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: false, version: "1.0.0",
     controls: "Tap or press Space to shoot", progressSupport: true, scoreSupport: true,
   },
   {
     id: "pixel-bloom", title: "Pixel Bloom", summary: "Bloom a symmetric neon mandala — no timer, no pressure.",
     description: "A calm creative toy. Place petals that mirror four ways; build combos as the pattern fills.",
-    category: "Creative", tags: ["calm", "creative", "relax", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in",
+    category: "Creative", tags: ["calm", "creative", "relax", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
     launchUrl: "/app/games/pixel-bloom.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
     controls: "Tap cells or arrows + Space", progressSupport: true, scoreSupport: true,
   },
@@ -350,6 +352,33 @@ function historySummary(profile: PlayerProfile) {
   }));
 }
 
+function phantomLeaderboards(store: PhantomPlayStore, catalog: PhantomPlayGame[], actorId: string) {
+  const gameIds = new Set(catalog.map((game) => game.id));
+  const scores: Array<{ gameId: string; gameTitle: string; player: string; score: number; seconds: number; updatedAt: string; isYou: boolean }> = [];
+  for (const profile of Object.values(store.profiles)) {
+    for (const session of profile.sessions) {
+      if (!gameIds.has(session.gameId) || session.score === null) continue;
+      const gameTitle = catalog.find((game) => game.id === session.gameId)?.title || session.gameId;
+      scores.push({
+        gameId: session.gameId,
+        gameTitle,
+        player: profile.actorId === actorId ? "You" : `Player ${profile.actorId.slice(-4) || "ghost"}`,
+        score: session.score,
+        seconds: session.seconds,
+        updatedAt: session.updatedAt,
+        isYou: profile.actorId === actorId,
+      });
+    }
+  }
+  const sortScores = (rows: typeof scores) => rows.sort((a, b) => b.score - a.score || a.seconds - b.seconds || b.updatedAt.localeCompare(a.updatedAt));
+  const byGame = catalog.map((game) => ({
+    gameId: game.id,
+    gameTitle: game.title,
+    rows: sortScores(scores.filter((row) => row.gameId === game.id)).slice(0, 5),
+  })).filter((board) => board.rows.length);
+  return { overall: sortScores(scores.slice()).slice(0, 10), byGame };
+}
+
 function todaySeconds(profile: PlayerProfile) {
   const day = new Date().toISOString().slice(0, 10);
   return profile.sessions.filter((item) => item.startedAt.startsWith(day)).reduce((sum, item) => sum + item.seconds, 0);
@@ -376,11 +405,12 @@ export async function getPhantomPlaySnapshot(session: AccessSession, options: { 
       canModerate: session.canManageAccess || session.isSuperAdmin === true,
     },
     catalog,
+    leaderboards: phantomLeaderboards(store, catalog, actorId),
     favorites: profile.favorites,
     history: historySummary(profile),
     preferences: profile.preferences,
     submissions: store.submissions.filter((item) => item.developerId === actorId || session.canManageAccess).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-    developerSpotlight: catalog.find((game) => game.featured)?.developer || "Phantom Labs",
+    developerSpotlight: catalog.find((game) => game.featured)?.developer || TAK_CREATOR,
     approvedCommunityCount: communityGames(store).length,
   };
 }
