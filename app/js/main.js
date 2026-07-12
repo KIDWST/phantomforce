@@ -281,16 +281,16 @@ const BASE_NAV = [
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
-  { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
   { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
-  { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true },
-  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
-  { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
+  { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
+  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
+  { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
+  { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true },
 ];
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
@@ -319,6 +319,8 @@ let MOBILE_NAV = NAV.map((n) => ({
   adminOnly: n.adminOnly,
   ownerOnly: n.ownerOnly,
   badge: n.badge,
+  navZone: n.navZone,
+  quiet: n.quiet,
 }));
 
 function refreshCustomizedNavigation() {
@@ -332,6 +334,8 @@ function refreshCustomizedNavigation() {
     adminOnly: n.adminOnly,
     ownerOnly: n.ownerOnly,
     badge: n.badge,
+    navZone: n.navZone,
+    quiet: n.quiet,
   }));
 }
 let activeNav = "dashboard";
@@ -392,7 +396,7 @@ function renderNav() {
   const nav = $("[data-nav]");
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
   nav.innerHTML = NAV.filter(canAccessSurface).map((n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""}>
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navZone === "bottom" ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""}>
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
