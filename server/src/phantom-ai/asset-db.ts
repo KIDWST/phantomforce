@@ -50,11 +50,18 @@ export type AssetRecord = {
   tier: AssetTier;
   favorite: boolean;
   archived: boolean;
+  pinned: boolean;
+  availability: AssetAvailability;
+  cloud_provider: string | null;
+  cloud_key: string | null;
   legacy_synced_id: string | null;
   created_at: string;
   updated_at: string;
+  last_accessed_at: string | null;
   expires_at: string | null;
 };
+
+export type AssetAvailability = "local" | "cloud" | "local_and_cloud" | "syncing" | "downloading" | "uploading" | "missing" | "corrupted";
 
 // SQLite has no boolean type; this module's public shape uses real
 // booleans, rows on the wire use 0/1 — these two helpers are the only
@@ -84,20 +91,22 @@ function rowToAsset(row: any): AssetRecord {
     tier: row.tier,
     favorite: row.favorite === 1,
     archived: row.archived === 1,
+    pinned: row.pinned === 1,
+    availability: row.availability,
+    cloud_provider: row.cloud_provider,
+    cloud_key: row.cloud_key,
     legacy_synced_id: row.legacy_synced_id,
     created_at: row.created_at,
     updated_at: row.updated_at,
+    last_accessed_at: row.last_accessed_at,
     expires_at: row.expires_at,
   };
 }
 
-let dbInstance: DatabaseSync | null = null;
-
-export function getAssetDb(): DatabaseSync {
-  if (dbInstance) return dbInstance;
-  mkdirSync(path.dirname(DB_PATH), { recursive: true });
-  dbInstance = new DatabaseSync(DB_PATH);
-  dbInstance.exec(`
+// Single shared schema for both the real on-disk database and the in-memory
+// test database — the two were previously defined twice and had already
+// drifted out of sync once; this is the fix, not just a style preference.
+const SCHEMA_SQL = `
     PRAGMA foreign_keys = ON;
 
     CREATE TABLE IF NOT EXISTS assets (
@@ -124,9 +133,14 @@ export function getAssetDb(): DatabaseSync {
       tier TEXT NOT NULL DEFAULT 'cache',
       favorite INTEGER NOT NULL DEFAULT 0,
       archived INTEGER NOT NULL DEFAULT 0,
+      pinned INTEGER NOT NULL DEFAULT 0,
+      availability TEXT NOT NULL DEFAULT 'local',
+      cloud_provider TEXT,
+      cloud_key TEXT,
       legacy_synced_id TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL,
+      last_accessed_at TEXT,
       expires_at TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_assets_owner_scope ON assets(owner_scope);
@@ -156,34 +170,39 @@ export function getAssetDb(): DatabaseSync {
       asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
       PRIMARY KEY (collection_id, asset_id)
     );
-  `);
+
+    CREATE TABLE IF NOT EXISTS presets (
+      id TEXT PRIMARY KEY,
+      owner_scope TEXT NOT NULL,
+      name TEXT NOT NULL,
+      description TEXT,
+      kind TEXT NOT NULL,
+      version INTEGER NOT NULL DEFAULT 1,
+      definition TEXT NOT NULL,
+      archived INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_presets_owner_scope ON presets(owner_scope);
+`;
+
+let dbInstance: DatabaseSync | null = null;
+
+export function getAssetDb(): DatabaseSync {
+  if (dbInstance) return dbInstance;
+  mkdirSync(path.dirname(DB_PATH), { recursive: true });
+  dbInstance = new DatabaseSync(DB_PATH);
+  dbInstance.exec(SCHEMA_SQL);
   return dbInstance;
 }
 
 // Test-only: point a fresh in-memory database at this module without
-// touching the real on-disk vault.
+// touching the real on-disk vault. Uses the exact same schema as the real
+// database (see SCHEMA_SQL) so tests can't silently drift from production.
 export function resetAssetDbForTests(): DatabaseSync {
   dbInstance?.close();
   dbInstance = new DatabaseSync(":memory:");
-  dbInstance.exec(`
-    PRAGMA foreign_keys = ON;
-
-    CREATE TABLE assets (
-      id TEXT PRIMARY KEY, owner_scope TEXT NOT NULL, asset_type TEXT NOT NULL, original_name TEXT NOT NULL,
-      title TEXT, description TEXT, source TEXT, provider TEXT, model TEXT, style TEXT,
-      aspect TEXT, duration_seconds REAL, mime_type TEXT NOT NULL, extension TEXT,
-      file_size_bytes INTEGER NOT NULL, width INTEGER, height INTEGER, content_hash TEXT,
-      storage_provider TEXT NOT NULL, storage_key TEXT NOT NULL, tier TEXT NOT NULL DEFAULT 'cache',
-      favorite INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0,
-      legacy_synced_id TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL, expires_at TEXT
-    );
-    CREATE INDEX idx_assets_owner_scope ON assets(owner_scope);
-    CREATE INDEX idx_assets_content_hash ON assets(content_hash);
-    CREATE TABLE tags (id TEXT PRIMARY KEY, owner_scope TEXT NOT NULL, name TEXT NOT NULL, UNIQUE(owner_scope, name));
-    CREATE TABLE asset_tags (asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE, tag_id TEXT NOT NULL REFERENCES tags(id) ON DELETE CASCADE, PRIMARY KEY (asset_id, tag_id));
-    CREATE TABLE collections (id TEXT PRIMARY KEY, owner_scope TEXT NOT NULL, name TEXT NOT NULL, description TEXT, created_at TEXT NOT NULL);
-    CREATE TABLE collection_assets (collection_id TEXT NOT NULL REFERENCES collections(id) ON DELETE CASCADE, asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE, PRIMARY KEY (collection_id, asset_id));
-  `);
+  dbInstance.exec(SCHEMA_SQL);
   return dbInstance;
 }
 
@@ -390,4 +409,193 @@ export function listAssetsInCollection(collectionId: string, ownerScope: string)
     )
     .all(collectionId, ownerScope);
   return rows.map(rowToAsset);
+}
+
+// ---- access tracking + pinning (Stage 3: cache manager) ----------------------------
+
+export function touchAssetAccess(id: string, ownerScope: string): void {
+  getAssetDb()
+    .prepare(`UPDATE assets SET last_accessed_at = ? WHERE id = ? AND owner_scope = ?`)
+    .run(new Date().toISOString(), id, ownerScope);
+}
+
+export function setAssetPinned(id: string, ownerScope: string, pinned: boolean): boolean {
+  const result = getAssetDb()
+    .prepare(`UPDATE assets SET pinned = ?, updated_at = ? WHERE id = ? AND owner_scope = ?`)
+    .run(pinned ? 1 : 0, new Date().toISOString(), id, ownerScope);
+  return result.changes > 0;
+}
+
+export type CacheStats = {
+  totalAssets: number;
+  totalBytes: number;
+  vaultAssets: number;
+  vaultBytes: number;
+  cacheAssets: number;
+  cacheBytes: number;
+  pinnedAssets: number;
+  pinnedBytes: number;
+};
+
+// Real aggregate query over the actual table — not a guess, not a fixture.
+// ownerScope omitted means "across every scope" (an admin-only view; the
+// HTTP route restricts this, this function itself has no access opinion).
+export function getCacheStats(ownerScope?: string): CacheStats {
+  const db = getAssetDb();
+  const where = ownerScope ? `WHERE owner_scope = ?` : "";
+  const args = ownerScope ? [ownerScope] : [];
+  const row = db
+    .prepare(
+      `SELECT
+         COUNT(*) AS total_assets,
+         COALESCE(SUM(file_size_bytes), 0) AS total_bytes,
+         COALESCE(SUM(CASE WHEN tier = 'vault' THEN 1 ELSE 0 END), 0) AS vault_assets,
+         COALESCE(SUM(CASE WHEN tier = 'vault' THEN file_size_bytes ELSE 0 END), 0) AS vault_bytes,
+         COALESCE(SUM(CASE WHEN tier = 'cache' THEN 1 ELSE 0 END), 0) AS cache_assets,
+         COALESCE(SUM(CASE WHEN tier = 'cache' THEN file_size_bytes ELSE 0 END), 0) AS cache_bytes,
+         COALESCE(SUM(CASE WHEN pinned = 1 THEN 1 ELSE 0 END), 0) AS pinned_assets,
+         COALESCE(SUM(CASE WHEN pinned = 1 THEN file_size_bytes ELSE 0 END), 0) AS pinned_bytes
+       FROM assets ${where}`,
+    )
+    .get(...args) as any;
+  return {
+    totalAssets: row.total_assets,
+    totalBytes: row.total_bytes,
+    vaultAssets: row.vault_assets,
+    vaultBytes: row.vault_bytes,
+    cacheAssets: row.cache_assets,
+    cacheBytes: row.cache_bytes,
+    pinnedAssets: row.pinned_assets,
+    pinnedBytes: row.pinned_bytes,
+  };
+}
+
+// Candidates for eviction when over quota: cache-tier, not pinned, least
+// recently used first (falling back to created_at for an asset that was
+// never accessed after ingestion). Ordering only — callers decide how many
+// to actually take.
+export function listEvictionCandidates(ownerScope: string): AssetRecord[] {
+  const rows = getAssetDb()
+    .prepare(
+      `SELECT * FROM assets
+       WHERE owner_scope = ? AND tier = 'cache' AND pinned = 0
+       ORDER BY COALESCE(last_accessed_at, created_at) ASC`,
+    )
+    .all(ownerScope);
+  return rows.map(rowToAsset);
+}
+
+export function listAllStorageKeys(storageProvider: string): string[] {
+  const rows = getAssetDb()
+    .prepare(`SELECT storage_key FROM assets WHERE storage_provider = ?`)
+    .all(storageProvider) as Array<{ storage_key: string }>;
+  return rows.map((r) => r.storage_key);
+}
+
+export function setAssetAvailability(id: string, ownerScope: string, availability: AssetAvailability): boolean {
+  const result = getAssetDb()
+    .prepare(`UPDATE assets SET availability = ?, updated_at = ? WHERE id = ? AND owner_scope = ?`)
+    .run(availability, new Date().toISOString(), id, ownerScope);
+  return result.changes > 0;
+}
+
+export function setAssetContentHash(id: string, ownerScope: string, contentHash: string): void {
+  getAssetDb()
+    .prepare(`UPDATE assets SET content_hash = ?, updated_at = ? WHERE id = ? AND owner_scope = ?`)
+    .run(contentHash, new Date().toISOString(), id, ownerScope);
+}
+
+export function setAssetDimensions(id: string, ownerScope: string, width: number | null, height: number | null, durationSeconds: number | null): void {
+  getAssetDb()
+    .prepare(
+      `UPDATE assets SET width = ?, height = ?, duration_seconds = COALESCE(?, duration_seconds), updated_at = ? WHERE id = ? AND owner_scope = ?`,
+    )
+    .run(width, height, durationSeconds, new Date().toISOString(), id, ownerScope);
+}
+
+// ---- presets (Stage 7) -------------------------------------------------------------
+
+export type PresetRecord = {
+  id: string;
+  owner_scope: string;
+  name: string;
+  description: string | null;
+  kind: string;
+  version: number;
+  definition: unknown;
+  archived: boolean;
+  created_at: string;
+  updated_at: string;
+};
+
+function rowToPreset(row: any): PresetRecord {
+  return {
+    id: row.id,
+    owner_scope: row.owner_scope,
+    name: row.name,
+    description: row.description,
+    kind: row.kind,
+    version: row.version,
+    definition: JSON.parse(row.definition),
+    archived: row.archived === 1,
+    created_at: row.created_at,
+    updated_at: row.updated_at,
+  };
+}
+
+export function createPreset(input: {
+  ownerScope: string;
+  name: string;
+  description?: string | null;
+  kind: string;
+  definition: unknown;
+}): PresetRecord {
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  getAssetDb()
+    .prepare(
+      `INSERT INTO presets (id, owner_scope, name, description, kind, version, definition, archived, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, ?, 0, ?, ?)`,
+    )
+    .run(id, input.ownerScope, input.name, input.description ?? null, input.kind, JSON.stringify(input.definition), now, now);
+  return rowToPreset(
+    getAssetDb().prepare(`SELECT * FROM presets WHERE id = ? AND owner_scope = ?`).get(id, input.ownerScope),
+  );
+}
+
+export function listPresets(ownerScope: string, kind?: string): PresetRecord[] {
+  const rows = kind
+    ? getAssetDb()
+        .prepare(`SELECT * FROM presets WHERE owner_scope = ? AND kind = ? AND archived = 0 ORDER BY created_at DESC`)
+        .all(ownerScope, kind)
+    : getAssetDb().prepare(`SELECT * FROM presets WHERE owner_scope = ? AND archived = 0 ORDER BY created_at DESC`).all(ownerScope);
+  return rows.map(rowToPreset);
+}
+
+export function getPresetById(id: string, ownerScope: string): PresetRecord | null {
+  const row = getAssetDb().prepare(`SELECT * FROM presets WHERE id = ? AND owner_scope = ?`).get(id, ownerScope);
+  return row ? rowToPreset(row) : null;
+}
+
+// A new version is a new row sharing the same lineage via name+kind rather
+// than mutating history in place — old versions stay inspectable.
+export function createPresetVersion(previousId: string, ownerScope: string, definition: unknown): PresetRecord | null {
+  const previous = getPresetById(previousId, ownerScope);
+  if (!previous) return null;
+  const id = randomUUID();
+  const now = new Date().toISOString();
+  getAssetDb()
+    .prepare(
+      `INSERT INTO presets (id, owner_scope, name, description, kind, version, definition, archived, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`,
+    )
+    .run(id, ownerScope, previous.name, previous.description, previous.kind, previous.version + 1, JSON.stringify(definition), now, now);
+  return getPresetById(id, ownerScope);
+}
+
+export function archivePreset(id: string, ownerScope: string): boolean {
+  const result = getAssetDb()
+    .prepare(`UPDATE presets SET archived = 1, updated_at = ? WHERE id = ? AND owner_scope = ?`)
+    .run(new Date().toISOString(), id, ownerScope);
+  return result.changes > 0;
 }

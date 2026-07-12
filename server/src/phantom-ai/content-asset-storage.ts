@@ -29,6 +29,7 @@ import {
   getAssetById,
   insertAsset,
   listAssetsByOwnerScope,
+  touchAssetAccess,
   type AssetRecord,
   type AssetTier,
 } from "./asset-db.js";
@@ -206,6 +207,7 @@ class LocalDiskContentAssetProvider implements ContentAssetStorageProvider {
     if (!asset) return { ok: false as const, error: "not_found" };
     try {
       const buffer = await readFile(path.join(FILES_DIR, asset.storage_key));
+      touchAssetAccess(id, ownerScope); // real LRU signal for the Stage 3 cache manager
       return {
         ok: true as const,
         dataUrl: `data:${asset.mime_type};base64,${buffer.toString("base64")}`,
@@ -248,3 +250,9 @@ export function getContentAssetStorageProvider(): ContentAssetStorageProvider {
 }
 
 export const CONTENT_ASSET_RETENTION_DAYS = RETENTION_DAYS;
+
+// Exposed for asset-cache-manager.ts — the real file storage location this
+// provider uses, needed for orphan/corruption detection and eviction.
+export function contentAssetFilesDir(): string {
+  return FILES_DIR;
+}

@@ -183,9 +183,11 @@ import {
   listAssetsInCollection,
   listCollections,
   listTagsForAsset,
+  setAssetPinned,
   tagAsset,
   untagAsset,
 } from "./phantom-ai/asset-db.js";
+import { getCacheStats, previewCleanup, runCleanup } from "./phantom-ai/asset-cache-manager.js";
 import {
   getProviderSetupStatus,
   previewModelRouterFoundation,
@@ -4164,6 +4166,68 @@ app.get("/phantom-ai/collections/:id/assets", async (request, reply) => {
   const query = (request.query ?? {}) as { tenant_id?: unknown };
   const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
   return { ok: true, tenant_id: ownerScope, assets: listAssetsInCollection(id, ownerScope) };
+});
+
+/* ---- Asset Vault Stage 3: cache manager ----
+   Real stats/cleanup over the real SQLite index + real files. Only the
+   requesting session's own owner_scope is ever affected — an admin session
+   (canManageAccess) may pass tenant_id to inspect a specific workspace's
+   cache, exactly like every other content-asset route already does. */
+
+app.get("/phantom-ai/asset-vault/cache-stats", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  return { ok: true, tenant_id: ownerScope, stats: getCacheStats(ownerScope) };
+});
+
+const CacheCleanupSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  target_free_bytes: z.number().int().positive().max(50 * 1024 * 1024 * 1024),
+});
+
+app.post("/phantom-ai/asset-vault/cache/preview-cleanup", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = CacheCleanupSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  return { ok: true, tenant_id: ownerScope, preview: previewCleanup(ownerScope, parsed.data.target_free_bytes) };
+});
+
+app.post("/phantom-ai/asset-vault/cache/cleanup", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = CacheCleanupSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const result = await runCleanup(ownerScope, parsed.data.target_free_bytes);
+  return { ok: true, tenant_id: ownerScope, result };
+});
+
+const PinAssetSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  pinned: z.boolean(),
+});
+
+app.post("/phantom-ai/content/assets/:id/pin", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = PinAssetSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const updated = setAssetPinned(id, ownerScope, parsed.data.pinned);
+  if (!updated) return reply.code(404).send({ ok: false, error: "not_found" });
+  return { ok: true, tenant_id: ownerScope, asset: getVaultAssetById(id, ownerScope) };
 });
 
 /* ---- Local background removal (rembg) ----
