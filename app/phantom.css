@@ -7402,21 +7402,21 @@ body.phantomplay-playing .buddy-say {
 }
 .console .hero2-stage {
   position: absolute;
-  top: clamp(76px, 8cqw, 118px);
-  right: clamp(-132px, -7cqw, -42px);
-  bottom: clamp(72px, 7cqw, 110px);
-  width: clamp(640px, 70cqw, 1040px);
+  top: clamp(40px, 5cqw, 76px);
+  right: clamp(-102px, -5cqw, -22px);
+  bottom: clamp(145px, 13cqw, 188px);
+  width: clamp(580px, 58cqw, 900px);
   min-height: 0;
   height: auto;
-  align-items: center;
+  align-items: end;
   justify-items: end;
   transform: none;
   pointer-events: none;
-  opacity: 0.54;
+  opacity: 0.68;
   z-index: 1;
   mix-blend-mode: screen;
-  -webkit-mask-image: radial-gradient(circle at 58% 50%, #000 0 62%, rgba(0, 0, 0, 0.84) 74%, transparent 96%);
-  mask-image: radial-gradient(circle at 58% 50%, #000 0 62%, rgba(0, 0, 0, 0.84) 74%, transparent 96%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0 78%, rgba(0, 0, 0, 0.86) 88%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0 78%, rgba(0, 0, 0, 0.86) 88%, transparent 100%);
 }
 /* the WebGL glow layer has no .console-scoped rule of its own upstream, so
    without this it silently inherits whichever plain .phantom-webgl rule
@@ -7430,14 +7430,17 @@ body.phantomplay-playing .buddy-say {
   min-height: 0;
 }
 .console .phantom-mode-stage {
-  width: min(100%, 960px);
+  width: min(100%, 860px);
   height: 100%;
   aspect-ratio: auto;
   filter: saturate(1.22) contrast(1.12) drop-shadow(0 0 72px rgba(65, 255, 161, 0.42));
 }
 .console .phantom-mode-pose {
-  width: min(98%, 900px);
-  max-height: 100%;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
   opacity: 0.96;
 }
 .console .hero2-stage .ghost-canvas {
@@ -7448,15 +7451,29 @@ body.phantomplay-playing .buddy-say {
   display: none;
 }
 
+@media (min-width: 768px) {
+  .console .hero2-stage > .phantom-mode-stage {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    max-width: none;
+    height: 100% !important;
+    max-height: 100%;
+    margin: 0;
+    display: grid;
+    place-items: end center;
+  }
+}
+
 @container (min-width: 900px) {
   .console .hero2-stage {
-    top: clamp(76px, 8cqw, 118px);
-    right: clamp(-132px, -7cqw, -42px);
-    bottom: clamp(72px, 7cqw, 110px);
-    width: clamp(640px, 70cqw, 1040px);
+    top: clamp(40px, 5cqw, 76px);
+    right: clamp(-102px, -5cqw, -22px);
+    bottom: clamp(145px, 13cqw, 188px);
+    width: clamp(580px, 58cqw, 900px);
     min-height: 0;
     transform: none;
-    opacity: 0.54;
+    opacity: 0.68;
   }
 }
 
@@ -7465,26 +7482,30 @@ body.phantomplay-playing .buddy-say {
     width: 100%;
   }
   .console .hero2-stage {
-    top: clamp(58px, 7cqw, 90px);
-    right: clamp(-58px, -5cqw, -18px);
-    bottom: clamp(82px, 8cqw, 118px);
-    width: clamp(520px, 68cqw, 760px);
+    top: clamp(42px, 6cqw, 78px);
+    right: clamp(-42px, -4cqw, -10px);
+    bottom: clamp(142px, 13cqw, 168px);
+    width: clamp(440px, 56cqw, 660px);
     min-height: 0;
     height: auto !important;
+    align-items: end;
     justify-items: end;
     transform: none;
-    opacity: 0.42;
-    -webkit-mask-image: radial-gradient(circle at 68% 56%, #000 0 52%, rgba(0, 0, 0, 0.82) 68%, transparent 93%);
-    mask-image: radial-gradient(circle at 68% 56%, #000 0 52%, rgba(0, 0, 0, 0.82) 68%, transparent 93%);
+    opacity: 0.58;
+    -webkit-mask-image: linear-gradient(180deg, #000 0 76%, rgba(0, 0, 0, 0.84) 88%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0 76%, rgba(0, 0, 0, 0.84) 88%, transparent 100%);
   }
   .console .phantom-mode-stage {
-    width: min(100%, 720px) !important;
+    width: min(100%, 640px) !important;
     max-width: none;
     height: 100%;
   }
   .console .phantom-mode-pose {
-    width: min(94%, 680px) !important;
-    max-height: 100% !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: contain;
     opacity: 0.88;
   }
   .console .hero2-stage .ghost-canvas {
@@ -7547,17 +7568,17 @@ body.phantomplay-playing .buddy-say {
     padding-right: min(36%, 270px);
   }
   .console .hero2-stage {
-    top: clamp(142px, 18cqw, 190px);
-    right: clamp(-72px, -8cqw, -42px);
-    bottom: clamp(76px, 9cqw, 106px);
-    width: clamp(430px, 62cqw, 560px);
+    top: clamp(98px, 14cqw, 146px);
+    right: clamp(-48px, -6cqw, -24px);
+    bottom: clamp(148px, 15cqw, 178px);
+    width: clamp(380px, 54cqw, 500px);
     height: auto !important;
     min-height: 0 !important;
-    opacity: 0.4;
+    opacity: 0.58;
     z-index: 1;
     justify-items: end;
-    -webkit-mask-image: radial-gradient(circle at 70% 55%, #000 0 52%, rgba(0, 0, 0, 0.78) 68%, transparent 94%);
-    mask-image: radial-gradient(circle at 70% 55%, #000 0 52%, rgba(0, 0, 0, 0.78) 68%, transparent 94%);
+    -webkit-mask-image: linear-gradient(180deg, #000 0 76%, rgba(0, 0, 0, 0.84) 88%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0 76%, rgba(0, 0, 0, 0.84) 88%, transparent 100%);
   }
   .console .phantom-mode-stage {
     width: min(100%, 560px) !important;
@@ -7566,8 +7587,11 @@ body.phantomplay-playing .buddy-say {
     transform: none;
   }
   .console .phantom-mode-pose {
-    width: min(94%, 520px) !important;
-    max-height: 100% !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: contain;
     opacity: 0.86;
   }
   .console .hero2-stage .ghost-canvas {
@@ -7579,6 +7603,41 @@ body.phantomplay-playing .buddy-say {
     left: auto;
     transform: scale(1.04);
     opacity: 0.14;
+  }
+}
+
+/* Keep the desktop/tablet dashboard Phantom staged above the command bar
+   instead of sinking behind the composer as the viewport or zoom level changes. */
+@media (min-width: 768px) {
+  .phantom .console .hero2-stage {
+    display: grid !important;
+    align-items: end !important;
+    justify-items: center !important;
+    overflow: hidden !important;
+  }
+
+  .phantom .console .hero2-stage > .phantom-mode-stage {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    margin: 0 !important;
+    display: grid !important;
+    place-items: end center !important;
+    aspect-ratio: auto !important;
+    transform: none !important;
+  }
+
+  .phantom .console .hero2-stage > .phantom-mode-stage > .phantom-mode-pose {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: contain !important;
+    object-position: center bottom !important;
   }
 }
 
