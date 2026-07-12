@@ -1,7 +1,9 @@
 param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
   [int]$Port = 5177,
-  [switch]$RestartServer
+  [int]$HermesPort = 5190,
+  [switch]$RestartServer,
+  [switch]$SkipHermes
 )
 
 $ErrorActionPreference = "Stop"
@@ -108,7 +110,41 @@ try {
     & (Join-Path $PSScriptRoot "Start-AdminLive.ps1") -RepoRoot $RepoRoot -Port $Port -StopExisting
   }
 
-  $summary = "synced at $($local.Substring(0, 7)); serving 127.0.0.1:$Port$(if ($needRestart) { ' (restarted)' } else { '' })"
+  # Hermes (the API on 5190) is the other half. New server routes — Competitor
+  # Intelligence, Asset Cloud, PhantomPlay, agent runs — only go live when THIS
+  # process restarts. Same pattern: Hermes reports the commit it is running on
+  # /health; when a pull delivered a newer commit (or Hermes isn't answering),
+  # restart it. Failures here never abort the sync — the UI is already updated.
+  $hermesRestarted = $false
+  if (-not $SkipHermes) {
+    try {
+      $needHermesRestart = [bool]$RestartServer
+      $hermesListeners = @(Get-ListeningPids -LocalPort $HermesPort)
+      if ($hermesListeners.Count -eq 0) {
+        $needHermesRestart = $true
+      } elseif (-not $needHermesRestart) {
+        try {
+          $hermesHealth = Invoke-RestMethod -Uri "http://127.0.0.1:$HermesPort/health" -TimeoutSec 6
+          $runningCommit = [string]$hermesHealth.commit
+          # restart only when the running commit is a real, older value than
+          # what we just synced — never churn Hermes when it is already current
+          if ([string]::IsNullOrWhiteSpace($runningCommit) -or $runningCommit -eq "unknown" -or $runningCommit -ne $local) {
+            $needHermesRestart = $true
+          }
+        } catch {
+          $needHermesRestart = $true
+        }
+      }
+      if ($needHermesRestart) {
+        & (Join-Path $PSScriptRoot "Start-Hermes.ps1") -RepoRoot $RepoRoot -Port $HermesPort -Commit $local -StopExisting
+        $hermesRestarted = $true
+      }
+    } catch {
+      Write-SyncLog "Hermes restart check failed (non-fatal): $($_.Exception.Message)"
+    }
+  }
+
+  $summary = "synced at $($local.Substring(0, 7)); serving 127.0.0.1:$Port$(if ($needRestart) { ' (ui restarted)' } else { '' })$(if ($hermesRestarted) { ' (hermes restarted)' } else { '' })"
   Write-SyncLog $summary
   Write-Output "PhantomForce admin main $summary"
 } catch {

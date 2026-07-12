@@ -1,6 +1,7 @@
 param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
   [int]$Port = 5177,
+  [int]$HermesPort = 5190,
   [int]$EveryMinutes = 15
 )
 
@@ -9,10 +10,12 @@ $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path $RepoRoot).Path
 $ps = (Get-Command powershell.exe -ErrorAction Stop).Source
 $startScript = Join-Path $PSScriptRoot "Start-AdminLive.ps1"
+$hermesScript = Join-Path $PSScriptRoot "Start-Hermes.ps1"
 $syncScript = Join-Path $PSScriptRoot "Sync-AdminMain.ps1"
 
 $startArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$startScript`" -RepoRoot `"$repo`" -Port $Port -StopExisting"
-$syncArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$syncScript`" -RepoRoot `"$repo`" -Port $Port"
+$hermesArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$hermesScript`" -RepoRoot `"$repo`" -Port $HermesPort -StopExisting"
+$syncArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$syncScript`" -RepoRoot `"$repo`" -Port $Port -HermesPort $HermesPort"
 
 # Task Scheduler's own "Hidden" task-setting only hides the task from the
 # Task Scheduler UI — it does NOT suppress the console window the launched
@@ -33,15 +36,19 @@ WshShell.Run "$vbsCommand", 0, True
 }
 
 $startVbs = Join-Path $stateDir "run-admin-live-start.vbs"
+$hermesVbs = Join-Path $stateDir "run-hermes-start.vbs"
 $syncVbs = Join-Path $stateDir "run-admin-live-sync.vbs"
 New-HiddenLauncher -VbsPath $startVbs -Command "$ps $startArgs"
+New-HiddenLauncher -VbsPath $hermesVbs -Command "$ps $hermesArgs"
 New-HiddenLauncher -VbsPath $syncVbs -Command "$ps $syncArgs"
 
 $wscript = (Get-Command wscript.exe -ErrorAction Stop).Source
 $startAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$startVbs`""
+$hermesAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$hermesVbs`""
 $syncAction = New-ScheduledTaskAction -Execute $wscript -Argument "`"$syncVbs`""
 
 $startTrigger = New-ScheduledTaskTrigger -AtLogOn
+$hermesTrigger = New-ScheduledTaskTrigger -AtLogOn
 $syncTrigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddMinutes(1) -RepetitionInterval (New-TimeSpan -Minutes $EveryMinutes) -RepetitionDuration (New-TimeSpan -Days 3650)
 
 $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Minutes 10) -Hidden -MultipleInstances IgnoreNew
@@ -49,7 +56,8 @@ $principal = New-ScheduledTaskPrincipal -UserId ([System.Security.Principal.Wind
 
 try {
   Register-ScheduledTask -TaskName "PhantomForce Admin Live Server" -Action $startAction -Trigger $startTrigger -Settings $settings -Principal $principal -Description "Starts the local static admin server for admin.phantomforce.online." -Force | Out-Null
-  Register-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger $syncTrigger -Settings $settings -Principal $principal -Description "Fast-forwards PhantomForce main so the admin site follows GitHub." -Force | Out-Null
+  Register-ScheduledTask -TaskName "PhantomForce Hermes API" -Action $hermesAction -Trigger $hermesTrigger -Settings $settings -Principal $principal -Description "Starts the Hermes API backend (5190) so new server routes go live." -Force | Out-Null
+  Register-ScheduledTask -TaskName "PhantomForce Admin Main Sync" -Action $syncAction -Trigger $syncTrigger -Settings $settings -Principal $principal -Description "Fast-forwards PhantomForce main and restarts the UI + Hermes so the admin site follows GitHub." -Force | Out-Null
 } catch {
   $watchScript = Join-Path $PSScriptRoot "Watch-AdminMain.ps1"
   $vbs = Join-Path $stateDir "start-admin-live-watch.vbs"
