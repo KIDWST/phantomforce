@@ -10,20 +10,19 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260712-214";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-214";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-214";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260712-214";
+} from "./imagefilters.js?v=phantom-live-20260712-217";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-217";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-217";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260712-214";
+} from "./content-editor.js?v=phantom-live-20260712-217";
 import {
-  currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-214";
+  currentTenantId, currentWs, session, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
+} from "./store.js?v=phantom-live-20260712-217";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -3189,62 +3188,6 @@ function numericMetric(source = {}, keys = []) {
   const key = keys.find((name) => Number.isFinite(Number(source?.[name])));
   return key ? Number(source[key]) : 0;
 }
-function activeWorkspaceSites() {
-  try {
-    return visible(store.state.sites || []).filter((site) => !site.archived);
-  } catch {
-    return [];
-  }
-}
-function recentWorkspaceActivity() {
-  try {
-    return visible(store.state.activity || []).filter((row) =>
-      /\b(creator|content|media|website|publish|site|analytics)\b/i.test(`${row.who || ""} ${row.text || ""}`));
-  } catch {
-    return [];
-  }
-}
-function accountPublishDrafts() {
-  return loadPublishDrafts().filter((draft) => !draft.archived);
-}
-function localSignalLabel(summary = {}) {
-  const parts = [
-    summary.posts ? `${summary.posts} published` : "",
-    summary.media ? `${summary.media} media` : "",
-    summary.drafts ? `${summary.drafts} drafts` : "",
-    summary.sites ? `${summary.sites} sites` : "",
-    summary.activity ? `${summary.activity} updates` : "",
-  ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "No first-party activity yet";
-}
-function localWorkspaceSignals(data = loadContent()) {
-  const posts = (data.posts || []).filter((post) => post.status === "published" && !isRemoved(`post:${post.id}`));
-  const media = loadContentAssets();
-  const drafts = accountPublishDrafts();
-  const sites = activeWorkspaceSites();
-  const activity = recentWorkspaceActivity();
-  const timestamps = [
-    ...posts.map((post) => Date.parse(post.publishedAt || post.updatedAt || 0) || 0),
-    ...media.map((asset) => Number(asset.updatedAt || asset.createdAt || 0)),
-    ...drafts.map((draft) => Number(draft.updatedAt || draft.createdAt || 0)),
-    ...sites.map((site) => Date.parse(site.updated || site.updatedAt || site.createdAt || 0) || 0),
-    ...activity.map((row) => Date.parse(row.at || 0) || 0),
-  ].filter(Boolean);
-  const summary = {
-    posts: posts.length,
-    media: media.length,
-    drafts: drafts.length,
-    sites: sites.length,
-    activity: activity.length,
-  };
-  return {
-    ...summary,
-    total: Object.values(summary).reduce((sum, value) => sum + value, 0),
-    latestAt: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : "",
-    source: "PhantomForce local site/content signals",
-    signalLabel: localSignalLabel(summary),
-  };
-}
 function analyticsFeedForAccount(account = {}) {
   const raw = account.analytics || account.insights || account.metrics || null;
   if (!raw || typeof raw !== "object") return null;
@@ -3336,8 +3279,6 @@ function accountAnalyticsRow(row, esc) {
     : `<div class="an-channel-empty"><b>${canSync ? "Ready to sync" : saved ? "Profile saved" : "Not connected"}</b><span>${canSync ? "Official read-only analytics are ready." : "Connect this account in Settings to start live data."}</span></div>`}
     <div class="an-channel-actions">
       ${canSync ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up live connection</button>`}
-      <details class="an-import-backup"><summary aria-label="More data options">More</summary><small>Backup only · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import official report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
-      ${feed ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear data</button>` : ""}
     </div>
   </article>`;
 }
@@ -3347,45 +3288,15 @@ function wireAnalyticsActions(el, accounts, opts) {
     analyticsNotice = `Syncing ${button.dataset.anSync}…`;
     await refreshLiveAnalytics(el, accounts, opts, { force: true, platform: button.dataset.anSync });
   });
-  el.querySelectorAll("[data-an-import]").forEach((input) => input.onchange = async () => {
-    const account = accounts.find((row) => row.id === input.dataset.anImport);
-    const file = input.files?.[0];
-    if (!account || !file) return;
-    try {
-      account.analytics = parseAnalyticsReport(await file.text(), {
-        fileName: file.name,
-        source: `${account.name} analytics export`,
-      });
-      account.enabled = true;
-      account.connectMode = "report-import";
-      account.officialConnectState = account.officialConnectState || "not_configured";
-      saveSocialAccounts(accounts);
-      analyticsNotice = `${account.name} metrics imported from ${file.name}.`;
-    } catch (error) {
-      analyticsNotice = error?.message || "That report could not be read.";
-    }
-    renderAnalytics(el, opts);
-  });
-  el.querySelectorAll("[data-an-clear]").forEach((button) => button.onclick = () => {
-    const account = accounts.find((row) => row.id === button.dataset.anClear);
-    if (!account) return;
-    delete account.analytics;
-    delete account.insights;
-    delete account.metrics;
-    saveSocialAccounts(accounts);
-    analyticsNotice = `${account.name} analytics were cleared. The saved profile was not removed.`;
-    renderAnalytics(el, opts);
-  });
 }
 export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   const esc = opts.esc || ((s) => String(s));
   const accounts = loadSocialAccounts();
-  const localSignals = localWorkspaceSignals(loadContent());
   const linked = accounts.filter((acct) => socialStatus(acct) === "linked");
   const displayAccounts = linked.length ? linked : accounts.filter((account) => ["instagram", "tiktok", "youtube", "facebook"].includes(account.id));
-  const feedRows = displayAccounts.map((account) => ({ account, feed: analyticsFeedForAccount(account) }));
+  const feedRows = displayAccounts.map((account) => ({ account, feed: account.connectMode === "live-api" ? analyticsFeedForAccount(account) : null }));
   const liveRows = feedRows.filter((row) => row.feed);
-  const liveApiRows = liveRows.filter((row) => row.account.connectMode === "live-api");
+  const liveApiRows = liveRows;
   const totals = analyticsTotals(liveRows);
   const maxEngagement = Math.max(1, ...feedRows.map((row) => row.feed?.engagement || 0));
   el.innerHTML = `
@@ -3393,8 +3304,8 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Business intelligence</p>
-          <h3>${liveApiRows.length ? "Live performance at a glance." : localSignals.total ? "Your business activity is live." : "Connect your channels for live data."}</h3>
-          <p>${liveApiRows.length ? "Official platform connections refresh automatically. Report files are available only as a backup." : localSignals.total ? "PhantomForce is already tracking your publishing, media, sites, and drafts. Connect social accounts to add official reach and engagement." : "Connect YouTube, Instagram, Facebook, or TikTok once. PhantomForce will keep this page current for you."}</p>
+          <h3>${liveApiRows.length ? "Live performance at a glance." : "Your analytics command center."}</h3>
+          <p>${liveApiRows.length ? "Verified platform performance refreshes automatically." : "Connect YouTube, Instagram, Facebook, or TikTok once. PhantomForce keeps this dashboard current after that."}</p>
         </div>
         <div class="an-hero-actions">
           ${analyticsConnectorState.connectors.some((connector) => connector.configured) ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect accounts</button>`}
@@ -3402,18 +3313,6 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
         </div>
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
-      <section class="ch-card an-first-party-card">
-        <div class="ch-card-h"><div><p class="ch-eyebrow">Your activity</p><h3>PhantomForce workspace</h3></div><span class="an-live-label">${localSignals.total ? "Live now" : "Waiting"}</span></div>
-        <p class="an-first-party-copy">${esc(localSignals.source)}${localSignals.latestAt ? ` · updated ${esc(ago(localSignals.latestAt))}` : ""}</p>
-        <div class="an-first-party-metrics">
-          <span><b>${localSignals.posts}</b>Published</span>
-          <span><b>${localSignals.media}</b>Media</span>
-          <span><b>${localSignals.drafts}</b>Drafts</span>
-          <span><b>${localSignals.sites}</b>Sites</span>
-          <span><b>${localSignals.activity}</b>Updates</span>
-        </div>
-        <small>${esc(localSignals.signalLabel)}</small>
-      </section>
       <div class="ch-kpis an-kpis">
         ${kpi("Reach", K(totals.reach), liveRows.length ? "reported reach" : "waiting for data")}
         ${kpi("Views", K(totals.impressions), liveRows.length ? "views + impressions" : "waiting for data")}

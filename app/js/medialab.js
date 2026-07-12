@@ -6,14 +6,14 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-214";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-217";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260712-214";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-214";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-214";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-214";
-import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-214";
+} from "./contenthub.js?v=phantom-live-20260712-217";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-217";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-217";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-217";
+import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-217";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1066,6 +1066,7 @@ const NAV_TABS = [
   ["library", "Media Pool"],
   ["pending", "Pending"],
   ["edit", "Edit"],
+  ["content", "Content Hub"],
 ];
 const NAV_DRAWERS = [
   ["templates", "Templates", "layout"],
@@ -1075,6 +1076,10 @@ const NAV_DRAWERS = [
 let activeDrawer = null;
 
 export function renderMediaStudio(el, opts = {}) {
+  if (opts.initialTab && el.dataset.mlInitialTab !== opts.initialTab) {
+    session.tab = opts.initialTab;
+    el.dataset.mlInitialTab = opts.initialTab;
+  }
   consumeEditIntent(opts);
   consumePromptIntent(opts);
   const esc = opts.esc || ((s) => String(s));
@@ -1083,7 +1088,6 @@ export function renderMediaStudio(el, opts = {}) {
   el.innerHTML = `
     <div class="ml">
       <div class="ml-topbar">
-        <button class="ml-back" data-ml-back type="button" aria-label="Go back"><span aria-hidden="true">&larr;</span><em>Back</em></button>
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
           ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
         </nav>
@@ -1092,10 +1096,6 @@ export function renderMediaStudio(el, opts = {}) {
       <div class="ml-body" data-ml-body></div>
       ${activeDrawer ? drawerHtml(activeDrawer, cfg, esc, opts) : ""}
     </div>`;
-  el.querySelector("[data-ml-back]")?.addEventListener("click", () => {
-    if (window.history.length > 1) window.history.back();
-    else opts.openWorkspace?.("home");
-  });
   el.querySelectorAll("[data-ml-tab]").forEach((b) => b.onclick = () => { session.tab = b.dataset.mlTab; activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelectorAll("[data-ml-drawer-open]").forEach((b) => b.onclick = () => { activeDrawer = activeDrawer === b.dataset.mlDrawerOpen ? null : b.dataset.mlDrawerOpen; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-open-local-settings]")?.addEventListener("click", () => { activeDrawer = activeDrawer === "settings" ? null : "settings"; renderMediaStudio(el, opts); });
@@ -1107,6 +1107,7 @@ export function renderMediaStudio(el, opts = {}) {
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderLibrary(body, opts, el);
+  else if (session.tab === "content") opts.renderContentHub?.(body, opts);
 }
 
 /* ---- drawers: Templates / History / Engine / Settings — local Media Lab only ---- */

@@ -6,37 +6,37 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-214";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-214";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-214";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-214";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-214";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-214";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-214";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-214";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-214";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-214";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-214";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-214";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-214";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-214";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-214";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-214";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-214";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-214";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-214";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-216";
+} from "./store.js?v=phantom-live-20260712-217";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-217";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-217";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-217";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-217";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-217";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-217";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-217";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-217";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-217";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-217";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-217";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-217";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-217";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-217";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-217";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-217";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-217";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-217";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-217";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-214";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-214";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-214";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-216";
+} from "./orgs.js?v=phantom-live-20260712-217";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-217";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-217";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-217";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260712-214";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-214";
+} from "./customization.js?v=phantom-live-20260712-217";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-217";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -905,7 +905,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-216";
+const POSE_VERSION = "phantom-live-20260712-217";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2493,10 +2493,8 @@ function renderDeveloperPage(body) {
 }
 
 function renderMediaLabSuite(body, initialTab = "create") {
-  let activeTab = initialTab === "content" ? "content" : "create";
   const opts = mediaOpts();
-  const paint = () => {
-    body.innerHTML = `
+  body.innerHTML = `
       <section class="media-suite" data-media-suite>
         <header class="media-suite-head">
           <div>
@@ -2504,25 +2502,15 @@ function renderMediaLabSuite(body, initialTab = "create") {
             <h2>Media Lab</h2>
             <p>Generate, edit, organize, and publish from the same tab.</p>
           </div>
-          <nav class="media-suite-tabs" role="tablist" aria-label="Media Lab sections">
-            <button class="${activeTab === "create" ? "is-active" : ""}" data-media-suite-tab="create" type="button" role="tab" aria-selected="${activeTab === "create"}">${svg("media")} Create & Edit</button>
-            <button class="${activeTab === "content" ? "is-active" : ""}" data-media-suite-tab="content" type="button" role="tab" aria-selected="${activeTab === "content"}">${svg("doc")} Content Hub</button>
-          </nav>
         </header>
         <div class="media-suite-body" data-media-suite-body></div>
       </section>`;
-    const target = $("[data-media-suite-body]", body);
-    if (activeTab === "content") renderContentHub(target, opts);
-    else renderMediaStudio(target, opts);
-    $$("[data-media-suite-tab]", body).forEach((button) => {
-      button.onclick = () => {
-        activeTab = button.dataset.mediaSuiteTab === "content" ? "content" : "create";
-        try { history.replaceState(null, "", `#page/${activeTab === "content" ? "content" : "media"}`); } catch {}
-        paint();
-      };
-    });
-  };
-  paint();
+  const target = $("[data-media-suite-body]", body);
+  renderMediaStudio(target, {
+    ...opts,
+    initialTab: initialTab === "content" ? "content" : "generate",
+    renderContentHub: (host) => renderContentHub(host, opts),
+  });
 }
 
 const CUSTOM = {
