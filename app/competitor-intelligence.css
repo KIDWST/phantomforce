@@ -2,3 +2,59 @@
 @media(max-width:1050px){.ci-metrics{grid-template-columns:repeat(3,1fr)}.ci-overview-grid,.ci-two-col{grid-template-columns:1fr}.ci-boundaries{position:static}.ci-mode{align-items:flex-start}.ci-mode-actions{flex-direction:column;align-items:flex-end}}
 @media(max-width:767px){.ci-shell{padding:14px 14px calc(100px + env(safe-area-inset-bottom))}.ci-hero{align-items:flex-start;padding:4px 0 20px}.ci-hero h1{font-size:32px}.ci-hero-status{min-width:0;padding:9px}.ci-hero-status div{display:none}.ci-tabs{margin:0 -14px;padding:13px 14px 9px}.ci-tabs button{padding:11px 13px}.ci-mode{display:grid;padding:18px}.ci-mode-actions{align-items:stretch}.ci-mode-actions .ci-primary{width:100%}.ci-metrics{grid-template-columns:repeat(2,1fr)}.ci-metrics article{padding:14px}.ci-metrics b{font-size:23px}.ci-section-head{align-items:flex-start;flex-direction:column}.ci-tools{width:100%;display:grid}.ci-tools input{max-width:none}.ci-form-row,.ci-form-grid,.ci-detail-grid{grid-template-columns:1fr}.ci-signal-list article{grid-template-columns:1fr}.ci-competitor-strip article{align-items:flex-start;gap:12px}.ci-inference header{align-items:flex-start}.ci-inference footer{grid-template-columns:1fr auto}.ci-inference footer div{grid-column:1/-1;grid-row:2}.ci-audit article{grid-template-columns:24px 1fr}.ci-audit time{grid-column:2}.ci-creative-card dl{grid-template-columns:1fr}.ci-builder>summary{padding:16px}.ci-builder form{padding:0 16px 16px}.ci-card-list>article,.ci-inference{padding:15px}}
 @media(prefers-reduced-motion:reduce){.ci-shell *{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+/* Discover tab: business profile, competitor discovery, deep-dive dossiers */
+.ci-discover{display:grid;gap:18px}
+.ci-profile-card,.ci-discovery,.ci-dossier{border:1px solid var(--ci-line);border-radius:10px;background:var(--ci-panel);padding:22px}
+.ci-profile-card.is-seeded{border-color:rgba(255,197,80,.4)}
+.ci-hint{margin:0 0 14px;color:#8fb5a2;font-size:14px;max-width:720px}
+.ci-profile-view dl{display:grid;gap:10px;margin:0 0 12px}
+.ci-profile-view dl>div{display:grid;grid-template-columns:150px 1fr;gap:12px}
+.ci-profile-view dt{color:#6d927e;font:500 12px "DM Mono",monospace;text-transform:uppercase;letter-spacing:.06em}
+.ci-profile-view dd{margin:0;color:#dff6ea}
+.ci-chip-row{display:flex;flex-wrap:wrap;align-items:center;gap:7px;margin-top:10px}
+.ci-chip-row small{color:#6d927e;font:500 11px "DM Mono",monospace;text-transform:uppercase;letter-spacing:.06em;margin-right:4px}
+.ci-chip{display:inline-flex;border:1px solid rgba(66,245,164,.28);border-radius:999px;padding:4px 10px;color:#9fe9c4;font-size:12px;background:rgba(14,74,47,.24)}
+.ci-profile-form{display:grid;gap:13px;margin-top:6px}
+.ci-profile-form label{display:grid;gap:6px;color:#9fc2b0;font-size:13px}
+.ci-profile-form input,.ci-profile-form textarea{width:100%;border:1px solid rgba(90,160,124,.28);border-radius:6px;padding:11px 12px;background:#03100c;color:#e8fff4;font:inherit}
+.ci-profile-form input:focus,.ci-profile-form textarea:focus{outline:2px solid rgba(66,245,164,.3);border-color:#42f5a4}
+.ci-profile-actions{display:flex;gap:10px}
+.ci-web-status{display:flex;gap:12px;align-items:flex-start;padding:14px 16px;border:1px solid var(--ci-line);border-radius:8px;background:rgba(3,21,15,.7)}
+.ci-web-status.is-off{border-color:rgba(255,197,80,.32)}
+.ci-web-status>span{font-size:18px;color:#42f5a4;line-height:1.3}
+.ci-web-status.is-off>span{color:#ffd375}
+.ci-web-status b{display:block;color:#eafff4}
+.ci-web-status small{display:block;margin-top:3px;color:#8fb5a2}
+.ci-discover-cta{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:22px;border:1px solid var(--ci-line);border-radius:10px;background:linear-gradient(130deg,rgba(5,33,23,.9),rgba(2,15,14,.82))}
+.ci-discover-cta h2{margin:0 0 6px;font-size:clamp(20px,2.2vw,28px)}
+.ci-discover-cta p{margin:0;color:#91b5a3;max-width:560px}
+.ci-basis{margin:0 0 16px;color:#8fb5a2;font-size:13px}
+.ci-time{color:#678b79;font-size:12px}
+.ci-lead-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.ci-lead{border:1px solid rgba(76,143,109,.22);border-radius:9px;padding:16px;background:rgba(4,20,15,.6)}
+.ci-lead h4{margin:0 0 6px;font-size:16px}
+.ci-lead p{margin:0 0 12px;color:#a4c2b3;font-size:14px}
+.ci-lead-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.ci-lead h5{margin:0 0 6px;color:#42f5a4;font-size:11px;text-transform:uppercase;letter-spacing:.08em}
+.ci-lead ul{margin:0;padding-left:16px;color:#a7c7b7;font-size:13px}
+.ci-lead li{margin:5px 0}
+.ci-lead footer{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.ci-queries a{color:#54db9b;word-break:break-word}
+.ci-disclaimer{margin:16px 0 0;padding-top:12px;border-top:1px solid rgba(76,143,109,.18);color:#7ea593;font-size:12.5px;font-style:italic}
+.ci-dossier-launch{display:grid;gap:10px}
+.ci-dossier-launch article{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 15px;border:1px solid var(--ci-line);border-radius:8px;background:var(--ci-panel)}
+.ci-dossier-launch h3{margin:0 0 2px}
+.ci-dossier-launch a{color:#54db9b;font-size:13px}
+.ci-dossier header{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:10px}
+.ci-dossier header>div{display:flex;align-items:center;gap:10px}
+.ci-dossier header h3{margin:0}
+.ci-dossier>p{margin:0 0 14px;color:#a4c2b3}
+.ci-dossier-sources{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-bottom:14px}
+.ci-dossier-source{border:1px solid rgba(76,143,109,.2);border-radius:8px;padding:13px;background:rgba(4,20,15,.55)}
+.ci-dossier-source-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:7px}
+.ci-dossier-source-head a{color:#66e6ab;font-weight:700}
+.ci-dossier-source p{margin:0 0 7px;color:#9fc0af;font-size:13px}
+.ci-dossier-source ul{margin:0;padding-left:16px;color:#a7c7b7;font-size:12.5px}
+.ci-dossier-source li{margin:4px 0}
+@media(max-width:900px){.ci-lead-list,.ci-lead-grid,.ci-dossier-sources{grid-template-columns:1fr}.ci-discover-cta{flex-direction:column;align-items:stretch}.ci-discover-cta .ci-primary{width:100%}.ci-profile-view dl>div{grid-template-columns:1fr}}

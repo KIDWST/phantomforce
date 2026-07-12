@@ -1,0 +1,65 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src data:"><title>Court Vision</title><style>
+*{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020806;color:#effff6;font-family:system-ui,sans-serif}body{background:radial-gradient(circle at 50% 12%,#123e30,#020806 66%)}canvas{width:100%;height:100%;display:block;touch-action:none}.hud{position:fixed;inset:18px;display:flex;justify-content:space-between;pointer-events:none}.hud b{color:#63ffad;font-size:34px}.hud span{display:block;color:#8ba99a;font:700 11px ui-monospace;letter-spacing:.5px}.hint{position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translateX(-50%);padding:12px 18px;border:1px solid #4dffa36b;border-radius:999px;background:#03110ccc;color:#caffdf;font-weight:800;white-space:nowrap;pointer-events:none}.over{position:fixed;inset:0;display:grid;place-items:center;background:#010504e0}.over[hidden]{display:none}.over div{text-align:center}.over h1{font-size:52px;color:#5affa9;margin:0}.over p{color:#a9c5b7}.over button{border:0;border-radius:999px;background:#55ffa8;padding:14px 26px;font-weight:900;cursor:pointer;font-size:16px}@media(max-width:600px){.hud b{font-size:26px}.over h1{font-size:38px}}</style></head><body><canvas></canvas><div class="hud"><div><span>BASKETS</span><b data-score>0</b></div><div style="text-align:right"><span>MISSES</span><b data-miss>0</b></div></div><div class="hint">Tap / Space to set power, again to shoot</div><div class="over" hidden><div><h1>Game over</h1><p data-result></p><button>Shoot again</button></div></div><script>
+const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*'),c=document.querySelector('canvas'),g=c.getContext('2d');
+let W,H,DPR,reduced=false,score=0,misses=0,running=true;
+let phase='aim';// aim(power oscillating) | fly | settle
+let power=0,pdir=1;let ball,hoop,dist=0,raf=0,anglePow;
+const GRAV=1400;// px/s^2 in css px
+function size(){DPR=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;c.width=W*DPR;c.height=H*DPR;g.setTransform(DPR,0,0,DPR,0,0)}
+addEventListener('resize',()=>{size()});
+function groundY(){return H*0.82}
+function launchPt(){return{x:W*0.16,y:groundY()-8}}
+function setupShot(){const lp=launchPt();
+// distance grows with score, clamped to fit screen
+const maxD=W*0.72;dist=Math.min(maxD,W*0.36+score*W*0.03);
+const hx=lp.x+dist;const rimY=groundY()-Math.min(H*0.42,H*0.30+score*4);
+hoop={x:hx,y:rimY,w:Math.max(34,W*0.06)};
+ball={x:lp.x,y:lp.y,r:Math.max(12,W*0.018),vx:0,vy:0,flying:false};
+power=0;pdir=1;phase='aim'}
+function shoot(){
+// map power(0..100) to launch speed; aim angle fixed 58deg for a nice arc
+const ang=58*Math.PI/180;
+const speed=340+power/100*(760);
+ball.vx=Math.cos(ang)*speed;ball.vy=-Math.sin(ang)*speed;ball.flying=true;phase='fly';ball.scored=false}
+let last=0;
+function loop(t){if(!last)last=t;let dt=(t-last)/1000;last=t;if(dt>0.05)dt=0.05;
+if(phase==='aim'){power+=pdir*dt*130;if(power>=100){power=100;pdir=-1}else if(power<=0){power=0;pdir=1}}
+if(phase==='fly'){
+ball.vy+=GRAV*dt;ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
+// check rim pass: ball descending and crossing hoop x-range near rim y
+if(!ball.scored&&ball.vy>0&&Math.abs(ball.x-hoop.x)<hoop.w*0.5&&Math.abs(ball.y-hoop.y)<ball.r+8){
+ball.scored=true;made()}
+if(ball.y>groundY()+ball.r||ball.x>W+40){
+if(!ball.scored)missed();else settle()}
+}
+draw();raf=requestAnimationFrame(loop)}
+function made(){score++;document.querySelector('[data-score]').textContent=score;host('score',{score,progress:Math.min(99,score*7),state:{baskets:score,misses}});setTimeout(()=>{if(running)setupShot()},520)}
+function settle(){/*after made, ball fell through*/}
+function missed(){misses++;document.querySelector('[data-miss]').textContent=misses;
+if(misses>=3){over();return}
+host('progress',{score,progress:Math.min(99,score*7)});
+setTimeout(()=>{if(running)setupShot()},420);phase='wait'}
+function over(){running=false;cancelAnimationFrame(raf);draw();document.querySelector('[data-result]').textContent=`You sank ${score} basket${score===1?'':'s'}.`;document.querySelector('.over').hidden=false;host('complete',{score,progress:100,state:{baskets:score,misses}})}
+function restart(){score=0;misses=0;running=true;document.querySelector('[data-score]').textContent=0;document.querySelector('[data-miss]').textContent=0;document.querySelector('.over').hidden=true;setupShot();host('progress',{score:0,progress:0})}
+function draw(){g.clearRect(0,0,W,H);
+// court floor
+g.strokeStyle='#36ff9422';g.lineWidth=1;for(let y=groundY();y<H;y+=Math.max(16,H*0.05)){g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}
+g.strokeStyle='#41ffa155';g.lineWidth=3;g.beginPath();g.moveTo(0,groundY());g.lineTo(W,groundY());g.stroke();
+// backboard + hoop
+if(hoop){const bx=hoop.x+hoop.w*0.5+8;g.strokeStyle='#8ba99a';g.lineWidth=4;g.beginPath();g.moveTo(bx,hoop.y-46);g.lineTo(bx,hoop.y+30);g.stroke();
+g.strokeStyle='#ff6b6b';g.lineWidth=5;g.beginPath();g.moveTo(hoop.x-hoop.w*0.5,hoop.y);g.lineTo(hoop.x+hoop.w*0.5,hoop.y);g.stroke();
+// net
+g.strokeStyle='#effff655';g.lineWidth=1;for(let i=0;i<=5;i++){const nx=hoop.x-hoop.w*0.5+hoop.w*i/5;g.beginPath();g.moveTo(nx,hoop.y);g.lineTo(hoop.x-hoop.w*0.25+hoop.w*0.5*i/5,hoop.y+26);g.stroke()}}
+// aim trajectory preview
+if(phase==='aim'&&ball){const ang=58*Math.PI/180,speed=340+power/100*760;let px=ball.x,py=ball.y,pvx=Math.cos(ang)*speed,pvy=-Math.sin(ang)*speed;g.fillStyle='#41ffa155';for(let i=0;i<26;i++){pvy+=GRAV*0.045;px+=pvx*0.045;py+=pvy*0.045;if(py>groundY())break;g.beginPath();g.arc(px,py,2,0,7);g.fill()}}
+// ball
+if(ball){g.save();g.shadowColor='#ffab5a';g.shadowBlur=reduced?0:16;g.fillStyle='#ff9d42';g.beginPath();g.arc(ball.x,ball.y,ball.r,0,7);g.fill();g.restore();g.strokeStyle='#7a3d10';g.lineWidth=1.5;g.beginPath();g.arc(ball.x,ball.y,ball.r,0,7);g.stroke();g.beginPath();g.moveTo(ball.x-ball.r,ball.y);g.lineTo(ball.x+ball.r,ball.y);g.moveTo(ball.x,ball.y-ball.r);g.lineTo(ball.x,ball.y+ball.r);g.stroke()}
+// power meter
+if(phase==='aim'){const mx=launchPt().x-6,mtop=groundY()-140,mh=130;g.fillStyle='#03110c';g.fillRect(mx-9,mtop,14,mh);g.fillStyle=power>75?'#ff6b6b':power>45?'#ffd166':'#41ffa1';const ph=mh*power/100;g.fillRect(mx-9,mtop+mh-ph,14,ph);g.strokeStyle='#4dffa36b';g.strokeRect(mx-9,mtop,14,mh)}}
+function act(){if(!running)return;if(phase==='aim')shoot();}
+c.addEventListener('pointerdown',e=>{e.preventDefault();act()});
+addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();act()}});
+document.querySelector('.over button').onclick=restart;
+addEventListener('message',e=>{if(e.data?.source==='phantomplay-host'&&e.data.type==='settings')reduced=!!e.data.reducedMotion});
+size();setupShot();raf=requestAnimationFrame(loop);host('ready');
+</script></body></html>
