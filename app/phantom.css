@@ -2779,6 +2779,19 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .user-menu-link:hover { color: var(--ink); border-color: var(--line-strong); background: rgba(255,255,255,0.04); }
 
+/* org switcher (database-auth sessions with multiple businesses) */
+.user-menu-orgs { display: flex; flex-direction: column; gap: 4px; padding: 8px 0; border-top: 1px solid var(--line); }
+.user-menu-orgs > i { font-style: normal; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); padding: 0 4px 2px; }
+.user-menu-org {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 7px 10px; border: 1px solid transparent; border-radius: 10px;
+  background: none; color: var(--ink); cursor: pointer; text-align: left; font: inherit;
+}
+.user-menu-org:hover { background: rgba(255,255,255,0.04); border-color: var(--line); }
+.user-menu-org.is-active { border-color: rgba(65,255,161,0.4); background: rgba(65,255,161,0.06); }
+.user-menu-org b { font-size: 12.5px; font-weight: 600; }
+.user-menu-org span { font-size: 10.5px; color: var(--dim); text-transform: capitalize; }
+
 /* ---------------- console grid ---------------- */
 .console { flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 330px); gap: clamp(10px, 1vw, 16px); padding: clamp(16px, 1.6vw, 22px); align-items: start; }
 .console-center { min-width: 0; display: flex; flex-direction: column; gap: clamp(16px, 1.8vw, 22px); }
@@ -9490,6 +9503,11 @@ body:has([data-workspace-page="workforce"]) .buddy-canvas {
 }
 .ss-publish-waiting { border: 1px solid rgba(255,209,102,0.4); color: var(--warn); background: rgba(255,209,102,0.08); }
 .ss-publish-approved { border: 1px solid rgba(65,255,161,0.4); color: var(--neon); background: rgba(65,255,161,0.08); }
+.ss-publish-live {
+  border: 1px solid rgba(65,255,161,0.55); color: #06130c; background: var(--neon);
+  text-decoration: none; display: inline-block;
+}
+.ss-publish-live:hover { filter: brightness(1.08); }
 
 /* device preview: real constrained widths so layout is actually checked */
 .ss-simple-preview { transition: max-width 0.28s ease; }

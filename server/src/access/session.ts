@@ -20,6 +20,17 @@ export type AccessSession = {
   visibleOnLogin?: boolean;
   /** Paid access, resolved server-side from the subscription store. Never client-set. */
   subscriptionActive?: boolean;
+  /* Database-auth sessions carry richer identity resolved per request from
+     Postgres (user-accounts.ts). Optional so every legacy provider is
+     untouched. orgRole is the per-org role — deliberately distinct from
+     canManageAccess, which stays platform-super-admin only. */
+  userId?: string;
+  email?: string;
+  authSessionId?: string;
+  isSuperAdmin?: boolean;
+  orgId?: string | null;
+  orgRole?: "owner" | "admin" | "member" | "client" | null;
+  memberships?: Array<{ orgId: string; orgName: string; role: "owner" | "admin" | "member" | "client" }>;
 };
 
 const DEFAULT_SESSION_SECRET = "phantomforce-local-dev-session-secret-change-before-production";
@@ -31,6 +42,9 @@ const enableDemoAuth =
 const enablePrismaDevAuth = authProvider === "prisma-dev" && !productionMode;
 const enableOwnerProductionAuth = authProvider === "owner-production";
 const enableGatewayForwardedAuth = authProvider === "gateway-forwarded";
+/* Real multi-user auth: Postgres users + memberships (user-accounts.ts).
+   Valid in production when strongly configured. */
+const enableDatabaseAuth = authProvider === "database";
 const ownerEmail = (process.env.PHANTOMFORCE_OWNER_EMAIL ?? "").trim().toLowerCase();
 const ownerLoginKey = process.env.PHANTOMFORCE_OWNER_LOGIN_KEY ?? "";
 const allowShortOwnerLoginKey = process.env.PHANTOMFORCE_ALLOW_SHORT_OWNER_LOGIN_KEY === "true";
@@ -160,16 +174,21 @@ export function getAccessAuthConfiguration() {
     gatewayForwardedAuthEnabled: enableGatewayForwardedAuth,
     gatewayConfigured,
     sessionLoginEnabled: enableLocalSessionLogin,
+    databaseAuthEnabled: enableDatabaseAuth,
     sessionSource: enableGatewayForwardedAuth
       ? "gateway-forwarded"
-      : enableOwnerProductionAuth
-        ? "owner-production"
-        : enablePrismaDevAuth
-          ? "prisma-membership"
-          : enableDemoAuth
-            ? "demo-seed"
-            : "disabled",
-    productionReady: ownerProductionConfigured || gatewayConfigured,
+      : enableDatabaseAuth
+        ? "database"
+        : enableOwnerProductionAuth
+          ? "owner-production"
+          : enablePrismaDevAuth
+            ? "prisma-membership"
+            : enableDemoAuth
+              ? "demo-seed"
+              : "disabled",
+    productionReady:
+      ownerProductionConfigured || gatewayConfigured || (enableDatabaseAuth && sessionSecretIsStrong),
+    databaseLoginEndpoint: enableDatabaseAuth ? "/auth/login" : undefined,
     tokenType: "Bearer" as const,
     authorizationHeader: AUTHORIZATION_HEADER,
     legacyHeader: SESSION_HEADER,
@@ -193,9 +212,31 @@ export function assertAccessAuthConfiguration() {
     authProvider !== "demo" &&
     authProvider !== "prisma-dev" &&
     authProvider !== "owner-production" &&
-    authProvider !== "gateway-forwarded"
+    authProvider !== "gateway-forwarded" &&
+    authProvider !== "database"
   ) {
     throw new Error(`Unsupported PHANTOMFORCE_AUTH_PROVIDER "${authProvider}".`);
+  }
+
+  // Database auth (Postgres users + memberships). Valid in production only
+  // with a strong non-default session secret; DATABASE_URL is asserted by
+  // the identity initializer at boot.
+  if (enableDatabaseAuth) {
+    if (enableDemoAuth) {
+      throw new Error("Demo auth must be disabled for database auth.");
+    }
+    if (allowUnsignedSessionHeader) {
+      throw new Error("PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER cannot be enabled with database auth.");
+    }
+    if (!process.env.DATABASE_URL) {
+      throw new Error("PHANTOMFORCE_AUTH_PROVIDER=database requires DATABASE_URL.");
+    }
+    if (productionMode && (sessionSecretUsesDefault || sessionSecret.length < MIN_SESSION_SECRET_LENGTH)) {
+      throw new Error(
+        "PHANTOMFORCE_SESSION_SECRET must be a strong non-default value (at least 32 characters) for database auth in production.",
+      );
+    }
+    return authConfiguration;
   }
 
   // Gateway-forwarded (Pangolin single login). Valid in production too. Must be
@@ -302,7 +343,7 @@ function safeEqual(left: string, right: string) {
   return leftBuffer.length === rightBuffer.length && timingSafeEqual(leftBuffer, rightBuffer);
 }
 
-function readBearerToken(request: FastifyRequest) {
+export function readBearerToken(request: FastifyRequest) {
   const value = request.headers.authorization;
   const header = Array.isArray(value) ? value[0] : value;
 
@@ -314,6 +355,14 @@ function readBearerToken(request: FastifyRequest) {
 }
 
 function verifyAccessSessionToken(token: string | undefined) {
+  const sid = verifyAccessSessionTokenSid(token);
+  return sid ? getAccessSession(sid) : undefined;
+}
+
+/* Signature + expiry check only, returning the sid — the database-auth
+   preHandler uses this to resolve "db:" sessions from Postgres, where the
+   in-memory getAccessSession lookup can't apply. */
+export function verifyAccessSessionTokenSid(token: string | undefined): string | undefined {
   if (!token) return undefined;
 
   const [payloadSegment, signature, unexpected] = token.split(".");
@@ -337,7 +386,7 @@ function verifyAccessSessionToken(token: string | undefined) {
       return undefined;
     }
 
-    return getAccessSession(payload.sid);
+    return payload.sid;
   } catch {
     return undefined;
   }
@@ -456,7 +505,43 @@ function resolveGatewayForwardedSession(request: FastifyRequest): AccessSession 
   };
 }
 
+/* Database-auth sessions are resolved asynchronously (Postgres) by a Fastify
+   preHandler in index.ts, which verifies the bearer signature, loads the
+   session row, and stashes it here. Keeping the stash on the request lets
+   every existing synchronous guard call site work unchanged. */
+export type RequestWithDatabaseSession = FastifyRequest & { phantomDatabaseSession?: AccessSession };
+
+export function attachDatabaseSession(request: FastifyRequest, session: AccessSession) {
+  (request as RequestWithDatabaseSession).phantomDatabaseSession = session;
+}
+
+export function databaseAuthEnabledForSessions() {
+  return enableDatabaseAuth;
+}
+
+/* Mint a signed token for a database-auth session id ("db:<authSessionId>").
+   Signature/TTL identical to every other provider; the sid is resolved from
+   Postgres on each request instead of the in-memory list. */
+export function mintDatabaseSessionToken(sid: string) {
+  if (!enableDatabaseAuth) return undefined;
+  const issuedAt = Date.now();
+  const expiresAtMs = issuedAt + tokenTtlMs;
+  const payloadSegment = Buffer.from(
+    JSON.stringify({ v: 1, sid, iat: issuedAt, exp: expiresAtMs }),
+  ).toString("base64url");
+  return {
+    tokenType: "Bearer" as const,
+    token: `${payloadSegment}.${signTokenSegment(payloadSegment)}`,
+    expiresAt: new Date(expiresAtMs).toISOString(),
+  };
+}
+
 export function resolveAccessSession(request: FastifyRequest) {
+  const attached = (request as RequestWithDatabaseSession).phantomDatabaseSession;
+  if (attached) {
+    return attached;
+  }
+
   if (enableGatewayForwardedAuth) {
     return resolveGatewayForwardedSession(request);
   }

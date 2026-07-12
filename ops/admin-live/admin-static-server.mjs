@@ -116,9 +116,15 @@ async function fileExists(filePath) {
 function shouldProxy(urlPath) {
   return urlPath === "/session"
     || urlPath === "/sessions"
+    || urlPath === "/orgs"
     || urlPath.startsWith("/auth/")
     || urlPath.startsWith("/api/vacation-mode")
-    || urlPath.startsWith("/phantom-ai/");
+    || urlPath.startsWith("/phantom-ai/")
+    /* multi-tenant org APIs + published-site hosting live on Hermes */
+    || urlPath.startsWith("/orgs/")
+    || urlPath.startsWith("/admin/plans")
+    || urlPath.startsWith("/admin/orgs/")
+    || urlPath.startsWith("/public/sites/");
 }
 
 async function readRequestBody(req, limit = 6_000_000) {
