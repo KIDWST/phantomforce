@@ -9487,6 +9487,352 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 /* workspace overlays blur the whole console — the buddy ducks out too */
 body.overlay-open .buddy { opacity: 0; }
 body.overlay-open .buddy-canvas { pointer-events: none; }
+
+/* ---------------- Mission Control Mode ---------------- */
+.mission-control-mount { margin: 18px 0 0; }
+.mc-switch-card,
+.mission-control,
+.mc-dialog::backdrop,
+.mc-setup {
+  font-family: "Space Grotesk", sans-serif;
+}
+.mc-switch-card {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid rgba(65,255,161,0.18);
+  border-radius: 22px;
+  background: linear-gradient(135deg, rgba(5,18,14,0.84), rgba(3,8,11,0.9));
+  box-shadow: 0 18px 50px rgba(0,0,0,0.26), inset 0 1px 0 rgba(255,255,255,0.04);
+  overflow: hidden;
+}
+.mc-switch-card::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 14% 0%, rgba(65,255,161,0.18), transparent 34%);
+  opacity: 0;
+  transition: opacity 0.28s ease;
+  pointer-events: none;
+}
+.mc-switch-card.is-on::before { opacity: 1; }
+.mc-kicker {
+  margin: 0 0 5px;
+  color: var(--neon);
+  font: 800 10px "DM Mono", monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.mc-switch-card h2,
+.mission-control h2,
+.mission-control h3,
+.mc-setup h3 { margin: 0; color: #f2fff8; letter-spacing: -0.02em; }
+.mc-switch-card h2 span { color: var(--neon); text-shadow: 0 0 18px rgba(65,255,161,0.28); }
+.mc-switch-card small,
+.mission-control small,
+.mc-muted { color: var(--dim); }
+.mc-toggle {
+  width: 92px;
+  height: 42px;
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.05);
+  color: #d9ffe9;
+  font: 900 12px "DM Mono", monospace;
+  cursor: pointer;
+}
+.mc-toggle span {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(255,255,255,0.08);
+  transition: transform 0.25s ease, background 0.25s ease, color 0.25s ease;
+}
+.mc-toggle.is-on span {
+  transform: translateX(48px);
+  color: #021009;
+  background: linear-gradient(120deg, var(--neon), #15d97f);
+  box-shadow: 0 0 24px rgba(65,255,161,0.42);
+}
+body.mission-control-on .phantom {
+  background:
+    radial-gradient(circle at 30% 5%, rgba(65,255,161,0.08), transparent 28%),
+    linear-gradient(180deg, rgba(0,5,4,0.98), rgba(1,8,10,0.99));
+}
+body.mission-control-on .sidebar,
+body.mission-control-on .topbar2,
+body.mission-control-on .console {
+  border-color: rgba(65,255,161,0.18);
+}
+.mission-control {
+  position: relative;
+  display: grid;
+  gap: 14px;
+  margin-top: 16px;
+  padding: 16px;
+  border: 1px solid rgba(65,255,161,0.24);
+  border-radius: 26px;
+  background:
+    linear-gradient(rgba(65,255,161,0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(65,255,161,0.035) 1px, transparent 1px),
+    linear-gradient(145deg, rgba(3,18,12,0.96), rgba(2,7,11,0.98));
+  background-size: 34px 34px, 34px 34px, auto;
+  box-shadow: 0 28px 90px rgba(0,0,0,0.42), 0 0 70px rgba(65,255,161,0.08);
+  overflow: hidden;
+  animation: mcBoot 0.42s ease both;
+}
+.mission-control::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, rgba(65,255,161,0.08), transparent);
+  transform: translateX(-120%);
+  animation: mcScan 3.2s ease-in-out infinite;
+  pointer-events: none;
+}
+.mc-online-flash {
+  position: absolute;
+  top: 12px;
+  right: 18px;
+  color: var(--neon);
+  font: 900 10px "DM Mono", monospace;
+  letter-spacing: 0.18em;
+  opacity: 0;
+  animation: mcFlash 2.4s ease 0.15s both;
+  pointer-events: none;
+}
+@keyframes mcBoot { from { opacity: 0; transform: translateY(12px) scale(0.99); } to { opacity: 1; transform: none; } }
+@keyframes mcScan { 0%, 45% { transform: translateX(-120%); } 70%, 100% { transform: translateX(120%); } }
+@keyframes mcFlash { 0%, 12%, 72% { opacity: 0; } 20%, 58% { opacity: 1; } 100% { opacity: 0; } }
+.mc-head,
+.mc-commander,
+.mc-grid2,
+.mc-workers,
+.mc-team {
+  position: relative;
+  z-index: 1;
+}
+.mc-head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 14px;
+  align-items: flex-start;
+}
+.mc-head small { display: block; margin-top: 5px; line-height: 1.45; }
+.mc-actions,
+.mc-view-row,
+.mc-worker footer,
+.mc-approvals footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+.mc-actions button,
+.mc-view-row button,
+.mc-worker button,
+.mc-approvals button,
+.mc-primary,
+.mc-setup footer button,
+.mc-empty button {
+  border: 1px solid rgba(65,255,161,0.22);
+  border-radius: 999px;
+  background: rgba(255,255,255,0.035);
+  color: #dfffee;
+  padding: 8px 11px;
+  font: 800 11px "Space Grotesk", sans-serif;
+  cursor: pointer;
+}
+.mc-primary,
+.mc-view-row .is-active {
+  color: #03160d;
+  border-color: transparent;
+  background: linear-gradient(120deg, var(--neon), #15d97f);
+  box-shadow: 0 0 24px rgba(65,255,161,0.22);
+}
+.mc-danger { border-color: rgba(255,77,99,0.34) !important; color: #ffb9c2 !important; }
+.mc-commander,
+.mc-worker,
+.mc-board-col,
+.mc-approvals article,
+.mc-deliverables article,
+.mc-activity,
+.mc-cli,
+.mc-empty,
+.mc-worker-chat {
+  border: 1px solid rgba(65,255,161,0.16);
+  border-radius: 18px;
+  background: rgba(0,0,0,0.22);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+}
+.mc-commander { display: grid; gap: 12px; padding: 14px; grid-template-columns: minmax(0,1fr) auto; }
+.mc-overall {
+  display: grid;
+  place-items: center;
+  min-width: 90px;
+  padding: 9px;
+  border-radius: 16px;
+  background: rgba(65,255,161,0.08);
+}
+.mc-overall b { color: var(--neon); font-size: 25px; line-height: 1; }
+.mc-chatlog {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 7px;
+  max-height: 180px;
+  overflow: auto;
+  padding-right: 4px;
+}
+.mc-chatlog p,
+.mc-worker-chat p {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255,255,255,0.035);
+  color: #e9fff3;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.mc-chatlog b,
+.mc-worker-chat b { display: block; color: var(--neon); font: 800 9px "DM Mono", monospace; letter-spacing: 0.12em; text-transform: uppercase; }
+.mc-chat-user { justify-self: end; max-width: 86%; background: rgba(65,255,161,0.09) !important; }
+.mc-chat-phantom { border: 1px solid rgba(65,255,161,0.12); }
+.mc-commander form,
+.mc-worker-chat form { grid-column: 1 / -1; display: flex; gap: 8px; }
+.mc-commander input,
+.mc-worker-chat input,
+.mc-setup input,
+.mc-setup textarea,
+.mc-setup select {
+  min-width: 0;
+  width: 100%;
+  border: 1px solid rgba(65,255,161,0.2);
+  border-radius: 14px;
+  background: rgba(0,0,0,0.35);
+  color: #f2fff8;
+  padding: 10px 11px;
+}
+.mc-workers {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 10px;
+}
+.mc-worker { display: grid; gap: 10px; padding: 12px; min-width: 0; }
+.mc-worker header { display: grid; grid-template-columns: auto minmax(0,1fr) auto; gap: 9px; align-items: center; }
+.mc-worker header b { display: block; color: #f2fff8; }
+.mc-worker header small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mc-worker header i {
+  color: var(--neon);
+  font: 800 9px "DM Mono", monospace;
+  font-style: normal;
+  text-transform: uppercase;
+}
+.mc-avatar {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 13px;
+  color: #021009;
+  background: linear-gradient(120deg, var(--neon), #15d97f);
+  box-shadow: 0 0 22px rgba(65,255,161,0.24);
+}
+.mc-worker p { margin: 0; color: #eafff2; font-size: 12px; line-height: 1.35; }
+.mc-progress { height: 7px; overflow: hidden; border-radius: 999px; background: rgba(255,255,255,0.08); }
+.mc-progress span { display: block; height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--neon), #15d97f); box-shadow: 0 0 18px rgba(65,255,161,0.35); transition: width 0.35s ease; }
+.mc-worker-meta { display: flex; flex-wrap: wrap; gap: 6px; }
+.mc-worker-meta span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.045);
+  color: var(--dim);
+  font-size: 10px;
+}
+.mc-latest { min-height: 32px; }
+.mc-grid2 { display: grid; grid-template-columns: minmax(0,1.35fr) minmax(260px,0.65fr); gap: 12px; }
+.mc-board { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.mc-board-col { padding: 10px; display: grid; gap: 7px; align-content: start; min-height: 120px; }
+.mc-board-col > b { color: var(--neon); font: 900 10px "DM Mono", monospace; text-transform: uppercase; letter-spacing: 0.12em; }
+.mc-board-col article,
+.mc-approvals article,
+.mc-deliverables article { padding: 9px; border-radius: 12px; background: rgba(255,255,255,0.04); }
+.mc-board-col p,
+.mc-approvals p,
+.mc-deliverables p { margin: 4px 0; color: #eafff2; font-size: 12px; line-height: 1.35; }
+.mc-board-col span { color: var(--dim); font-size: 10px; }
+.mc-board-col em { color: rgba(210,255,230,0.36); font-style: normal; font-size: 11px; }
+.mc-approvals,
+.mc-deliverables { display: grid; gap: 8px; }
+.mc-team { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
+.mc-worker-chat { padding: 10px; }
+.mc-worker-chat summary { cursor: pointer; color: #f2fff8; font-weight: 800; }
+.mc-worker-chat div { display: grid; gap: 6px; margin: 9px 0; max-height: 190px; overflow: auto; }
+.mc-activity { padding: 12px; }
+.mc-activity summary { color: #f2fff8; font-weight: 900; cursor: pointer; }
+.mc-activity ol { margin: 10px 0 0; padding: 0 0 0 20px; display: grid; gap: 8px; }
+.mc-activity li { color: #dfffee; }
+.mc-activity li b { color: var(--neon); margin-right: 6px; }
+.mc-activity li span { display: block; font-size: 12px; line-height: 1.35; }
+.mc-activity li small { display: block; color: var(--dim); font-size: 10px; }
+.mc-cli { padding: 13px; display: grid; gap: 7px; }
+.mc-cli code {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #020504;
+  color: var(--neon);
+  font: 700 11px "DM Mono", monospace;
+}
+.mc-empty { margin-top: 14px; padding: 18px; display: grid; gap: 8px; }
+.mc-dialog {
+  width: min(760px, calc(100vw - 24px));
+  border: 0;
+  border-radius: 24px;
+  padding: 0;
+  color: #f2fff8;
+  background: transparent;
+}
+.mc-dialog::backdrop { background: rgba(0,5,4,0.72); backdrop-filter: blur(10px); }
+.mc-setup {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid rgba(65,255,161,0.22);
+  border-radius: 24px;
+  background: linear-gradient(145deg, rgba(3,18,12,0.98), rgba(2,7,11,0.98));
+  box-shadow: 0 30px 100px rgba(0,0,0,0.62);
+}
+.mc-setup header,
+.mc-setup footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.mc-setup header button { border: 0; background: rgba(255,255,255,0.06); color: #fff; border-radius: 50%; width: 34px; height: 34px; cursor: pointer; }
+.mc-setup label { display: grid; gap: 6px; color: var(--dim); font-size: 12px; }
+.mc-setup textarea { min-height: 96px; resize: vertical; }
+.mc-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 10px; }
+@media (prefers-reduced-motion: reduce) {
+  .mission-control,
+  .mission-control::after,
+  .mc-online-flash { animation: none !important; }
+}
+@media (max-width: 900px) {
+  .mc-grid2 { grid-template-columns: 1fr; }
+  .mc-board { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 620px) {
+  .mc-switch-card,
+  .mc-head,
+  .mc-commander { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+  .mc-workers { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 4px; }
+  .mc-worker { min-width: 82vw; scroll-snap-align: start; }
+  .mc-board,
+  .mc-form-grid { grid-template-columns: 1fr; }
+  .mc-actions button,
+  .mc-view-row button { flex: 1; }
+}
 /* The home console already has Phantom in the hero. Keep the sidebar companion
    for actual work pages so it feels useful instead of crowded. */
 body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy {
