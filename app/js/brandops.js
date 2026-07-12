@@ -8,11 +8,11 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-201";
+import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-202";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260712-201";
+} from "./content-ideas.js?v=phantom-live-20260712-202";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -71,19 +71,19 @@ const AUTOPILOT_CATEGORY_LABEL = { health: "System health", ops: "Business opera
 const AUTOPILOT_CADENCE_LABEL = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 
 const AGENT_STATE = {
-  active: { label: "RUNNING", cls: "on" },
-  waiting: { label: "WAITING", cls: "gate" },
-  "needs-approval": { label: "APPROVE", cls: "gate" },
+  active: { label: "ON", cls: "on" },
+  waiting: { label: "OFF", cls: "gate" },
+  "needs-approval": { label: "APPROVAL", cls: "gate" },
   blocked: { label: "BLOCKED", cls: "hold" },
-  paused: { label: "PAUSED", cls: "idle" },
-  idle: { label: "DRAFT", cls: "idle" },
+  paused: { label: "OFF", cls: "idle" },
+  idle: { label: "OFF", cls: "idle" },
 };
 
 /* Starter recipes — real, honest starting points. Using one creates a real
    draft automation record (same path as chat-created automations) that
-   waits in Drafts for approval; nothing runs on its own. */
+   lands in Configured as off / approval required; nothing runs on its own. */
 const RECIPES = [
-  { id: "lead-followup", name: "Follow up with new leads every morning", mission: "Each morning, review new leads from the last 24 hours and draft a personalized follow-up for each one. Drafts wait for approval before sending." },
+  { id: "lead-followup", name: "Follow up with new leads every morning", mission: "Each morning, review new leads from the last 24 hours and draft a personalized follow-up for each one. Replies wait for approval before sending." },
   { id: "weekly-analytics", name: "Send me a weekly analytics report", mission: "Every week, compile a summary of connected-account performance and post it as an activity update." },
   { id: "comment-drafts", name: "Draft replies to comments, don't send", mission: "Watch connected social accounts for new comments and draft a reply for each — nothing sends without approval." },
   { id: "lead-assign", name: "Assign a worker when a new lead comes in", mission: "When a new lead is captured, assign it to an available worker and draft an initial response for review." },
@@ -92,10 +92,7 @@ const RECIPES = [
 
 const TABS = [
   ["configured", "Configured"],
-  ["autopilot", "Autopilot"],
-  ["active", "Active"],
   ["recipes", "Recipes"],
-  ["drafts", "Drafts"],
   ["logs", "Logs"],
   ["safety", "Safety rules"],
 ];
@@ -179,6 +176,7 @@ function automationRow({ id, kicker, name, summary, meta, enabled, disabled = fa
 function dailyIdeaEditPanel(config, missingProfile) {
   return `<div class="au-edit-panel" data-au-edit-panel="${esc(DAILY_IDEA_AUTOMATION_ID)}">
     <div class="au-config-grid">
+      <label class="au-config-wide">Automation name<input data-di-name value="${esc(config.name)}" /></label>
       <label>Number of ideas<input type="number" min="1" max="12" step="1" data-di-count value="${esc(config.count)}" /></label>
       <label>Style<select data-di-style>${options(DAILY_IDEA_STYLES, config.style)}</select></label>
       <label>Content focus<select data-di-focus>${options(DAILY_IDEA_FOCUS, config.focus)}</select></label>
@@ -237,7 +235,10 @@ function configuredAutomationTab(agents) {
   }
   const dailyExpanded = expandedAutomationId === DAILY_IDEA_AUTOMATION_ID;
   const automationRows = [
-    `<div class="au-automation-block">
+    {
+      id: DAILY_IDEA_AUTOMATION_ID,
+      enabled: config.enabled,
+      html: `<div class="au-automation-block">
       ${automationRow({
         id: DAILY_IDEA_AUTOMATION_ID,
         kicker: "Creator Hub automation",
@@ -251,13 +252,17 @@ function configuredAutomationTab(agents) {
       })}
       ${dailyExpanded ? dailyIdeaEditPanel(config, missingProfile) : ""}
     </div>`,
+    },
     ...created.map((a) => {
       const pendingApproval = (store.state.approvals || []).find((app) => app.ref === a.id && app.status === "pending");
       const st = AGENT_STATE[a.status] || AGENT_STATE.idle;
       const allowedDuringVacation = a.allowedDuringVacation !== false;
-      const disabled = !!pendingApproval || a.status === "idle" || a.status === "needs-approval" || a.status === "blocked";
+      const disabled = !!pendingApproval || a.status === "needs-approval" || a.status === "blocked";
       const expanded = expandedAutomationId === a.id;
-      return `<div class="au-automation-block">
+      return {
+        id: a.id,
+        enabled: a.status === "active",
+        html: `<div class="au-automation-block">
         ${automationRow({
           id: a.id,
           kicker: a.source || "User-created automation",
@@ -271,19 +276,33 @@ function configuredAutomationTab(agents) {
           status: pendingApproval ? "Approval needed" : st.label,
         })}
         ${expanded ? customAutomationEditPanel(a, pendingApproval, allowedDuringVacation) : ""}
-      </div>`;
+      </div>`,
+      };
     }),
   ];
+  const onRows = automationRows.filter((row) => row.enabled);
+  const offRows = automationRows.filter((row) => !row.enabled);
+  const renderGroup = (label, rows, empty) => `
+    <section class="au-automation-group ${rows.length ? "" : "is-empty"}">
+      <div class="au-automation-group-head">
+        <b>${esc(label)}</b>
+        <span>${rows.length}</span>
+      </div>
+      ${rows.length ? rows.map((row) => row.html).join("") : `<p class="au-empty-note">${esc(empty)}</p>`}
+    </section>`;
   return `<div class="au-config-wrap">
     <section class="au-config-card au-config-list-card">
       <div class="au-config-head">
         <div>
           <p class="ch-eyebrow">Configured automations</p>
           <h3>Automation list</h3>
-          <p>Compact by default. Use the switch without opening a row, or click a row when you need to edit the details.</p>
+          <p>On automations stay at the top. Off or approval-required automations stay below. Use the switch for quick control, or open a row to rename and edit it.</p>
         </div>
       </div>
-      <div class="au-automation-list">${automationRows.join("")}</div>
+      <div class="au-automation-list">
+        ${renderGroup("On", onRows, "No automations are on yet.")}
+        ${renderGroup("Off / approval required", offRows, "Nothing is off or waiting.")}
+      </div>
     </section>
   </div>`;
 }
@@ -313,28 +332,6 @@ function autopilotDeveloperTab() {
         <div class="ap-job-grid">${inCat.map(autopilotJobCard).join("")}</div>
       </section>`;
     }).join("")}
-  </div>`;
-}
-
-function autopilotTab() {
-  const curtain = [
-    ["Client view", "Show approvals, prepared work, outcomes, and what needs a decision."],
-    ["Behind the curtain", "Server jobs, health checks, ledger probes, bridges, and run controls stay in Developer."],
-    ["Owner rules", "Autopilot can move safe prep work, but sends, uploads, posts, payments, deploys, and risky changes still stop at the gate."],
-  ];
-  return `<div class="ap-curtain">
-    <section class="ap-curtain-hero">
-      <p class="ch-eyebrow">Client curtain</p>
-      <h3>Keep the machinery private. Show the work moving.</h3>
-      <p>Clients should not see internal job names, local ports, health probes, or server controls. This view explains the promise: PhantomForce prepares, routes, and tracks the work while the operational console stays owner-only.</p>
-    </section>
-    <div class="ap-curtain-grid">
-      ${curtain.map(([title, copy]) => `<article class="ap-curtain-card"><b>${esc(title)}</b><p>${esc(copy)}</p></article>`).join("")}
-    </div>
-    <div class="ap-curtain-note">
-      <b>Developer-only diagnostics moved.</b>
-      <span>Open Developer for scheduled server jobs, toggles, live health checks, and run-now controls.</span>
-    </div>
   </div>`;
 }
 
@@ -582,14 +579,9 @@ export function renderDeveloperAgentRunsPanel(el, opts = {}) {
   scheduleAgentRunsPoll(el, paint);
 }
 
-function activeTab(agents) {
-  const active = agents.filter((a) => a.status === "active");
-  return `<div class="au-list">${active.length ? active.map((a) => agentCard(a)).join("") : `<div class="au-empty"><b>Nothing running right now.</b><span>Approve a draft below to start it, or use a recipe to create one.</span></div>`}</div>`;
-}
-
 function recipesTab() {
   return `<div class="au-recipes">
-    <p class="bm-hint au-recipes-note">Using a recipe drafts a real automation and sends it to Drafts for your review — nothing runs until you approve it.</p>
+    <p class="bm-hint au-recipes-note">Using a recipe adds a real automation to Configured as off / approval required. Nothing runs until you turn it on or approve it.</p>
     <div class="au-recipe-grid">
       ${RECIPES.map((r) => `<article class="au-recipe-card">
         <b>${esc(r.name)}</b>
@@ -600,11 +592,6 @@ function recipesTab() {
   </div>`;
 }
 
-function draftsTab(agents) {
-  const drafts = agents.filter((a) => a.status === "idle" || a.status === "needs-approval");
-  return `<div class="au-list">${drafts.length ? drafts.map((a) => agentCard(a)).join("") : `<div class="au-empty"><b>No drafts waiting.</b><span>Ask Phantom on the dashboard to create a repeatable workflow, or use a recipe.</span><button class="btn" data-au-focus type="button">Ask Phantom</button></div>`}</div>`;
-}
-
 function logsTab() {
   const rows = (store.state.activity || []).filter((a) => a.text && /automation/i.test(a.text)).slice(0, 40);
   return `<div class="au-logs">${rows.length ? rows.map((a) => `<div class="au-log-row"><b>${esc(a.who)}</b><span>${esc(a.text)}</span><i>${ago(a.at)}</i></div>`).join("") : `<p class="au-empty-note">No automation history yet.</p>`}</div>`;
@@ -612,7 +599,7 @@ function logsTab() {
 
 function safetyTab() {
   const rules = [
-    ["New automations start as drafts", "Nothing runs the moment it's created — every automation waits in Drafts until you approve it."],
+    ["New automations start off", "Nothing runs the moment it's created — every automation lands in Configured as off or approval required until you approve it."],
     ["Outward-facing actions always gate", "Sending, publishing, spending, or deleting always queues to Approvals — automations can't skip that, regardless of status."],
     ["Pause stops before the next run", "Pausing an active automation stops it cleanly; resuming picks back up from paused, not mid-action. Pausing this automation does not disable Vacation Mode."],
     ["Vacation Mode is a separate system", "Vacation Mode rules decide whether this can run while you are away. Automations can be used during Vacation Mode if allowed, but turning Vacation Mode on or off never starts, stops, or deletes an automation."],
@@ -624,31 +611,32 @@ function safetyTab() {
 export function renderAutomation(el, opts = {}) {
   const notify = opts.notify || (() => {});
   const paint = () => renderAutomation(el, opts);
+  const allowedTabIds = new Set(TABS.map(([id]) => id));
+  if (!allowedTabIds.has(auTab)) auTab = "configured";
   const agents = visible(store.state.agents || []);
-  const count = agents.length;
-  const pending = agents.filter((a) => a.status === "idle" || a.status === "needs-approval").length;
-  const running = agents.filter((a) => a.status === "active").length;
-  const paused = agents.filter((a) => a.status === "paused" || a.status === "waiting").length;
+  const automationAgents = agents.filter((a) => a.kind === "automation");
+  const dailyConfig = dailyIdeaState().config;
+  const count = automationAgents.length + 1;
+  const pending = automationAgents.filter((a) => a.status === "idle" || a.status === "needs-approval").length;
+  const running = automationAgents.filter((a) => a.status === "active").length + (dailyConfig.enabled ? 1 : 0);
+  const off = Math.max(0, count - running);
 
   const panel = auTab === "configured" ? configuredAutomationTab(agents)
-    : auTab === "autopilot" ? autopilotTab()
-    : auTab === "active" ? activeTab(agents)
     : auTab === "recipes" ? recipesTab()
-    : auTab === "drafts" ? draftsTab(agents)
     : auTab === "logs" ? logsTab()
     : safetyTab();
 
   el.innerHTML = `
     <div class="au">
-      <div class="bm-note au-note"><i></i>Automations help your team move faster — they appear here after Phantom drafts them from Business HQ chat, or you pick a recipe, and nothing runs until you approve it. Vacation Mode is a separate system with its own page: automations can be used during Vacation Mode if allowed, but Vacation Mode never turns your automations on or off.</div>
+      <div class="bm-note au-note"><i></i>Configured automations live here. Switch them on or off manually, edit the details in the row, and use Vacation Mode from its own tab.</div>
       <div class="au-summary" aria-label="Automation summary">
-        <span><b>${count}</b><i>Total</i></span>
-        <span><b>${pending}</b><i>Needs approval</i></span>
-        <span><b>${running}</b><i>Running</i></span>
-        <span><b>${paused}</b><i>Paused</i></span>
+        <span><b>${count}</b><i>Configured</i></span>
+        <span><b>${running}</b><i>On</i></span>
+        <span><b>${off}</b><i>Off</i></span>
+        <span><b>${pending}</b><i>Approval required</i></span>
       </div>
       <nav class="ml-tabs au-tabs" role="tablist">
-        ${TABS.map(([id, label]) => `<button class="ml-tab ${auTab === id ? "is-active" : ""}" type="button" role="tab" data-au-tab="${id}">${label}${id === "drafts" && pending ? ` <i class="ss-acc-count">${pending}</i>` : ""}</button>`).join("")}
+        ${TABS.map(([id, label]) => `<button class="ml-tab ${auTab === id ? "is-active" : ""}" type="button" role="tab" data-au-tab="${id}">${label}</button>`).join("")}
       </nav>
       <section class="bm-card au-card">${panel}</section>
     </div>`;
@@ -713,6 +701,7 @@ export function renderAutomation(el, opts = {}) {
     el.querySelectorAll("[data-di-profile]").forEach((input) => { profile[input.dataset.diProfile] = input.value || ""; });
     const next = saveDailyIdeaAutomation({
       ...current,
+      name: (el.querySelector("[data-di-name]")?.value || current.name).trim().slice(0, 90) || current.name,
       enabled: current.enabled,
       count: Number(el.querySelector("[data-di-count]")?.value || current.count),
       style: el.querySelector("[data-di-style]")?.value || current.style,
@@ -779,14 +768,14 @@ export function renderAutomation(el, opts = {}) {
       // Switch tab and re-render on this closure's live element before store.save()/notify() —
       // notify() triggers a global store-change listener that can fully remount this page,
       // which would otherwise leave this call updating an already-detached DOM reference.
-      auTab = "drafts";
+      auTab = "configured";
+      expandedAutomationId = a.id;
       paint();
       store.save();
-      notify("Automation", `Drafted "${a.name}" from a recipe. It's waiting in Drafts for your approval.`);
+      notify("Automation", `Added "${a.name}" to Configured. It is off until approved or turned on.`);
     };
   });
 
-  el.querySelector("[data-au-focus]")?.addEventListener("click", () => opts.focusCommand?.());
   el.querySelectorAll("[data-au-pause]").forEach((btn) => {
     btn.onclick = () => {
       const agent = (store.state.agents || []).find((a) => a.id === btn.dataset.auPause);
