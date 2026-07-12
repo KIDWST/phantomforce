@@ -380,6 +380,14 @@ async function ensureBrainBootstrapMemories(session: AccessSession, options: Bra
   }
 }
 
+function isLegacyDisposableMemory(record: BrainMemoryRecord) {
+  // Older feedback handling promoted ordinary criticism such as "too
+  // robotic" directly into durable memory. Keep the ledger event, but remove
+  // those records from retrieval and context unless the feedback contains a
+  // genuinely durable instruction under the current policy.
+  return record.source === "feedback_integrator" && !feedbackWarrantsDurableMemory(record.text);
+}
+
 export async function listBrainMemories(
   session: AccessSession,
   options: BrainStoreOptions & { includeInactive?: boolean; limit?: number; type?: unknown } = {},
@@ -402,6 +410,7 @@ export async function listBrainMemories(
     malformed: read.malformed,
     memories: [...latest.values()]
       .filter((record) => options.includeInactive || record.active)
+      .filter((record) => !isLegacyDisposableMemory(record))
       .filter((record) => !typeFilter || record.type === typeFilter)
       .sort((left, right) => right.weight - left.weight || right.updatedAt.localeCompare(left.updatedAt))
       .slice(0, limit),
