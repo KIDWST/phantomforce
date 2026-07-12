@@ -16,6 +16,7 @@
   --line-strong: rgba(65, 255, 161, 0.34);
   --phantom-keyboard-offset: 0px;
 }
+
 * { box-sizing: border-box; }
 html, body {
   margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
@@ -2990,8 +2991,69 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   transform: scale(0.9);
 }
 .phantom-mode-stage {
-  position: relative; z-index: 2; isolation: isolate; width: min(100%, 470px); aspect-ratio: 1;
-  display: grid; place-items: center; margin: 0; transform-style: preserve-3d;
+  position: relative; z-index: 2; isolation: isolate; width: min(100%, 390px); aspect-ratio: 1;
+  display: grid; place-items: center; margin: clamp(22px, 4vw, 44px) auto 0; transform-style: preserve-3d;
+  overflow: visible;
+}
+
+/* FINAL companion containment fix: Phantom pet stays small, and his words sit
+   above his head as a bounded bubble instead of running across/over the body. */
+.pc,
+.chatbox-head .pc,
+.console .chatbox-head .pc {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: 32px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  column-gap: 9px !important;
+  min-width: 0 !important;
+  padding-top: 30px !important;
+}
+
+.pc .pc-avatar,
+.chatbox-head .pc-avatar,
+.console .chatbox-head .pc-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  max-width: 32px !important;
+  max-height: 32px !important;
+}
+
+.pc .pc-meta,
+.chatbox-head .pc-meta,
+.console .chatbox-head .pc-meta {
+  min-width: 0 !important;
+}
+
+.pc .pc-caption,
+.chatbox-head .pc-caption,
+.console .chatbox-head .pc-caption {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  display: block !important;
+  max-width: min(260px, calc(100vw - 42px)) !important;
+  margin: 0 !important;
+  padding: 5px 9px !important;
+  border: 1px solid rgba(65, 255, 161, 0.22) !important;
+  border-radius: 999px !important;
+  background: rgba(2, 12, 9, 0.88) !important;
+  color: rgba(225, 255, 239, 0.88) !important;
+  font: 700 10px "DM Mono", monospace !important;
+  letter-spacing: 0.04em !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34), 0 0 18px rgba(65, 255, 161, 0.1) !important;
+  z-index: 4 !important;
+}
+
+.pc .pc-title b,
+.chatbox-head .pc-title b,
+.console .chatbox-head .pc-title b {
+  max-width: 150px !important;
 }
 .phantom-mode-stage::before,
 .phantom-mode-stage::after {
@@ -3009,7 +3071,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   opacity: 0.54; animation: phantomOrbit 15s linear infinite;
 }
 .phantom-mode-pose {
-  position: relative; z-index: 1; width: min(80%, 390px); max-height: min(50vh, 420px);
+  position: relative; z-index: 1; width: min(72%, 300px); max-height: min(40vh, 330px);
   object-fit: contain; transform-origin: 50% 76%; mix-blend-mode: screen; opacity: 0.92;
   filter: saturate(1.08) contrast(1.12) brightness(1.05) drop-shadow(0 0 22px rgba(65, 255, 161, 0.28)) drop-shadow(0 26px 54px rgba(0, 0, 0, 0.46));
   animation: phantomPoseFloat 5.6s ease-in-out infinite;
@@ -3020,13 +3082,15 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   filter: saturate(1.2) contrast(1.16) brightness(1.08) drop-shadow(0 0 34px rgba(65, 255, 161, 0.36)) drop-shadow(0 26px 54px rgba(0, 0, 0, 0.42));
 }
 .phantom-mode-caption {
-  position: absolute; left: 50%; bottom: 7%; z-index: 7; transform: translateX(-50%);
-  padding: 6px 10px; border: 1px solid rgba(65, 255, 161, 0.22); border-radius: 999px;
-  background: rgba(2, 12, 9, 0.46); color: rgba(201, 255, 223, 0.72);
-  font: 700 8.5px "DM Mono", monospace; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap;
+  position: absolute; left: 50%; top: 0; z-index: 7; transform: translate(-50%, -82%);
+  width: max-content; max-width: min(280px, calc(100vw - 42px));
+  padding: 8px 12px; border: 1px solid rgba(65, 255, 161, 0.24); border-radius: 999px;
+  background: rgba(2, 12, 9, 0.76); color: rgba(226, 255, 239, 0.86);
+  font: 700 8.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.35;
   box-shadow: 0 0 18px rgba(65, 255, 161, 0.09); backdrop-filter: blur(14px);
 }
-.phantom.has-3d-phantom .phantom-mode-caption { bottom: 5%; background: rgba(2, 12, 9, 0.36); }
+.phantom.has-3d-phantom .phantom-mode-caption { top: 0; bottom: auto; background: rgba(2, 12, 9, 0.68); }
 .phantom-mode-stage[data-pose="ask"] .phantom-mode-pose { animation-name: phantomPoseListen; }
 .phantom-mode-stage[data-pose="write"] .phantom-mode-pose { animation-name: phantomPoseWrite; }
 .phantom-mode-stage[data-pose="image"] .phantom-mode-pose { animation-name: phantomPosePresent; }
@@ -3341,7 +3405,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .phantom-webgl { min-height: 270px; inset: -8% -8% -4%; }
   .phantom-mode-stage { width: min(100%, 310px); }
   .phantom-mode-pose { width: min(88%, 270px); max-height: 240px; opacity: 0.9; }
-  .phantom-mode-caption { bottom: 2%; padding: 5px 9px; font-size: 8px; letter-spacing: 0.16em; opacity: 0.82; }
+  .phantom-mode-caption { top: 0; bottom: auto; transform: translate(-50%, -82%); padding: 7px 10px; font-size: 8px; letter-spacing: 0.12em; opacity: 0.9; }
   .cmd-chip { min-height: 42px; justify-content: center; padding: 10px 8px; }
   .cmd-chip span { font-size: 12px; }
   .site-builder-head { padding: 15px; border-radius: 18px; }
@@ -5796,7 +5860,9 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     max-height: 250px;
   }
   .phantom-mode-caption {
-    bottom: 0;
+    top: 0;
+    bottom: auto;
+    transform: translate(-50%, -82%);
   }
 }
 
@@ -9788,4 +9854,56 @@ body:has([data-workspace-page="workforce"]) .buddy-canvas {
   .cust-publish { bottom: calc(76px + env(safe-area-inset-bottom, 0px)); align-items: stretch; flex-direction: column; }
   .cust-publish-actions { width: 100%; }
   .cust-publish-actions button { flex: 1; }
+}
+
+/* Final hard override: keep the Phantom pet compact with speech above its head. */
+body .phantom .console .chatbox-head,
+body .phantom .chatbox-head {
+  overflow: visible !important;
+}
+
+body .phantom .console .chatbox-head .pc,
+body .phantom .chatbox-head .pc,
+body .phantom .pc {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: 32px minmax(0, 1fr) auto !important;
+  align-items: end !important;
+  gap: 9px !important;
+  min-height: 68px !important;
+  padding-top: 30px !important;
+}
+
+body .phantom .console .chatbox-head .pc-avatar,
+body .phantom .chatbox-head .pc-avatar,
+body .phantom .pc .pc-avatar {
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  border-radius: 12px !important;
+}
+
+body .phantom .console .chatbox-head .pc-caption,
+body .phantom .chatbox-head .pc-caption,
+body .phantom .pc .pc-caption {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  z-index: 4 !important;
+  display: block !important;
+  width: max-content !important;
+  max-width: min(260px, calc(100vw - 42px)) !important;
+  padding: 5px 9px !important;
+  border: 1px solid rgba(65, 255, 161, 0.2) !important;
+  border-radius: 999px !important;
+  background: rgba(1, 8, 6, 0.92) !important;
+  color: #d9ffe9 !important;
+  font-size: 0.68rem !important;
+  line-height: 1.2 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28) !important;
 }
