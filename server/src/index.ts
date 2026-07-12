@@ -196,8 +196,14 @@ import {
   untagAsset,
   type AssetSearchQuery,
 } from "./phantom-ai/asset-db.js";
-import { getCacheStats, previewCleanup, runCleanup } from "./phantom-ai/asset-cache-manager.js";
+import { findMissingFiles, findOrphanFiles, getCacheStats, previewCleanup, runCleanup } from "./phantom-ai/asset-cache-manager.js";
 import { downloadAssetFromCloud, getCloudCapabilityStatus, removeAssetFromCloud, uploadAssetToCloud } from "./phantom-ai/asset-cloud-sync.js";
+import {
+  findDuplicateGroups,
+  importFolder,
+  reindexAsset,
+  runIntegrityValidation,
+} from "./phantom-ai/asset-admin-diagnostics.js";
 import {
   getProviderSetupStatus,
   previewModelRouterFoundation,
@@ -4458,6 +4464,81 @@ app.post("/phantom-ai/content/assets/:id/cloud/remove", async (request, reply) =
     return reply.code(status).send({ ok: false, error: result.error });
   }
   return { ok: true, tenant_id: ownerScope, asset: getVaultAssetById(id, ownerScope) };
+});
+
+/* ---- Asset Vault Stage 9: admin diagnostics + repair tools ----
+   Orphan/missing-file detection and integrity validation are real
+   filesystem/hash checks (Stage 3/9); duplicate detection, re-index, and
+   folder import are new here. Folder import in particular reads an
+   arbitrary local path on this server's machine, so every route in this
+   block is admin-only (requireAdminAccessSession), not just tenant-scoped
+   like the rest of the asset-vault surface. */
+
+app.get("/phantom-ai/asset-vault/admin/orphan-files", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return { ok: true, orphanFiles: await findOrphanFiles() };
+});
+
+app.get("/phantom-ai/asset-vault/admin/missing-files", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const ownerScope = query.tenant_id ? contentAssetOwnerScope(session, query.tenant_id) : undefined;
+  return { ok: true, missingAssets: await findMissingFiles(ownerScope) };
+});
+
+app.get("/phantom-ai/asset-vault/admin/validate", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  return { ok: true, tenant_id: ownerScope, report: await runIntegrityValidation(ownerScope) };
+});
+
+app.get("/phantom-ai/asset-vault/admin/duplicates", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  return { ok: true, tenant_id: ownerScope, duplicateGroups: findDuplicateGroups(ownerScope) };
+});
+
+const ReindexAssetSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+});
+
+app.post("/phantom-ai/asset-vault/admin/assets/:id/reindex", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const { id } = request.params as { id: string };
+  const parsed = ReindexAssetSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const outcome = await reindexAsset(id, ownerScope);
+  if (!outcome.ok) {
+    return reply.code(outcome.error === "not_found" ? 404 : 400).send({ ok: false, error: outcome.error });
+  }
+  return { ok: true, tenant_id: ownerScope, result: outcome.result, asset: getVaultAssetById(id, ownerScope) };
+});
+
+const ImportFolderSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  folder_path: z.string().trim().min(1).max(1000),
+  tier: z.enum(["vault", "cache"]).optional().default("cache"),
+});
+
+app.post("/phantom-ai/asset-vault/admin/import-folder", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = ImportFolderSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const outcome = await importFolder(ownerScope, parsed.data.folder_path, parsed.data.tier);
+  if (!outcome.ok) return reply.code(404).send({ ok: false, error: outcome.error });
+  return { ok: true, tenant_id: ownerScope, result: outcome.result };
 });
 
 /* ---- Asset Vault Stage 3: cache manager ----
