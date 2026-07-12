@@ -4058,6 +4058,44 @@ app.delete("/phantom-ai/content/assets/:id", async (request, reply) => {
   return { ok: true, session, tenant_id: ownerScope };
 });
 
+/* ---- Asset Vault Stage 4: ingestion derivatives ----
+   Thumbnails/proxies/waveforms produced at upload time by asset-ingest.ts.
+   listDerivatives returns [] (not an error) when ffmpeg wasn't available at
+   ingest time — a caller should treat a missing derivative as "not
+   generated," never assume one exists. */
+
+app.get("/phantom-ai/content/assets/:id/derivatives", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const provider = getContentAssetStorageProvider();
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const derivatives = await provider.listDerivatives(id, ownerScope);
+  return { ok: true, tenant_id: ownerScope, derivatives };
+});
+
+app.get("/phantom-ai/content/assets/:id/derivatives/:kind", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id, kind } = request.params as { id: string; kind: string };
+  if (kind !== "thumbnail" && kind !== "proxy" && kind !== "waveform") {
+    return reply.code(400).send({ ok: false, error: "invalid_derivative_kind" });
+  }
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const provider = getContentAssetStorageProvider();
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const result = await provider.getDerivativeFile(id, ownerScope, kind);
+
+  if (!result.ok) {
+    return reply.code(404).send({ ok: false, error: result.error });
+  }
+
+  return { ok: true, tenant_id: ownerScope, image: result.dataUrl, derivative: result.derivative };
+});
+
 /* ---- Asset Vault Stage 2: tags + collections ----
    Additive routes only — nothing above this changes. Same owner_scope
    resolution (contentAssetOwnerScope) as every other content-asset route,

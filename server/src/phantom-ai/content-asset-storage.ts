@@ -20,24 +20,30 @@
    requests vault storage today, so real-world behavior for existing
    callers is unchanged. */
 
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import {
   deleteAssetById,
   deleteExpiredCacheAssets,
+  findAssetByContentHash,
   getAssetById,
   insertAsset,
   listAssetsByOwnerScope,
+  listDerivativesForAsset,
   touchAssetAccess,
   type AssetRecord,
   type AssetTier,
+  type DerivativeKind,
+  type DerivativeRecord,
 } from "./asset-db.js";
+import { ingestAsset, sha256File } from "./asset-ingest.js";
 
 const RETENTION_DAYS = 30;
 const DEFAULT_STATE_DIR = path.join(process.cwd(), ".local", "content-assets");
 const STATE_DIR = process.env.PHANTOMFORCE_CONTENT_ASSET_DIR ?? DEFAULT_STATE_DIR;
 const FILES_DIR = path.join(STATE_DIR, "files");
+const DERIVED_DIR = path.join(STATE_DIR, "derived");
 // Pre-Stage-2 index. Read once (lazily, on first real operation) to
 // backfill the SQLite index, then left on disk untouched as a reversible
 // fallback — never written to or deleted by this module again.
@@ -156,6 +162,14 @@ export interface ContentAssetStorageProvider {
   listAssets(ownerScope: string): Promise<ContentAssetRecord[]>;
   deleteAsset(id: string, ownerScope: string): Promise<boolean>;
   deleteExpiredAssets(): Promise<{ deletedCount: number }>;
+  // Stage 4: ingestion-produced thumbnails/proxies/waveforms. Empty array
+  // (not an error) when ffmpeg wasn't available at ingest time.
+  listDerivatives(id: string, ownerScope: string): Promise<DerivativeRecord[]>;
+  getDerivativeFile(
+    id: string,
+    ownerScope: string,
+    kind: DerivativeKind,
+  ): Promise<{ ok: true; dataUrl: string; derivative: DerivativeRecord } | { ok: false; error: string }>;
 }
 
 class LocalDiskContentAssetProvider implements ContentAssetStorageProvider {
@@ -165,20 +179,29 @@ class LocalDiskContentAssetProvider implements ContentAssetStorageProvider {
     if (parsed.buffer.byteLength > MAX_UPLOAD_BYTES) return { ok: false as const, error: "file_too_large" };
     await ensureMigratedFromLegacyIndex();
 
+    // Real content-addressed dedup: identical bytes already stored for this
+    // owner_scope return the existing asset rather than writing a second
+    // copy of the file and a second index row.
+    const contentHash = createHash("sha256").update(parsed.buffer).digest("hex");
+    const existing = findAssetByContentHash(input.ownerScope, contentHash);
+    if (existing) return { ok: true as const, asset: toContentAssetRecord(existing) };
+
     const id = randomUUID();
     const now = new Date();
     const originalName = (input.originalName || "content-asset").slice(0, 160);
     const extension = path.extname(originalName).replace(/^\./, "") || null;
     const tier: AssetTier = input.tier ?? "cache";
     const expiresAt = tier === "cache" ? new Date(now.getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000).toISOString() : null;
+    const assetType = input.assetType ?? inferAssetType(parsed.mimeType);
 
     await mkdir(FILES_DIR, { recursive: true });
-    await writeFile(path.join(FILES_DIR, id), parsed.buffer);
+    const sourcePath = path.join(FILES_DIR, id);
+    await writeFile(sourcePath, parsed.buffer);
 
-    const asset = insertAsset({
+    insertAsset({
       id,
       ownerScope: input.ownerScope,
-      assetType: input.assetType ?? inferAssetType(parsed.mimeType),
+      assetType,
       originalName,
       title: input.title ?? null,
       description: input.description ?? null,
@@ -191,6 +214,7 @@ class LocalDiskContentAssetProvider implements ContentAssetStorageProvider {
       mimeType: parsed.mimeType,
       extension,
       fileSizeBytes: parsed.buffer.byteLength,
+      contentHash,
       storageProvider: "local-disk",
       storageKey: id,
       tier,
@@ -198,7 +222,21 @@ class LocalDiskContentAssetProvider implements ContentAssetStorageProvider {
       expiresAt,
     });
 
-    return { ok: true as const, asset: toContentAssetRecord(asset) };
+    // Real ffprobe/ffmpeg pass: fills in width/height/duration and generates
+    // whatever derivative makes sense for this asset type. Awaited so the
+    // asset record returned to the caller already reflects real metadata
+    // rather than nulls that only get filled in later.
+    await ingestAsset({
+      assetId: id,
+      ownerScope: input.ownerScope,
+      assetType,
+      mimeType: parsed.mimeType,
+      sourcePath,
+      derivedDir: DERIVED_DIR,
+    });
+
+    const finalAsset = getAssetById(id, input.ownerScope) as AssetRecord;
+    return { ok: true as const, asset: toContentAssetRecord(finalAsset) };
   }
 
   async getAssetFile(id: string, ownerScope: string) {
@@ -227,8 +265,15 @@ class LocalDiskContentAssetProvider implements ContentAssetStorageProvider {
     await ensureMigratedFromLegacyIndex();
     const asset = getAssetById(id, ownerScope);
     if (!asset) return false;
+    // Captured before the delete: the FK cascade removes the derivative DB
+    // rows automatically, but the derivative *files* on disk are only
+    // cleaned up here, using the storage keys we just read.
+    const derivatives = listDerivativesForAsset(id);
     const deleted = deleteAssetById(id, ownerScope);
-    if (deleted) await unlink(path.join(FILES_DIR, asset.storage_key)).catch(() => {});
+    if (deleted) {
+      await unlink(path.join(FILES_DIR, asset.storage_key)).catch(() => {});
+      await Promise.all(derivatives.map((d) => unlink(path.join(DERIVED_DIR, d.storage_key)).catch(() => {})));
+    }
     return deleted;
   }
 
@@ -237,6 +282,25 @@ class LocalDiskContentAssetProvider implements ContentAssetStorageProvider {
     const { deletedCount, deletedStorageKeys } = deleteExpiredCacheAssets();
     await Promise.all(deletedStorageKeys.map((key) => unlink(path.join(FILES_DIR, key)).catch(() => {})));
     return { deletedCount };
+  }
+
+  async listDerivatives(id: string, ownerScope: string) {
+    const asset = getAssetById(id, ownerScope);
+    if (!asset) return [];
+    return listDerivativesForAsset(id);
+  }
+
+  async getDerivativeFile(id: string, ownerScope: string, kind: DerivativeKind) {
+    const asset = getAssetById(id, ownerScope);
+    if (!asset) return { ok: false as const, error: "not_found" };
+    const derivative = listDerivativesForAsset(id).find((d) => d.kind === kind);
+    if (!derivative) return { ok: false as const, error: "derivative_not_found" };
+    try {
+      const buffer = await readFile(path.join(DERIVED_DIR, derivative.storage_key));
+      return { ok: true as const, dataUrl: `data:${derivative.mime_type};base64,${buffer.toString("base64")}`, derivative };
+    } catch {
+      return { ok: false as const, error: "file_missing" };
+    }
   }
 }
 
@@ -255,4 +319,10 @@ export const CONTENT_ASSET_RETENTION_DAYS = RETENTION_DAYS;
 // provider uses, needed for orphan/corruption detection and eviction.
 export function contentAssetFilesDir(): string {
   return FILES_DIR;
+}
+
+// Exposed for admin/diagnostic tooling (Stage 9) — the real derivative
+// storage location, parallel to contentAssetFilesDir() above.
+export function contentAssetDerivedDir(): string {
+  return DERIVED_DIR;
 }

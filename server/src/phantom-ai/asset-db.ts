@@ -171,6 +171,20 @@ const SCHEMA_SQL = `
       PRIMARY KEY (collection_id, asset_id)
     );
 
+    CREATE TABLE IF NOT EXISTS asset_derivatives (
+      id TEXT PRIMARY KEY,
+      asset_id TEXT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+      kind TEXT NOT NULL,
+      storage_key TEXT NOT NULL,
+      mime_type TEXT NOT NULL,
+      width INTEGER,
+      height INTEGER,
+      file_size_bytes INTEGER NOT NULL,
+      created_at TEXT NOT NULL,
+      UNIQUE(asset_id, kind)
+    );
+    CREATE INDEX IF NOT EXISTS idx_asset_derivatives_asset_id ON asset_derivatives(asset_id);
+
     CREATE TABLE IF NOT EXISTS presets (
       id TEXT PRIMARY KEY,
       owner_scope TEXT NOT NULL,
@@ -511,6 +525,77 @@ export function setAssetDimensions(id: string, ownerScope: string, width: number
       `UPDATE assets SET width = ?, height = ?, duration_seconds = COALESCE(?, duration_seconds), updated_at = ? WHERE id = ? AND owner_scope = ?`,
     )
     .run(width, height, durationSeconds, new Date().toISOString(), id, ownerScope);
+}
+
+// ---- derivatives (Stage 4: ingestion pipeline) -------------------------------------
+// Thumbnails/proxies/waveforms generated from a source asset. One row per
+// (asset, kind) — re-ingesting an asset replaces its derivative of that kind
+// rather than accumulating stale rows (see upsertDerivative).
+
+export type DerivativeKind = "thumbnail" | "proxy" | "waveform";
+
+export type DerivativeRecord = {
+  id: string;
+  asset_id: string;
+  kind: DerivativeKind;
+  storage_key: string;
+  mime_type: string;
+  width: number | null;
+  height: number | null;
+  file_size_bytes: number;
+  created_at: string;
+};
+
+function rowToDerivative(row: any): DerivativeRecord {
+  return {
+    id: row.id,
+    asset_id: row.asset_id,
+    kind: row.kind,
+    storage_key: row.storage_key,
+    mime_type: row.mime_type,
+    width: row.width,
+    height: row.height,
+    file_size_bytes: row.file_size_bytes,
+    created_at: row.created_at,
+  };
+}
+
+export function upsertDerivative(input: {
+  assetId: string;
+  kind: DerivativeKind;
+  storageKey: string;
+  mimeType: string;
+  width?: number | null;
+  height?: number | null;
+  fileSizeBytes: number;
+}): DerivativeRecord {
+  const db = getAssetDb();
+  const now = new Date().toISOString();
+  const id = randomUUID();
+  db.prepare(
+    `INSERT INTO asset_derivatives (id, asset_id, kind, storage_key, mime_type, width, height, file_size_bytes, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+     ON CONFLICT(asset_id, kind) DO UPDATE SET
+       storage_key = excluded.storage_key,
+       mime_type = excluded.mime_type,
+       width = excluded.width,
+       height = excluded.height,
+       file_size_bytes = excluded.file_size_bytes,
+       created_at = excluded.created_at`,
+  ).run(id, input.assetId, input.kind, input.storageKey, input.mimeType, input.width ?? null, input.height ?? null, input.fileSizeBytes, now);
+  return rowToDerivative(
+    db.prepare(`SELECT * FROM asset_derivatives WHERE asset_id = ? AND kind = ?`).get(input.assetId, input.kind),
+  );
+}
+
+export function listDerivativesForAsset(assetId: string): DerivativeRecord[] {
+  const rows = getAssetDb().prepare(`SELECT * FROM asset_derivatives WHERE asset_id = ? ORDER BY kind`).all(assetId);
+  return rows.map(rowToDerivative);
+}
+
+export function getDerivative(assetId: string, kind: DerivativeKind): DerivativeRecord | null {
+  const row = getAssetDb().prepare(`SELECT * FROM asset_derivatives WHERE asset_id = ? AND kind = ?`).get(assetId, kind);
+  return row ? rowToDerivative(row) : null;
 }
 
 // ---- presets (Stage 7) -------------------------------------------------------------
