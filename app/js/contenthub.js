@@ -10,19 +10,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260712-208";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-208";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-208";
+} from "./imagefilters.js?v=phantom-live-20260712-211";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-211";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-211";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260712-211";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260712-208";
+} from "./content-editor.js?v=phantom-live-20260712-211";
 import {
   currentTenantId, currentWs, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-208";
+} from "./store.js?v=phantom-live-20260712-211";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -54,13 +55,12 @@ export const TYPES = { image: "Image", carousel: "Carousel", reel: "Reel", short
 const plat = (id) => PLATFORMS.find((p) => p.id === id) || PLATFORMS[0];
 const isVideo = (t) => ["reel", "short", "video"].includes(t);
 
-/* ---------------- social account connection (shared with Media Lab settings) ----------------
-   A "linked" account means PhantomForce detected the real signed-in public profile through the
-   browser bridge — never a fabricated number. Analytics/Overview must not show any metric that
-   isn't traceable to a real connected account. */
+/* ---------------- social profiles (shared with Media Lab settings) ----------------
+   A saved profile is a public identity reference, not API authorization. Analytics
+   renders only imported or adapter-provided metrics and never invents numbers. */
 const SOCIAL_KEY = "pf.social.accounts.v1";
 const PUBLISH_PRESETS = [
-  { id: "enabled", name: "Enabled", hint: "connected/manual accounts", platforms: null },
+  { id: "enabled", name: "Enabled", hint: "saved profiles", platforms: null },
   { id: "all", name: "Select all", hint: "every channel", platforms: PLATFORMS.map((p) => p.id) },
   { id: "short-form", name: "Short-form", hint: "reels, shorts, TikTok", platforms: ["instagram", "tiktok", "youtube"] },
   { id: "business", name: "Business", hint: "LinkedIn, Facebook, X", platforms: ["linkedin", "facebook", "x"] },
@@ -1128,7 +1128,7 @@ function renderPostPublish(body, data, esc, root, opts) {
       <div class="ch-card ch-pub-composer">
         <div class="ch-card-h">
           <div><h3>Post / Publish composer</h3><span class="ch-src">AI caption assist · platform preview · approval controlled</span></div>
-          <span class="ch-pub-safe">${linkedCount ? `${linkedCount} account${linkedCount === 1 ? "" : "s"} configured` : "Manual preview mode"}</span>
+          <span class="ch-pub-safe">${linkedCount ? `${linkedCount} profile${linkedCount === 1 ? "" : "s"} saved` : "Manual preview mode"}</span>
         </div>
         <div class="ch-pub-section">
           <b class="ch-pub-label">Presets</b>
@@ -3103,8 +3103,8 @@ function openPost(p, esc) {
 }
 
 /* =========================================================================
-   ANALYTICS — real connections only. A connected profile proves identity; it
-   is not the same thing as a metrics feed. KPIs render only from explicit
+   ANALYTICS - real metrics only. A saved profile identifies what to measure;
+   it is not API authorization. KPIs render only from explicit
    account analytics payloads. No Creator Hub inventory, seeded posts, or
    modeled estimates leak into this page.
    ========================================================================= */
@@ -3139,27 +3139,49 @@ function analyticsTotals(feeds = []) {
     followers: sum.followers + row.feed.followers,
   }), { reach: 0, impressions: 0, engagement: 0, followers: 0 });
 }
-function accountAnalyticsCard(row, esc) {
+let analyticsNotice = "";
+function accountAnalyticsRow(row, esc) {
   const account = row.account;
   const feed = row.feed;
-  if (!feed) {
-    return `<article class="an-feed-card is-missing">
-      <div><span class="ch-dot" style="background:${account.color}"></span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile connected")}</i></div>
-      <strong>No analytics feed</strong>
-      <p>Profile identity is connected, but reach, impressions, followers, and engagement are not available until that platform's insights API is wired server-side.</p>
-    </article>`;
-  }
-  return `<article class="an-feed-card">
-    <div><span class="ch-dot" style="background:${account.color}"></span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile connected")}</i></div>
-    <strong>${esc(feed.source)}</strong>
-    <p>${feed.syncedAt ? `Last sync ${esc(ago(feed.syncedAt))}` : "Live metrics feed connected."}</p>
-    <div class="an-feed-metrics">
-      <span><b>${K(feed.reach)}</b>reach</span>
-      <span><b>${K(feed.impressions)}</b>impressions</span>
-      <span><b>${K(feed.engagement)}</b>engagement</span>
-      <span><b>${K(feed.followers)}</b>followers</span>
+  return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
+    <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
+    ${feed ? `<div class="an-channel-metrics">
+      <span><b>${K(feed.reach)}</b>reach</span><span><b>${K(feed.impressions)}</b>views</span><span><b>${K(feed.engagement)}</b>engagement</span><span><b>${K(feed.followers)}</b>followers</span>
+    </div><div class="an-channel-source"><b>${esc(feed.source)}</b><i>${feed.syncedAt ? esc(ago(feed.syncedAt)) : "current"}</i></div>`
+    : `<div class="an-channel-empty"><b>Profile saved</b><span>Import its analytics export to activate metrics.</span></div>`}
+    <div class="an-channel-actions">
+      <label class="btn ${feed ? "btn-ghost" : "btn-primary"}">${feed ? "Replace report" : "Import report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label>
+      ${feed ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear</button>` : ""}
     </div>
   </article>`;
+}
+function wireAnalyticsActions(el, accounts, opts) {
+  el.querySelectorAll("[data-an-import]").forEach((input) => input.onchange = async () => {
+    const account = accounts.find((row) => row.id === input.dataset.anImport);
+    const file = input.files?.[0];
+    if (!account || !file) return;
+    try {
+      account.analytics = parseAnalyticsReport(await file.text(), {
+        fileName: file.name,
+        source: `${account.name} analytics export`,
+      });
+      saveSocialAccounts(accounts);
+      analyticsNotice = `${account.name} metrics imported from ${file.name}.`;
+    } catch (error) {
+      analyticsNotice = error?.message || "That report could not be read.";
+    }
+    renderAnalytics(el, opts);
+  });
+  el.querySelectorAll("[data-an-clear]").forEach((button) => button.onclick = () => {
+    const account = accounts.find((row) => row.id === button.dataset.anClear);
+    if (!account) return;
+    delete account.analytics;
+    delete account.insights;
+    delete account.metrics;
+    saveSocialAccounts(accounts);
+    analyticsNotice = `${account.name} analytics were cleared. The saved profile was not removed.`;
+    renderAnalytics(el, opts);
+  });
 }
 export function renderAnalytics(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
@@ -3172,13 +3194,13 @@ export function renderAnalytics(el, opts = {}) {
         <section class="an-hero">
           <div>
             <p class="ch-eyebrow">Business intelligence</p>
-            <h3>Connect a social account to see analytics.</h3>
-            <p>Analytics only shows numbers pulled from an account you've actually signed in with. Nothing is modeled, estimated, or invented here.</p>
+            <h3>Add a social profile to start.</h3>
+            <p>Save the business profile you want to measure, then import its platform analytics export. Nothing is modeled, estimated, or invented here.</p>
           </div>
         </section>
         <div class="an-connect-card">
-          <p class="an-connect-lede">No social account is connected yet.</p>
-          <button class="btn btn-primary" type="button" data-open-ws="settings">Connect a social account</button>
+          <p class="an-connect-lede">No social profile is saved yet.</p>
+          <button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Add a social profile</button>
         </div>
       </div>`;
     return;
@@ -3192,25 +3214,21 @@ export function renderAnalytics(el, opts = {}) {
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Business intelligence</p>
-          <h3>${liveRows.length ? "Real analytics feed live." : "Accounts connected. Metrics feed missing."}</h3>
-          <p>${liveRows.length ? "These numbers come from explicit platform analytics payloads only." : "The profiles below are connected, but PhantomForce has not received real reach, engagement, follower, or impression data from the platform APIs yet."}</p>
+          <h3>${liveRows.length ? "Performance at a glance." : "Add your real performance data."}</h3>
+          <p>${liveRows.length ? "Every number below comes from an imported platform report or an authorized analytics adapter." : "Your profiles are saved. Import each platform's CSV, TSV, or JSON analytics export to turn this page on."}</p>
         </div>
-        <span class="an-src">${svgIc("up")} ${liveRows.length}/${linked.length} metrics feed${linked.length === 1 ? "" : "s"} live</span>
+        <span class="an-src">${svgIc("up")} ${liveRows.length}/${linked.length} channel${linked.length === 1 ? "" : "s"} reporting</span>
       </section>
-      <div class="an-connected-grid">
-        ${linked.map((acct) => `<div class="an-account-chip"><span class="ch-dot" style="background:${acct.color}"></span><b>${esc(acct.name)}</b><i>${esc(acct.handle || acct.loginIdentity || "connected")}</i></div>`).join("")}
-      </div>
+      ${analyticsNotice ? `<div class="an-flash">${esc(analyticsNotice)}</div>` : ""}
       ${liveRows.length ? `<div class="ch-kpis">
         ${kpi("Reach", K(totals.reach), "real platform feed")}
         ${kpi("Impressions", K(totals.impressions), "real platform feed")}
         ${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}
         ${kpi("Followers", K(totals.followers), "reported by platform")}
-      </div>` : `<div class="ch-card an-notice">
-        <b>Connected profile does not equal analytics data.</b>
-        <p>Instagram, TikTok, YouTube, and Facebook identity checks are present, but no server-side insights feed is returning real metrics yet. This page will stay empty of numbers until those APIs are actually connected.</p>
-      </div>`}
-      <section class="an-feed-grid">
-        ${feedRows.map((row) => accountAnalyticsCard(row, esc)).join("")}
+      </div>` : ""}
+      <section class="an-channel-list" aria-label="Social analytics channels">
+        ${feedRows.map((row) => accountAnalyticsRow(row, esc)).join("")}
       </section>
     </div>`;
+  wireAnalyticsActions(el, accounts, opts);
 }
