@@ -183,9 +183,13 @@ import {
   listAssetsInCollection,
   listCollections,
   listTagsForAsset,
+  searchAssets,
+  setAssetArchived,
+  setAssetFavorite,
   setAssetPinned,
   tagAsset,
   untagAsset,
+  type AssetSearchQuery,
 } from "./phantom-ai/asset-db.js";
 import { getCacheStats, previewCleanup, runCleanup } from "./phantom-ai/asset-cache-manager.js";
 import {
@@ -4094,6 +4098,86 @@ app.get("/phantom-ai/content/assets/:id/derivatives/:kind", async (request, repl
   }
 
   return { ok: true, tenant_id: ownerScope, image: result.dataUrl, derivative: result.derivative };
+});
+
+/* ---- Asset Vault Stage 5: search ----
+   Real keyword + filter search over the SQLite index (see searchAssets in
+   asset-db.ts). Deliberately not "AI search" — there is no embeddings/
+   vector-similarity infrastructure in this project, so this is honest
+   keyword + exact-filter matching, not a dressed-up semantic search claim. */
+
+function parseSearchQuery(raw: Record<string, unknown>): AssetSearchQuery {
+  const sortValues = ["created_desc", "created_asc", "name_asc", "size_desc"] as const;
+  const sort = sortValues.includes(raw.sort as any) ? (raw.sort as (typeof sortValues)[number]) : undefined;
+  return {
+    text: typeof raw.text === "string" && raw.text.trim() ? raw.text.trim().slice(0, 200) : undefined,
+    assetType: typeof raw.asset_type === "string" && raw.asset_type ? raw.asset_type : undefined,
+    tier: raw.tier === "vault" || raw.tier === "cache" ? raw.tier : undefined,
+    favorite: raw.favorite === "true" ? true : raw.favorite === "false" ? false : undefined,
+    archived: raw.archived === "true" ? true : raw.archived === "false" ? false : undefined,
+    provider: typeof raw.provider === "string" && raw.provider ? raw.provider : undefined,
+    tags:
+      typeof raw.tags === "string" && raw.tags.trim()
+        ? raw.tags
+            .split(",")
+            .map((t) => t.trim())
+            .filter(Boolean)
+            .slice(0, 20)
+        : undefined,
+    collectionId: typeof raw.collection_id === "string" && raw.collection_id ? raw.collection_id : undefined,
+    sort,
+    limit: typeof raw.limit === "string" && Number.isFinite(Number(raw.limit)) ? Number(raw.limit) : undefined,
+    offset: typeof raw.offset === "string" && Number.isFinite(Number(raw.offset)) ? Number(raw.offset) : undefined,
+  };
+}
+
+app.get("/phantom-ai/content/assets/search", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const query = (request.query ?? {}) as Record<string, unknown>;
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const searchQuery = parseSearchQuery(query);
+  const { results, total } = searchAssets(ownerScope, searchQuery);
+  return { ok: true, tenant_id: ownerScope, total, assets: results };
+});
+
+const FavoriteAssetSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  favorite: z.boolean(),
+});
+
+app.post("/phantom-ai/content/assets/:id/favorite", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = FavoriteAssetSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const updated = setAssetFavorite(id, ownerScope, parsed.data.favorite);
+  if (!updated) return reply.code(404).send({ ok: false, error: "not_found" });
+  return { ok: true, tenant_id: ownerScope, asset: getVaultAssetById(id, ownerScope) };
+});
+
+const ArchiveAssetSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  archived: z.boolean(),
+});
+
+app.post("/phantom-ai/content/assets/:id/archive", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = ArchiveAssetSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const updated = setAssetArchived(id, ownerScope, parsed.data.archived);
+  if (!updated) return reply.code(404).send({ ok: false, error: "not_found" });
+  return { ok: true, tenant_id: ownerScope, asset: getVaultAssetById(id, ownerScope) };
 });
 
 /* ---- Asset Vault Stage 2: tags + collections ----

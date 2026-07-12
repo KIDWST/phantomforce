@@ -18,6 +18,9 @@ import {
   listAssetsInCollection,
   listTagsForAsset,
   resetAssetDbForTests,
+  searchAssets,
+  setAssetArchived,
+  setAssetFavorite,
   tagAsset,
   untagAsset,
 } from "../src/phantom-ai/asset-db.js";
@@ -144,6 +147,99 @@ assert(!cleanup.deletedIds.includes(freshCache.id), "a not-yet-expired cache-tie
 assert(!cleanup.deletedIds.includes(vaultAsset.id), "a vault-tier asset must never be swept, regardless of expires_at.");
 assert(getAssetById(expiredCache.id, "scope-a") === null, "swept asset should actually be gone from the index.");
 assert(getAssetById(vaultAsset.id, "scope-a") !== null, "vault asset must still be present after cleanup.");
+
+// ---- search (Stage 5) ------------------------------------------------------------
+
+resetAssetDbForTests();
+
+const sunset = insertAsset({
+  ownerScope: "search-scope",
+  assetType: "image",
+  originalName: "sunset-beach.jpg",
+  title: "Sunset over the beach",
+  provider: "midjourney",
+  mimeType: "image/jpeg",
+  fileSizeBytes: 100,
+  storageProvider: "local-disk",
+  storageKey: "sunset-key",
+});
+const cityNight = insertAsset({
+  ownerScope: "search-scope",
+  assetType: "image",
+  originalName: "city-night.jpg",
+  title: "City skyline at night",
+  provider: "dalle",
+  mimeType: "image/jpeg",
+  fileSizeBytes: 200,
+  storageProvider: "local-disk",
+  storageKey: "city-key",
+});
+const clip = insertAsset({
+  ownerScope: "search-scope",
+  assetType: "video",
+  originalName: "beach-clip.mp4",
+  title: "Beach waves clip",
+  provider: "midjourney",
+  mimeType: "video/mp4",
+  fileSizeBytes: 300,
+  storageProvider: "local-disk",
+  storageKey: "clip-key",
+});
+const otherScopeAsset = insertAsset({
+  ownerScope: "other-scope",
+  assetType: "image",
+  originalName: "beach-elsewhere.jpg",
+  mimeType: "image/jpeg",
+  fileSizeBytes: 50,
+  storageProvider: "local-disk",
+  storageKey: "elsewhere-key",
+});
+
+tagAsset(sunset.id, "search-scope", "warm");
+tagAsset(sunset.id, "search-scope", "landscape");
+tagAsset(cityNight.id, "search-scope", "urban");
+
+const textSearch = searchAssets("search-scope", { text: "beach" });
+assert(textSearch.total === 2, "text search should match against original_name/title, case-insensitively.");
+assert(
+  textSearch.results.every((a) => a.id !== otherScopeAsset.id),
+  "search must never leak results across owner_scope.",
+);
+
+const typeFiltered = searchAssets("search-scope", { assetType: "video" });
+assert(typeFiltered.total === 1 && typeFiltered.results[0].id === clip.id, "assetType filter should narrow results correctly.");
+
+const providerFiltered = searchAssets("search-scope", { provider: "midjourney" });
+assert(providerFiltered.total === 2, "provider filter should match all assets from that provider.");
+
+const tagFiltered = searchAssets("search-scope", { tags: ["warm", "landscape"] });
+assert(
+  tagFiltered.total === 1 && tagFiltered.results[0].id === sunset.id,
+  "multi-tag search should use AND semantics, matching only the asset with every listed tag.",
+);
+
+const tagFilteredSingle = searchAssets("search-scope", { tags: ["urban"] });
+assert(tagFilteredSingle.total === 1 && tagFilteredSingle.results[0].id === cityNight.id, "single-tag search should work too.");
+
+assert(setAssetFavorite(cityNight.id, "search-scope", true), "setAssetFavorite should update an owned asset.");
+const favoritesOnly = searchAssets("search-scope", { favorite: true });
+assert(favoritesOnly.total === 1 && favoritesOnly.results[0].id === cityNight.id, "favorite filter should only return favorited assets.");
+assert(!setAssetFavorite(cityNight.id, "other-scope", true), "setAssetFavorite must fail across owner_scope.");
+
+assert(setAssetArchived(clip.id, "search-scope", true), "setAssetArchived should update an owned asset.");
+const nonArchived = searchAssets("search-scope", { archived: false });
+assert(
+  nonArchived.results.every((a) => a.id !== clip.id),
+  "archived filter should exclude archived assets when archived:false is requested.",
+);
+
+const sizeSorted = searchAssets("search-scope", { sort: "size_desc" });
+assert(sizeSorted.results[0].id === clip.id, "size_desc sort should put the largest file first.");
+
+const paged = searchAssets("search-scope", { limit: 1, offset: 1, sort: "created_asc" });
+assert(paged.results.length === 1 && paged.total === 3, "pagination should slice results while total still reflects the full match count.");
+
+console.log("search (Stage 5): all checks passed.");
 
 console.log("asset-db.ts: all checks passed.");
 

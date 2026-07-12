@@ -20,6 +20,9 @@ function assert(condition: boolean, message: string) {
 const tempStateDir = await mkdtemp(path.join(os.tmpdir(), "phantomforce-asset-ingest-test-"));
 process.env.PHANTOMFORCE_CONTENT_ASSET_DIR = tempStateDir;
 
+const { resetAssetDbForTests } = await import("../src/phantom-ai/asset-db.js");
+resetAssetDbForTests(); // in-memory index — without this, content-hash dedup would match stale rows from a prior real on-disk run
+
 const { getContentAssetStorageProvider } = await import("../src/phantom-ai/content-asset-storage.js");
 const { isFfmpegAvailable } = await import("../src/phantom-ai/asset-ingest.js");
 const provider = getContentAssetStorageProvider();

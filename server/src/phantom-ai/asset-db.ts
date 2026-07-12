@@ -527,6 +527,116 @@ export function setAssetDimensions(id: string, ownerScope: string, width: number
     .run(width, height, durationSeconds, new Date().toISOString(), id, ownerScope);
 }
 
+export function setAssetFavorite(id: string, ownerScope: string, favorite: boolean): boolean {
+  const result = getAssetDb()
+    .prepare(`UPDATE assets SET favorite = ?, updated_at = ? WHERE id = ? AND owner_scope = ?`)
+    .run(favorite ? 1 : 0, new Date().toISOString(), id, ownerScope);
+  return result.changes > 0;
+}
+
+export function setAssetArchived(id: string, ownerScope: string, archived: boolean): boolean {
+  const result = getAssetDb()
+    .prepare(`UPDATE assets SET archived = ?, updated_at = ? WHERE id = ? AND owner_scope = ?`)
+    .run(archived ? 1 : 0, new Date().toISOString(), id, ownerScope);
+  return result.changes > 0;
+}
+
+// ---- search (Stage 5) ---------------------------------------------------------------
+// Real keyword + filter search over the actual columns and the actual tag
+// index — no embeddings, no vector similarity, no ranking model. This
+// project has no embeddings infrastructure (no vector store, no configured
+// embedding provider), so semantic/similarity search is explicitly not
+// offered rather than faked with a keyword search dressed up as "AI search."
+// What's here is real: SQL LIKE text matching (case-insensitive for ASCII,
+// SQLite's native behavior) across name/title/description/source/provider/
+// model/style, combined with exact filters and AND-tag matching.
+
+export type AssetSearchQuery = {
+  text?: string;
+  assetType?: string;
+  tier?: AssetTier;
+  favorite?: boolean;
+  archived?: boolean;
+  provider?: string;
+  tags?: string[]; // AND semantics: every listed tag must be present
+  collectionId?: string;
+  sort?: "created_desc" | "created_asc" | "name_asc" | "size_desc";
+  limit?: number;
+  offset?: number;
+};
+
+export type AssetSearchResult = { results: AssetRecord[]; total: number };
+
+export function searchAssets(ownerScope: string, query: AssetSearchQuery): AssetSearchResult {
+  const db = getAssetDb();
+  const clauses: string[] = ["owner_scope = ?"];
+  const args: Array<string | number> = [ownerScope];
+
+  if (query.text && query.text.trim()) {
+    const like = `%${query.text.trim()}%`;
+    clauses.push(
+      `(original_name LIKE ? OR title LIKE ? OR description LIKE ? OR source LIKE ? OR provider LIKE ? OR model LIKE ? OR style LIKE ?)`,
+    );
+    args.push(like, like, like, like, like, like, like);
+  }
+  if (query.assetType) {
+    clauses.push(`asset_type = ?`);
+    args.push(query.assetType);
+  }
+  if (query.tier) {
+    clauses.push(`tier = ?`);
+    args.push(query.tier);
+  }
+  if (query.favorite !== undefined) {
+    clauses.push(`favorite = ?`);
+    args.push(query.favorite ? 1 : 0);
+  }
+  if (query.archived !== undefined) {
+    clauses.push(`archived = ?`);
+    args.push(query.archived ? 1 : 0);
+  }
+  if (query.provider) {
+    clauses.push(`provider = ?`);
+    args.push(query.provider);
+  }
+  if (query.collectionId) {
+    clauses.push(`id IN (SELECT asset_id FROM collection_assets WHERE collection_id = ?)`);
+    args.push(query.collectionId);
+  }
+  if (query.tags && query.tags.length > 0) {
+    clauses.push(
+      `id IN (
+         SELECT asset_tags.asset_id FROM asset_tags
+         JOIN tags ON tags.id = asset_tags.tag_id
+         WHERE tags.owner_scope = ? AND tags.name IN (${query.tags.map(() => "?").join(",")})
+         GROUP BY asset_tags.asset_id
+         HAVING COUNT(DISTINCT tags.name) = ?
+       )`,
+    );
+    args.push(ownerScope, ...query.tags, query.tags.length);
+  }
+
+  const where = clauses.join(" AND ");
+  const orderBy =
+    query.sort === "created_asc"
+      ? "created_at ASC"
+      : query.sort === "name_asc"
+        ? "original_name COLLATE NOCASE ASC"
+        : query.sort === "size_desc"
+          ? "file_size_bytes DESC"
+          : "created_at DESC";
+
+  const total = (db.prepare(`SELECT COUNT(*) AS count FROM assets WHERE ${where}`).get(...args) as any).count as number;
+
+  const limit = Math.min(Math.max(query.limit ?? 50, 1), 200);
+  const offset = Math.max(query.offset ?? 0, 0);
+  const rows = db
+    .prepare(`SELECT * FROM assets WHERE ${where} ORDER BY ${orderBy} LIMIT ? OFFSET ?`)
+    .all(...args, limit, offset);
+
+  return { results: rows.map(rowToAsset), total };
+}
+
 // ---- derivatives (Stage 4: ingestion pipeline) -------------------------------------
 // Thumbnails/proxies/waveforms generated from a source asset. One row per
 // (asset, kind) — re-ingesting an asset replaces its derivative of that kind
