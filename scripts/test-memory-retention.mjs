@@ -25,6 +25,12 @@ const technicalFailure = "Codex did not complete this Phantom chat request. Priv
 
 assert.equal(shouldAiRemember("why do we have 0 active workers"), false);
 assert.equal(shouldAiRemember("Remember that workers must report real activity"), true);
+assert.equal(shouldAiRemember("Make sure the worker page looks better"), false);
+assert.equal(shouldAiRemember("I don't like these title cards"), false);
+assert.equal(shouldAiRemember("Fix the bokeh cursor because it is still broken"), false);
+assert.equal(shouldAiRemember("From now on, never auto-create tasks from brainstorming"), true);
+assert.equal(shouldAiRemember("My preference is direct human wording"), true);
+assert.equal(shouldAiRemember("We use Resend for transactional email"), true);
 assert.equal(isFailedMemoryInteraction("why do we have 0 active workers", technicalFailure), true);
 assert.equal(sanitizeMemoryText(technicalFailure).includes("AppData\\Local\\Temp"), false);
 
@@ -47,5 +53,15 @@ assert.equal(store.state.chatHistory[0].reply, "Request failed before a usable a
 rememberConversation({ prompt: "Remember that workers must report real activity", reply: "Got it." });
 assert.equal(store.state.memory.length, 1, "explicit durable instruction should become memory");
 assert.equal(store.state.memory[0].pinnedByAi, true);
+assert.equal(store.state.memory[0].text, "Remember that workers must report real activity", "saved memory should not include disposable assistant chatter");
+
+rememberConversation({ prompt: "Make sure the mobile nav fits", reply: "I'll remember to keep it compact." });
+assert.equal(store.state.memory.length, 1, "assistant wording must not promote a one-off request");
+assert.ok(store.state.chatHistory.some((entry) => entry.prompt === "Make sure the mobile nav fits"), "one-off requests remain temporary context");
+
+for (let index = 0; index < 130; index += 1) {
+  rememberConversation({ prompt: `Explain temporary context item number ${index}`, reply: `Temporary answer ${index}` });
+}
+assert.equal(store.state.chatHistory.length, 120, "temporary history should stay within the context window cap");
 
 console.log("memory retention tests passed");

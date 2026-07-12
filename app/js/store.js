@@ -87,7 +87,9 @@ export const MEMORY_CATEGORY_LABELS = {
   operations: "Operations",
 };
 const MEMORY_LIMIT = 300;
-const CHAT_HISTORY_LIMIT = 500;
+// Temporary history is context, not an archive. Ten days is the outer limit,
+// while this cap keeps roughly the most recent 60 user/assistant turns.
+const CHAT_HISTORY_LIMIT = 120;
 const SECRET_REDACTIONS = [
   [/\b(sk-[a-z0-9_-]{12,}|hf_[a-z0-9]{12,}|ghp_[a-z0-9_]{20,})\b/gi, "[redacted-key]"],
   [/\b(AKIA|ASIA)[A-Z0-9]{16}\b/g, "[redacted-aws-key]"],
@@ -100,7 +102,10 @@ const SECRET_REDACTIONS = [
   [/[A-Za-z]:\\Users\\[^\\\s]+\\AppData\\Local\\Temp\\[^\s,;]+/gi, "[redacted-temp-path]"],
 ];
 
-const EXPLICIT_MEMORY_SIGNAL_PATTERN = /\b(remember(?: this| that)?|make sure|from now on|always|never|prefer|preference|i like|i do not like|i don't like|i hate|do not|don't|should not|shouldn't|must not|save this|keep this|do it this way next time|next time)\b/i;
+const EXPLICIT_MEMORY_SAVE_PATTERN = /\b(?:remember(?: this| that)?|save (?:this|that)(?: as (?:a )?memory)?|keep (?:this|that) in memory|add (?:this|that) to (?:your )?memory)\b/i;
+const FUTURE_RULE_PATTERN = /\b(?:from now on|going forward|in the future|every time|next time|do it this way next time|never do this again|always (?:use|do|keep|show|write|respond|route|ask|make)|never (?:use|do|show|write|respond|route|ask|make))\b/i;
+const STABLE_PREFERENCE_PATTERN = /\b(?:(?:my|our) (?:default|preference|preferred (?:style|format|workflow|model|tool|tone)) (?:is|should be)|(?:i|we) prefer\b|(?:my|our) (?:business|company|brand|workflow|process) (?:is|uses?|requires?)\b|we use\b)/i;
+const ONE_OFF_REQUEST_PATTERN = /\b(?:fix|change|update|remove|add|build|create|generate|move|open|close|check|look at|why (?:is|does|did|was)|what happened|isn't working|not working|still broken|still offline)\b/i;
 const FAILED_INTERACTION_PATTERN = /(?:did not complete (?:this )?(?:phantom )?chat request|private brain error|command failed|run-codex\.ps1|powershell\.exe|appdata\\local\\temp|request failed before a usable answer|provider (?:is )?(?:unavailable|offline)|transport error|timed? out|stack trace|exit code\s*\d+)/i;
 const FAILED_HISTORY_REPLY = "Request failed before a usable answer was produced.";
 
@@ -145,11 +150,20 @@ function memoryTags(value = "", category = "conversation") {
 }
 
 export function shouldAiRemember(value = "") {
-  return EXPLICIT_MEMORY_SIGNAL_PATTERN.test(String(value || ""));
+  const text = sanitizeMemoryText(value);
+  if (!text || isFailedMemoryInteraction(text, "")) return false;
+  const explicitSave = EXPLICIT_MEMORY_SAVE_PATTERN.test(text);
+  if (explicitSave) return true;
+  if (/[?]\s*$/.test(text) || /^(?:why|what|when|where|who|how|can|could|would|should|is|are|do|does|did)\b/i.test(text)) return false;
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  if (wordCount < 4) return false;
+  if (FUTURE_RULE_PATTERN.test(text)) return true;
+  if (STABLE_PREFERENCE_PATTERN.test(text) && !ONE_OFF_REQUEST_PATTERN.test(text)) return true;
+  return false;
 }
 
 function hasDurableMemorySignal(value = "") {
-  return EXPLICIT_MEMORY_SIGNAL_PATTERN.test(String(value || ""));
+  return shouldAiRemember(value);
 }
 
 export function isFailedMemoryInteraction(prompt = "", reply = "") {
@@ -158,7 +172,11 @@ export function isFailedMemoryInteraction(prompt = "", reply = "") {
 
 function isInvalidAutoMemory(entry = {}) {
   if (entry.pinnedByUser || entry.source === "manual") return false;
-  return isFailedMemoryInteraction(entry.title, `${entry.summary || ""} ${entry.text || ""}`);
+  if (isFailedMemoryInteraction(entry.title, `${entry.summary || ""} ${entry.text || ""}`)) return true;
+  if (entry.source === "saved-conversation" || entry.source === "feedback_integrator") {
+    return !shouldAiRemember(entry.title || entry.text || entry.summary || "");
+  }
+  return false;
 }
 
 /* Greetings, thanks, acks — chatter that isn't actually about anything.
@@ -875,7 +893,10 @@ export function addMemory(entry = {}) {
     updatedAt: now,
     lastAccessedAt: now,
     pinnedByUser: !!entry.pinnedByUser,
-    pinnedByAi: !!entry.pinnedByAi || shouldAiRemember(sourceText),
+    // Automatic promotion is decided before addMemory is called. Never let
+    // an assistant reply containing "remember" pin an otherwise throwaway
+    // conversation.
+    pinnedByAi: entry.pinnedByAi === true,
   };
   const recentDuplicate = (store.state.memory || []).find((item) =>
     item.text === memory.text && Date.now() - new Date(item.createdAt).getTime() < 60000);
@@ -913,13 +934,12 @@ export function rememberConversation({ prompt = "", reply = "", mode = "ask", ro
     store.save();
     return history;
   }
-  const combined = cleanReply ? `User: ${cleanPrompt}\nPhantom: ${cleanReply}` : `User: ${cleanPrompt}`;
   memory = addMemory({
     source: "saved-conversation",
     category,
     title: cleanPrompt,
-    summary: cleanReply || cleanPrompt,
-    text: combined,
+    summary: cleanPrompt,
+    text: cleanPrompt,
     tags: [mode, route, category].filter(Boolean),
     pinnedByAi: true,
     createdAt: now,
