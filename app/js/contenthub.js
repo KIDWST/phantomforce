@@ -226,11 +226,20 @@ function genPosts() {
 }
 
 /* ---------------- data API (Analytics + Hub both use this) ---------------- */
+/* Showcase posts are fabricated: invented captions, reach, commenters, and
+   "scheduled" items. Seeding them into a brand-new workspace showed a customer
+   a feed of posts they never wrote — including ones apparently queued to go out
+   in 24h — next to a panel truthfully reporting 0 media. Real content only,
+   unless someone explicitly asks for the demo dataset. */
+const CH_DEMO_FLAG = "pf.contenthub.demoData.v1";
+function demoContentEnabled() {
+  try { return localStorage.getItem(CH_DEMO_FLAG) === "on"; } catch { return false; }
+}
 export function loadContent() {
   let saved = null;
   try { saved = JSON.parse(workspaceStorageGetItem(CH_KEY) || "null"); } catch {}
   if (saved && Array.isArray(saved.posts) && saved.posts.length) return saved;
-  const data = { posts: genPosts(), updatedAt: Date.now() };
+  const data = { posts: demoContentEnabled() ? genPosts() : [], updatedAt: Date.now(), demo: demoContentEnabled() };
   try { workspaceStorageSetItem(CH_KEY, JSON.stringify(data)); } catch {}
   return data;
 }
@@ -1322,7 +1331,9 @@ function renderContentLibrary(body, data, esc, root, opts) {
       : `<p class="empty-line">No generated images or videos yet. Create media in Media Lab and it will land here automatically.</p>`}
       ${stats.trimmed ? `<p class="ch-src">Space saver active: ${stats.trimmed} older/heavier preview${stats.trimmed === 1 ? "" : "s"} kept as metadata only.</p>` : ""}
     </section>
-    <div class="ch-grid ch-grid-lg">${shownPosts.map((p) => postCard(p, esc, { creator: true })).join("")}</div>`;
+    ${shownPosts.length
+      ? `<div class="ch-grid ch-grid-lg">${shownPosts.map((p) => postCard(p, esc, { creator: true })).join("")}</div>`
+      : `<p class="empty-line">No published or scheduled posts yet. Connect a social account or queue a draft, and your real posts show up here.</p>`}`;
   wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts);
   wirePostCards(body, data, esc, root, opts);
 }

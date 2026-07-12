@@ -2,13 +2,13 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago,
-} from "./store.js?v=phantom-live-20260712-211";
+} from "./store.js?v=phantom-live-20260712-212";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260712-211";
+} from "./workspaces.js?v=phantom-live-20260712-212";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun,
-} from "./orgs.js?v=phantom-live-20260712-211";
+} from "./orgs.js?v=phantom-live-20260712-212";
 
 const siteUi = { activeSiteId: null, device: "desktop", selectedSection: -1 };
 
@@ -320,6 +320,8 @@ export function renderSiteStudio(el) {
   el.querySelectorAll("[data-act='ss-remove-site']").forEach((button) => {
     button.onclick = () => {
       const target = store.state.sites.find((site) => site.id === button.dataset.id);
+      // Deleting a whole site is irreversible and sat one misclick away.
+      if (target && !confirm(`Delete the website "${target.title}"? This removes its content and revision history and cannot be undone.`)) return;
       store.state.sites = store.state.sites.filter((site) => site.id !== button.dataset.id);
       siteUi.activeSiteId = store.state.sites[0]?.id || null;
       if (target) pushActivity("Websites", `deleted ${target.title}.`, target.ws);

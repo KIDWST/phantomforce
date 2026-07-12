@@ -480,6 +480,23 @@ function normalizeFinance(finance) {
   return { accounts, transactions, connectors };
 }
 
+// Normalizes in place and always returns the same object identity for a given
+// store.state. Render code captures store.state.finance in event-handler
+// closures; handing back a fresh object on every call orphaned those closures
+// and silently dropped writes (added transactions disappeared on save).
+function ensureFinance() {
+  const normalized = normalizeFinance(store.state.finance);
+  const current = store.state.finance;
+  if (!current || typeof current !== "object") {
+    store.state.finance = normalized;
+    return normalized;
+  }
+  current.accounts = normalized.accounts;
+  current.transactions = normalized.transactions;
+  current.connectors = normalized.connectors;
+  return current;
+}
+
 /* ---------------- seed ---------------- */
 const REQUIRED_WORKSPACES = [
   {
@@ -583,7 +600,13 @@ export const store = {
       this.state.memory = pruneMemory(Array.isArray(this.state.memory) ? this.state.memory : []);
       this.state.chatHistory = pruneChatHistory(Array.isArray(this.state.chatHistory) ? this.state.chatHistory : []);
       localStorage.setItem(DB_KEY, JSON.stringify(this.state));
-    } catch {}
+    } catch (error) {
+      // A swallowed failure here means the user's work is gone with no warning.
+      console.error("[phantomforce] save failed — changes were not persisted", error);
+      try {
+        window.dispatchEvent(new CustomEvent("pf:save-failed", { detail: { error: String(error?.message || error) } }));
+      } catch {}
+    }
     listeners.forEach((fn) => fn());
   },
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
@@ -998,8 +1021,7 @@ export function moneyView() {
   const wonValue = won.reduce((s, p) => s + p.price, 0);
   const retainerMonthly = props.filter((p) => p.retainer && p.status !== "lost")
     .reduce((s, p) => s + (RETAINERS.find((r) => r.id === p.retainer)?.price || 0), 0);
-  const finance = normalizeFinance(store.state.finance);
-  store.state.finance = finance;
+  const finance = ensureFinance();
   const transactions = visible(finance.transactions)
     .slice()
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || String(b.createdAt).localeCompare(String(a.createdAt)));

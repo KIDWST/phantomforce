@@ -6,37 +6,37 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-211";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-211";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-211";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-211";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-211";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-211";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-211";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-211";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-211";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-211";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-211";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-211";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-211";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-211";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-211";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-211";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-211";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-211";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-211";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-211";
+} from "./store.js?v=phantom-live-20260712-212";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-212";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-212";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-212";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-212";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-212";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-212";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-212";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-212";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-212";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-212";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-212";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-212";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-212";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-212";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-212";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-212";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-212";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-212";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-212";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-211";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-211";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-211";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-211";
+} from "./orgs.js?v=phantom-live-20260712-212";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-212";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-212";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-212";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260712-211";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-211";
+} from "./customization.js?v=phantom-live-20260712-212";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-212";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -901,7 +901,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-211";
+const POSE_VERSION = "phantom-live-20260712-212";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1178,16 +1178,23 @@ function renderPlan() {
     return;
   }
   const msg = plan.length === 1 ? "One real thing needs you." : "A few real things need you.";
+  /* Each plan item knows the surface it lives on. Hardcoding "approvals" here
+     sent a task or lead straight to an empty approval queue — the count said
+     one thing was waiting and the destination said nothing was. */
+  const target = plan[0]?.open || "approvals";
+  const detail = plan.length === 1
+    ? plan[0].text
+    : `${plan.length} things need you.`;
   $("[data-plan]").innerHTML = `
     <div class="section-head"><h2>Today's plan</h2></div>
-    <button class="plan-inner" data-open-ws="approvals">
+    <button class="plan-inner" data-open-ws="${target}">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
         <circle cx="36" cy="36" r="30" class="plan-track"/>
         <text x="36" y="40" class="plan-pct">${plan.length}</text>
       </svg>
       <span class="plan-copy">
         <b>${msg}</b>
-        <i>${plan.length ? `${plan.length} thing${plan.length > 1 ? "s" : ""} need you.` : "Nothing waiting. Keep going."}</i>
+        <i>${esc(detail)}</i>
       </span>
       <span class="plan-arrow">${svg("arrow")}</span>
     </button>`;

@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260712-211";
+} from "./store.js?v=phantom-live-20260712-212";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260712-211";
+} from "./orgs.js?v=phantom-live-20260712-212";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -449,7 +449,14 @@ export function applyWebsitePrompt(site, promptText) {
   const design = ensureSiteDesign(site);
   const lower = prompt.toLowerCase();
   const quoted = prompt.match(/["“](.+?)["”]/)?.[1];
-  const afterTo = prompt.match(/\b(?:to|as|called)\s+(.{3,90})$/i)?.[1]?.replace(/[.?!]\s*$/, "").trim();
+  /* "…headline to X and add a testimonials section" must not make the whole
+     tail the headline. Cut the captured phrase at the point a *new* instruction
+     starts, so only X survives. */
+  const trimToClause = (value) => String(value || "")
+    .split(/\s*(?:,|;)?\s*\b(?:and|then|also|plus)\b\s+(?=add|make|change|set|use|include|remove|delete|create|update|put|swap)/i)[0]
+    .replace(/[.?!]\s*$/, "")
+    .trim();
+  const afterTo = trimToClause(prompt.match(/\b(?:to|as|called)\s+(.{3,120})$/i)?.[1]);
   let changed = "";
 
   if (/store|shop|checkout|cart|product/.test(lower)) {
@@ -501,11 +508,16 @@ export function applyWebsitePrompt(site, promptText) {
     design.offer = quoted || afterTo || firstSentence(prompt.replace(/offer|deal|package|make|set/gi, ""));
     changed = "Updated the offer.";
   }
-  if (/add section|section for|add a section/.test(lower)) {
-    const section = quoted || afterTo || prompt.replace(/add( a)? section( for)?/i, "").trim();
-    if (section) {
-      site.sections.push(title(section).slice(0, 48));
-      changed = `Added ${title(section)} section.`;
+  /* "add a testimonials section" matched none of the old patterns (they only
+     covered "add section" / "add a section" / "section for"), so the request was
+     silently dropped while the reply still reported success. */
+  const namedSection = prompt.match(/\badd\s+(?:an?\s+)?([a-z0-9][a-z0-9 &/-]{1,40}?)\s+section\b/i)?.[1]?.trim();
+  if (namedSection || /add section|section for|add a section/.test(lower)) {
+    const section = namedSection || quoted || afterTo || prompt.replace(/add( a)? section( for)?/i, "").trim();
+    const label = title(String(section || "").trim()).slice(0, 48);
+    if (label && !site.sections.some((existing) => existing.toLowerCase() === label.toLowerCase())) {
+      site.sections.push(label);
+      changed = changed ? `${changed} Added ${label} section.` : `Added ${label} section.`;
     }
   }
   if (/remove checkout|no checkout|hide checkout/.test(lower)) {
@@ -767,8 +779,11 @@ function renderMoney(el, rerender) {
         </div>
       </section>
     </section>`;
-  const finance = store.state.finance;
+  // Read the live object on every handler run. Capturing it once goes stale as
+  // soon as anything else re-derives finance state, and the write is lost.
+  const financeNow = () => store.state.finance;
   const ensureAccount = (name) => {
+    const finance = financeNow();
     const label = (name || "Manual ledger").trim().slice(0, 80);
     if (!finance.accounts.some((account) => account.ws === ws && account.name.toLowerCase() === label.toLowerCase())) {
       finance.accounts.unshift({ id: uid("acct"), ws, name: label, type: "manual", institution: "", status: "manual", lastSync: null });
@@ -784,7 +799,7 @@ function renderMoney(el, rerender) {
       if (!Number.isFinite(rawAmount) || rawAmount <= 0) return;
       const direction = data.get("direction") === "expense" ? -1 : 1;
       const account = ensureAccount(String(data.get("account") || "Manual ledger"));
-      finance.transactions.unshift({
+      financeNow().transactions.unshift({
         id: uid("txn"),
         ws,
         date: financeDate(data.get("date")),
@@ -808,10 +823,10 @@ function renderMoney(el, rerender) {
       const file = importInput.files?.[0];
       if (!file) return;
       const rows = parseFinanceCsv(await file.text(), ws);
-      const existing = new Set((finance.transactions || []).map((tx) => tx.externalId).filter(Boolean));
+      const existing = new Set((financeNow().transactions || []).map((tx) => tx.externalId).filter(Boolean));
       const fresh = rows.filter((tx) => !tx.externalId || !existing.has(tx.externalId));
       fresh.forEach((tx) => ensureAccount(tx.account));
-      finance.transactions.unshift(...fresh);
+      financeNow().transactions.unshift(...fresh);
       pushActivity("Accounting Ledger", `imported ${fresh.length} transaction${fresh.length === 1 ? "" : "s"} from ${file.name}.`, ws);
       store.save();
       rerender();
@@ -822,16 +837,18 @@ function renderMoney(el, rerender) {
       event.preventDefault();
       event.stopPropagation();
       const id = event.currentTarget?.dataset?.id || button.getAttribute("data-id") || "";
-      const financeState = store.state.finance || finance;
-      financeState.transactions = (financeState.transactions || []).filter((tx) => String(tx.id) !== id);
-      store.state.finance = financeState;
+      const tx = (financeNow().transactions || []).find((item) => String(item.id) === id);
+      if (tx && !confirm(`Delete "${tx.description}" (${moneySigned(tx.amount)})? This cannot be undone.`)) return;
+      const financeState = financeNow();
+      financeState.transactions = (financeState.transactions || []).filter((item) => String(item.id) !== id);
+      if (tx) pushActivity("Accounting Ledger", `deleted a transaction: ${tx.description} (${moneySigned(tx.amount)}).`, ws);
       store.save();
       rerender();
     };
   });
   bindActions(el, {
     connector: (id) => {
-      const connector = finance.connectors.find((item) => item.id === id);
+      const connector = financeNow().connectors.find((item) => item.id === id);
       if (!connector) return;
       connector.status = "requested";
       connector.requestedAt = new Date().toISOString();
@@ -1035,7 +1052,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260712-211")
+      import("./brain.js?v=phantom-live-20260712-212")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
