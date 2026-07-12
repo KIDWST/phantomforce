@@ -10,24 +10,26 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260711-195";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-195";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-195";
+} from "./imagefilters.js?v=phantom-live-20260711-196";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260711-196";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-196";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
-} from "./content-editor.js?v=phantom-live-20260711-195";
+  imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
+} from "./content-editor.js?v=phantom-live-20260711-196";
 import {
   currentTenantId, currentWs, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260711-195";
+} from "./store.js?v=phantom-live-20260711-196";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
 const CH_ASSETS_KEY = "pf.contenthub.assets.v1";
 const CH_MEDIA_EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const CH_OPEN_TAB_KEY = "pf.contenthub.openTab.v1";
+const CH_OPEN_ASSET_KEY = "pf.contenthub.openAsset.v1";
 const CH_PUBLISH_STATE_KEY = "pf.contenthub.publish.state.v1";
 const CH_PUBLISH_DRAFTS_KEY = "pf.contenthub.publish.drafts.v1";
 const DAY = 864e5;
@@ -686,14 +688,25 @@ let chLastDeleted = null;
 
 export function renderContentHub(el, opts = {}) {
   syncCreatorTenant();
+  let requestedAssetId = "";
   try {
     const requestedTab = workspaceStorageGetItem(CH_OPEN_TAB_KEY, { migrateGlobal: false });
     if (requestedTab && ["library", "publish", "ideas", "drafts", "calendar", "production"].includes(requestedTab)) chState.tab = requestedTab;
     if (requestedTab) workspaceStorageRemoveItem(CH_OPEN_TAB_KEY);
+    requestedAssetId = workspaceStorageGetItem(CH_OPEN_ASSET_KEY, { migrateGlobal: false }) || "";
+    if (requestedAssetId) workspaceStorageRemoveItem(CH_OPEN_ASSET_KEY);
   } catch {}
   const esc = opts.esc || ((s) => String(s));
   const data = loadContent();
   const mediaAssets = loadContentAssets();
+  if (requestedAssetId) {
+    const requestedAsset = mediaAssets.find((asset) => asset.id === requestedAssetId && asset.type === "image" && asset.url);
+    if (requestedAsset) {
+      chState.tab = "library";
+      chState.ctype = "all";
+      chLightbox = freshLightbox(requestedAsset);
+    }
+  }
   const mediaStats = contentAssetStats(mediaAssets);
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
@@ -1305,17 +1318,7 @@ function freshLightbox(asset, extra = {}) {
 }
 
 function editStateSnapshot(state) {
-  return {
-    brightness: state.brightness, contrast: state.contrast, saturate: state.saturate,
-    hue: state.hue, blur: state.blur, rotate: state.rotate, flip: state.flip,
-    crop: { ...(state.crop || {}) }, text: state.text, textStyle: { ...state.textStyle }, bokehBrush: state.bokehBrush,
-    bokeh: state.bokeh ? {
-      spots: (state.bokeh.spots || []).map((spot) => ({ ...spot })),
-      strength: state.bokeh.strength,
-      feather: state.bokeh.feather,
-      maskImg: null,
-    } : null,
-  };
+  return imageEditSnapshot(state);
 }
 
 function editorSnapshot(lb) {
@@ -1330,9 +1333,7 @@ function restoreEditorSnapshot(lb, snapshot) {
   restoreComposition(lb.composition, snapshot.composition);
   const source = snapshot.layerEffects || (snapshot.state ? { base: snapshot.state } : {});
   lb.layerEffects = Object.fromEntries(Object.entries(source).map(([id, state]) => {
-    const restored = { ...freshEditState(), ...state, crop: { ...freshEditState().crop, ...(state?.crop || {}) }, textStyle: { ...freshTextStyle(), ...(state?.textStyle || {}) } };
-    if (restored.bokeh && masks[id]) restored.bokeh.maskImg = masks[id];
-    return [id, restored];
+    return [id, restoreImageEditSnapshot(state, { maskImg: masks[id] })];
   }));
   if (!lb.layerEffects.base) lb.layerEffects.base = freshEditState();
   lb.state = lb.layerEffects.base;
@@ -1341,8 +1342,7 @@ function restoreEditorSnapshot(lb, snapshot) {
 function commitEditorChange(lb, before) {
   const after = editorSnapshot(lb);
   if (JSON.stringify(before) === JSON.stringify(after)) return false;
-  lb.editorUndo.push(before);
-  if (lb.editorUndo.length > 60) lb.editorUndo.shift();
+  pushEditorSnapshot(lb.editorUndo, before, 60);
   lb.editorRedo = [];
   return true;
 }

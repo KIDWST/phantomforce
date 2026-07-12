@@ -6,16 +6,19 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-195";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260711-196";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260711-195";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260711-195";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260711-195";
+} from "./contenthub.js?v=phantom-live-20260711-196";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260711-196";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260711-196";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260711-196";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
 const PROMPT_INTENT_KEY = "pf.medialab.promptIntent.v1";
+const CONTENT_HUB_OPEN_TAB_KEY = "pf.contenthub.openTab.v1";
+const CONTENT_HUB_OPEN_ASSET_KEY = "pf.contenthub.openAsset.v1";
 const TAU = Math.PI * 2;
 
 const PRIMARY_MEDIA_LANE = "cinematic";
@@ -1832,23 +1835,17 @@ let mlEditHistory = [];
 let mlEditFuture = [];
 
 function cloneEditState(source = editState) {
-  return {
-    ...source,
-    crop: { ...(source.crop || {}) },
-    textStyle: { ...(source.textStyle || {}) },
-    bokeh: source.bokeh ? { ...source.bokeh, spots: (source.bokeh.spots || []).map((spot) => ({ ...spot })) } : null,
-  };
+  return cloneImageEditState(source);
 }
 
 function rememberEdit() {
-  mlEditHistory.push(cloneEditState());
-  if (mlEditHistory.length > 30) mlEditHistory.shift();
+  pushEditorSnapshot(mlEditHistory, cloneEditState(), 30);
   mlEditFuture = [];
 }
 
 function restoreEdit(next) {
   const loadedUrl = editState.loadedUrl;
-  editState = cloneEditState(next);
+  editState = cloneImageEditState(next);
   editState.loadedUrl = loadedUrl;
 }
 function renderEdit(body, cfg, opts, root) {
@@ -1938,6 +1935,7 @@ function renderEdit(body, cfg, opts, root) {
         </details>
         <div class="ml-editor-actions">
           <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to library</button>
+          <button class="ml-generate ml-ghost" data-ml-layeredit>Open layer editor</button>
           <button class="ml-generate ml-ghost" data-ml-dledit>${svgIc("upload")} Download</button>
           <button class="ml-link" data-ml-resetedit>Reset</button>
           <button class="ml-link" data-ml-changeedit>Change image</button>
@@ -2105,6 +2103,29 @@ function renderEdit(body, cfg, opts, root) {
     if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't download this edit: ${exported.error}`); return; }
     downloadAsset({ url: exported.url, type: "image", id: "edit" });
   };
+  body.querySelector("[data-ml-layeredit]")?.addEventListener("click", async () => {
+    if (!canvas._img) return;
+    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
+    if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't open the layer editor: ${exported.error}`); return; }
+    const at = Date.now();
+    const title = editState.text ? `Layer edit - ${editState.text.slice(0, 36)}` : "Layer edit draft";
+    const result = registerContentAsset({
+      id: `layer-edit-${at}`,
+      type: "image",
+      title,
+      prompt: editState.text || "Opened from Media Lab quick editor.",
+      source: "Media Lab quick editor",
+      url: exported.url,
+      createdAt: at,
+      saved: true,
+    }, { skipSync: true });
+    try {
+      workspaceStorageSetItem(CONTENT_HUB_OPEN_TAB_KEY, "library");
+      workspaceStorageSetItem(CONTENT_HUB_OPEN_ASSET_KEY, result.asset.id);
+    } catch {}
+    if (opts.notify) opts.notify("Media Factory", "Opened the current edit in Creator Hub's layer editor. Nothing was posted.");
+    opts.openWorkspace?.("content");
+  });
 }
 function slider(label, key, min, max, val) {
   return `<label class="ml-slider"><span>${label} <b data-out="${key}">${val}</b></span>

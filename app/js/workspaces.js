@@ -9,7 +9,7 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-195";
+} from "./store.js?v=phantom-live-20260711-196";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1272,7 +1272,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260711-195")
+      import("./brain.js?v=phantom-live-20260711-196")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -1926,11 +1926,10 @@ function baselineWorkerCount(runtime) {
   return reported + (privateAdminRouteReached() && !routeAlreadyCounted ? 1 : 0);
 }
 
-// Fullscreen Workers "web" canvas is desktop/tablet only - mobile keeps the
-// existing tap-to-select in-page box (just fixed for touch), so we never
-// touch that just-restored behavior.
+// The interactive network stays inside the Workforce page. Smaller screens
+// use the compact tap-to-select layout instead of pan/zoom.
 function workerWebEnabled() {
-  return !window.matchMedia("(max-width: 560px)").matches;
+  return !window.matchMedia("(max-width: 760px)").matches;
 }
 
 // Measures the actual rendered position of every node (post-layout, at the
@@ -2012,7 +2011,7 @@ function wireWorkerWeb(el, rerender) {
   let captured = false;
   stage.onpointerdown = (event) => {
     if (event.button !== undefined && event.button !== 0) return;
-    if (event.target.closest(".worker-web-exit, .worker-web-search")) return;
+    if (event.target.closest(".worker-web-controls, .worker-web-search, .worker-mesh-foot")) return;
     dragging = true; dragMoved = false; captured = false;
     dragStartX = event.clientX; dragStartY = event.clientY;
     panStartX = workerWebUi.pan.x; panStartY = workerWebUi.pan.y;
@@ -2094,7 +2093,10 @@ function wireWorkerWeb(el, rerender) {
 
   if (workerWebEscapeHandler) document.removeEventListener("keydown", workerWebEscapeHandler);
   workerWebEscapeHandler = (event) => {
-    if (event.key === "Escape" && workerUi.view === "map") { workerUi.view = "list"; rerender(); }
+    if (event.key === "Escape" && workerUi.view === "map" && workerUi.selectedId) {
+      workerUi.selectedId = "";
+      rerender();
+    }
   };
   document.addEventListener("keydown", workerWebEscapeHandler);
 }
@@ -2244,10 +2246,13 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
           </div>
         </div>
         ${webEnabled ? `
-        <button class="worker-web-exit" type="button" data-act="worker-web-exit" aria-label="Exit fullscreen web view">✕ Exit</button>
-        <label class="worker-web-search">
-          <input type="search" data-worker-web-search placeholder="Search workers…" value="${esc(workerWebUi.search)}" aria-label="Search workers" />
-        </label>
+        <div class="worker-web-controls">
+          <label class="worker-web-search">
+            <span class="sr-only">Search workers</span>
+            <input type="search" data-worker-web-search placeholder="Find a worker…" value="${esc(workerWebUi.search)}" aria-label="Search workers" />
+          </label>
+          <button class="worker-web-fit" type="button" data-act="worker-web-fit" aria-label="Fit the full worker network in view">Fit network</button>
+        </div>
         ` : ""}
         <div class="worker-mesh-foot">
           <div class="worker-web-legend" aria-label="Legend">
@@ -2258,14 +2263,6 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
             <span><i class="worker-legend-dot worker-legend-blocked"></i>Offline</span>
             ${overflowSubagents > 0 ? `<span class="worker-legend-more">+${overflowSubagents} more subagents</span>` : ""}
             ${hiddenCells > 0 ? `<span class="worker-legend-more">+${hiddenCells.toLocaleString()} helper lanes beyond mobile view</span>` : `<span class="worker-legend-more">${cellNodes.length.toLocaleString()} helper lanes rendered</span>`}
-          </div>
-          <div class="worker-mesh-readout">
-            <span><b>${Number.isFinite(baselineOnline) ? baselineOnline : "—"}</b> baseline online</span>
-            <span><b>${Number.isFinite(recentJobs) ? recentJobs : "—"}</b> jobs · 24h</span>
-            <span><b>${mapped.toLocaleString()}</b> capacity mapped</span>
-            <span><b>${waiting || "clear"}</b> approval queue</span>
-            <span><b>${cellNodes.length.toLocaleString()}</b> helper lanes</span>
-            <span><b>${departments}</b> departments covered</span>
           </div>
         </div>
       </div>
@@ -2649,13 +2646,8 @@ function renderWorkerMapDetail(worker, subagents, cellsBySubagent, rootCells) {
   // they do; a permanent "tap a worker" panel just occupies space and says
   // nothing. Show real content or nothing at all.
   if (!worker) return "";
-  // The fullscreen web (see workerWebEnabled()) covers the whole viewport, so
-  // this panel has to float ON TOP of it (fixed + higher z-index) or its
-  // otherwise-correct content just renders behind the canvas, invisible.
-  const floating = workerWebEnabled() ? "worker-map-detail-floating" : "";
-
   return `
-    <section class="worker-map-detail ${floating} worker-${esc(worker.status)}" aria-label="${esc(worker.display_name)} selected worker details">
+    <section class="worker-map-detail worker-${esc(worker.status)}" aria-label="${esc(worker.display_name)} selected worker details">
       <div class="worker-map-detail-head">
         <span class="wf-avatar wf-avatar-${esc(worker.avatar?.tone || worker.status)}">${esc(worker.avatar?.initials || workerInitials(worker.display_name))}</span>
         <div>
@@ -2716,23 +2708,30 @@ function renderWorkforce(el, rerender) {
   el.innerHTML = `
     <section class="workers-hero">
       <div>
-        <p class="worker-kicker">Workforce ${isMap ? "web" : "map"}</p>
-        <h3>PhantomForce Workers</h3>
+        <p class="worker-kicker">${isMap ? "Live workforce" : "Worker directory"}</p>
+        <h3>${isMap ? "Worker Network" : "All Workers"}</h3>
         <p>${isMap
-          ? "The force map separates always-on capacity from real logged activity: baseline workers stay online, helper lanes stay mapped, and ledger-backed jobs light up when they happen."
-          : "Full directory — departments, subagents, helper lanes, and safety rules. Built to scale toward 1,000+ real workers without exposing tool names to clients."}</p>
+          ? "See who is available, what is active, and how work routes. Select a worker to inspect its real lanes and safety rules."
+          : "Browse lead workers, subagents, helper lanes, and approval boundaries."}</p>
       </div>
       <div class="worker-view-toggle" role="tablist" aria-label="Workers view">
-        <button class="worker-view-btn ${isMap ? "is-active" : ""}" data-act="worker-view" data-view="map" role="tab" aria-selected="${isMap ? "true" : "false"}">Web view</button>
+        <button class="worker-view-btn ${isMap ? "is-active" : ""}" data-act="worker-view" data-view="map" role="tab" aria-selected="${isMap ? "true" : "false"}">Network</button>
         <button class="worker-view-btn ${!isMap ? "is-active" : ""}" data-act="worker-view" data-view="list" role="tab" aria-selected="${!isMap ? "true" : "false"}">List view</button>
       </div>
     </section>
     ${workerUi.notice ? `<div class="worker-notice">${esc(workerUi.notice)} <button data-act="worker-notice-close" aria-label="Dismiss worker notice">×</button></div>` : ""}
     ${isMap ? `
       <div class="worker-map-view">
-        ${renderBaselineWorkers(runtime)}
-        ${renderWorkerMesh(workers, runtime, subagentsByParent, cellsBySubagent)}
-        ${renderWorkerMapDetail(selectedWorker, selectedSubagents, cellsBySubagent, selectedRootCells)}
+        <div class="worker-map-summary" aria-label="Live workforce summary">
+          <span><i></i><b>${workerRuntime.state === "ready" ? baselineOnline : "—"}</b><small>baseline online</small></span>
+          <span><b>${workerRuntime.state === "ready" ? jobsLogged : "—"}</b><small>jobs · 24h</small></span>
+          <span><b>${mappedCount.toLocaleString()}</b><small>capacity mapped</small></span>
+          <span class="${pendingApprovals ? "needs-attention" : ""}"><b>${pendingApprovals || "Clear"}</b><small>approval queue</small></span>
+        </div>
+        <div class="worker-map-layout ${selectedWorker ? "has-selection" : ""}">
+          ${renderWorkerMesh(workers, runtime, subagentsByParent, cellsBySubagent)}
+          ${renderWorkerMapDetail(selectedWorker, selectedSubagents, cellsBySubagent, selectedRootCells)}
+        </div>
       </div>
     ` : `
       ${renderBaselineWorkers(runtime)}
@@ -2775,7 +2774,11 @@ function renderWorkforce(el, rerender) {
       workerUi.selectedId = "";
       rerender();
     },
-    "worker-web-exit": () => { workerUi.view = "list"; rerender(); },
+    "worker-web-fit": () => {
+      workerWebUi._needsFit = true;
+      workerWebUi.search = "";
+      rerender();
+    },
     "worker-filter": (_id, button) => { workerUi.filter = button.dataset.filter || "all"; rerender(); },
     "worker-notice-close": () => { workerUi.notice = ""; rerender(); },
     "worker-preview-close": () => { workerUi.preview = null; rerender(); },
