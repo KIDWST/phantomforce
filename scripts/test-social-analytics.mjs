@@ -25,6 +25,11 @@ assert.throws(() => parseAnalyticsReport("Name,Title\nA,B"), /No recognized metr
 const contentHubSource = readFileSync(new URL("../app/js/contenthub.js", import.meta.url), "utf8");
 assert.match(contentHubSource, /social-analytics\.js/);
 assert.match(contentHubSource, /parseAnalyticsReport/);
+assert.match(contentHubSource, /PhantomForce local site\/content signals/);
+assert.match(contentHubSource, /signalLabel/);
+assert.match(contentHubSource, /activeWorkspaceSites/);
+assert.match(contentHubSource, /Import official report/);
+assert.match(contentHubSource, /Auto · CSV · TSV · JSON/);
 assert.match(contentHubSource, /Connect your channels for live data\./);
 assert.match(contentHubSource, /\/phantom-ai\/ops\/social-analytics\/status/);
 assert.match(contentHubSource, /\/phantom-ai\/ops\/social-analytics\/sync/);
