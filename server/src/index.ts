@@ -75,12 +75,36 @@ import {
 import {
   assignOrgPlan,
   checkSeatLimit,
+  checkUsageLimit,
   consumeUsage,
   getOrgEntitlements,
   getUsageSummary,
   listPlanDefinitions,
+  recordUsage,
   upgradeRequiredBody,
 } from "./access/entitlements.js";
+import {
+  assetUsageReport,
+  createCollection,
+  createFolder,
+  deleteAssetPermanently,
+  getAsset,
+  ingestAsset,
+  listAssetVersions,
+  listAssets,
+  listCollections,
+  listFolders,
+  readAssetBytes,
+  recordAssetUsage,
+  restoreAssetVersion,
+  searchAssetsForAi,
+  setAssetLifecycle,
+  setCollectionMembership,
+  updateAsset,
+} from "./assets/asset-service.js";
+import { assetCloudDiagnostics } from "./assets/asset-cache.js";
+import { describeAssetStorageProviders } from "./assets/asset-storage-provider.js";
+import { runContentAssetMigration } from "./assets/asset-migration.js";
 import type { AccessSession } from "./access/session.js";
 import {
   canUseSessionOnPublicHost,
@@ -1162,6 +1186,281 @@ app.get("/admin/orgs/:orgId/usage", async (request, reply) => {
   const dbSession = requireSuperAdmin(request, reply);
   if (!dbSession) return reply;
   return { ok: true, ...(await getUsageSummary(orgId)) };
+});
+
+/* ============================================================================
+   ASSET CLOUD — the org-isolated permanent creative library.
+   Blobs are content-addressed on the storage provider; metadata lives in
+   Prisma; every route is org-gated; uploads meter storage_mb through the
+   entitlement engine and permanent deletes release it. */
+
+const AssetUploadSchema = z.object({
+  data_url: z.string().min(32),
+  name: z.string().min(1).max(200),
+  title: z.string().max(200).optional(),
+  source: z.string().max(40).optional(),
+  folder_id: z.string().max(120).nullable().optional(),
+  tags: z.array(z.string().max(40)).max(20).optional(),
+  brand: z.boolean().optional(),
+  on_duplicate: z.enum(["keep_both", "skip", "version_of"]).optional(),
+  version_of: z.string().max(120).optional(),
+});
+
+app.post("/orgs/:orgId/assets", { bodyLimit: 24 * 1024 * 1024 }, async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = AssetUploadSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  /* meter BEFORE writing: estimated MiB from base64 length (~3/4) */
+  const estimatedMb = Math.max(1, Math.ceil((parsed.data.data_url.length * 0.75) / 1048576));
+  if (!dbSession.isSuperAdmin) {
+    const usage = await checkUsageLimit(orgId, "storage_mb", estimatedMb);
+    if (!usage.allowed) {
+      return reply.code(403).send({
+        ...upgradeRequiredBody(usage.reason, usage.entitlements),
+        usage: { metric: "storage_mb", used: usage.used, limit: usage.limit, resetAt: usage.resetAt },
+      });
+    }
+  }
+
+  const result = await ingestAsset({
+    orgId,
+    actorUserId: dbSession.userId,
+    actorEmail: dbSession.email,
+    dataUrl: parsed.data.data_url,
+    name: parsed.data.name,
+    title: parsed.data.title,
+    source: parsed.data.source,
+    folderId: parsed.data.folder_id ?? null,
+    tags: parsed.data.tags,
+    brand: parsed.data.brand,
+    onDuplicate: parsed.data.on_duplicate,
+    versionOfAssetId: parsed.data.version_of,
+  });
+  if (!result.ok) return reply.code(400).send(result);
+  if (!result.deduplicated && result.asset) {
+    await recordUsage(orgId, "storage_mb", Math.ceil(Number(result.asset.sizeBytes) / 1048576), {
+      assetId: result.asset.id, mime: result.asset.mimeType,
+    });
+  }
+  return result;
+});
+
+app.get("/orgs/:orgId/assets", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const q = request.query as Record<string, string | undefined>;
+  const result = await listAssets(orgId, {
+    view: q.view as Parameters<typeof listAssets>[1]["view"],
+    kind: q.kind as Parameters<typeof listAssets>[1]["kind"],
+    folderId: q.folder_id,
+    collectionId: q.collection_id,
+    search: q.search,
+    tag: q.tag,
+    source: q.source,
+    orientation: q.orientation as Parameters<typeof listAssets>[1]["orientation"],
+    sort: q.sort as Parameters<typeof listAssets>[1]["sort"],
+    cursor: q.cursor,
+    limit: q.limit ? Number(q.limit) : undefined,
+  });
+  return { ok: true, ...result };
+});
+
+app.get("/orgs/:orgId/assets/:assetId", async (request, reply) => {
+  const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const asset = await getAsset(orgId, assetId);
+  if (!asset) return reply.code(404).send({ ok: false, error: "asset_not_found" });
+  return { ok: true, asset, versions: await listAssetVersions(orgId, assetId), usage: await assetUsageReport(orgId, assetId) };
+});
+
+/* raw bytes — sniffing disabled and scripts sandboxed because these bytes
+   are user uploads served under the app origin */
+for (const variant of ["file", "thumbnail"] as const) {
+  app.get(`/orgs/:orgId/assets/:assetId/${variant}`, async (request, reply) => {
+    const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+    const dbSession = requireOrgMember(request, reply, orgId);
+    if (!dbSession) return reply;
+    const content = await readAssetBytes(orgId, assetId, variant);
+    if (!content) return reply.code(404).send({ ok: false, error: "asset_content_not_found" });
+    return reply
+      .header("content-type", content.mime)
+      .header("x-content-type-options", "nosniff")
+      .header("content-security-policy", "sandbox")
+      .header("cache-control", "private, max-age=3600")
+      .send(content.bytes);
+  });
+}
+
+const AssetPatchSchema = z.object({
+  title: z.string().max(200).optional(),
+  folder_id: z.string().max(120).nullable().optional(),
+  tags: z.array(z.string().max(40)).max(20).optional(),
+  favorite: z.boolean().optional(),
+  brand: z.boolean().optional(),
+  flags: z.record(z.string(), z.boolean()).optional(),
+});
+
+app.post("/orgs/:orgId/assets/:assetId", async (request, reply) => {
+  const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+  const parsed = AssetPatchSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  /* governance flags + brand marking are manager actions; everyday metadata
+     (title/tags/favorite/folder) is open to members */
+  const needsManager = parsed.data.flags !== undefined || parsed.data.brand !== undefined;
+  const dbSession = needsManager ? requireOrgManager(request, reply, orgId) : requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const result = await updateAsset({
+    orgId,
+    assetId,
+    actorEmail: dbSession.email,
+    patch: {
+      title: parsed.data.title,
+      folderId: parsed.data.folder_id,
+      tags: parsed.data.tags,
+      favorite: parsed.data.favorite,
+      brand: parsed.data.brand,
+      flags: parsed.data.flags,
+    },
+  });
+  if (!result.ok) return reply.code(result.error === "asset_locked" ? 423 : 404).send(result);
+  return result;
+});
+
+const AssetLifecycleSchema = z.object({ action: z.enum(["archive", "unarchive", "trash", "restore"]) });
+
+app.post("/orgs/:orgId/assets/:assetId/lifecycle", async (request, reply) => {
+  const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = AssetLifecycleSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await setAssetLifecycle({ orgId, assetId, actorEmail: dbSession.email, action: parsed.data.action });
+  if (!result.ok) return reply.code(404).send(result);
+  return result;
+});
+
+app.delete("/orgs/:orgId/assets/:assetId", async (request, reply) => {
+  const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const result = await deleteAssetPermanently({ orgId, assetId, actorEmail: dbSession.email });
+  if (!result.ok) return reply.code(result.error === "not_in_trash" ? 409 : 404).send(result);
+  /* release metered storage — negative usage reconciles the absolute sum */
+  await recordUsage(orgId, "storage_mb", -Math.ceil(result.freedBytes / 1048576), { assetId, reason: "asset_deleted" });
+  return { ok: true, freed_bytes: result.freedBytes, dependency_warnings: result.hadUsages };
+});
+
+app.get("/orgs/:orgId/assets/:assetId/versions", async (request, reply) => {
+  const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  return { ok: true, versions: await listAssetVersions(orgId, assetId) };
+});
+
+app.post("/orgs/:orgId/assets/:assetId/versions/:versionNumber/restore", async (request, reply) => {
+  const { orgId, assetId, versionNumber } = request.params as { orgId: string; assetId: string; versionNumber: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const result = await restoreAssetVersion({
+    orgId, assetId, versionNumber: Number(versionNumber),
+    actorEmail: dbSession.email, actorUserId: dbSession.userId,
+  });
+  if (!result.ok) return reply.code(404).send(result);
+  return result;
+});
+
+const AssetUsageSchema = z.object({
+  surface: z.string().min(1).max(40),
+  ref_id: z.string().min(1).max(120),
+  ref_label: z.string().min(1).max(160),
+});
+
+app.post("/orgs/:orgId/assets/:assetId/usage", async (request, reply) => {
+  const { orgId, assetId } = request.params as { orgId: string; assetId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = AssetUsageSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await recordAssetUsage({ orgId, assetId, surface: parsed.data.surface, refId: parsed.data.ref_id, refLabel: parsed.data.ref_label });
+  if (!result.ok) return reply.code(404).send(result);
+  return result;
+});
+
+app.get("/orgs/:orgId/asset-folders", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  return { ok: true, folders: await listFolders(orgId) };
+});
+
+const FolderCreateSchema = z.object({ name: z.string().min(1).max(120), parent_id: z.string().max(120).nullable().optional() });
+
+app.post("/orgs/:orgId/asset-folders", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = FolderCreateSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await createFolder(orgId, parsed.data.name, parsed.data.parent_id ?? null);
+  if (!result.ok) return reply.code(404).send(result);
+  return result;
+});
+
+app.get("/orgs/:orgId/asset-collections", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  return { ok: true, collections: await listCollections(orgId) };
+});
+
+app.post("/orgs/:orgId/asset-collections", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = z.object({ name: z.string().min(1).max(120) }).safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  return createCollection(orgId, parsed.data.name);
+});
+
+app.post("/orgs/:orgId/asset-collections/:collectionId/items", async (request, reply) => {
+  const { orgId, collectionId } = request.params as { orgId: string; collectionId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = z.object({ asset_id: z.string().min(1).max(120), present: z.boolean() }).safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await setCollectionMembership({ orgId, collectionId, assetId: parsed.data.asset_id, present: parsed.data.present });
+  if (!result.ok) return reply.code(404).send(result);
+  return result;
+});
+
+/* admin curtain: diagnostics, provider status, migration */
+app.get("/admin/asset-cloud/diagnostics", async (request, reply) => {
+  const dbSession = requireSuperAdmin(request, reply);
+  if (!dbSession) return reply;
+  return { ok: true, ...(await assetCloudDiagnostics()), providers: describeAssetStorageProviders() };
+});
+
+const AssetMigrationSchema = z.object({
+  scope_to_org: z.record(z.string(), z.string().max(120)),
+  dry_run: z.boolean().default(true),
+});
+
+app.post("/admin/asset-cloud/migrate", async (request, reply) => {
+  const dbSession = requireSuperAdmin(request, reply);
+  if (!dbSession) return reply;
+  const parsed = AssetMigrationSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const report = await runContentAssetMigration({
+    scopeToOrg: parsed.data.scope_to_org,
+    dryRun: parsed.data.dry_run,
+    actorEmail: dbSession.email,
+  });
+  return { ok: true, report };
 });
 
 app.get("/readiness", async (request, reply) => {
@@ -5734,6 +6033,30 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     session,
     "chat",
   );
+  /* Asset Cloud retrieval — structured and permission-aware. Matching
+     assets from THIS org's library ride into context as one compact module
+     (never whole folders); assets flagged aiReferenceAllowed:false or
+     deprecated are filtered inside the search. Failures never break chat. */
+  {
+    const dbSession = asDatabaseSession(session);
+    if (dbSession?.orgId && process.env.DATABASE_URL) {
+      try {
+        const aiAssets = await searchAssetsForAi(dbSession.orgId, normalized.user_request);
+        if (aiAssets.length) {
+          normalized.module_data.push({
+            module: "asset_library",
+            summary: `${aiAssets.length} matching asset(s) in this business's Asset Cloud. Reference them by title/id; do not invent assets.`,
+            items: aiAssets.slice(0, 5).map((asset) => ({
+              title: String(asset.title).slice(0, 120),
+              status: `${String(asset.kind)}${asset.brand ? " · brand" : ""}${asset.favorite ? " · favorite" : ""}`,
+              detail: `id ${String(asset.id)} · ${String(asset.mimeType)}${asset.width ? ` · ${asset.width}x${asset.height}` : ""}${Array.isArray(asset.tags) && asset.tags.length ? ` · tags: ${(asset.tags as string[]).join(", ")}` : ""}`.slice(0, 220),
+            })),
+          });
+        }
+      } catch { /* retrieval is additive only */ }
+    }
+  }
+
   const chatMemoryKey = buildChatMemoryKey(session, normalized);
   const privacyFirstLocationReply = await buildPrivacyFirstLocationReply(normalized.user_request, session, chatMemoryKey);
 
