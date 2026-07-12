@@ -11,9 +11,9 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-204";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260712-204";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260712-204";
+} from "./store.js?v=phantom-live-20260712-205";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260712-205";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260712-205";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -57,6 +57,8 @@ function loadRuntimeAiSettings() {
      of silently locking everyone into canned regex replies forever. */
   const defaults = {
     provider: "claude",
+    providerMode: "smart",
+    selectedProviders: ["claude", "codex", "openrouter", "local"],
     brainMode: "api",
     responseStyle: "operator",
     responseLength: "balanced",
@@ -73,18 +75,48 @@ function loadRuntimeAiSettings() {
   }
 }
 
-function modelLaneForSettings(settings) {
-  return getPhantomLaneTarget(settings.provider).id;
+const PROVIDER_TO_BACKEND = {
+  claude: "claude_cli",
+  codex: "codex_cli",
+  openrouter: "openrouter_glm",
+  local: "local_ollama",
+};
+
+function providerIdForRequest(settings, intent) {
+  const selected = Array.isArray(settings.selectedProviders) && settings.selectedProviders.length
+    ? settings.selectedProviders
+    : [settings.provider || "codex"];
+  if (settings.providerMode !== "smart") return selected.includes(settings.provider) ? settings.provider : selected[0];
+  if (["brainstorm", "plan", "feedback"].includes(intent.primaryIntent) && selected.includes("claude")) return "claude";
+  if (selected.includes("codex")) return "codex";
+  return selected[0];
 }
 
-function providerForSettings(settings) {
-  return getPhantomLaneTarget(settings.provider).provider || "phantom";
+function modelLaneForProvider(providerId) {
+  if (providerId === "claude") return "claude_cli";
+  if (providerId === "openrouter" || providerId === "local") return "glm_5_2";
+  return "codex";
 }
 
-function selectedLaneModelForSettings(settings) {
+function providerForRequest(providerId) {
+  return providerId === "openrouter" ? "openrouter_glm" : "phantom";
+}
+
+function selectedModelForProvider(settings, providerId) {
+  const configured = settings.models?.[providerId];
+  if (configured) return configured;
   const cfg = loadPhantomLaneConfig();
-  const lane = cfg.lanes?.[settings.provider];
-  return lane?.model || getPhantomLaneTarget(settings.provider).models?.[0] || "";
+  const lane = cfg.lanes?.[providerId];
+  return lane?.model || getPhantomLaneTarget(providerId).models?.[0] || "";
+}
+
+function allowedProvidersForSettings(settings) {
+  const selected = settings.providerMode === "smart"
+    ? ["claude", "codex", "openrouter", "local"]
+    : Array.isArray(settings.selectedProviders) && settings.selectedProviders.length
+      ? settings.selectedProviders
+      : [settings.provider || "codex"];
+  return [...new Set(selected.map((id) => PROVIDER_TO_BACKEND[id]).filter(Boolean))];
 }
 
 function canAskHermes(intent, settings) {
@@ -154,6 +186,7 @@ async function askHermesBrain(raw, intent, settings) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   const loop = loadPhantomLoop();
+  const requestedProviderId = providerIdForRequest(settings, intent);
   try {
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
@@ -162,10 +195,11 @@ async function askHermesBrain(raw, intent, settings) {
       body: JSON.stringify({
         message: raw,
         user_request: raw,
-        provider: providerForSettings(settings),
-        admin_model: modelLaneForSettings(settings),
-        model_lane: modelLaneForSettings(settings),
-        requested_model: selectedLaneModelForSettings(settings),
+        provider: providerForRequest(requestedProviderId),
+        admin_model: modelLaneForProvider(requestedProviderId),
+        model_lane: modelLaneForProvider(requestedProviderId),
+        requested_model: selectedModelForProvider(settings, requestedProviderId),
+        allowed_providers: allowedProvidersForSettings(settings),
         execution_mode: settings.externalActionMode === "owner_rules" ? "auto" : "approval",
         task_type: intent.primaryIntent,
         tenant_id: currentTenantId(),

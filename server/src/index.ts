@@ -1703,9 +1703,16 @@ async function callAdminPhantomAiProviderSafe(providerId: AdminPhantomAiProvider
   }
 }
 
-async function runAdminPhantomAiChatWithFallback(requestedLane: AdminPhantomAiModelLane, ctx: AdminPhantomAiChatContext) {
-  const primaryProviderId = adminPhantomAiProviderIdForLane(requestedLane);
-  const order = adminProviderAttemptOrder(primaryProviderId);
+async function runAdminPhantomAiChatWithFallback(
+  requestedLane: AdminPhantomAiModelLane,
+  ctx: AdminPhantomAiChatContext,
+  allowedProviders?: AdminPhantomAiProviderId[],
+) {
+  const requestedPrimaryProviderId = adminPhantomAiProviderIdForLane(requestedLane);
+  const allowed = Array.isArray(allowedProviders) && allowedProviders.length ? new Set(allowedProviders) : null;
+  const filteredOrder = adminProviderAttemptOrder(requestedPrimaryProviderId).filter((providerId) => !allowed || allowed.has(providerId));
+  const order = filteredOrder.length ? filteredOrder : allowed ? [...allowed] : [requestedPrimaryProviderId];
+  const primaryProviderId = order[0];
   const attempts: AdminPhantomAiChatAttempt[] = [];
   let providerId = primaryProviderId;
   let result: any = null;
@@ -5573,6 +5580,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
 
   const body = (request.body ?? {}) as {
     provider?: unknown;
+    allowed_providers?: unknown;
     admin_model?: unknown;
     model_lane?: unknown;
     message?: unknown;
@@ -5697,6 +5705,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         : [],
     });
     const approvalRequired = brainContext.needsApproval || preview.decision.approval_required || preview.action_preview.approval_required;
+    const allowedAdminProviders: AdminPhantomAiProviderId[] | undefined = Array.isArray(body.allowed_providers)
+      ? Array.from(new Set(body.allowed_providers.filter((value: unknown): value is AdminPhantomAiProviderId =>
+          value === "codex_cli" || value === "claude_cli" || value === "openrouter_glm" || value === "local_ollama")))
+      : undefined;
     const fallbackChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
       requestId: normalized.request_id,
       businessName: normalized.business_name,
@@ -5706,7 +5718,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       sensitivityLevel: preview.decision.sensitivity_level,
       approvalRequired,
       executionMode: adminExecutionMode,
-    });
+    }, allowedAdminProviders);
     const respondingProviderId = fallbackChat.providerId;
     const respondingLane = adminPhantomAiLaneForProviderId(respondingProviderId);
     const respondingLabel = adminPhantomAiProviderLabel(respondingProviderId);
