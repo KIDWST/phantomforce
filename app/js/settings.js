@@ -1,20 +1,24 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260712-199";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-199";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260712-199";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260712-200";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260712-200";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-200";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260712-200";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
 
 const SETTINGS_TABS = [
-  { id: "model", label: "Model" },
-  { id: "loop", label: "Loop routing" },
-  { id: "chat", label: "Chat behavior" },
-  { id: "companion", label: "Companion" },
-  { id: "media", label: "Media & social" },
+  { id: "model", label: "Model", category: "AI Brain" },
+  { id: "loop", label: "Loop routing", category: "AI Brain" },
+  { id: "chat", label: "Chat behavior", category: "AI Brain" },
+  { id: "workspace", label: "Workspace Studio", category: "Workspace" },
+  { id: "companion", label: "Companion", category: "Workspace" },
+  { id: "media", label: "Media & social", category: "Media" },
 ];
+
+const SETTINGS_CATEGORIES = ["AI Brain", "Workspace", "Media"];
 
 function loadSettingsTab() {
   try {
@@ -83,6 +87,32 @@ const esc = (value = "") => String(value)
   .replace(/>/g, "&gt;")
   .replace(/"/g, "&quot;")
   .replace(/'/g, "&#39;");
+
+function renderSettingsCategories(activeTab) {
+  return `
+    <nav class="set-category-nav" aria-label="Settings categories">
+      ${SETTINGS_CATEGORIES.map((category) => {
+        const items = SETTINGS_TABS.filter((item) => item.category === category);
+        const hasActiveItem = items.some((item) => item.id === activeTab);
+        return `
+          <details class="set-category" ${hasActiveItem ? "open" : ""}>
+            <summary>
+              <span>${esc(category)}</span>
+              <span>${items.length}</span>
+            </summary>
+            <div class="set-category-options">
+              ${items.map((item) => `
+                <button type="button" class="${item.id === activeTab ? "is-active" : ""}" role="tab" aria-selected="${item.id === activeTab}" data-set-tab="${esc(item.id)}">
+                  ${esc(item.label)}
+                </button>
+              `).join("")}
+            </div>
+          </details>
+        `;
+      }).join("")}
+    </nav>
+  `;
+}
 
 function providerFor(id) {
   return PROVIDERS.find((provider) => provider.id === id) || PROVIDERS[0];
@@ -526,12 +556,16 @@ export function renderOperatorSettings(el, opts = {}) {
   const activeProvider = providerFor(settings.provider);
   const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
   const mediaMountId = `media-settings-${Math.random().toString(36).slice(2)}`;
-  const activeTab = loadSettingsTab();
+  const workspaceMountId = `workspace-studio-${Math.random().toString(36).slice(2)}`;
+  const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
+  const activeTab = initialTab || loadSettingsTab();
+  if (initialTab) saveSettingsTab(initialTab);
 
   const TAB_CONTENT = {
     model: () => renderModelTab(settings, activeProvider, activeModel),
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
+    workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
     companion: () => renderCompanionTab(),
     media: () => `<div id="${mediaMountId}"></div>`,
   };
@@ -547,12 +581,11 @@ export function renderOperatorSettings(el, opts = {}) {
         ${renderSafetySummary(settings)}
       </div>
 
-      <nav class="ml-tabs set-tabs" role="tablist" aria-label="Settings sections">
-        ${SETTINGS_TABS.map((tab) => `<button class="ml-tab ${activeTab === tab.id ? "is-active" : ""}" type="button" role="tab" aria-selected="${activeTab === tab.id}" data-set-tab="${tab.id}">${esc(tab.label)}</button>`).join("")}
-      </nav>
-
-      <div class="set-tab-panel" data-set-panel role="tabpanel">
-        ${(TAB_CONTENT[activeTab] || TAB_CONTENT.model)()}
+      <div class="set-settings-layout">
+        ${renderSettingsCategories(activeTab)}
+        <div class="set-tab-panel" data-set-panel role="tabpanel">
+          ${(TAB_CONTENT[activeTab] || TAB_CONTENT.model)()}
+        </div>
       </div>
     </div>`;
 
@@ -678,4 +711,16 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const mediaMount = el.querySelector(`#${mediaMountId}`);
   if (mediaMount) renderMediaSettings(mediaMount, opts);
+
+  const workspaceMount = el.querySelector(`#${workspaceMountId}`);
+  if (workspaceMount) {
+    renderCustomizationStudio(workspaceMount, {
+      ...opts,
+      onApplied: (config) => {
+        if (typeof opts.onWorkspaceApplied === "function") {
+          opts.onWorkspaceApplied(config);
+        }
+      },
+    });
+  }
 }

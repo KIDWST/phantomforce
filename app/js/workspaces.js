@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260712-199";
+} from "./store.js?v=phantom-live-20260712-200";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260712-199";
+} from "./orgs.js?v=phantom-live-20260712-200";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1275,7 +1275,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260712-199")
+      import("./brain.js?v=phantom-live-20260712-200")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -2129,12 +2129,10 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
     : selectedWorker?.worker_type === "subagent" ? (selectedWorker.parent_id || null)
     : null;
 
-  const CORE_RADIUS = 260;
+  const CORE_RADIUS = visibleParentId ? 160 : 235;
   const MOBILE_CORE_RADIUS = 96;
   const MOBILE_SUBAGENT_RADIUS = 150;
-  const SUBAGENTS_PER_SHELL = 2;
-  const SHELL_BASE_RADIUS = 460;
-  const SHELL_RADIUS_STEP = 170;
+  const SHELL_BASE_RADIUS = 285;
   const slicePerEmployee = 360 / Math.max(1, employeeNodes.length);
   const cappedSubagentIds = new Set(cappedSubagents.map((s) => s.worker_id));
 
@@ -2143,19 +2141,9 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
   if (visibleEmployeeIndex >= 0) {
     const employeeAngle = visibleEmployeeIndex * slicePerEmployee;
     const kids = (subagentsByParent.get(visibleParentId) || []).filter((s) => cappedSubagentIds.has(s.worker_id));
-    // Only one cluster is ever on screen at a time now, so it can use a wide
-    // fan (nothing left/right to collide with) instead of squeezing into a
-    // narrow per-employee slice.
-    const fanSpread = Math.min(300, slicePerEmployee * employeeNodes.length * 0.6);
     kids.forEach((subagent, i) => {
-      const shell = Math.floor(i / SUBAGENTS_PER_SHELL);
-      const shellStart = shell * SUBAGENTS_PER_SHELL;
-      const slotsInShell = Math.min(SUBAGENTS_PER_SHELL, kids.length - shellStart);
-      const slotInShell = i - shellStart;
-      const withinShell = slotsInShell > 1 ? (slotInShell / (slotsInShell - 1) - 0.5) : 0;
-      const angle = employeeAngle + withinShell * fanSpread;
-      const radius = SHELL_BASE_RADIUS + shell * SHELL_RADIUS_STEP;
-      subagentSlots.push({ worker: subagent, angle, radius });
+      const angle = employeeAngle + ((i + 0.5) / Math.max(1, kids.length)) * 360;
+      subagentSlots.push({ worker: subagent, angle, radius: SHELL_BASE_RADIUS });
     });
   }
 
@@ -2164,8 +2152,8 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
   // then a subagent, and see what it's connected to and whether it's live.
   const cellSlots = [];
   const CELLS_PER_SHELL = 3;
-  const CELL_SHELL_BASE = SHELL_BASE_RADIUS + 4 * SHELL_RADIUS_STEP;
-  const CELL_SHELL_STEP = 130;
+  const CELL_SHELL_BASE = 370;
+  const CELL_SHELL_STEP = 58;
   if (selectedWorker?.worker_type === "subagent") {
     const anchor = subagentSlots.find((slot) => slot.worker.worker_id === selectedWorker.worker_id);
     if (anchor) {
@@ -2251,7 +2239,6 @@ function renderWorkerMesh(workers, runtime = null, subagentsByParent = new Map()
         ${webEnabled ? `
         <div class="worker-web-controls">
           <label class="worker-web-search">
-            <span class="sr-only">Search workers</span>
             <input type="search" data-worker-web-search placeholder="Find a worker…" value="${esc(workerWebUi.search)}" aria-label="Search workers" />
           </label>
           <button class="worker-web-fit" type="button" data-act="worker-web-fit" aria-label="Fit the full worker network in view">Fit network</button>

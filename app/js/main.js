@@ -6,33 +6,32 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-199";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-199";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-199";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-199";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-199";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-199";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-199";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-199";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-199";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-199";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-199";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-199";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-199";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-199";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-199";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-199";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-199";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-199";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-199";
+} from "./store.js?v=phantom-live-20260712-200";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-200";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-200";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-200";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-200";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-200";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-200";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-200";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-200";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-200";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-200";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-200";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-200";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-200";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-200";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-200";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-200";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-200";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-200";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-199";
+} from "./orgs.js?v=phantom-live-20260712-200";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-  renderCustomizationStudio,
-} from "./customization.js?v=phantom-live-20260712-199";
+} from "./customization.js?v=phantom-live-20260712-200";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -256,7 +255,6 @@ const BASE_NAV = [
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true },
-  { id: "customize",  label: "Workspace Studio", icon: "spark", ws: "customize", adminOnly: true },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
@@ -863,7 +861,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-199";
+const POSE_VERSION = "phantom-live-20260712-200";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2454,11 +2452,11 @@ const CUSTOM = {
   analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
-  settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, mediaOpts()) },
+  settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
   automation: { title: "Automations", kicker: "Business workflows — approval-gated", custom: true, wide: true, render: (body) => renderAutomation(body, mediaOpts()) },
   vacation: { title: "Away Mode", kicker: "Your business stays covered while you are away", custom: true, wide: true, render: (body) => renderVacationMode(body, mediaOpts()) },
   promptlibrary: { title: "Prompt Library", kicker: "Saved prompts, ready to reuse", custom: true, wide: true, render: (body) => renderPromptLibrary(body, mediaOpts()) },
-  customize: { title: "Workspace Studio", kicker: "Make this organization feel purpose-built", custom: true, wide: true, adminOnly: true, render: (body) => renderCustomizationStudio(body, { onApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
+  customize: { title: "Workspace Studio", kicker: "Make this organization feel purpose-built", custom: true, wide: true, adminOnly: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), initialTab: "workspace", onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
   /* The full worker roster + telemetry + live tail log — kept out of the
      dashboard's permanent layout (that only shows a compact summary) and
      opened on demand from "View all activity". */
