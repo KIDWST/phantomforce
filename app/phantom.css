@@ -9547,6 +9547,9 @@ body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy-canvas {
 @media (max-width: 620px) {
   .customization-studio { gap: 12px; }
   .cust-hero, .cust-ai, .cust-panel { padding: 15px; }
+  .cust-ai form { flex-direction: column; width: 100%; }
+  .cust-ai textarea { width: 100%; min-height: 96px; }
+  .cust-ai form .cust-primary { width: 100%; min-height: 46px; }
   .cust-form-grid { grid-template-columns: 1fr; }
   .cust-module { grid-template-columns: 18px minmax(0, 1fr) auto; }
   .cust-module input { grid-column: 2 / -1; }
