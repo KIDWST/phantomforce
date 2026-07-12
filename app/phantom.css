@@ -6540,6 +6540,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   }
 }
 
+/* PhantomPlay runtime owns the screen while a game is open. The companion must
+   not float over, cover, or distract from the game iframe. */
+body.phantomplay-playing .buddy,
+body.phantomplay-playing .buddy-menu,
+body.phantomplay-playing .buddy-say {
+  display: none !important;
+  pointer-events: none !important;
+}
+
 @media (max-width: 390px) {
   .mobile-bottom-nav { left: 8px; right: 8px; padding: 6px 12px; }
   .mobile-bottom-item { flex-basis: 54px; min-height: 46px; font-size: 8.5px; }
