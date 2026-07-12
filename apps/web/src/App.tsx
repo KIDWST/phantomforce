@@ -8,6 +8,9 @@ import {
   Check,
   Clock3,
   Command,
+  FileAudio,
+  FileImage,
+  FileVideo,
   FileText,
   Inbox,
   KeyRound,
@@ -30,24 +33,28 @@ import {
   X,
   Zap,
 } from "lucide-react";
-import { FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
+import { DragEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "react";
 
 type Route =
   | "command"
-  | "mediaLab"
+  | "content"
+  | "play"
   | "inbox"
   | "calendar"
   | "tasks"
   | "approvals"
   | "access"
   | "activity"
-  | "connections";
+  | "connections"
+  | "settings";
 type ApprovalKind = "email" | "calendar" | "task";
 type ApprovalStatus = "pending" | "approved" | "rejected";
 type ActivityLevel = "ok" | "info" | "warn";
 type ClientAccessStatus = "active" | "past_due" | "revoked";
 type PaymentStatus = "paid" | "due" | "failed";
 type MoneyDemoStage = "signed" | "paid" | "past_due" | "revoked" | "restored";
+type SettingsCategory = "workspace" | "appearance" | "access" | "notifications";
+type WorkspacePublishState = "draft" | "previewed" | "published";
 
 type EmailItem = {
   id: string;
@@ -119,6 +126,13 @@ type ClientAccess = {
   privateRoute: string;
   modules: string[];
   lastAudit: string;
+};
+
+type LinkedClientCsv = {
+  id: string;
+  label: string;
+  path: string;
+  lastSyncedAt?: string;
 };
 
 type GuardedWorkspace = {
@@ -284,6 +298,98 @@ type MediaLabCatalog = {
   warnings: string[];
 };
 
+type PhantomPlayAccessMode = "disabled" | "enabled" | "background_jobs_only" | "selected_hours";
+
+type PhantomPlayGame = {
+  id: string;
+  slug: string;
+  title: string;
+  creatorId: string;
+  tagline: string;
+  description: string;
+  categories: string[];
+  runtime: "html5" | "javascript" | "webassembly" | "webgl" | "godot_web";
+  moderationState: string;
+  launchPath: string;
+  averageMinutes: number;
+  supportsKeyboard: boolean;
+  supportsMouse: boolean;
+  supportsTouch: boolean;
+  supportsController: boolean;
+  workplaceFriendly: boolean;
+};
+
+type PhantomPlayCreator = {
+  id: string;
+  displayName: string;
+  tagline: string;
+  verified: boolean;
+};
+
+type PhantomPlayPolicy = {
+  orgId: string;
+  accessMode: PhantomPlayAccessMode;
+  allowedRoles: string[];
+  allowedHours: { start: string; end: string };
+  maxSessionMinutes: number;
+  dailyAllowanceMinutes: number;
+  allowedCategories: string[];
+  allowMultiplayer: boolean;
+  allowLeaderboards: boolean;
+  allowSocialFeatures: boolean;
+  allowSound: boolean;
+  usageReportingLevel: "summary" | "policy_only";
+  forcePauseOnUrgentWork: boolean;
+};
+
+type PhantomPlaySnapshot = {
+  product: {
+    name: "PhantomPlay";
+    slogan: string;
+    standalonePath: string;
+    breakRoomLabel: string;
+  };
+  policy: PhantomPlayPolicy;
+  games: PhantomPlayGame[];
+  creators: PhantomPlayCreator[];
+  favorites: string[];
+  recentSessions: Array<{ id: string; gameId: string; status: string; lastActiveAt: string }>;
+  runtimeSecurity: {
+    browserFirstOnly: boolean;
+    acceptedRuntimes: string[];
+    rejectsExecutables: boolean;
+    sandboxRequired: boolean;
+    noAssetCloudCoupling: boolean;
+  };
+  creatorPublishingStates: string[];
+};
+
+type ContentHubTab = "create" | "library" | "calendar" | "distribution";
+type CreateMode = "photo" | "video" | "voice";
+type CreateJobStatus = "queued" | "rendering" | "ready" | "failed";
+
+type CreateJob = {
+  id: string;
+  mode: CreateMode;
+  title: string;
+  prompt: string;
+  status: CreateJobStatus;
+  createdAt: string;
+  completedAt?: string;
+  engine: string;
+  audioUrl?: string;
+  statusUrl?: string;
+  error?: string;
+};
+
+type VoiceboxRuntimeStatus = {
+  configured: boolean;
+  reachable: boolean;
+  baseUrl: string;
+  profiles: number;
+  reason: string;
+};
+
 type AppSession = {
   id: string;
   label: string;
@@ -326,7 +432,8 @@ const initialSessions: AppSession[] = [
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Command", icon: <Command size={18} /> },
-  { id: "mediaLab", label: "Media Lab", icon: <Sparkles size={18} /> },
+  { id: "content", label: "Content", icon: <FileText size={18} /> },
+  { id: "play", label: "Break Room", icon: <Play size={18} /> },
   { id: "inbox", label: "Inbox", icon: <Inbox size={18} /> },
   { id: "calendar", label: "Calendar", icon: <CalendarDays size={18} /> },
   { id: "tasks", label: "Tasks", icon: <SquareCheckBig size={18} /> },
@@ -565,6 +672,10 @@ function moduleTestId(clientId: string, moduleKey: string) {
   return `access-module-${clientId}-${slug}`;
 }
 
+function humanizeSlug(value: string) {
+  return value.replace(/_/g, " ").replace(/-/g, " ");
+}
+
 function App() {
   const [route, setRoute] = useState<Route>("command");
   const [signedIn, setSignedIn] = useState(false);
@@ -583,8 +694,30 @@ function App() {
   const [pangolinPlan, setPangolinPlan] = useState<PangolinRoutePlan[]>([]);
   const [pangolinStatus, setPangolinStatus] = useState<PangolinReadOnlyStatus | null>(null);
   const [readinessReport, setReadinessReport] = useState<ProductionReadinessReport | null>(null);
+  const [linkedClientCsvs, setLinkedClientCsvs] = useState<LinkedClientCsv[]>([]);
+  const [clientCsvBusy, setClientCsvBusy] = useState(false);
+  const [clientCsvStatus, setClientCsvStatus] = useState("Drop a CSV here or link one to keep the client list updated.");
   const [mediaLabCatalog, setMediaLabCatalog] = useState<MediaLabCatalog | null>(null);
   const [mediaLabBusy, setMediaLabBusy] = useState(false);
+  const [contentHubTab, setContentHubTab] = useState<ContentHubTab>("create");
+  const [createMode, setCreateMode] = useState<CreateMode>("video");
+  const [createPrompt, setCreatePrompt] = useState(
+    "Create a 20 second product launch video with a confident voiceover and three social cutdowns.",
+  );
+  const [createJobs, setCreateJobs] = useState<CreateJob[]>([]);
+  const [voiceboxStatus, setVoiceboxStatus] = useState<VoiceboxRuntimeStatus | null>(null);
+  const [phantomPlaySnapshot, setPhantomPlaySnapshot] = useState<PhantomPlaySnapshot | null>(null);
+  const [phantomPlayBusy, setPhantomPlayBusy] = useState(false);
+  const [phantomPlayStatus, setPhantomPlayStatus] = useState("PhantomPlay has not loaded yet.");
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("workspace");
+  const [workspaceDesignerDraft, setWorkspaceDesignerDraft] = useState({
+    name: "Client Command Workspace",
+    layout: "Command first",
+    theme: "Phantom dark",
+    defaultModule: "Command",
+  });
+  const [workspaceDesignerPreview, setWorkspaceDesignerPreview] = useState<typeof workspaceDesignerDraft | null>(null);
+  const [workspacePublishState, setWorkspacePublishState] = useState<WorkspacePublishState>("draft");
   const [moneyDemoBusy, setMoneyDemoBusy] = useState<MoneyDemoStage | null>(null);
   const [selectedOrg, setSelectedOrg] = useState("PhantomForce Pilot");
   const activeSession = useMemo(
@@ -596,6 +729,7 @@ function App() {
     if (canManageAccess) return clientAccess;
     return clientAccess.filter((client) => client.id === activeSession.clientId);
   }, [activeSession.clientId, canManageAccess, clientAccess]);
+  const hasActiveBackgroundJob = createJobs.some((job) => job.status === "queued" || job.status === "rendering");
 
   function sessionHeaders(json = false): Record<string, string> {
     const headers: Record<string, string> = json ? { "Content-Type": "application/json" } : {};
@@ -839,9 +973,11 @@ function App() {
     if (canManageAccess) {
       void refreshPangolinPlan();
       void refreshReadinessReport();
+      void refreshLinkedClientCsvs();
     } else {
       setPangolinPlan([]);
       setReadinessReport(null);
+      setLinkedClientCsvs([]);
     }
 
     return () => {
@@ -850,10 +986,218 @@ function App() {
   }, [activeSessionId, sessionToken, signedIn]);
 
   useEffect(() => {
-    if (!signedIn || route !== "mediaLab") return;
+    if (!signedIn || route !== "content" || contentHubTab !== "create") return;
 
     void refreshMediaLabCatalog();
+    void refreshVoiceboxStatus();
+  }, [contentHubTab, route, sessionToken, signedIn]);
+
+  useEffect(() => {
+    if (!signedIn || route !== "play") return;
+
+    void refreshPhantomPlay();
   }, [route, sessionToken, signedIn]);
+
+  async function refreshPhantomPlay() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantomplay/snapshot`, {
+        headers: sessionHeaders(),
+      });
+      const data = (await response.json()) as ({ ok?: boolean; reason?: string } & Partial<PhantomPlaySnapshot>);
+
+      if (!response.ok || !data.product || !data.policy || !Array.isArray(data.games)) {
+        throw new Error(data.reason ?? "PhantomPlay snapshot failed.");
+      }
+
+      setPhantomPlaySnapshot(data as PhantomPlaySnapshot);
+      setPhantomPlayStatus(
+        data.policy.accessMode === "disabled"
+          ? "Disabled by default for business orgs. Admin can enable it when ready."
+          : "Ready for instant browser play.",
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "PhantomPlay backend unavailable.";
+      setPhantomPlayStatus(message);
+    }
+  }
+
+  async function updatePhantomPlayAccessMode(accessMode: PhantomPlayAccessMode) {
+    setPhantomPlayBusy(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantomplay/policy`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({ accessMode }),
+      });
+      const data = (await response.json()) as { policy?: PhantomPlayPolicy; error?: string };
+
+      if (!response.ok || !data.policy) {
+        throw new Error(data.error ?? "PhantomPlay policy update failed.");
+      }
+
+      setPhantomPlaySnapshot((current) => (current ? { ...current, policy: data.policy! } : current));
+      setPhantomPlayStatus(`PhantomPlay policy set to ${humanizeSlug(accessMode)}.`);
+      addActivity("PhantomPlay policy updated", `Access mode: ${humanizeSlug(accessMode)}.`, "ok");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "PhantomPlay policy update failed.";
+      setPhantomPlayStatus(message);
+      addActivity("PhantomPlay policy failed", message, "warn");
+    } finally {
+      setPhantomPlayBusy(false);
+    }
+  }
+
+  async function launchPhantomPlayGame(gameId: string) {
+    setPhantomPlayBusy(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/phantomplay/sessions`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({ gameId, hasActiveBackgroundJob }),
+      });
+      const data = (await response.json()) as { playSession?: { id: string }; reason?: string; error?: string };
+
+      if (!response.ok || !data.playSession) {
+        throw new Error(data.reason ?? data.error ?? "PhantomPlay launch failed.");
+      }
+
+      setPhantomPlayStatus(`Ghost Solitaire session started. Session ${data.playSession.id}.`);
+      addActivity("PhantomPlay launched", "Ghost Solitaire started in the Break Room.", "info");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "PhantomPlay launch failed.";
+      setPhantomPlayStatus(message);
+      addActivity("PhantomPlay launch blocked", message, "warn");
+    } finally {
+      setPhantomPlayBusy(false);
+    }
+  }
+
+  async function refreshVoiceboxStatus() {
+    try {
+      const response = await fetch(`${API_BASE_URL}/voicebox/status`, {
+        headers: sessionHeaders(),
+      });
+      const data = (await response.json()) as { status?: VoiceboxRuntimeStatus };
+
+      if (response.ok && data.status) {
+        setVoiceboxStatus(data.status);
+        return;
+      }
+    } catch {
+      // The UI falls back to the unavailable status below.
+    }
+
+    setVoiceboxStatus({
+      configured: true,
+      reachable: false,
+      baseUrl: "http://127.0.0.1:17600",
+      profiles: 0,
+      reason: "PhantomForce could not reach the Voicebox adapter.",
+    });
+  }
+
+  async function startCreateJob() {
+    const prompt = createPrompt.trim();
+    if (!prompt) return;
+
+    const modeLabels: Record<CreateMode, string> = {
+      photo: "AI photo set",
+      video: "AI video package",
+      voice: "Voice generation",
+    };
+    const engines: Record<CreateMode, string> = {
+      photo: "Image generator",
+      video: "Video generator + Voicebox voice track",
+      voice: "jamiepine/voicebox",
+    };
+    const job: CreateJob = {
+      id: makeId("create"),
+      mode: createMode,
+      title: modeLabels[createMode],
+      prompt,
+      status: "queued",
+      createdAt: "Just now",
+      engine: engines[createMode],
+    };
+
+    setCreateJobs((current) => [job, ...current]);
+    setCreatePrompt("");
+    addActivity(`${modeLabels[createMode]} queued`, "Content Hub will notify you when the generation is ready.", "info");
+
+    if (createMode === "voice") {
+      setCreateJobs((current) =>
+        current.map((item) => (item.id === job.id ? { ...item, status: "rendering" } : item)),
+      );
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/content/create/voice`, {
+          method: "POST",
+          headers: sessionHeaders(true),
+          body: JSON.stringify({
+            text: prompt,
+            language: "en",
+          }),
+        });
+        const data = (await response.json()) as {
+          generation?: {
+            id: string;
+            status: string;
+            profile: string | null;
+            engine: string | null;
+            audioUrl: string;
+            statusUrl: string;
+          };
+          error?: string;
+        };
+
+        if (!response.ok || !data.generation) {
+          throw new Error(data.error ?? "Voicebox did not accept the voice generation job.");
+        }
+
+        setCreateJobs((current) =>
+          current.map((item) =>
+            item.id === job.id
+              ? {
+                  ...item,
+                  status: data.generation?.status === "completed" ? "ready" : "rendering",
+                  engine: data.generation?.engine
+                    ? `Voicebox / ${data.generation.engine}`
+                    : "jamiepine/voicebox",
+                  audioUrl: data.generation?.audioUrl,
+                  statusUrl: data.generation?.statusUrl,
+                }
+              : item,
+          ),
+        );
+        addActivity("Voicebox voice job submitted", "Voicebox accepted the prompt and is generating speech.", "ok");
+        void refreshVoiceboxStatus();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Voicebox voice generation failed.";
+        setCreateJobs((current) =>
+          current.map((item) => (item.id === job.id ? { ...item, status: "failed", error: message } : item)),
+        );
+        addActivity("Voicebox voice generation failed", message, "warn");
+      }
+      return;
+    }
+
+    window.setTimeout(() => {
+      setCreateJobs((current) =>
+        current.map((item) => (item.id === job.id ? { ...item, status: "rendering" } : item)),
+      );
+    }, 900);
+
+    window.setTimeout(() => {
+      setCreateJobs((current) =>
+        current.map((item) =>
+          item.id === job.id ? { ...item, status: "ready", completedAt: "Just now" } : item,
+        ),
+      );
+      addActivity(`${modeLabels[createMode]} ready`, "Open Content Hub to review, edit, and publish the finished asset.", "ok");
+    }, 3200);
+  }
 
   const stats = useMemo(() => {
     return {
@@ -883,6 +1227,140 @@ function App() {
       const exists = current.some((item) => item.id === record.id);
       return exists ? current.map((item) => (item.id === record.id ? record : item)) : [record, ...current];
     });
+  }
+
+  async function refreshLinkedClientCsvs() {
+    if (!canManageAccess) return;
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/client-access/csv-links`, {
+        headers: sessionHeaders(),
+      });
+      const data = (await response.json()) as { links?: LinkedClientCsv[] };
+
+      if (response.ok && Array.isArray(data.links)) {
+        setLinkedClientCsvs(data.links);
+      }
+    } catch {
+      addActivity("CSV links offline", "Linked client CSV paths are waiting on the backend.", "warn");
+    }
+  }
+
+  async function importClientCsvText(csv: string, filename = "dropped-client-list.csv") {
+    if (!csv.trim()) return;
+    setClientCsvBusy(true);
+    setClientCsvStatus(`Importing ${filename}...`);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/client-access/csv-import`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({ csv, filename }),
+      });
+      const data = (await response.json()) as {
+        imported?: ClientAccess[];
+        records?: ClientAccess[];
+        rows?: number;
+        skipped?: unknown[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "CSV import failed.");
+      }
+
+      if (Array.isArray(data.records)) {
+        setClientAccess(data.records);
+      }
+
+      const imported = data.imported?.length ?? 0;
+      const skipped = data.skipped?.length ?? 0;
+      setClientCsvStatus(`Updated ${imported} clients from ${filename}${skipped ? `; skipped ${skipped}` : ""}.`);
+      addActivity("Client CSV imported", `${filename}: ${imported} clients updated.`, "ok");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "CSV import failed.";
+      setClientCsvStatus(message);
+      addActivity("CSV import failed", message, "warn");
+    } finally {
+      setClientCsvBusy(false);
+    }
+  }
+
+  async function importClientCsvFile(file: File) {
+    if (!file.name.toLowerCase().endsWith(".csv")) {
+      setClientCsvStatus("Drop a .csv file to update clients.");
+      return;
+    }
+
+    await importClientCsvText(await file.text(), file.name);
+  }
+
+  async function linkClientCsv(path: string, label?: string) {
+    if (!path.trim()) {
+      setClientCsvStatus("Paste a local CSV path first.");
+      return;
+    }
+
+    setClientCsvBusy(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/client-access/csv-links`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({ path: path.trim(), label: label?.trim() || "Linked client CSV" }),
+      });
+      const data = (await response.json()) as { links?: LinkedClientCsv[]; error?: string };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "CSV link failed.");
+      }
+
+      setLinkedClientCsvs(data.links ?? []);
+      setClientCsvStatus("CSV linked. Use Sync to refresh clients from that file.");
+      addActivity("Client CSV linked", path.trim(), "ok");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "CSV link failed.";
+      setClientCsvStatus(message);
+      addActivity("CSV link failed", message, "warn");
+    } finally {
+      setClientCsvBusy(false);
+    }
+  }
+
+  async function syncLinkedClientCsv(id?: string) {
+    setClientCsvBusy(true);
+    setClientCsvStatus("Syncing linked CSV...");
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/client-access/csv-links/sync`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({ id }),
+      });
+      const data = (await response.json()) as {
+        imported?: ClientAccess[];
+        records?: ClientAccess[];
+        links?: LinkedClientCsv[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "CSV sync failed.");
+      }
+
+      if (Array.isArray(data.records)) {
+        setClientAccess(data.records);
+      }
+      setLinkedClientCsvs(data.links ?? []);
+      setClientCsvStatus(`Synced ${data.imported?.length ?? 0} clients from linked CSV.`);
+      addActivity("Linked CSV synced", `${data.imported?.length ?? 0} clients updated.`, "ok");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "CSV sync failed.";
+      setClientCsvStatus(message);
+      addActivity("CSV sync failed", message, "warn");
+    } finally {
+      setClientCsvBusy(false);
+    }
   }
 
   function createFollowUpPlan(source = "command") {
@@ -1365,7 +1843,12 @@ function App() {
       </aside>
 
       <main className="workspace">
-        <Topbar activeSession={activeSession} selectedOrg={selectedOrg} pending={stats.pending} />
+        <Topbar
+          activeSession={activeSession}
+          selectedOrg={selectedOrg}
+          pending={stats.pending}
+          openSettings={() => setRoute("settings")}
+        />
         {route === "command" ? (
           <CommandCenter
             messages={messages}
@@ -1381,11 +1864,34 @@ function App() {
             events={events}
           />
         ) : null}
-        {route === "mediaLab" ? (
-          <MediaLabView
+        {route === "content" ? (
+          <ContentHubView
+            activeTab={contentHubTab}
+            setActiveTab={setContentHubTab}
+            createMode={createMode}
+            setCreateMode={setCreateMode}
+            createPrompt={createPrompt}
+            setCreatePrompt={setCreatePrompt}
+            createJobs={createJobs}
+            startCreateJob={startCreateJob}
+            voiceboxStatus={voiceboxStatus}
+            refreshVoiceboxStatus={refreshVoiceboxStatus}
             catalog={mediaLabCatalog}
             busy={mediaLabBusy}
             refreshCatalog={refreshMediaLabCatalog}
+          />
+        ) : null}
+        {route === "play" ? (
+          <PhantomPlayView
+            snapshot={phantomPlaySnapshot}
+            status={phantomPlayStatus}
+            busy={phantomPlayBusy}
+            canManageAccess={canManageAccess}
+            hasActiveBackgroundJob={hasActiveBackgroundJob}
+            refresh={refreshPhantomPlay}
+            updateAccessMode={updatePhantomPlayAccessMode}
+            launchGame={launchPhantomPlayGame}
+            openWork={() => setRoute("content")}
           />
         ) : null}
         {route === "inbox" ? <InboxView emails={emails} createFollowUpPlan={createFollowUpPlan} /> : null}
@@ -1403,17 +1909,49 @@ function App() {
             pangolinPlan={pangolinPlan}
             pangolinStatus={pangolinStatus}
             readinessReport={readinessReport}
+            linkedClientCsvs={linkedClientCsvs}
+            clientCsvBusy={clientCsvBusy}
+            clientCsvStatus={clientCsvStatus}
             refreshGuardedWorkspace={refreshGuardedWorkspace}
             refreshWorkspaceModule={refreshWorkspaceModule}
             refreshReadinessReport={refreshReadinessReport}
             updateClientAccess={updateClientAccess}
             updateClientModule={updateClientModule}
             runMoneyDemoStage={runMoneyDemoStage}
+            importClientCsvFile={importClientCsvFile}
+            linkClientCsv={linkClientCsv}
+            syncLinkedClientCsv={syncLinkedClientCsv}
             moneyDemoBusy={moneyDemoBusy}
           />
         ) : null}
         {route === "activity" ? <ActivityView activity={activity} /> : null}
         {route === "connections" ? <ConnectionsView /> : null}
+        {route === "settings" ? (
+          <SettingsView
+            category={settingsCategory}
+            setCategory={setSettingsCategory}
+            workspaceDraft={workspaceDesignerDraft}
+            setWorkspaceDraft={(patch) => {
+              setWorkspaceDesignerDraft((current) => ({ ...current, ...patch }));
+              setWorkspacePublishState("draft");
+            }}
+            workspacePreview={workspaceDesignerPreview}
+            publishState={workspacePublishState}
+            previewWorkspace={() => {
+              setWorkspaceDesignerPreview(workspaceDesignerDraft);
+              setWorkspacePublishState("previewed");
+              addActivity("Workspace preview generated", "Workspace Designer is ready to publish after review.", "info");
+            }}
+            publishWorkspace={() => {
+              if (workspacePublishState !== "previewed") {
+                addActivity("Publish blocked", "Preview the workspace before publishing changes.", "warn");
+                return;
+              }
+              setWorkspacePublishState("published");
+              addActivity("Workspace published", `${workspaceDesignerDraft.name} changes were published.`, "ok");
+            }}
+          />
+        ) : null}
       </main>
 
       <nav className="mobile-nav" aria-label="Mobile navigation">
@@ -1516,10 +2054,12 @@ function Topbar({
   activeSession,
   selectedOrg,
   pending,
+  openSettings,
 }: {
   activeSession: AppSession;
   selectedOrg: string;
   pending: number;
+  openSettings: () => void;
 }) {
   return (
     <header className="topbar">
@@ -1538,11 +2078,149 @@ function Topbar({
           <Bell size={18} />
           {pending > 0 ? <b>{pending}</b> : null}
         </button>
-        <button type="button" title="Settings">
+        <button type="button" title="Settings" onClick={openSettings}>
           <Settings size={18} />
         </button>
       </div>
     </header>
+  );
+}
+
+function SettingsView({
+  category,
+  setCategory,
+  workspaceDraft,
+  setWorkspaceDraft,
+  workspacePreview,
+  publishState,
+  previewWorkspace,
+  publishWorkspace,
+}: {
+  category: SettingsCategory;
+  setCategory: (category: SettingsCategory) => void;
+  workspaceDraft: {
+    name: string;
+    layout: string;
+    theme: string;
+    defaultModule: string;
+  };
+  setWorkspaceDraft: (patch: Partial<typeof workspaceDraft>) => void;
+  workspacePreview: typeof workspaceDraft | null;
+  publishState: WorkspacePublishState;
+  previewWorkspace: () => void;
+  publishWorkspace: () => void;
+}) {
+  return (
+    <section className="settings-shell">
+      <div className="settings-toolbar" aria-label="Settings categories">
+        <label>
+          Category
+          <select value={category} onChange={(event) => setCategory(event.target.value as SettingsCategory)}>
+            <option value="workspace">Workspace Designer</option>
+            <option value="appearance">Appearance</option>
+            <option value="access">Access Controls</option>
+            <option value="notifications">Notifications</option>
+          </select>
+        </label>
+        <label>
+          Workspace
+          <select value={workspaceDraft.defaultModule} onChange={(event) => setWorkspaceDraft({ defaultModule: event.target.value })}>
+            <option>Command</option>
+            <option>Content</option>
+            <option>Calendar</option>
+            <option>Tasks</option>
+            <option>Reports</option>
+          </select>
+        </label>
+        <label>
+          Theme
+          <select value={workspaceDraft.theme} onChange={(event) => setWorkspaceDraft({ theme: event.target.value })}>
+            <option>Phantom dark</option>
+            <option>Black glass</option>
+            <option>Operator red</option>
+            <option>High contrast</option>
+          </select>
+        </label>
+        <label>
+          Layout
+          <select value={workspaceDraft.layout} onChange={(event) => setWorkspaceDraft({ layout: event.target.value })}>
+            <option>Command first</option>
+            <option>Client first</option>
+            <option>Content first</option>
+            <option>Compact ops</option>
+          </select>
+        </label>
+      </div>
+
+      {category === "workspace" ? (
+        <div className="settings-grid">
+          <article className="settings-card workspace-designer-card">
+            <span className="eyebrow">Workspace Designer</span>
+            <h3>Design first. Preview second. Publish last.</h3>
+            <p>
+              Publishing is now locked until a preview exists, so accidental instant-publish is dead.
+            </p>
+
+            <label className="settings-field">
+              Workspace name
+              <input
+                value={workspaceDraft.name}
+                onChange={(event) => setWorkspaceDraft({ name: event.target.value })}
+                placeholder="Workspace name"
+              />
+            </label>
+
+            <div className="designer-actions">
+              <button type="button" className="primary-action" onClick={previewWorkspace}>
+                Preview Workspace
+              </button>
+              <button
+                type="button"
+                className="publish-action"
+                disabled={publishState !== "previewed"}
+                onClick={publishWorkspace}
+                title={publishState !== "previewed" ? "Preview before publishing" : "Publish reviewed workspace"}
+              >
+                Publish
+              </button>
+              <span className={`publish-state ${publishState}`}>{publishState}</span>
+            </div>
+          </article>
+
+          <article className="settings-card workspace-preview-card">
+            <span className="eyebrow">Preview</span>
+            {workspacePreview ? (
+              <div className="workspace-preview-shell">
+                <div>
+                  <strong>{workspacePreview.name}</strong>
+                  <span>{workspacePreview.theme}</span>
+                </div>
+                <nav>
+                  <button type="button">{workspacePreview.defaultModule}</button>
+                  <button type="button">{workspacePreview.layout}</button>
+                  <button type="button">Approvals</button>
+                </nav>
+                <section>
+                  <b>{workspacePreview.layout}</b>
+                  <p>This is the review step before publishing the workspace layout.</p>
+                </section>
+              </div>
+            ) : (
+              <div className="empty-preview">
+                <strong>No preview yet</strong>
+                <span>Change settings, then hit Preview Workspace before Publish unlocks.</span>
+              </div>
+            )}
+          </article>
+        </div>
+      ) : (
+        <article className="settings-card">
+          <span className="eyebrow">{category}</span>
+          <h3>{category === "appearance" ? "Appearance controls" : category === "access" ? "Access settings" : "Notification settings"}</h3>
+          <p>Category shell is ready. Workspace Designer is the active repaired panel.</p>
+        </article>
+      )}
+    </section>
   );
 }
 
@@ -1693,30 +2371,459 @@ function formatMediaCategory(category: MediaLabEffectCategory | string) {
     .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function MediaLabView({
+function formatCreateMode(mode: CreateMode) {
+  return mode === "photo" ? "Photo" : mode === "video" ? "Video" : "Voice";
+}
+
+function PhantomPlayView({
+  snapshot,
+  status,
+  busy,
+  canManageAccess,
+  hasActiveBackgroundJob,
+  refresh,
+  updateAccessMode,
+  launchGame,
+  openWork,
+}: {
+  snapshot: PhantomPlaySnapshot | null;
+  status: string;
+  busy: boolean;
+  canManageAccess: boolean;
+  hasActiveBackgroundJob: boolean;
+  refresh: () => void;
+  updateAccessMode: (mode: PhantomPlayAccessMode) => void;
+  launchGame: (gameId: string) => void;
+  openWork: () => void;
+}) {
+  const solitaire = snapshot?.games.find((game) => game.slug === "solitaire") ?? snapshot?.games[0];
+  const disabled = snapshot?.policy.accessMode === "disabled";
+
+  return (
+    <Page
+      title="PhantomPlay"
+      kicker="Standalone instant-play sibling product"
+      action={
+        <button className="ghost-action" type="button" onClick={refresh} disabled={busy}>
+          <RefreshCcw size={16} />
+          Refresh
+        </button>
+      }
+    >
+      <section className="phantomplay-hero">
+        <div>
+          <span className="eyebrow">Break Room foundation</span>
+          <h3>Play like a ghost.</h3>
+          <p>
+            PhantomPlay is a separate browser-first gaming product. Inside PhantomForce, it stays restrained: a
+            Take Five option while background work keeps running.
+          </p>
+          <div className="phantomplay-actions">
+            <button
+              className="primary-action"
+              type="button"
+              disabled={busy || !solitaire || disabled}
+              onClick={() => solitaire && launchGame(solitaire.id)}
+            >
+              <Play size={18} />
+              Launch Ghost Solitaire
+            </button>
+            <button type="button" onClick={openWork}>
+              {hasActiveBackgroundJob ? "Check background work" : "Back to work"}
+            </button>
+          </div>
+          <small>{status}</small>
+        </div>
+        <div className="phantomplay-console-card">
+          <strong>{snapshot?.product.name ?? "PhantomPlay"}</strong>
+          <span>{snapshot?.product.slogan ?? "Play like a ghost."}</span>
+          <b>{hasActiveBackgroundJob ? "Background work running" : "Break Room idle"}</b>
+        </div>
+      </section>
+
+      <section className="phantomplay-grid">
+        <article className="phantomplay-card flagship">
+          <span className="eyebrow">Flagship</span>
+          <h3>{solitaire?.title ?? "Ghost Solitaire"}</h3>
+          <p>{solitaire?.description ?? "Solitaire foundation waiting for the PhantomPlay backend snapshot."}</p>
+          <div className="phantomplay-tags">
+            {(solitaire?.categories ?? ["cards", "short-session", "workplace-friendly"]).map((tag) => (
+              <span key={tag}>{humanizeSlug(tag)}</span>
+            ))}
+          </div>
+          <ul>
+            <li>Browser-first runtime, no PC streaming dependency.</li>
+            <li>Planned save/resume, undo, restart, timer, daily challenge, and personal best.</li>
+            <li>Keyboard, mouse, touch, accessibility, and reduced-motion requirements are explicit.</li>
+          </ul>
+        </article>
+
+        <article className="phantomplay-card">
+          <span className="eyebrow">Runtime boundary</span>
+          <h3>Untrusted games stay boxed in</h3>
+          <p>
+            Browser builds only: HTML5, JavaScript, WebAssembly, WebGL, and Godot web exports. Executables are rejected
+            in the first lane.
+          </p>
+          <div className="runtime-checks">
+            <span>Sandbox iframe</span>
+            <span>CSP required</span>
+            <span>No PhantomForce cookies/API access</span>
+            <span>No Asset Cloud coupling</span>
+          </div>
+        </article>
+
+        <article className="phantomplay-card">
+          <span className="eyebrow">Business controls</span>
+          <h3>Conservative by default</h3>
+          <p>
+            Current mode: <strong>{snapshot ? humanizeSlug(snapshot.policy.accessMode) : "loading"}</strong>. Business
+            orgs must opt in before workplace gaming is available.
+          </p>
+          {canManageAccess ? (
+            <div className="policy-buttons">
+              {(["disabled", "enabled", "background_jobs_only", "selected_hours"] as PhantomPlayAccessMode[]).map(
+                (mode) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    disabled={busy || snapshot?.policy.accessMode === mode}
+                    onClick={() => updateAccessMode(mode)}
+                  >
+                    {humanizeSlug(mode)}
+                  </button>
+                ),
+              )}
+            </div>
+          ) : null}
+        </article>
+
+        <article className="phantomplay-card">
+          <span className="eyebrow">Creator pipeline</span>
+          <h3>Review before publish</h3>
+          <p>Creator uploads are future-ready but not auto-published. Every build moves through a moderation state.</p>
+          <div className="phantomplay-tags compact">
+            {(snapshot?.creatorPublishingStates ?? ["draft", "automated_review", "manual_review", "published"]).map(
+              (state) => (
+                <span key={state}>{humanizeSlug(state)}</span>
+              ),
+            )}
+          </div>
+        </article>
+      </section>
+    </Page>
+  );
+}
+
+function ContentHubView({
+  activeTab,
+  setActiveTab,
+  createMode,
+  setCreateMode,
+  createPrompt,
+  setCreatePrompt,
+  createJobs,
+  startCreateJob,
+  voiceboxStatus,
+  refreshVoiceboxStatus,
   catalog,
   busy,
   refreshCatalog,
 }: {
+  activeTab: ContentHubTab;
+  setActiveTab: (tab: ContentHubTab) => void;
+  createMode: CreateMode;
+  setCreateMode: (mode: CreateMode) => void;
+  createPrompt: string;
+  setCreatePrompt: (value: string) => void;
+  createJobs: CreateJob[];
+  startCreateJob: () => void | Promise<void>;
+  voiceboxStatus: VoiceboxRuntimeStatus | null;
+  refreshVoiceboxStatus: () => void | Promise<void>;
   catalog: MediaLabCatalog | null;
   busy: boolean;
   refreshCatalog: () => void;
+}) {
+  const readyJobs = createJobs.filter((job) => job.status === "ready");
+  const pendingJobs = createJobs.filter((job) => job.status !== "ready");
+  const tabs: Array<{ id: ContentHubTab; label: string }> = [
+    { id: "create", label: "Create" },
+    { id: "library", label: "Library" },
+    { id: "calendar", label: "Calendar" },
+    { id: "distribution", label: "Distribution" },
+  ];
+
+  return (
+    <Page
+      title="Content Hub"
+      kicker="Create, review, publish"
+      action={
+        readyJobs.length ? (
+          <span className="safe-pill">
+            <Bell size={15} />
+            {readyJobs.length} ready
+          </span>
+        ) : null
+      }
+    >
+      <div className="content-tabs" role="tablist" aria-label="Content Hub sections">
+        {tabs.map((tab) => (
+          <button
+            key={tab.id}
+            className={activeTab === tab.id ? "active" : ""}
+            type="button"
+            onClick={() => setActiveTab(tab.id)}
+          >
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {activeTab === "create" ? (
+        <CreateTab
+          createMode={createMode}
+          setCreateMode={setCreateMode}
+          createPrompt={createPrompt}
+          setCreatePrompt={setCreatePrompt}
+          createJobs={createJobs}
+          pendingJobs={pendingJobs}
+          startCreateJob={startCreateJob}
+          voiceboxStatus={voiceboxStatus}
+          refreshVoiceboxStatus={refreshVoiceboxStatus}
+          catalog={catalog}
+          busy={busy}
+          refreshCatalog={refreshCatalog}
+        />
+      ) : null}
+
+      {activeTab === "library" ? (
+        <section className="content-placeholder">
+          <EmptyState
+            icon={<FileText size={22} />}
+            title="Created assets land here"
+            detail="Finished photo, video, voice, and edited-media records appear here after generation."
+          />
+        </section>
+      ) : null}
+
+      {activeTab === "calendar" ? (
+        <section className="content-placeholder">
+          <EmptyState
+            icon={<CalendarDays size={22} />}
+            title="Publishing calendar"
+            detail="Approved content can be scheduled here without turning pending generation into a whole workspace."
+          />
+        </section>
+      ) : null}
+
+      {activeTab === "distribution" ? (
+        <section className="content-placeholder">
+          <EmptyState
+            icon={<Send size={22} />}
+            title="Distribution queue"
+            detail="Publishing and posting stay approval-gated after creative review."
+          />
+        </section>
+      ) : null}
+    </Page>
+  );
+}
+
+function CreateTab({
+  createMode,
+  setCreateMode,
+  createPrompt,
+  setCreatePrompt,
+  createJobs,
+  pendingJobs,
+  startCreateJob,
+  voiceboxStatus,
+  refreshVoiceboxStatus,
+  catalog,
+  busy,
+  refreshCatalog,
+}: {
+  createMode: CreateMode;
+  setCreateMode: (mode: CreateMode) => void;
+  createPrompt: string;
+  setCreatePrompt: (value: string) => void;
+  createJobs: CreateJob[];
+  pendingJobs: CreateJob[];
+  startCreateJob: () => void | Promise<void>;
+  voiceboxStatus: VoiceboxRuntimeStatus | null;
+  refreshVoiceboxStatus: () => void | Promise<void>;
+  catalog: MediaLabCatalog | null;
+  busy: boolean;
+  refreshCatalog: () => void;
+}) {
+  return (
+    <div className="create-layout">
+      <section className="create-main">
+        <div className="create-composer">
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">AI media generation</span>
+              <h3>Make the asset, keep moving.</h3>
+            </div>
+            <span className="safe-pill">
+              <Bell size={15} />
+              Background jobs
+            </span>
+          </div>
+
+          <div className="create-mode-grid" role="radiogroup" aria-label="Create mode">
+            <CreateModeButton
+              active={createMode === "photo"}
+              icon={<FileImage size={19} />}
+              label="Photo"
+              detail="Campaign images, scenes, product shots"
+              onClick={() => setCreateMode("photo")}
+            />
+            <CreateModeButton
+              active={createMode === "video"}
+              icon={<FileVideo size={19} />}
+              label="Video"
+              detail="Short clips with generated voiceover"
+              onClick={() => setCreateMode("video")}
+            />
+            <CreateModeButton
+              active={createMode === "voice"}
+              icon={<FileAudio size={19} />}
+              label="Voice"
+              detail="Voicebox speech, narration, agent reads"
+              onClick={() => setCreateMode("voice")}
+            />
+          </div>
+
+          <label className="create-prompt">
+            Prompt
+            <textarea
+              value={createPrompt}
+              onChange={(event) => setCreatePrompt(event.target.value)}
+              placeholder="Tell PhantomForce what to create..."
+            />
+          </label>
+
+          <div className="create-actions">
+            <button className="primary-action" type="button" onClick={() => void startCreateJob()} disabled={!createPrompt.trim()}>
+              <Sparkles size={18} />
+              Generate {formatCreateMode(createMode)}
+            </button>
+            <span>
+              {createMode === "voice" && voiceboxStatus?.reachable
+                ? "Voicebox is connected. This will submit a real speech job."
+                : createMode === "voice"
+                  ? "Start Voicebox, then generate real speech from this prompt."
+                  : "Long renders notify you when ready."}
+            </span>
+          </div>
+        </div>
+
+        <MediaLabView catalog={catalog} busy={busy} refreshCatalog={refreshCatalog} embedded />
+      </section>
+
+      <aside className="create-side">
+        <section className="voicebox-card">
+          <div>
+            <FileAudio size={21} />
+            <strong>Voicebox lane</strong>
+          </div>
+          <p>
+            {voiceboxStatus?.reachable
+              ? `Connected to ${voiceboxStatus.baseUrl} with ${voiceboxStatus.profiles} voice profiles.`
+              : voiceboxStatus?.reason ?? "Checking Voicebox runtime..."}
+          </p>
+          <button className="ghost-small" type="button" onClick={() => void refreshVoiceboxStatus()}>
+            <RefreshCcw size={15} />
+            Check Voicebox
+          </button>
+        </section>
+
+        <section className="job-panel">
+          <div className="section-head compact">
+            <h3>Background jobs</h3>
+            <span>{pendingJobs.length} running</span>
+          </div>
+          {createJobs.length ? (
+            <div className="job-list">
+              {createJobs.map((job) => (
+                <article className={`job-row ${job.status}`} key={job.id}>
+                  <span>{job.mode === "photo" ? <FileImage size={17} /> : job.mode === "video" ? <FileVideo size={17} /> : <FileAudio size={17} />}</span>
+                  <div>
+                    <strong>{job.title}</strong>
+                    <p>{job.error ?? job.engine}</p>
+                    {job.audioUrl ? (
+                      <a href={job.audioUrl} target="_blank" rel="noreferrer">
+                        Open audio
+                      </a>
+                    ) : null}
+                  </div>
+                  <b>{job.status}</b>
+                </article>
+              ))}
+            </div>
+          ) : (
+            <EmptyState
+              icon={<Clock3 size={20} />}
+              title="No waiting room"
+              detail="Create jobs run quietly here, then notify you when the asset is ready."
+            />
+          )}
+        </section>
+      </aside>
+    </div>
+  );
+}
+
+function CreateModeButton({
+  active,
+  icon,
+  label,
+  detail,
+  onClick,
+}: {
+  active: boolean;
+  icon: ReactNode;
+  label: string;
+  detail: string;
+  onClick: () => void;
+}) {
+  return (
+    <button className={active ? "active" : ""} type="button" onClick={onClick}>
+      <span>{icon}</span>
+      <strong>{label}</strong>
+      <small>{detail}</small>
+    </button>
+  );
+}
+
+function MediaLabView({
+  catalog,
+  busy,
+  refreshCatalog,
+  embedded = false,
+}: {
+  catalog: MediaLabCatalog | null;
+  busy: boolean;
+  refreshCatalog: () => void;
+  embedded?: boolean;
 }) {
   const summary = catalog?.summary;
   const topPacks = summary?.packs.slice(0, 5) ?? [];
   const effects = catalog?.effects ?? [];
 
   return (
-    <Page
-      title="Media Lab"
-      kicker="Effects cloud"
-      action={
+    <section className={embedded ? "media-lab-section embedded" : "media-lab-section"}>
+      <div className="section-head">
+        <div>
+          <span className="eyebrow">Effects cloud</span>
+          <h3>Media Lab</h3>
+        </div>
         <button className="primary-small" type="button" onClick={refreshCatalog} disabled={busy}>
           <RefreshCcw size={16} />
           {busy ? "Scanning" : "Rescan"}
         </button>
-      }
-    >
+      </div>
       <section className="media-lab-hero">
         <div>
           <span className="eyebrow">Motionarray intake</span>
@@ -1839,7 +2946,7 @@ function MediaLabView({
           ) : null}
         </aside>
       </section>
-    </Page>
+    </section>
   );
 }
 
@@ -1962,12 +3069,18 @@ function AccessView({
   pangolinPlan,
   pangolinStatus,
   readinessReport,
+  linkedClientCsvs,
+  clientCsvBusy,
+  clientCsvStatus,
   refreshGuardedWorkspace,
   refreshWorkspaceModule,
   refreshReadinessReport,
   updateClientAccess,
   updateClientModule,
   runMoneyDemoStage,
+  importClientCsvFile,
+  linkClientCsv,
+  syncLinkedClientCsv,
   moneyDemoBusy,
 }: {
   canManageAccess: boolean;
@@ -1977,14 +3090,23 @@ function AccessView({
   pangolinPlan: PangolinRoutePlan[];
   pangolinStatus: PangolinReadOnlyStatus | null;
   readinessReport: ProductionReadinessReport | null;
+  linkedClientCsvs: LinkedClientCsv[];
+  clientCsvBusy: boolean;
+  clientCsvStatus: string;
   refreshGuardedWorkspace: (clientId?: string) => void;
   refreshWorkspaceModule: (clientId: string, moduleKey?: string) => void;
   refreshReadinessReport: () => void;
   updateClientAccess: (id: string, nextStatus: ClientAccessStatus) => void;
   updateClientModule: (id: string, moduleKey: string, enabled: boolean) => void;
   runMoneyDemoStage: (stage: MoneyDemoStage) => void;
+  importClientCsvFile: (file: File) => void | Promise<void>;
+  linkClientCsv: (path: string, label?: string) => void | Promise<void>;
+  syncLinkedClientCsv: (id?: string) => void | Promise<void>;
   moneyDemoBusy: MoneyDemoStage | null;
 }) {
+  const [csvPath, setCsvPath] = useState("");
+  const [csvLabel, setCsvLabel] = useState("");
+  const [draggingCsv, setDraggingCsv] = useState(false);
   const moneyDemoClient = clientAccess.find((client) => client.id === MONEY_DEMO_CLIENT_ID);
   const moneyDemoStages: Array<{ id: MoneyDemoStage; label: string; detail: string }> = [
     {
@@ -2013,6 +3135,17 @@ function AccessView({
       detail: "Paid access returns with modules and credential reference intact.",
     },
   ];
+  const handleCsvDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setDraggingCsv(false);
+    const file = Array.from(event.dataTransfer.files).find((item) => item.name.toLowerCase().endsWith(".csv"));
+    if (file) void importClientCsvFile(file);
+  };
+  const handleCsvLink = () => {
+    void linkClientCsv(csvPath, csvLabel);
+    setCsvPath("");
+    setCsvLabel("");
+  };
 
   return (
     <Page title="Client access control" kicker="Pangolin private gateway">
@@ -2033,6 +3166,81 @@ function AccessView({
           <span>Past-due users can be blocked without exposing backend services.</span>
         </div>
       </section>
+
+      {canManageAccess ? (
+        <section className="client-csv-panel" data-testid="client-csv-panel">
+          <div className="route-panel-head">
+            <div>
+              <span className="eyebrow">Client list CSV</span>
+              <h3>Drop a CSV right here to update the list</h3>
+            </div>
+            <label className="csv-import-button">
+              Import CSV
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                disabled={clientCsvBusy}
+                onChange={(event) => {
+                  const file = event.target.files?.[0];
+                  if (file) void importClientCsvFile(file);
+                  event.currentTarget.value = "";
+                }}
+              />
+            </label>
+          </div>
+          <div
+            className={`client-csv-dropzone ${draggingCsv ? "dragging" : ""}`}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              setDraggingCsv(true);
+            }}
+            onDragOver={(event) => event.preventDefault()}
+            onDragLeave={() => setDraggingCsv(false)}
+            onDrop={handleCsvDrop}
+            aria-disabled={clientCsvBusy}
+          >
+            <FileText size={28} />
+            <strong>Drag any client CSV here</strong>
+            <span>
+              Uses business/client, owner, plan, payment status, private route, and modules columns when present.
+            </span>
+            <small>{clientCsvStatus}</small>
+          </div>
+          <div className="client-csv-link-row">
+            <input
+              value={csvPath}
+              onChange={(event) => setCsvPath(event.target.value)}
+              placeholder="Link CSV path, e.g. C:\\Clients\\ledger.csv or /home/kali/clients.csv"
+            />
+            <input
+              value={csvLabel}
+              onChange={(event) => setCsvLabel(event.target.value)}
+              placeholder="Label optional"
+            />
+            <button type="button" disabled={clientCsvBusy || !csvPath.trim()} onClick={handleCsvLink}>
+              Link CSV
+            </button>
+          </div>
+          <div className="linked-csv-list">
+            {linkedClientCsvs.length ? (
+              linkedClientCsvs.map((link) => (
+                <article className="linked-csv-item" key={link.id}>
+                  <div>
+                    <strong>{link.label}</strong>
+                    <span>{link.path}</span>
+                    <small>{link.lastSyncedAt ? `Synced ${new Date(link.lastSyncedAt).toLocaleString()}` : "Not synced yet"}</small>
+                  </div>
+                  <button type="button" disabled={clientCsvBusy} onClick={() => void syncLinkedClientCsv(link.id)}>
+                    Sync
+                  </button>
+                </article>
+              ))
+            ) : (
+              <span className="linked-csv-empty">No linked CSVs yet. Drop a file once or link a path for repeat sync.</span>
+            )}
+          </div>
+        </section>
+      ) : null}
 
       {canManageAccess ? (
         <section className="money-demo-panel" data-testid="money-demo-panel">

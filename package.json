@@ -12,6 +12,10 @@
     "build": "npm run build --workspaces --if-present",
     "dev:web": "npm run dev --workspace @phantomforce/web",
     "dev:server": "npm run dev --workspace @phantomforce/server",
+    "voicebox:up": "docker compose -f integrations/voicebox/docker-compose.yml up --build -d",
+    "voicebox:down": "docker compose -f integrations/voicebox/docker-compose.yml down",
+    "voicebox:logs": "docker compose -f integrations/voicebox/docker-compose.yml logs -f voicebox",
+    "voicebox:status": "powershell -NoProfile -Command \"try { Invoke-RestMethod http://127.0.0.1:17600/profiles | ConvertTo-Json -Depth 4 } catch { Invoke-RestMethod http://127.0.0.1:17493/profiles | ConvertTo-Json -Depth 4 }\"",
     "typecheck": "npm run build --workspace @phantomforce/contracts && npm run typecheck --workspace @phantomforce/web && npm run typecheck --workspace @phantomforce/server",
     "prisma:generate": "npm run prisma:generate --workspace @phantomforce/server"
   },
