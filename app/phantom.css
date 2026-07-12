@@ -16,6 +16,7 @@
   --line-strong: rgba(65, 255, 161, 0.34);
   --phantom-keyboard-offset: 0px;
 }
+
 * { box-sizing: border-box; }
 html, body {
   margin: 0; min-height: 100%; background: var(--bg); color: var(--ink);
@@ -2990,8 +2991,69 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   transform: scale(0.9);
 }
 .phantom-mode-stage {
-  position: relative; z-index: 2; isolation: isolate; width: min(100%, 470px); aspect-ratio: 1;
-  display: grid; place-items: center; margin: 0; transform-style: preserve-3d;
+  position: relative; z-index: 2; isolation: isolate; width: min(100%, 390px); aspect-ratio: 1;
+  display: grid; place-items: center; margin: clamp(22px, 4vw, 44px) auto 0; transform-style: preserve-3d;
+  overflow: visible;
+}
+
+/* FINAL companion containment fix: Phantom pet stays small, and his words sit
+   above his head as a bounded bubble instead of running across/over the body. */
+.pc,
+.chatbox-head .pc,
+.console .chatbox-head .pc {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: 32px minmax(0, 1fr) auto !important;
+  align-items: center !important;
+  column-gap: 9px !important;
+  min-width: 0 !important;
+  padding-top: 30px !important;
+}
+
+.pc .pc-avatar,
+.chatbox-head .pc-avatar,
+.console .chatbox-head .pc-avatar {
+  width: 32px !important;
+  height: 32px !important;
+  max-width: 32px !important;
+  max-height: 32px !important;
+}
+
+.pc .pc-meta,
+.chatbox-head .pc-meta,
+.console .chatbox-head .pc-meta {
+  min-width: 0 !important;
+}
+
+.pc .pc-caption,
+.chatbox-head .pc-caption,
+.console .chatbox-head .pc-caption {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  display: block !important;
+  max-width: min(260px, calc(100vw - 42px)) !important;
+  margin: 0 !important;
+  padding: 5px 9px !important;
+  border: 1px solid rgba(65, 255, 161, 0.22) !important;
+  border-radius: 999px !important;
+  background: rgba(2, 12, 9, 0.88) !important;
+  color: rgba(225, 255, 239, 0.88) !important;
+  font: 700 10px "DM Mono", monospace !important;
+  letter-spacing: 0.04em !important;
+  line-height: 1.25 !important;
+  white-space: normal !important;
+  overflow: visible !important;
+  overflow-wrap: anywhere !important;
+  text-overflow: clip !important;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.34), 0 0 18px rgba(65, 255, 161, 0.1) !important;
+  z-index: 4 !important;
+}
+
+.pc .pc-title b,
+.chatbox-head .pc-title b,
+.console .chatbox-head .pc-title b {
+  max-width: 150px !important;
 }
 .phantom-mode-stage::before,
 .phantom-mode-stage::after {
@@ -3009,7 +3071,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   opacity: 0.54; animation: phantomOrbit 15s linear infinite;
 }
 .phantom-mode-pose {
-  position: relative; z-index: 1; width: min(80%, 390px); max-height: min(50vh, 420px);
+  position: relative; z-index: 1; width: min(72%, 300px); max-height: min(40vh, 330px);
   object-fit: contain; transform-origin: 50% 76%; mix-blend-mode: screen; opacity: 0.92;
   filter: saturate(1.08) contrast(1.12) brightness(1.05) drop-shadow(0 0 22px rgba(65, 255, 161, 0.28)) drop-shadow(0 26px 54px rgba(0, 0, 0, 0.46));
   animation: phantomPoseFloat 5.6s ease-in-out infinite;
@@ -3020,13 +3082,15 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   filter: saturate(1.2) contrast(1.16) brightness(1.08) drop-shadow(0 0 34px rgba(65, 255, 161, 0.36)) drop-shadow(0 26px 54px rgba(0, 0, 0, 0.42));
 }
 .phantom-mode-caption {
-  position: absolute; left: 50%; bottom: 7%; z-index: 7; transform: translateX(-50%);
-  padding: 6px 10px; border: 1px solid rgba(65, 255, 161, 0.22); border-radius: 999px;
-  background: rgba(2, 12, 9, 0.46); color: rgba(201, 255, 223, 0.72);
-  font: 700 8.5px "DM Mono", monospace; letter-spacing: 0.2em; text-transform: uppercase; white-space: nowrap;
+  position: absolute; left: 50%; top: 0; z-index: 7; transform: translate(-50%, -82%);
+  width: max-content; max-width: min(280px, calc(100vw - 42px));
+  padding: 8px 12px; border: 1px solid rgba(65, 255, 161, 0.24); border-radius: 999px;
+  background: rgba(2, 12, 9, 0.76); color: rgba(226, 255, 239, 0.86);
+  font: 700 8.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase;
+  white-space: normal; overflow-wrap: anywhere; text-align: center; line-height: 1.35;
   box-shadow: 0 0 18px rgba(65, 255, 161, 0.09); backdrop-filter: blur(14px);
 }
-.phantom.has-3d-phantom .phantom-mode-caption { bottom: 5%; background: rgba(2, 12, 9, 0.36); }
+.phantom.has-3d-phantom .phantom-mode-caption { top: 0; bottom: auto; background: rgba(2, 12, 9, 0.68); }
 .phantom-mode-stage[data-pose="ask"] .phantom-mode-pose { animation-name: phantomPoseListen; }
 .phantom-mode-stage[data-pose="write"] .phantom-mode-pose { animation-name: phantomPoseWrite; }
 .phantom-mode-stage[data-pose="image"] .phantom-mode-pose { animation-name: phantomPosePresent; }
@@ -3341,7 +3405,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .phantom-webgl { min-height: 270px; inset: -8% -8% -4%; }
   .phantom-mode-stage { width: min(100%, 310px); }
   .phantom-mode-pose { width: min(88%, 270px); max-height: 240px; opacity: 0.9; }
-  .phantom-mode-caption { bottom: 2%; padding: 5px 9px; font-size: 8px; letter-spacing: 0.16em; opacity: 0.82; }
+  .phantom-mode-caption { top: 0; bottom: auto; transform: translate(-50%, -82%); padding: 7px 10px; font-size: 8px; letter-spacing: 0.12em; opacity: 0.9; }
   .cmd-chip { min-height: 42px; justify-content: center; padding: 10px 8px; }
   .cmd-chip span { font-size: 12px; }
   .site-builder-head { padding: 15px; border-radius: 18px; }
@@ -4503,14 +4567,44 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-add { display: inline-flex; align-items: center; gap: 6px; padding: 8px 13px; border: 1px solid var(--line-strong); border-radius: 10px; background: rgba(65,255,161,0.06); color: var(--neon); cursor: pointer; font: 600 12px "Space Grotesk"; }
 .set-add:hover { background: rgba(65,255,161,0.14); }
 .set-add .ic { width: 14px; height: 14px; }
-.set-model-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
+.set-label { margin: 18px 0 8px; color: var(--dim); font: 700 9.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; }
+.set-choice-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.set-choice-card {
+  min-width: 0; padding: 13px 14px; border: 1px solid var(--line); border-radius: 14px;
+  background: rgba(2,10,8,0.42); color: var(--ink); text-align: left; cursor: pointer;
+}
+.set-choice-card b { display: block; color: #effff6; font-size: 13px; }
+.set-choice-card i { display: block; margin-top: 4px; color: var(--dim); font-size: 11px; font-style: normal; line-height: 1.35; }
+.set-choice-card:hover, .set-choice-card.is-active { border-color: rgba(65,255,161,0.48); background: rgba(65,255,161,0.08); }
+.set-choice-card.is-active { box-shadow: inset 3px 0 0 var(--neon), 0 0 22px rgba(65,255,161,0.06); }
+.set-selection-summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 10px; padding: 10px 12px;
+  border: 1px solid rgba(65,255,161,0.14); border-radius: 12px; background: rgba(65,255,161,0.035);
+}
+.set-selection-summary span { min-width: 0; }
+.set-selection-summary b { display: block; color: var(--neon); font-size: 12px; }
+.set-selection-summary i { display: block; margin-top: 2px; color: var(--dim); font-size: 11px; font-style: normal; }
+.set-selection-summary em { flex: 0 0 auto; color: #cfeeda; font: 700 9px "DM Mono", monospace; font-style: normal; text-transform: uppercase; letter-spacing: .08em; }
+.set-model-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-bottom: 14px; }
 .set-model-card {
-  min-width: 0; text-align: left; border: 1px solid var(--line); border-radius: 15px; padding: 13px;
+  min-width: 0; display: grid; grid-template-columns: 38px minmax(0,1fr) 24px; align-items: center; gap: 10px;
+  text-align: left; border: 1px solid var(--line); border-radius: 15px; padding: 12px;
   background: rgba(2,10,8,0.42); color: var(--ink); cursor: pointer; transition: border-color 0.2s, background 0.2s, transform 0.2s;
 }
 .set-model-card:hover, .set-model-card.is-active {
   border-color: rgba(65,255,161,0.42); background: rgba(65,255,161,0.08); transform: translateY(-1px);
 }
+.set-model-card.is-preferred { box-shadow: inset 3px 0 0 var(--neon); }
+.set-provider-mark {
+  width: 38px; height: 38px; display: grid; place-items: center; border: 1px solid rgba(65,255,161,.28);
+  border-radius: 12px; color: var(--neon); background: rgba(65,255,161,.08); font: 800 10px "DM Mono", monospace;
+}
+.set-provider-copy { min-width: 0; }
+.set-provider-check {
+  width: 22px; height: 22px; display: grid; place-items: center; border: 1px solid var(--line); border-radius: 999px;
+  color: var(--dim); font-size: 12px;
+}
+.set-model-card.is-active .set-provider-check { border-color: var(--neon); color: #04160d; background: var(--neon); }
 .set-model-orb {
   display: block; width: 13px; height: 13px; margin-bottom: 9px; border-radius: 50%;
   background: radial-gradient(circle at 35% 30%, #eafff4, var(--neon) 42%, rgba(65,255,161,0.24) 70%);
@@ -4518,6 +4612,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .set-model-card b { display: block; font-size: 14px; color: #f4fff8; }
 .set-model-card i { display: block; margin-top: 4px; color: var(--dim); font-style: normal; font-size: 11.5px; line-height: 1.35; }
+.set-preferred-provider { max-width: 360px; margin: 0 0 8px; }
+.set-provider-models { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
+.set-response-controls { margin-top: 18px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.set-footnote { margin: 14px 0 0; color: var(--dim); font-size: 11px; line-height: 1.45; }
 .set-section-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; margin-bottom: 14px; }
 .set-grid { display: grid; gap: 12px; margin: 8px 0 14px; }
 .set-grid-two { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -4555,6 +4653,10 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .set-category-nav { grid-template-columns: 1fr; }
   .set-section-head { flex-direction: column; }
   .set-grid-two { grid-template-columns: 1fr; }
+  .set-choice-grid { grid-template-columns: 1fr; }
+  .set-model-grid { grid-template-columns: 1fr; }
+  .set-selection-summary { align-items: flex-start; flex-direction: column; }
+  .set-response-controls { grid-template-columns: 1fr; }
 }
 .set-providers { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px; }
 .set-prov { position: relative; border: 1px solid var(--line); border-radius: 15px; padding: 15px; background: rgba(4,12,9,0.5); transition: border-color 0.2s; }
@@ -5796,7 +5898,9 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     max-height: 250px;
   }
   .phantom-mode-caption {
-    bottom: 0;
+    top: 0;
+    bottom: auto;
+    transform: translate(-50%, -82%);
   }
 }
 
@@ -9903,4 +10007,54 @@ body:has([data-workspace-page="workforce"]) .buddy-canvas {
   .ac-detail-panel { grid-template-columns: 1fr; grid-template-rows: auto 1fr; max-height: 92vh; }
   .ac-detail-preview { max-height: 40vh; }
   .ac-detail-facts, .ac-detail-flags { grid-template-columns: 1fr; }
+/* Final hard override: keep the Phantom pet compact with speech above its head. */
+body .phantom .console .chatbox-head,
+body .phantom .chatbox-head {
+  overflow: visible !important;
+}
+
+body .phantom .console .chatbox-head .pc,
+body .phantom .chatbox-head .pc,
+body .phantom .pc {
+  position: relative !important;
+  display: grid !important;
+  grid-template-columns: 32px minmax(0, 1fr) auto !important;
+  align-items: end !important;
+  gap: 9px !important;
+  min-height: 68px !important;
+  padding-top: 30px !important;
+}
+
+body .phantom .console .chatbox-head .pc-avatar,
+body .phantom .chatbox-head .pc-avatar,
+body .phantom .pc .pc-avatar {
+  width: 32px !important;
+  min-width: 32px !important;
+  max-width: 32px !important;
+  height: 32px !important;
+  min-height: 32px !important;
+  max-height: 32px !important;
+  border-radius: 12px !important;
+}
+
+body .phantom .console .chatbox-head .pc-caption,
+body .phantom .chatbox-head .pc-caption,
+body .phantom .pc .pc-caption {
+  position: absolute !important;
+  left: 0 !important;
+  top: 0 !important;
+  z-index: 4 !important;
+  display: block !important;
+  width: max-content !important;
+  max-width: min(260px, calc(100vw - 42px)) !important;
+  padding: 5px 9px !important;
+  border: 1px solid rgba(65, 255, 161, 0.2) !important;
+  border-radius: 999px !important;
+  background: rgba(1, 8, 6, 0.92) !important;
+  color: #d9ffe9 !important;
+  font-size: 0.68rem !important;
+  line-height: 1.2 !important;
+  white-space: normal !important;
+  overflow-wrap: anywhere !important;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28) !important;
 }

@@ -1,10 +1,10 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260712-203";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260712-203";
-import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-203";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260712-203";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260712-206";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260712-206";
+import { loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-206";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260712-206";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -33,44 +33,53 @@ function saveSettingsTab(id) {
   try { localStorage.setItem(SETTINGS_TAB_KEY, id); } catch {}
 }
 
-/* Display-only lane names — the real backend/vendor identity behind each
-   lane never surfaces outside the owner-only Developer page. The `id`
-   values are stable storage keys, not shown to the user. */
 const PROVIDERS = [
   {
     id: "claude",
-    name: "Phantom Reasoning",
-    role: "Strategy, copy, review",
-    models: ["Fast", "Balanced", "Deep"],
+    name: "Claude",
+    short: "CL",
+    role: "Writing, strategy, and careful review",
+    models: ["claude-cli", "claude-sonnet", "claude-opus"],
   },
   {
     id: "codex",
-    name: "Phantom Code",
-    role: "Code, repo work, implementation",
-    models: ["Fast", "Balanced", "Deep"],
+    name: "Codex",
+    short: "CX",
+    role: "Code, files, debugging, and implementation",
+    models: ["codex-default", "codex-high", "codex-fast"],
   },
   {
     id: "openrouter",
-    name: "Phantom Router",
-    role: "Flexible cloud routing",
-    models: ["Fast", "Balanced", "Deep"],
+    name: "OpenRouter",
+    short: "OR",
+    role: "Cloud model routing and flexible fallbacks",
+    models: ["openrouter-auto", "z-ai/glm-5.2"],
   },
   {
     id: "local",
-    name: "Phantom Local",
-    role: "Private, on-device lane",
-    models: ["Fast", "Balanced", "Deep"],
+    name: "Local",
+    short: "PC",
+    role: "Private models running on this computer",
+    models: ["local-auto", "local-glm"],
   },
+];
+
+const PROVIDER_MODES = [
+  { id: "smart", name: "Smart Mix", note: "Phantom picks the best provider and falls back automatically." },
+  { id: "single", name: "One provider", note: "Use only the provider you choose." },
+  { id: "multiple", name: "Multiple", note: "Choose the providers Phantom is allowed to use." },
 ];
 
 const DEFAULT_SETTINGS = {
   provider: "claude",
+  providerMode: "smart",
+  selectedProviders: ["claude", "codex", "openrouter", "local"],
   brainMode: "api",
   models: {
-    claude: "Balanced",
-    codex: "Balanced",
-    openrouter: "Balanced",
-    local: "Balanced",
+    claude: "claude-cli",
+    codex: "codex-default",
+    openrouter: "openrouter-auto",
+    local: "local-auto",
   },
   responseStyle: "operator",
   responseLength: "balanced",
@@ -121,15 +130,27 @@ function providerFor(id) {
 function normalizeSettings(value) {
   const input = value && typeof value === "object" ? value : {};
   const provider = PROVIDERS.some((item) => item.id === input.provider) ? input.provider : DEFAULT_SETTINGS.provider;
+  const providerMode = PROVIDER_MODES.some((item) => item.id === input.providerMode) ? input.providerMode : DEFAULT_SETTINGS.providerMode;
   const brainMode = ["local", "api", "subscription"].includes(input.brainMode) ? input.brainMode : DEFAULT_SETTINGS.brainMode;
   const models = { ...DEFAULT_SETTINGS.models, ...(input.models || {}) };
   for (const option of PROVIDERS) {
     if (!option.models.includes(models[option.id])) models[option.id] = option.models[0];
   }
+  const requestedProviders = Array.isArray(input.selectedProviders) ? input.selectedProviders : DEFAULT_SETTINGS.selectedProviders;
+  let selectedProviders = [...new Set(requestedProviders.filter((id) => PROVIDERS.some((providerOption) => providerOption.id === id)))];
+  if (providerMode === "smart") selectedProviders = PROVIDERS.map((item) => item.id);
+  if (providerMode === "single") selectedProviders = [provider];
+  if (!selectedProviders.length) selectedProviders = [provider];
+  if (providerMode === "multiple" && selectedProviders.length < 2) {
+    selectedProviders.push(selectedProviders[0] === "claude" ? "codex" : "claude");
+  }
+  const preferredProvider = selectedProviders.includes(provider) ? provider : selectedProviders[0];
   return {
     ...DEFAULT_SETTINGS,
     ...input,
-    provider,
+    provider: preferredProvider,
+    providerMode,
+    selectedProviders,
     brainMode,
     models,
   };
@@ -157,11 +178,28 @@ function optionList(options, selected) {
 
 function renderProviderCards(settings) {
   return PROVIDERS.map((provider) => `
-    <button class="set-model-card ${settings.provider === provider.id ? "is-active" : ""}" type="button" data-ai-provider="${esc(provider.id)}" aria-pressed="${settings.provider === provider.id ? "true" : "false"}">
-      <span class="set-model-orb"></span>
-      <b>${esc(provider.name)}</b>
-      <i>${esc(provider.role)}</i>
+    <button class="set-model-card ${settings.selectedProviders.includes(provider.id) ? "is-active" : ""} ${settings.provider === provider.id ? "is-preferred" : ""}" type="button" data-ai-provider="${esc(provider.id)}" aria-pressed="${settings.selectedProviders.includes(provider.id) ? "true" : "false"}">
+      <span class="set-provider-mark">${esc(provider.short)}</span>
+      <span class="set-provider-copy"><b>${esc(provider.name)}</b><i>${esc(provider.role)}</i></span>
+      <span class="set-provider-check">${settings.selectedProviders.includes(provider.id) ? "✓" : "+"}</span>
     </button>`).join("");
+}
+
+function renderProviderModeCards(settings) {
+  return PROVIDER_MODES.map((mode) => `
+    <button class="set-choice-card ${settings.providerMode === mode.id ? "is-active" : ""}" type="button" data-provider-mode="${mode.id}" aria-pressed="${settings.providerMode === mode.id ? "true" : "false"}">
+      <b>${esc(mode.name)}</b><i>${esc(mode.note)}</i>
+    </button>`).join("");
+}
+
+function renderSelectedModelControls(settings) {
+  return settings.selectedProviders.map((providerId) => {
+    const provider = providerFor(providerId);
+    const selectedModel = settings.models[provider.id] || provider.models[0];
+    return `<label class="set-control set-provider-model"><span>${esc(provider.name)} model</span>
+      <select data-ai-provider-model="${provider.id}">${provider.models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(modelDisplayLabel(model))}</option>`).join("")}</select>
+    </label>`;
+  }).join("");
 }
 
 function loopProviderName(id) {
@@ -207,11 +245,11 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   const activeProvider = providerFor(settings.provider);
   const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
   const loop = loadPhantomLoop();
-  const brainLabel = {
-    local: "Instant",
-    api: "Connected",
-    subscription: "Subscription",
-  }[settings.brainMode] || "Instant";
+  const brainLabel = settings.providerMode === "smart"
+    ? "Smart Mix"
+    : settings.providerMode === "multiple"
+      ? `${settings.selectedProviders.length} providers`
+      : activeProvider.name;
   const loopModel = LOOP_PROVIDERS.find((p) => p.id === loop.targetProvider) || LOOP_PROVIDERS[0];
 
   el.innerHTML = `
@@ -222,22 +260,19 @@ export function renderOperatorMiniSettings(el, opts = {}) {
         <em class="chat-mini-saved" data-mini-saved hidden>Saved — applies to the next message</em>
       </div>
       <div class="chat-mini-summary">
-        <span><b>${esc(brainLabel)}</b><i>${esc(activeProvider.name)} · ${esc(activeModel)}</i></span>
+        <span><b>${esc(brainLabel)}</b><i>${settings.providerMode === "smart" ? "Automatic routing and fallback" : `${esc(activeProvider.name)} · ${esc(modelDisplayLabel(activeModel))}`}</i></span>
         <span><b>${loop.enabled ? "Loop on" : "Loop off"}</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Replies stay with Phantom"}</i></span>
       </div>
       <div class="chat-mini-fields">
-        <label class="chat-mini-field"><span>Backend</span>
-          <select data-mini-brain>${optionList([
-            { id: "local", label: "Instant (no backend)" },
-            { id: "api", label: "Connected" },
-            { id: "subscription", label: "Subscription" },
-          ], settings.brainMode)}</select>
+        <label class="chat-mini-field"><span>AI routing</span>
+          <select data-mini-provider>
+            <option value="smart" ${settings.providerMode === "smart" ? "selected" : ""}>Smart Mix</option>
+            ${PROVIDERS.map((provider) => `<option value="${esc(provider.id)}" ${settings.providerMode === "single" && provider.id === settings.provider ? "selected" : ""}>${esc(provider.name)} only</option>`).join("")}
+            <option value="multiple" ${settings.providerMode === "multiple" ? "selected" : ""}>Multiple providers</option>
+          </select>
         </label>
-        <label class="chat-mini-field"><span>Model</span>
-          <select data-mini-provider>${PROVIDERS.map((provider) => `<option value="${esc(provider.id)}" ${provider.id === settings.provider ? "selected" : ""}>${esc(provider.name)}</option>`).join("")}</select>
-        </label>
-        <label class="chat-mini-field chat-mini-wide"><span>Default model</span>
-          <select data-mini-model>${activeProvider.models.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(model)}</option>`).join("")}</select>
+        <label class="chat-mini-field chat-mini-wide"><span>Preferred model</span>
+          <select data-mini-model ${settings.providerMode === "smart" ? "disabled" : ""}>${activeProvider.models.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(modelDisplayLabel(model))}</option>`).join("")}</select>
         </label>
       </div>
       <div class="chat-mini-loop">
@@ -276,13 +311,18 @@ export function renderOperatorMiniSettings(el, opts = {}) {
 
   const providerSelect = el.querySelector("[data-mini-provider]");
   if (providerSelect) providerSelect.onchange = () => {
-    settings.provider = providerSelect.value;
-    saveMiniAndRender(el, opts, settings);
-  };
-
-  const brainSelect = el.querySelector("[data-mini-brain]");
-  if (brainSelect) brainSelect.onchange = () => {
-    settings.brainMode = brainSelect.value;
+    const value = providerSelect.value;
+    if (value === "smart") {
+      settings.providerMode = "smart";
+      settings.selectedProviders = PROVIDERS.map((provider) => provider.id);
+    } else if (value === "multiple") {
+      settings.providerMode = "multiple";
+      if (settings.selectedProviders.length < 2) settings.selectedProviders = [settings.provider, "claude"].filter((id, index, list) => list.indexOf(id) === index);
+    } else {
+      settings.providerMode = "single";
+      settings.provider = value;
+      settings.selectedProviders = [value];
+    }
     saveMiniAndRender(el, opts, settings);
   };
 
@@ -385,26 +425,30 @@ function renderLoopAdvancedSection() {
 }
 
 function renderModelTab(settings, activeProvider, activeModel) {
+  const mode = PROVIDER_MODES.find((item) => item.id === settings.providerMode) || PROVIDER_MODES[0];
   return `
       <div class="set-section">
         <div class="set-sec-head">
           <div>
-            <h3>Model</h3>
-            <p class="set-note">Pick the brain lane Phantom should prefer when a task needs reasoning, code, provider routing, or private local work.</p>
+            <h3>AI models</h3>
+            <p class="set-note">Choose one provider, several providers, or let Phantom select the best one for each request.</p>
           </div>
         </div>
+        <p class="set-label">How Phantom chooses</p>
+        <div class="set-choice-grid">${renderProviderModeCards(settings)}</div>
+        <div class="set-selection-summary">
+          <span><b>${esc(mode.name)}</b><i>${esc(mode.note)}</i></span>
+          <em>${settings.selectedProviders.length} of ${PROVIDERS.length} providers enabled</em>
+        </div>
+        <p class="set-label">Providers</p>
         <div class="set-model-grid">${renderProviderCards(settings)}</div>
-        <div class="set-control-grid">
-          <label class="set-control"><span>Chat backend</span>
-            <select data-ai-field="brainMode">${optionList([
-              { id: "local", label: "Instant - answers now, no backend" },
-              { id: "api", label: "Connected - backend brain" },
-              { id: "subscription", label: "Subscription - managed brain" },
-            ], settings.brainMode)}</select>
-          </label>
-          <label class="set-control"><span>Default model</span>
-            <select data-ai-model>${activeProvider.models.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(model)}</option>`).join("")}</select>
-          </label>
+        ${settings.providerMode === "multiple" ? `
+          <label class="set-control set-preferred-provider"><span>Try this provider first</span>
+            <select data-ai-preferred>${settings.selectedProviders.map((id) => `<option value="${id}" ${id === settings.provider ? "selected" : ""}>${esc(providerFor(id).name)}</option>`).join("")}</select>
+          </label>` : ""}
+        <p class="set-label">Models</p>
+        <div class="set-control-grid set-provider-models">${renderSelectedModelControls(settings)}</div>
+        <div class="set-control-grid set-response-controls">
           <label class="set-control"><span>Response style</span>
             <select data-ai-field="responseStyle">${optionList([
               { id: "operator", label: "Operator - direct and decisive" },
@@ -421,6 +465,7 @@ function renderModelTab(settings, activeProvider, activeModel) {
             ], settings.responseLength)}</select>
           </label>
         </div>
+        <p class="set-footnote">If a selected provider is unavailable, Smart Mix and Multiple can try another enabled provider. One provider never switches silently.</p>
       </div>`;
 }
 
@@ -603,14 +648,44 @@ export function renderOperatorSettings(el, opts = {}) {
 
   el.querySelectorAll("[data-ai-provider]").forEach((button) => {
     button.onclick = () => {
-      settings.provider = button.dataset.aiProvider || DEFAULT_SETTINGS.provider;
+      const id = button.dataset.aiProvider || DEFAULT_SETTINGS.provider;
+      if (settings.providerMode === "smart") return;
+      if (settings.providerMode === "single") {
+        settings.provider = id;
+        settings.selectedProviders = [id];
+      } else if (settings.selectedProviders.includes(id)) {
+        if (settings.selectedProviders.length <= 2) return;
+        settings.selectedProviders = settings.selectedProviders.filter((providerId) => providerId !== id);
+        if (settings.provider === id) settings.provider = settings.selectedProviders[0];
+      } else {
+        settings.selectedProviders = [...settings.selectedProviders, id];
+      }
       saveAndRender();
     };
   });
 
-  const modelSelect = el.querySelector("[data-ai-model]");
-  if (modelSelect) modelSelect.onchange = () => {
-    settings.models[settings.provider] = modelSelect.value;
+  el.querySelectorAll("[data-provider-mode]").forEach((button) => {
+    button.onclick = () => {
+      settings.providerMode = button.dataset.providerMode || "smart";
+      if (settings.providerMode === "smart") settings.selectedProviders = PROVIDERS.map((provider) => provider.id);
+      if (settings.providerMode === "single") settings.selectedProviders = [settings.provider];
+      if (settings.providerMode === "multiple" && settings.selectedProviders.length < 2) {
+        settings.selectedProviders = [settings.provider, settings.provider === "claude" ? "codex" : "claude"];
+      }
+      saveAndRender();
+    };
+  });
+
+  el.querySelectorAll("[data-ai-provider-model]").forEach((select) => {
+    select.onchange = () => {
+      settings.models[select.dataset.aiProviderModel] = select.value;
+      saveAndRender();
+    };
+  });
+
+  const preferred = el.querySelector("[data-ai-preferred]");
+  if (preferred) preferred.onchange = () => {
+    settings.provider = preferred.value;
     saveAndRender();
   };
 

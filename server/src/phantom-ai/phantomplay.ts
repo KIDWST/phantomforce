@@ -1,0 +1,478 @@
+import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import type { AccessSession } from "../access/session.js";
+
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = resolve(moduleDir, "../../..");
+const storePath = process.env.PHANTOMFORCE_PHANTOMPLAY_PATH || resolve(repoRoot, ".phantom", "phantomplay.json");
+
+export type PhantomPlayRating = "everyone" | "teen" | "mature";
+export type PhantomPlaySubmissionStatus = "draft" | "submitted" | "changes_requested" | "approved" | "rejected" | "disabled";
+
+export type PhantomPlayGame = {
+  id: string;
+  title: string;
+  summary: string;
+  description: string;
+  category: string;
+  tags: string[];
+  contentRating: PhantomPlayRating;
+  developer: string;
+  kind: "built_in" | "community";
+  launchUrl: string;
+  thumbnail: string;
+  featured: boolean;
+  version: string;
+  controls: string;
+  progressSupport: boolean;
+  scoreSupport: boolean;
+};
+
+type PlaySession = {
+  id: string;
+  gameId: string;
+  startedAt: string;
+  updatedAt: string;
+  endedAt: string | null;
+  seconds: number;
+  score: number | null;
+  progress: number;
+  state: Record<string, string | number | boolean | null>;
+};
+
+type PlayerProfile = {
+  tenantId: string;
+  actorId: string;
+  favorites: string[];
+  sessions: PlaySession[];
+  preferences: {
+    contentRating: PhantomPlayRating;
+    sound: boolean;
+    reducedMotion: boolean;
+    allowCommunityGames: boolean;
+  };
+  updatedAt: string;
+};
+
+export type PhantomPlaySubmission = {
+  id: string;
+  tenantId: string;
+  developerId: string;
+  developerName: string;
+  title: string;
+  summary: string;
+  description: string;
+  category: string;
+  contentRating: PhantomPlayRating;
+  launchUrl: string;
+  screenshots: string[];
+  tags: string[];
+  controls: string;
+  dataHandling: string;
+  version: string;
+  status: PhantomPlaySubmissionStatus;
+  featured: boolean;
+  moderationNote: string;
+  versions: Array<{ version: string; submittedAt: string; notes: string }>;
+  createdAt: string;
+  updatedAt: string;
+};
+
+type PhantomPlayStore = {
+  version: 1;
+  profiles: Record<string, PlayerProfile>;
+  submissions: PhantomPlaySubmission[];
+};
+
+export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
+  {
+    id: "neon-drift",
+    title: "Neon Drift",
+    summary: "Dodge the signal storm and keep your streak alive.",
+    description: "A fast one-button reaction game built for a two-minute reset between focused work blocks.",
+    category: "Arcade",
+    tags: ["quick", "reaction", "keyboard", "touch"],
+    contentRating: "everyone",
+    developer: "Phantom Labs",
+    kind: "built_in",
+    launchUrl: "/app/games/neon-drift.html",
+    thumbnail: "/app/assets/poses/mode-dark-video.webp",
+    featured: true,
+    version: "1.0.0",
+    controls: "Arrow keys, A/D, or tap left/right",
+    progressSupport: true,
+    scoreSupport: true,
+  },
+  {
+    id: "signal-match",
+    title: "Signal Match",
+    summary: "Find the matching signals before the grid resets.",
+    description: "A calm memory game with short rounds, keyboard support, and saved best scores.",
+    category: "Puzzle",
+    tags: ["memory", "calm", "puzzle", "touch"],
+    contentRating: "everyone",
+    developer: "Phantom Labs",
+    kind: "built_in",
+    launchUrl: "/app/games/signal-match.html",
+    thumbnail: "/app/assets/poses/mode-dark-image.webp",
+    featured: true,
+    version: "1.0.0",
+    controls: "Click, tap, or use Tab + Enter",
+    progressSupport: true,
+    scoreSupport: true,
+  },
+  {
+    id: "focus-stack",
+    title: "Focus Stack",
+    summary: "Drop each layer cleanly and build the tallest signal tower.",
+    description: "A timing game designed for quick intentional breaks, with resumable progress and a local best score.",
+    category: "Focus",
+    tags: ["timing", "focus", "quick", "touch"],
+    contentRating: "everyone",
+    developer: "Phantom Labs",
+    kind: "built_in",
+    launchUrl: "/app/games/focus-stack.html",
+    thumbnail: "/app/assets/poses/mode-dark-website.webp",
+    featured: false,
+    version: "1.0.0",
+    controls: "Space, Enter, click, or tap",
+    progressSupport: true,
+    scoreSupport: true,
+  },
+];
+
+const ratingRank: Record<PhantomPlayRating, number> = { everyone: 0, teen: 1, mature: 2 };
+const clean = (value: unknown, max = 500) => String(value ?? "").trim().replace(/[\u0000-\u001f\u007f]/g, " ").slice(0, max);
+const now = () => new Date().toISOString();
+const clamp = (value: unknown, min: number, max: number) => Math.max(min, Math.min(max, Number(value) || 0));
+const safeRating = (value: unknown): PhantomPlayRating => value === "mature" || value === "teen" ? value : "everyone";
+const safeVersion = (value: unknown) => /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i.test(clean(value, 40)) ? clean(value, 40) : "1.0.0";
+const privateHost = (hostname: string) => {
+  const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
+  if (host === "localhost" || [".localhost", ".local", ".internal", ".lan", ".home"].some((suffix) => host.endsWith(suffix)) || host === "0.0.0.0" || host === "::1") return true;
+  if (/^(10|127|169\.254|192\.168)\./.test(host)) return true;
+  const private172 = host.match(/^172\.(\d{1,3})\./);
+  if (private172 && Number(private172[1]) >= 16 && Number(private172[1]) <= 31) return true;
+  const carrier100 = host.match(/^100\.(\d{1,3})\./);
+  if (carrier100 && Number(carrier100[1]) >= 64 && Number(carrier100[1]) <= 127) return true;
+  if (/^198\.(18|19)\./.test(host)) return true;
+  return /^(fc|fd|fe80):/i.test(host);
+};
+const publicHttpsUrl = (value: unknown) => {
+  const raw = clean(value, 700);
+  try {
+    const url = new URL(raw);
+    return url.protocol === "https:" && !url.username && !url.password && !privateHost(url.hostname) ? raw : "";
+  } catch { return ""; }
+};
+const safeUrl = (value: unknown) => {
+  const url = clean(value, 700);
+  if (!url) return "";
+  if (url.startsWith("/app/games/community/")) return url;
+  return publicHttpsUrl(url);
+};
+const safeScreenshot = (value: unknown) => {
+  const url = clean(value, 700);
+  if (url.startsWith("/app/")) return url;
+  return publicHttpsUrl(url);
+};
+
+function tenantIdFor(session: AccessSession, requested?: unknown) {
+  const own = session.orgId || session.clientId || session.id || "phantomforce";
+  if (!session.canManageAccess) return clean(own, 100) || "phantomforce";
+  return clean(requested, 100) || clean(own, 100) || "phantomforce";
+}
+
+function actorIdFor(session: AccessSession) {
+  return clean(session.userId || session.id, 120) || "anonymous";
+}
+
+function profileKey(tenantId: string, actorId: string) {
+  return `${tenantId}::${actorId}`;
+}
+
+function freshProfile(tenantId: string, actorId: string): PlayerProfile {
+  return {
+    tenantId,
+    actorId,
+    favorites: [],
+    sessions: [],
+    preferences: { contentRating: "teen", sound: true, reducedMotion: false, allowCommunityGames: true },
+    updatedAt: now(),
+  };
+}
+
+async function readStore(): Promise<PhantomPlayStore> {
+  try {
+    const parsed = JSON.parse(await readFile(storePath, "utf8")) as Partial<PhantomPlayStore>;
+    return {
+      version: 1,
+      profiles: parsed.profiles && typeof parsed.profiles === "object" ? parsed.profiles : {},
+      submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [],
+    };
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, profiles: {}, submissions: [] };
+    throw error;
+  }
+}
+
+let writes = Promise.resolve();
+async function writeStore(store: PhantomPlayStore) {
+  writes = writes.then(async () => {
+    await mkdir(dirname(storePath), { recursive: true });
+    const temp = `${storePath}.${process.pid}.tmp`;
+    await writeFile(temp, JSON.stringify(store, null, 2), "utf8");
+    await rename(temp, storePath);
+  });
+  await writes;
+}
+
+function ensureProfile(store: PhantomPlayStore, tenantId: string, actorId: string) {
+  const key = profileKey(tenantId, actorId);
+  const profile = store.profiles[key] || freshProfile(tenantId, actorId);
+  profile.favorites = Array.isArray(profile.favorites) ? profile.favorites.slice(0, 200) : [];
+  profile.sessions = Array.isArray(profile.sessions) ? profile.sessions.slice(0, 120) : [];
+  store.profiles[key] = profile;
+  return profile;
+}
+
+function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
+  return store.submissions.filter((item) => item.status === "approved" && item.launchUrl).map((item) => ({
+    id: `community:${item.id}`,
+    title: item.title,
+    summary: item.summary,
+    description: item.description,
+    category: item.category,
+    tags: item.tags,
+    contentRating: item.contentRating,
+    developer: item.developerName,
+    kind: "community",
+    launchUrl: item.launchUrl,
+    thumbnail: item.screenshots[0] || "/app/assets/poses/mode-dark-ask.webp",
+    featured: item.featured,
+    version: item.version,
+    controls: item.controls,
+    progressSupport: true,
+    scoreSupport: true,
+  }));
+}
+
+function catalogFor(store: PhantomPlayStore, profile: PlayerProfile) {
+  const all = [...PHANTOMPLAY_BUILT_IN_GAMES, ...(profile.preferences.allowCommunityGames ? communityGames(store) : [])];
+  return all.filter((game) => ratingRank[game.contentRating] <= ratingRank[profile.preferences.contentRating]);
+}
+
+function historySummary(profile: PlayerProfile) {
+  const byGame = new Map<string, { latest: PlaySession; bestScore: number | null; totalSeconds: number }>();
+  for (const item of profile.sessions) {
+    const current = byGame.get(item.gameId);
+    if (!current) {
+      byGame.set(item.gameId, { latest: item, bestScore: item.score, totalSeconds: item.seconds });
+      continue;
+    }
+    current.totalSeconds += item.seconds;
+    if (item.score !== null) current.bestScore = Math.max(current.bestScore ?? 0, item.score);
+    if (current.latest.updatedAt < item.updatedAt) current.latest = item;
+  }
+  return [...byGame.values()].sort((a, b) => b.latest.updatedAt.localeCompare(a.latest.updatedAt)).map((item) => ({
+    gameId: item.latest.gameId,
+    lastPlayedAt: item.latest.updatedAt,
+    score: item.bestScore,
+    progress: item.latest.progress,
+    seconds: item.totalSeconds,
+    canContinue: item.latest.progress > 0 && item.latest.progress < 100,
+  }));
+}
+
+function todaySeconds(profile: PlayerProfile) {
+  const day = new Date().toISOString().slice(0, 10);
+  return profile.sessions.filter((item) => item.startedAt.startsWith(day)).reduce((sum, item) => sum + item.seconds, 0);
+}
+
+export async function getPhantomPlaySnapshot(session: AccessSession, options: { tenantId?: unknown; entitled?: boolean; dailyMinuteLimit?: number; canSubmitGames?: boolean } = {}) {
+  const tenantId = tenantIdFor(session, options.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const profile = ensureProfile(store, tenantId, actorId);
+  const catalog = catalogFor(store, profile);
+  const dailyMinuteLimit = Math.max(0, Math.floor(options.dailyMinuteLimit ?? (session.canManageAccess ? 1440 : 60)));
+  const usedSeconds = todaySeconds(profile);
+  return {
+    tenantId,
+    actorId,
+    access: {
+      enabled: options.entitled !== false,
+      reason: options.entitled === false ? "plan_restricted" : "available",
+      dailyMinuteLimit,
+      usedMinutesToday: Math.ceil(usedSeconds / 60),
+      remainingMinutesToday: Math.max(0, dailyMinuteLimit - Math.ceil(usedSeconds / 60)),
+      canSubmitGames: options.canSubmitGames ?? (session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin"),
+      canModerate: session.canManageAccess || session.isSuperAdmin === true,
+    },
+    catalog,
+    favorites: profile.favorites,
+    history: historySummary(profile),
+    preferences: profile.preferences,
+    submissions: store.submissions.filter((item) => item.developerId === actorId || session.canManageAccess).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    developerSpotlight: catalog.find((game) => game.featured)?.developer || "Phantom Labs",
+    approvedCommunityCount: communityGames(store).length,
+  };
+}
+
+export async function updatePhantomPlayProfile(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const profile = ensureProfile(store, tenantId, actorId);
+  const gameId = clean(input.gameId, 180);
+  if (input.favorite === true && gameId && !profile.favorites.includes(gameId)) profile.favorites.unshift(gameId);
+  if (input.favorite === false && gameId) profile.favorites = profile.favorites.filter((id) => id !== gameId);
+  if (input.preferences && typeof input.preferences === "object" && !Array.isArray(input.preferences)) {
+    const prefs = input.preferences as Record<string, unknown>;
+    if (prefs.contentRating !== undefined) profile.preferences.contentRating = safeRating(prefs.contentRating);
+    if (typeof prefs.sound === "boolean") profile.preferences.sound = prefs.sound;
+    if (typeof prefs.reducedMotion === "boolean") profile.preferences.reducedMotion = prefs.reducedMotion;
+    if (typeof prefs.allowCommunityGames === "boolean") profile.preferences.allowCommunityGames = prefs.allowCommunityGames;
+  }
+  profile.updatedAt = now();
+  await writeStore(store);
+  return { favorites: profile.favorites, preferences: profile.preferences };
+}
+
+export async function startPhantomPlaySession(session: AccessSession, input: Record<string, unknown>, limits: { entitled?: boolean; dailyMinuteLimit?: number } = {}) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const profile = ensureProfile(store, tenantId, actorId);
+  if (limits.entitled === false) throw new Error("PhantomPlay is not included in this plan.");
+  const dailyMinuteLimit = Math.max(0, Math.floor(limits.dailyMinuteLimit ?? (session.canManageAccess ? 1440 : 60)));
+  if (todaySeconds(profile) >= dailyMinuteLimit * 60) throw new Error("Today's PhantomPlay time limit has been reached.");
+  const gameId = clean(input.gameId, 180);
+  const game = catalogFor(store, profile).find((item) => item.id === gameId);
+  if (!game) throw new Error("This game is unavailable for this account or content setting.");
+  const stamp = now();
+  const play: PlaySession = { id: `play-${randomUUID()}`, gameId, startedAt: stamp, updatedAt: stamp, endedAt: null, seconds: 0, score: null, progress: 0, state: {} };
+  profile.sessions.unshift(play);
+  profile.sessions = profile.sessions.slice(0, 120);
+  profile.updatedAt = stamp;
+  await writeStore(store);
+  return { play, game, remainingMinutesToday: dailyMinuteLimit - Math.ceil(todaySeconds(profile) / 60) };
+}
+
+export async function updatePhantomPlaySession(session: AccessSession, playId: string, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const profile = ensureProfile(store, tenantId, actorId);
+  const play = profile.sessions.find((item) => item.id === playId);
+  if (!play) return null;
+  play.seconds = Math.min(86400, play.seconds + Math.floor(clamp(input.secondsDelta, 0, 600)));
+  if (input.score !== undefined) play.score = Math.max(play.score ?? 0, Math.floor(clamp(input.score, 0, 1_000_000_000)));
+  if (input.progress !== undefined) play.progress = Math.floor(clamp(input.progress, 0, 100));
+  if (input.state && typeof input.state === "object" && !Array.isArray(input.state)) {
+    play.state = Object.fromEntries(Object.entries(input.state as Record<string, unknown>).slice(0, 30).map(([key, value]) => [clean(key, 50), typeof value === "string" ? clean(value, 300) : typeof value === "number" || typeof value === "boolean" || value === null ? value : null]));
+  }
+  if (input.ended === true) play.endedAt = now();
+  play.updatedAt = now();
+  profile.updatedAt = play.updatedAt;
+  await writeStore(store);
+  return play;
+}
+
+function submissionInput(input: Record<string, unknown>) {
+  const screenshots = Array.isArray(input.screenshots) ? input.screenshots.map(safeScreenshot).filter(Boolean).slice(0, 6) : [];
+  const tags = Array.isArray(input.tags) ? input.tags.map((tag) => clean(tag, 32)).filter(Boolean).slice(0, 12) : [];
+  return {
+    title: clean(input.title, 90),
+    summary: clean(input.summary, 180),
+    description: clean(input.description, 3000),
+    category: clean(input.category, 60) || "Other",
+    contentRating: safeRating(input.contentRating),
+    launchUrl: safeUrl(input.launchUrl),
+    screenshots,
+    tags,
+    controls: clean(input.controls, 240),
+    dataHandling: clean(input.dataHandling, 600),
+    version: safeVersion(input.version),
+  };
+}
+
+function submissionValidation(input: ReturnType<typeof submissionInput>) {
+  const issues: string[] = [];
+  if (input.title.length < 2) issues.push("Add a game title.");
+  if (input.summary.length < 20) issues.push("Add a clear one-line summary.");
+  if (input.description.length < 80) issues.push("Describe the game, audience, and play loop.");
+  if (!input.launchUrl) issues.push("Add an HTTPS or approved PhantomPlay launch URL.");
+  if (!input.screenshots.length) issues.push("Add at least one screenshot.");
+  if (!input.controls) issues.push("Explain the controls.");
+  if (!input.dataHandling) issues.push("Explain what player data the game reads or stores.");
+  return issues;
+}
+
+export async function createPhantomPlaySubmission(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const data = submissionInput(input);
+  const submit = input.submit === true;
+  const issues = submissionValidation(data);
+  if (submit && issues.length) throw new Error(issues.join(" "));
+  const store = await readStore();
+  const timestamp = now();
+  const submission: PhantomPlaySubmission = {
+    id: `game-sub-${randomUUID()}`,
+    tenantId,
+    developerId: actorId,
+    developerName: clean(input.developerName || session.label, 90) || "Developer",
+    ...data,
+    status: submit ? "submitted" : "draft",
+    featured: false,
+    moderationNote: "",
+    versions: [{ version: data.version, submittedAt: timestamp, notes: clean(input.releaseNotes, 600) }],
+    createdAt: timestamp,
+    updatedAt: timestamp,
+  };
+  store.submissions.unshift(submission);
+  await writeStore(store);
+  return { submission, issues };
+}
+
+export async function updatePhantomPlaySubmission(session: AccessSession, submissionId: string, input: Record<string, unknown>) {
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const submission = store.submissions.find((item) => item.id === submissionId);
+  if (!submission || (!session.canManageAccess && submission.developerId !== actorId)) return null;
+  if (["approved", "disabled"].includes(submission.status) && !session.canManageAccess) throw new Error("Approved games require a new update review.");
+  const data = submissionInput({ ...submission, ...input });
+  const submit = input.submit === true;
+  const issues = submissionValidation(data);
+  if (submit && issues.length) throw new Error(issues.join(" "));
+  Object.assign(submission, data, { status: submit ? "submitted" : "draft", updatedAt: now(), moderationNote: "" });
+  if (!submission.versions.some((item) => item.version === data.version)) submission.versions.unshift({ version: data.version, submittedAt: now(), notes: clean(input.releaseNotes, 600) });
+  await writeStore(store);
+  return { submission, issues };
+}
+
+export async function moderatePhantomPlaySubmission(session: AccessSession, submissionId: string, input: Record<string, unknown>) {
+  if (!session.canManageAccess && session.isSuperAdmin !== true) throw new Error("Platform moderation access is required.");
+  const decision = clean(input.decision, 40);
+  if (!["approved", "rejected", "changes_requested", "disabled"].includes(decision)) throw new Error("Choose approve, reject, request changes, or disable.");
+  const store = await readStore();
+  const submission = store.submissions.find((item) => item.id === submissionId);
+  if (!submission) return null;
+  const issues = submissionValidation(submissionInput(submission as unknown as Record<string, unknown>));
+  if (decision === "approved" && issues.length) throw new Error(`Cannot approve: ${issues.join(" ")}`);
+  submission.status = decision as PhantomPlaySubmissionStatus;
+  submission.featured = decision === "approved" && input.featured === true;
+  submission.moderationNote = clean(input.note, 1000);
+  submission.updatedAt = now();
+  await writeStore(store);
+  return submission;
+}
+
+export async function getPhantomPlayStoreStatus() {
+  const store = await readStore();
+  return { provider: "local_json", pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMPLAY_PATH), profiles: Object.keys(store.profiles).length, submissions: store.submissions.length, approvedCommunityGames: communityGames(store).length };
+}

@@ -380,6 +380,14 @@ async function ensureBrainBootstrapMemories(session: AccessSession, options: Bra
   }
 }
 
+function isLegacyDisposableMemory(record: BrainMemoryRecord) {
+  // Older feedback handling promoted ordinary criticism such as "too
+  // robotic" directly into durable memory. Keep the ledger event, but remove
+  // those records from retrieval and context unless the feedback contains a
+  // genuinely durable instruction under the current policy.
+  return record.source === "feedback_integrator" && !feedbackWarrantsDurableMemory(record.text);
+}
+
 export async function listBrainMemories(
   session: AccessSession,
   options: BrainStoreOptions & { includeInactive?: boolean; limit?: number; type?: unknown } = {},
@@ -402,6 +410,7 @@ export async function listBrainMemories(
     malformed: read.malformed,
     memories: [...latest.values()]
       .filter((record) => options.includeInactive || record.active)
+      .filter((record) => !isLegacyDisposableMemory(record))
       .filter((record) => !typeFilter || record.type === typeFilter)
       .sort((left, right) => right.weight - left.weight || right.updatedAt.localeCompare(left.updatedAt))
       .slice(0, limit),
@@ -925,6 +934,17 @@ export async function composeBrainContext(
   return pack;
 }
 
+function feedbackWarrantsDurableMemory(value: string) {
+  const text = sanitizeText(value, MAX_TEXT_CHARS);
+  if (!text) return false;
+  if (/\b(?:remember(?: this| that)?|save (?:this|that)(?: as (?:a )?memory)?|keep (?:this|that) in memory|add (?:this|that) to (?:your )?memory)\b/i.test(text)) return true;
+  if (/[?]\s*$/.test(text) || /^(?:why|what|when|where|who|how|can|could|would|should|is|are|do|does|did)\b/i.test(text)) return false;
+  const wordCount = text.split(/\s+/).filter(Boolean).length;
+  if (wordCount < 4) return false;
+  if (/\b(?:from now on|going forward|in the future|every time|next time|do it this way next time|never do this again|always (?:use|do|keep|show|write|respond|route|ask|make)|never (?:use|do|show|write|respond|route|ask|make))\b/i.test(text)) return true;
+  return /\b(?:(?:my|our) (?:default|preference|preferred (?:style|format|workflow|model|tool|tone)) (?:is|should be)|(?:i|we) prefer\b|(?:my|our) (?:business|company|brand|workflow|process) (?:is|uses?|requires?)\b|we use\b)/i.test(text);
+}
+
 export async function recordBrainFeedback(
   session: AccessSession,
   input: {
@@ -940,6 +960,7 @@ export async function recordBrainFeedback(
   const text = sanitizeText(input.text, MAX_TEXT_CHARS);
   if (!text && input.useful === undefined) throw new Error("feedback_text_required");
   const summary = text || (input.useful ? "Output marked useful." : "Output marked not useful.");
+  const durableMemory = feedbackWarrantsDurableMemory(summary);
   const event = await appendBrainEvent(
     session,
     {
@@ -949,7 +970,7 @@ export async function recordBrainFeedback(
       linkedRunId: typeof input.targetId === "string" ? input.targetId : null,
       outcome: input.useful === false ? "negative_feedback" : "feedback_recorded",
       importance: /never|wrong|do not|don't|too robotic|next time/i.test(summary) ? "high" : "medium",
-      safeForMemory: true,
+      safeForMemory: durableMemory,
       source: "feedback_integrator",
       metadata: { kind, useful: input.useful === undefined ? null : Boolean(input.useful) },
     },
@@ -957,14 +978,14 @@ export async function recordBrainFeedback(
   );
 
   let suggestedMemory: BrainMemoryRecord | null = null;
-  if (/remember|always|never|do not|don't|next time|too robotic|more human|higgsfield|rembg|approval/i.test(summary)) {
+  if (durableMemory) {
     suggestedMemory = await createBrainMemory(
       session,
       {
         text: summary,
         type: inferMemoryType(summary),
-        confidence: /remember|always|never/i.test(summary) ? 0.78 : 0.58,
-        weight: /never|always|approval|higgsfield|rembg/i.test(summary) ? 0.78 : 0.58,
+        confidence: /remember|always|never|from now on|going forward/i.test(summary) ? 0.82 : 0.68,
+        weight: /never|always|from now on|every time/i.test(summary) ? 0.82 : 0.68,
         source: "feedback_integrator",
         sourceEventId: event.id,
       },

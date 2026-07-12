@@ -18,6 +18,10 @@
   still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
+- **PhantomPlay product foundation (2026-07-12)** — native entertainment module
+  with three real network-free games, secure sandboxed launch, tenant-scoped
+  favorites/progress/history/preferences, plan and age controls, developer release
+  submission/versioning, and platform-admin moderation. See `docs/PHANTOMPLAY.md`.
 - **Content Hub planner + unified post preview (2026-07-11)** — Creator Hub follows
   `Library → Ideas → Drafts → Publish → Planner`; Publish renders one combined
   destination preview instead of duplicate platform cards. Planner combines
@@ -53,7 +57,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260712-201`**.
+- Current cache-bust build id: **`phantom-live-20260712-204`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

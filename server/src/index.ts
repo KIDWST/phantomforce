@@ -218,6 +218,16 @@ import {
   updateVacationModeSettings,
 } from "./phantom-ai/vacation-mode.js";
 import {
+  createPhantomPlaySubmission,
+  getPhantomPlaySnapshot,
+  getPhantomPlayStoreStatus,
+  moderatePhantomPlaySubmission,
+  startPhantomPlaySession,
+  updatePhantomPlayProfile,
+  updatePhantomPlaySession,
+  updatePhantomPlaySubmission,
+} from "./phantom-ai/phantomplay.js";
+import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
 } from "./phantom-ai/security-scan-scheduler.js";
@@ -1992,9 +2002,16 @@ async function callAdminPhantomAiProviderSafe(providerId: AdminPhantomAiProvider
   }
 }
 
-async function runAdminPhantomAiChatWithFallback(requestedLane: AdminPhantomAiModelLane, ctx: AdminPhantomAiChatContext) {
-  const primaryProviderId = adminPhantomAiProviderIdForLane(requestedLane);
-  const order = adminProviderAttemptOrder(primaryProviderId);
+async function runAdminPhantomAiChatWithFallback(
+  requestedLane: AdminPhantomAiModelLane,
+  ctx: AdminPhantomAiChatContext,
+  allowedProviders?: AdminPhantomAiProviderId[],
+) {
+  const requestedPrimaryProviderId = adminPhantomAiProviderIdForLane(requestedLane);
+  const allowed = Array.isArray(allowedProviders) && allowedProviders.length ? new Set(allowedProviders) : null;
+  const filteredOrder = adminProviderAttemptOrder(requestedPrimaryProviderId).filter((providerId) => !allowed || allowed.has(providerId));
+  const order = filteredOrder.length ? filteredOrder : allowed ? [...allowed] : [requestedPrimaryProviderId];
+  const primaryProviderId = order[0];
   const attempts: AdminPhantomAiChatAttempt[] = [];
   let providerId = primaryProviderId;
   let result: any = null;
@@ -3293,6 +3310,119 @@ app.post("/api/vacation-mode/check-in", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
   return { ok: true, session, ...(await runVacationModeCheckIn("owner_requested")) };
+});
+
+/* ============================================================================
+   PHANTOMPLAY
+   Tenant-scoped game catalog, player progress, developer submissions, and
+   platform moderation. Games run in a browser sandbox; these routes never
+   proxy game traffic or expose internal infrastructure. */
+
+async function phantomPlayAccess(session: AccessSession) {
+  if (session.canManageAccess || session.isSuperAdmin) {
+    return { entitled: true, dailyMinuteLimit: 1_000_000, submissionLimit: 100_000, reason: "platform_admin" };
+  }
+  if (session.orgId) {
+    try {
+      const decision = await orgHasFeature(session.orgId, "phantomPlay");
+      return {
+        entitled: decision.allowed,
+        dailyMinuteLimit: decision.entitlements.limits.phantomPlayMinutesPerDay,
+        submissionLimit: decision.entitlements.limits.gameSubmissions,
+        reason: decision.reason,
+      };
+    } catch {
+      return { entitled: false, dailyMinuteLimit: 0, submissionLimit: 0, reason: "entitlements_unavailable" };
+    }
+  }
+  return {
+    entitled: session.subscriptionActive !== false,
+    dailyMinuteLimit: session.subscriptionActive === false ? 0 : 60,
+    submissionLimit: 0,
+    reason: session.subscriptionActive === false ? "subscription_inactive" : "legacy_session",
+  };
+}
+
+app.get("/api/phantomplay", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const access = await phantomPlayAccess(session);
+  return {
+    ok: true,
+    session,
+    ...(await getPhantomPlaySnapshot(session, { tenantId: query.tenant_id, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 })),
+    subscription: access,
+    storage: session.canManageAccess ? await getPhantomPlayStoreStatus() : undefined,
+  };
+});
+
+app.patch("/api/phantomplay/profile", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available for this plan.", reason: access.reason });
+  return { ok: true, session, ...(await updatePhantomPlayProfile(session, (request.body ?? {}) as Record<string, unknown>)) };
+});
+
+app.post("/api/phantomplay/plays", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  try {
+    return { ok: true, session, ...(await startPhantomPlaySession(session, (request.body ?? {}) as Record<string, unknown>, { entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit })) };
+  } catch (error) {
+    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Game launch was blocked." });
+  }
+});
+
+app.patch("/api/phantomplay/plays/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  const play = params.id ? await updatePhantomPlaySession(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+  return play ? { ok: true, session, play } : reply.code(404).send({ ok: false, error: "Play session was not found." });
+});
+
+app.post("/api/phantomplay/submissions", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  const snapshot = await getPhantomPlaySnapshot(session, { tenantId: body.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 });
+  if (!access.entitled || !snapshot.access.canSubmitGames || access.submissionLimit < 1) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or plan." });
+  if (snapshot.submissions.length >= access.submissionLimit && !session.canManageAccess) return reply.code(403).send({ ok: false, error: "This plan's game submission limit has been reached." });
+  try {
+    return { ok: true, session, ...(await createPhantomPlaySubmission(session, body)) };
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Game submission could not be saved." });
+  }
+});
+
+app.patch("/api/phantomplay/submissions/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  if (!access.entitled || access.submissionLimit < 1) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or plan." });
+  const params = request.params as { id?: string };
+  try {
+    const result = params.id ? await updatePhantomPlaySubmission(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Game submission was not found." });
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Game update could not be saved." });
+  }
+});
+
+app.post("/api/phantomplay/submissions/:id/moderate", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { id?: string };
+  try {
+    const submission = params.id ? await moderatePhantomPlaySubmission(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
+    return submission ? { ok: true, session, submission } : reply.code(404).send({ ok: false, error: "Game submission was not found." });
+  } catch (error) {
+    return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Moderation decision could not be saved." });
+  }
 });
 
 function buildHermesInteractionMemoryPreviewFromBody(
@@ -5749,6 +5879,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
 
   const body = (request.body ?? {}) as {
     provider?: unknown;
+    allowed_providers?: unknown;
     admin_model?: unknown;
     model_lane?: unknown;
     message?: unknown;
@@ -5897,6 +6028,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         : [],
     });
     const approvalRequired = brainContext.needsApproval || preview.decision.approval_required || preview.action_preview.approval_required;
+    const allowedAdminProviders: AdminPhantomAiProviderId[] | undefined = Array.isArray(body.allowed_providers)
+      ? Array.from(new Set(body.allowed_providers.filter((value: unknown): value is AdminPhantomAiProviderId =>
+          value === "codex_cli" || value === "claude_cli" || value === "openrouter_glm" || value === "local_ollama")))
+      : undefined;
     const fallbackChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
       requestId: normalized.request_id,
       businessName: normalized.business_name,
@@ -5906,7 +6041,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       sensitivityLevel: preview.decision.sensitivity_level,
       approvalRequired,
       executionMode: adminExecutionMode,
-    });
+    }, allowedAdminProviders);
     const respondingProviderId = fallbackChat.providerId;
     const respondingLane = adminPhantomAiLaneForProviderId(respondingProviderId);
     const respondingLabel = adminPhantomAiProviderLabel(respondingProviderId);

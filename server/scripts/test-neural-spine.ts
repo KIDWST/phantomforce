@@ -67,7 +67,24 @@ try {
     text: "Too robotic, make it more human.",
     surface: "chat",
   }, options);
-  assert.ok(feedback.suggestedMemory);
+  assert.equal(feedback.suggestedMemory, null, "one-off feedback stays in the event ledger instead of durable memory");
+  assert.equal(feedback.event.safeForMemory, false);
+
+  const legacyDisposable = await createBrainMemory(session, {
+    text: "Too robotic, make it more human.",
+    type: "preference",
+    source: "feedback_integrator",
+  }, options);
+  const afterLegacyCleanup = await listBrainMemories(session, options);
+  assert.equal(afterLegacyCleanup.memories.some((memory) => memory.id === legacyDisposable.id), false, "legacy disposable feedback should be filtered out of memory retrieval");
+
+  const durableFeedback = await recordBrainFeedback(session, {
+    kind: "correction",
+    text: "From now on, always use direct human wording.",
+    surface: "chat",
+  }, options);
+  assert.ok(durableFeedback.suggestedMemory);
+  assert.equal(durableFeedback.event.safeForMemory, true);
 
   const forgotten = await forgetBrainMemory(session, created.id, options);
   assert.equal(forgotten.active, false);
