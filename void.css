@@ -327,6 +327,12 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 .download-card h2 {
   margin: -4px 38px 0 0; font-size: clamp(27px, 5vw, 38px); font-weight: 600; line-height: 1.04; letter-spacing: -0.02em;
 }
+.download-consent-copy {
+  margin: -6px 0 0;
+  color: rgba(191, 223, 207, 0.82);
+  font: 500 12px/1.55 "Space Grotesk", sans-serif;
+  text-align: left;
+}
 .download-fields { display: grid; gap: 12px; }
 .download-fields label { display: grid; gap: 7px; text-align: left; }
 .download-fields span {
@@ -339,6 +345,13 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 .download-fields input::placeholder { color: rgba(126, 167, 149, 0.6); }
 .download-fields input:focus { border-color: rgba(77, 255, 171, 0.7); box-shadow: 0 0 0 3px rgba(77, 255, 171, 0.12); }
+.download-accept {
+  display: flex; align-items: flex-start; gap: 10px; margin: -2px 0 0; padding: 12px;
+  border: 1px solid rgba(77, 255, 171, 0.16); border-radius: 14px;
+  background: rgba(4, 18, 13, 0.72); color: rgba(214, 245, 230, 0.9);
+  font: 600 11px/1.45 "DM Mono", monospace; letter-spacing: 0.03em; text-align: left;
+}
+.download-accept input { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 1px; accent-color: var(--neon); }
 .download-submit {
   display: inline-flex; align-items: center; justify-content: center; gap: 8px;
   min-height: 48px; padding: 13px 18px; border: 0; border-radius: 999px; cursor: pointer;
@@ -354,7 +367,7 @@ button:focus-visible, input:focus-visible, a:focus-visible {
 }
 .download-status.ok { color: var(--neon); text-shadow: 0 0 14px rgba(77, 255, 171, 0.4); }
 .download-status.err { color: #ff9a9a; }
-.download-card.sent .download-fields, .download-card.sent .download-submit { display: none; }
+.download-card.sent .download-fields, .download-card.sent .download-accept, .download-card.sent .download-submit, .download-card.sent .download-consent-copy { display: none; }
 .download-alt { margin: 0; text-align: center; font: 400 11.5px "DM Mono", monospace; letter-spacing: 0.04em; color: var(--dim); }
 .download-alt a { color: var(--neon); text-decoration: none; }
 .download-alt a:hover { text-shadow: 0 0 12px rgba(77, 255, 171, 0.6); }

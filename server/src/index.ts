@@ -130,7 +130,7 @@ import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
 import { randomUUID, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -363,6 +363,8 @@ const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const appStaticRoot = resolve(moduleDir, "..", "..", "app");
+const downloadsRoot = resolve(moduleDir, "..", "..", "downloads");
+const installManifestVersion = "phantomforce-install-consent-2026-07-12";
 const appStaticTypes: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -374,6 +376,8 @@ const appStaticTypes: Record<string, string> = {
   ".png": "image/png",
   ".svg": "image/svg+xml; charset=utf-8",
   ".webp": "image/webp",
+  ".txt": "text/plain; charset=utf-8",
+  ".zip": "application/zip",
 };
 
 /* Build fingerprint captured once at boot: the git commit this Hermes
@@ -835,6 +839,66 @@ app.get("/app/*", async (request, reply) => {
     return reply.header("content-type", contentType).header("cache-control", "no-store").send(bytes);
   } catch {
     return reply.code(404).send({ ok: false, error: "app_asset_not_found" });
+  }
+});
+
+app.get("/api/install/manifest", async () => {
+  const bytes = await readFile(resolve(downloadsRoot, "phantomforce-install-manifest.json"), "utf8");
+  return JSON.parse(bytes) as Record<string, unknown>;
+});
+
+const InstallAcceptSchema = z.object({
+  accepted: z.literal(true),
+  manifestVersion: z.string().default(installManifestVersion),
+  name: z.string().trim().min(1).max(160).optional(),
+  email: z.string().trim().email().max(254).optional(),
+  source: z.string().trim().max(80).optional(),
+});
+
+app.post("/api/install/accept", async (request, reply) => {
+  const parsed = InstallAcceptSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (parsed.data.manifestVersion !== installManifestVersion) {
+    return reply.code(409).send({ ok: false, error: "Install terms changed. Refresh and accept the current PhantomForce install terms.", current: installManifestVersion });
+  }
+  const record = {
+    id: randomUUID(),
+    acceptedAt: new Date().toISOString(),
+    manifestVersion: parsed.data.manifestVersion,
+    source: parsed.data.source || "download",
+    name: parsed.data.name || null,
+    emailDomain: parsed.data.email?.split("@").pop()?.toLowerCase() || null,
+    userAgent: String(request.headers["user-agent"] || "").slice(0, 220),
+  };
+  const logPath = resolve(process.env.PHANTOMFORCE_INSTALL_ACCEPTANCE_LOG || join(tmpdir(), "phantomforce", "install-acceptance.ndjson"));
+  await mkdir(dirname(logPath), { recursive: true });
+  await appendFile(logPath, `${JSON.stringify(record)}\n`, "utf8");
+  return { ok: true, receipt: record.id, acceptedAt: record.acceptedAt, manifestVersion: installManifestVersion };
+});
+
+app.get("/downloads/*", async (request, reply) => {
+  const query = (request.query ?? {}) as { accepted?: unknown };
+  if (query.accepted !== installManifestVersion) {
+    return reply.code(403).send({
+      ok: false,
+      error: "acceptance_required",
+      manifestVersion: installManifestVersion,
+      manifestUrl: "/api/install/manifest",
+      acceptUrl: "/api/install/accept",
+    });
+  }
+  const rawPath = String((request.params as { "*": string })["*"] || "");
+  if (!rawPath || rawPath.includes("\0")) return reply.code(400).send({ ok: false, error: "Invalid download path." });
+  const assetPath = resolve(downloadsRoot, rawPath.replace(/^[/\\]+/, ""));
+  if (assetPath !== downloadsRoot && !assetPath.startsWith(`${downloadsRoot}${sep}`)) {
+    return reply.code(403).send({ ok: false, error: "Download path is outside the PhantomForce package bundle." });
+  }
+  try {
+    const bytes = await readFile(assetPath);
+    const contentType = appStaticTypes[extname(assetPath).toLowerCase()] ?? "application/octet-stream";
+    return reply.header("content-type", contentType).header("cache-control", "no-store").send(bytes);
+  } catch {
+    return reply.code(404).send({ ok: false, error: "download_not_found" });
   }
 });
 

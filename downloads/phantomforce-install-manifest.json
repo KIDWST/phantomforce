@@ -1,0 +1,47 @@
+{
+  "product": "PhantomForce",
+  "manifestVersion": "phantomforce-install-consent-2026-07-12",
+  "installMode": "local-app-private",
+  "summary": "PhantomForce installs the local runtime and product helpers it needs into PhantomForce-owned app data folders so the user experiences one app.",
+  "userFacingName": "PhantomForce",
+  "internalComponentDisclosure": "Bundled components are installed as PhantomForce components. Third-party licenses and notices remain available in the app/legal bundle and install records.",
+  "localPaths": {
+    "windows": "%LOCALAPPDATA%\\PhantomForce\\Runtime",
+    "macos": "~/Library/Application Support/PhantomForce/Runtime",
+    "linux": "~/.local/share/phantomforce/runtime"
+  },
+  "bundledCapabilities": [
+    {
+      "id": "local-runtime",
+      "label": "Local runtime",
+      "purpose": "Runs PhantomForce desktop services and app workflows."
+    },
+    {
+      "id": "ai-operations-services",
+      "label": "AI operations services",
+      "purpose": "Supports chat, routing, local task preparation, memory, and workflow execution."
+    },
+    {
+      "id": "media-helpers",
+      "label": "Media helpers",
+      "purpose": "Supports image/video import, preview, local processing, and exports."
+    },
+    {
+      "id": "browser-game-runtime",
+      "label": "PhantomPlay runtime",
+      "purpose": "Supports approved browser-first games and saved local progress."
+    },
+    {
+      "id": "update-components",
+      "label": "Update components",
+      "purpose": "Checks, verifies, and applies PhantomForce app updates."
+    }
+  ],
+  "boundaries": [
+    "No bundled component is installed under a misleading system-file name.",
+    "No component is granted privileged access unless the user or administrator approves the operating-system prompt.",
+    "External sends, uploads, posts, and destructive changes remain approval-gated.",
+    "Third-party notices are stored in the app/legal bundle and are not shown as separate user-facing apps."
+  ],
+  "acceptanceRequired": true
+}

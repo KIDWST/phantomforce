@@ -52,7 +52,24 @@ const REGISTER_ENDPOINT =
   (location.hostname === "127.0.0.1" || location.hostname === "localhost")
     ? "http://127.0.0.1:8788/register"
     : "https://ai.phantomforce.online/register";
-async function registerForDemo(name, email) {
+const INSTALL_ACCEPT_ENDPOINT = "/api/install/accept";
+async function recordInstallAcceptance(name, email, installConsent) {
+  try {
+    const r = await fetch(INSTALL_ACCEPT_ENDPOINT, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        accepted: true,
+        manifestVersion: installConsent.version,
+        name,
+        email,
+        source: "public-download-modal",
+      }),
+    });
+    return r.ok;
+  } catch { return false; }
+}
+async function registerForDemo(name, email, installConsent = null) {
   if (!REGISTER_ENDPOINT) return true; // no endpoint -> optimistic local preview
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 22000);
@@ -60,7 +77,7 @@ async function registerForDemo(name, email) {
     const r = await fetch(REGISTER_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email }),
+      body: JSON.stringify({ name, email, installConsent }),
       signal: ctrl.signal,
     });
     return r.ok;
@@ -135,6 +152,7 @@ function initConversation() {
   const downloadForm = document.querySelector("[data-download-form]");
   const downloadName = document.querySelector("[data-download-name]");
   const downloadEmail = document.querySelector("[data-download-email]");
+  const downloadAccept = document.querySelector("[data-download-accept]");
   const downloadStatus = document.querySelector("[data-download-status]");
   const hint = document.querySelector("[data-hint]");
   if (!say) return;
@@ -292,6 +310,15 @@ function initConversation() {
       downloadEmail?.focus();
       return;
     }
+    if (!downloadAccept?.checked) {
+      if (downloadStatus) {
+        downloadStatus.hidden = false;
+        downloadStatus.className = "download-status err";
+        downloadStatus.textContent = "Accept the PhantomForce install terms before downloading.";
+      }
+      downloadAccept?.focus();
+      return;
+    }
     const btn = downloadForm.querySelector("button[type='submit']");
     if (btn) btn.disabled = true;
     if (downloadStatus) {
@@ -299,7 +326,18 @@ function initConversation() {
       downloadStatus.className = "download-status";
       downloadStatus.textContent = "Sending your PhantomForce setup/demo link...";
     }
-    registerForDemo(name, email).then((ok) => {
+    const installConsent = {
+      accepted: true,
+      acceptedAt: new Date().toISOString(),
+      version: "phantomforce-install-consent-2026-07-12",
+      appDataScope: "PhantomForce-owned local app data folders",
+      bundledCapabilities: ["local runtime", "AI operations services", "media helpers", "game/runtime support", "update components"],
+    };
+    Promise.allSettled([
+      recordInstallAcceptance(name, email, installConsent),
+      registerForDemo(name, email, installConsent),
+    ]).then((results) => {
+      const ok = results[1]?.status === "fulfilled" && results[1].value === true;
       // the highest-emotion moment on the page gets a real reaction
       if (ok) setCharMood("happy", "happy", 2200, "laugh");
       else setCharMood("talking", "sad", 3000, "sheepish");
