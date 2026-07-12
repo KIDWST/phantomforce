@@ -10,19 +10,19 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260712-207";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-207";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-207";
+} from "./imagefilters.js?v=phantom-live-20260712-208";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-208";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-208";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260712-207";
+} from "./content-editor.js?v=phantom-live-20260712-208";
 import {
   currentTenantId, currentWs, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-207";
+} from "./store.js?v=phantom-live-20260712-208";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -1563,7 +1563,11 @@ function removeBgBody(lb, esc) {
   return `
     <button class="btn btn-primary ch-lb-bg-one" type="button" data-ch-lb-bg-run ${checking || loading || unavailable || !target ? "disabled" : ""}>${loading ? "Removing…" : "Remove"}</button>
     ${!target ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Select an image layer.</p>` : ""}
-    ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Unavailable.</p>` : ""}
+    ${checking ? `<p class="ch-lb-ai-note">Checking the local image engine…</p>` : ""}
+    ${unavailable ? `
+      <p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "The local image engine is not ready yet.")}</p>
+      <button class="btn btn-quiet" type="button" data-ch-lb-rembg-recheck>Re-check</button>
+    ` : ""}
     ${bg.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "Background removal failed.")}</p>` : ""}
     ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Applied to ${esc(targetName || "selected layer")}.</p>` : ""}
   `;
@@ -1581,7 +1585,7 @@ function bokehBody(lb, s, esc) {
     <div class="ch-lb-chips">
       <button type="button" data-ch-lb-bokeh-detect ${detecting || detectUnavailable ? "disabled" : ""}>${svgIc("spark")} ${detecting ? "Detecting subject…" : hasMask ? "Re-detect subject" : "AI detect subject"}</button>
     </div>
-    ${detectUnavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">AI subject detection needs Local Background Removal connected — set it up in Settings → Media Engines.</p>` : ""}
+    ${detectUnavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(detect.message || "Subject detection is waiting for the local image engine. Use Re-check under Remove Background.")}</p>` : ""}
     ${detect.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(detect.message || "Subject detection failed.")}</p>` : ""}
     ${hasMask && detect.status !== "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">AI detected the subject — the background blurs around its real shape, gaps included (e.g. between a cat's ears). Add focus spots below to touch it up.</p>` : ""}
     <p class="ch-lb-bokeh-note">${esc(lb.subjectHint || (hasMask ? "The detected subject is protected from blur and outlined on canvas. Add a small touch-up only if part of the subject was missed." : spots.length ? "Manual touch-ups keep those circles sharp. AI Detect is better for a full person or object." : "Detect the full subject first. Manual touch-ups are only for small areas the detector misses."))}</p>
@@ -2422,6 +2426,45 @@ function wireLightbox(root, opts) {
   };
   if (aiRun) aiRun.onclick = () => runAiEdit();
   root.querySelectorAll("[data-ch-ai-preset]").forEach((button) => button.onclick = () => runAiEdit(button.dataset.chAiPreset));
+
+  const applyRembgAvailability = (status) => {
+    if (chLightbox !== lb) return;
+    const available = !!status?.available;
+    if (lb.bg.status === "checking" || lb.bg.status === "unavailable" || lb.bg.status === "idle") {
+      lb.bg = {
+        status: available ? "idle" : "unavailable",
+        message: available ? "" : (status?.error || "The local image engine is not ready yet."),
+      };
+    }
+    if (lb.bokehDetect.status === "idle" || lb.bokehDetect.status === "unavailable") {
+      lb.bokehDetect = {
+        status: available ? "idle" : "unavailable",
+        message: available ? "" : (status?.error || "Subject detection is waiting for the local image engine."),
+      };
+    }
+    rerender();
+  };
+
+  const refreshRembgAvailability = async ({ force = false, retryOnce = false } = {}) => {
+    if (force && chLightbox === lb) {
+      lb.bg = { status: "checking", message: "" };
+      rerender();
+    }
+    let status = await getRembgStatus({ recheck: force });
+    if (!status.available && retryOnce) {
+      // The editor can mount while owner-session verification is still
+      // settling. One short forced retry prevents that transient race from
+      // becoming a permanent dead control for the rest of the lightbox.
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 650));
+      if (chLightbox !== lb) return;
+      status = await getRembgStatus({ recheck: true });
+    }
+    applyRembgAvailability(status);
+  };
+
+  const bgRecheck = root.querySelector("[data-ch-lb-rembg-recheck]");
+  if (bgRecheck) bgRecheck.onclick = () => refreshRembgAvailability({ force: true });
+
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
   if (bgRun) bgRun.onclick = async () => {
     if (lb.bg.status === "unavailable") return;
@@ -2552,17 +2595,7 @@ function wireLightbox(root, opts) {
       lb.aiEdit = { mode: r.mode, status: "idle", message: "", provider: r.provider };
       rerender();
     });
-    probeRemoveBackground().then((available) => {
-      if (chLightbox !== lb) return;
-      lb.bg = { status: available ? "idle" : "unavailable", message: "" };
-      // AI subject detection reuses the same local background-removal engine, so it's honest
-      // about being unavailable together with Remove Background — never a
-      // fake "connected" state when the real check failed.
-      if (lb.bokehDetect.status === "idle" || lb.bokehDetect.status === "unavailable") {
-        lb.bokehDetect = { status: available ? "idle" : "unavailable", message: "" };
-      }
-      rerender();
-    });
+    refreshRembgAvailability({ retryOnce: true });
   }
 
   root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = freshLightbox(asset, { showTutorial: lb.showTutorial }); rerender(); };
