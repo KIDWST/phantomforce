@@ -432,7 +432,7 @@ const initialSessions: AppSession[] = [
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Command", icon: <Command size={18} /> },
-  { id: "content", label: "Content", icon: <FileText size={18} /> },
+  { id: "content", label: "Media Lab", icon: <FileImage size={18} /> },
   { id: "play", label: "Break Room", icon: <Play size={18} /> },
   { id: "inbox", label: "Inbox", icon: <Inbox size={18} /> },
   { id: "calendar", label: "Calendar", icon: <CalendarDays size={18} /> },
@@ -598,7 +598,7 @@ const initialClientAccess: ClientAccess[] = [
     accessStatus: "active",
     gateway: "Pangolin",
     privateRoute: "app.phantomforce.online/chicagoshots",
-    modules: ["Command", "Media Lab", "Content", "Tasks", "Approvals", "Activity"],
+    modules: ["Command", "Media Lab", "Tasks", "Approvals", "Activity"],
     lastAudit: "Access confirmed for partner workspace",
   },
   {
@@ -635,7 +635,6 @@ const modules = [
   "Approvals",
   "Activity",
   "Media Lab",
-  "Content Studio",
   "Contacts",
   "Documents",
   "Falcon Worker",
@@ -648,7 +647,6 @@ const clientModuleCatalog = [
   "Approvals",
   "Contacts",
   "Media Lab",
-  "Content",
   "Activity",
   "Documents",
   "Reports",
@@ -1124,7 +1122,7 @@ function App() {
 
     setCreateJobs((current) => [job, ...current]);
     setCreatePrompt("");
-    addActivity(`${modeLabels[createMode]} queued`, "Content Hub will notify you when the generation is ready.", "info");
+    addActivity(`${modeLabels[createMode]} queued`, "Media Lab will notify you when the generation is ready.", "info");
 
     if (createMode === "voice") {
       setCreateJobs((current) =>
@@ -1195,7 +1193,7 @@ function App() {
           item.id === job.id ? { ...item, status: "ready", completedAt: "Just now" } : item,
         ),
       );
-      addActivity(`${modeLabels[createMode]} ready`, "Open Content Hub to review, edit, and publish the finished asset.", "ok");
+      addActivity(`${modeLabels[createMode]} ready`, "Open Media Lab to review, edit, and publish the finished asset.", "ok");
     }, 3200);
   }
 
@@ -2555,7 +2553,7 @@ function ContentHubView({
 
   return (
     <Page
-      title="Content Hub"
+      title="Media Lab"
       kicker="Create, review, publish"
       action={
         readyJobs.length ? (
@@ -2566,7 +2564,7 @@ function ContentHubView({
         ) : null
       }
     >
-      <div className="content-tabs" role="tablist" aria-label="Content Hub sections">
+      <div className="content-tabs" role="tablist" aria-label="Media Lab sections">
         {tabs.map((tab) => (
           <button
             key={tab.id}

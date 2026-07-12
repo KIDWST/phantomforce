@@ -78,7 +78,7 @@ export const seedClientAccessRecords: ClientAccessRecord[] = [
     accessStatus: "active",
     gateway: "Pangolin",
     privateRoute: "app.phantomforce.online/chicagoshots",
-    modules: ["Command", "Media Lab", "Content", "Tasks", "Approvals", "Activity"],
+    modules: ["Command", "Media Lab", "Tasks", "Approvals", "Activity"],
     connectorCredentials: {},
     lastAudit: "Access confirmed for partner workspace",
   },
