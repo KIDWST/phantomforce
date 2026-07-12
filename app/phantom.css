@@ -10674,3 +10674,98 @@ body .workspace-page :where(
   line-height: 1.38 !important;
   max-width: 720px !important;
 }
+
+/* Final scroll contract: every workspace, tab, and subtab must remain reachable.
+   The dashboard chat can be viewport-locked, but work pages are scrollable apps. */
+body .phantom .app-main:has(.console-workspace) {
+  min-height: 0 !important;
+  height: auto !important;
+  overflow-x: hidden !important;
+  overflow-y: auto !important;
+}
+
+body .phantom .console-workspace,
+body .phantom .console-workspace-wide {
+  min-height: 0 !important;
+  height: auto !important;
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+  align-content: start !important;
+}
+
+body .phantom .workspace-page,
+body .phantom .workspace-page-first,
+body .phantom .workspace-page[data-workspace-page] {
+  min-height: calc(100dvh - 130px) !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow-x: hidden !important;
+  overflow-y: visible !important;
+}
+
+body .phantom .workspace-page-body,
+body .phantom .workspace-page-first .workspace-page-body,
+body .phantom .workspace-page[data-workspace-page] .workspace-page-body {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow-x: visible !important;
+  overflow-y: visible !important;
+}
+
+body .phantom .workspace-page :where(
+  .ml,
+  .ch,
+  .an,
+  .pp-shell,
+  .ci-shell,
+  .developer-shell,
+  .developer-denied,
+  .au,
+  .vm,
+  .pl,
+  .agentops,
+  .ss-simple,
+  .cust,
+  .memory,
+  .workers
+) {
+  min-height: 0 !important;
+  height: auto !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+body .phantom .workspace-page :where(
+  .ml-panels,
+  .ml-create-grid,
+  .ml-pool-grid,
+  .ml-edit-shell,
+  .ch-body,
+  .ch-main,
+  .ch-grid,
+  .ch-library,
+  .an-grid,
+  .pp-content,
+  .ci-shell main
+) {
+  min-height: 0 !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+@media (max-width: 767px) {
+  body .phantom .app-main:has(.console-workspace),
+  body .phantom .console-workspace {
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  body .phantom .workspace-page {
+    margin-bottom: calc(var(--mobile-admin-taskbar) + 40px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+
+  body .phantom .workspace-page-body {
+    padding-bottom: calc(var(--mobile-admin-taskbar) + 54px + env(safe-area-inset-bottom, 0px)) !important;
+  }
+}
