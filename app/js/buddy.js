@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-211";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-212";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260712-211";
+} from "./companion-preferences.js?v=phantom-live-20260712-212";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -272,7 +272,7 @@ function createBuddyController() {
         <hr />
         <button type="button" data-buddy-action="dock" role="menuitem">Return to sidebar</button>
         <button type="button" data-buddy-action="quiet" role="menuitem">Quiet mode</button>
-        <button type="button" data-buddy-action="hide" role="menuitem">Hide for this session</button>
+        <button type="button" data-buddy-action="hide" role="menuitem">Hide for 30 minutes</button>
         <button type="button" data-buddy-action="disable" role="menuitem">Disable companion</button>
         <hr />
         <label>Size <select data-buddy-pref="size">

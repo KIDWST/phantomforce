@@ -4,6 +4,7 @@
 export const COMPANION_PREF_KEY = "pf.companion.preferences.v1";
 export const COMPANION_EVENT = "phantom:companion-preferences";
 const SESSION_HIDE_KEY = "pf.companion.hidden.session.v1";
+const SESSION_HIDE_MS = 30 * 60 * 1000;
 
 export const DEFAULT_COMPANION_PREFS = {
   enabled: true,
@@ -76,7 +77,7 @@ export function resetCompanionPrefs() {
 }
 
 export function hideCompanionForSession() {
-  try { sessionStorage.setItem(SESSION_HIDE_KEY, "1"); } catch {}
+  try { sessionStorage.setItem(SESSION_HIDE_KEY, String(Date.now())); } catch {}
   try { window.dispatchEvent(new CustomEvent(COMPANION_EVENT, { detail: loadCompanionPrefs() })); } catch {}
 }
 
@@ -86,5 +87,18 @@ export function clearCompanionSessionHide() {
 }
 
 export function isCompanionHiddenForSession() {
-  try { return sessionStorage.getItem(SESSION_HIDE_KEY) === "1"; } catch { return false; }
+  try {
+    const raw = sessionStorage.getItem(SESSION_HIDE_KEY);
+    if (!raw) return false;
+    const hiddenAt = Number(raw);
+    if (!Number.isFinite(hiddenAt)) {
+      sessionStorage.removeItem(SESSION_HIDE_KEY);
+      return false;
+    }
+    if (Date.now() - hiddenAt > SESSION_HIDE_MS) {
+      sessionStorage.removeItem(SESSION_HIDE_KEY);
+      return false;
+    }
+    return true;
+  } catch { return false; }
 }
