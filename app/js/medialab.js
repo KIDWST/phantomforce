@@ -1040,13 +1040,13 @@ function consumeEditIntent(opts = {}) {
     type: "image",
     url: intent.url,
     saved: true,
-    meta: { prompt: intent.prompt || "", title: intent.title || "Creator Hub edit" },
+    meta: { prompt: intent.prompt || "", title: intent.title || "Content Hub edit" },
   };
   if (!session.assets.some((item) => item.id === asset.id)) session.assets.unshift(asset);
   session.edit = { url: asset.url, type: "image", id: asset.id };
   session.tab = "edit";
   resetEdit();
-  opts.notify?.("Media Factory", `loaded ${intent.title || "Creator Hub asset"} for local edit.`);
+  opts.notify?.("Media Factory", `loaded ${intent.title || "Content Hub asset"} for local edit.`);
 }
 
 function consumePromptIntent(opts = {}) {
@@ -1063,10 +1063,8 @@ function consumePromptIntent(opts = {}) {
 
 const NAV_TABS = [
   ["generate", "Create"],
-  ["library", "Media Pool"],
   ["pending", "Pending"],
   ["edit", "Edit"],
-  ["content", "Content Hub"],
 ];
 const NAV_DRAWERS = [
   ["templates", "Templates", "layout"],
@@ -1106,8 +1104,10 @@ export function renderMediaStudio(el, opts = {}) {
   if (session.tab === "generate") renderGenerate(body, cfg, opts, el);
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
-  else if (session.tab === "library") renderLibrary(body, opts, el);
-  else if (session.tab === "content") opts.renderContentHub?.(body, opts);
+  else if (session.tab === "library") {
+    session.tab = "generate";
+    renderGenerate(body, cfg, opts, el);
+  }
 }
 
 /* ---- drawers: Templates / History / Engine / Settings — local Media Lab only ---- */
@@ -1385,10 +1385,10 @@ function nextStepsHtml(esc) {
       <div class="ml-next-head">${svgIc("spark")}<b>Next steps</b><span>Choose what happens to this cut</span></div>
       <div class="ml-next-grid">
         <button class="ml-next-card is-neon" data-ml-next="save" ${unsavedCount ? "" : "disabled"}>
-          ${svgIc("check")}<b>Save to library</b><span>${unsavedCount ? `${unsavedCount} unsaved` : "All saved"}</span>
+          ${svgIc("check")}<b>Save</b><span>${unsavedCount ? `${unsavedCount} unsaved` : "All saved"}</span>
         </button>
         <button class="ml-next-card is-cyan" data-ml-next="hub">
-          ${svgIc("hub")}<b>Open in Creator Hub</b><span>Auto-captured already</span>
+          ${svgIc("hub")}<b>Open Content Hub</b><span>Auto-captured already</span>
         </button>
         <button class="ml-next-card is-gold" data-ml-next="ref">
           ${svgIc("image")}<b>Use as reference</b><span>Continuity for the next take</span>
@@ -1441,7 +1441,7 @@ function railHtml(cfg, esc) {
           ${svgIc("bolt")}<b>${cfg.credits}</b><span>credits</span>
           <span class="ml-rail-credit-meter"><i style="width:${meterPct}%"></i></span>
         </div>
-        <span class="ml-chip is-ready" title="Every finished render is captured to your Creator Hub automatically.">${svgIc("hub")} Auto-capture on</span>
+        <span class="ml-chip is-ready" title="Every finished render is captured to Content Hub automatically.">${svgIc("hub")} Sent to Content Hub</span>
         <details class="ml-queue-drop">
           <summary>${svgIc("play")} Queue <b>${queue.length}</b></summary>
           <div class="ml-queue-pop">
@@ -1520,7 +1520,7 @@ function resultsHtml(esc) {
     <div class="ml-idle">
       <div class="ml-idle-orb" aria-hidden="true"><span></span><span></span><span></span></div>
       <b>Create with context</b>
-      <i>Phantom preps the brief, creates the media, reviews the output, and turns it into campaigns, sites, and follow-ups. Finished media lands here — and in Creator Hub.</i>
+      <i>Create here. Finished media moves to Content Hub for library, planning, publishing, and performance.</i>
       <div class="ml-board" aria-hidden="true">
         ${["1:1", "4:5", "16:9", "9:16", "3:2"].map((r, i) => `<span class="ml-board-cell" style="--d:${(i * 0.4).toFixed(1)}s" data-ratio="${r}"></span>`).join("")}
       </div>
@@ -1538,7 +1538,7 @@ function tileHtml(a, esc) {
     ${a.meta && a.meta.preview ? `<span class="ml-badge">preview</span>` : `<span class="ml-badge ml-badge-live">live</span>`}
     <figcaption class="ml-tile-bar">
       <button data-tile-act="edit" data-id="${a.id}" title="Edit" aria-label="Edit">${svgIc("edit")}</button>
-      <button data-tile-act="save" data-id="${a.id}" title="Save to library" aria-label="Save to library">${svgIc("check")}</button>
+      <button data-tile-act="save" data-id="${a.id}" title="Save to Content Hub" aria-label="Save to Content Hub">${svgIc("check")}</button>
       <button data-tile-act="download" data-id="${a.id}" title="Download" aria-label="Download">${svgIc("upload")}</button>
       <button data-tile-act="regen" data-id="${a.id}" title="Regenerate" aria-label="Regenerate">${svgIc("spark")}</button>
       <button data-tile-act="ref" data-id="${a.id}" title="Use as reference" aria-label="Use as reference">${svgIc("image")}</button>
@@ -1634,7 +1634,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
         setDoctor("warn", "Media Lab — Sign-in expired", ["Sign out, sign back in, then re-check"],
           "Your admin session needs a refresh. Sign out, sign back in, and hit Re-check.");
       } else if (ready) {
-        setDoctor("ok", "Media Lab — Ready", ["Owner-approved", "Auto-saved to Creator Hub"], adminTail);
+        setDoctor("ok", "Media Lab — Ready", ["Owner-approved", "Auto-saved to Content Hub"], adminTail);
       } else if (e.status === "not_configured") {
         setDoctor("warn", "Media Lab — Offline", ["Generation needs attention"], adminTail);
       } else {
@@ -1645,7 +1645,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
     } else if (h.bridge && !h.bridgeAuth) {
       setDoctor("warn", "Media Lab — Sign-in expired", ["Sign out, sign back in, then re-check"]);
     } else if (h.bridge) {
-      setDoctor("ok", "Media Lab — Ready", ["Auto-saved to Creator Hub"]);
+      setDoctor("ok", "Media Lab — Ready", ["Auto-saved to Content Hub"]);
     } else if (h.proxy) {
       setDoctor("warn", "Media Lab — Needs setup", ["Offline sketches only until connected"]);
     } else if (h.studio && prov === PRIMARY_MEDIA_LANE) {
@@ -1681,7 +1681,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
   body.querySelector("[data-ml-next='save']")?.addEventListener("click", () => {
     const recent = session.assets.filter((a) => a.fromGen && !a.saved);
     recent.forEach((a) => { a.saved = true; captureForContentHub(a); });
-    if (opts.notify) opts.notify("Media Factory", `saved ${recent.length} generation${recent.length === 1 ? "" : "s"} to the library.`);
+    if (opts.notify) opts.notify("Media Factory", `saved ${recent.length} generation${recent.length === 1 ? "" : "s"} to Content Hub.`);
     renderGenerate(body, cfg, opts, root);
   });
   body.querySelector("[data-ml-next='hub']")?.addEventListener("click", () => opts.openWorkspace && opts.openWorkspace("content"));
@@ -1807,7 +1807,7 @@ function tileAction(act, id, cfg, opts, root, esc, body) {
   if (act === "download") return downloadAsset(a);
   if (act === "regen") { runGenerate(body, cfg, opts, root, esc); return; }
   if (act === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); return; }
-  if (act === "save") { a.saved = true; captureForContentHub(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to the library."); renderMediaStudio(root, opts); return; }
+  if (act === "save") { a.saved = true; captureForContentHub(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to Content Hub."); renderMediaStudio(root, opts); return; }
   if (act === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); return; }
   if (act === "remove") {
     session.assets = session.assets.filter((x) => x.id !== id);
@@ -1864,7 +1864,7 @@ function restoreEdit(next) {
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
   if (!session.edit) {
-    body.innerHTML = `<div class="ml-empty">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, choose one from your library, or upload.</i>
+    body.innerHTML = `<div class="ml-empty">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, use the latest result, or upload.</i>
       <div class="ml-edit-pick"><button class="ml-generate ml-inline" data-ml-upload>${svgIc("upload")} Upload an image</button>
       ${session.assets[0] ? `<button class="ml-generate ml-inline ml-ghost" data-ml-fromlib>Use latest generation</button>` : ""}</div>
       <input type="file" accept="image/*" data-ml-editfile hidden /></div>`;
@@ -1947,7 +1947,7 @@ function renderEdit(body, cfg, opts, root) {
           <div class="ml-edit-section-body"><p class="ml-hint">Describe a look, like “brighter product photo” or “moody night.”</p><div class="ml-prompt-wrap"><input class="ml-text-in" data-ml-aiedit placeholder="Describe the change…"/><button class="ml-enhance" data-ml-runai>Apply</button></div></div>
         </details>
         <div class="ml-editor-actions">
-          <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to library</button>
+          <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to Content Hub</button>
           <button class="ml-generate ml-ghost" data-ml-layeredit>Open layer editor</button>
           <button class="ml-generate ml-ghost" data-ml-dledit>${svgIc("upload")} Download</button>
           <button class="ml-link" data-ml-resetedit>Reset</button>
@@ -2104,12 +2104,8 @@ function renderEdit(body, cfg, opts, root) {
     const asset = { id: `edit-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
     session.assets.unshift(asset);
     captureForContentHub(asset, { title: "Edited image", prompt: editState.text || "Edited image" });
-    // switch tab (and its rerender) before notify(): notify() triggers a global store-change
-    // listener that can fully remount this page, invalidating this closure's stale DOM/root —
-    // landing the tab switch on live DOM first avoids it getting silently overwritten.
-    session.tab = "library";
     renderMediaStudio(root, opts);
-    if (opts.notify) opts.notify("Media Factory", "saved an edited image to the library.");
+    if (opts.notify) opts.notify("Media Factory", "saved an edited image to Content Hub.");
   };
   body.querySelector("[data-ml-dledit]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.92);
@@ -2136,7 +2132,7 @@ function renderEdit(body, cfg, opts, root) {
       workspaceStorageSetItem(CONTENT_HUB_OPEN_TAB_KEY, "library");
       workspaceStorageSetItem(CONTENT_HUB_OPEN_ASSET_KEY, result.asset.id);
     } catch {}
-    if (opts.notify) opts.notify("Media Factory", "Opened the current edit in Creator Hub's layer editor. Nothing was posted.");
+    if (opts.notify) opts.notify("Media Factory", "Opened the current edit in Content Hub's layer editor. Nothing was posted.");
     opts.openWorkspace?.("content");
   });
 }
@@ -2153,7 +2149,7 @@ function tutorialMarkup() {
     ["Fix it fast", "Clean up balances light and color. Remove background uses the connected local media engine when it is available."],
     ["Check your work", "Hold Before to compare with the original. Undo and redo are always above the image."],
     ["Go deeper only when needed", "Open Quick looks, Fine tune, Focus blur, Text, or Ask Phantom. Closed sections stay out of your way."],
-    ["Keep the result", "Save to library keeps the edit inside PhantomForce. Download saves a WebP copy to your device."],
+    ["Keep the result", "Save to Content Hub keeps the edit ready for posts, planning, and performance. Download saves a WebP copy to your device."],
   ];
   return `
     <div class="ch-lb-tutorial">

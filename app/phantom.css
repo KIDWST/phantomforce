@@ -3776,7 +3776,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 /* Compact, denser page head just for the Media Lab workspace — same title
    size as every other workspace page (.workspace-page-head h1's shared
    default), only the padding shrinks to make room for Media Lab's own
-   Create/Media Pool/Pending/Edit tab row directly below it. */
+   Create/Pending/Edit tab row directly below it. */
 .workspace-page[data-workspace-page="media"] .workspace-page-head { padding: 8px clamp(18px, 2vw, 28px) 6px; }
 .workspace-page[data-workspace-page="media"] .workspace-page-kicker { margin-bottom: 1px; }
 .workspace-page[data-workspace-page="media"] .workspace-page-body { padding-top: 8px; }
@@ -10368,14 +10368,16 @@ body:has([data-workspace-page="workforce"]) .buddy-canvas {
   color: var(--dim);
 }
 
-.media-suite-tabs {
+.media-suite-tabs,
+.media-suite-link {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
 
-.media-suite-tabs button {
+.media-suite-tabs button,
+.media-suite-link {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -10388,9 +10390,11 @@ body:has([data-workspace-page="workforce"]) .buddy-canvas {
   cursor: pointer;
   font-weight: 800;
   transition: .18s ease;
+  text-decoration: none;
 }
 
-.media-suite-tabs button.is-active {
+.media-suite-tabs button.is-active,
+.media-suite-link:hover {
   border-color: color-mix(in srgb, var(--neon) 70%, transparent);
   background: color-mix(in srgb, var(--neon) 14%, transparent);
   color: var(--ink);
@@ -10407,7 +10411,8 @@ body:has([data-workspace-page="workforce"]) .buddy-canvas {
     flex-direction: column;
   }
 
-  .media-suite-tabs {
+  .media-suite-tabs,
+  .media-suite-link {
     width: 100%;
     justify-content: flex-start;
   }

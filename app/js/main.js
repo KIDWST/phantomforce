@@ -661,7 +661,7 @@ const ACCOUNT_TIERS = [
     price: "$2,500/mo",
     badge: "Growth",
     copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
-    features: ["Phantom AI operator", "Creator Hub + Media Lab", "Accounting-aware ops"],
+    features: ["Phantom AI operator", "Content Hub + Media Lab", "Accounting-aware ops"],
   },
   {
     id: "elite",
@@ -1224,7 +1224,7 @@ const QUICK = [
   { label: "Create new content", icon: "spark",  run: "Create campaign media" },
   { label: "Start video campaign", icon: "film",  run: "Create a launch video" },
   { label: "Check cashflow", icon: "chart",   run: "What's my cash flow?" },
-  { label: "Open media library", icon: "upload",   open: "media" },
+  { label: "Open Content Hub", icon: "upload",   open: "content" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
 function renderQuick() {
@@ -2492,31 +2492,29 @@ function renderDeveloperPage(body) {
   }, 30000);
 }
 
-function renderMediaLabSuite(body, initialTab = "create") {
+function renderMediaLabSuite(body) {
   const opts = mediaOpts();
   body.innerHTML = `
       <section class="media-suite" data-media-suite>
         <header class="media-suite-head">
           <div>
-            <p class="media-suite-kicker">One creative workspace</p>
+            <p class="media-suite-kicker">Creation workspace</p>
             <h2>Media Lab</h2>
-            <p>Generate, edit, organize, and publish from the same tab.</p>
+            <p>Create and edit here. Finished work moves to Content Hub for planning, publishing, and analytics.</p>
           </div>
+          <button class="media-suite-link" data-open-ws="content" type="button">${svg("doc")} Open Content Hub</button>
         </header>
         <div class="media-suite-body" data-media-suite-body></div>
       </section>`;
   const target = $("[data-media-suite-body]", body);
-  renderMediaStudio(target, {
-    ...opts,
-    initialTab: initialTab === "content" ? "content" : "generate",
-    renderContentHub: (host) => renderContentHub(host, opts),
-  });
+  renderMediaStudio(target, opts);
+  $("[data-open-ws='content']", body)?.addEventListener("click", () => opts.openWorkspace?.("content"));
 }
 
 const CUSTOM = {
-  media: { title: "Media Lab", kicker: "Create, organize, and publish", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "create") },
+  media: { title: "Media Lab", kicker: "Create and edit", custom: true, wide: true, render: (body) => renderMediaLabSuite(body) },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
-  content: { title: "Media Lab", kicker: "Content Hub inside Media Lab", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "content") },
+  content: { title: "Content Hub", kicker: "Library, ideas, drafts, publishing, and performance", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => renderPhantomPlay(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
