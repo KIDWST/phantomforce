@@ -204,12 +204,26 @@ import {
   startAutomationEngine,
 } from "./phantom-ai/automation-engine.js";
 import {
+  approveAgentRun,
   getAgentRun,
   listAgentRunOperations,
   listAgentRuns,
+  rehydrateAgentRuns,
+  rejectAgentRun,
   requestAgentRunCancel,
   startAgentRun,
 } from "./phantom-ai/agent-runs.js";
+import {
+  addSiteDomain,
+  createSiteBuild,
+  getBuildHtml,
+  getPublishedHtml,
+  listOrgSites,
+  registerPublishingExecutor,
+  rollbackSite,
+  verifySiteDomain,
+} from "./sites/publishing.js";
+import { orgHasFeature } from "./access/entitlements.js";
 import { getContentAssetStorageProvider } from "./phantom-ai/content-asset-storage.js";
 import {
   getProviderSetupStatus,
@@ -505,6 +519,11 @@ try {
   await initializeAccessIdentityState();
   await initializeDatabaseAuthState();
   await initializeAccessWorkflowState();
+  await rehydrateAgentRuns();
+  /* the publish executor talks to Postgres — register only when configured */
+  if (process.env.DATABASE_URL) {
+    registerPublishingExecutor();
+  }
 } catch (error) {
   app.log.error(error, "PhantomForce server startup failed while loading access state.");
   await app.close();
@@ -3764,10 +3783,12 @@ app.get("/phantom-ai/automations", async (request, reply) => {
 });
 
 /* ---------------- agent runs: the real execution lifecycle ----------------
-   Admin-only. A run is a persisted record with real states (queued →
-   executing → verifying → completed/failed/cancelled), progress events,
-   on-disk artifacts, and a Hermes ledger proof entry. Executors do
-   read-only/prep work only — no sends, spends, or external actions. */
+   A run is a persisted record with real states (low-risk: queued → executing
+   → verifying → completed; external: awaiting_approval → approved → … →
+   succeeded/partially_succeeded, or rejected/expired), progress events,
+   on-disk artifacts, receipts, and a Hermes ledger proof entry. Global
+   list/start stay super-admin; a single run is visible to anyone with
+   authority over its workspace so org owners can watch their own runs. */
 const AgentRunStartSchema = z.object({
   operation: z.string().min(1).max(60),
   request: z.string().max(400).optional(),
@@ -3787,10 +3808,17 @@ app.get("/phantom-ai/runs", async (request, reply) => {
 });
 
 app.get("/phantom-ai/runs/:id", async (request, reply) => {
-  const session = requireAdminAccessSession(request, reply);
+  const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const run = getAgentRun((request.params as { id: string }).id);
   if (!run) return reply.code(404).send({ ok: false, error: "run_not_found" });
+  /* tenant isolation: a run is visible to the platform super-admin or to
+     members of the org it belongs to — never across orgs */
+  const dbSession = asDatabaseSession(session);
+  const isMember = dbSession ? canAccessOrg(dbSession, run.workspace) : false;
+  if (!session.canManageAccess && !isMember) {
+    return reply.code(403).send({ ok: false, error: "This session cannot view runs for that workspace." });
+  }
   return { ok: true, run };
 });
 
@@ -3836,6 +3864,192 @@ app.post("/phantom-ai/runs/:id/cancel", async (request, reply) => {
   const run = requestAgentRunCancel((request.params as { id: string }).id);
   if (!run) return reply.code(404).send({ ok: false, error: "run_not_found" });
   return { ok: true, run };
+});
+
+/* ---- approval-gated external execution (same run engine, no second one) ----
+   Approving requires authority over the run's workspace: the platform
+   super-admin always can; org owners/admins can approve runs scoped to their
+   own org unless the executor demands super_admin. */
+
+function canDecideRun(session: AccessSession, run: NonNullable<ReturnType<typeof getAgentRun>>) {
+  if (session.canManageAccess) return true;
+  if (run.required_role === "super_admin") return false;
+  const dbSession = asDatabaseSession(session);
+  if (!dbSession) return false;
+  return canManageOrg(dbSession, run.workspace);
+}
+
+app.post("/phantom-ai/runs/:id/approve", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const run = getAgentRun((request.params as { id: string }).id);
+  if (!run) return reply.code(404).send({ ok: false, error: "run_not_found" });
+  if (!canDecideRun(session, run)) {
+    return reply.code(403).send({ ok: false, error: "This session cannot approve runs for that workspace." });
+  }
+  const result = await approveAgentRun(
+    run.id,
+    { id: session.id, email: session.email ?? session.label },
+    { tenantId: `${run.workspace}-owner`, businessName: run.workspace },
+  );
+  if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+  return { ok: true, run: result.run };
+});
+
+const RunRejectSchema = z.object({ reason: z.string().max(300).optional() });
+
+app.post("/phantom-ai/runs/:id/reject", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const run = getAgentRun((request.params as { id: string }).id);
+  if (!run) return reply.code(404).send({ ok: false, error: "run_not_found" });
+  if (!canDecideRun(session, run)) {
+    return reply.code(403).send({ ok: false, error: "This session cannot reject runs for that workspace." });
+  }
+  const parsed = RunRejectSchema.safeParse(request.body ?? {});
+  const result = await rejectAgentRun(run.id, { id: session.id, email: session.email ?? session.label }, parsed.success ? parsed.data.reason : undefined);
+  if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+  return { ok: true, run: result.run };
+});
+
+/* Org-scoped run list — the approval queue for org owners/admins. Members
+   can see their org's runs; only managers/super-admin can decide them. */
+app.get("/orgs/:orgId/runs", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const state = (request.query as { state?: string }).state as NonNullable<Parameters<typeof listAgentRuns>[0]>["state"];
+  return { ok: true, runs: listAgentRuns({ workspace: orgId, state, limit: 30 }) };
+});
+
+/* ---- website publishing pipeline (builds → approval → deploy → verify) ---- */
+
+const SiteSnapshotSchema = z.object({
+  siteId: z.string().max(120).optional(),
+  title: z.string().min(2).max(160),
+  sections: z.array(z.string().min(1).max(60)).min(1).max(12),
+  design: z.object({
+    brand: z.string().max(120).optional(),
+    headline: z.string().max(200).optional(),
+    subhead: z.string().max(300).optional(),
+    offer: z.string().max(300).optional(),
+    cta: z.string().max(80).optional(),
+    theme: z.string().max(40).optional(),
+    style: z.string().max(40).optional(),
+  }).default({}),
+});
+
+app.get("/orgs/:orgId/sites", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  return { ok: true, sites: await listOrgSites(orgId) };
+});
+
+app.post("/orgs/:orgId/sites/builds", async (request, reply) => {
+  const { orgId } = request.params as { orgId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = SiteSnapshotSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await createSiteBuild({
+    orgId,
+    actorUserId: dbSession.userId,
+    actorEmail: dbSession.email,
+    snapshot: parsed.data,
+  });
+  if (!result.ok) return reply.code(403).send(result);
+  return {
+    ok: true,
+    site: { id: result.site.id, title: result.site.title },
+    build: { id: result.build.id, version: result.build.version, status: result.build.status },
+    validated: result.validated,
+    buildLog: result.buildLog,
+  };
+});
+
+app.get("/orgs/:orgId/sites/:siteId/builds/:buildId/preview", async (request, reply) => {
+  const { orgId, siteId, buildId } = request.params as { orgId: string; siteId: string; buildId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const html = await getBuildHtml(orgId, siteId, buildId);
+  if (!html) return reply.code(404).send({ ok: false, error: "build_not_found" });
+  return reply.header("content-type", "text/html; charset=utf-8").header("cache-control", "no-store").send(html);
+});
+
+const PublishRequestSchema = z.object({ buildId: z.string().min(1).max(120) });
+
+app.post("/orgs/:orgId/sites/:siteId/publish-request", async (request, reply) => {
+  const { orgId, siteId } = request.params as { orgId: string; siteId: string };
+  const dbSession = requireOrgMember(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = PublishRequestSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const feature = await orgHasFeature(orgId, "websitePublishing");
+  if (!feature.allowed) {
+    return reply.code(403).send(upgradeRequiredBody(feature.reason, feature.entitlements));
+  }
+  const result = await startAgentRun({
+    operation: "publish_site",
+    workspace: orgId,
+    sessionId: dbSession.id,
+    request: `Publish site ${siteId} (build ${parsed.data.buildId})`,
+    tenantId: `${orgId}-owner`,
+    businessName: orgId,
+    requestedBy: dbSession.email,
+    inputs: { siteId, buildId: parsed.data.buildId },
+  });
+  if (!("id" in result)) return reply.code(400).send({ ok: false, ...result });
+  return { ok: true, run: result, note: "Awaiting approval — nothing is live until an org owner/admin approves this run." };
+});
+
+app.post("/orgs/:orgId/sites/:siteId/rollback", async (request, reply) => {
+  const { orgId, siteId } = request.params as { orgId: string; siteId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const result = await rollbackSite({ orgId, siteId, actorEmail: dbSession.email });
+  if (!result.ok) return reply.code(409).send({ ok: false, error: result.error });
+  return { ok: true, deployment: { id: result.deployment.id, receipt: result.receipt } };
+});
+
+const DomainAddSchema = z.object({ domain: z.string().min(4).max(253) });
+
+app.post("/orgs/:orgId/sites/:siteId/domains", async (request, reply) => {
+  const { orgId, siteId } = request.params as { orgId: string; siteId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const parsed = DomainAddSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const result = await addSiteDomain({ orgId, siteId, domain: parsed.data.domain, actorEmail: dbSession.email });
+  if (!result.ok) return reply.code(400).send(result);
+  return {
+    ok: true,
+    domain: {
+      id: result.domain.id,
+      domain: result.domain.domain,
+      state: result.domain.state,
+      verificationToken: result.domain.verificationToken,
+      instructions: `Create a TXT record at _phantomforce-verify.${result.domain.domain} with value ${result.domain.verificationToken}, then call the verify endpoint. PhantomForce never changes your DNS.`,
+    },
+  };
+});
+
+app.post("/orgs/:orgId/sites/:siteId/domains/:domainId/verify", async (request, reply) => {
+  const { orgId, domainId } = request.params as { orgId: string; siteId: string; domainId: string };
+  const dbSession = requireOrgManager(request, reply, orgId);
+  if (!dbSession) return reply;
+  const result = await verifySiteDomain({ orgId, domainId });
+  if (!result.ok) return reply.code(404).send({ ok: false, error: result.error });
+  return { ok: true, domain: { id: result.domain.id, domain: result.domain.domain, state: result.domain.state, sslState: result.domain.sslState }, check: result.check };
+});
+
+/* Published sites are public by definition — served read-only from the
+   promoted build on disk, with the deployment receipt as provenance. */
+app.get("/public/sites/:siteId", async (request, reply) => {
+  const { siteId } = request.params as { siteId: string };
+  const published = await getPublishedHtml(siteId).catch(() => null);
+  if (!published) return reply.code(404).send({ ok: false, error: "site_not_published" });
+  return reply.header("content-type", "text/html; charset=utf-8").header("cache-control", "no-store").send(published.html);
 });
 
 const AutomationToggleSchema = z.object({ enabled: z.boolean() });

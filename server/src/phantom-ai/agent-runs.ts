@@ -1,11 +1,20 @@
 /* PhantomForce agent-run lifecycle.
-   The execution contract behind "Phantom acts like an agent": every run is a
-   real record with real states (queued → executing → verifying →
-   completed | failed | cancelled), timestamped progress events, artifacts on
-   disk, and a Hermes ledger proof entry. Executors do REAL work only — they
-   read real server state and produce real files; nothing here simulates
-   success, calls paid providers, or performs external actions. New executors
-   register in EXECUTORS and inherit the whole lifecycle. */
+   ONE execution engine for everything Phantom does on the server.
+
+   Low-risk internal operations (read org data, compile reports) run
+   automatically:  queued → executing → verifying → completed.
+
+   External actions (publish a site, send, deploy…) NEVER run silently:
+   awaiting_approval → approved → queued → executing → verifying →
+   succeeded | partially_succeeded, or rejected / expired / cancelled /
+   failed along the way. Approval is recorded with the requesting user, the
+   approving user, a deadline, and an execution receipt; never_silent
+   operations require approval regardless of any org policy.
+
+   Every transition is persisted to .phantom/agent-runs.jsonl (runs are
+   rehydrated at boot so approvals survive restarts), artifacts land on
+   disk, and completed runs write a Hermes ledger proof entry. Nothing here
+   simulates success or calls paid providers. */
 
 import { appendFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -20,7 +29,29 @@ const repoRoot = resolve(moduleDir, "../../..");
 const RUNS_LOG_PATH = resolve(repoRoot, ".phantom", "agent-runs.jsonl");
 const ARTIFACTS_DIR = resolve(repoRoot, ".phantom", "artifacts");
 
-export type AgentRunState = "queued" | "executing" | "verifying" | "completed" | "failed" | "cancelled";
+const DEFAULT_APPROVAL_DEADLINE_MS = Number(process.env.PHANTOM_RUN_APPROVAL_DEADLINE_MS ?? 24 * 60 * 60 * 1000);
+
+export type AgentRunState =
+  | "draft"
+  | "planned"
+  | "awaiting_approval"
+  | "approved"
+  | "rejected"
+  | "expired"
+  | "queued"
+  | "executing"
+  | "verifying"
+  | "completed"            /* legacy terminal success for low-risk internal ops */
+  | "succeeded"
+  | "partially_succeeded"
+  | "failed"
+  | "cancelled";
+
+export const TERMINAL_AGENT_RUN_STATES: ReadonlySet<AgentRunState> = new Set([
+  "completed", "succeeded", "partially_succeeded", "failed", "cancelled", "rejected", "expired",
+]);
+
+export type AgentRunRiskClass = "low_internal" | "external_approval" | "never_silent";
 
 export type AgentRunEvent = {
   at: string;
@@ -29,9 +60,23 @@ export type AgentRunEvent = {
 };
 
 export type AgentRunArtifact = {
-  kind: "markdown" | "json";
+  kind: "markdown" | "json" | "html";
   path: string;
   summary: string;
+};
+
+export type AgentRunReceipt = {
+  operation: string;
+  requested_by: string;
+  approved_by: string | null;
+  approved_at: string | null;
+  executed_at: string;
+  inputs: Record<string, unknown>;
+  scope: string;
+  expected_effect: string;
+  actual_effect: string;
+  cost_estimate_usd: number | null;
+  rollback_guidance: string | null;
 };
 
 export type AgentRun = {
@@ -42,10 +87,24 @@ export type AgentRun = {
   session_id: string;
   request: string;
   state: AgentRunState;
+  risk: AgentRunRiskClass;
+  required_role: "org_manager" | "super_admin";
+  inputs: Record<string, unknown>;
+  scope: string;
+  expected_effect: string;
+  cost_estimate_usd: number | null;
+  requested_by: string;
+  approval_deadline: string | null;
+  approved_by: string | null;
+  approved_at: string | null;
+  rejected_by: string | null;
+  rejected_at: string | null;
+  rejection_reason: string | null;
   created_at: string;
   updated_at: string;
   events: AgentRunEvent[];
   artifacts: AgentRunArtifact[];
+  receipt: AgentRunReceipt | null;
   error: string | null;
   proof_request_id: string | null;
   cancel_requested: boolean;
@@ -57,10 +116,21 @@ type ExecutorContext = {
   isCancelled: () => boolean;
 };
 
-type Executor = {
+export type AgentRunExecutor = {
   title: string;
   description: string;
-  execute: (ctx: ExecutorContext) => Promise<{ artifacts: AgentRunArtifact[]; summary: string }>;
+  risk: AgentRunRiskClass;
+  requiredRole: "org_manager" | "super_admin";
+  scope: string;
+  expectedEffect: string;
+  costEstimateUsd?: number | null;
+  rollbackGuidance?: string;
+  execute: (ctx: ExecutorContext) => Promise<{
+    artifacts: AgentRunArtifact[];
+    summary: string;
+    partial?: boolean;
+    actualEffect?: string;
+  }>;
   verify: (ctx: ExecutorContext, artifacts: AgentRunArtifact[]) => Promise<{ ok: boolean; detail: string }>;
 };
 
@@ -93,12 +163,71 @@ async function writeArtifact(run: AgentRun, name: string, content: string, summa
   return { kind: "markdown", path, summary };
 }
 
+/* Rehydrate persisted runs at boot so approval queues survive restarts.
+   Runs that were mid-flight when the process died are honestly failed. */
+let rehydrated = false;
+export async function rehydrateAgentRuns() {
+  if (rehydrated) return;
+  rehydrated = true;
+  try {
+    const raw = await readFile(RUNS_LOG_PATH, "utf8");
+    const latest = new Map<string, AgentRun>();
+    for (const line of raw.split("\n")) {
+      if (!line.trim()) continue;
+      try {
+        const parsed = JSON.parse(line) as { type?: string; run?: AgentRun };
+        if (parsed.type === "run" && parsed.run?.id) latest.set(parsed.run.id, parsed.run);
+      } catch { /* skip corrupt line */ }
+    }
+    for (const run of latest.values()) {
+      /* backfill fields for runs recorded before the approval lifecycle */
+      run.risk = run.risk ?? "low_internal";
+      run.required_role = run.required_role ?? "super_admin";
+      run.inputs = run.inputs ?? {};
+      run.scope = run.scope ?? "server";
+      run.expected_effect = run.expected_effect ?? "";
+      run.cost_estimate_usd = run.cost_estimate_usd ?? null;
+      run.requested_by = run.requested_by ?? run.session_id;
+      run.approval_deadline = run.approval_deadline ?? null;
+      run.approved_by = run.approved_by ?? null;
+      run.approved_at = run.approved_at ?? null;
+      run.rejected_by = run.rejected_by ?? null;
+      run.rejected_at = run.rejected_at ?? null;
+      run.rejection_reason = run.rejection_reason ?? null;
+      run.receipt = run.receipt ?? null;
+      if (["queued", "executing", "verifying", "approved"].includes(run.state)) {
+        run.state = "failed";
+        run.error = "server_restarted_mid_run";
+        run.updated_at = nowIso();
+        run.events.push({ at: run.updated_at, state: "failed", note: "Server restarted while this run was in flight." });
+      }
+      runs.set(run.id, run);
+    }
+  } catch { /* no journal yet */ }
+}
+void rehydrateAgentRuns();
+
+/* Lazy expiry: an approval that outlived its deadline can never execute. */
+function applyExpiry(run: AgentRun) {
+  if (run.state === "awaiting_approval" && run.approval_deadline && Date.parse(run.approval_deadline) < Date.now()) {
+    run.state = "expired";
+    run.updated_at = nowIso();
+    run.events.push({ at: run.updated_at, state: "expired", note: "Approval deadline passed; the run can no longer execute." });
+    void persistRun(run);
+  }
+  return run;
+}
+
 /* ---------------- executors: real work only ---------------- */
 
-const EXECUTORS: Record<string, Executor> = {
+const EXECUTORS: Record<string, AgentRunExecutor> = {
   business_snapshot: {
     title: "Business snapshot report",
     description: "Compiles a real operational report from live server state: automation results, recent Hermes proof entries, and provider readiness. No provider calls, no spend.",
+    risk: "low_internal",
+    requiredRole: "super_admin",
+    scope: "server state (read-only)",
+    expectedEffect: "A markdown report artifact on disk; nothing external.",
     async execute({ run, progress, isCancelled }) {
       await progress("Reading automation engine state…");
       const jobs = await listAutomationJobs();
@@ -156,6 +285,10 @@ const EXECUTORS: Record<string, Executor> = {
   provider_health: {
     title: "AI provider health check",
     description: "Reports which chat provider lanes are actually usable right now, from the real readiness probes. No provider calls, no spend.",
+    risk: "low_internal",
+    requiredRole: "super_admin",
+    scope: "server state (read-only)",
+    expectedEffect: "A markdown report artifact on disk; nothing external.",
     async execute({ run, progress }) {
       await progress("Running provider readiness probes…");
       const report = getProviderReadinessReport();
@@ -185,30 +318,141 @@ const EXECUTORS: Record<string, Executor> = {
   },
 };
 
+/* External modules (e.g. the site publishing pipeline) register their
+   executors here — one engine, no parallel architectures. */
+export function registerAgentRunExecutor(operation: string, executor: AgentRunExecutor) {
+  if (EXECUTORS[operation]) {
+    throw new Error(`Agent run executor "${operation}" is already registered.`);
+  }
+  EXECUTORS[operation] = executor;
+}
+
 export function listAgentRunOperations() {
   return Object.entries(EXECUTORS).map(([id, executor]) => ({
     id,
     title: executor.title,
     description: executor.description,
+    risk: executor.risk,
+    required_role: executor.requiredRole,
+    scope: executor.scope,
+    expected_effect: executor.expectedEffect,
   }));
 }
 
-export function listAgentRuns(options: { sessionId?: string; limit?: number } = {}) {
-  const all = [...runs.values()].sort((a, b) => b.created_at.localeCompare(a.created_at));
-  const scoped = options.sessionId ? all.filter((r) => r.session_id === options.sessionId) : all;
+export function listAgentRuns(options: { workspace?: string; state?: AgentRunState; limit?: number } = {}) {
+  const all = [...runs.values()].map(applyExpiry).sort((a, b) => b.created_at.localeCompare(a.created_at));
+  const scoped = all
+    .filter((r) => (options.workspace ? r.workspace === options.workspace : true))
+    .filter((r) => (options.state ? r.state === options.state : true));
   return scoped.slice(0, options.limit ?? 20);
 }
 
 export function getAgentRun(id: string) {
-  return runs.get(id) ?? null;
+  const run = runs.get(id);
+  return run ? applyExpiry(run) : null;
+}
+
+export function getAgentRunExecutor(operation: string) {
+  return EXECUTORS[operation];
 }
 
 export function requestAgentRunCancel(id: string) {
   const run = runs.get(id);
   if (!run) return null;
-  if (["completed", "failed", "cancelled"].includes(run.state)) return run;
+  if (TERMINAL_AGENT_RUN_STATES.has(run.state)) return run;
+  if (run.state === "awaiting_approval") {
+    void transition(run, "cancelled", "Cancelled while awaiting approval; nothing executed.");
+    return run;
+  }
   run.cancel_requested = true;
   return run;
+}
+
+/* ---------------- execution core ---------------- */
+
+async function executeRun(run: AgentRun, executor: AgentRunExecutor, proof: {
+  tenantId: string;
+  businessName: string;
+}) {
+  const ctx: ExecutorContext = {
+    run,
+    progress: async (note: string) => {
+      run.updated_at = nowIso();
+      run.events.push({ at: run.updated_at, note });
+      await persistRun(run);
+    },
+    isCancelled: () => run.cancel_requested,
+  };
+  try {
+    await transition(run, "executing", `Executing ${executor.title}.`);
+    const result = await executor.execute(ctx);
+    if (run.cancel_requested) {
+      await transition(run, "cancelled", "Cancelled by request during execution.");
+      return;
+    }
+    run.artifacts = result.artifacts;
+
+    await transition(run, "verifying", "Verifying the produced artifacts.");
+    const verdict = await executor.verify(ctx, result.artifacts);
+    if (!verdict.ok) {
+      run.error = verdict.detail;
+      await transition(run, "failed", `Verification failed: ${verdict.detail}`);
+      return;
+    }
+
+    /* execution receipt — who asked, who approved, what actually happened */
+    run.receipt = {
+      operation: run.operation,
+      requested_by: run.requested_by,
+      approved_by: run.approved_by,
+      approved_at: run.approved_at,
+      executed_at: nowIso(),
+      inputs: run.inputs,
+      scope: run.scope,
+      expected_effect: run.expected_effect,
+      actual_effect: result.actualEffect ?? result.summary,
+      cost_estimate_usd: run.cost_estimate_usd,
+      rollback_guidance: executor.rollbackGuidance ?? null,
+    };
+
+    /* proof: a real Hermes ledger record referencing this run */
+    const ledgerRecord = {
+      timestamp: nowIso(),
+      tenant_id: proof.tenantId,
+      business_name: proof.businessName,
+      actor_user_id: run.requested_by,
+      actor_role: "admin" as const,
+      request_id: run.id,
+      task_type: `agent_run:${run.operation}`,
+      sensitivity_level: "internal" as const,
+      provider_route: "none" as const,
+      model_id: "none",
+      context_chars: 0,
+      estimated_tokens: 0,
+      estimated_cost_usd: run.cost_estimate_usd,
+      user_request_summary: redactSensitiveText(run.request || executor.title).slice(0, 200),
+      result_summary: redactSensitiveText(result.summary).slice(0, 240),
+      approval_required: run.risk !== "low_internal",
+      approval_state: run.risk !== "low_internal" ? ("approved" as const) : ("not_required" as const),
+      external_action: run.risk !== "low_internal",
+      external_action_executed: run.risk !== "low_internal",
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await appendHermesLedgerRecord(ledgerRecord as any);
+    run.proof_request_id = run.id;
+
+    const successState: AgentRunState =
+      run.risk === "low_internal" ? "completed" : result.partial ? "partially_succeeded" : "succeeded";
+    await transition(run, successState, `${verdict.detail} Proof recorded in the Hermes ledger (request ${run.id}).`);
+  } catch (error) {
+    const message = String((error as Error)?.message || error);
+    if (message === "cancelled" || run.cancel_requested) {
+      await transition(run, "cancelled", "Cancelled by request.");
+    } else {
+      run.error = message.slice(0, 300);
+      await transition(run, "failed", `Failed: ${run.error}`);
+    }
+  }
 }
 
 export async function startAgentRun(input: {
@@ -218,12 +462,15 @@ export async function startAgentRun(input: {
   request: string;
   tenantId: string;
   businessName: string;
+  requestedBy?: string;
+  inputs?: Record<string, unknown>;
 }): Promise<AgentRun | { error: string; available: ReturnType<typeof listAgentRunOperations> }> {
   const executor = EXECUTORS[input.operation];
   if (!executor) {
     return { error: `unknown_operation`, available: listAgentRunOperations() };
   }
 
+  const requiresApproval = executor.risk !== "low_internal";
   const run: AgentRun = {
     id: runId(),
     operation: input.operation,
@@ -231,11 +478,29 @@ export async function startAgentRun(input: {
     workspace: input.workspace,
     session_id: input.sessionId,
     request: String(input.request || "").slice(0, 300),
-    state: "queued",
+    state: requiresApproval ? "awaiting_approval" : "queued",
+    risk: executor.risk,
+    required_role: executor.requiredRole,
+    inputs: input.inputs ?? {},
+    scope: executor.scope,
+    expected_effect: executor.expectedEffect,
+    cost_estimate_usd: executor.costEstimateUsd ?? null,
+    requested_by: input.requestedBy ?? input.sessionId,
+    approval_deadline: requiresApproval ? new Date(Date.now() + DEFAULT_APPROVAL_DEADLINE_MS).toISOString() : null,
+    approved_by: null,
+    approved_at: null,
+    rejected_by: null,
+    rejected_at: null,
+    rejection_reason: null,
     created_at: nowIso(),
     updated_at: nowIso(),
-    events: [{ at: nowIso(), state: "queued", note: "Run created and queued." }],
+    events: [
+      requiresApproval
+        ? { at: nowIso(), state: "awaiting_approval", note: `External action proposed — waiting for explicit approval. ${executor.expectedEffect}` }
+        : { at: nowIso(), state: "queued", note: "Run created and queued." },
+    ],
     artifacts: [],
+    receipt: null,
     error: null,
     proof_request_id: null,
     cancel_requested: false,
@@ -243,72 +508,44 @@ export async function startAgentRun(input: {
   runs.set(run.id, run);
   await persistRun(run);
 
-  /* execute asynchronously — the route answers with the queued run and the
-     client polls. Every transition is persisted and evented. */
-  void (async () => {
-    const ctx: ExecutorContext = {
-      run,
-      progress: async (note: string) => {
-        run.updated_at = nowIso();
-        run.events.push({ at: run.updated_at, note });
-        await persistRun(run);
-      },
-      isCancelled: () => run.cancel_requested,
-    };
-    try {
-      await transition(run, "executing", `Executing ${executor.title}.`);
-      const result = await executor.execute(ctx);
-      if (run.cancel_requested) {
-        await transition(run, "cancelled", "Cancelled by request during execution.");
-        return;
-      }
-      run.artifacts = result.artifacts;
-
-      await transition(run, "verifying", "Verifying the produced artifacts.");
-      const verdict = await executor.verify(ctx, result.artifacts);
-      if (!verdict.ok) {
-        run.error = verdict.detail;
-        await transition(run, "failed", `Verification failed: ${verdict.detail}`);
-        return;
-      }
-
-      /* proof: a real Hermes ledger record referencing this run */
-      const ledgerRecord = {
-        timestamp: nowIso(),
-        tenant_id: input.tenantId,
-        business_name: input.businessName,
-        actor_user_id: input.sessionId,
-        actor_role: "admin" as const,
-        request_id: run.id,
-        task_type: `agent_run:${input.operation}`,
-        sensitivity_level: "internal" as const,
-        provider_route: "none" as const,
-        model_id: "none",
-        context_chars: 0,
-        estimated_tokens: 0,
-        estimated_cost_usd: null,
-        user_request_summary: redactSensitiveText(run.request || executor.title).slice(0, 200),
-        result_summary: redactSensitiveText(result.summary).slice(0, 240),
-        approval_required: false,
-        approval_state: "not_required" as const,
-        external_action: false,
-        external_action_executed: false,
-      };
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await appendHermesLedgerRecord(ledgerRecord as any);
-      run.proof_request_id = run.id;
-
-      await transition(run, "completed", `${verdict.detail} Proof recorded in the Hermes ledger (request ${run.id}).`);
-    } catch (error) {
-      const message = String((error as Error)?.message || error);
-      if (message === "cancelled" || run.cancel_requested) {
-        await transition(run, "cancelled", "Cancelled by request.");
-      } else {
-        run.error = message.slice(0, 300);
-        await transition(run, "failed", `Failed: ${run.error}`);
-      }
-    }
-  })();
+  if (!requiresApproval) {
+    /* low-risk internal work executes immediately; the client polls */
+    void executeRun(run, executor, { tenantId: input.tenantId, businessName: input.businessName });
+  }
 
   return run;
+}
+
+/* Approve an awaiting run. Authorization (org manager / super-admin for the
+   run's workspace) is enforced by the caller — this records WHO approved and
+   flips the machine. The engine refuses to execute anything not in
+   awaiting_approval, so approval can never be skipped or repeated. */
+export async function approveAgentRun(id: string, approver: { id: string; email?: string }, proof: {
+  tenantId: string;
+  businessName: string;
+}) {
+  const run = getAgentRun(id);
+  if (!run) return { ok: false as const, error: "run_not_found" };
+  if (run.state === "expired") return { ok: false as const, error: "approval_expired" };
+  if (run.state !== "awaiting_approval") return { ok: false as const, error: `not_awaiting_approval:${run.state}` };
+  const executor = EXECUTORS[run.operation];
+  if (!executor) return { ok: false as const, error: "executor_missing" };
+
+  run.approved_by = approver.email ?? approver.id;
+  run.approved_at = nowIso();
+  await transition(run, "approved", `Approved by ${run.approved_by}.`);
+  await transition(run, "queued", "Queued for execution.");
+  void executeRun(run, executor, proof);
+  return { ok: true as const, run };
+}
+
+export async function rejectAgentRun(id: string, approver: { id: string; email?: string }, reason?: string) {
+  const run = getAgentRun(id);
+  if (!run) return { ok: false as const, error: "run_not_found" };
+  if (run.state !== "awaiting_approval") return { ok: false as const, error: `not_awaiting_approval:${run.state}` };
+  run.rejected_by = approver.email ?? approver.id;
+  run.rejected_at = nowIso();
+  run.rejection_reason = reason?.slice(0, 300) ?? null;
+  await transition(run, "rejected", `Rejected by ${run.rejected_by}${reason ? `: ${reason.slice(0, 200)}` : "."}`);
+  return { ok: true as const, run };
 }

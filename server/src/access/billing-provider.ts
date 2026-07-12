@@ -47,3 +47,51 @@ export function getProvisioningBillingMetadata(): {
     billingSourceOfTruth: sourceOfTruth,
   };
 }
+
+/* ============================================================================
+   Billing provider adapter boundary.
+   The entitlement engine (entitlements.ts) is deliberately billing-agnostic:
+   plans are assigned by the super-admin (or, later, by a billing adapter
+   translating provider webhooks into these neutral events). Integrating
+   Stripe/another provider means adding ONE adapter here — the product's
+   permission logic never changes. No adapter is integrated today, no
+   checkout exists, and nothing below pretends a payment happened. */
+
+export type BillingEvent =
+  | { type: "subscription_activated"; orgId: string; planKey: string; provider: string }
+  | { type: "subscription_cancelled"; orgId: string; provider: string }
+  | { type: "payment_failed"; orgId: string; provider: string };
+
+export type BillingProviderAdapter = {
+  id: string;
+  label: string;
+  /** true only when real credentials/webhook secrets are configured */
+  configured: boolean;
+  liveWebhooksAllowed: boolean;
+  /** Verify + translate a provider webhook into a neutral BillingEvent.
+      Absent on the manual adapter — manual assignment happens via
+      POST /admin/orgs/:orgId/plan. */
+  parseWebhook?: (headers: Record<string, unknown>, body: unknown) => BillingEvent | undefined;
+};
+
+const manualAdapter: BillingProviderAdapter = {
+  id: "manual",
+  label: "Manual super-admin assignment (no billing provider)",
+  configured: true,
+  liveWebhooksAllowed: false,
+};
+
+const adapters = new Map<string, BillingProviderAdapter>([[manualAdapter.id, manualAdapter]]);
+
+export function listBillingAdapters() {
+  return [...adapters.values()].map((adapter) => ({
+    id: adapter.id,
+    label: adapter.label,
+    configured: adapter.configured,
+    liveWebhooksAllowed: adapter.liveWebhooksAllowed,
+  }));
+}
+
+export function getBillingAdapter(id: string) {
+  return adapters.get(id);
+}
