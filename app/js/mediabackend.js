@@ -374,3 +374,51 @@ export async function listVaultAssetTags(id) {
     return { ok: false, error: "Could not reach the vault backend.", tags: [] };
   }
 }
+
+/* ---------------- Asset Vault: presets / effect stacks ----------------
+   A preset is a named, versioned, arbitrary-JSON definition scoped the
+   same way as everything else here — the server never interprets its
+   contents, so callers (e.g. Creator Hub's image editor) are free to store
+   whatever shape their own edit state uses. */
+export async function createVaultPreset(kind, name, definition, description) {
+  try {
+    const r = await fetchWithTimeout("/phantom-ai/presets", {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ kind, name, description, definition, tenant_id: currentTenantId() }),
+    }, 10000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok && d.preset) return { ok: true, preset: d.preset };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the vault backend." };
+  }
+}
+
+export async function listVaultPresets(kind) {
+  try {
+    const params = new URLSearchParams({ tenant_id: currentTenantId() });
+    if (kind) params.set("kind", kind);
+    const r = await fetchWithTimeout(`/phantom-ai/presets?${params.toString()}`, { headers: authHeaders() }, 10000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok && Array.isArray(d.presets)) return { ok: true, presets: d.presets };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).`, presets: [] };
+  } catch {
+    return { ok: false, error: "Could not reach the vault backend.", presets: [] };
+  }
+}
+
+export async function archiveVaultPreset(id) {
+  try {
+    const r = await fetchWithTimeout(`/phantom-ai/presets/${encodeURIComponent(id)}/archive`, {
+      method: "POST",
+      headers: authHeaders({ "Content-Type": "application/json" }),
+      body: JSON.stringify({ tenant_id: currentTenantId() }),
+    }, 10000);
+    const d = await r.json().catch(() => null);
+    if (r.ok && d && d.ok) return { ok: true };
+    return { ok: false, error: (d && d.error) || `Request failed (${r.status}).` };
+  } catch {
+    return { ok: false, error: "Could not reach the vault backend." };
+  }
+}

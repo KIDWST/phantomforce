@@ -11,7 +11,7 @@ import {
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
 } from "./imagefilters.js?v=phantom-live-20260711-189";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, searchVaultAssets, fetchAssetDerivative, setVaultAssetFavorite, tagVaultAsset, untagVaultAsset, listVaultAssetTags } from "./mediabackend.js?v=phantom-live-20260711-189";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile, searchVaultAssets, fetchAssetDerivative, setVaultAssetFavorite, tagVaultAsset, untagVaultAsset, listVaultAssetTags, createVaultPreset, listVaultPresets, archiveVaultPreset } from "./mediabackend.js?v=phantom-live-20260711-189";
 import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260711-189";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
@@ -371,6 +371,9 @@ function syncCreatorTenant() {
     chState.platform = "all";
     chState.ctype = "all";
     chState.eng = "likes";
+    chVault.results = [];
+    chVault.searchedOnce = false;
+    chLbPresetsCache.items = null;
   }
   chRenderedTenant = tenant;
 }
@@ -688,6 +691,12 @@ const chSelection = new Set();
 const chVault = { query: "", type: "all", favoriteOnly: false, loading: false, searchedOnce: false, error: "", results: [], total: 0 };
 const chVaultThumbCache = new Map(); // asset id -> dataUrl | "unavailable", so re-renders don't re-fetch
 const chVaultTagsOpen = new Set(); // asset ids with the inline tag editor expanded
+/* ---------------- saved-look presets (Stage 7) ----------------
+   Server-backed, versioned, cross-device saved editor looks (kind
+   "creator-hub-filter"), living alongside the static FILTER_PRESETS chips
+   already built into imagefilters.js — this is the user-savable extension
+   of that same idea, using the real presets table/routes (Stage 7). */
+const chLbPresetsCache = { items: null, loading: false, error: "" };
 let chLightbox = null;
 let chLbKeyHandler = null;
 let chSelectAnchor = null;
@@ -1995,6 +2004,23 @@ function lightboxMarkup(lb, esc) {
                 <button type="button" data-v="emerald">Emerald</button><button type="button" data-v="warm">Warm</button>
                 <button type="button" data-v="cold">Cold</button><button type="button" data-v="vivid">Vivid</button>
               </div>
+              <div class="ch-lb-saved-presets">
+                <span class="ch-lb-saved-label">Saved looks</span>
+                ${chLbPresetsCache.error ? `<p class="ch-src ch-error">${esc(chLbPresetsCache.error)}</p>` : ""}
+                ${chLbPresetsCache.items === null
+                  ? `<p class="ch-src">Loading saved looks…</p>`
+                  : (chLbPresetsCache.items.length
+                      ? `<div class="ch-lb-chips ch-lb-chips-wrap">${chLbPresetsCache.items.map((preset) => `
+                          <span class="ch-lb-preset-chip">
+                            <button type="button" data-ch-lb-preset-apply="${esc(preset.id)}">${esc(preset.name)}</button>
+                            <button type="button" class="ch-lb-preset-delete" data-ch-lb-preset-delete="${esc(preset.id)}" title="Delete this saved look" aria-label="Delete ${esc(preset.name)}">×</button>
+                          </span>`).join("")}</div>`
+                      : `<p class="ch-src">No saved looks yet — dial in a look, then save it below.</p>`)}
+                <div class="ch-lb-preset-save-row">
+                  <input type="text" data-ch-lb-preset-name placeholder="Name this look…" maxlength="120"/>
+                  <button class="ch-tool" type="button" data-ch-lb-preset-save>Save current look</button>
+                </div>
+              </div>
             </details>
             </div>` : `<div class="ch-layer-tool-empty">Select an image layer to use Effects and AI.</div>`}
             <div class="ch-lb-actions">
@@ -2393,6 +2419,58 @@ function wireLightbox(root, opts) {
     });
     commitEditorChange(lb, before);
     repaint();
+  });
+
+  if (chLbPresetsCache.items === null && !chLbPresetsCache.loading) {
+    chLbPresetsCache.loading = true;
+    listVaultPresets("creator-hub-filter").then((result) => {
+      chLbPresetsCache.loading = false;
+      chLbPresetsCache.items = result.ok ? result.presets : [];
+      chLbPresetsCache.error = result.ok ? "" : (result.error || "Could not load saved looks.");
+      if (chLightbox === lb) rerender();
+    });
+  }
+  root.querySelectorAll("[data-ch-lb-preset-apply]").forEach((b) => b.onclick = () => {
+    const preset = (chLbPresetsCache.items || []).find((p) => p.id === b.dataset.chLbPresetApply);
+    if (!preset || !preset.definition || typeof preset.definition !== "object") return;
+    const before = editorSnapshot(lb);
+    Object.assign(s, preset.definition, { textStyle: { ...freshTextStyle(), ...(preset.definition.textStyle || {}) } });
+    root.querySelectorAll("[data-ch-lb-slider]").forEach((slider) => {
+      slider.value = s[slider.dataset.chLbSlider];
+      const out = root.querySelector(`[data-out="${slider.dataset.chLbSlider}"]`);
+      if (out) out.textContent = slider.value;
+    });
+    commitEditorChange(lb, before);
+    repaint();
+  });
+  const presetNameInput = root.querySelector("[data-ch-lb-preset-name]");
+  const presetSaveBtn = root.querySelector("[data-ch-lb-preset-save]");
+  if (presetSaveBtn) presetSaveBtn.onclick = async () => {
+    const name = (presetNameInput?.value || "").trim();
+    if (!name) return;
+    presetSaveBtn.disabled = true;
+    presetSaveBtn.textContent = "Saving…";
+    const result = await createVaultPreset("creator-hub-filter", name, editStateSnapshot(s));
+    presetSaveBtn.disabled = false;
+    presetSaveBtn.textContent = "Save current look";
+    if (result.ok) {
+      chLbPresetsCache.items = [result.preset, ...(chLbPresetsCache.items || [])];
+      chLbPresetsCache.error = "";
+    } else {
+      chLbPresetsCache.error = result.error || "Could not save this look.";
+    }
+    rerender();
+  };
+  root.querySelectorAll("[data-ch-lb-preset-delete]").forEach((b) => b.onclick = async () => {
+    const id = b.dataset.chLbPresetDelete;
+    b.disabled = true;
+    const result = await archiveVaultPreset(id);
+    if (result.ok) {
+      chLbPresetsCache.items = (chLbPresetsCache.items || []).filter((p) => p.id !== id);
+      rerender();
+    } else {
+      b.disabled = false;
+    }
   });
   const textInput = root.querySelector("[data-ch-lb-text]");
   if (textInput) {

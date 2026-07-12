@@ -7981,6 +7981,17 @@ details.ch-lb-section .ch-lb-slider:last-child, details.ch-lb-section .ch-lb-chi
 .ch-lb-chips button:hover { border-color: var(--neon); background: rgba(65,255,161,0.1); }
 .ch-lb-chips button.is-on { color: #04160d; background: linear-gradient(120deg, var(--neon), #15d97f); border-color: transparent; }
 .ch-lb-chips button .ic { width: 12px; height: 12px; }
+
+/* Saved-look presets (Stage 7) */
+.ch-lb-saved-presets { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); }
+.ch-lb-saved-label { display: block; font: 700 9.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); margin-bottom: 6px; }
+.ch-lb-preset-chip { display: inline-flex; align-items: stretch; border: 1px solid var(--line); border-radius: 9px; overflow: hidden; background: rgba(0,0,0,0.24); }
+.ch-lb-preset-chip button[data-ch-lb-preset-apply] { border: none; border-radius: 0; background: transparent; color: #dfffee; padding: 7px 10px; font: 600 11.5px "Space Grotesk"; cursor: pointer; }
+.ch-lb-preset-chip button[data-ch-lb-preset-apply]:hover { background: rgba(65,255,161,0.1); }
+.ch-lb-preset-delete { border: none; border-left: 1px solid var(--line); background: transparent; color: var(--dim); cursor: pointer; padding: 0 8px; font-size: 13px; }
+.ch-lb-preset-delete:hover { color: #ffb0bb; background: rgba(255,92,115,0.12); }
+.ch-lb-preset-save-row { display: flex; gap: 6px; margin-top: 8px; }
+.ch-lb-preset-save-row input { flex: 1; background: rgba(0,0,0,0.24); border: 1px solid var(--line); border-radius: 9px; color: #eafff2; padding: 7px 10px; font: 500 12px "DM Mono", monospace; }
 .ch-lb-actions { display: flex; flex-direction: column; gap: 8px; margin-top: auto; padding-top: 4px; }
 .ch-lb-actions .btn { width: 100%; justify-content: center; }
 

@@ -9,13 +9,18 @@ import path from "node:path";
 
 import {
   addAssetToCollection,
+  archivePreset,
   createCollection,
+  createPreset,
+  createPresetVersion,
   deleteAssetById,
   deleteExpiredCacheAssets,
   getAssetById,
+  getPresetById,
   insertAsset,
   listAssetsByOwnerScope,
   listAssetsInCollection,
+  listPresets,
   listTagsForAsset,
   resetAssetDbForTests,
   searchAssets,
@@ -240,6 +245,60 @@ const paged = searchAssets("search-scope", { limit: 1, offset: 1, sort: "created
 assert(paged.results.length === 1 && paged.total === 3, "pagination should slice results while total still reflects the full match count.");
 
 console.log("search (Stage 5): all checks passed.");
+
+// ---- presets / effect stacks (Stage 7) --------------------------------------------
+
+const filterPreset = createPreset({
+  ownerScope: "search-scope",
+  name: "Golden hour",
+  kind: "creator-hub-filter",
+  definition: { brightness: 108, contrast: 105, saturate: 135, hue: 20, blur: 0 },
+});
+assert(filterPreset.version === 1, "a newly created preset should start at version 1.");
+assert(
+  filterPreset.definition && (filterPreset.definition as { hue: number }).hue === 20,
+  "the stored definition should round-trip through JSON exactly as given.",
+);
+
+const otherKindPreset = createPreset({
+  ownerScope: "search-scope",
+  name: "Fast cuts",
+  kind: "phantomcut-effect-stack",
+  definition: { transitions: ["cut", "cut", "fade"] },
+});
+
+const otherScopePreset = createPreset({
+  ownerScope: "other-scope",
+  name: "Not visible here",
+  kind: "creator-hub-filter",
+  definition: {},
+});
+
+const filterKindOnly = listPresets("search-scope", "creator-hub-filter");
+assert(
+  filterKindOnly.length === 1 && filterKindOnly[0].id === filterPreset.id,
+  "listPresets with a kind filter should only return that kind, scoped to the caller's owner_scope.",
+);
+const allKinds = listPresets("search-scope");
+assert(
+  allKinds.length === 2 && allKinds.every((p) => p.id !== otherScopePreset.id),
+  "listPresets without a kind filter should return every kind for this scope, but never another scope's presets.",
+);
+assert(getPresetById(otherScopePreset.id, "search-scope") === null, "a preset must not be readable under the wrong owner_scope.");
+
+const versioned = createPresetVersion(filterPreset.id, "search-scope", { brightness: 112, contrast: 108, saturate: 140, hue: 22, blur: 0 });
+assert(versioned !== null && versioned.version === 2, "creating a new version should increment the version number.");
+assert(versioned!.name === filterPreset.name, "a new version should keep the same name as its lineage.");
+assert(createPresetVersion(otherScopePreset.id, "search-scope", {}) === null, "creating a version under the wrong owner_scope must fail.");
+
+assert(archivePreset(otherKindPreset.id, "search-scope"), "archiving an owned preset should succeed.");
+assert(
+  listPresets("search-scope", "phantomcut-effect-stack").length === 0,
+  "an archived preset must no longer appear in listPresets.",
+);
+assert(!archivePreset(otherKindPreset.id, "other-scope"), "archiving a preset under the wrong owner_scope must fail.");
+
+console.log("presets (Stage 7): all checks passed.");
 
 console.log("asset-db.ts: all checks passed.");
 

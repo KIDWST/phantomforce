@@ -178,10 +178,15 @@ import {
 import { getContentAssetStorageProvider } from "./phantom-ai/content-asset-storage.js";
 import {
   addAssetToCollection,
+  archivePreset,
   createCollection,
+  createPreset,
+  createPresetVersion,
   getAssetById as getVaultAssetById,
+  getPresetById,
   listAssetsInCollection,
   listCollections,
+  listPresets,
   listTagsForAsset,
   searchAssets,
   setAssetArchived,
@@ -4288,6 +4293,101 @@ app.get("/phantom-ai/collections/:id/assets", async (request, reply) => {
   const query = (request.query ?? {}) as { tenant_id?: unknown };
   const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
   return { ok: true, tenant_id: ownerScope, assets: listAssetsInCollection(id, ownerScope) };
+});
+
+/* ---- Asset Vault Stage 7: presets / effect stacks ----
+   A "preset" is any named, versioned, arbitrary-JSON definition scoped the
+   same way as everything else here (contentAssetOwnerScope) — today used
+   for Creator Hub's saved image-editor look (brightness/contrast/crop/text/
+   bokeh, the same shape editStateSnapshot() already produces), but kind is
+   caller-defined so this same table/routes work for any future effect-
+   stack shape without a schema change. Definitions are stored as opaque
+   JSON — this server never interprets or validates their contents, only
+   the caller (the editor UI) knows what a given kind's definition means. */
+
+const CreatePresetSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  name: z.string().trim().min(1).max(120),
+  description: z.string().trim().max(500).optional(),
+  kind: z.string().trim().min(1).max(60),
+  definition: z.unknown(),
+});
+
+app.post("/phantom-ai/presets", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const parsed = CreatePresetSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const preset = createPreset({
+    ownerScope,
+    name: parsed.data.name,
+    description: parsed.data.description,
+    kind: parsed.data.kind,
+    definition: parsed.data.definition,
+  });
+  return { ok: true, tenant_id: ownerScope, preset };
+});
+
+app.get("/phantom-ai/presets", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const query = (request.query ?? {}) as { tenant_id?: unknown; kind?: unknown };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const kind = typeof query.kind === "string" && query.kind ? query.kind : undefined;
+  return { ok: true, tenant_id: ownerScope, presets: listPresets(ownerScope, kind) };
+});
+
+app.get("/phantom-ai/presets/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const ownerScope = contentAssetOwnerScope(session, query.tenant_id);
+  const preset = getPresetById(id, ownerScope);
+  if (!preset) return reply.code(404).send({ ok: false, error: "not_found" });
+  return { ok: true, tenant_id: ownerScope, preset };
+});
+
+const CreatePresetVersionSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  definition: z.unknown(),
+});
+
+app.post("/phantom-ai/presets/:id/versions", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = CreatePresetVersionSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const preset = createPresetVersion(id, ownerScope, parsed.data.definition);
+  if (!preset) return reply.code(404).send({ ok: false, error: "not_found" });
+  return { ok: true, tenant_id: ownerScope, preset };
+});
+
+const ArchivePresetSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+});
+
+app.post("/phantom-ai/presets/:id/archive", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = ArchivePresetSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const archived = archivePreset(id, ownerScope);
+  if (!archived) return reply.code(404).send({ ok: false, error: "not_found" });
+  return { ok: true, tenant_id: ownerScope };
 });
 
 /* ---- Asset Vault Stage 3: cache manager ----
