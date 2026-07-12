@@ -879,6 +879,7 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
     return reply.code(401).send({
       ok: false,
       error: "Invalid session credentials.",
+      auth: authConfiguration,
       sessions: listAccessSessions(),
     });
   }

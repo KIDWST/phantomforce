@@ -733,15 +733,22 @@ export async function ownerLogin(ownerKey) {
     }
     if (response.status === 401 || response.status === 403) {
       // auto-diagnose: is the backend even holding an owner key right now?
-      let keyLoaded = null;
+      let auth = payload?.auth && typeof payload.auth === "object" ? payload.auth : null;
+      let keyLoaded = typeof auth?.ownerLoginKeyConfigured === "boolean" ? auth.ownerLoginKeyConfigured : null;
       try {
-        const probe = await fetch("/sessions").then((r) => r.json());
-        if (typeof probe?.auth?.ownerLoginKeyConfigured === "boolean") keyLoaded = probe.auth.ownerLoginKeyConfigured;
+        if (!auth) {
+          const probe = await fetch("/sessions").then((r) => r.json());
+          auth = probe?.auth && typeof probe.auth === "object" ? probe.auth : null;
+        }
+        if (typeof auth?.ownerLoginKeyConfigured === "boolean") keyLoaded = auth.ownerLoginKeyConfigured;
       } catch {}
       if (keyLoaded === false) {
-        throw new Error("Your key is fine — the backend started WITHOUT its .env file, so no owner key is loaded. On the admin PC: stop the server (Ctrl+C), then run it from the phantomforce\\server folder (cd ...\\phantomforce\\server, then npm run dev) and sign in again.");
+        throw new Error("Owner auth is not fully loaded on this backend. Stop the server, restart it from the PhantomForce server folder so server\\.env is loaded, then sign in again.");
       }
-      throw new Error("That key was rejected by the backend. If you're sure it's right, restart the server from the phantomforce\\server folder so it loads PHANTOMFORCE_OWNER_LOGIN_KEY from .env — see docs/ADMIN_RECOVERY.md.");
+      if (auth?.ownerProductionAuthEnabled && auth?.productionReady) {
+        throw new Error("That owner key was rejected. The backend is running and owner auth is configured, so re-enter the saved owner key exactly or update PHANTOMFORCE_OWNER_LOGIN_KEY in server\\.env and restart the server.");
+      }
+      throw new Error("Owner login was rejected because this backend is not in ready owner-auth mode. Restart the PhantomForce server and check /sessions before trying again.");
     }
     throw new Error(raw || "Owner login failed.");
   }
