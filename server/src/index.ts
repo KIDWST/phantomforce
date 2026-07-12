@@ -204,6 +204,20 @@ import {
   updatePhantomPlaySubmission,
 } from "./phantom-ai/phantomplay.js";
 import {
+  auditCompetitorIntelligenceRequest,
+  createAudienceTheme,
+  createCompetitor,
+  createCreativeAnalysis,
+  createInterceptionPackage,
+  createMysteryEvidence,
+  createResearchOpportunity,
+  createSignal,
+  fuseCompetitorSignals,
+  getCompetitorIntelligenceSnapshot,
+  getCompetitorIntelligenceStoreStatus,
+  updateAggressiveMode,
+} from "./phantom-ai/competitor-intelligence.js";
+import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
 } from "./phantom-ai/security-scan-scheduler.js";
@@ -3125,6 +3139,103 @@ app.post("/api/phantomplay/submissions/:id/moderate", async (request, reply) => 
     return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Moderation decision could not be saved." });
   }
 });
+
+/* ============================================================================
+   COMPETITOR INTELLIGENCE
+   Tenant-scoped analysis of lawfully available public signals. These routes
+   store evidence and prepare original response plans; they never scrape,
+   contact, publish, impersonate, or take an external competitive action. */
+
+async function competitorIntelligenceAccess(session: AccessSession) {
+  if (session.canManageAccess || session.isSuperAdmin) {
+    return { entitled: true, aggressiveEntitled: true, competitorLimit: 100_000, signalLimit: 1_000_000, reason: "platform_admin" };
+  }
+  if (session.orgId) {
+    try {
+      const [base, aggressive] = await Promise.all([
+        orgHasFeature(session.orgId, "competitorIntelligence"),
+        orgHasFeature(session.orgId, "aggressiveIntelligence"),
+      ]);
+      return {
+        entitled: base.allowed,
+        aggressiveEntitled: aggressive.allowed,
+        competitorLimit: base.entitlements.limits.competitorProfiles,
+        signalLimit: base.entitlements.limits.competitorSignals,
+        reason: base.reason,
+      };
+    } catch {
+      return { entitled: false, aggressiveEntitled: false, competitorLimit: 0, signalLimit: 0, reason: "entitlements_unavailable" };
+    }
+  }
+  return {
+    entitled: session.subscriptionActive !== false,
+    aggressiveEntitled: false,
+    competitorLimit: session.subscriptionActive === false ? 0 : 3,
+    signalLimit: session.subscriptionActive === false ? 0 : 100,
+    reason: session.subscriptionActive === false ? "subscription_inactive" : "legacy_session",
+  };
+}
+
+function intelligenceError(reply: FastifyReply, error: unknown) {
+  return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Competitor intelligence request could not be completed." });
+}
+
+app.get("/api/competitor-intelligence", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const access = await competitorIntelligenceAccess(session);
+  return {
+    ok: true,
+    session,
+    ...(await getCompetitorIntelligenceSnapshot(session, { tenantId: query.tenant_id, ...access })),
+    subscription: access,
+    storage: session.canManageAccess ? await getCompetitorIntelligenceStoreStatus() : undefined,
+  };
+});
+
+app.patch("/api/competitor-intelligence/mode", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan.", reason: access.reason });
+  try { return { ok: true, settings: await updateAggressiveMode(session, (request.body ?? {}) as Record<string, unknown>, access) }; }
+  catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/competitors", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, competitor: await createCompetitor(session, (request.body ?? {}) as Record<string, unknown>, access.competitorLimit) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/signals", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, signal: await createSignal(session, (request.body ?? {}) as Record<string, unknown>, access.signalLimit) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/fuse", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, inferences: await fuseCompetitorSignals(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+const intelligenceCreateRoutes: Array<[string, (session: AccessSession, body: Record<string, unknown>) => Promise<unknown>]> = [
+  ["/api/competitor-intelligence/audience-themes", createAudienceTheme],
+  ["/api/competitor-intelligence/creative-analyses", createCreativeAnalysis],
+  ["/api/competitor-intelligence/interceptions", createInterceptionPackage],
+  ["/api/competitor-intelligence/opportunities", createResearchOpportunity],
+  ["/api/competitor-intelligence/mystery-evidence", createMysteryEvidence],
+  ["/api/competitor-intelligence/policy-check", auditCompetitorIntelligenceRequest],
+];
+for (const [route, handler] of intelligenceCreateRoutes) {
+  app.post(route, async (request, reply) => {
+    const session = requireAccessSession(request, reply); if (!session) return reply;
+    const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+    try { return { ok: true, result: await handler(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
+  });
+}
 
 function buildHermesInteractionMemoryPreviewFromBody(
   body: {

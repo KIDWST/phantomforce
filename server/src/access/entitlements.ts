@@ -27,6 +27,8 @@ export type PlanFeatures = {
   customDomains: boolean;
   vacationMode: boolean;
   phantomPlay: boolean;
+  competitorIntelligence: boolean;
+  aggressiveIntelligence: boolean;
   advancedWorkflows: boolean;
   assetPacks: boolean;
   agentRuns: boolean;
@@ -43,6 +45,8 @@ export type PlanLimits = {
   sitesPerOrg: number;
   phantomPlayMinutesPerDay: number;
   gameSubmissions: number;
+  competitorProfiles: number;
+  competitorSignals: number;
 };
 
 export type PlanDefinition = {
@@ -68,11 +72,11 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     graceDays: 7,
     features: {
       chat: true, mediaLab: true, websites: true, websitePublishing: false, customDomains: false,
-      vacationMode: false, phantomPlay: true, advancedWorkflows: false, assetPacks: false, agentRuns: true, modelTier: "standard",
+      vacationMode: false, phantomPlay: true, competitorIntelligence: false, aggressiveIntelligence: false, advancedWorkflows: false, assetPacks: false, agentRuns: true, modelTier: "standard",
     },
     limits: {
       seats: 3, businesses: 1, mediaCreditsPerMonth: 50, chatRequestsPerDay: 100,
-      agentRunsPerDay: 10, storageMb: 512, sitesPerOrg: 1, phantomPlayMinutesPerDay: 30, gameSubmissions: 0,
+      agentRunsPerDay: 10, storageMb: 512, sitesPerOrg: 1, phantomPlayMinutesPerDay: 30, gameSubmissions: 0, competitorProfiles: 0, competitorSignals: 0,
     },
   },
   {
@@ -84,11 +88,11 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     graceDays: 7,
     features: {
       chat: true, mediaLab: true, websites: true, websitePublishing: true, customDomains: false,
-      vacationMode: true, phantomPlay: true, advancedWorkflows: false, assetPacks: true, agentRuns: true, modelTier: "standard",
+      vacationMode: true, phantomPlay: true, competitorIntelligence: true, aggressiveIntelligence: false, advancedWorkflows: false, assetPacks: true, agentRuns: true, modelTier: "standard",
     },
     limits: {
       seats: 10, businesses: 2, mediaCreditsPerMonth: 250, chatRequestsPerDay: 500,
-      agentRunsPerDay: 50, storageMb: 4096, sitesPerOrg: 5, phantomPlayMinutesPerDay: 90, gameSubmissions: 1,
+      agentRunsPerDay: 50, storageMb: 4096, sitesPerOrg: 5, phantomPlayMinutesPerDay: 90, gameSubmissions: 1, competitorProfiles: 5, competitorSignals: 500,
     },
   },
   {
@@ -100,11 +104,11 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     graceDays: 14,
     features: {
       chat: true, mediaLab: true, websites: true, websitePublishing: true, customDomains: true,
-      vacationMode: true, phantomPlay: true, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
+      vacationMode: true, phantomPlay: true, competitorIntelligence: true, aggressiveIntelligence: true, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
     },
     limits: {
       seats: 25, businesses: 5, mediaCreditsPerMonth: 1000, chatRequestsPerDay: 2000,
-      agentRunsPerDay: 200, storageMb: 20480, sitesPerOrg: 20, phantomPlayMinutesPerDay: 240, gameSubmissions: 5,
+      agentRunsPerDay: 200, storageMb: 20480, sitesPerOrg: 20, phantomPlayMinutesPerDay: 240, gameSubmissions: 5, competitorProfiles: 25, competitorSignals: 5000,
     },
   },
   {
@@ -116,11 +120,11 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     graceDays: 30,
     features: {
       chat: true, mediaLab: true, websites: true, websitePublishing: true, customDomains: true,
-      vacationMode: true, phantomPlay: true, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
+      vacationMode: true, phantomPlay: true, competitorIntelligence: true, aggressiveIntelligence: true, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
     },
     limits: {
       seats: 100, businesses: 25, mediaCreditsPerMonth: 10000, chatRequestsPerDay: 10000,
-      agentRunsPerDay: 1000, storageMb: 102400, sitesPerOrg: 100, phantomPlayMinutesPerDay: 1440, gameSubmissions: 50,
+      agentRunsPerDay: 1000, storageMb: 102400, sitesPerOrg: 100, phantomPlayMinutesPerDay: 1440, gameSubmissions: 50, competitorProfiles: 250, competitorSignals: 50000,
     },
   },
   {
@@ -132,11 +136,11 @@ export const PLAN_DEFINITIONS: PlanDefinition[] = [
     graceDays: 0,
     features: {
       chat: true, mediaLab: true, websites: true, websitePublishing: true, customDomains: true,
-      vacationMode: true, phantomPlay: true, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
+      vacationMode: true, phantomPlay: true, competitorIntelligence: true, aggressiveIntelligence: true, advancedWorkflows: true, assetPacks: true, agentRuns: true, modelTier: "advanced",
     },
     limits: {
       seats: 1000, businesses: 1000, mediaCreditsPerMonth: 1000000, chatRequestsPerDay: 1000000,
-      agentRunsPerDay: 100000, storageMb: 1048576, sitesPerOrg: 1000, phantomPlayMinutesPerDay: 1000000, gameSubmissions: 100000,
+      agentRunsPerDay: 100000, storageMb: 1048576, sitesPerOrg: 1000, phantomPlayMinutesPerDay: 1000000, gameSubmissions: 100000, competitorProfiles: 100000, competitorSignals: 1000000,
     },
   },
 ];
