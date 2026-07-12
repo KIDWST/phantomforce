@@ -2,10 +2,10 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago,
-} from "./store.js?v=phantom-live-20260711-196";
+} from "./store.js?v=phantom-live-20260711-198";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260711-196";
+} from "./workspaces.js?v=phantom-live-20260711-198";
 
 const siteUi = { activeSiteId: null, device: "desktop", selectedSection: -1 };
 

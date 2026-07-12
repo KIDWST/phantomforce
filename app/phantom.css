@@ -822,7 +822,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .stack { display: grid; gap: 12px; }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 13px; }
 
-.lane-row { display: grid; grid-template-columns: repeat(5, minmax(230px, 1fr)); gap: 13px; overflow-x: auto; padding-bottom: 8px; }
+.lane-row { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 13px; overflow-x: visible; padding-bottom: 8px; }
 .lane { min-width: 0; }
 .lane-head { font: 500 10.5px "DM Mono", monospace; letter-spacing: 0.18em; text-transform: uppercase; color: var(--dim); margin-bottom: 9px; }
 .lane-head b { color: var(--neon); }
@@ -1744,55 +1744,65 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .worker-mesh {
   display: flex; flex-direction: column; gap: 14px; margin: 14px 0;
 }
-.worker-map-view { display: contents; }
+.worker-map-view { display: grid; gap: 14px; }
+.worker-map-summary {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px;
+}
+.worker-map-summary > span {
+  position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center;
+  gap: 1px 9px; min-width: 0; padding: 12px 14px; border: 1px solid rgba(65,255,161,0.16);
+  border-radius: 14px; background: linear-gradient(145deg, rgba(6,20,15,0.88), rgba(2,9,10,0.92));
+}
+.worker-map-summary > span > i {
+  grid-row: 1 / span 2; width: 8px; height: 8px; border-radius: 50%; background: var(--neon);
+  box-shadow: 0 0 12px rgba(65,255,161,0.72);
+}
+.worker-map-summary b { color: #eafff2; font: 800 18px "Space Grotesk", sans-serif; }
+.worker-map-summary small { overflow: hidden; color: var(--dim); font: 600 9px "DM Mono", monospace; text-transform: uppercase; letter-spacing: 0.1em; text-overflow: ellipsis; white-space: nowrap; }
+.worker-map-summary .needs-attention { border-color: rgba(255,209,102,0.32); }
+.worker-map-summary .needs-attention b { color: #ffe098; }
+.worker-map-layout { display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; min-width: 0; }
+.worker-map-layout.has-selection { grid-template-columns: minmax(0, 1fr) minmax(300px, 380px); align-items: stretch; }
+.worker-map-layout .worker-mesh { min-width: 0; margin: 0; }
+.worker-map-layout .worker-map-detail { min-width: 0; margin: 0; max-height: 680px; overflow-y: auto; }
 .worker-mesh-foot { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; justify-content: space-between; }
 .worker-mesh-stage {
-  position: relative; min-height: 320px; overflow: hidden; border: 1px solid rgba(65, 255, 161, 0.2); border-radius: 22px;
+  position: relative; min-height: clamp(520px, 62vh, 680px); overflow: hidden; border: 1px solid rgba(65, 255, 161, 0.2); border-radius: 22px;
   background:
     radial-gradient(circle at 50% 50%, rgba(65,255,161,0.16), transparent 28%),
     radial-gradient(circle at 20% 18%, rgba(30,240,255,0.1), transparent 24%),
     linear-gradient(145deg, rgba(3,14,11,0.92), rgba(0,5,8,0.95));
 }
-/* Fullscreen interactive canvas (desktop/tablet - see workerWebEnabled() in
-   workspaces.js, which keeps mobile on the existing small in-page box).
-   position: fixed here escapes .worker-mesh's normal flow entirely, so the
-   sidebar/topbar stay in the DOM (no state loss) but are visually covered. */
+/* Interactive network canvas. It stays contained inside Workforce so the app
+   shell, navigation, and companion never leak underneath a fullscreen layer. */
 .worker-mesh-stage.is-web-active {
-  position: fixed; inset: 0; z-index: 400; min-height: 0; border-radius: 0;
-  cursor: grab; touch-action: none;
+  position: relative; inset: auto; z-index: 1; min-height: clamp(520px, 62vh, 680px); border-radius: 22px;
+  cursor: grab; touch-action: none; isolation: isolate;
 }
 .worker-mesh-stage.is-web-active:active { cursor: grabbing; }
-/* The page-enter transition's fill-forwards animation holds a (functionally
-   identity, but literally present) transform on .workspace-page-body after
-   it finishes - ANY transform value on an ancestor creates a new containing
-   block, so position: fixed above resolves against that ancestor's box
-   instead of the real viewport, rendering small and in-page instead of
-   fullscreen. A plain `transform: none` loses to the still-applied fill-
-   forwards animation (animations take precedence over the normal cascade),
-   so both the animation and the transform it holds need !important here. */
-body:has([data-worker-web-stage].is-web-active) .workspace-page-body {
-  animation: none !important;
-  transform: none !important;
-}
 .worker-web-world {
   position: absolute; inset: 0; transform-origin: 0 0;
 }
 .worker-mesh-stage.is-web-active .worker-web-world { will-change: transform; }
-.worker-web-exit {
-  position: absolute; top: 20px; right: 20px; z-index: 12; display: flex; align-items: center; gap: 6px;
-  padding: 9px 16px; border-radius: 999px; border: 1px solid rgba(65,255,161,0.3);
-  background: rgba(3,12,9,0.88); color: #dfffee; font: 700 12px "Space Grotesk", sans-serif; cursor: pointer;
+.worker-web-controls {
+  position: absolute; top: 16px; left: 16px; right: 16px; z-index: 12; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  pointer-events: none;
 }
-.worker-web-exit:hover { border-color: rgba(65,255,161,0.6); background: rgba(65,255,161,0.08); }
-.worker-web-search { position: absolute; top: 20px; left: 20px; z-index: 12; display: block; }
+.worker-web-fit {
+  flex: 0 0 auto; display: flex; align-items: center; gap: 6px;
+  padding: 9px 16px; border-radius: 999px; border: 1px solid rgba(65,255,161,0.3);
+  background: rgba(3,12,9,0.9); color: #dfffee; font: 700 12px "Space Grotesk", sans-serif; cursor: pointer; pointer-events: auto;
+}
+.worker-web-fit:hover { border-color: rgba(65,255,161,0.6); background: rgba(65,255,161,0.08); }
+.worker-web-search { position: static; z-index: 12; display: block; pointer-events: auto; }
 .worker-web-search input {
-  width: 280px; max-width: calc(100vw - 160px); padding: 10px 14px; border-radius: 999px;
+  width: min(280px, 34vw); max-width: 100%; padding: 10px 14px; border-radius: 999px;
   border: 1px solid rgba(65,255,161,0.3); background: rgba(3,12,9,0.88);
   color: #dfffee; font: 500 13px "Space Grotesk", sans-serif;
 }
 .worker-web-search input:focus { outline: none; border-color: var(--neon); }
 .worker-mesh-stage.is-web-active .worker-mesh-foot {
-  position: absolute; left: 20px; right: 20px; bottom: 20px; z-index: 11;
+  position: absolute; left: 16px; right: 16px; bottom: 16px; z-index: 11;
   background: rgba(3,12,9,0.88); border: 1px solid rgba(65,255,161,0.22); border-radius: 16px;
   padding: 14px 18px; -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
 }
@@ -1972,14 +1982,26 @@ body:has([data-worker-web-stage].is-web-active) .workspace-page-body {
 @media (prefers-reduced-motion: reduce) {
   .worker-node, .worker-cell-dot, .worker-mesh-rings span, .worker-thread.is-live::after { animation: none !important; }
 }
+@media (max-width: 1180px) {
+  .worker-map-layout.has-selection { grid-template-columns: 1fr; }
+  .worker-map-layout .worker-map-detail { max-height: none; }
+  .worker-map-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .worker-map-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+  .worker-map-summary > span { padding: 10px 11px; }
+  .worker-map-summary b { font-size: 16px; }
+  .worker-mesh-stage,
+  .worker-mesh-stage.is-web-active { min-height: clamp(350px, 94vw, 430px); }
+  .worker-mesh-stage .worker-mesh-foot { left: 10px; right: 10px; bottom: 10px; padding: 10px 12px; }
+}
+@media (max-width: 430px) {
+  .worker-map-summary small { white-space: normal; }
+  .worker-map-summary > span { grid-template-columns: auto minmax(0, 1fr); }
+}
 /* Docked side panel over the fullscreen web (z-index above .worker-mesh-stage
    .is-web-active's 400) - without this it renders in normal page flow, which
    sits underneath and behind the fullscreen canvas, invisible. */
-.worker-map-detail-floating {
-  position: fixed; top: 90px; right: 20px; bottom: 90px; z-index: 410;
-  width: min(400px, calc(100vw - 40px)); margin: 0 !important; overflow-y: auto;
-  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
-}
 .worker-map-detail {
   display: grid; gap: 14px; margin: 14px 0 0; padding: 16px;
   border: 1px solid rgba(65,255,161,0.24); border-radius: 18px;
@@ -2428,10 +2450,14 @@ body:has([data-worker-web-stage].is-web-active) .workspace-page-body {
 @media (max-width: 980px) {
   .deck-body { grid-template-columns: 1fr; }
   .rail { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
-  .lane-row { grid-template-columns: repeat(5, minmax(240px, 78vw)); }
+  .lane-row { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow-x: visible; }
 }
 @media (max-width: 640px) {
   html, body { overflow-x: hidden; }
+  .lane-row {
+    grid-template-columns: 1fr;
+    overflow-x: visible;
+  }
   .gate {
     align-items: start;
     justify-items: center;
@@ -4965,7 +4991,8 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 @media (max-width: 640px) {
   .ml { gap: 10px; }
-  .ml-tabs { overflow-x: auto; flex-wrap: nowrap; width: 100%; }
+  .ml-tabs { overflow: visible; flex-wrap: wrap; width: 100%; }
+  .ml-tab { flex: 1 1 calc(50% - 4px); text-align: center; }
   .ml-topbar-tools { order: 3; }
   .ml-engine-mini { order: 2; margin-left: 0; }
   .ml-rail { width: 100%; }
@@ -5000,6 +5027,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     background: rgba(2,10,8,0.96);
   }
   .ml-editor-actions .ml-generate { min-height: 44px; }
+  .ml-generate-glow { inset: 0; }
   .set-sec-head, .set-social-assist { flex-direction: column; align-items: stretch; }
   .set-safe-pill { align-self: flex-start; }
   .set-social-actions { align-items: stretch; }
@@ -5410,6 +5438,24 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .an-notice b { display: block; margin-bottom: 6px; font-size: 14px; color: #ffeec0; }
 .an-notice p { margin: 0; color: var(--dim); font-size: 12.5px; line-height: 1.55; }
 .an-assets-line { margin: 0; color: var(--dim); font-size: 12.5px; }
+.an-feed-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+.an-feed-card {
+  display: flex; flex-direction: column; gap: 10px; min-height: 160px; padding: 16px;
+  border: 1px solid var(--line); border-radius: 16px; background: rgba(4, 12, 10, 0.74);
+}
+.an-feed-card > div:first-child { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.an-feed-card > div:first-child b { color: #f0fff7; }
+.an-feed-card > div:first-child i { min-width: 0; color: var(--dim); font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.an-feed-card strong { color: var(--neon); font-size: 14px; }
+.an-feed-card p { margin: 0; color: var(--dim); font-size: 12.5px; line-height: 1.55; }
+.an-feed-card.is-missing { border-color: rgba(255,209,102,.24); background: rgba(255,209,102,.035); }
+.an-feed-card.is-missing strong { color: #ffeec0; }
+.an-feed-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: auto; }
+.an-feed-metrics span {
+  display: flex; flex-direction: column; gap: 2px; padding: 9px 10px; border: 1px solid var(--line);
+  border-radius: 10px; color: var(--dim); font-size: 10.5px; text-transform: uppercase; letter-spacing: .08em;
+}
+.an-feed-metrics b { color: var(--ink); font: 600 15px "DM Mono", monospace; letter-spacing: 0; text-transform: none; }
 .an-hero { align-items: center; background: linear-gradient(135deg, rgba(65,255,161,.08), rgba(3,10,8,.7)); }
 .an-chart { width: 100%; height: 150px; display: block; }
 .an-area { fill: rgba(65,255,161,.12); }
@@ -5446,10 +5492,12 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ch-tenant-actions { justify-content: flex-start; }
   .ch-draft, .ch-calendar-item { grid-template-columns: 1fr; }
   .ch-production, .an-trend-list, .an-reco-grid { grid-template-columns: 1fr; }
-  .ch-tabs, .ch-chips { overflow-x: auto; flex-wrap: nowrap; }
-  .ch-subtabs { overflow-x: auto; flex-wrap: nowrap; margin-top: -8px; padding-bottom: 10px; scrollbar-width: none; }
+  .ch-tabs, .ch-chips { overflow: visible; flex-wrap: wrap; }
+  .ch-tab { flex: 1 1 calc(50% - 6px); text-align: center; }
+  .ch-subtabs { overflow: visible; flex-wrap: wrap; margin-top: -8px; padding-bottom: 10px; scrollbar-width: none; }
   .ch-subtabs::-webkit-scrollbar { display: none; }
-  .ch-subtab { flex: 0 0 auto; min-height: 38px; }
+  .ch-subtab { flex: 1 1 calc(50% - 7px); min-height: 38px; text-align: center; }
+  .ch-src { flex-basis: 100%; margin-left: 0; }
   .ch-library-head { flex-direction: column; }
   .ch-storage { width: 100%; align-items: stretch; }
   .ch-storage i { width: 100%; }
@@ -9169,6 +9217,16 @@ body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy {
   pointer-events: none;
 }
 body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy-canvas {
+  pointer-events: none;
+}
+/* Workforce already has Phantom as the central router. The roaming companion
+   stays out of this focused operations surface. */
+body:has([data-workspace-page="workforce"]) .buddy {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+body:has([data-workspace-page="workforce"]) .buddy-canvas {
   pointer-events: none;
 }
 
