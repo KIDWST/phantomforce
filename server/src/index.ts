@@ -132,7 +132,8 @@ import { listSubscriptions, setSubscription } from "./access/subscription-store.
 import { randomUUID, timingSafeEqual } from "node:crypto";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, extname, join, resolve, sep } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
@@ -171,6 +172,10 @@ import {
 } from "./phantom-ai/agent-actions.js";
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
+import {
+  getSocialAnalyticsConnectorStatus,
+  syncSocialAnalytics,
+} from "./connectors/social-analytics-connector.js";
 import {
   getHermesInteractionMemoryStoreStatus,
   normalizeHermesInteractionMemoryStoreLimit,
@@ -356,6 +361,20 @@ import {
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
+const moduleDir = dirname(fileURLToPath(import.meta.url));
+const appStaticRoot = resolve(moduleDir, "..", "..", "app");
+const appStaticTypes: Record<string, string> = {
+  ".css": "text/css; charset=utf-8",
+  ".html": "text/html; charset=utf-8",
+  ".ico": "image/x-icon",
+  ".jpg": "image/jpeg",
+  ".jpeg": "image/jpeg",
+  ".js": "text/javascript; charset=utf-8",
+  ".json": "application/json; charset=utf-8",
+  ".png": "image/png",
+  ".svg": "image/svg+xml; charset=utf-8",
+  ".webp": "image/webp",
+};
 
 /* Build fingerprint captured once at boot: the git commit this Hermes
    process is running. The admin sync compares it against the freshly-pulled
@@ -382,6 +401,9 @@ const CustomizationPreviewBodySchema = z.object({ tenant_id: z.string().trim().m
 const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ summary: z.string().trim().max(240).optional(), expected_version: z.number().int().positive().optional() });
 const CustomizationRollbackBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), version: z.number().int().positive() });
 const CustomizationAssistantBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), message: z.string().trim().min(1).max(1200) });
+const SocialAnalyticsSyncSchema = z.object({
+  platform: z.enum(["youtube", "instagram", "facebook", "tiktok"]),
+});
 
 function safeCustomizationTenantId(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
@@ -794,6 +816,26 @@ app.get("/", async (request, reply) => {
     : "/app/index.html";
 
   return reply.code(302).header("Location", target).send();
+});
+
+app.get("/app", async (_request, reply) => reply.code(302).header("Location", "/app/index.html").send());
+
+app.get("/app/*", async (request, reply) => {
+  const rawPath = String((request.params as { "*": string })["*"] || "index.html");
+  if (rawPath.includes("\0")) return reply.code(400).send({ ok: false, error: "Invalid app asset path." });
+
+  const assetPath = resolve(appStaticRoot, rawPath.replace(/^[/\\]+/, ""));
+  if (assetPath !== appStaticRoot && !assetPath.startsWith(`${appStaticRoot}${sep}`)) {
+    return reply.code(403).send({ ok: false, error: "App asset path is outside the local app bundle." });
+  }
+
+  try {
+    const bytes = await readFile(assetPath);
+    const contentType = appStaticTypes[extname(assetPath).toLowerCase()] ?? "application/octet-stream";
+    return reply.header("content-type", contentType).header("cache-control", "no-store").send(bytes);
+  } catch {
+    return reply.code(404).send({ ok: false, error: "app_asset_not_found" });
+  }
 });
 
 app.get("/sessions", async (request) => {
@@ -4947,6 +4989,43 @@ app.get("/phantom-ai/ops/finance-connector/status", async (request, reply) => {
   }
 
   return { ok: true, session, read_only: true, finance_connector: getFinanceConnectorStatus() };
+});
+
+app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    social_analytics: getSocialAnalyticsConnectorStatus(),
+  };
+});
+
+app.post("/phantom-ai/ops/social-analytics/sync", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = SocialAnalyticsSyncSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const status = getSocialAnalyticsConnectorStatus();
+  const connector = status.connectors.find((item) => item.id === parsed.data.platform);
+  if (!connector?.configured) {
+    return reply.code(409).send({
+      ok: false,
+      error: `${connector?.name || "That channel"} is not connected. Add the official API connection in Settings first.`,
+      connector,
+    });
+  }
+  try {
+    const analytics = await syncSocialAnalytics(parsed.data.platform);
+    return { ok: true, session, read_only: true, analytics };
+  } catch (error) {
+    return reply.code(502).send({
+      ok: false,
+      error: error instanceof Error ? error.message.slice(0, 400) : "The platform analytics sync failed.",
+      connector,
+    });
+  }
 });
 
 app.get("/phantom-ai/ops/send-readiness/status", async (request, reply) => {

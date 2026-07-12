@@ -6,14 +6,14 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-208";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-214";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260712-208";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-208";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-208";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-208";
-import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-208";
+} from "./contenthub.js?v=phantom-live-20260712-214";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-214";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-214";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-214";
+import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-214";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -190,21 +190,21 @@ function socialLoginTarget(account) {
 }
 function socialStatusLabel(account) {
   const st = socialStatus(account);
-  if (st === "linked") return "connected";
-  if (st === "pending") return "finish link";
-  return "not linked";
+  if (st === "linked") return "profile saved";
+  if (st === "pending") return "finish setup";
+  return "not saved";
 }
 function socialPostingState(account) {
   const st = socialStatus(account);
-  if (st === "linked") return "connected";
+  if (st === "linked") return account.analytics ? "metrics loaded" : "profile only";
   if (st === "pending") return "waiting";
-  return "ready";
+  return "not configured";
 }
 function socialActionLabel(account) {
   const st = socialStatus(account);
-  if (st === "linked") return `Reconnect with ${account.name}`;
-  if (st === "pending") return `Linking ${account.name}`;
-  return `Sign in with ${account.name}`;
+  if (st === "linked") return `Update ${account.name} profile`;
+  if (st === "pending") return `Finish ${account.name}`;
+  return `Add ${account.name} profile`;
 }
 function clampHermesText(value = "", limit = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -280,7 +280,7 @@ function applyHermesProfilePacket(payload = {}) {
     return;
   }
   if (pendingPlatform && packet.platform !== pendingPlatform) {
-    socialNotice = `${socialAccountName(pendingPlatform)} is still waiting. Ignored a saved ${socialAccountName(packet.platform)} profile so the wrong account does not get linked.`;
+    socialNotice = `${socialAccountName(pendingPlatform)} is still waiting. Ignored a saved ${socialAccountName(packet.platform)} profile so the wrong profile was not changed.`;
     saveHermesExtensionState({ detected: true, lastSeenAt: new Date().toISOString(), lastResult: "platform_mismatch" });
     rerenderMediaSettings();
     return;
@@ -302,7 +302,7 @@ function applyHermesProfilePacket(payload = {}) {
     pendingPlatform: "",
     lastResult: "linked",
   });
-  socialNotice = `${account.name} signed in from the visible browser profile. Stored only public handle/profile fields; no cookies, passwords, tokens, or private messages were read.`;
+  socialNotice = `${account.name} profile saved from the visible browser page. This stores public identity fields only and does not authorize analytics APIs.`;
   rerenderMediaSettings();
 }
 function handleHermesExtensionPageMessage(event) {
@@ -2214,10 +2214,10 @@ export function renderMediaSettings(el, opts = {}) {
       <div class="set-section set-social-section">
         <div class="set-sec-head">
           <div>
-            <h3>Social accounts</h3>
-            <p class="set-note">Connect each platform with one sign-in button. The platform handles login and OAuth; PhantomForce never reads cookies, tokens, saved passwords, private messages, or browser sessions.</p>
+            <h3>Social profiles</h3>
+            <p class="set-note">Save the public profiles your business uses. A saved profile is not API authorization; real performance appears in Analytics after an authorized feed or platform report is added.</p>
           </div>
-          <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} linked</span>
+          <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} saved</span>
         </div>
         ${socialNotice ? `<div class="set-social-notice">${esc(socialNotice)}</div>` : ""}
         <div class="set-social-grid">
@@ -2250,7 +2250,7 @@ export function renderMediaSettings(el, opts = {}) {
       window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
       account.connectMode = "browser-bridge";
       account.lastConnectAt = new Date().toISOString();
-      socialNotice = `${account.name} sign-in opened. Come back and confirm your handle below once you're signed in.`;
+      socialNotice = `${account.name} opened. Come back and save the public handle or profile URL.`;
       startSocialBridgePolling(account.id);
       saveAndRender();
     };
@@ -2267,7 +2267,7 @@ export function renderMediaSettings(el, opts = {}) {
       account.lastConnectAt = new Date().toISOString();
       delete account.hermesProof;
       if (socialBridgePollTimer) { clearInterval(socialBridgePollTimer); socialBridgePollTimer = 0; }
-      socialNotice = `${account.name} connected. No cookies, passwords, tokens, or private messages were read.`;
+      socialNotice = `${account.name} profile saved. No API authorization or analytics feed was created.`;
       saveAndRender();
     };
   });
@@ -2278,12 +2278,12 @@ function socialCard(account, esc) {
   const status = socialStatus(account);
   const profile = socialProfileTarget(account);
   const lastConnect = status === "linked"
-    ? (profile ? `Linked profile: ${profile}` : "Linked locally")
+    ? (profile ? `Saved profile: ${profile}` : "Profile saved locally")
     : status === "pending"
       ? "Confirm your handle below once you're signed in, or clear this to start over."
-      : "Password is never stored here";
+      : "Save a public handle or profile URL";
   const hermesProof = account.hermesProof
-    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Linked profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
+    ? `<div class="set-social-hermes-proof">${svgIc("spark")} Saved profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
     : "";
   return `<article class="set-social-card is-${status}" data-social-card="${account.id}">
     <button class="set-card-x" data-social-clear aria-label="Clear ${esc(account.name)} link" title="Clear ${esc(account.name)} link" type="button">×</button>
@@ -2292,7 +2292,7 @@ function socialCard(account, esc) {
       <span><b>${esc(account.name)}</b><i>${esc(socialStatusLabel(account))}</i></span>
     </div>
     <div class="set-social-connect-state">
-      <span>Official sign-in</span>
+      <span>Analytics status</span>
       <b>${esc(socialPostingState(account))}</b>
     </div>
     ${hermesProof}
@@ -2305,7 +2305,7 @@ function socialCard(account, esc) {
       <label>Handle or profile URL</label>
       <div class="set-social-confirm-row">
         <input type="text" data-social-confirm-input placeholder="@yourhandle or https://..." value="${esc(account.handle || account.url || "")}"/>
-        <button class="btn btn-primary" type="submit">I'm signed in — save</button>
+        <button class="btn btn-primary" type="submit">Save profile</button>
       </div>
     </form>` : ""}
   </article>`;

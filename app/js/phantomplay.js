@@ -1,15 +1,15 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260712-208";
+} from "./store.js?v=phantom-live-20260712-214";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const BUILT_INS = [
-  { id: "neon-drift", title: "Neon Drift", summary: "Dodge the signal storm and keep your streak alive.", description: "A fast one-button reaction game built for a two-minute reset between focused work blocks.", category: "Arcade", tags: ["quick", "reaction", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/neon-drift.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.0", controls: "Arrow keys, A/D, or tap left/right", progressSupport: true, scoreSupport: true },
-  { id: "signal-match", title: "Signal Match", summary: "Find the matching signals before the grid resets.", description: "A calm memory game with short rounds, keyboard support, and saved best scores.", category: "Puzzle", tags: ["memory", "calm", "puzzle"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/signal-match.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: true, version: "1.0.0", controls: "Click, tap, or use Tab + Enter", progressSupport: true, scoreSupport: true },
-  { id: "focus-stack", title: "Focus Stack", summary: "Drop each layer cleanly and build the tallest signal tower.", description: "A timing game designed for quick intentional breaks, with resumable progress and a local best score.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/focus-stack.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
+  { id: "neon-drift", title: "Neon Drift", summary: "Dodge the signal storm and keep your streak alive.", description: "A fast reaction run with visible touch steering, three lives, pause, restart, and keyboard controls.", category: "Arcade", tags: ["quick", "reaction", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.1.0", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.1.0", controls: "Arrow keys, A/D, or hold left/right", progressSupport: true, scoreSupport: true },
+  { id: "signal-match", title: "Signal Match", summary: "Find every matching signal with the fewest turns.", description: "A responsive memory grid with clear feedback, pause, restart, touch, and keyboard support.", category: "Puzzle", tags: ["memory", "calm", "puzzle"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/signal-match.html?v=1.1.0", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: true, version: "1.1.0", controls: "Click, tap, or use Tab + Enter", progressSupport: true, scoreSupport: true },
+  { id: "focus-stack", title: "Focus Stack", summary: "Drop each layer cleanly and build the tallest signal tower.", description: "A focused timing run with a proper start, pause, restart, and resize-safe play field.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/focus-stack.html?v=1.1.0", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.1.0", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
   { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the lit cell before the fuse burns out.", description: "A nine-cell reaction test that speeds up as you score. Three misses ends the run.", category: "Arcade", tags: ["reaction", "quick", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/reflex-grid.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: true, version: "1.0.0", controls: "Tap/click a cell or press 1-9", progressSupport: true, scoreSupport: true },
   { id: "penalty-kick", title: "Penalty Kick", summary: "Beat the keeper — time your shot past the moving save zone.", description: "Read the sweeping reticle and the keeper's reach, then strike. The keeper gets faster every round.", category: "Sports", tags: ["sports", "timing", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/penalty-kick.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.0", controls: "Space or tap to shoot", progressSupport: true, scoreSupport: true },
   { id: "color-rush", title: "Color Rush", summary: "Catch only the target color as the tiles fall faster.", description: "Four falling columns and a rotating target color. Catch the right hue, ignore the rest, keep three lives.", category: "Arcade", tags: ["reaction", "color", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/color-rush.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0", controls: "A/S/D/F or tap a column", progressSupport: true, scoreSupport: true },
@@ -31,6 +31,7 @@ const ui = {
   snapshot: null,
   player: null,
   playerReady: false,
+  playerPaused: false,
   settingsOpen: false,
   editingSubmissionId: null,
 };
@@ -40,6 +41,7 @@ let mountedOpts = null;
 let playClock = null;
 let playTickAt = 0;
 let messageBound = false;
+let keyboardBound = false;
 
 function authHeaders(json = false) {
   const token = session.token();
@@ -193,11 +195,12 @@ function settingsMarkup() {
 function playerMarkup() {
   if (!ui.player) return "";
   const { game, play } = ui.player;
-  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(game.thumbnail)}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span>Progress saves automatically</span></footer></div>`;
+  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(game.thumbnail)}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
   if (!mountedRoot) return;
+  document.body.classList.toggle("phantomplay-playing", !!ui.player);
   if (ui.loading && !ui.snapshot) {
     mountedRoot.innerHTML = `<div class="pp-loading"><i></i><b>Opening PhantomPlay</b><span>Loading your library and saved progress…</span></div>`;
     return;
@@ -247,6 +250,7 @@ async function launch(gameId) {
     const result = ui.offline ? offlinePlay(game) : await api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) });
     ui.player = { game: result.game || game, play: result.play };
     ui.playerReady = false;
+    ui.playerPaused = false;
     playTickAt = Date.now();
     render();
     startClock();
@@ -276,7 +280,37 @@ async function closePlayer() {
   await persistPlay(true);
   ui.player = null;
   ui.playerReady = false;
+  ui.playerPaused = false;
+  document.body.classList.remove("phantomplay-playing");
   render();
+}
+
+function postToGame(type) {
+  const frame = mountedRoot?.querySelector("[data-pp-frame]");
+  frame?.contentWindow?.postMessage({ source: "phantomplay-host", type }, "*");
+  frame?.focus?.({ preventScroll: true });
+}
+
+function togglePlayerPause() {
+  if (!ui.playerReady) return;
+  ui.playerPaused = !ui.playerPaused;
+  postToGame(ui.playerPaused ? "pause" : "resume");
+  const pauseButton = mountedRoot?.querySelector("[data-pp-player-pause]");
+  if (pauseButton) pauseButton.textContent = ui.playerPaused ? "Resume" : "Pause";
+  const state = mountedRoot?.querySelector("[data-pp-live-state]");
+  if (state) state.textContent = ui.playerPaused ? "Paused" : "Playing";
+}
+
+function restartPlayer() {
+  if (!ui.playerReady) return;
+  ui.playerPaused = false;
+  postToGame("restart");
+  const pauseButton = mountedRoot?.querySelector("[data-pp-player-pause]");
+  if (pauseButton) pauseButton.textContent = "Pause";
+  const score = mountedRoot?.querySelector("[data-pp-live-score]");
+  if (score) score.textContent = "Score 0";
+  const state = mountedRoot?.querySelector("[data-pp-live-state]");
+  if (state) state.textContent = "Playing";
 }
 
 function onGameMessage(event) {
@@ -286,6 +320,14 @@ function onGameMessage(event) {
     ui.playerReady = true;
     mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
     frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion }, "*");
+    frame.focus?.({ preventScroll: true });
+  }
+  if (event.data.type === "paused") {
+    ui.playerPaused = !!event.data.paused;
+    const pauseButton = mountedRoot.querySelector("[data-pp-player-pause]");
+    if (pauseButton) pauseButton.textContent = ui.playerPaused ? "Resume" : "Pause";
+    const state = mountedRoot.querySelector("[data-pp-live-state]");
+    if (state) state.textContent = ui.playerPaused ? "Paused" : "Playing";
   }
   if (event.data.type === "score" || event.data.type === "progress" || event.data.type === "complete") {
     const detail = { score: Number(event.data.score) || undefined, progress: event.data.type === "complete" ? 100 : Number(event.data.progress) || undefined, state: event.data.state };
@@ -335,6 +377,8 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-pref]").forEach((input) => input.onchange = () => { ui.snapshot.preferences[input.dataset.ppPref] = input.type === "checkbox" ? input.checked : input.value; updatePreferences(); });
   mountedRoot.querySelector("[data-pp-retry]")?.addEventListener("click", hydrate);
   mountedRoot.querySelector("[data-pp-player-close]")?.addEventListener("click", closePlayer);
+  mountedRoot.querySelector("[data-pp-player-pause]")?.addEventListener("click", togglePlayerPause);
+  mountedRoot.querySelector("[data-pp-player-restart]")?.addEventListener("click", restartPlayer);
   mountedRoot.querySelector("[data-pp-player-fullscreen]")?.addEventListener("click", () => mountedRoot.querySelector(".pp-player-stage")?.requestFullscreen?.());
   const form = mountedRoot.querySelector("[data-pp-submit-form]");
   if (form) form.onsubmit = (event) => { event.preventDefault(); submitGame(form, event.submitter); };
@@ -347,7 +391,16 @@ export function renderPhantomPlay(root, opts = {}) {
   mountedRoot = root;
   mountedOpts = opts;
   if (!messageBound) { messageBound = true; window.addEventListener("message", onGameMessage); }
+  if (!keyboardBound) {
+    keyboardBound = true;
+    window.addEventListener("keydown", (event) => {
+      if (!ui.player) return;
+      if (event.key === "Escape") { event.preventDefault(); closePlayer(); }
+      if ((event.key === "p" || event.key === "P") && !event.ctrlKey && !event.metaKey) { event.preventDefault(); togglePlayerPause(); }
+      if ((event.key === "r" || event.key === "R") && !event.ctrlKey && !event.metaKey) { event.preventDefault(); restartPlayer(); }
+    });
+  }
   render();
   hydrate();
-  return () => { clearInterval(playClock); mountedRoot = null; mountedOpts = null; };
+  return () => { clearInterval(playClock); document.body.classList.remove("phantomplay-playing"); mountedRoot = null; mountedOpts = null; };
 }

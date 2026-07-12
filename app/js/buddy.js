@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-208";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-214";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260712-208";
+} from "./companion-preferences.js?v=phantom-live-20260712-214";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -136,14 +136,14 @@ function createBuddyController() {
     const sideTop = Math.max(0, side.top || 0);
     const sideBottom = Math.min(window.innerHeight, side.bottom || window.innerHeight);
     const navBottom = lastItem?.bottom || navRect?.bottom || (sideTop + 420);
-    const top = Math.min(sideBottom - 190, Math.max(navBottom + 18, sideTop + 250));
-    const bottom = Math.max(top + 170, sideBottom - 10);
+    const top = Math.min(sideBottom - 118, Math.max(navBottom + 12, sideTop + 250));
+    const bottom = Math.max(top + 108, sideBottom - 14);
     return {
       left: side.left,
       top,
       bottom,
       width: side.width,
-      height: Math.max(170, bottom - top),
+      height: Math.max(108, bottom - top),
     };
   }
 
@@ -151,7 +151,7 @@ function createBuddyController() {
     const hasSidebar = window.innerWidth > 900;
     const inSidebarDock = hasSidebar && prefs.dockLocation === "sidebar";
     return {
-      left: inSidebarDock ? 10 : hasSidebar ? 236 : 14,
+      left: inSidebarDock ? 10 : hasSidebar ? 214 : 14,
       right: 18,
       top: hasSidebar ? 88 : 72,
       bottom: mobile() ? 98 : 24,
@@ -160,9 +160,9 @@ function createBuddyController() {
 
   function sizeForPrefs() {
     const map = {
-      compact: mobile() ? 76 : 96,
-      standard: mobile() ? 88 : 118,
-      large: mobile() ? 104 : 146,
+      compact: mobile() ? 60 : 58,
+      standard: mobile() ? 68 : 64,
+      large: mobile() ? 78 : 74,
     };
     return map[prefs.size] || map.standard;
   }
@@ -171,12 +171,11 @@ function createBuddyController() {
     const base = sizeForPrefs();
     if (!sidebarPortraitMode()) return { width: base, height: base };
     const zone = sidebarDockZone();
-    const sizeBoost = prefs.size === "large" ? 1.1 : prefs.size === "compact" ? 0.9 : 1;
-    const width = Math.round(Math.min(Math.max(zone.width - 22, 154), 214) * sizeBoost);
-    const height = Math.round(Math.min(Math.max(zone.height * 0.8, 320), 560) * sizeBoost);
+    const width = Math.round(Math.min(Math.max(base, 54), Math.max(54, Math.min(76, zone.width - 42))));
+    const height = Math.round(Math.min(Math.max(base + 4, 60), Math.max(60, Math.min(82, zone.height - 18))));
     return {
-      width: Math.min(width, Math.max(142, zone.width - 12)),
-      height: Math.min(height, Math.max(280, zone.height - 12)),
+      width,
+      height,
     };
   }
 
@@ -521,8 +520,15 @@ function createBuddyController() {
     menu.style.left = "0px";
     menu.style.top = "0px";
     const rect = menu.getBoundingClientRect();
-    const left = Math.max(10, Math.min(window.innerWidth - rect.width - 10, clientX));
-    const top = Math.max(10, Math.min(window.innerHeight - rect.height - 10, clientY));
+    const anchorX = Number.isFinite(clientX) ? clientX : x + buddyWidth / 2;
+    const anchorY = Number.isFinite(clientY) ? clientY : y - buddyHeight / 2;
+    const gutter = 10;
+    const sidebar = sidebarRect();
+    const prefersRightOfSidebar = prefs.dockLocation === "sidebar" && sidebar.width > 120;
+    const rawLeft = prefersRightOfSidebar ? sidebar.left + sidebar.width + gutter : anchorX;
+    const rawTop = prefersRightOfSidebar ? anchorY - rect.height + 18 : anchorY;
+    const left = Math.max(gutter, Math.min(window.innerWidth - rect.width - gutter, rawLeft));
+    const top = Math.max(gutter, Math.min(window.innerHeight - rect.height - gutter, rawTop));
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
     menu.querySelector("button, select")?.focus({ preventScroll: true });

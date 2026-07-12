@@ -11,9 +11,9 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-208";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260712-208";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260712-208";
+} from "./store.js?v=phantom-live-20260712-214";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260712-214";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260712-214";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -614,6 +614,25 @@ function localQuestionAnswer(text, settings = null) {
   };
 }
 
+function operatorContextAnswer(text) {
+  const model = text.match(/\b(glm\s*5(?:\.2)?|glm[-\s]?\d+(?:\.\d+)?|qwen[^\s,.!?]*|claude[^\s,.!?]*|codex|ollama|openrouter)\b/i)?.[0]?.replace(/\s+/g, " ");
+  const isStatement = !/[?]$/.test(text.trim()) && /\b(we|we're|we are|i|i'm|i am|it|it's|it is|codex|claude|glm|qwen|hermes|phantom)\b/i.test(text);
+  if (isStatement) {
+    return {
+      say: model
+        ? `Got it — I’ll treat ${model} as operating context, not a task or ledger note. If the normal providers are down, I’ll keep the conversation useful and only ask for action when you actually give me one.`
+        : "Got it — I’ll treat that as operating context, not a task or ledger note. If a connection is down, I’ll say that clearly and keep helping instead of pretending it’s a quote or bookkeeping issue.",
+      cards: [],
+      open: null,
+    };
+  }
+  return {
+    say: "That sounds like an operator/model connection issue. I can help check the AI backend path, provider health, or local model settings — tell me which one you want me to inspect.",
+    cards: [],
+    open: null,
+  };
+}
+
 function intentResponse(intent, text, settings = null) {
   if (intent.primaryIntent === "greeting") {
     /* a greeting is a greeting — no status dump, no task, no cards */
@@ -650,6 +669,9 @@ function intentResponse(intent, text, settings = null) {
       cards: [],
       open: null,
     };
+  }
+  if (intent.primaryIntent === "internal_operator_handoff") {
+    return operatorContextAnswer(text);
   }
   if (intent.primaryIntent === "question") {
     return localQuestionAnswer(text, settings);

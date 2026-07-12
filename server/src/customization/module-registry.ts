@@ -12,7 +12,7 @@ export type PlatformModuleDefinition = {
 };
 
 export const PLATFORM_MODULES: PlatformModuleDefinition[] = [
-  { id: "dashboard", displayName: "Business HQ", description: "Business home and AI briefing.", icon: "grid", route: "main", required: true, customerConfigurable: true, dependencies: [], allowedRoles: ["owner", "admin", "manager", "member", "client"], mobile: true },
+  { id: "dashboard", displayName: "Dashboard", description: "Business home and AI briefing.", icon: "grid", route: "main", required: true, customerConfigurable: true, dependencies: [], allowedRoles: ["owner", "admin", "manager", "member", "client"], mobile: true },
   { id: "crm", displayName: "Clients", description: "Contacts, leads, pipeline, and follow-up.", icon: "users", route: "leads", required: false, customerConfigurable: true, dependencies: [], allowedRoles: ["owner", "admin", "manager", "member"], mobile: true },
   { id: "media", displayName: "Media Lab", description: "Image/video creation, content library, and publishing workflow.", icon: "media", route: "media", required: false, customerConfigurable: true, dependencies: [], allowedRoles: ["owner", "admin", "manager", "member"], mobile: true },
   { id: "sites", displayName: "Websites", description: "Websites, stores, forms, and pages.", icon: "site", route: "sites", required: false, customerConfigurable: true, dependencies: [], allowedRoles: ["owner", "admin", "manager", "member"], mobile: true },

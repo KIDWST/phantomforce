@@ -10,19 +10,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260712-208";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-208";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-208";
+} from "./imagefilters.js?v=phantom-live-20260712-214";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-214";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-214";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260712-214";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260712-208";
+} from "./content-editor.js?v=phantom-live-20260712-214";
 import {
-  currentTenantId, currentWs, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-208";
+  currentTenantId, currentWs, session, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
+} from "./store.js?v=phantom-live-20260712-214";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -37,8 +38,8 @@ const DAY = 864e5;
 export const CONTENT_ASSET_LIMITS = Object.freeze({
   retentionDays: 30,
   maxItems: 30,
-  budgetBytes: 3000000,
-  maxInlineChars: 280000,
+  budgetBytes: 8000000,
+  maxInlineChars: 2400000,
 });
 
 export const PLATFORMS = [
@@ -54,13 +55,12 @@ export const TYPES = { image: "Image", carousel: "Carousel", reel: "Reel", short
 const plat = (id) => PLATFORMS.find((p) => p.id === id) || PLATFORMS[0];
 const isVideo = (t) => ["reel", "short", "video"].includes(t);
 
-/* ---------------- social account connection (shared with Media Lab settings) ----------------
-   A "linked" account means PhantomForce detected the real signed-in public profile through the
-   browser bridge — never a fabricated number. Analytics/Overview must not show any metric that
-   isn't traceable to a real connected account. */
+/* ---------------- social profiles (shared with Media Lab settings) ----------------
+   A saved profile is a public identity reference, not API authorization. Analytics
+   renders only imported or adapter-provided metrics and never invents numbers. */
 const SOCIAL_KEY = "pf.social.accounts.v1";
 const PUBLISH_PRESETS = [
-  { id: "enabled", name: "Enabled", hint: "connected/manual accounts", platforms: null },
+  { id: "enabled", name: "Enabled", hint: "saved profiles", platforms: null },
   { id: "all", name: "Select all", hint: "every channel", platforms: PLATFORMS.map((p) => p.id) },
   { id: "short-form", name: "Short-form", hint: "reels, shorts, TikTok", platforms: ["instagram", "tiktok", "youtube"] },
   { id: "business", name: "Business", hint: "LinkedIn, Facebook, X", platforms: ["linkedin", "facebook", "x"] },
@@ -967,7 +967,7 @@ function sourceMediaMarkup(source, esc, size = "large") {
         ? `<video src="${esc(asset.url)}" muted playsinline preload="metadata"></video><span class="ch-post-play">▶</span>`
         : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
     }
-    return `<span class="ch-pub-media-empty" style="${assetBg(asset)}">${size === "tiny" ? "media" : "preview trimmed"}</span>`;
+    return `<span class="ch-pub-media-empty" style="${assetBg(asset)}">${size === "tiny" ? "media" : "media saved · preview loading"}</span>`;
   }
   if (source.post) {
     return `<span class="ch-pub-media-empty" style="${thumb(source.post)}"><span class="ch-post-plat" style="background:${plat(source.post.platform).color}">${PGLYPH[source.post.platform] || "●"}</span>${isVideo(source.post.type) ? `<span class="ch-post-play">▶</span>` : ""}</span>`;
@@ -1128,7 +1128,7 @@ function renderPostPublish(body, data, esc, root, opts) {
       <div class="ch-card ch-pub-composer">
         <div class="ch-card-h">
           <div><h3>Post / Publish composer</h3><span class="ch-src">AI caption assist · platform preview · approval controlled</span></div>
-          <span class="ch-pub-safe">${linkedCount ? `${linkedCount} account${linkedCount === 1 ? "" : "s"} configured` : "Manual preview mode"}</span>
+          <span class="ch-pub-safe">${linkedCount ? `${linkedCount} profile${linkedCount === 1 ? "" : "s"} saved` : "Manual preview mode"}</span>
         </div>
         <div class="ch-pub-section">
           <b class="ch-pub-label">Presets</b>
@@ -1337,10 +1337,10 @@ function contentAssetCard(asset, esc) {
   return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}" data-ch-asset-id="${esc(asset.id)}" title="${hasUrl ? "Click to open" : ""}">
     <button class="ch-remove ch-asset-x" data-ch-delete-asset="${esc(asset.id)}" aria-label="Remove ${esc(asset.title)}" title="Remove ${esc(asset.title)}" type="button">x</button>
     <span class="ch-select-box" data-ch-select-hit aria-hidden="true">${selected ? "✓" : ""}</span>
-    <span class="ch-asset-thumb" style="${hasUrl ? "" : assetBg(asset)}">
+    <span class="ch-asset-thumb ${hasUrl ? "has-real-media" : "is-missing-media"}" style="${hasUrl ? "" : assetBg(asset)}">
       ${hasUrl ? (asset.type === "video"
         ? `<video src="${esc(asset.url)}" muted playsinline preload="metadata"></video>`
-        : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`) : `<em>preview trimmed</em>`}
+        : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`) : `<em>${asset.syncedId ? "synced · loading preview" : "preview unavailable"}</em>`}
       ${asset.type === "video" ? `<span class="ch-post-play">▶</span>` : ""}
       <b>${typeLabel}</b>
     </span>
@@ -1563,7 +1563,11 @@ function removeBgBody(lb, esc) {
   return `
     <button class="btn btn-primary ch-lb-bg-one" type="button" data-ch-lb-bg-run ${checking || loading || unavailable || !target ? "disabled" : ""}>${loading ? "Removing…" : "Remove"}</button>
     ${!target ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Select an image layer.</p>` : ""}
-    ${unavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">Unavailable.</p>` : ""}
+    ${checking ? `<p class="ch-lb-ai-note">Checking the local image engine…</p>` : ""}
+    ${unavailable ? `
+      <p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "The local image engine is not ready yet.")}</p>
+      <button class="btn btn-quiet" type="button" data-ch-lb-rembg-recheck>Re-check</button>
+    ` : ""}
     ${bg.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(bg.message || "Background removal failed.")}</p>` : ""}
     ${bg.status === "applied" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">Applied to ${esc(targetName || "selected layer")}.</p>` : ""}
   `;
@@ -1581,7 +1585,7 @@ function bokehBody(lb, s, esc) {
     <div class="ch-lb-chips">
       <button type="button" data-ch-lb-bokeh-detect ${detecting || detectUnavailable ? "disabled" : ""}>${svgIc("spark")} ${detecting ? "Detecting subject…" : hasMask ? "Re-detect subject" : "AI detect subject"}</button>
     </div>
-    ${detectUnavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">AI subject detection needs Local Background Removal connected — set it up in Settings → Media Engines.</p>` : ""}
+    ${detectUnavailable ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(detect.message || "Subject detection is waiting for the local image engine. Use Re-check under Remove Background.")}</p>` : ""}
     ${detect.status === "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-warn">${esc(detect.message || "Subject detection failed.")}</p>` : ""}
     ${hasMask && detect.status !== "error" ? `<p class="ch-lb-ai-note ch-lb-ai-note-ok">AI detected the subject — the background blurs around its real shape, gaps included (e.g. between a cat's ears). Add focus spots below to touch it up.</p>` : ""}
     <p class="ch-lb-bokeh-note">${esc(lb.subjectHint || (hasMask ? "The detected subject is protected from blur and outlined on canvas. Add a small touch-up only if part of the subject was missed." : spots.length ? "Manual touch-ups keep those circles sharp. AI Detect is better for a full person or object." : "Detect the full subject first. Manual touch-ups are only for small areas the detector misses."))}</p>
@@ -2422,6 +2426,45 @@ function wireLightbox(root, opts) {
   };
   if (aiRun) aiRun.onclick = () => runAiEdit();
   root.querySelectorAll("[data-ch-ai-preset]").forEach((button) => button.onclick = () => runAiEdit(button.dataset.chAiPreset));
+
+  const applyRembgAvailability = (status) => {
+    if (chLightbox !== lb) return;
+    const available = !!status?.available;
+    if (lb.bg.status === "checking" || lb.bg.status === "unavailable" || lb.bg.status === "idle") {
+      lb.bg = {
+        status: available ? "idle" : "unavailable",
+        message: available ? "" : (status?.error || "The local image engine is not ready yet."),
+      };
+    }
+    if (lb.bokehDetect.status === "idle" || lb.bokehDetect.status === "unavailable") {
+      lb.bokehDetect = {
+        status: available ? "idle" : "unavailable",
+        message: available ? "" : (status?.error || "Subject detection is waiting for the local image engine."),
+      };
+    }
+    rerender();
+  };
+
+  const refreshRembgAvailability = async ({ force = false, retryOnce = false } = {}) => {
+    if (force && chLightbox === lb) {
+      lb.bg = { status: "checking", message: "" };
+      rerender();
+    }
+    let status = await getRembgStatus({ recheck: force });
+    if (!status.available && retryOnce) {
+      // The editor can mount while owner-session verification is still
+      // settling. One short forced retry prevents that transient race from
+      // becoming a permanent dead control for the rest of the lightbox.
+      await new Promise((resolvePromise) => setTimeout(resolvePromise, 650));
+      if (chLightbox !== lb) return;
+      status = await getRembgStatus({ recheck: true });
+    }
+    applyRembgAvailability(status);
+  };
+
+  const bgRecheck = root.querySelector("[data-ch-lb-rembg-recheck]");
+  if (bgRecheck) bgRecheck.onclick = () => refreshRembgAvailability({ force: true });
+
   const bgRun = root.querySelector("[data-ch-lb-bg-run]");
   if (bgRun) bgRun.onclick = async () => {
     if (lb.bg.status === "unavailable") return;
@@ -2552,17 +2595,7 @@ function wireLightbox(root, opts) {
       lb.aiEdit = { mode: r.mode, status: "idle", message: "", provider: r.provider };
       rerender();
     });
-    probeRemoveBackground().then((available) => {
-      if (chLightbox !== lb) return;
-      lb.bg = { status: available ? "idle" : "unavailable", message: "" };
-      // AI subject detection reuses the same local background-removal engine, so it's honest
-      // about being unavailable together with Remove Background — never a
-      // fake "connected" state when the real check failed.
-      if (lb.bokehDetect.status === "idle" || lb.bokehDetect.status === "unavailable") {
-        lb.bokehDetect = { status: available ? "idle" : "unavailable", message: "" };
-      }
-      rerender();
-    });
+    refreshRembgAvailability({ retryOnce: true });
   }
 
   root.querySelector("[data-ch-lb-reset]").onclick = () => { chLightbox = freshLightbox(asset, { showTutorial: lb.showTutorial }); rerender(); };
@@ -3070,11 +3103,88 @@ function openPost(p, esc) {
 }
 
 /* =========================================================================
-   ANALYTICS — real connections only. A connected profile proves identity; it
-   is not the same thing as a metrics feed. KPIs render only from explicit
+   ANALYTICS - real metrics only. A saved profile identifies what to measure;
+   it is not API authorization. KPIs render only from explicit
    account analytics payloads. No Creator Hub inventory, seeded posts, or
    modeled estimates leak into this page.
    ========================================================================= */
+const LIVE_ANALYTICS_PLATFORMS = new Set(["instagram", "tiktok", "youtube", "facebook"]);
+const ANALYTICS_REFRESH_MS = 15 * 60 * 1000;
+const analyticsConnectorState = {
+  loaded: false,
+  loading: false,
+  connectors: [],
+  error: "",
+};
+function analyticsAuthHeaders(extra = {}) {
+  const token = typeof session?.token === "function" ? session.token() : "";
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+async function analyticsApi(path, { method = "GET", body } = {}) {
+  const response = await fetch(path, {
+    method,
+    headers: analyticsAuthHeaders(body === undefined ? {} : { "Content-Type": "application/json" }),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("Sign in to check your live social connections.");
+    if (response.status === 403) throw new Error("Only a business owner or admin can manage live social connections.");
+    throw new Error(String(json?.error || `Analytics request failed (${response.status}).`));
+  }
+  return json;
+}
+function connectorStatus(platformId) {
+  return analyticsConnectorState.connectors.find((connector) => connector.id === platformId) || null;
+}
+function liveAnalyticsIsFresh(account = {}) {
+  const synced = Date.parse(account?.analytics?.syncedAt || "");
+  return account.connectMode === "live-api" && Number.isFinite(synced) && Date.now() - synced < ANALYTICS_REFRESH_MS;
+}
+async function syncLiveAnalyticsAccount(account, accounts) {
+  const response = await analyticsApi("/phantom-ai/ops/social-analytics/sync", {
+    method: "POST",
+    body: { platform: account.id },
+  });
+  account.analytics = { ...response.analytics, live: true };
+  account.enabled = true;
+  account.connectMode = "live-api";
+  account.officialConnectState = "connected";
+  account.lastConnectAt = response.analytics?.syncedAt || new Date().toISOString();
+  saveSocialAccounts(accounts);
+  return account.analytics;
+}
+async function refreshLiveAnalytics(el, accounts, opts, { force = false, platform = "" } = {}) {
+  if (analyticsConnectorState.loading) return;
+  analyticsConnectorState.loading = true;
+  analyticsConnectorState.error = "";
+  try {
+    if (!analyticsConnectorState.loaded || force) {
+      const response = await analyticsApi("/phantom-ai/ops/social-analytics/status");
+      analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
+        ? response.social_analytics.connectors
+        : [];
+      analyticsConnectorState.loaded = true;
+    }
+    const ready = analyticsConnectorState.connectors.filter((connector) => connector.configured && (!platform || connector.id === platform));
+    for (const connector of ready) {
+      const account = accounts.find((row) => row.id === connector.id);
+      if (!account || (!force && liveAnalyticsIsFresh(account))) continue;
+      await syncLiveAnalyticsAccount(account, accounts);
+    }
+    if (force && platform && !ready.length) {
+      const connector = connectorStatus(platform);
+      throw new Error(connector?.reason || "Connect this channel in Settings before syncing live data.");
+    }
+    if (force) analyticsNotice = ready.length ? "Live platform data synced." : "No live social connector is configured yet.";
+  } catch (error) {
+    analyticsConnectorState.error = error?.message || "Live analytics could not be reached.";
+    if (force) analyticsNotice = analyticsConnectorState.error;
+  } finally {
+    analyticsConnectorState.loading = false;
+    if (el?.isConnected) renderAnalytics(el, opts, { skipAutoRefresh: true });
+  }
+}
 function numericMetric(source = {}, keys = []) {
   const key = keys.find((name) => Number.isFinite(Number(source?.[name])));
   return key ? Number(source[key]) : 0;
@@ -3096,6 +3206,13 @@ function analyticsFeedForAccount(account = {}) {
     reach, impressions, engagement, followers,
     source: raw.source || raw.provider || "platform analytics",
     syncedAt: raw.syncedAt || raw.lastSyncedAt || raw.updatedAt || account.analyticsLastSyncAt || "",
+    series: Array.isArray(raw.series) ? raw.series.slice(-90).map((point) => ({
+      label: String(point?.label || ""),
+      reach: numericMetric(point, ["reach"]),
+      impressions: numericMetric(point, ["impressions"]),
+      engagement: numericMetric(point, ["engagement"]),
+      followers: numericMetric(point, ["followers"]),
+    })) : [],
   };
 }
 function analyticsTotals(feeds = []) {
@@ -3106,78 +3223,157 @@ function analyticsTotals(feeds = []) {
     followers: sum.followers + row.feed.followers,
   }), { reach: 0, impressions: 0, engagement: 0, followers: 0 });
 }
-function accountAnalyticsCard(row, esc) {
+function analyticsLinePath(values = [], maxValue = 1, width = 680, height = 190) {
+  const points = values.length > 1 ? values : [0, ...(values.length ? values : [0]), 0];
+  return points.map((value, index) => {
+    const x = points.length === 1 ? 0 : index / (points.length - 1) * width;
+    const y = height - 14 - (Number(value || 0) / Math.max(1, maxValue)) * (height - 30);
+    return `${index ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
+  }).join(" ");
+}
+function analyticsChart(feedRows = []) {
+  const width = 680;
+  const height = 190;
+  const rows = feedRows.map((row) => ({
+    ...row,
+    values: row.feed?.series?.length
+      ? row.feed.series.map((point) => point.reach || point.impressions || 0)
+      : [0, 0, 0, 0, 0, 0, 0],
+  }));
+  const maxValue = Math.max(1, ...rows.flatMap((row) => row.values));
+  return `
+    <div class="an-chart-wrap ${rows.some((row) => row.feed) ? "has-data" : "is-empty"}">
+      <svg class="an-chart" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-label="Reach and views trend">
+        ${[.2, .4, .6, .8].map((fraction) => `<line class="an-grid-line" x1="0" x2="${width}" y1="${(height * fraction).toFixed(1)}" y2="${(height * fraction).toFixed(1)}"/>`).join("")}
+        ${rows.map((row) => `<path class="an-channel-line ${row.feed ? "" : "is-waiting"}" style="--channel:${row.account.color}" d="${analyticsLinePath(row.values, maxValue, width, height)}"/>`).join("")}
+      </svg>
+      ${rows.some((row) => row.feed) ? "" : `<div class="an-chart-empty"><b>Waiting for live performance</b><span>Connect one social account and this chart updates automatically.</span></div>`}
+      <div class="an-chart-legend">${rows.map((row) => `<span><i style="background:${row.account.color}"></i>${row.account.name}${row.feed ? "" : " · waiting"}</span>`).join("")}</div>
+    </div>`;
+}
+function analyticsCoverage(feedRows = []) {
+  const count = feedRows.length || 1;
+  const stops = feedRows.map((row, index) => {
+    const start = (index / count * 100).toFixed(2);
+    const end = ((index + 1) / count * 100).toFixed(2);
+    return `${row.feed ? row.account.color : "rgba(135,165,151,.13)"} ${start}% ${end}%`;
+  }).join(",");
+  const live = feedRows.filter((row) => row.feed).length;
+  return `<div class="an-coverage">
+    <div class="an-coverage-ring" style="background:conic-gradient(${stops || "rgba(135,165,151,.13) 0 100%"})"><span><b>${live}/${feedRows.length}</b><i>reporting</i></span></div>
+    <div class="an-coverage-copy"><b>Channel coverage</b><p>${live ? `${live} verified data source${live === 1 ? "" : "s"} active.` : "Connect your channels to activate reporting."}</p></div>
+  </div>`;
+}
+let analyticsNotice = "";
+function accountAnalyticsRow(row, esc) {
   const account = row.account;
   const feed = row.feed;
-  if (!feed) {
-    return `<article class="an-feed-card is-missing">
-      <div><span class="ch-dot" style="background:${account.color}"></span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile connected")}</i></div>
-      <strong>No analytics feed</strong>
-      <p>Profile identity is connected, but reach, impressions, followers, and engagement are not available until that platform's insights API is wired server-side.</p>
-    </article>`;
-  }
-  return `<article class="an-feed-card">
-    <div><span class="ch-dot" style="background:${account.color}"></span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile connected")}</i></div>
-    <strong>${esc(feed.source)}</strong>
-    <p>${feed.syncedAt ? `Last sync ${esc(ago(feed.syncedAt))}` : "Live metrics feed connected."}</p>
-    <div class="an-feed-metrics">
-      <span><b>${K(feed.reach)}</b>reach</span>
-      <span><b>${K(feed.impressions)}</b>impressions</span>
-      <span><b>${K(feed.engagement)}</b>engagement</span>
-      <span><b>${K(feed.followers)}</b>followers</span>
+  const saved = socialStatus(account) === "linked";
+  const connector = connectorStatus(account.id);
+  const live = account.connectMode === "live-api" && !!feed;
+  const canSync = !!connector?.configured;
+  return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
+    <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
+    ${feed ? `<div class="an-channel-metrics">
+      <span><b>${K(feed.reach)}</b>reach</span><span><b>${K(feed.impressions)}</b>views</span><span><b>${K(feed.engagement)}</b>engagement</span><span><b>${K(feed.followers)}</b>followers</span>
+    </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? esc(ago(feed.syncedAt)) : "current"}</i></div>`
+    : `<div class="an-channel-empty"><b>${canSync ? "Ready to sync" : saved ? "Profile saved" : "Not connected"}</b><span>${canSync ? "Official read-only analytics are ready." : "Connect this account in Settings to start live data."}</span></div>`}
+    <div class="an-channel-actions">
+      ${canSync ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up live connection</button>`}
+      <details class="an-import-backup"><summary>Use a report file</summary><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import backup"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
+      ${feed ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear data</button>` : ""}
     </div>
   </article>`;
 }
-export function renderAnalytics(el, opts = {}) {
+function wireAnalyticsActions(el, accounts, opts) {
+  el.querySelectorAll("[data-an-sync]").forEach((button) => button.onclick = async () => {
+    button.disabled = true;
+    analyticsNotice = `Syncing ${button.dataset.anSync}…`;
+    await refreshLiveAnalytics(el, accounts, opts, { force: true, platform: button.dataset.anSync });
+  });
+  el.querySelectorAll("[data-an-import]").forEach((input) => input.onchange = async () => {
+    const account = accounts.find((row) => row.id === input.dataset.anImport);
+    const file = input.files?.[0];
+    if (!account || !file) return;
+    try {
+      account.analytics = parseAnalyticsReport(await file.text(), {
+        fileName: file.name,
+        source: `${account.name} analytics export`,
+      });
+      account.enabled = true;
+      account.connectMode = "report-import";
+      account.officialConnectState = account.officialConnectState || "not_configured";
+      saveSocialAccounts(accounts);
+      analyticsNotice = `${account.name} metrics imported from ${file.name}.`;
+    } catch (error) {
+      analyticsNotice = error?.message || "That report could not be read.";
+    }
+    renderAnalytics(el, opts);
+  });
+  el.querySelectorAll("[data-an-clear]").forEach((button) => button.onclick = () => {
+    const account = accounts.find((row) => row.id === button.dataset.anClear);
+    if (!account) return;
+    delete account.analytics;
+    delete account.insights;
+    delete account.metrics;
+    saveSocialAccounts(accounts);
+    analyticsNotice = `${account.name} analytics were cleared. The saved profile was not removed.`;
+    renderAnalytics(el, opts);
+  });
+}
+export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   const esc = opts.esc || ((s) => String(s));
   const accounts = loadSocialAccounts();
   const linked = accounts.filter((acct) => socialStatus(acct) === "linked");
-
-  if (!linked.length) {
-    el.innerHTML = `
-      <div class="an an-gate">
-        <section class="an-hero">
-          <div>
-            <p class="ch-eyebrow">Business intelligence</p>
-            <h3>Connect a social account to see analytics.</h3>
-            <p>Analytics only shows numbers pulled from an account you've actually signed in with. Nothing is modeled, estimated, or invented here.</p>
-          </div>
-        </section>
-        <div class="an-connect-card">
-          <p class="an-connect-lede">No social account is connected yet.</p>
-          <button class="btn btn-primary" type="button" data-open-ws="settings">Connect a social account</button>
-        </div>
-      </div>`;
-    return;
-  }
-
-  const feedRows = linked.map((account) => ({ account, feed: analyticsFeedForAccount(account) }));
+  const displayAccounts = linked.length ? linked : accounts.filter((account) => ["instagram", "tiktok", "youtube", "facebook"].includes(account.id));
+  const feedRows = displayAccounts.map((account) => ({ account, feed: analyticsFeedForAccount(account) }));
   const liveRows = feedRows.filter((row) => row.feed);
+  const liveApiRows = liveRows.filter((row) => row.account.connectMode === "live-api");
   const totals = analyticsTotals(liveRows);
+  const maxEngagement = Math.max(1, ...feedRows.map((row) => row.feed?.engagement || 0));
   el.innerHTML = `
     <div class="an">
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Business intelligence</p>
-          <h3>${liveRows.length ? "Real analytics feed live." : "Accounts connected. Metrics feed missing."}</h3>
-          <p>${liveRows.length ? "These numbers come from explicit platform analytics payloads only." : "The profiles below are connected, but PhantomForce has not received real reach, engagement, follower, or impression data from the platform APIs yet."}</p>
+          <h3>${liveApiRows.length ? "Live performance at a glance." : "Connect your channels for live data."}</h3>
+          <p>${liveApiRows.length ? "Official platform connections refresh automatically. Report files are available only as a backup." : "Connect YouTube, Instagram, Facebook, or TikTok once. PhantomForce will keep this page current for you."}</p>
         </div>
-        <span class="an-src">${svgIc("up")} ${liveRows.length}/${linked.length} metrics feed${linked.length === 1 ? "" : "s"} live</span>
+        <div class="an-hero-actions">
+          ${analyticsConnectorState.connectors.some((connector) => connector.configured) ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect accounts</button>`}
+          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live</span>
+        </div>
       </section>
-      <div class="an-connected-grid">
-        ${linked.map((acct) => `<div class="an-account-chip"><span class="ch-dot" style="background:${acct.color}"></span><b>${esc(acct.name)}</b><i>${esc(acct.handle || acct.loginIdentity || "connected")}</i></div>`).join("")}
+      ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
+      <div class="ch-kpis an-kpis">
+        ${kpi("Reach", K(totals.reach), liveRows.length ? "reported reach" : "waiting for data")}
+        ${kpi("Views", K(totals.impressions), liveRows.length ? "views + impressions" : "waiting for data")}
+        ${kpi("Engagement", K(totals.engagement), liveRows.length ? "likes + comments + shares" : "waiting for data")}
+        ${kpi("Followers", K(totals.followers), liveRows.length ? "latest reported total" : "waiting for data")}
       </div>
-      ${liveRows.length ? `<div class="ch-kpis">
-        ${kpi("Reach", K(totals.reach), "real platform feed")}
-        ${kpi("Impressions", K(totals.impressions), "real platform feed")}
-        ${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}
-        ${kpi("Followers", K(totals.followers), "reported by platform")}
-      </div>` : `<div class="ch-card an-notice">
-        <b>Connected profile does not equal analytics data.</b>
-        <p>Instagram, TikTok, YouTube, and Facebook identity checks are present, but no server-side insights feed is returning real metrics yet. This page will stay empty of numbers until those APIs are actually connected.</p>
-      </div>`}
-      <section class="an-feed-grid">
-        ${feedRows.map((row) => accountAnalyticsCard(row, esc)).join("")}
+      <div class="an-visual-grid">
+        <section class="ch-card an-trend-card">
+          <div class="ch-card-h"><div><p class="ch-eyebrow">Performance trend</p><h3>Reach and views</h3></div><span class="an-live-label">${liveRows.length ? "Live + verified" : "Waiting for connection"}</span></div>
+          ${analyticsChart(feedRows)}
+        </section>
+        <section class="ch-card an-coverage-card">
+          <p class="ch-eyebrow">Data coverage</p>
+          ${analyticsCoverage(feedRows)}
+        </section>
+      </div>
+      <section class="ch-card an-engagement-card">
+        <div class="ch-card-h"><div><p class="ch-eyebrow">Channel comparison</p><h3>Engagement by platform</h3></div></div>
+        <div class="ch-bars">${feedRows.map((row) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${row.account.color}"></i>${esc(row.account.name)}</span><span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round((row.feed?.engagement || 0) / maxEngagement * 100)}%;background:${row.account.color}"></span></span><b class="ch-bar-val">${K(row.feed?.engagement || 0)}</b></div>`).join("")}</div>
+      </section>
+      <div class="an-section-head"><div><p class="ch-eyebrow">Sources</p><h3>Live channel connections</h3></div><span>Official read-only APIs</span></div>
+      <section class="an-channel-list" aria-label="Social analytics channels">
+        ${feedRows.map((row) => accountAnalyticsRow(row, esc)).join("")}
       </section>
     </div>`;
+  wireAnalyticsActions(el, accounts, opts);
+  const syncAll = el.querySelector("[data-an-sync-all]");
+  if (syncAll) syncAll.onclick = () => refreshLiveAnalytics(el, accounts, opts, { force: true });
+  if (!renderOptions.skipAutoRefresh && !analyticsConnectorState.loaded && !analyticsConnectorState.loading) {
+    void refreshLiveAnalytics(el, accounts, opts);
+  }
 }
