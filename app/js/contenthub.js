@@ -37,8 +37,8 @@ const DAY = 864e5;
 export const CONTENT_ASSET_LIMITS = Object.freeze({
   retentionDays: 30,
   maxItems: 30,
-  budgetBytes: 3000000,
-  maxInlineChars: 280000,
+  budgetBytes: 8000000,
+  maxInlineChars: 2400000,
 });
 
 export const PLATFORMS = [
@@ -967,7 +967,7 @@ function sourceMediaMarkup(source, esc, size = "large") {
         ? `<video src="${esc(asset.url)}" muted playsinline preload="metadata"></video><span class="ch-post-play">▶</span>`
         : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`;
     }
-    return `<span class="ch-pub-media-empty" style="${assetBg(asset)}">${size === "tiny" ? "media" : "preview trimmed"}</span>`;
+    return `<span class="ch-pub-media-empty" style="${assetBg(asset)}">${size === "tiny" ? "media" : "media saved · preview loading"}</span>`;
   }
   if (source.post) {
     return `<span class="ch-pub-media-empty" style="${thumb(source.post)}"><span class="ch-post-plat" style="background:${plat(source.post.platform).color}">${PGLYPH[source.post.platform] || "●"}</span>${isVideo(source.post.type) ? `<span class="ch-post-play">▶</span>` : ""}</span>`;
@@ -1337,10 +1337,10 @@ function contentAssetCard(asset, esc) {
   return `<article class="ch-asset-card ch-selectable ${selected ? "is-selected" : ""}" data-ch-select-item="${esc(key)}" data-ch-asset-id="${esc(asset.id)}" title="${hasUrl ? "Click to open" : ""}">
     <button class="ch-remove ch-asset-x" data-ch-delete-asset="${esc(asset.id)}" aria-label="Remove ${esc(asset.title)}" title="Remove ${esc(asset.title)}" type="button">x</button>
     <span class="ch-select-box" data-ch-select-hit aria-hidden="true">${selected ? "✓" : ""}</span>
-    <span class="ch-asset-thumb" style="${hasUrl ? "" : assetBg(asset)}">
+    <span class="ch-asset-thumb ${hasUrl ? "has-real-media" : "is-missing-media"}" style="${hasUrl ? "" : assetBg(asset)}">
       ${hasUrl ? (asset.type === "video"
         ? `<video src="${esc(asset.url)}" muted playsinline preload="metadata"></video>`
-        : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`) : `<em>preview trimmed</em>`}
+        : `<img src="${esc(asset.url)}" alt="${esc(asset.title)}" loading="lazy"/>`) : `<em>${asset.syncedId ? "synced · loading preview" : "preview unavailable"}</em>`}
       ${asset.type === "video" ? `<span class="ch-post-play">▶</span>` : ""}
       <b>${typeLabel}</b>
     </span>
