@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260712-202";
+import { ctx, session } from "./store.js?v=phantom-live-20260712-203";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -181,4 +181,137 @@ export async function fetchServerSites() {
   if (!orgId) return [];
   const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/sites`);
   return ok ? json.sites || [] : [];
+}
+
+/* ---------------- Asset Cloud client ----------------
+   The permanent org creative library. Fetches include the bearer token, so
+   <img>/<video> must load bytes as blob URLs (assetBlobUrl) — the server
+   requires Authorization on every asset route. */
+
+export const assetsAvailable = () => isDatabaseSession() && !!activeOrgId();
+
+export async function uploadAsset(dataUrl, name, opts = {}) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, status, json } = await api(`/orgs/${encodeURIComponent(orgId)}/assets`, {
+    method: "POST",
+    body: {
+      data_url: dataUrl,
+      name,
+      title: opts.title,
+      source: opts.source || "upload",
+      folder_id: opts.folderId,
+      tags: opts.tags,
+      brand: opts.brand,
+      on_duplicate: opts.onDuplicate,
+      version_of: opts.versionOf,
+    },
+  });
+  if (!ok) return { ok: false, error: json?.error || `upload_failed_${status}`, detail: json };
+  return { ok: true, ...json };
+}
+
+export async function listAssets(query = {}) {
+  const orgId = activeOrgId();
+  if (!orgId) return { assets: [], next_cursor: null };
+  const params = new URLSearchParams();
+  for (const [k, v] of Object.entries(query)) if (v !== undefined && v !== null && v !== "") params.set(k, String(v));
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/assets?${params.toString()}`);
+  return ok ? { assets: json.assets || [], next_cursor: json.next_cursor || null } : { assets: [], next_cursor: null };
+}
+
+export async function fetchAsset(assetId) {
+  const orgId = activeOrgId();
+  if (!orgId) return null;
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/assets/${encodeURIComponent(assetId)}`);
+  return ok ? json : null;
+}
+
+export async function patchAsset(assetId, patch) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, status, json } = await api(`/orgs/${encodeURIComponent(orgId)}/assets/${encodeURIComponent(assetId)}`, { method: "POST", body: patch });
+  return ok ? { ok: true, ...json } : { ok: false, error: json?.error || `patch_failed_${status}` };
+}
+
+export async function assetLifecycle(assetId, action) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/assets/${encodeURIComponent(assetId)}/lifecycle`, { method: "POST", body: { action } });
+  return ok ? { ok: true, ...json } : { ok: false, error: json?.error };
+}
+
+export async function deleteAsset(assetId) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/assets/${encodeURIComponent(assetId)}`, { method: "DELETE" });
+  return ok ? { ok: true, ...json } : { ok: false, error: json?.error };
+}
+
+export async function restoreAssetVersion(assetId, versionNumber) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false, error: "no_active_org" };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/assets/${encodeURIComponent(assetId)}/versions/${versionNumber}/restore`, { method: "POST", body: {} });
+  return ok ? { ok: true, ...json } : { ok: false, error: json?.error };
+}
+
+export async function recordAssetUsage(assetId, surface, refId, refLabel) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false };
+  const { ok } = await api(`/orgs/${encodeURIComponent(orgId)}/assets/${encodeURIComponent(assetId)}/usage`, { method: "POST", body: { surface, ref_id: refId, ref_label: refLabel } });
+  return { ok };
+}
+
+export async function listAssetFolders() {
+  const orgId = activeOrgId();
+  if (!orgId) return [];
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/asset-folders`);
+  return ok ? json.folders || [] : [];
+}
+
+export async function createAssetFolder(name) {
+  const orgId = activeOrgId();
+  if (!orgId) return { ok: false };
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/asset-folders`, { method: "POST", body: { name } });
+  return ok ? { ok: true, ...json } : { ok: false, error: json?.error };
+}
+
+export async function listAssetCollections() {
+  const orgId = activeOrgId();
+  if (!orgId) return [];
+  const { ok, json } = await api(`/orgs/${encodeURIComponent(orgId)}/asset-collections`);
+  return ok ? json.collections || [] : [];
+}
+
+/* Load asset bytes as an object URL for <img>/<video> — the server needs the
+   bearer header, so plain src= can't be used. Callers must revokeObjectURL. */
+const blobUrlCache = new Map();
+export async function assetBlobUrl(assetId, variant = "thumbnail") {
+  const orgId = activeOrgId();
+  if (!orgId) return null;
+  const cacheKey = `${orgId}:${assetId}:${variant}`;
+  if (blobUrlCache.has(cacheKey)) return blobUrlCache.get(cacheKey);
+  try {
+    const res = await fetch(`/orgs/${encodeURIComponent(orgId)}/assets/${encodeURIComponent(assetId)}/${variant}`, { headers: authHeaders() });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    blobUrlCache.set(cacheKey, url);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+export function clearAssetBlobCache() {
+  for (const url of blobUrlCache.values()) URL.revokeObjectURL(url);
+  blobUrlCache.clear();
+}
+
+/* Save a data URL straight into the library from any editor (Media Lab,
+   photo editor, generated media). Returns the created asset or a clear
+   unavailable state — callers treat it as best-effort. */
+export async function saveToAssetCloud(dataUrl, name, opts = {}) {
+  if (!assetsAvailable()) return { ok: false, error: "assets_unavailable" };
+  return uploadAsset(dataUrl, name, { source: opts.source || "media-lab", tags: opts.tags, folderId: opts.folderId });
 }

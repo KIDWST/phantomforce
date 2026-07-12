@@ -6,13 +6,14 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-202";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-203";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260712-202";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-202";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-202";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-202";
+} from "./contenthub.js?v=phantom-live-20260712-203";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-203";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-203";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-203";
+import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-203";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1463,10 +1464,21 @@ function queueRow(a, esc) {
 
 const estCredits = () => genState.modality === "video" ? genState.duration * 4 : genState.count * (genState.quality === "high" ? 6 : 3);
 function captureForContentHub(asset, extra = {}) {
+  const title = extra.title || (asset.type === "video" ? "Generated video" : "Generated image");
+  /* also push generated media into the permanent Asset Cloud when a business
+     session is active — one save, reusable everywhere (best-effort, never
+     blocks the local capture) */
+  if (asset?.url && /^data:(image|video)\//.test(asset.url) && assetsAvailable()) {
+    const ext = asset.type === "video" ? "mp4" : (asset.url.slice(5, asset.url.indexOf(";")).split("/")[1] || "png");
+    saveToAssetCloud(asset.url, `${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.${ext}`, {
+      source: "media-lab",
+      tags: [extra.style || genState.style, extra.provider || genState.provider].filter(Boolean),
+    }).catch(() => {});
+  }
   try {
     const result = registerContentAsset({
       ...asset,
-      title: extra.title || (asset.type === "video" ? "Generated video" : "Generated image"),
+      title,
       prompt: extra.prompt || (asset.meta && asset.meta.prompt) || genState.prompt,
       source: "Media Lab",
       provider: extra.provider || genState.provider,
