@@ -18,6 +18,11 @@
   still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
+- **Content Hub planner + unified post preview (2026-07-11)** — Creator Hub follows
+  `Library → Ideas → Drafts → Publish → Planner`; Publish renders one combined
+  destination preview instead of duplicate platform cards. Planner combines
+  scheduled content with tenant-local meetings, calls, follow-ups, deadlines, and
+  honest email/calendar connector setup states. The old Workflow tab is removed.
 - **ChicagoShots workspace isolation (2026-07-11)** — the live Business Manager
   now requires both `phantomforce` and `chicagoshots` workspaces. Existing browser
   state is migrated without reset; each workspace has its own brain, memory, and
@@ -48,7 +53,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260711-167`**.
+- Current cache-bust build id: **`phantom-live-20260712-201`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

@@ -10,19 +10,19 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260712-200";
-import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-200";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-200";
+} from "./imagefilters.js?v=phantom-live-20260712-201";
+import { probeRemoveBackground, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-201";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-201";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260712-200";
+} from "./content-editor.js?v=phantom-live-20260712-201";
 import {
   currentTenantId, currentWs, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-200";
+} from "./store.js?v=phantom-live-20260712-201";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -32,6 +32,7 @@ const CH_OPEN_TAB_KEY = "pf.contenthub.openTab.v1";
 const CH_OPEN_ASSET_KEY = "pf.contenthub.openAsset.v1";
 const CH_PUBLISH_STATE_KEY = "pf.contenthub.publish.state.v1";
 const CH_PUBLISH_DRAFTS_KEY = "pf.contenthub.publish.drafts.v1";
+const CH_PLANNER_ITEMS_KEY = "pf.contenthub.planner.items.v1";
 const DAY = 864e5;
 export const CONTENT_ASSET_LIMITS = Object.freeze({
   retentionDays: 30,
@@ -72,6 +73,17 @@ const PUBLISH_TONES = [
   ["premium", "Premium"],
   ["local", "Local"],
 ];
+const PLANNER_CONNECTORS = [
+  { id: "gmail", group: "Email", name: "Gmail", method: "Google OAuth", capability: "Inbox, drafts, replies", guide: "https://support.google.com/accounts/answer/3466521" },
+  { id: "outlook-mail", group: "Email", name: "Outlook", method: "Microsoft OAuth", capability: "Inbox, drafts, replies", guide: "https://account.live.com/consent/Manage" },
+  { id: "proton-mail", group: "Email", name: "Proton Mail", method: "Proton Mail Bridge", capability: "Desktop Bridge connection", guide: "https://proton.me/mail/bridge" },
+  { id: "other-mail", group: "Email", name: "Other email", method: "OAuth or IMAP/SMTP adapter", capability: "Provider-specific setup", guide: "" },
+  { id: "google-calendar", group: "Calendar", name: "Google Calendar", method: "Google OAuth", capability: "Events, availability, reminders", guide: "https://support.google.com/calendar/answer/37648" },
+  { id: "outlook-calendar", group: "Calendar", name: "Outlook Calendar", method: "Microsoft OAuth", capability: "Events, availability, reminders", guide: "https://support.microsoft.com/outlook" },
+  { id: "calendly", group: "Calendar", name: "Calendly", method: "Calendly integration", capability: "Bookings and event types", guide: "https://calendly.com/integrations" },
+  { id: "icloud-calendar", group: "Calendar", name: "Apple / iCloud", method: "CalDAV connector", capability: "Calendar events and availability", guide: "https://support.apple.com/102654" },
+];
+const plannerState = { weekOffset: 0, openConnector: "" };
 function defaultSocialAccounts() {
   return PLATFORMS.map((p) => ({
     id: p.id, name: p.name, color: p.color, handle: "", url: "", loginIdentity: "",
@@ -169,14 +181,6 @@ const COMMENTS = [
   ["mant_detail", "booked 3 jobs this week off this", "pos"], ["quiet_lurker", "commenting so i remember this", "neu"],
 ];
 const HASHTAGS = ["#AI", "#smallbusiness", "#automation", "#phantomforce", "#entrepreneur", "#marketing", "#solopreneur", "#contentcreation", "#business", "#productivity"];
-const PRODUCTION_STEPS = [
-  ["Idea", "Choose the hook and business outcome."],
-  ["Draft", "Write caption, visual direction, and CTA."],
-  ["Asset", "Create or attach image/video source."],
-  ["Risk check", "Only claims, spend, sends, and public posts need review."],
-  ["Autopilot", "Safe steps move forward without sitting in a manual review pile."],
-];
-
 function genPosts() {
   const rng = mulberry(20260705);
   const posts = [];
@@ -691,7 +695,8 @@ export function renderContentHub(el, opts = {}) {
   let requestedAssetId = "";
   try {
     const requestedTab = workspaceStorageGetItem(CH_OPEN_TAB_KEY, { migrateGlobal: false });
-    if (requestedTab && ["library", "publish", "ideas", "drafts", "calendar", "production"].includes(requestedTab)) chState.tab = requestedTab;
+    if (requestedTab === "production") chState.tab = "drafts";
+    else if (requestedTab && ["library", "ideas", "drafts", "publish", "calendar"].includes(requestedTab)) chState.tab = requestedTab;
     if (requestedTab) workspaceStorageRemoveItem(CH_OPEN_TAB_KEY);
     requestedAssetId = workspaceStorageGetItem(CH_OPEN_ASSET_KEY, { migrateGlobal: false }) || "";
     if (requestedAssetId) workspaceStorageRemoveItem(CH_OPEN_ASSET_KEY);
@@ -711,7 +716,7 @@ export function renderContentHub(el, opts = {}) {
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
   const publishDrafts = loadPublishDrafts();
-  const tabs = [["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`], ["publish", "Publish"], ["ideas", "Idea Bank"], ["drafts", "Draft Queue"], ["calendar", "Calendar"], ["production", "Workflow"]];
+  const tabs = [["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`], ["ideas", "Ideas"], ["drafts", "Drafts"], ["publish", "Publish"], ["calendar", "Planner"]];
   el.innerHTML = `
     <div class="ch">
       <section class="ch-workbar">
@@ -736,8 +741,7 @@ export function renderContentHub(el, opts = {}) {
   if (t === "ideas") renderCreatorIdeas(body, data, esc, el, opts);
   else if (t === "publish") renderPostPublish(body, data, esc, el, opts);
   else if (t === "drafts") renderDraftQueue(body, data, esc, el, opts);
-  else if (t === "calendar") renderContentCalendar(body, data, esc, el, opts);
-  else if (t === "production") renderProductionBoard(body, data, esc, el, opts);
+  else if (t === "calendar") renderContentPlanner(body, data, esc, el, opts);
   else if (t === "library") renderContentLibrary(body, data, esc, el, opts);
   if (chLightbox) wireLightbox(el, opts);
 }
@@ -826,47 +830,103 @@ function renderDraftQueue(body, data, esc, root, opts) {
   wireCreatorActions(body, opts, root);
   wireRemovals(body, opts, root);
 }
-function renderContentCalendar(body, data, esc, root, opts) {
-  const rows = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).sort((a, b) => Date.parse(a.publishedAt) - Date.parse(b.publishedAt));
-  body.innerHTML = `
-    <div class="ch-card">
-      <div class="ch-card-h"><h3>Upcoming content calendar</h3><span class="ch-src">Autopilot schedule view, owner can remove</span></div>
-      ${rows.length ? `<div class="ch-calendar-list">${rows.map((p) => `<article class="ch-calendar-item ch-removable" data-ch-open="${p.id}" role="button" tabindex="0">
-        ${removeButton(`schedule:${p.id}`, `Remove scheduled ${p.caption}`)}
-        <span class="ch-calendar-date">${ago(p.publishedAt)}</span>
-        <span class="ch-tr-thumb" style="${thumb(p)}"></span>
-        <span><b>${esc(p.caption)}</b><i>${esc(plat(p.platform).name)} · ${esc(TYPES[p.type])}</i></span>
-        <em>queued</em>
-      </article>`).join("")}</div>` : `<p class="empty-line">Nothing queued. Generate content in the Media Lab and queue it here.</p>`}
-    </div>`;
-  wirePostCards(body, data, esc, root, opts);
-  wireRemovals(body, opts, root);
+function loadPlannerItems() {
+  try {
+    const saved = JSON.parse(workspaceStorageGetItem(CH_PLANNER_ITEMS_KEY) || "[]");
+    return Array.isArray(saved) ? saved.filter((item) => item?.id && item?.title && item?.startsAt) : [];
+  } catch { return []; }
 }
-function renderProductionBoard(body, data, esc, root, opts) {
-  const assetIdeas = activeIdeas().slice(0, 3).filter((idea) => !isRemoved(`asset:${idea.id}`));
+function savePlannerItems(items) {
+  workspaceStorageSetItem(CH_PLANNER_ITEMS_KEY, JSON.stringify(items.slice(0, 250)));
+  return items;
+}
+function plannerWeekStart(offset = plannerState.weekOffset) {
+  const value = new Date();
+  value.setHours(0, 0, 0, 0);
+  value.setDate(value.getDate() - ((value.getDay() + 6) % 7) + offset * 7);
+  return value;
+}
+function plannerDayKey(value) {
+  const date = new Date(value);
+  return Number.isFinite(date.getTime()) ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}` : "";
+}
+function plannerTime(value) {
+  return new Date(value).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+}
+function plannerRows(data) {
+  const own = loadPlannerItems().map((item) => ({ ...item, source: "planner", removable: true }));
+  const content = data.posts
+    .filter((post) => post.status === "scheduled" && !isRemoved(`schedule:${post.id}`))
+    .map((post) => ({ id: `content:${post.id}`, postId: post.id, title: post.caption, kind: "content", startsAt: post.publishedAt, source: plat(post.platform).name, detail: TYPES[post.type] || post.type, removable: false }));
+  return [...own, ...content].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+}
+function plannerConnectorMarkup(connector, esc) {
+  const open = plannerState.openConnector === connector.id;
+  return `<article class="ch-planner-connector ${open ? "is-open" : ""}">
+    <button type="button" class="ch-planner-connector-head" data-planner-connector="${esc(connector.id)}" aria-expanded="${open}">
+      <span><b>${esc(connector.name)}</b><i>${esc(connector.capability)}</i></span><em>Not connected</em>
+    </button>
+    ${open ? `<div class="ch-planner-connector-body"><p><b>${esc(connector.method)}</b> is required. PhantomForce will not store a password in this page or pretend the account is connected.</p>${connector.guide ? `<button type="button" class="btn btn-quiet" data-planner-guide="${esc(connector.guide)}">Open setup guide</button>` : `<span class="ch-src">A provider-specific adapter must be configured by the workspace owner.</span>`}</div>` : ""}
+  </article>`;
+}
+function renderContentPlanner(body, data, esc, root, opts) {
+  const weekStart = plannerWeekStart();
+  const days = Array.from({ length: 7 }, (_, index) => new Date(weekStart.getTime() + index * DAY));
+  const weekEnd = new Date(weekStart.getTime() + 7 * DAY);
+  const rows = plannerRows(data);
+  const visibleRows = rows.filter((item) => Date.parse(item.startsAt) >= weekStart.getTime() && Date.parse(item.startsAt) < weekEnd.getTime());
+  const todayKey = plannerDayKey(Date.now());
+  const waiting = rows.filter((item) => Date.parse(item.startsAt) >= Date.now()).length;
   body.innerHTML = `
-    <div class="ch-card">
-      <div class="ch-card-h"><h3>Production workflow</h3><span class="ch-src">Creator-side pipeline</span></div>
-      <div class="ch-production">
-        ${PRODUCTION_STEPS.map(([name, copy], i) => `<article class="ch-production-step">
-          <span>${i + 1}</span>
-          <h4>${esc(name)}</h4>
-          <p>${esc(copy)}</p>
-        </article>`).join("")}
+    <section class="ch-planner-hero ch-card">
+      <div><p class="ch-planner-kicker">BUSINESS PLANNER</p><h3>Everything that needs a time and place.</h3><span>Content, calls, follow-ups, meetings, and deadlines in one week.</span></div>
+      <div class="ch-planner-metrics"><span><b>${visibleRows.length}</b><i>This week</i></span><span><b>${waiting}</b><i>Upcoming</i></span><span><b>${PLANNER_CONNECTORS.length}</b><i>Connectors ready to set up</i></span></div>
+    </section>
+    <section class="ch-planner-layout">
+      <div class="ch-card ch-planner-calendar">
+        <div class="ch-card-h ch-planner-head"><div><h3>${weekStart.toLocaleDateString([], { month: "long", day: "numeric" })} – ${new Date(weekEnd.getTime() - DAY).toLocaleDateString([], { month: "short", day: "numeric" })}</h3><span class="ch-src">Your week at a glance</span></div><div class="ch-planner-nav"><button type="button" data-planner-week="-1" aria-label="Previous week">←</button><button type="button" data-planner-today>Today</button><button type="button" data-planner-week="1" aria-label="Next week">→</button></div></div>
+        <div class="ch-planner-week">
+          ${days.map((day) => {
+            const key = plannerDayKey(day);
+            const dayRows = visibleRows.filter((item) => plannerDayKey(item.startsAt) === key);
+            return `<section class="ch-planner-day ${key === todayKey ? "is-today" : ""}"><header><b>${day.toLocaleDateString([], { weekday: "short" })}</b><span>${day.getDate()}</span></header><div>${dayRows.map((item) => `<article class="ch-planner-event is-${esc(item.kind || "task")}" ${item.postId ? `data-ch-open="${esc(item.postId)}" role="button" tabindex="0"` : ""}><time>${esc(plannerTime(item.startsAt))}</time><b>${esc(item.title)}</b><i>${esc(item.source || item.kind || "Planner")}${item.detail ? ` · ${esc(item.detail)}` : ""}</i>${item.removable ? `<button type="button" data-planner-remove="${esc(item.id)}" aria-label="Remove ${esc(item.title)}">×</button>` : ""}</article>`).join("") || `<span class="ch-planner-open">Open</span>`}</div></section>`;
+          }).join("")}
+        </div>
       </div>
-    </div>
-    <div class="ch-card">
-      <div class="ch-card-h"><h3>Asset requests</h3><span class="ch-src">safe asset prep can run on autopilot</span></div>
-      <div class="ch-draft-list">
-        ${assetIdeas.length ? assetIdeas.map((idea, i) => `<article class="ch-draft ch-removable">
-          ${removeButton(`asset:${idea.id}`, `Remove ${idea.title} asset request`)}
-          <span class="ch-draft-step">${i + 1}</span>
-          <div><h4>${esc(idea.title)}</h4><p>${esc(idea.next)}</p><div class="ch-draft-meta"><span>${esc(idea.format)}</span><span>Media Lab optional</span></div></div>
-          <button class="btn" data-open-ws="media">Open Media Lab</button>
-        </article>`).join("") : `<p class="empty-line">No asset requests are waiting.</p>`}
+      <aside class="ch-card ch-planner-add">
+        <div class="ch-card-h"><div><h3>Add to planner</h3><span class="ch-src">Saved to this business only</span></div></div>
+        <form data-planner-form>
+          <label>What<input name="title" maxlength="90" placeholder="Client call, follow-up, deadline…" required/></label>
+          <label>When<input name="startsAt" type="datetime-local" value="${esc(localDateTimeValue(Date.now() + 3600e3))}" required/></label>
+          <label>Type<select name="kind"><option value="meeting">Meeting</option><option value="call">Call</option><option value="follow_up">Follow-up</option><option value="deadline">Deadline</option><option value="task">Task</option><option value="content">Content</option></select></label>
+          <label>Note<textarea name="detail" rows="3" maxlength="240" placeholder="Optional details"></textarea></label>
+          <button class="btn btn-primary" type="submit">Add to planner</button>
+        </form>
+      </aside>
+    </section>
+    <section class="ch-card ch-planner-connectors">
+      <div class="ch-card-h"><div><h3>Connect your workday</h3><span class="ch-src">Email + calendar setup · credentials stay in approved provider adapters</span></div></div>
+      <div class="ch-planner-connector-groups">
+        ${["Email", "Calendar"].map((group) => `<section><h4>${group}</h4><div>${PLANNER_CONNECTORS.filter((connector) => connector.group === group).map((connector) => plannerConnectorMarkup(connector, esc)).join("")}</div></section>`).join("")}
       </div>
-    </div>`;
-  wireRemovals(body, opts, root);
+    </section>`;
+  body.querySelectorAll("[data-planner-week]").forEach((button) => { button.onclick = () => { plannerState.weekOffset += Number(button.dataset.plannerWeek); renderContentHub(root, opts); }; });
+  body.querySelector("[data-planner-today]")?.addEventListener("click", () => { plannerState.weekOffset = 0; renderContentHub(root, opts); });
+  body.querySelector("[data-planner-form]")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    const form = new FormData(event.currentTarget);
+    const startsAt = new Date(String(form.get("startsAt") || ""));
+    if (!Number.isFinite(startsAt.getTime())) return;
+    const items = loadPlannerItems();
+    items.push({ id: `planner-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, title: String(form.get("title") || "").trim(), startsAt: startsAt.toISOString(), kind: String(form.get("kind") || "task"), detail: String(form.get("detail") || "").trim(), createdAt: Date.now() });
+    savePlannerItems(items);
+    opts.notify?.("Creator Hub", "Added to this business planner.");
+    renderContentHub(root, opts);
+  });
+  body.querySelectorAll("[data-planner-remove]").forEach((button) => { button.onclick = (event) => { event.stopPropagation(); savePlannerItems(loadPlannerItems().filter((item) => item.id !== button.dataset.plannerRemove)); renderContentHub(root, opts); }; });
+  body.querySelectorAll("[data-planner-connector]").forEach((button) => { button.onclick = () => { plannerState.openConnector = plannerState.openConnector === button.dataset.plannerConnector ? "" : button.dataset.plannerConnector; renderContentHub(root, opts); }; });
+  body.querySelectorAll("[data-planner-guide]").forEach((button) => { button.onclick = () => window.open(button.dataset.plannerGuide, "_blank", "noopener,noreferrer"); });
+  wirePostCards(body, data, esc, root, opts);
 }
 function publishSources(data, assets) {
   const assetRows = assets.slice(0, 10).map((asset) => ({
@@ -968,23 +1028,22 @@ function publishSourceRail(sources, state, esc) {
     <span><b>${esc(source.title.slice(0, 54))}${source.title.length > 54 ? "..." : ""}</b><i>${esc(source.sub)}</i></span>
   </button>`).join("");
 }
-function publishPlatformPreview(platformId, state, source, account, esc) {
-  const P = plat(platformId);
-  const status = socialStatus(account || {});
-  const handle = account?.handle || account?.loginIdentity || P.handle;
-  const caption = captionForPlatform(state.caption || suggestPublishCaption(state, source, [platformId]), platformId);
-  const type = publishTypeFor(platformId, source);
-  const statusCopy = status === "linked" ? "connector ready" : status === "pending" ? "manual review" : "manual setup";
-  return `<article class="ch-pub-preview-card" style="--pc:${P.color}">
+function publishUnifiedPreview(platformIds, state, source, accounts, esc) {
+  const ids = normalizePlatformIds(platformIds, ["instagram"]);
+  const primary = plat(ids[0]);
+  const linked = ids.filter((id) => socialStatus(accounts[id] || {}) === "linked").length;
+  const caption = state.caption || suggestPublishCaption(state, source, ids);
+  const formats = [...new Set(ids.map((id) => TYPES[publishTypeFor(id, source)] || publishTypeFor(id, source)))];
+  return `<article class="ch-pub-preview-card ch-pub-preview-unified" style="--pc:${primary.color}">
     <div class="ch-pub-preview-top">
-      <span class="ch-post-plat" style="background:${P.color}">${PGLYPH[platformId] || "●"}</span>
-      <span><b>${esc(P.name)}</b><i>${esc(handle)}</i></span>
-      <em>${esc(statusCopy)}</em>
+      <span class="ch-pub-preview-destinations">${ids.map((id) => `<i class="ch-post-plat" style="background:${plat(id).color}" title="${esc(plat(id).name)}">${PGLYPH[id] || "●"}</i>`).join("")}</span>
+      <span><b>Universal post preview</b><i>${ids.map((id) => esc(plat(id).name)).join(" · ")}</i></span>
+      <em>${linked}/${ids.length} ready</em>
     </div>
     <div class="ch-pub-preview-media">${sourceMediaMarkup(source, esc)}</div>
     <div class="ch-pub-preview-actions"><span>${svgIc("heart")}</span><span>${svgIc("chat")}</span><span>${svgIc("share")}</span><span>${svgIc("save")}</span></div>
-    <p class="ch-pub-preview-caption"><b>${esc(handle)}</b> ${esc(caption)}</p>
-    <div class="ch-pub-preview-foot">${esc(TYPES[type] || type)} preview · local draft only</div>
+    <p class="ch-pub-preview-caption">${esc(caption)}</p>
+    <div class="ch-pub-preview-foot">${esc(formats.join(" / "))} · one preview for every selected channel · final crop may vary</div>
   </article>`;
 }
 function draftStatusLabel(status) {
@@ -1120,9 +1179,9 @@ function renderPostPublish(body, data, esc, root, opts) {
         </div>
       </div>
       <aside class="ch-card ch-pub-preview">
-        <div class="ch-card-h"><h3>Post preview</h3><span class="ch-src">${selectedPlatforms.length} selected</span></div>
+        <div class="ch-card-h"><h3>Post preview</h3><span class="ch-src">One clean preview · ${selectedPlatforms.length} destinations</span></div>
         <div class="ch-pub-preview-stack">
-          ${selectedPlatforms.map((id) => publishPlatformPreview(id, state, source, accountById[id], esc)).join("")}
+          ${publishUnifiedPreview(selectedPlatforms, state, source, accountById, esc)}
         </div>
       </aside>
     </section>
