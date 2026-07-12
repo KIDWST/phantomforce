@@ -513,6 +513,22 @@ export function setAssetAvailability(id: string, ownerScope: string, availabilit
   return result.changes > 0;
 }
 
+// Records where a real upload actually landed (Stage 8) — never set except
+// after a real, successful provider upload confirms the object exists.
+export function setAssetCloudLocation(id: string, ownerScope: string, cloudProvider: string, cloudKey: string): boolean {
+  const result = getAssetDb()
+    .prepare(`UPDATE assets SET cloud_provider = ?, cloud_key = ?, updated_at = ? WHERE id = ? AND owner_scope = ?`)
+    .run(cloudProvider, cloudKey, new Date().toISOString(), id, ownerScope);
+  return result.changes > 0;
+}
+
+export function clearAssetCloudLocation(id: string, ownerScope: string): boolean {
+  const result = getAssetDb()
+    .prepare(`UPDATE assets SET cloud_provider = NULL, cloud_key = NULL, updated_at = ? WHERE id = ? AND owner_scope = ?`)
+    .run(new Date().toISOString(), id, ownerScope);
+  return result.changes > 0;
+}
+
 export function setAssetContentHash(id: string, ownerScope: string, contentHash: string): void {
   getAssetDb()
     .prepare(`UPDATE assets SET content_hash = ?, updated_at = ? WHERE id = ? AND owner_scope = ?`)

@@ -197,6 +197,7 @@ import {
   type AssetSearchQuery,
 } from "./phantom-ai/asset-db.js";
 import { getCacheStats, previewCleanup, runCleanup } from "./phantom-ai/asset-cache-manager.js";
+import { downloadAssetFromCloud, getCloudCapabilityStatus, removeAssetFromCloud, uploadAssetToCloud } from "./phantom-ai/asset-cloud-sync.js";
 import {
   getProviderSetupStatus,
   previewModelRouterFoundation,
@@ -4388,6 +4389,75 @@ app.post("/phantom-ai/presets/:id/archive", async (request, reply) => {
   const archived = archivePreset(id, ownerScope);
   if (!archived) return reply.code(404).send({ ok: false, error: "not_found" });
   return { ok: true, tenant_id: ownerScope };
+});
+
+/* ---- Asset Vault Stage 8: cloud capability ----
+   A real, pluggable S3-compatible provider (AWS S3, Cloudflare R2,
+   Backblaze B2, MinIO — anything speaking the S3 REST API), configured
+   entirely via environment variables. cloud-status is a genuine probe of
+   whether those variables are set, never a hardcoded "connected" claim —
+   when unconfigured, the upload/download routes return a real 501 rather
+   than silently pretending to sync. */
+
+app.get("/phantom-ai/asset-vault/cloud-status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  return { ok: true, ...getCloudCapabilityStatus() };
+});
+
+const CloudSyncSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+});
+
+app.post("/phantom-ai/content/assets/:id/cloud/upload", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = CloudSyncSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const result = await uploadAssetToCloud(id, ownerScope);
+  if (!result.ok) {
+    const status = result.error === "cloud_storage_not_configured" ? 501 : result.error === "not_found" ? 404 : 502;
+    return reply.code(status).send({ ok: false, error: result.error });
+  }
+  return { ok: true, tenant_id: ownerScope, asset: getVaultAssetById(id, ownerScope) };
+});
+
+app.post("/phantom-ai/content/assets/:id/cloud/download", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = CloudSyncSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const result = await downloadAssetFromCloud(id, ownerScope);
+  if (!result.ok) {
+    const status = result.error === "cloud_storage_not_configured" ? 501 : result.error === "not_found" ? 404 : 502;
+    return reply.code(status).send({ ok: false, error: result.error });
+  }
+  return { ok: true, tenant_id: ownerScope, asset: getVaultAssetById(id, ownerScope) };
+});
+
+app.post("/phantom-ai/content/assets/:id/cloud/remove", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+
+  const { id } = request.params as { id: string };
+  const parsed = CloudSyncSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+
+  const ownerScope = contentAssetOwnerScope(session, parsed.data.tenant_id);
+  const result = await removeAssetFromCloud(id, ownerScope);
+  if (!result.ok) {
+    const status = result.error === "cloud_storage_not_configured" ? 501 : result.error === "not_found" ? 404 : 502;
+    return reply.code(status).send({ ok: false, error: result.error });
+  }
+  return { ok: true, tenant_id: ownerScope, asset: getVaultAssetById(id, ownerScope) };
 });
 
 /* ---- Asset Vault Stage 3: cache manager ----
