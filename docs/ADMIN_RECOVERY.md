@@ -18,9 +18,19 @@ on the admin PC). The key lives in `server/.env` as
 
 ## Fastest fix: restart the stack
 
-**Option A — reboot the PC.** The admin static server re-registers at logon
-(scheduled task). If Hermes is also set to start at logon, everything comes
-back on its own. Try signing in ~2 minutes after logon.
+**Option A — reboot the PC.** Both the admin static server AND Hermes now
+re-register at logon (scheduled tasks), so everything comes back on its own.
+Try signing in ~2 minutes after logon.
+
+> **Why a feature can say "unavailable" / "Not Found" even though login works:**
+> new server routes (Competitor Intelligence, Asset Cloud, PhantomPlay, agent
+> runs) only exist once **Hermes** restarts on the new code. The UI files sync
+> from GitHub automatically, but the API process used to keep running old code
+> until a manual restart — which is exactly what made a page 404. This is now
+> fixed: the every-15-min sync compares Hermes's running commit
+> (`/health` → `commit`) against the freshly-pulled `main` and restarts Hermes
+> when they differ. So a new feature goes live within one sync cycle, hands-free.
+> If you want it *instantly* instead of waiting for the tick, use Option B.
 
 **Option B — start Hermes by hand:**
 1. Open PowerShell.

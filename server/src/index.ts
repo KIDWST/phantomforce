@@ -1,5 +1,7 @@
 import "./load-env.js";
 
+import { execFileSync } from "node:child_process";
+
 import cors from "@fastify/cors";
 import {
   ACTION_SCHEMAS,
@@ -350,6 +352,22 @@ import {
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
 
+/* Build fingerprint captured once at boot: the git commit this Hermes
+   process is running. The admin sync compares it against the freshly-pulled
+   repo HEAD and restarts Hermes when they differ — the same hands-free
+   pattern the static server already uses via its source_hash, so a push to
+   main brings NEW API ROUTES live within one sync cycle instead of waiting
+   for a manual restart. */
+const runningCommit = (() => {
+  if (process.env.PHANTOMFORCE_BUILD_COMMIT) return process.env.PHANTOMFORCE_BUILD_COMMIT.trim().slice(0, 40);
+  try {
+    return execFileSync("git", ["rev-parse", "HEAD"], { cwd: process.cwd(), timeout: 4000 })
+      .toString().trim().slice(0, 40);
+  } catch {
+    return "unknown";
+  }
+})();
+
 const app = Fastify({
   logger: process.env.PHANTOMFORCE_SERVER_LOGGER === "false" ? false : true,
 });
@@ -620,6 +638,9 @@ app.get("/health", async () => {
   return {
     ok: true,
     service: "phantomforce-server",
+    /* the commit this API process is running — the sync watches this to know
+       when a git pull delivered new server code and Hermes must restart */
+    commit: runningCommit,
     contracts: {
       actions: Object.keys(ACTION_SCHEMAS),
       falconJobs: Object.keys(FALCON_JOB_SCHEMAS),
