@@ -173,6 +173,10 @@ import {
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
 import {
+  getSocialAnalyticsConnectorStatus,
+  syncSocialAnalytics,
+} from "./connectors/social-analytics-connector.js";
+import {
   getHermesInteractionMemoryStoreStatus,
   normalizeHermesInteractionMemoryStoreLimit,
   persistHermesInteractionMemoryPreview,
@@ -392,6 +396,9 @@ const CustomizationPreviewBodySchema = z.object({ tenant_id: z.string().trim().m
 const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ summary: z.string().trim().max(240).optional(), expected_version: z.number().int().positive().optional() });
 const CustomizationRollbackBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), version: z.number().int().positive() });
 const CustomizationAssistantBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), message: z.string().trim().min(1).max(1200) });
+const SocialAnalyticsSyncSchema = z.object({
+  platform: z.enum(["youtube", "instagram", "facebook", "tiktok"]),
+});
 
 function safeCustomizationTenantId(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
@@ -4951,6 +4958,43 @@ app.get("/phantom-ai/ops/finance-connector/status", async (request, reply) => {
   }
 
   return { ok: true, session, read_only: true, finance_connector: getFinanceConnectorStatus() };
+});
+
+app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    social_analytics: getSocialAnalyticsConnectorStatus(),
+  };
+});
+
+app.post("/phantom-ai/ops/social-analytics/sync", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = SocialAnalyticsSyncSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const status = getSocialAnalyticsConnectorStatus();
+  const connector = status.connectors.find((item) => item.id === parsed.data.platform);
+  if (!connector?.configured) {
+    return reply.code(409).send({
+      ok: false,
+      error: `${connector?.name || "That channel"} is not connected. Add the official API connection in Settings first.`,
+      connector,
+    });
+  }
+  try {
+    const analytics = await syncSocialAnalytics(parsed.data.platform);
+    return { ok: true, session, read_only: true, analytics };
+  } catch (error) {
+    return reply.code(502).send({
+      ok: false,
+      error: error instanceof Error ? error.message.slice(0, 400) : "The platform analytics sync failed.",
+      connector,
+    });
+  }
 });
 
 app.get("/phantom-ai/ops/send-readiness/status", async (request, reply) => {
