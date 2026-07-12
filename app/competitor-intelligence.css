@@ -58,3 +58,12 @@
 .ci-dossier-source ul{margin:0;padding-left:16px;color:#a7c7b7;font-size:12.5px}
 .ci-dossier-source li{margin:4px 0}
 @media(max-width:900px){.ci-lead-list,.ci-lead-grid,.ci-dossier-sources{grid-template-columns:1fr}.ci-discover-cta{flex-direction:column;align-items:stretch}.ci-discover-cta .ci-primary{width:100%}.ci-profile-view dl>div{grid-template-columns:1fr}}
+
+/* Admin cleanup: competitor intelligence starts at the working controls, not a title card. */
+.ci-shell{padding:clamp(10px,1.3vw,18px)!important}
+.ci-hero{display:none!important}
+.ci-tabs{padding:4px 0 10px!important}
+.ci-mode{min-height:0!important;margin:8px 0 12px!important;padding:14px!important}
+.ci-mode h2,.ci-section-head h2,.ci-boundaries h2{font-size:clamp(18px,1.7vw,24px)!important}
+.ci-mode p:not(.ci-kicker),.ci-boundaries p{font-size:12px!important;line-height:1.38!important}
+.ci-metrics{margin-bottom:14px!important}
