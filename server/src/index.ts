@@ -244,8 +244,13 @@ import {
   createResearchOpportunity,
   createSignal,
   fuseCompetitorSignals,
+  getBusinessProfile,
   getCompetitorIntelligenceSnapshot,
   getCompetitorIntelligenceStoreStatus,
+  getWebDiscoveryStatus,
+  runCompetitorDiscovery,
+  runCompetitorDossier,
+  saveBusinessProfile,
   updateAggressiveMode,
 } from "./phantom-ai/competitor-intelligence.js";
 import {
@@ -3551,9 +3556,35 @@ app.get("/api/competitor-intelligence", async (request, reply) => {
     ok: true,
     session,
     ...(await getCompetitorIntelligenceSnapshot(session, { tenantId: query.tenant_id, ...access })),
+    webDiscovery: getWebDiscoveryStatus(),
     subscription: access,
     storage: session.canManageAccess ? await getCompetitorIntelligenceStoreStatus() : undefined,
   };
+});
+
+app.get("/api/competitor-intelligence/business-profile", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try { return { ok: true, ...(await getBusinessProfile(session, query.tenant_id)) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.put("/api/competitor-intelligence/business-profile", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, ...(await saveBusinessProfile(session, (request.body ?? {}) as Record<string, unknown>)) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/discover", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, discovery: await runCompetitorDiscovery(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/dossier", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, dossier: await runCompetitorDossier(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
 });
 
 app.patch("/api/competitor-intelligence/mode", async (request, reply) => {
