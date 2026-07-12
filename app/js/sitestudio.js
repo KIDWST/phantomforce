@@ -2,10 +2,10 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago,
-} from "./store.js?v=phantom-live-20260711-194";
+} from "./store.js?v=phantom-live-20260711-195";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260711-194";
+} from "./workspaces.js?v=phantom-live-20260711-195";
 
 const siteUi = { activeSiteId: null, device: "desktop", selectedSection: -1 };
 
@@ -139,9 +139,13 @@ function emptyMarkup() {
   return `
     <section class="ss-simple is-empty">
       <div class="ss-simple-empty">
-        <h3>Start a website.</h3>
+        <div class="ss-simple-empty-copy">
+          <p>Websites by domain</p>
+          <h3>Start a website.</h3>
+          <span>Describe the site once. Phantom builds the first draft, then every change happens through the prompt.</span>
+        </div>
         <form class="ss-simple-prompt" data-ss-prompt-form>
-          <textarea data-ss-prompt rows="5" placeholder="Describe the website. Include the domain if you have one."></textarea>
+          <textarea data-ss-prompt rows="8" placeholder="Describe the website. Include the domain if you have one."></textarea>
           <button class="btn btn-primary" type="submit">Build website</button>
         </form>
       </div>
