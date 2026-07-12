@@ -18,6 +18,13 @@
   still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
+- **Competitor Intelligence + optional Aggressive Mode (2026-07-12)** —
+  tenant-scoped public-signal evidence, labeled weak-signal inferences,
+  aggregated audience-gap mining, originality-risk checks, bounded market
+  interception packages, search/offer/timing opportunities, authorized
+  customer-experience evidence, plan gates, and a durable blocked-action audit.
+  No scraping, outreach, publishing, impersonation, or external action is
+  performed. See `docs/COMPETITOR_INTELLIGENCE.md`.
 - **PhantomPlay product foundation (2026-07-12)** — native entertainment module
   with three real network-free games, secure sandboxed launch, tenant-scoped
   favorites/progress/history/preferences, plan and age controls, developer release
@@ -57,7 +64,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260712-204`**.
+- Current cache-bust build id: **`phantom-live-20260712-205`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

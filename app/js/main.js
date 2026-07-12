@@ -25,6 +25,7 @@ import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.j
 import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-206";
 import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-206";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-206";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-206";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
 } from "./orgs.js?v=phantom-live-20260712-206";
@@ -285,6 +286,7 @@ const BASE_NAV = [
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
+  { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
   { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true },
   { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
@@ -304,6 +306,7 @@ const MOBILE_LABEL_OVERRIDES = {
   automation: "Auto",
   approvals: "Approvals",
   analytics: "Analytics",
+  intelligence: "Intel",
   vacation: "Away",
   developer: "Developer",
 };
@@ -2487,6 +2490,7 @@ const CUSTOM = {
   content: { title: "Creator Hub", kicker: "Creator intelligence, media library, and publishing workflow", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => renderPhantomPlay(body, mediaOpts()) },
+  intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
