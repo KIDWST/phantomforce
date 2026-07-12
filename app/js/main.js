@@ -30,33 +30,7 @@ import {
 } from "./orgs.js?v=phantom-live-20260712-206";
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-206";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-206";
-import {
-  customizeNavigation,
-  loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260712-206";
-} from "./store.js?v=phantom-live-20260712-206";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-206";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-206";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-206";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-206";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-206";
 import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-206";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-206";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-206";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-206";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-206";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-206";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-206";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-206";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-206";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-206";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-206";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-206";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-206";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-206";
-import {
-  fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-206";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
