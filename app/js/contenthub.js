@@ -2685,6 +2685,23 @@ function undoLastDelete(root, opts) {
   renderContentHub(root, opts);
   opts.notify?.("Creator Hub", `Restored ${count} item${count === 1 ? "" : "s"}.`);
 }
+function openAssetInMediaLabEditor(asset, opts = {}) {
+  if (!asset?.url || asset.type !== "image") return false;
+  try {
+    workspaceStorageSetItem(CH_MEDIA_EDIT_INTENT_KEY, JSON.stringify({
+      id: asset.id,
+      url: asset.url,
+      type: asset.type,
+      title: asset.title,
+      prompt: asset.prompt,
+      source: asset.source || "Creator Hub",
+      at: Date.now(),
+    }));
+  } catch {}
+  opts.notify?.("Creator Hub", `Opening ${asset.title || "image"} in Media Lab edit.`);
+  opts.openWorkspace?.("media");
+  return true;
+}
 function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts) {
   const shownItems = visibleLibraryItems(shownAssets, shownPosts);
   const orderedKeys = shownItems.map((item) => selectionKey(item.kind, item.id));
@@ -2706,8 +2723,8 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
       if (!asset || !asset.url) return;
       event.preventDefault();
       event.stopImmediatePropagation();
-      chLightbox = asset.type === "video" ? { asset, state: null, viewOnly: true } : freshLightbox(asset);
-      rerender();
+      if (asset.type === "image") openAssetInMediaLabEditor(asset, opts);
+      else { chLightbox = { asset, state: null, viewOnly: true }; rerender(); }
       return;
     }
     event.preventDefault();
@@ -2821,18 +2838,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
       opts.notify?.("Creator Hub", "Select an image with a live preview to open it in the local editor.");
       return;
     }
-    try {
-      workspaceStorageSetItem(CH_MEDIA_EDIT_INTENT_KEY, JSON.stringify({
-        id: assetItem.asset.id,
-        url: assetItem.asset.url,
-        type: assetItem.asset.type,
-        title: assetItem.asset.title,
-        prompt: assetItem.asset.prompt,
-        at: Date.now(),
-      }));
-    } catch {}
-    opts.notify?.("Creator Hub", `Opening ${assetItem.asset.title} in Media Lab edit.`);
-    opts.openWorkspace?.("media");
+    openAssetInMediaLabEditor(assetItem.asset, opts);
   });
   body.querySelector("[data-ch-delete-selected]")?.addEventListener("click", () => {
     const selected = selectedLibraryItems(data, loadContentAssets());

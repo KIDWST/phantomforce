@@ -6,14 +6,14 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-211";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-216";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260712-211";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-211";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-211";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-211";
-import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-211";
+} from "./contenthub.js?v=phantom-live-20260712-216";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-216";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-216";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-216";
+import { assetsAvailable, assetBlobUrl, listAssets, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-216";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -64,6 +64,33 @@ export const DEFAULT_PROVIDERS = [
 ];
 
 const STYLES = ["None", "Cinematic", "Product", "Portrait", "Neon", "Editorial", "3D render", "Analog film"];
+const EDIT_PROMPT_LANGUAGES = [
+  {
+    id: "camera-raw",
+    label: "Camera Raw clean",
+    prompt: "Camera Raw style cleanup: correct exposure, white balance, contrast, color, texture, and clarity while keeping the subject realistic.",
+  },
+  {
+    id: "brand-pack",
+    label: "Brand pack match",
+    prompt: "Use the workspace asset pack direction: preserve brand colors, premium dark/mint PhantomForce contrast, clean commercial composition, and usable negative space.",
+  },
+  {
+    id: "higgsfield",
+    label: "Higgsfield product polish",
+    prompt: "Higgsfield-ready edit language: premium product/ad finish, realistic lighting, sharp subject separation, clean background control, and no fake text.",
+  },
+  {
+    id: "chicagoshots",
+    label: "ChicagoShots social punch",
+    prompt: "ChicagoShots style: energetic local business promo look, social-first crop, strong subject, crisp color, and scroll-stopping but realistic finish.",
+  },
+  {
+    id: "ecommerce",
+    label: "Ecommerce clean",
+    prompt: "Commercial ecommerce cleanup: accurate product/person, clean edges, neutral distraction-free presentation, and marketplace-safe polish.",
+  },
+];
 const IMG_ASPECTS = [["1:1", 1], ["4:5", 0.8], ["3:2", 1.5], ["16:9", 1.777], ["9:16", 0.5625]];
 const VID_ASPECTS = [["16:9", 1.777], ["9:16", 0.5625], ["4:5", 0.8], ["1:1", 1]];
 const DURATIONS = [4, 6, 8, 10, 15, 30];
@@ -1845,6 +1872,9 @@ let mlShowTutorial = false;
 let mlEditLoadError = null;
 let mlEditHistory = [];
 let mlEditFuture = [];
+let mlPaintMode = "select";
+let mlPaintColor = "#41ffa1";
+let mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
 
 function cloneEditState(source = editState) {
   return cloneImageEditState(source);
@@ -1860,6 +1890,139 @@ function restoreEdit(next) {
   editState = cloneImageEditState(next);
   editState.loadedUrl = loadedUrl;
 }
+function editorPaintState() {
+  editState.paint ||= { strokes: [], size: 26, opacity: 84 };
+  if (!Array.isArray(editState.paint.strokes)) editState.paint.strokes = [];
+  return editState.paint;
+}
+function canvasEditPoint(event, canvas) {
+  const rect = canvas.getBoundingClientRect();
+  return {
+    x: Math.max(0, Math.min(1, (event.clientX - rect.left) / Math.max(1, rect.width))),
+    y: Math.max(0, Math.min(1, (event.clientY - rect.top) / Math.max(1, rect.height))),
+  };
+}
+function drawPaintStrokes(canvas, state = editState) {
+  const paint = state.paint;
+  if (!paint?.strokes?.length) return;
+  const ctx = canvas.getContext("2d");
+  ctx.save();
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  paint.strokes.forEach((stroke) => {
+    const points = stroke.points || [];
+    if (!points.length) return;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0.05, Math.min(1, (stroke.opacity ?? 84) / 100));
+    ctx.globalCompositeOperation = stroke.mode === "erase" ? "destination-out" : "source-over";
+    ctx.strokeStyle = stroke.color || mlPaintColor;
+    ctx.lineWidth = Math.max(2, Number(stroke.size || paint.size || 26));
+    ctx.beginPath();
+    points.forEach((point, index) => {
+      const x = point.x * canvas.width;
+      const y = point.y * canvas.height;
+      if (index) ctx.lineTo(x, y);
+      else ctx.moveTo(x, y);
+    });
+    if (points.length === 1) {
+      const p = points[0];
+      ctx.lineTo(p.x * canvas.width + 0.01, p.y * canvas.height + 0.01);
+    }
+    ctx.stroke();
+    ctx.restore();
+  });
+  ctx.restore();
+}
+function paintActiveCanvas(canvas, img, state = editState) {
+  paintEdit(canvas, img, state);
+  drawPaintStrokes(canvas, state);
+}
+function editPromptLanguage(id = editState.promptLanguage || "camera-raw") {
+  return EDIT_PROMPT_LANGUAGES.find((row) => row.id === id) || EDIT_PROMPT_LANGUAGES[0];
+}
+function buildEditPrompt(query = "") {
+  const language = editPromptLanguage();
+  const parts = [
+    language.prompt,
+    "Keep the original person/product identity and do not add fake logos, fake client proof, or unreadable text.",
+    query.trim(),
+  ].filter(Boolean);
+  return parts.join("\n\n");
+}
+function editorAssetRows() {
+  const local = session.assets
+    .filter((asset) => asset.type === "image" && asset.url)
+    .slice(0, 6)
+    .map((asset) => ({
+      id: asset.id,
+      title: asset.meta?.title || asset.meta?.prompt || "Media Lab image",
+      url: asset.url,
+      source: "Media Lab cache",
+      prompt: asset.meta?.prompt || "",
+    }));
+  const cloud = (mlAssetCache.assets || [])
+    .filter((asset) => asset.kind === "image" && asset.previewUrl)
+    .slice(0, 8)
+    .map((asset) => ({
+      id: `cloud:${asset.id}`,
+      assetId: asset.id,
+      title: asset.title || "Asset Cloud image",
+      url: asset.previewUrl,
+      source: asset.brand ? "Brand asset" : "Asset Cloud",
+      prompt: (asset.tags || []).join(", "),
+    }));
+  const seen = new Set();
+  return [...local, ...cloud].filter((row) => {
+    const key = row.url || row.id;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+function assetCachePanelHtml(esc) {
+  const rows = editorAssetRows();
+  const cloudState = !assetsAvailable()
+    ? "Sign in to a business workspace for Asset Cloud."
+    : mlAssetCache.loading
+      ? "Loading Asset Cloud..."
+      : mlAssetCache.error
+        ? mlAssetCache.error
+        : `${(mlAssetCache.assets || []).length} cloud asset${(mlAssetCache.assets || []).length === 1 ? "" : "s"} ready`;
+  return `
+    <details class="ml-edit-section" open>
+      <summary><span>Asset cache</span><b>${rows.length || "Cloud"}</b></summary>
+      <div class="ml-edit-section-body">
+        <p class="ml-hint">${esc(cloudState)}</p>
+        ${rows.length ? `<div class="ml-asset-cache-grid">
+          ${rows.map((row) => `<button type="button" class="ml-asset-cache-card" data-ml-use-asset="${esc(row.id)}" title="Edit ${esc(row.title)}">
+            <img src="${esc(row.url)}" alt="${esc(row.title)}"/>
+            <span><b>${esc(row.title)}</b><i>${esc(row.source)}</i></span>
+          </button>`).join("")}
+        </div>` : `<div class="ml-hint">Generate, upload, or save media and it will appear here.</div>`}
+      </div>
+    </details>`;
+}
+async function loadEditorAssetCache(root, opts) {
+  const tenant = currentTenantId();
+  if (!assetsAvailable()) {
+    mlAssetCache = { tenant, loading: false, loaded: true, assets: [], error: "" };
+    return;
+  }
+  if (mlAssetCache.tenant === tenant && (mlAssetCache.loaded || mlAssetCache.loading)) return;
+  mlAssetCache = { tenant, loading: true, loaded: false, assets: [], error: "" };
+  let result;
+  try {
+    result = await listAssets({ kind: "image", view: "library", sort: "newest", limit: 12 });
+    const assets = await Promise.all((result.assets || []).slice(0, 12).map(async (asset) => ({
+      ...asset,
+      previewUrl: await assetBlobUrl(asset.id, "thumbnail") || await assetBlobUrl(asset.id, "file"),
+    })));
+    mlAssetCache = { tenant, loading: false, loaded: true, assets: assets.filter((asset) => !!asset.previewUrl), error: "" };
+  } catch (error) {
+    mlAssetCache = { tenant, loading: false, loaded: true, assets: [], error: error?.message || "Asset Cloud could not load." };
+  }
+  if (root?.isConnected) renderMediaStudio(root, opts);
+}
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
   if (!session.edit) {
@@ -1874,6 +2037,7 @@ function renderEdit(body, cfg, opts, root) {
     return;
   }
   const bSpots = editState.bokeh?.spots || [];
+  const paintState = editorPaintState();
   body.innerHTML = `
     <div class="ml-editor">
       <div class="ml-canvas-wrap">
@@ -1882,8 +2046,9 @@ function renderEdit(body, cfg, opts, root) {
           <button type="button" data-ml-undo ${mlEditHistory.length ? "" : "disabled"} title="Undo">${svgIc("undo")}</button>
           <button type="button" data-ml-redo ${mlEditFuture.length ? "" : "disabled"} title="Redo">${svgIc("redo")}</button>
           <button type="button" data-ml-before title="Hold to see original">Before</button>
+          <button type="button" data-ml-duplicate-edit title="Duplicate image">Copy</button>
         </div>
-        <canvas class="ml-canvas" data-ml-canvas></canvas>
+        <canvas class="ml-canvas ${mlPaintMode !== "select" ? "is-painting" : ""}" data-ml-canvas></canvas>
         <div class="ch-lb-bokeh-markers" data-ml-bokeh-markers></div>
         <div class="ch-lb-pick-hint" data-ml-pick-hint hidden>${svgIc("spark")} Click to add focus, right-click a spot to remove it</div>
       </div>
@@ -1894,6 +2059,7 @@ function renderEdit(body, cfg, opts, root) {
           <button type="button" data-ml-clean>${svgIc("spark")} Clean up</button>
           <button type="button" data-ml-rembg>Remove background</button>
         </div>
+        ${assetCachePanelHtml(esc)}
         <details class="ml-edit-section" open>
           <summary><span>Crop & frame</span><b>${esc(editState.crop?.aspect || "original")}</b></summary>
           <div class="ml-edit-section-body">
@@ -1934,7 +2100,23 @@ function renderEdit(body, cfg, opts, root) {
             <p class="ch-lb-bokeh-note">${bSpots.length ? "Add more sharp areas or clear the effect." : "Tap the subject to keep it sharp and soften the background."}</p>
             <label class="ml-slider"><span>Brush size <b data-bout="r">${editState.bokehBrush || 24}</b></span><input type="range" min="8" max="45" value="${editState.bokehBrush || 24}" data-ml-bslider="r"/></label>
             ${bSpots.length ? `<label class="ml-slider"><span>Background blur <b data-bout="strength">${editState.bokeh.strength}</b></span><input type="range" min="4" max="32" value="${editState.bokeh.strength}" data-ml-bslider="strength"/></label>` : ""}
-            <div class="ml-chips"><button data-ml-bokeh-pick class="${mlBokehPicking ? "is-on" : ""}">${svgIc("spark")} ${mlBokehPicking ? "Done" : "Choose subject"}</button>${bSpots.length ? `<button data-ml-bokeh-off>Clear</button>` : ""}</div>
+            <div class="ml-chips"><button data-ml-bokeh-auto>${svgIc("spark")} AI detect subject</button><button data-ml-bokeh-pick class="${mlBokehPicking ? "is-on" : ""}">${mlBokehPicking ? "Done" : "Add touch-up"}</button>${bSpots.length ? `<button data-ml-bokeh-off>Clear</button>` : ""}</div>
+          </div>
+        </details>
+        <details class="ml-edit-section" ${mlPaintMode !== "select" ? "open" : ""}>
+          <summary><span>Brush & eraser</span><b>${paintState.strokes.length ? `${paintState.strokes.length} strokes` : "Paint"}</b></summary>
+          <div class="ml-edit-section-body">
+            <div class="ml-seg ml-seg-sm ml-paint-mode" data-ml-paint-mode>
+              <button type="button" class="${mlPaintMode === "select" ? "is-on" : ""}" data-v="select">Select</button>
+              <button type="button" class="${mlPaintMode === "paint" ? "is-on" : ""}" data-v="paint">Brush</button>
+              <button type="button" class="${mlPaintMode === "erase" ? "is-on" : ""}" data-v="erase">Eraser</button>
+            </div>
+            <div class="ml-paint-controls">
+              <label class="ml-field"><span>Brush color</span><input type="color" data-ml-paint-color value="${esc(mlPaintColor)}"/></label>
+              <label class="ml-slider"><span>Brush size <b data-paint-out="size">${paintState.size}</b></span><input type="range" min="4" max="90" value="${paintState.size}" data-ml-paint-size/></label>
+              <label class="ml-slider"><span>Opacity <b data-paint-out="opacity">${paintState.opacity}</b></span><input type="range" min="10" max="100" value="${paintState.opacity}" data-ml-paint-opacity/></label>
+            </div>
+            <div class="ml-chips"><button type="button" data-ml-clear-paint ${paintState.strokes.length ? "" : "disabled"}>Clear strokes</button></div>
           </div>
         </details>
         <details class="ml-edit-section">
@@ -1943,11 +2125,15 @@ function renderEdit(body, cfg, opts, root) {
         </details>
         <details class="ml-edit-section">
           <summary><span>Ask Phantom to edit</span><b>${svgIc("spark")}</b></summary>
-          <div class="ml-edit-section-body"><p class="ml-hint">Describe a look, like “brighter product photo” or “moody night.”</p><div class="ml-prompt-wrap"><input class="ml-text-in" data-ml-aiedit placeholder="Describe the change…"/><button class="ml-enhance" data-ml-runai>Apply</button></div></div>
+          <div class="ml-edit-section-body">
+            <p class="ml-hint">Uses the connected edit backend when available; otherwise it applies an honest local preview polish.</p>
+            <label class="ml-field"><span>Prompt language</span><select class="ml-select ml-select-pill" data-ml-edit-language>${EDIT_PROMPT_LANGUAGES.map((row) => `<option value="${esc(row.id)}" ${editPromptLanguage().id === row.id ? "selected" : ""}>${esc(row.label)}</option>`).join("")}</select></label>
+            <div class="ml-prompt-wrap"><input class="ml-text-in" data-ml-aiedit placeholder="Describe the finished image…"/><button class="ml-enhance" data-ml-runai>Apply</button></div>
+          </div>
         </details>
         <div class="ml-editor-actions">
           <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to library</button>
-          <button class="ml-generate ml-ghost" data-ml-layeredit>Open layer editor</button>
+          <button class="ml-generate ml-ghost" data-ml-duplicate-edit>Duplicate image</button>
           <button class="ml-generate ml-ghost" data-ml-dledit>${svgIc("upload")} Download</button>
           <button class="ml-link" data-ml-resetedit>Reset</button>
           <button class="ml-link" data-ml-changeedit>Change image</button>
@@ -1956,14 +2142,17 @@ function renderEdit(body, cfg, opts, root) {
     </div>`;
   const canvas = body.querySelector("[data-ml-canvas]");
   const markerLayer = body.querySelector("[data-ml-bokeh-markers]");
-  const repaint = () => { if (canvas._img) { paintEdit(canvas, canvas._img, editState); positionMarkers(); } };
+  loadEditorAssetCache(root, opts);
+  const repaint = () => { if (canvas._img) { paintActiveCanvas(canvas, canvas._img, editState); positionMarkers(); } };
   const positionMarkers = () => {
     if (!markerLayer) return;
     const spots = editState.bokeh?.spots || [];
     markerLayer.innerHTML = spots.map(() => `<div class="ch-lb-bokeh-marker"></div>`).join("");
+    const canvasRect = canvas.getBoundingClientRect();
+    const markerRect = markerLayer.getBoundingClientRect();
     [...markerLayer.children].forEach((el, i) => {
-      el.style.left = `${canvas.offsetLeft + spots[i].x * canvas.offsetWidth}px`;
-      el.style.top = `${canvas.offsetTop + spots[i].y * canvas.offsetHeight}px`;
+      el.style.left = `${canvasRect.left - markerRect.left + spots[i].x * canvasRect.width}px`;
+      el.style.top = `${canvasRect.top - markerRect.top + spots[i].y * canvasRect.height}px`;
     });
   };
   if (mlBokehPicking) canvas.classList.add("is-picking");
@@ -1980,7 +2169,7 @@ function renderEdit(body, cfg, opts, root) {
         if (session.edit?.url !== targetUrl) return; // user picked a different image while this was loading
         mlEditLoadError = null;
         editState.loadedUrl = targetUrl;
-        paintEdit(canvas, img, editState);
+        paintActiveCanvas(canvas, img, editState);
         positionMarkers();
       })
       .catch((error) => {
@@ -2057,22 +2246,84 @@ function renderEdit(body, cfg, opts, root) {
   body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { rememberEdit(); applyFilterPreset(b.dataset.v, editState); syncSliders(body); repaint(); });
   const tin = body.querySelector("[data-ml-text]"); if (tin) { tin.onfocus = () => rememberEdit(); tin.oninput = () => { editState.text = tin.value; repaint(); }; }
   body.querySelectorAll("[data-ml-bokeh-pick]").forEach((b) => b.onclick = () => { mlBokehPicking = !mlBokehPicking; renderMediaStudio(root, opts); });
+  body.querySelector("[data-ml-bokeh-auto]")?.addEventListener("click", () => {
+    if (!canvas._img) return;
+    rememberEdit();
+    const focus = estimateSubjectPoint(canvas) || { x: 0.5, y: 0.45 };
+    addBokehSpot(editState, focus.x, focus.y, Math.max(0.12, (editState.bokehBrush || 24) / 100));
+    mlBokehPicking = false;
+    repaint();
+    renderMediaStudio(root, opts);
+  });
   const bokehOff = body.querySelector("[data-ml-bokeh-off]");
   if (bokehOff) bokehOff.onclick = () => { rememberEdit(); editState.bokeh = null; repaint(); renderMediaStudio(root, opts); };
   body.querySelectorAll("[data-ml-bslider]").forEach((s) => s.oninput = () => {
     const key = s.dataset.mlBslider;
     if (key === "r") { editState.bokehBrush = +s.value; }
-    else if (editState.bokeh) { editState.bokeh.strength = +s.value; if (canvas._img) paintEdit(canvas, canvas._img, editState); }
+    else if (editState.bokeh) { editState.bokeh.strength = +s.value; if (canvas._img) paintActiveCanvas(canvas, canvas._img, editState); }
     const o = body.querySelector(`[data-bout="${key}"]`);
     if (o) o.textContent = s.value;
   });
+  body.querySelectorAll("[data-ml-use-asset]").forEach((button) => button.onclick = () => {
+    const row = editorAssetRows().find((item) => item.id === button.dataset.mlUseAsset);
+    if (!row?.url) return;
+    session.edit = { url: row.url, type: "image", id: row.assetId || row.id };
+    resetEdit();
+    opts.notify?.("Media Lab", `loaded ${row.title || "asset"} from ${row.source || "asset cache"}.`);
+    renderMediaStudio(root, opts);
+  });
+  body.querySelectorAll("[data-ml-paint-mode] button").forEach((button) => button.onclick = () => {
+    mlPaintMode = button.dataset.v || "select";
+    if (mlPaintMode !== "select") mlBokehPicking = false;
+    renderMediaStudio(root, opts);
+  });
+  const paintColor = body.querySelector("[data-ml-paint-color]");
+  if (paintColor) paintColor.oninput = () => { mlPaintColor = paintColor.value || mlPaintColor; };
+  const paintSize = body.querySelector("[data-ml-paint-size]");
+  if (paintSize) paintSize.oninput = () => {
+    editorPaintState().size = +paintSize.value;
+    const out = body.querySelector(`[data-paint-out="size"]`);
+    if (out) out.textContent = paintSize.value;
+  };
+  const paintOpacity = body.querySelector("[data-ml-paint-opacity]");
+  if (paintOpacity) paintOpacity.oninput = () => {
+    editorPaintState().opacity = +paintOpacity.value;
+    const out = body.querySelector(`[data-paint-out="opacity"]`);
+    if (out) out.textContent = paintOpacity.value;
+  };
+  body.querySelector("[data-ml-clear-paint]")?.addEventListener("click", () => {
+    rememberEdit();
+    editorPaintState().strokes = [];
+    repaint();
+    renderMediaStudio(root, opts);
+  });
+  canvas.onpointerdown = (event) => {
+    if (mlPaintMode === "select" || mlBokehPicking) return;
+    event.preventDefault();
+    rememberEdit();
+    const paint = editorPaintState();
+    const stroke = { mode: mlPaintMode === "erase" ? "erase" : "paint", color: mlPaintColor, size: paint.size, opacity: paint.opacity, points: [canvasEditPoint(event, canvas)] };
+    paint.strokes.push(stroke);
+    canvas.setPointerCapture?.(event.pointerId);
+    canvas.onpointermove = (moveEvent) => {
+      stroke.points.push(canvasEditPoint(moveEvent, canvas));
+      repaint();
+    };
+    canvas.onpointerup = canvas.onpointercancel = () => {
+      canvas.onpointermove = null;
+      canvas.onpointerup = null;
+      canvas.onpointercancel = null;
+      repaint();
+    };
+    repaint();
+  };
   canvas.onclick = (event) => {
-    if (!mlBokehPicking) return;
+    if (!mlBokehPicking || mlPaintMode !== "select") return;
     const rect = canvas.getBoundingClientRect();
     const x = (event.clientX - rect.left) / rect.width;
     const y = (event.clientY - rect.top) / rect.height;
     rememberEdit(); addBokehSpot(editState, x, y, (editState.bokehBrush || 24) / 100);
-    if (canvas._img) paintEdit(canvas, canvas._img, editState);
+    if (canvas._img) paintActiveCanvas(canvas, canvas._img, editState);
     renderMediaStudio(root, opts);
   };
   canvas.oncontextmenu = (event) => {
@@ -2086,16 +2337,40 @@ function renderEdit(body, cfg, opts, root) {
   const runai = body.querySelector("[data-ml-runai]");
   if (runai) runai.onclick = async () => {
     const q = body.querySelector("[data-ml-aiedit]").value || "";
+    const prompt = buildEditPrompt(q);
     runai.disabled = true; runai.textContent = "…";
-    // local heuristic "AI edit" preview (real backend routes to provider edit)
-    rememberEdit(); heuristicAiEdit(q, editState);
-    syncSliders(body); if (canvas._img) paintEdit(canvas, canvas._img, editState);
+    rememberEdit();
+    const exported = await exportCanvas(canvas, (img) => { canvas._img = img; repaint(); }, "image/png");
+    const aspect = canvas.width / Math.max(1, canvas.height) > 1.55 ? "16:9" : canvas.width / Math.max(1, canvas.height) < 0.7 ? "9:16" : canvas.width / Math.max(1, canvas.height) < 0.9 ? "4:5" : "1:1";
+    const result = exported.ok ? await requestAiEdit({ dataUrl: exported.url, prompt, provider: "cinematic", aspect }) : { ok: false, message: exported.error };
+    if (result.ok && result.url) {
+      session.edit = { ...session.edit, url: result.url };
+      resetEdit();
+      opts.notify?.("Media Factory", `applied ${editPromptLanguage().label} through the edit backend.`);
+      renderMediaStudio(root, opts);
+      return;
+    }
+    heuristicAiEdit(prompt, editState);
+    syncSliders(body); if (canvas._img) paintActiveCanvas(canvas, canvas._img, editState);
     runai.disabled = false; runai.textContent = "Apply";
-    if (opts.notify) opts.notify("Media Factory", `applied an AI edit: "${q.slice(0, 30)}".`);
+    if (opts.notify) opts.notify("Media Factory", `edit backend unavailable; applied local ${editPromptLanguage().label} preview.`);
   };
+  const language = body.querySelector("[data-ml-edit-language]");
+  if (language) language.onchange = () => { editState.promptLanguage = language.value; };
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; mlBokehPicking = false; renderMediaStudio(root, opts); };
-  const repaintWithImg = (img) => { canvas._img = img; paintEdit(canvas, img, editState); positionMarkers(); };
+  const repaintWithImg = (img) => { canvas._img = img; paintActiveCanvas(canvas, img, editState); positionMarkers(); };
+  const duplicateCurrentEdit = async () => {
+    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
+    if (!exported.ok) { opts.notify?.("Media Factory", `Couldn't duplicate this image: ${exported.error}`); return; }
+    const at = Date.now();
+    const asset = { id: `dup-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Duplicated image" } };
+    session.assets.unshift(asset);
+    captureForContentHub(asset, { title: "Duplicated image", prompt: editState.text || "Duplicated image" });
+    opts.notify?.("Media Factory", "duplicated the current image into your library.");
+    renderMediaStudio(root, opts);
+  };
+  body.querySelectorAll("[data-ml-duplicate-edit]").forEach((button) => button.onclick = duplicateCurrentEdit);
   body.querySelector("[data-ml-savedit]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
     if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't save this edit: ${exported.error}`); return; }
@@ -2115,29 +2390,6 @@ function renderEdit(body, cfg, opts, root) {
     if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't download this edit: ${exported.error}`); return; }
     downloadAsset({ url: exported.url, type: "image", id: "edit" });
   };
-  body.querySelector("[data-ml-layeredit]")?.addEventListener("click", async () => {
-    if (!canvas._img) return;
-    const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
-    if (!exported.ok) { if (opts.notify) opts.notify("Media Factory", `Couldn't open the layer editor: ${exported.error}`); return; }
-    const at = Date.now();
-    const title = editState.text ? `Layer edit - ${editState.text.slice(0, 36)}` : "Layer edit draft";
-    const result = registerContentAsset({
-      id: `layer-edit-${at}`,
-      type: "image",
-      title,
-      prompt: editState.text || "Opened from Media Lab quick editor.",
-      source: "Media Lab quick editor",
-      url: exported.url,
-      createdAt: at,
-      saved: true,
-    }, { skipSync: true });
-    try {
-      workspaceStorageSetItem(CONTENT_HUB_OPEN_TAB_KEY, "library");
-      workspaceStorageSetItem(CONTENT_HUB_OPEN_ASSET_KEY, result.asset.id);
-    } catch {}
-    if (opts.notify) opts.notify("Media Factory", "Opened the current edit in Creator Hub's layer editor. Nothing was posted.");
-    opts.openWorkspace?.("content");
-  });
 }
 function slider(label, key, min, max, val) {
   return `<label class="ml-slider"><span>${label} <b data-out="${key}">${val}</b></span>

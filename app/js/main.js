@@ -10,8 +10,8 @@ import {
 import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-212";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-212";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-212";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-212";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-212";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-216";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-216";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-212";
 import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-212";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-212";
