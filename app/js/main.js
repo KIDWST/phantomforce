@@ -6,25 +6,28 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260711-185";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260711-185";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260711-185";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260711-185";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260711-185";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260711-185";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260711-185";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260711-185";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260711-185";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260711-185";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260711-185";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260711-185";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260711-185";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260711-185";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260711-185";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260711-185";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260711-185";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260711-185";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260711-185";
+} from "./store.js?v=phantom-live-20260712-186";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-186";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-186";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-186";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-186";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-186";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-186";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-186";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-186";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-186";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-186";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-186";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-186";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-186";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-186";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-186";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-186";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-186";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-186";
+import {
+  fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
+} from "./orgs.js?v=phantom-live-20260712-186";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -166,6 +169,7 @@ function showGate() {
         form.classList.remove("is-loading");
       }
     };
+    maybeUpgradeGateToDatabaseLogin(card);
     return;
   }
 
@@ -180,6 +184,57 @@ function showGate() {
       enterPhantom();
     };
   });
+
+  maybeUpgradeGateToDatabaseLogin(card);
+}
+
+/* When the backend runs real multi-user auth (database provider), the
+   gate becomes an email/password sign-in — accounts, orgs, and roles
+   live in Postgres, not in this shell. Checked live, never assumed. */
+function maybeUpgradeGateToDatabaseLogin(card) {
+  fetchAuthConfig().then((auth) => {
+    if (!auth?.databaseAuthEnabled || gate.hidden) return;
+    card.innerHTML = `
+      <p class="gate-kicker">PHANTOMFORCE · SIGN IN</p>
+      <h1>Sign in to your business.</h1>
+      <form class="owner-login" data-db-login>
+        <label>
+          <span>Email</span>
+          <input type="email" data-db-email autocomplete="username" placeholder="you@business.com" autofocus required />
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" data-db-password autocomplete="current-password" placeholder="Password" required />
+        </label>
+        <button class="gate-opt gate-submit" type="submit">
+          <span class="gate-opt-icon">⌘</span>
+          <b>Open Business Manager</b>
+          <i>Your account, businesses, and roles are managed on the PhantomForce server.</i>
+        </button>
+        <p class="gate-error" data-db-error hidden></p>
+      </form>
+      <p class="gate-note">Invited to a business? Accept your invitation first, then sign in here.</p>`;
+    const form = card.querySelector("[data-db-login]");
+    const error = card.querySelector("[data-db-error]");
+    form.onsubmit = async (event) => {
+      event.preventDefault();
+      error.hidden = true;
+      form.classList.add("is-loading");
+      try {
+        ctx.session = await databaseLogin(
+          card.querySelector("[data-db-email]").value.trim(),
+          card.querySelector("[data-db-password]").value,
+        );
+        enterPhantom();
+      } catch (err) {
+        session.clear();
+        error.textContent = err?.message || "Sign-in failed.";
+        error.hidden = false;
+      } finally {
+        form.classList.remove("is-loading");
+      }
+    };
+  }).catch(() => {});
 }
 
 /* ============================ sidebar nav ============================ */
@@ -514,6 +569,7 @@ function renderUser() {
 
 function signOut() {
   if (confirm("Sign out of PhantomForce?")) {
+    if (ctx.session?.database) databaseLogout(); /* revoke the server session for real */
     session.clear(); ctx.session = null; accountMenuOpen = false; closeOverlay(true); showGate();
   }
 }
@@ -612,12 +668,66 @@ function renderAccountMenu() {
       </span>
       <strong>Manage →</strong>
     </button>
+    ${ctx.session?.database && (ctx.session.memberships || []).length ? `
+    <div class="user-menu-orgs">
+      <i>Business</i>
+      ${(ctx.session.memberships || []).map((m) => `
+        <button class="user-menu-org ${m.orgId === ctx.session.orgId ? "is-active" : ""}" data-user-menu-org="${esc(m.orgId)}" type="button">
+          <b>${esc(m.orgName)}</b><span>${esc(m.role)}</span>
+        </button>`).join("")}
+    </div>` : ""}
     <div class="user-menu-status is-${status.tone}">
       <span aria-hidden="true"></span>
       <b>${esc(status.label)}</b>
     </div>
     <button class="user-menu-link" data-user-menu-action="signout" type="button">Sign out</button>`;
+  menu.querySelectorAll("[data-user-menu-org]").forEach((btn) => {
+    btn.onclick = async () => {
+      const orgId = btn.dataset.userMenuOrg;
+      if (orgId === ctx.session?.orgId) { accountMenuOpen = false; renderAccountMenu(); return; }
+      const result = await switchOrg(orgId);
+      accountMenuOpen = false;
+      renderAccountMenu();
+      if (result.ok) {
+        pushActivity("Account", `switched active business to ${ctx.session.memberships.find((m) => m.orgId === orgId)?.orgName || orgId}.`);
+        store.save();
+        routeWorkspace("dashboard");
+        renderConsole();
+      } else {
+        pushActivity("Account", "business switch was refused by the server — this account is not a member.");
+        store.save();
+      }
+    };
+  });
 }
+/* Database-auth accounts get the REAL plan from the server: assigned plan,
+   status, limits, and live usage from the entitlement engine — replacing
+   the static local copy. Fetched fresh on every open, never cached-fake. */
+async function hydrateLivePlan(body) {
+  const mount = body.querySelector("[data-live-plan]");
+  if (!mount) return;
+  const [me, summary] = await Promise.all([fetchAuthMe(), fetchEntitlementsSummary()]);
+  if (!document.body.contains(mount)) return;
+  if (!me?.entitlements || !summary) {
+    mount.innerHTML = `<p class="set-note">Live plan details are unavailable right now — the server did not answer.</p>`;
+    return;
+  }
+  const ent = summary.entitlements;
+  const chip = body.querySelector(".account-plan-chip");
+  if (chip) chip.innerHTML = `<span>${esc(ent.planName)}</span><b>${esc(ent.effectiveStatus)}</b>`;
+  mount.innerHTML = `
+    <article class="account-card">
+      <p class="account-card-k">Live plan (server)</p>
+      <h4>${esc(ent.planName)} · ${esc(ent.effectiveStatus)}</h4>
+      <p>${ent.canWrite ? "Writes enabled for this business." : "This business is view-only until the plan is restored."}${ent.note ? ` Note: ${esc(ent.note)}` : ""}</p>
+      <div class="account-facts">
+        ${summary.metrics.map((m) => `<span><b>${esc(m.metric.replace(/_/g, " "))}</b>${m.used}/${m.limit}${m.resetAt ? ` · resets ${new Date(m.resetAt).toLocaleDateString()}` : ""}</span>`).join("")}
+        <span><b>seats</b>${summary.seats.used}/${summary.seats.limit}</span>
+      </div>
+      <p class="set-note">Plans are assigned manually by the PhantomForce operator until billing is connected — no self-serve checkout exists yet.</p>
+    </article>`;
+}
+
 function renderAccountPlan(body) {
   const owner = accountOwnerName();
   const status = accountStatusMeta();
@@ -625,6 +735,7 @@ function renderAccountPlan(body) {
   body.innerHTML = `
     <div class="account-plan">
       ${accountNotice ? `<div class="account-notice">${esc(accountNotice)}</div>` : ""}
+      ${ctx.session?.database ? `<div data-live-plan><p class="set-note">Loading live plan from the server…</p></div>` : ""}
       <section class="account-hero">
         <div class="account-avatar" aria-label="Profile picture">${esc(accountInitials(owner))}</div>
         <div class="account-hero-main">
@@ -717,6 +828,7 @@ function renderAccountPlan(body) {
       renderAccountPlan(body);
     });
   });
+  if (ctx.session?.database) hydrateLivePlan(body);
 }
 
 /* ============================ hero + command deck ============================ */
@@ -729,7 +841,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260711-185";
+const POSE_VERSION = "phantom-live-20260712-186";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

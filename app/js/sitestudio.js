@@ -2,10 +2,13 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago,
-} from "./store.js?v=phantom-live-20260711-185";
+} from "./store.js?v=phantom-live-20260712-186";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260711-185";
+} from "./workspaces.js?v=phantom-live-20260712-186";
+import {
+  isDatabaseSession, requestServerPublish, fetchServerRun,
+} from "./orgs.js?v=phantom-live-20260712-186";
 
 const siteUi = { activeSiteId: null, device: "desktop", selectedSection: -1 };
 
@@ -44,13 +47,46 @@ function restoreSnapshot(site, index) {
   return true;
 }
 
-/* publish state, honestly: approval-gated, and never claims "live" —
-   deployment is not connected, and the UI says so. */
+/* publish state, honestly. With the multi-tenant backend (database auth)
+   publishing is REAL: builds validate server-side, publishing waits for an
+   org owner/admin approval, and "Live" appears only after the server
+   verified the deployment. Without that backend, the old truthful local
+   states remain — nothing ever claims "live" unless the server said so. */
 function publishState(site) {
+  const sp = site.serverPublish;
+  if (sp) {
+    if (sp.state === "awaiting_approval") return { key: "waiting", label: "Publish approval pending", detail: "A real server action is waiting in Approvals." };
+    if (sp.state === "approved" || sp.state === "queued" || sp.state === "executing" || sp.state === "verifying") {
+      return { key: "waiting", label: "Publishing…", detail: `Server run ${sp.runId} is ${sp.state}.` };
+    }
+    if (sp.state === "succeeded") return { key: "live", label: `Live · v${sp.buildVersion}`, detail: `Deployed and verified. Public URL: ${sp.publicPath}` };
+    if (sp.state === "rejected") return { key: "draft", label: "Publish rejected", detail: sp.reason ? `Rejected: ${sp.reason}` : "Rejected — edit and request again." };
+    if (sp.state === "expired") return { key: "draft", label: "Approval expired", detail: "The approval window passed. Request publish again." };
+    if (sp.state === "failed") return { key: "draft", label: "Publish failed", detail: sp.error || "The server run failed — see Developer → Agent runs." };
+  }
   const approval = (store.state.approvals || []).find((a) => a.type === "publish-page" && a.ref === site.id && a.status === "pending");
   if (approval) return { key: "waiting", label: "Publish approval pending", detail: "Waiting in the Approval Queue." };
   if (site.status === "approved-to-publish") return { key: "approved", label: "Approved to publish", detail: "Deployment isn't connected yet — nothing is live." };
   return { key: "draft", label: "Draft", detail: "Request approval when it's ready to go out." };
+}
+
+/* Non-terminal server publishes refresh their real state on render. */
+const TERMINAL_PUBLISH_STATES = new Set(["succeeded", "rejected", "expired", "failed", "cancelled"]);
+async function refreshServerPublish(site, rerender) {
+  const sp = site.serverPublish;
+  if (!sp || TERMINAL_PUBLISH_STATES.has(sp.state)) return;
+  const run = await fetchServerRun(sp.runId).catch(() => null);
+  if (!run || run.state === sp.state) return;
+  sp.state = run.state;
+  sp.reason = run.rejection_reason || null;
+  sp.error = run.error || null;
+  if (run.state === "succeeded") {
+    sp.publicPath = `/public/sites/${sp.serverSiteId}`;
+    site.url = sp.publicPath;
+    pushActivity("Websites", `${site.title} is LIVE — deployment verified by the server (run ${run.id}).`, site.ws);
+  }
+  store.save();
+  rerender();
 }
 
 function slugText(value) {
@@ -203,6 +239,9 @@ function shellMarkup(active, sites, products) {
           ${(() => {
             const state = publishState(active);
             if (state.key === "draft") return `<button class="btn btn-quiet" type="button" data-act="ss-request-publish" title="${esc(state.detail)}">Request publish approval</button>`;
+            if (state.key === "live") return `
+              <a class="ss-publish-chip ss-publish-live" href="${esc(active.serverPublish?.publicPath || "#")}" target="_blank" rel="noopener" title="${esc(state.detail)}">${esc(state.label)}</a>
+              <button class="btn btn-quiet" type="button" data-act="ss-request-publish" title="Build and publish the current edits (approval required)">Publish update</button>`;
             return `<span class="ss-publish-chip ss-publish-${state.key}" title="${esc(state.detail)}">${esc(state.label)}</span>`;
           })()}
         </div>
@@ -349,8 +388,36 @@ export function renderSiteStudio(el) {
   });
 
   const publishBtn = el.querySelector("[data-act='ss-request-publish']");
-  if (publishBtn && active) publishBtn.onclick = () => {
+  if (publishBtn && active) publishBtn.onclick = async () => {
     snapshotSite(active, "publish requested");
+    if (isDatabaseSession()) {
+      /* the REAL pipeline: server-side build + validation, then an
+         approval-gated publish run — nothing goes live until approved */
+      publishBtn.disabled = true;
+      const result = await requestServerPublish(active);
+      if (result.ok) {
+        active.serverSiteId = result.serverSiteId;
+        active.serverPublish = {
+          runId: result.run.id,
+          state: result.run.state,
+          buildId: result.buildId,
+          buildVersion: result.buildVersion,
+          serverSiteId: result.serverSiteId,
+          publicPath: null,
+          reason: null,
+          error: null,
+        };
+        pushActivity("Websites", `built v${result.buildVersion} of ${active.title} and requested publish approval (run ${result.run.id}).`, active.ws);
+      } else {
+        const why = result.error === "upgrade_required" ? "your current plan doesn't include publishing"
+          : result.error === "build_validation_failed" ? "the build failed validation"
+          : `the server refused (${result.error})`;
+        pushActivity("Websites", `publish request for ${active.title} did not start: ${why}.`, active.ws);
+      }
+      store.save();
+      rerender();
+      return;
+    }
     store.state.approvals.unshift({
       id: uid("app"), ws: active.ws, type: "publish-page",
       title: `Publish website: ${active.title}`,
@@ -361,6 +428,7 @@ export function renderSiteStudio(el) {
     store.save();
     rerender();
   };
+  if (active) refreshServerPublish(active, rerender);
 
   /* ---- section selection + toolbar ---- */
   const preview = el.querySelector("[data-ss-preview]");

@@ -9,7 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260711-185";
+} from "./store.js?v=phantom-live-20260712-186";
+import {
+  isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
+} from "./orgs.js?v=phantom-live-20260712-186";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -1272,7 +1275,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260711-185")
+      import("./brain.js?v=phantom-live-20260712-186")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
@@ -2774,11 +2777,59 @@ function renderWorkforce(el, rerender) {
 
 /* ============================= APPROVALS ============================= */
 const approvalChangesFormOpen = new Set();
+/* Server approvals: awaiting_approval agent runs for the active org —
+   REAL external actions held by the backend until an org owner/admin (or
+   the super-admin) decides. Rendered only for database-auth sessions;
+   fetched live, never fabricated. */
+async function hydrateServerApprovals(el, rerender) {
+  const mount = el.querySelector("[data-server-approvals]");
+  if (!mount) return;
+  const runs = await fetchServerApprovals().catch(() => []);
+  if (!document.body.contains(mount)) return;
+  if (!runs.length) { mount.innerHTML = ""; return; }
+  const manager = canManageActiveOrg();
+  mount.innerHTML = `
+    <h3 class="ws-subhead">Server actions waiting for approval</h3>
+    <div class="stack">
+      ${runs.map((run) => `
+        <article class="record record-wide approval-card">
+          <div class="record-top"><h4>${esc(run.title)}</h4><i class="record-time">${ago(run.created_at)}</i></div>
+          <p class="record-notes">${esc(run.expected_effect || run.request)}</p>
+          <p class="record-sub">Requested by ${esc(run.requested_by)} · scope: ${esc(run.scope)} · deadline: ${run.approval_deadline ? esc(new Date(run.approval_deadline).toLocaleString()) : "—"}</p>
+          ${manager ? `
+          <div class="record-actions">
+            <button class="btn btn-good" data-server-run-approve="${esc(run.id)}">Approve &amp; execute</button>
+            <button class="btn btn-quiet" data-server-run-reject="${esc(run.id)}">Reject</button>
+          </div>` : `<p class="record-sub">Waiting for a business owner or admin to decide.</p>`}
+        </article>`).join("")}
+    </div>`;
+  mount.querySelectorAll("[data-server-run-approve]").forEach((btn) => {
+    btn.onclick = async () => {
+      btn.disabled = true;
+      const result = await decideServerRun(btn.dataset.serverRunApprove, true);
+      pushActivity("Approval Desk", result.ok ? "approved a server action — executing now." : `server approval failed: ${result.error}.`);
+      store.save();
+      rerender();
+    };
+  });
+  mount.querySelectorAll("[data-server-run-reject]").forEach((btn) => {
+    btn.onclick = async () => {
+      const reason = prompt("Why is this rejected? (recorded on the run)") || undefined;
+      btn.disabled = true;
+      const result = await decideServerRun(btn.dataset.serverRunReject, false, reason);
+      pushActivity("Approval Desk", result.ok ? "rejected a server action — nothing executed." : `server rejection failed: ${result.error}.`);
+      store.save();
+      rerender();
+    };
+  });
+}
+
 function renderApprovals(el, rerender) {
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
   const done = visible(store.state.approvals).filter((a) => a.status !== "pending").slice(0, 6);
   el.innerHTML = `
     <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, deploys. Drafting never waits on you. Workers prepare — you release, send back for changes, or say no.</p></div>
+    ${isDatabaseSession() ? `<div data-server-approvals></div>` : ""}
     ${pending.length ? `<div class="stack">
       ${pending.map((a) => `
         <article class="record record-wide approval-card">
@@ -2833,6 +2884,7 @@ function renderApprovals(el, rerender) {
       rerender();
     };
   });
+  if (isDatabaseSession()) hydrateServerApprovals(el, rerender);
 }
 
 /* ============================== PHANTOMOPS ============================== */
