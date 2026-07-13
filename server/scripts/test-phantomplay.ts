@@ -35,7 +35,7 @@ try {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
-  assert(initial.catalog.find((game) => game.id === "neon-drift")?.version === "1.2.2", "Neon Drift should ship the faster arcade tuning.");
+  assert(initial.catalog.find((game) => game.id === "neon-drift")?.version === "1.2.3", "Neon Drift should ship the faster arcade tuning.");
   assert(initial.access.canSubmitGames === false, "The snapshot should honor the plan submission decision.");
 
   await play.updatePhantomPlayProfile(playerA, { gameId: "neon-drift", favorite: true, preferences: { contentRating: "everyone", allowCommunityGames: true } });
