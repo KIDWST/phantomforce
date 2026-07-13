@@ -293,6 +293,7 @@ const BASE_NAV = [
   { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
+let navEntitlements = { loaded: false, features: null, limits: null };
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
    same items, same ownerOnly/adminOnly gates, just a compact label and a
    horizontally scrollable strip instead of a vertical list. */
@@ -319,11 +320,26 @@ let MOBILE_NAV = NAV.map((n) => ({
   adminOnly: n.adminOnly,
   ownerOnly: n.ownerOnly,
   badge: n.badge,
+  navDisabled: n.navDisabled,
 }));
 
-function refreshCustomizedNavigation() {
-  NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
-  MOBILE_NAV = NAV.map((n) => ({
+function navFeatureDisabled(item) {
+  if (item?.id !== "phantomplay") return false;
+  if (!ctx.session?.database || !navEntitlements.loaded) return false;
+  const featureOff = navEntitlements.features?.phantomPlay === false;
+  const minutes = Number(navEntitlements.limits?.phantomPlayMinutesPerDay ?? 1);
+  return featureOff || minutes <= 0;
+}
+
+function orderedNavItems() {
+  return NAV
+    .filter(canAccessSurface)
+    .map((item) => ({ ...item, navDisabled: navFeatureDisabled(item) }))
+    .sort((left, right) => Number(left.navDisabled) - Number(right.navDisabled));
+}
+
+function mobileItemsFromNav(items = orderedNavItems()) {
+  return items.map((n) => ({
     id: n.id,
     label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
     icon: n.icon,
@@ -332,7 +348,32 @@ function refreshCustomizedNavigation() {
     adminOnly: n.adminOnly,
     ownerOnly: n.ownerOnly,
     badge: n.badge,
+    navDisabled: n.navDisabled,
   }));
+}
+
+function refreshCustomizedNavigation() {
+  NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
+  MOBILE_NAV = mobileItemsFromNav();
+}
+
+async function refreshNavEntitlements({ rerender = true } = {}) {
+  if (!ctx.session?.database) {
+    navEntitlements = { loaded: true, features: null, limits: null };
+  } else {
+    try {
+      const me = await fetchAuthMe();
+      navEntitlements = {
+        loaded: true,
+        features: me?.entitlements?.features || null,
+        limits: me?.entitlements?.limits || null,
+      };
+    } catch {
+      navEntitlements = { loaded: true, features: null, limits: null };
+    }
+  }
+  MOBILE_NAV = mobileItemsFromNav();
+  if (rerender) renderNav();
 }
 let activeNav = "dashboard";
 let activePageId = null;
@@ -391,12 +432,14 @@ function navStatusPill(n) {
 function renderNav() {
   const nav = $("[data-nav]");
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  nav.innerHTML = NAV.filter(canAccessSurface).map((n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""}>
+  const items = orderedNavItems();
+  MOBILE_NAV = mobileItemsFromNav(items);
+  nav.innerHTML = items.map((n) => `
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navDisabled ? "nav-item-disabled" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
-      ${navStatusPill(n)}
+      ${n.navDisabled ? `<em class="nav-pill is-locked">OFF</em>` : navStatusPill(n)}
     </button>`).join("");
   renderMobileBottomNav();
 }
@@ -411,8 +454,9 @@ function renderMobileBottomNav() {
   const nav = $("[data-mobile-bottom-nav]");
   if (!nav) return;
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  nav.innerHTML = MOBILE_NAV.filter(canAccessSurface).map((item) => `
-    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""}" data-mobile-nav="${esc(item.id)}" type="button" ${mobileNavActive(item) ? 'aria-current="page"' : ""}>
+  MOBILE_NAV = mobileItemsFromNav();
+  nav.innerHTML = MOBILE_NAV.map((item) => `
+    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""} ${item.navDisabled ? "is-disabled" : ""}" data-mobile-nav="${esc(item.id)}" type="button" ${mobileNavActive(item) ? 'aria-current="page"' : ""} ${item.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
       ${svg(item.icon)}
       <span>${esc(item.label)}</span>
       ${item.badge && pending ? `<em class="mobile-bottom-badge">${pending}</em>` : ""}
@@ -582,6 +626,7 @@ async function switchWorkspace(id) {
   }
   if (!setWorkspace(id)) { renderStatusPills(); return; }
   await loadOrganizationCustomization({ onApplied: refreshCustomizedNavigation });
+  await refreshNavEntitlements({ rerender: false });
   accountMenuOpen = false;
   notifOpen = false;
   clearOverlayOnly();
@@ -749,6 +794,7 @@ function renderAccountMenu() {
       accountMenuOpen = false;
       renderAccountMenu();
       if (result.ok) {
+        await refreshNavEntitlements({ rerender: false });
         pushActivity("Account", `switched active business to ${ctx.session.memberships.find((m) => m.orgId === orgId)?.orgName || orgId}.`);
         store.save();
         routeWorkspace("dashboard");
@@ -2841,6 +2887,7 @@ function enterPhantom() {
       renderUser();
     },
   });
+  void refreshNavEntitlements();
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();
