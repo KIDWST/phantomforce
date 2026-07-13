@@ -6,37 +6,37 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-225";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-225";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-225";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-225";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-225";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-225";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-225";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-225";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-225";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-225";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-225";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-225";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-225";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-225";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-225";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-225";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-225";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-225";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-225";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-225";
+} from "./store.js?v=phantom-live-20260712-226";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-226";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-226";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-226";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-226";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-226";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-226";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-226";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-226";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-226";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-226";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-226";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-226";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-226";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-226";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-226";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-226";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-226";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-226";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-226";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-225";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-225";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-225";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-225";
+} from "./orgs.js?v=phantom-live-20260712-226";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-226";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-226";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-226";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260712-225";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-225";
+} from "./customization.js?v=phantom-live-20260712-226";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-226";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -911,7 +911,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-225";
+const POSE_VERSION = "phantom-live-20260712-226";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1247,6 +1247,48 @@ function greeting() {
   const h = new Date().getHours();
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
+/* Server truth for the bell: /api/organization/pulse tells us what is
+   actually pending/failing/running on the backend, beyond the client store.
+   Cached for 60s; on fetch failure we show nothing extra (no fake data). */
+let serverPulse = null;
+let serverPulseTenant = "";
+let serverPulseAt = 0;
+let serverPulseInFlight = null;
+async function fetchServerAttention(force = false) {
+  const tenant = currentTenantId();
+  if (!force && serverPulse && serverPulseTenant === tenant && Date.now() - serverPulseAt < 60000) return serverPulse;
+  if (serverPulseInFlight) return serverPulseInFlight;
+  serverPulseInFlight = (async () => {
+    try {
+      const token = session.token();
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), 8000);
+      const r = await fetch(`/api/organization/pulse?tenant_id=${encodeURIComponent(tenant)}`, { headers, signal: ctrl.signal });
+      clearTimeout(timer);
+      const d = await r.json().catch(() => null);
+      if (r.ok && d?.ok && d.pulse) { serverPulse = d.pulse; serverPulseTenant = tenant; serverPulseAt = Date.now(); }
+    } catch { /* keep last known pulse; never invent items */ }
+    serverPulseInFlight = null;
+    return serverPulse;
+  })();
+  return serverPulseInFlight;
+}
+function serverAttentionItems() {
+  const pulse = serverPulse && serverPulseTenant === currentTenantId() ? serverPulse : null;
+  if (!pulse) return [];
+  const items = [];
+  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
+  const pending = pulse.approvals?.available ? pulse.approvals.pending || 0 : 0;
+  if (pending > 0) items.push({ icon: "check", tone: "warn", title: `${plural(pending, "approval")} waiting on you`, sub: "Server-confirmed approval queue", open: "approvals" });
+  const failed = pulse.agentRuns?.available ? pulse.agentRuns.failed || 0 : 0;
+  if (failed > 0) items.push({ icon: "bolt", tone: "warn", title: `${plural(failed, "agent run")} failed — work stopped`, sub: "Open Automations to see what broke", open: "automation" });
+  const running = pulse.agentRuns?.available ? pulse.agentRuns.running || 0 : 0;
+  if (running > 0) items.push({ icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", open: "automation" });
+  const failing = pulse.automations?.available ? pulse.automations.failing || [] : [];
+  if (failing.length > 0) items.push({ icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, open: "automation" });
+  return items;
+}
 function attentionItems() {
   const items = [];
   visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
@@ -1257,6 +1299,7 @@ function attentionItems() {
     .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
   visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
     .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
+  items.push(...serverAttentionItems());
   return items;
 }
 /* ============================ notifications ============================ */
@@ -1428,6 +1471,10 @@ function renderConsole() {
   renderPlanMeta();
   renderUser();
   renderNotifs();
+  /* Fire-and-forget: pull server truth for the bell, then repaint the badge
+     (and the open menu) once it lands. Failures change nothing. */
+  const pulseBefore = serverPulseAt;
+  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) renderNotifs(); }).catch(() => {});
   renderHero();
   renderChips();
   renderModePose(activeMode);
