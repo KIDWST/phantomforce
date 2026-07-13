@@ -173,7 +173,9 @@ export async function getOrganizationPulse(session: AccessSession, access: Pulse
    line traces to a real store read above; nothing is invented. Kept short so
    it never crowds out the user's own message or memories. */
 export function buildWorkspaceAwarenessText(pulse: OrganizationPulse): string {
-  const lines: string[] = [`Live workspace state (${pulse.tenantId}):`];
+  const lines: string[] = [
+    `Live workspace state (${pulse.tenantId}) — background reference only: use it when the user asks about status, work, assets, or competitors. Do NOT volunteer this as a status report in casual conversation.`,
+  ];
   if (pulse.approvals.available) {
     lines.push(pulse.approvals.pending
       ? `- ${pulse.approvals.pending} approval(s) WAITING for the owner (${pulse.approvals.latest.map((item) => item.action).join(", ")})`
