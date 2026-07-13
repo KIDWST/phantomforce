@@ -237,6 +237,24 @@ import {
   updatePhantomPlaySubmission,
 } from "./phantom-ai/phantomplay.js";
 import {
+  getPhantomPlayDeveloperAnalytics,
+  getPhantomPlayDiscovery,
+  getPhantomPlayGamePage,
+  getPhantomPlayLeaderboard,
+  getPhantomPlayResumeState,
+  getPhantomPlayV2Snapshot,
+  getPhantomPlayV2StoreStatus,
+  getPhantomPlayWorkspacePolicy,
+  heartbeatPhantomPlayPresence,
+  mutatePhantomPlayFriend,
+  phantomPlayV2Enabled,
+  registerPhantomPlayV2Games,
+  setPhantomPlayFollow,
+  setPhantomPlayWishlist,
+  updatePhantomPlayWorkspacePolicy,
+  upsertPhantomPlayReview,
+} from "./phantom-ai/phantomplay-v2.js";
+import {
   auditCompetitorIntelligenceRequest,
   createAudienceTheme,
   createCompetitor,
@@ -4175,6 +4193,143 @@ app.post("/api/phantomplay/submissions/:id/moderate", async (request, reply) => 
   } catch (error) {
     return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Moderation decision could not be saved." });
   }
+});
+
+/* ---- PhantomPlay V2: platform layer (social, community, workspace, dev hub) ----
+   Additive routes over ./phantom-ai/phantomplay-v2.ts. V1 routes above are
+   untouched. PHANTOMFORCE_PHANTOMPLAY_V2_ENABLED=false turns all of this off
+   (including V2 game registration) and V1 behaves exactly as before. */
+
+if (phantomPlayV2Enabled()) registerPhantomPlayV2Games();
+
+function phantomPlayV2Gate(reply: FastifyReply) {
+  if (phantomPlayV2Enabled()) return true;
+  reply.code(404).send({ ok: false, error: "phantomplay_v2_disabled" });
+  return false;
+}
+
+function phantomPlayV2Error(reply: FastifyReply, error: unknown) {
+  return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "PhantomPlay request could not be completed." });
+}
+
+app.get("/api/phantomplay/v2", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return {
+    ok: true,
+    session,
+    ...(await getPhantomPlayV2Snapshot(session, { tenantId: query.tenant_id })),
+    storage: session.canManageAccess ? await getPhantomPlayV2StoreStatus() : undefined,
+  };
+});
+
+app.post("/api/phantomplay/v2/presence", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  try { return { ok: true, ...(await heartbeatPhantomPlayPresence(session, (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.post("/api/phantomplay/v2/friends", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  try { await mutatePhantomPlayFriend(session, (request.body ?? {}) as Record<string, unknown>); return { ok: true }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.get("/api/phantomplay/v2/games/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { id?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const page = params.id ? await getPhantomPlayGamePage(session, params.id.slice(0, 180), { tenantId: query.tenant_id }) : null;
+  return page ? { ok: true, ...page } : reply.code(404).send({ ok: false, error: "That game is not in the catalog." });
+});
+
+app.post("/api/phantomplay/v2/games/:id/review", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await upsertPhantomPlayReview(session, String(params.id || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.post("/api/phantomplay/v2/games/:id/wishlist", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await setPhantomPlayWishlist(session, String(params.id || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.post("/api/phantomplay/v2/follows", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  try { return { ok: true, ...(await setPhantomPlayFollow(session, (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.get("/api/phantomplay/v2/discovery", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayDiscovery(session, { tenantId: query.tenant_id })) };
+});
+
+app.get("/api/phantomplay/v2/leaderboard/:gameId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { gameId?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayLeaderboard(session, String(params.gameId || "").slice(0, 180), { tenantId: query.tenant_id })) };
+});
+
+app.get("/api/phantomplay/v2/resume/:gameId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { gameId?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayResumeState(session, String(params.gameId || "").slice(0, 180), { tenantId: query.tenant_id })) };
+});
+
+app.get("/api/phantomplay/v2/developer/analytics", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayDeveloperAnalytics(session, { tenantId: query.tenant_id })) };
+});
+
+app.get("/api/phantomplay/v2/workspace-policy", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayWorkspacePolicy(session, { tenantId: query.tenant_id })) };
+});
+
+app.patch("/api/phantomplay/v2/workspace-policy", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  // Workspace policy is an org-owner/admin control, mirroring how V1 gates
+  // submissions: platform admins always may; org members need an admin role.
+  const isWorkspaceAdmin = session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin";
+  if (!isWorkspaceAdmin) return reply.code(403).send({ ok: false, error: "Workspace policy requires an admin or owner role." });
+  try { return { ok: true, ...(await updatePhantomPlayWorkspacePolicy(session, body)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
 });
 
 /* ============================================================================

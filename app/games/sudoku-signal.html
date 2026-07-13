@@ -1,0 +1,249 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'"><title>Sudoku Signal</title><style>
+*{box-sizing:border-box}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#05070a;color:#d1fae5;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+body{display:grid;place-items:center;background:radial-gradient(circle at 50% 12%,#0a1510 0,#060b09 40%,#05070a 78%)}
+body::after{content:"";position:fixed;inset:0;pointer-events:none;background:repeating-linear-gradient(0deg,#4ade8006 0 1px,transparent 1px 3px)}
+.wrap{display:flex;flex-direction:column;align-items:center;gap:10px;padding:12px;max-height:100%}
+header{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+header span{padding:6px 12px;border:1px solid #22c55e55;border-radius:999px;background:#04120acc;font-size:11px;font-weight:700;letter-spacing:.08em;color:#4ade80;text-shadow:0 0 8px #22c55e55}
+header .logo{color:#a7f3d0}
+.board{position:relative;display:grid;grid-template-columns:repeat(9,1fr);grid-template-rows:repeat(9,1fr);width:min(92vw,54vh,470px);aspect-ratio:1;border:2px solid #22c55e88;border-radius:6px;background:#070c10;box-shadow:0 0 26px #22c55e22,inset 0 0 30px #04120a}
+.cell{position:relative;display:grid;place-items:center;border:1px solid #14532d55;font-size:clamp(14px,3.4vmin,26px);color:#4ade80;cursor:pointer;user-select:none;text-shadow:0 0 8px #22c55e44;transition:background .12s}
+.cell.br{border-right:2px solid #22c55e66}.cell.bb{border-bottom:2px solid #22c55e66}
+.cell.given{color:#e7fff2;font-weight:700;text-shadow:0 0 6px #a7f3d033;cursor:default}
+.cell.peer{background:#0d1a1288}
+.cell.same{background:#16653444;color:#86efac}
+.cell.sel{background:#14532d66;outline:2px solid #4ade80;outline-offset:-2px;z-index:1;box-shadow:0 0 14px #22c55e55}
+.cell.conflict{color:#f87171;text-shadow:0 0 10px #ef4444aa;animation:throb 1s ease-in-out infinite alternate}
+.cell.wrong{background:#7f1d1d44;color:#fca5a5;text-shadow:0 0 10px #ef4444aa}
+@keyframes throb{from{text-shadow:0 0 4px #ef444466}to{text-shadow:0 0 14px #ef4444dd}}
+.reduced .cell{transition:none}.reduced .cell.conflict{animation:none}
+.marks{display:grid;grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(3,1fr);width:100%;height:100%;padding:1px}
+.marks i{font-style:normal;font-size:clamp(6px,1.25vmin,10px);line-height:1;display:grid;place-items:center;color:#34d39999;text-shadow:none}
+.controls{display:flex;flex-direction:column;gap:8px;width:min(92vw,54vh,470px)}
+.pad{display:grid;grid-template-columns:repeat(9,1fr);gap:6px}
+.row{display:flex;gap:6px;flex-wrap:wrap;justify-content:center}
+button{border:1px solid #22c55e55;border-radius:8px;background:#04120a;color:#4ade80;font-family:inherit;font-weight:700;font-size:13px;padding:10px 0;cursor:pointer;text-shadow:0 0 8px #22c55e44;letter-spacing:.05em}
+button:hover{background:#0a2415;box-shadow:0 0 12px #22c55e33}
+.row button{flex:1;min-width:70px;padding:10px 8px;font-size:11px}
+button.on{background:#14532d;color:#a7f3d0;box-shadow:0 0 12px #22c55e55}
+.overlay{position:fixed;inset:0;display:grid;place-items:center;background:#05070ae6;z-index:5}
+.overlay[hidden]{display:none}
+.overlay .card{text-align:center;padding:28px;max-width:440px}
+.overlay h1{font-size:42px;margin:0 0 6px;color:#4ade80;text-shadow:0 0 22px #22c55e88;letter-spacing:.04em}
+.overlay p{color:#86b39c;line-height:1.5;font-size:13px}
+.overlay .diffs{display:flex;gap:10px;justify-content:center;margin-top:16px}
+.overlay .diffs button{padding:14px 18px;border-radius:999px;min-width:104px}
+.overlay .diffs small{display:block;font-weight:400;color:#86b39c;margin-top:4px;font-size:10px}
+@media(max-width:520px){.overlay h1{font-size:30px}.overlay .diffs{flex-direction:column}header span{font-size:10px;padding:5px 9px}}
+</style></head><body>
+<div class="wrap">
+<header><span class="logo">SUDOKU SIGNAL</span><span data-timer>00:00</span><span data-diff>&mdash;</span><span data-checks>CHECKS 0</span></header>
+<div class="board" data-board></div>
+<div class="controls">
+<div class="pad" data-pad></div>
+<div class="row">
+<button data-erase>ERASE</button>
+<button data-pencil>PENCIL OFF</button>
+<button data-check>CHECK +30s</button>
+<button data-pause>PAUSE</button>
+<button data-new>NEW</button>
+</div>
+</div>
+</div>
+<div class="overlay" data-start><div class="card"><h1>Sudoku Signal</h1><p data-start-msg>Decode the grid. Every row, column and 3&times;3 box carries digits 1&ndash;9 exactly once. Arrows move, 1&ndash;9 write, 0/Backspace erase, P toggles pencil marks.</p><div class="diffs">
+<button data-d="calm">CALM<small>~38 givens &times;1</small></button>
+<button data-d="steady">STEADY<small>~30 givens &times;2</small></button>
+<button data-d="intense">INTENSE<small>~24 givens &times;3</small></button>
+</div></div></div>
+<div class="overlay" data-pauseov hidden><div class="card"><h1>Signal paused</h1><p>Transmission held. Resume to continue the decode.</p><div class="diffs"><button data-resume>RESUME</button></div></div></div>
+<script>
+'use strict';
+const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
+const $=s=>document.querySelector(s);
+const boardEl=$('[data-board]'),padEl=$('[data-pad]'),timerEl=$('[data-timer]'),diffEl=$('[data-diff]'),checksEl=$('[data-checks]');
+const startOv=$('[data-start]'),pauseOv=$('[data-pauseov]'),startMsg=$('[data-start-msg]'),startH1=startOv.querySelector('h1');
+const TARGETS={calm:38,steady:30,intense:24},MULT={calm:1,steady:2,intense:3},DIFFS=['calm','steady','intense'];
+
+// ---------- sudoku engine ----------
+const rowOf=i=>i/9|0,colOf=i=>i%9,boxOf=i=>(rowOf(i)/3|0)*3+(colOf(i)/3|0);
+const UNITS=[];
+for(let r=0;r<9;r++)UNITS.push(Array.from({length:9},(_,c)=>r*9+c));
+for(let c=0;c<9;c++)UNITS.push(Array.from({length:9},(_,r)=>r*9+c));
+for(let b=0;b<9;b++)UNITS.push(Array.from({length:9},(_,k)=>((b/3|0)*3+(k/3|0))*9+(b%3)*3+k%3));
+const PEERS=Array.from({length:81},(_,i)=>{const s=new Set();for(const u of UNITS)if(u.includes(i))for(const j of u)if(j!==i)s.add(j);return[...s]});
+function shuffle(a){for(let i=a.length-1;i>0;i--){const j=Math.random()*(i+1)|0;[a[i],a[j]]=[a[j],a[i]]}return a}
+function fillGrid(){ // random complete valid grid via backtracking
+  const g=new Array(81).fill(0),rw=new Array(9).fill(0),cl=new Array(9).fill(0),bx=new Array(9).fill(0);
+  (function go(i){if(i===81)return true;const r=rowOf(i),c=colOf(i),b=boxOf(i);
+    for(const v of shuffle([1,2,3,4,5,6,7,8,9])){const bit=1<<v;
+      if(!(rw[r]&bit)&&!(cl[c]&bit)&&!(bx[b]&bit)){g[i]=v;rw[r]|=bit;cl[c]|=bit;bx[b]|=bit;
+        if(go(i+1))return true;g[i]=0;rw[r]&=~bit;cl[c]&=~bit;bx[b]&=~bit}}
+    return false})(0);
+  return g}
+function countSolutions(cells,cap,sol){ // MRV backtracking counter, early-exits at cap
+  const rw=new Array(9).fill(0),cl=new Array(9).fill(0),bx=new Array(9).fill(0),blanks=[];
+  for(let i=0;i<81;i++){const v=cells[i];if(v){const bit=1<<v,r=rowOf(i),c=colOf(i),b=boxOf(i);
+    if((rw[r]&bit)||(cl[c]&bit)||(bx[b]&bit))return 0;rw[r]|=bit;cl[c]|=bit;bx[b]|=bit}else blanks.push(i)}
+  let count=0;
+  (function dfs(){
+    let best=-1,bestMask=0,bestN=10;
+    for(const i of blanks){if(cells[i])continue;const r=rowOf(i),c=colOf(i),b=boxOf(i);
+      let mask=0,n=0;for(let v=1;v<=9;v++){const bit=1<<v;if(!(rw[r]&bit)&&!(cl[c]&bit)&&!(bx[b]&bit)){mask|=bit;n++}}
+      if(n===0)return;if(n<bestN){bestN=n;best=i;bestMask=mask;if(n===1)break}}
+    if(best===-1){count++;if(count===1&&sol)for(let k=0;k<81;k++)sol[k]=cells[k];return}
+    const r=rowOf(best),c=colOf(best),b=boxOf(best);
+    for(let v=1;v<=9&&count<cap;v++){const bit=1<<v;if(bestMask&bit){
+      cells[best]=v;rw[r]|=bit;cl[c]|=bit;bx[b]|=bit;dfs();
+      cells[best]=0;rw[r]&=~bit;cl[c]&=~bit;bx[b]&=~bit}}
+  })();
+  return count}
+function makePuzzle(target){ // dig from a full grid, keeping the solution unique
+  const full=fillGrid(),puz=full.slice();let givens=81;
+  for(const i of shuffle(Array.from({length:81},(_,k)=>k))){
+    if(givens<=target)break;
+    const saved=puz[i];puz[i]=0;
+    if(countSolutions(puz.slice(),2)!==1)puz[i]=saved;else givens--;
+  }
+  return{puzzle:puz,solution:full}}
+
+// ---------- state ----------
+let puzzle=new Array(81).fill(0),entries=new Array(81).fill(0),solution=new Array(81).fill(0),marks=Array.from({length:81},()=>0);
+let sel=null,pencil=false,seconds=0,checks=0,difficulty=null,started=false,paused=false,won=false,soundOn=true,reduced=false;
+const wrongSet=new Set();
+const val=i=>puzzle[i]||entries[i];
+
+// ---------- audio (inline, no external resources) ----------
+let ac=null;
+function beep(f,d=.06,g=.025){if(!soundOn)return;try{ac=ac||new (window.AudioContext||window.webkitAudioContext)();
+  const o=ac.createOscillator(),v=ac.createGain();o.type='square';o.frequency.value=f;
+  v.gain.setValueAtTime(g,ac.currentTime);v.gain.exponentialRampToValueAtTime(.0001,ac.currentTime+d);
+  o.connect(v);v.connect(ac.destination);o.start();o.stop(ac.currentTime+d)}catch(_){}}
+
+// ---------- board DOM ----------
+const cellEls=[];
+for(let i=0;i<81;i++){const el=document.createElement('div');let base='cell';
+  if(colOf(i)%3===2&&colOf(i)!==8)base+=' br';if(rowOf(i)%3===2&&rowOf(i)!==8)base+=' bb';
+  el.dataset.base=base;el.className=base;
+  el.addEventListener('pointerdown',()=>{if(!started||paused||won)return;sel=i;render()});
+  boardEl.appendChild(el);cellEls.push(el)}
+for(let n=1;n<=9;n++){const b=document.createElement('button');b.textContent=n;
+  b.addEventListener('pointerdown',e=>{e.preventDefault();input(n)});padEl.appendChild(b)}
+
+function conflictSet(){const bad=new Set();
+  for(const u of UNITS){const seen={};for(const i of u){const v=val(i);if(!v)continue;(seen[v]||(seen[v]=[])).push(i)}
+    for(const k in seen)if(seen[k].length>1)for(const i of seen[k])bad.add(i)}
+  return bad}
+function render(){
+  const bad=conflictSet(),selVal=sel!=null?val(sel):0;
+  const selPeers=sel!=null?new Set(PEERS[sel]):null;
+  for(let i=0;i<81;i++){const el=cellEls[i],v=val(i);let cls=el.dataset.base;
+    if(puzzle[i])cls+=' given';
+    if(sel===i)cls+=' sel';else if(selPeers&&selPeers.has(i))cls+=' peer';
+    if(selVal&&v===selVal&&i!==sel)cls+=' same';
+    if(bad.has(i))cls+=' conflict';
+    if(wrongSet.has(i))cls+=' wrong';
+    el.className=cls;
+    if(v){el.textContent=v}
+    else if(marks[i]){let h='<span class="marks">';for(let n=1;n<=9;n++)h+='<i>'+((marks[i]>>n)&1?n:'')+'</i>';el.innerHTML=h+'</span>'}
+    else el.textContent=''}
+  timerEl.textContent=fmt(seconds);
+  diffEl.textContent=difficulty?difficulty.toUpperCase():'—';
+  checksEl.textContent='CHECKS '+checks}
+const fmt=s=>String(s/60|0).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+
+// ---------- protocol out ----------
+function sendProgress(){let filled=0;for(let i=0;i<81;i++)if(val(i))filled++;
+  host('progress',{progress:Math.round(filled/81*99),state:{
+    puzzle:puzzle.join(''),entries:entries.join(''),
+    difficulty:difficulty||'steady',seconds:String(seconds),checks:String(checks)}})}
+
+// ---------- game flow ----------
+function newGame(diff){
+  difficulty=diff;const made=makePuzzle(TARGETS[diff]);
+  puzzle=made.puzzle;solution=made.solution;
+  entries=new Array(81).fill(0);marks=Array.from({length:81},()=>0);wrongSet.clear();
+  sel=puzzle.findIndex(v=>!v);if(sel<0)sel=0;
+  seconds=0;checks=0;won=false;started=true;
+  startOv.hidden=true;if(paused)setPaused(false);pauseOv.hidden=true;
+  render();sendProgress();beep(520,.05)}
+function input(v){if(!started||paused||won||sel==null||puzzle[sel])return;
+  if(pencil&&!entries[sel]){marks[sel]^=1<<v;render();beep(340,.03,.015);return}
+  entries[sel]=v;marks[sel]=0;wrongSet.delete(sel);
+  for(const p of PEERS[sel])marks[p]&=~(1<<v); // prune candidate from peers
+  render();sendProgress();beep(480,.04);checkWin()}
+function erase(){if(!started||paused||won||sel==null||puzzle[sel])return;
+  if(!entries[sel]&&!marks[sel])return;
+  entries[sel]=0;marks[sel]=0;wrongSet.delete(sel);
+  render();sendProgress();beep(260,.04,.015)}
+function doCheck(){if(!started||paused||won)return;
+  checks++;seconds+=30;let flagged=0;
+  for(let i=0;i<81;i++)if(!puzzle[i]&&entries[i]&&entries[i]!==solution[i]){wrongSet.add(i);flagged++}
+  render();sendProgress();beep(flagged?220:640,.09,.03)}
+function checkWin(){
+  for(let i=0;i<81;i++)if(val(i)!==solution[i])return;
+  won=true;const score=Math.max(100,3000-seconds-200*checks)*MULT[difficulty];
+  host('score',{score});host('complete',{score,progress:100});
+  beep(523,.09);setTimeout(()=>beep(659,.09),110);setTimeout(()=>beep(784,.14),220);
+  startH1.textContent='Signal decoded';
+  startMsg.textContent='Grid solved in '+fmt(seconds)+' with '+checks+' check'+(checks===1?'':'s')+'. Score '+score+'. Pick a difficulty to run it again.';
+  startOv.hidden=false;render()}
+function setPaused(p,silent){if(p===paused)return;paused=p;
+  pauseOv.hidden=!(p&&started&&!won);
+  $('[data-pause]').textContent=p?'RESUME':'PAUSE';
+  if(!silent)host('paused',{paused:p})}
+setInterval(()=>{if(started&&!paused&&!won){seconds++;timerEl.textContent=fmt(seconds)}},1000);
+
+// ---------- restore ----------
+function tryRestore(s){
+  if(!s||typeof s!=='object')return false;
+  const p=s.puzzle,e=s.entries;
+  if(typeof p!=='string'||!/^[0-9]{81}$/.test(p))return false;
+  if(typeof e!=='string'||!/^[0-9]{81}$/.test(e))return false;
+  const parr=Array.from(p,Number),sol=new Array(81).fill(0);
+  if(countSolutions(parr.slice(),2,sol)!==1)return false; // only trust real unique puzzles
+  puzzle=parr;solution=sol;
+  entries=Array.from(e,(ch,i)=>puzzle[i]?0:+ch);
+  marks=Array.from({length:81},()=>0);wrongSet.clear();
+  difficulty=DIFFS.includes(s.difficulty)?s.difficulty:'steady';
+  seconds=Math.max(0,parseInt(s.seconds,10)||0);
+  checks=Math.max(0,parseInt(s.checks,10)||0);
+  sel=puzzle.findIndex(v=>!v);if(sel<0)sel=0;
+  won=false;started=true;startOv.hidden=true;pauseOv.hidden=paused?false:true;
+  render();checkWin();
+  return true}
+
+// ---------- input wiring ----------
+addEventListener('keydown',e=>{
+  if(!started||won)return;const k=e.key;
+  if(k==='ArrowLeft'||k==='ArrowRight'||k==='ArrowUp'||k==='ArrowDown'){
+    e.preventDefault();if(paused)return;if(sel==null){sel=0;render();return}
+    let r=rowOf(sel),c=colOf(sel);
+    if(k==='ArrowLeft')c=(c+8)%9;if(k==='ArrowRight')c=(c+1)%9;
+    if(k==='ArrowUp')r=(r+8)%9;if(k==='ArrowDown')r=(r+1)%9;
+    sel=r*9+c;render()}
+  else if(k>='1'&&k<='9')input(+k);
+  else if(k==='0'||k==='Backspace'||k==='Delete'){e.preventDefault();erase()}
+  else if(k==='p'||k==='P')togglePencil()});
+function togglePencil(){pencil=!pencil;const b=$('[data-pencil]');
+  b.textContent=pencil?'PENCIL ON':'PENCIL OFF';b.classList.toggle('on',pencil)}
+$('[data-erase]').addEventListener('pointerdown',e=>{e.preventDefault();erase()});
+$('[data-pencil]').onclick=togglePencil;
+$('[data-check]').onclick=doCheck;
+$('[data-pause]').onclick=()=>{if(started&&!won)setPaused(!paused)};
+$('[data-resume]').onclick=()=>setPaused(false);
+$('[data-new]').onclick=()=>{startH1.textContent='Sudoku Signal';
+  startMsg.textContent='Decode the grid. Every row, column and 3×3 box carries digits 1–9 exactly once. Arrows move, 1–9 write, 0/Backspace erase, P toggles pencil marks.';
+  startOv.hidden=false};
+for(const b of startOv.querySelectorAll('[data-d]'))b.onclick=()=>newGame(b.dataset.d);
+
+// ---------- protocol in ----------
+addEventListener('message',e=>{const d=e.data;if(!d||d.source!=='phantomplay-host')return;
+  switch(d.type){
+    case 'settings':if('sound'in d)soundOn=!!d.sound;reduced=!!d.reducedMotion;document.body.classList.toggle('reduced',reduced);break;
+    case 'pause':setPaused(true,true);break;
+    case 'resume':setPaused(false,true);break;
+    case 'restart':newGame(DIFFS.includes(difficulty)?difficulty:'steady');break;
+    case 'restore':tryRestore(d.state);break}});
+render();host('ready');
+</script></body></html>
