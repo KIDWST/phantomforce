@@ -51,6 +51,7 @@ import {
   requireAdminAccessSession,
   requireAccessSession,
   requireClientWorkspaceView,
+  verifyOwnerCredentials,
   verifyAccessSessionTokenSid,
 } from "./access/session.js";
 import {
@@ -1081,8 +1082,22 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
     });
   }
 
+  let ownerKeyForToken = parsed.data.ownerKey;
+
+  if (authConfiguration.ownerProductionAuthEnabled && parsed.data.password) {
+    if (!verifyOwnerCredentials(parsed.data.email, parsed.data.password)) {
+      return reply.code(401).send({
+        ok: false,
+        error: "Invalid owner email or password.",
+        sessions: [],
+      });
+    }
+
+    ownerKeyForToken = parsed.data.password;
+  }
+
   const token = issueAccessSessionToken(parsed.data.sessionId, {
-    ownerKey: parsed.data.ownerKey,
+    ownerKey: ownerKeyForToken,
   });
 
   if (!token) {
