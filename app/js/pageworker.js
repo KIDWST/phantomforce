@@ -4,8 +4,8 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-238";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-238";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-239";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-239";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -57,12 +57,40 @@ const PAGE_WORKERS = {
     helper: "Phantom answers from connected data and local activity first, then says exactly what is missing.",
     action: "Analyze performance question",
   },
+  money: {
+    eyebrow: "Accounting intelligence",
+    title: "Prompt the money question.",
+    placeholder: "Ask about cash flow, invoices, expenses, packages, or what needs cleanup...",
+    helper: "Phantom separates real ledger records from missing bank/payment connectors and keeps charges or sends approval-gated.",
+    action: "Analyze accounting workflow",
+  },
+  memory: {
+    eyebrow: "Memory intelligence",
+    title: "Prompt the memory check.",
+    placeholder: "Ask what Phantom remembers, what changed, or what should be corrected...",
+    helper: "Phantom checks scoped workspace memory, recent notes, contradictions, and what needs a durable note.",
+    action: "Review workspace memory",
+  },
   leads: {
     eyebrow: "Client intelligence",
     title: "Build the client base.",
     placeholder: "Tell Phantom who to find and add: schools, gyms, creators, service companies, warm prospects...",
     helper: "Phantom converts this page prompt into CRM prospect cards, qualification tasks, and approval-safe next moves.",
     action: "Find + add CRM prospects",
+  },
+  approvals: {
+    eyebrow: "Approval intelligence",
+    title: "Prompt the risk review.",
+    placeholder: "Ask what needs approval, what is safe, or why something is blocked...",
+    helper: "Phantom explains the risk, owner decision, required evidence, and what cannot execute before approval.",
+    action: "Review approval gate",
+  },
+  workforce: {
+    eyebrow: "Workforce intelligence",
+    title: "Prompt the worker route.",
+    placeholder: "Ask which worker should handle it, what is stuck, or what task to create...",
+    helper: "Phantom maps the outcome to workers, tasks, review lanes, and proof without launching unsafe work.",
+    action: "Route workforce task",
   },
   vacation: {
     eyebrow: "Away intelligence",
@@ -282,10 +310,30 @@ function actionDrafts(pageId, prompt, intent) {
       "Separate real metrics from missing connectors and give one next move.",
       "Flag the exact connector/report only if it is truly missing.",
     ],
+    money: [
+      "Check local ledger records, packages, invoices, and account connector status before estimating.",
+      "Separate real dollar records from missing bank/payment data; never invent revenue or charges.",
+      "Prepare cleanup, invoice, or offer-desk tasks without sending bills or charging cards.",
+    ],
+    memory: [
+      "Search scoped workspace memory and recent page prompts before answering.",
+      "Identify contradictions, stale notes, and facts that need user confirmation.",
+      "Suggest the smallest durable memory update instead of saving every chat line.",
+    ],
     leads: [
       "Immediately create local CRM prospect cards in Clients when the prompt asks to find or add a client base.",
       "Do not invent names, phone numbers, emails, or live relationships.",
       "Queue qualification and public/CRM enrichment as the next step before outreach.",
+    ],
+    approvals: [
+      "Explain what action is blocked, who can approve it, and what evidence is missing.",
+      "Never execute the underlying action from the prompt result itself.",
+      "Prepare an approve/reject summary and a safer draft-only alternative.",
+    ],
+    workforce: [
+      "Route the request to the right worker lane and define what proof that worker must return.",
+      "Create a draft task only when the user explicitly asks for tracking.",
+      "Keep external execution separate from planning, assignment, and review.",
     ],
     intelligence: [
       "Use public-safe research framing and separate facts from guesses.",
@@ -301,6 +349,11 @@ function actionDrafts(pageId, prompt, intent) {
       "Infer what can continue safely and what must wait for approval.",
       "Create coverage buckets: drafts, alerts, follow-ups, and blockers.",
       "Keep external actions locked unless Away Mode explicitly allows them.",
+    ],
+    phantomplay: [
+      "Choose a focused break, classroom-safe game, or private playtest path based on the prompt.",
+      "Keep social play inside same-workspace/private-room boundaries.",
+      "Flag child-safety, moderation, and owner-control requirements before any public multiplayer feature.",
     ],
   };
   return [...common, ...(byPage[pageId] || [

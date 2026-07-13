@@ -17,6 +17,15 @@ assert.match(worker, /automation:\s*\{[\s\S]*Enter your automation here and weâ€
 assert.match(worker, /Infer trigger, condition, action, review gate, and off switch/u, "Automation prompt must return plain-English steps.");
 assert.match(worker, /Do not send, post, deploy, delete, charge, or expose anything without approval/u, "Automation prompt must preserve safety boundaries.");
 assert.match(worker, /analytics:\s*\{/u, "Analytics should have a worker prompt.");
+assert.match(worker, /money:\s*\{[\s\S]*Prompt the money question/u, "Accounting should have a page-specific money prompter.");
+assert.match(worker, /memory:\s*\{[\s\S]*Prompt the memory check/u, "Memory should have a page-specific memory prompter.");
+assert.match(worker, /approvals:\s*\{[\s\S]*Prompt the risk review/u, "Approvals should have a page-specific risk prompter.");
+assert.match(worker, /workforce:\s*\{[\s\S]*Prompt the worker route/u, "Workforce should have a page-specific worker prompter.");
+assert.match(worker, /money:\s*\[[\s\S]*never invent revenue or charges/u, "Accounting fallback must separate real records from missing connector data.");
+assert.match(worker, /memory:\s*\[[\s\S]*smallest durable memory update/u, "Memory fallback must avoid saving every chat line.");
+assert.match(worker, /approvals:\s*\[[\s\S]*Never execute the underlying action/u, "Approvals fallback must not execute from the prompt result.");
+assert.match(worker, /workforce:\s*\[[\s\S]*proof that worker must return/u, "Workforce fallback must define proof requirements.");
+assert.match(worker, /phantomplay:\s*\[[\s\S]*same-workspace\/private-room boundaries/u, "PhantomPlay fallback must preserve private-room boundaries.");
 assert.match(worker, /leads:\s*\{[\s\S]*Build the client base/u, "Clients page must have a dedicated prospect-builder worker.");
 assert.match(worker, /createCrmProspectBuildout/u, "Clients worker must reuse the CRM prospect buildout instead of duplicating lead logic.");
 assert.match(worker, /CRM_PAGE_ACTION_VERB[\s\S]*find[\s\S]*discover[\s\S]*source[\s\S]*identify/u, "Clients page prompt must understand find/discover/source client requests.");
