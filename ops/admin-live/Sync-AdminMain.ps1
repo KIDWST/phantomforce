@@ -78,6 +78,20 @@ try {
 
   Write-Manifest -Commit $local -Branch $branch
 
+  # Game files are served straight off this disk into sandboxed iframes; a
+  # missing one shows players an endless spinner. Verify every tracked game
+  # file survived the pull (antivirus quarantine and partial checkouts are the
+  # realistic causes) and shout about any gap instead of failing silently.
+  $trackedGames = @(Invoke-Git ls-files "app/games/*.html" | Where-Object { $_ })
+  $missingGames = @($trackedGames | Where-Object { -not (Test-Path -LiteralPath (Join-Path $RepoRoot $_)) })
+  if ($missingGames.Count -gt 0) {
+    $list = $missingGames -join ", "
+    Write-SyncLog "WARNING: $($missingGames.Count) game file(s) tracked by git are MISSING on disk: $list. Run 'git checkout -- app/games' to restore them."
+    Write-Warning "Missing game files on disk: $list"
+  } else {
+    Write-SyncLog "Game files verified: $($trackedGames.Count) present on disk."
+  }
+
   # Restart when needed: port empty, explicitly asked, or the RUNNING server's
   # code no longer matches the file on disk (a pull delivered a new server).
   # The server reports its own source fingerprint on /health, so a push to
