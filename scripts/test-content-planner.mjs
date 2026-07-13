@@ -20,5 +20,6 @@ assert.match(source, /Google Calendar/u);
 assert.match(source, /Calendly/u);
 assert.match(source, /workspaceStorageSetItem\(CH_PLANNER_ITEMS_KEY/u, "Planner items must use workspace-isolated persistence.");
 assert.match(css, /grid-template-columns:\s*repeat\(5, minmax\(0, 1fr\)\)/u, "Mobile workflow tabs must remain in one ordered row.");
+assert.match(css, /\.workspace-page-first\[data-workspace-page="content"\][\s\S]*?\.media-suite-body\s*\{[\s\S]*?overflow:\s*visible/u, "Content Hub must scroll inside the full-page Media Lab shell instead of being clipped.");
 
 console.log("Content Hub planner checks passed.");

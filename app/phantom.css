@@ -2981,6 +2981,31 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     height: 100%;
     min-height: 0;
   }
+
+  .workspace-page-first[data-workspace-page="content"] .workspace-page-body {
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .workspace-page-first[data-workspace-page="content"] .workspace-page-body > .media-suite {
+    height: auto;
+    min-height: 100%;
+    overflow: visible;
+  }
+
+  .workspace-page-first[data-workspace-page="content"] .media-suite {
+    grid-template-rows: auto auto;
+  }
+
+  .workspace-page-first[data-workspace-page="content"] .media-suite-body {
+    min-height: auto;
+    overflow: visible;
+  }
+
+  .workspace-page-first[data-workspace-page="content"] .media-suite-body > .ch {
+    padding-bottom: clamp(24px, 4vh, 56px);
+  }
 }
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 14px; }
 .section-head h2 { margin: 0; font: 600 12px "Space Grotesk", sans-serif; letter-spacing: 0.16em; text-transform: uppercase; color: #d7f3e4; }
