@@ -299,6 +299,23 @@ assert.match(crmBuildout.say, /did not invent contact details|message anyone/i, 
 store.state.leads = [];
 store.state.tasks = [];
 
+crmFetchCalled = false;
+globalThis.fetch = async () => {
+  crmFetchCalled = true;
+  throw new Error("Find-and-add CRM requests should not call the backend");
+};
+const crmFindAndAdd = await handleSmartCommand("find and add clients who could use PhantomForce: gyms, schools, creators, service companies, and warm prospects");
+globalThis.fetch = originalFetch;
+assert.equal(crmFetchCalled, false, "Find-and-add CRM requests should stay on the deterministic local path");
+assert.equal(crmFindAndAdd.open, "leads", "Find-and-add CRM requests should open the Clients pipeline");
+assert.ok(store.state.leads.length >= 4, "Find-and-add CRM request should create multiple prospect lanes");
+assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent creator prospects");
+assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent school prospects");
+assert.ok(store.state.leads.some((lead) => /local service|gym|service/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent service/gym prospects");
+assert.ok(store.state.leads.some((lead) => /warm|referral/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent warm prospects");
+store.state.leads = [];
+store.state.tasks = [];
+
 const complaint = handleCommand("i hate this dashboard, it feels annoying");
 assert.equal(store.state.tasks.length, 0, "complaints should not create tasks");
 assert.match(complaint.say, /task|talk/i, "feedback should offer, not act");

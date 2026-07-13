@@ -60,9 +60,9 @@ const PAGE_WORKERS = {
   leads: {
     eyebrow: "Client intelligence",
     title: "Build the client base.",
-    placeholder: "Ask for small businesses, coaches, gyms, creators, service companies, or warm prospects...",
-    helper: "Phantom turns one prompt into draft prospect lanes, qualification tasks, and approval-safe next moves.",
-    action: "Build local prospect map",
+    placeholder: "Tell Phantom who to find and add: schools, gyms, creators, service companies, warm prospects...",
+    helper: "Phantom converts this page prompt into CRM prospect cards, qualification tasks, and approval-safe next moves.",
+    action: "Find + add CRM prospects",
   },
   vacation: {
     eyebrow: "Away intelligence",
@@ -89,9 +89,6 @@ const DEFAULT_WORKER = {
 };
 
 const SKIP_PAGES = new Set([
-  "media",
-  "content",
-  "sites",
   "settings",
   "developer",
   "activity",
@@ -283,7 +280,7 @@ function actionDrafts(pageId, prompt, intent) {
       "Flag the exact connector/report only if it is truly missing.",
     ],
     leads: [
-      "Create local draft prospect lanes in Clients when the prompt asks for a client base.",
+      "Immediately create local CRM prospect cards in Clients when the prompt asks to find or add a client base.",
       "Do not invent names, phone numbers, emails, or live relationships.",
       "Queue qualification and public/CRM enrichment as the next step before outreach.",
     ],
