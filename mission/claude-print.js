@@ -17,7 +17,7 @@ import { promisify } from "node:util";
 const run = promisify(execFile);
 const PWSH = "pwsh.exe";
 
-export async function runClaudePrint({ prompt, jsonSchema, cwd, maxBudgetUsd, timeoutMs = 120000, scratchDir }) {
+export async function runClaudePrint({ prompt, jsonSchema, cwd, maxBudgetUsd, timeoutMs = 120000, scratchDir, model }) {
   const id = randomBytes(8).toString("hex");
   const dir = path.join(scratchDir, `print-${id}`);
   await mkdir(dir, { recursive: true });
@@ -37,6 +37,9 @@ export async function runClaudePrint({ prompt, jsonSchema, cwd, maxBudgetUsd, ti
   }
   if (maxBudgetUsd) {
     scriptLines.push(`$claudeArgs += @('--max-budget-usd', '${Number(maxBudgetUsd)}')`);
+  }
+  if (model) {
+    scriptLines.push(`$claudeArgs += @('--model', ${psQuote(model)})`);
   }
   scriptLines.push(`claude @claudeArgs`);
 

@@ -513,6 +513,12 @@ input {
   color: #3a4451;
 }
 
+.tile-model:not(:empty)::after {
+  content: "·";
+  margin-left: 6px;
+  color: #3a4451;
+}
+
 .tile-runtime {
   font-variant-numeric: tabular-nums;
 }
@@ -1462,5 +1468,255 @@ body.broadcast-mode .tile.linked {
 
 .tile-mission-badge:hover {
   color: var(--accent-bright);
+}
+
+/* ---- Mission DVR: timeline, checkpoints, branch popover ------------------- */
+
+.timeline-toggle-btn {
+  margin-top: 10px;
+}
+
+.timeline-container {
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.timeline-container.hidden {
+  display: none;
+}
+
+.timeline-caveat {
+  font-size: 12px;
+  color: var(--muted);
+  padding: 8px 12px;
+  border-left: 2px solid var(--gold);
+  margin: 0 0 12px;
+}
+
+.timeline-scrub {
+  height: 28px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 8px;
+  cursor: pointer;
+  margin-bottom: 10px;
+}
+.timeline-scrub:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.timeline-track {
+  display: grid;
+  grid-template-columns: 140px 1fr;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  position: relative;
+}
+.timeline-track-label {
+  font-size: 12px;
+  color: var(--soft);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.timeline-track-lane {
+  position: relative;
+  height: 20px;
+  background: rgba(255, 255, 255, 0.03);
+  border-radius: 6px;
+}
+.timeline-checkpoint-tick {
+  position: absolute;
+  top: -2px;
+  width: 10px;
+  height: 24px;
+  border: none;
+  background: var(--accent);
+  border-radius: 3px;
+  cursor: pointer;
+  padding: 0;
+}
+.timeline-checkpoint-tick:hover {
+  background: var(--accent-bright);
+}
+.timeline-sparkline {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  color: var(--gold);
+  pointer-events: none;
+  opacity: 0.7;
+}
+
+.timeline-replay {
+  position: fixed;
+  inset: 6% 12%;
+  background: #050a0d;
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  padding: 14px;
+  z-index: 80;
+  overflow: auto;
+}
+.timeline-replay.hidden {
+  display: none;
+}
+.timeline-replay-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.timeline-replay-badge {
+  color: var(--red);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.04em;
+}
+.timeline-replay-output {
+  font-family: "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  color: var(--soft);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.timeline-branch-popover {
+  position: fixed;
+  background: #0c1116;
+  border: 1px solid var(--accent);
+  border-radius: 11px;
+  padding: 12px;
+  z-index: 90;
+  width: 280px;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45);
+}
+.timeline-branch-caveat {
+  font-size: 11px;
+  color: var(--muted);
+  margin: 0 0 10px;
+}
+.timeline-branch-note {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--soft);
+  font-size: 12px;
+  margin-bottom: 10px;
+}
+.timeline-branch-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+/* ---- Mission objective Enhance button ------------------------------------- */
+
+.mission-enhance-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: -6px;
+}
+.mission-enhance-note {
+  font-size: 12px;
+  color: var(--muted);
+}
+.mission-enhance-note button {
+  margin-left: 6px;
+}
+
+/* ---- Phantom Report -------------------------------------------------------- */
+
+.phantom-report {
+  margin-top: 16px;
+  padding: 12px;
+  border-radius: 11px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+}
+.phantom-report h4 {
+  margin: 14px 0 6px;
+  font-size: 13px;
+  color: var(--soft);
+}
+.phantom-report-summary {
+  color: var(--soft);
+}
+.phantom-report-findings {
+  margin: 0;
+  padding-left: 18px;
+}
+.phantom-step-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--line);
+}
+.phantom-step-desc {
+  font-weight: 600;
+}
+.phantom-step-rationale {
+  font-size: 12px;
+  color: var(--muted);
+}
+.phantom-step-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.phantom-step-tag-approved {
+  color: var(--accent);
+}
+.phantom-step-tag-skipped {
+  color: var(--muted);
+}
+.phantom-step-error {
+  color: var(--red);
+  font-size: 11px;
+}
+
+/* ---- Connections panel ------------------------------------------------------ */
+
+.connection-row {
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+}
+.connection-row-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.connection-status {
+  font-size: 12px;
+  color: var(--muted);
+}
+.connection-row-actions {
+  display: flex;
+  gap: 8px;
+}
+.connection-key-input {
+  flex: 1;
+  padding: 6px 8px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--soft);
+  font-size: 12px;
+}
+.connection-error {
+  color: var(--red);
+  font-size: 11px;
+  margin: 6px 0 0;
 }
 

@@ -265,9 +265,11 @@ function buildCard(card) {
   const project = document.createElement("span");
   project.className = "tile-project";
   project.textContent = projectLabel(card.profileId);
+  const model = document.createElement("span");
+  model.className = "tile-model";
   const runtime = document.createElement("span");
   runtime.className = "tile-runtime";
-  metaRight.append(project, runtime);
+  metaRight.append(project, model, runtime);
 
   meta.append(mission, metaRight);
 
@@ -419,6 +421,34 @@ function renderProject(card) {
   if (el) el.textContent = projectLabel(card.profileId);
 }
 
+// Friendly names for the raw model ids the token tracker reports (see
+// mission/tokens.js) — a worker's actual model isn't knowable from its
+// provider alone (e.g. "claude" can run several models), so this is only
+// ever populated once real usage data has been found for that worker.
+const MODEL_LABELS = {
+  "claude-fable-5": "Claude - Fable 5",
+  "claude-sonnet-5": "Claude - Sonnet 5",
+  "claude-opus-4-8": "Claude - Opus 4.8",
+  "claude-haiku-4-5-20251001": "Claude - Haiku 4.5",
+};
+
+function modelLabel(modelId) {
+  return MODEL_LABELS[modelId] || modelId;
+}
+
+function renderModel(card) {
+  const el = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-model`);
+  if (!el) return;
+  if (!card.tokenModel) {
+    el.textContent = "";
+    return;
+  }
+  el.textContent = card.tokenEstimated ? `~${modelLabel(card.tokenModel)}` : modelLabel(card.tokenModel);
+  el.title = card.tokenEstimated
+    ? "Estimated — no real usage data found yet for this worker"
+    : "Model in use, from this worker's real session data";
+}
+
 function renderRuntime(card) {
   const el = document.querySelector(`.tile[data-uid="${card.uid}"] .tile-runtime`);
   if (!el) return;
@@ -526,6 +556,12 @@ function openTerminal(card, sessionId) {
       } else if (msg.type === "ledger") {
         card.lastLedgerEvent = msg.event;
         if (card.role && typeof window.onMissionActivity === "function") window.onMissionActivity(card);
+      } else if (msg.type === "tokens") {
+        if (msg.model) {
+          card.tokenModel = msg.model;
+          card.tokenEstimated = Boolean(msg.estimated);
+          renderModel(card);
+        }
       }
     } catch {
       /* ignore */

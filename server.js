@@ -25,10 +25,16 @@ import { parseEvents } from "./mission/protocol.js";
 import { bracketedPaste, ENTER, SUBMIT_DELAY_MS } from "./mission/paste.js";
 import { buildWorkerPrompt } from "./mission/prompt.js";
 import { decomposeObjective } from "./mission/decompose.js";
+import { enhanceObjective } from "./mission/enhance.js";
 import { synthesizeMission, renderReportMarkdown } from "./mission/synthesize.js";
-import { isGitRepo, slugify, createWorktree, removeWorktree } from "./mission/worktree.js";
+import { isGitRepo, slugify, createWorktree, createWorktreeFromRef, removeWorktree } from "./mission/worktree.js";
 import { AGENT_PROVIDERS, isAgentProvider, isLaunchMode } from "./mission/adapters.js";
 import { findGitRepos } from "./mission/repos.js";
+import { CONNECTION_PROVIDERS, readConnections, removeConnection, saveConnection } from "./connections.js";
+import { createFrameRecorder, readFrames } from "./mission/recorder.js";
+import { maybeCheckpoint, readCheckpoints } from "./mission/checkpoint.js";
+import { TOKEN_ADAPTERS, estimateFromChars, costForUsage } from "./mission/tokens.js";
+import os from "node:os";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const publicDir = path.join(appDir, "public");
@@ -53,6 +59,7 @@ const sessions = new Map();
 
 const DETECTOR_TICK_MS = 200;
 const captureRoot = path.join(appDir, "training", "captures");
+const claudeProjectsDir = path.join(os.homedir(), ".claude", "projects");
 
 function feedDetector(session, data) {
   session.detector.feed(data);
@@ -64,15 +71,23 @@ function feedDetector(session, data) {
     session.lastDetected = result;
     if (session.capture) captureDetection(session, result);
     broadcastStatus(session, result);
-    if (session.missionId) feedMissionProtocol(session, result.raw);
+    if (session.missionId) {
+      feedMissionProtocol(session, result.raw);
+      pollTokenUsage(session).catch(() => {});
+    }
   }, DETECTOR_TICK_MS);
 }
 
 // Parses this tick's new raw output (not the whole rolling window, so an
 // event line is never re-logged twice) for TERMINA_EVENT lines, appends them
-// to the mission ledger, and broadcasts them to this worker's own tile(s).
+// to the mission ledger, broadcasts them to this worker's own tile(s), and —
+// for isolated worktree workers — snapshots the worktree via the Mission DVR
+// checkpoint manager on qualifying event types.
 function feedMissionProtocol(session, raw) {
   const events = parseEvents(stripAnsi(raw));
+  if (!events.length) return;
+  const mission = missionStore.readMission(appDir, session.missionId);
+  const worker = mission?.workers.find((w) => w.id === session.workerId);
   for (const event of events) {
     session.lastLedgerEvent = event;
     const record = { workerId: session.workerId, source: "worker", type: event.type, detail: event.detail ?? null };
@@ -81,7 +96,45 @@ function feedMissionProtocol(session, raw) {
     for (const socket of session.sockets) {
       if (socket.readyState === socket.OPEN) socket.send(payload);
     }
+    if (worker) {
+      maybeCheckpoint({ appDir, missionId: session.missionId, worker, eventType: event.type }).catch(() => {});
+    }
   }
+}
+
+// Real usage where a provider adapter can find the CLI's own local
+// transcript; otherwise a clearly estimated fallback derived from the
+// recorder's own byte count. Pushed to clients and rolled up into
+// tokens.json — never silently treated as equal-confidence to real data.
+async function pollTokenUsage(session) {
+  const mission = missionStore.readMission(appDir, session.missionId);
+  const worker = mission?.workers.find((w) => w.id === session.workerId);
+  if (!worker) return;
+
+  const adapter = TOKEN_ADAPTERS[worker.provider];
+  let usage = null;
+  let estimated = true;
+  if (adapter) {
+    const transcript = await adapter.findTranscript(worker.cwd, claudeProjectsDir);
+    if (transcript) {
+      const real = await adapter.readUsage(transcript);
+      usage = { inputTokens: real.inputTokens, outputTokens: real.outputTokens, model: real.model };
+      estimated = false;
+    }
+  }
+  if (!usage) {
+    const frames = await readFrames(appDir, session.missionId, session.workerId);
+    const charCount = (frames ?? []).reduce((sum, f) => sum + f.data.length, 0);
+    const est = estimateFromChars(charCount);
+    usage = { inputTokens: est.inputTokens, outputTokens: est.outputTokens, model: null };
+  }
+  const costUsd = costForUsage({ model: usage.model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
+
+  const payload = JSON.stringify({ type: "tokens", workerId: session.workerId, ...usage, costUsd, estimated });
+  for (const socket of session.sockets) {
+    if (socket.readyState === socket.OPEN) socket.send(payload);
+  }
+  await missionStore.writeTokens(appDir, session.missionId, session.workerId, { ...usage, costUsd, estimated }).catch(() => {});
 }
 
 function statusPayload(result) {
@@ -194,6 +247,8 @@ function startSession(sessionId, profile, opts = {}) {
     missionId: opts.missionId ?? null,
     workerId: opts.workerId ?? null,
     lastLedgerEvent: null,
+    // Mission DVR: only mission workers are recorded, never solo tiles.
+    recorder: opts.missionId ? createFrameRecorder(appDir, opts.missionId, opts.workerId) : null,
   };
   sessions.set(sessionId, session);
 
@@ -203,13 +258,14 @@ function startSession(sessionId, profile, opts = {}) {
       cols: opts.cols || 100,
       rows: opts.rows || 28,
       cwd: profile.cwd,
-      env: terminalEnv(),
+      env: terminalEnv(profile.id),
     });
     session.status = "running";
     session.proc.onData((data) => {
       broadcast(session, data);
       maybeAutoTrust(session, data);
       feedDetector(session, data);
+      session.recorder?.append(data);
     });
     session.proc.onExit(({ exitCode }) => {
       session.status = "exited";
@@ -526,6 +582,35 @@ const server = http.createServer((req, res) => {
     return sendJson(res, 200, { ok: true, repos: findGitRepos() });
   }
 
+  if (pathName === "/api/connections" && req.method === "GET") {
+    return sendJson(res, 200, { ok: true, connections: readConnections(appDir) });
+  }
+
+  const connectionMatch = pathName.match(/^\/api\/connections\/([\w-]+)$/);
+  if (connectionMatch && req.method === "POST") {
+    const provider = connectionMatch[1];
+    if (!Object.prototype.hasOwnProperty.call(CONNECTION_PROVIDERS, provider)) {
+      return sendJson(res, 400, { ok: false, error: "unknown_provider" });
+    }
+    readJsonBody(req)
+      .then(async (body) => {
+        const apiKey = String(body.apiKey ?? "").trim();
+        if (!apiKey) return sendJson(res, 400, { ok: false, error: "api_key_required" });
+        await saveConnection(appDir, provider, apiKey);
+        return sendJson(res, 200, { ok: true, connections: readConnections(appDir) });
+      })
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
+  }
+
+  if (connectionMatch && req.method === "DELETE") {
+    const provider = connectionMatch[1];
+    removeConnection(appDir, provider)
+      .then(() => sendJson(res, 200, { ok: true, connections: readConnections(appDir) }))
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
+  }
+
   if (pathName === "/api/missions/decompose" && req.method === "POST") {
     readJsonBody(req)
       .then(async (body) => {
@@ -539,6 +624,20 @@ const server = http.createServer((req, res) => {
         if (!workspaceRoot || !existsSync(workspaceRoot)) return sendJson(res, 400, { ok: false, error: "workspace_root_invalid" });
         const { roles, missionName, costUsd } = await decomposeObjective({ objective, workerCount, workspaceRoot, scratchDir: missionScratchDir });
         return sendJson(res, 200, { ok: true, roles, missionName, costUsd });
+      })
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
+  }
+
+  if (pathName === "/api/missions/enhance" && req.method === "POST") {
+    readJsonBody(req)
+      .then(async (body) => {
+        const objective = String(body.objective ?? "").trim();
+        const workspaceRoot = String(body.workspaceRoot ?? "").trim();
+        if (!objective) return sendJson(res, 400, { ok: false, error: "objective_required" });
+        if (!workspaceRoot || !existsSync(workspaceRoot)) return sendJson(res, 400, { ok: false, error: "workspace_root_invalid" });
+        const { enhancedObjective, whatChanged, costUsd } = await enhanceObjective({ objective, workspaceRoot, scratchDir: missionScratchDir });
+        return sendJson(res, 200, { ok: true, enhancedObjective, whatChanged, costUsd });
       })
       .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
     return;
@@ -610,7 +709,8 @@ const server = http.createServer((req, res) => {
     const mission = missionStore.readMission(appDir, missionGetMatch[1]);
     if (!mission) return sendJson(res, 404, { ok: false, error: "mission_not_found" });
     const ledger = missionStore.readLedger(appDir, missionGetMatch[1]);
-    return sendJson(res, 200, { ok: true, mission, ledger });
+    const tokens = missionStore.readTokens(appDir, missionGetMatch[1]);
+    return sendJson(res, 200, { ok: true, mission, ledger, tokens });
   }
 
   const workerActionMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/workers\/([\w-]+)\/(stop|retry)$/);
@@ -666,6 +766,111 @@ const server = http.createServer((req, res) => {
     return sendJson(res, 200, { ok: true, worker });
   }
 
+  // ---- Mission DVR: recordings, checkpoints, tokens, branch -------------
+
+  const recordingMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/recordings\/([\w-]+)$/);
+  if (recordingMatch && req.method === "GET") {
+    readFrames(appDir, recordingMatch[1], recordingMatch[2]).then((frames) => {
+      if (!frames) return sendJson(res, 404, { ok: false, error: "recording_not_found" });
+      return sendJson(res, 200, { ok: true, frames });
+    });
+    return;
+  }
+
+  const checkpointsMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/checkpoints$/);
+  if (checkpointsMatch && req.method === "GET") {
+    readCheckpoints(appDir, checkpointsMatch[1]).then((checkpoints) => sendJson(res, 200, { ok: true, checkpoints }));
+    return;
+  }
+
+  const tokensMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/tokens$/);
+  if (tokensMatch && req.method === "GET") {
+    const tokens = missionStore.readTokens(appDir, tokensMatch[1]);
+    const history = missionStore.readTokenHistory(appDir, tokensMatch[1]);
+    return sendJson(res, 200, { ok: true, tokens, history });
+  }
+
+  // Branches a new, brand-new sibling worker from a past checkpoint of an
+  // existing isolated worker — filesystem+transcript time-travel only, never
+  // process resurrection. The source worker's session/tile is untouched.
+  const branchMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/workers\/([\w-]+)\/branch$/);
+  if (branchMatch && req.method === "POST") {
+    const [, missionId, workerId] = branchMatch;
+    readJsonBody(req)
+      .then(async (body) => {
+        const mission = missionStore.readMission(appDir, missionId);
+        if (!mission) return sendJson(res, 404, { ok: false, error: "mission_not_found" });
+        const sourceWorker = mission.workers.find((w) => w.id === workerId);
+        if (!sourceWorker) return sendJson(res, 404, { ok: false, error: "worker_not_found" });
+        if (!sourceWorker.branch) return sendJson(res, 400, { ok: false, error: "worker_not_isolated" });
+
+        const checkpointSha = String(body.checkpointSha ?? "").trim();
+        const checkpoints = await readCheckpoints(appDir, missionId);
+        const checkpoint = checkpoints.find((c) => c.sha === checkpointSha && c.workerId === workerId);
+        if (!checkpoint) return sendJson(res, 400, { ok: false, error: "checkpoint_not_found" });
+
+        const branchIndex = mission.workers.filter((w) => w.id.startsWith(`${workerId}-branch-`)).length + 1;
+        const newWorkerId = `${workerId}-branch-${branchIndex}`;
+        const slug = `${slugify(sourceWorker.name)}-branch-${branchIndex}`;
+
+        let wt;
+        try {
+          wt = await createWorktreeFromRef({ repoRoot: mission.workspaceRoot, missionId, workerSlug: slug, ref: checkpointSha });
+        } catch (error) {
+          return sendJson(res, 500, { ok: false, error: `branch worktree creation failed: ${error.message}` });
+        }
+
+        const providerId = isAgentProvider(sourceWorker.provider) ? sourceWorker.provider : "claude";
+        const providerProfile = profileById.get(providerId);
+        const workerProfile = { ...providerProfile, cwd: wt.path, args: AGENT_PROVIDERS[providerId].buildArgs(sourceWorker.mode) };
+        const sessionId = `mission-${missionId}-${newWorkerId}`;
+        const session = startSession(sessionId, workerProfile, { cols: 100, rows: 28, missionId, workerId: newWorkerId });
+
+        const newWorker = {
+          id: newWorkerId,
+          index: mission.workers.length + 1,
+          name: `${sourceWorker.name} (branch ${branchIndex})`,
+          scope: sourceWorker.scope,
+          deliverables: sourceWorker.deliverables,
+          prohibited: sourceWorker.prohibited,
+          provider: providerId,
+          mode: sourceWorker.mode,
+          sessionId,
+          cwd: wt.path,
+          branch: wt.branch,
+          status: session.status === "error" ? "failed" : "starting",
+          resumingFrom: {
+            checkpointTs: checkpoint.ts,
+            summary: String(body.note ?? `Branched from worker ${sourceWorker.name}'s ${checkpoint.ledgerEventType} checkpoint.`),
+          },
+        };
+        mission.workers.push(newWorker);
+        await missionStore.writeMission(appDir, missionId, mission);
+        await missionStore.appendLedger(appDir, missionId, {
+          workerId: newWorkerId,
+          source: "termina",
+          type: "BRANCHED",
+          detail: `branched from ${workerId} at checkpoint ${checkpointSha}`,
+        });
+
+        (async () => {
+          const ready = await waitForReady(sessionId, READY_TIMEOUT_MS);
+          if (!ready) return;
+          const s = sessions.get(sessionId);
+          if (!s) return;
+          try {
+            submitPrompt(s, buildWorkerPrompt({ mission, worker: newWorker }));
+          } catch {
+            /* ignore */
+          }
+        })();
+
+        return sendJson(res, 200, { ok: true, worker: newWorker });
+      })
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
+  }
+
   const synthesizeMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/synthesize$/);
   if (synthesizeMatch && req.method === "POST") {
     const missionId = synthesizeMatch[1];
@@ -676,6 +881,7 @@ const server = http.createServer((req, res) => {
       .then(async ({ report, costUsd }) => {
         const markdown = renderReportMarkdown(mission, report, costUsd);
         await missionStore.writeReport(appDir, missionId, markdown);
+        await missionStore.writeReportJson(appDir, missionId, report);
         return sendJson(res, 200, { ok: true, report, markdown, costUsd });
       })
       .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
@@ -686,7 +892,31 @@ const server = http.createServer((req, res) => {
   if (reportMatch && req.method === "GET") {
     const markdown = missionStore.readReport(appDir, reportMatch[1]);
     if (!markdown) return sendJson(res, 404, { ok: false, error: "report_not_found" });
-    return sendJson(res, 200, { ok: true, markdown });
+    const report = missionStore.readReportJson(appDir, reportMatch[1]);
+    const approvals = missionStore.readReportApprovals(appDir, reportMatch[1]);
+    return sendJson(res, 200, { ok: true, markdown, report, approvals });
+  }
+
+  // Phantom Report: approve/skip a proposed next step. Bookkeeping only —
+  // never auto-launches anything; the user still acts on it manually.
+  const reportStepMatch = pathName.match(/^\/api\/missions\/([\w-]+)\/report\/steps\/([\w-]+)$/);
+  if (reportStepMatch && req.method === "POST") {
+    const [, missionId, stepId] = reportStepMatch;
+    readJsonBody(req)
+      .then(async (body) => {
+        const decision = body.decision;
+        if (decision !== "approved" && decision !== "skipped") {
+          return sendJson(res, 400, { ok: false, error: "invalid_decision" });
+        }
+        const report = missionStore.readReportJson(appDir, missionId);
+        if (!report || !report.nextSteps?.some((s) => s.id === stepId)) {
+          return sendJson(res, 400, { ok: false, error: "step_not_found" });
+        }
+        const approvals = await missionStore.writeReportApproval(appDir, missionId, stepId, decision);
+        return sendJson(res, 200, { ok: true, approvals });
+      })
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
   }
 
   return sendJson(res, 404, { ok: false, error: "not_found" });

@@ -15,6 +15,7 @@ export const EVENT_TYPES = [
   "HANDOFF",
   "COMPLETE",
   "FAILED",
+  "BRANCHED",
 ];
 
 const EVENT_LINE = /^TERMINA_EVENT:\s*(\{.*\})\s*$/;

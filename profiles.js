@@ -10,6 +10,7 @@ import { existsSync, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { getApiKeyEnv } from "./connections.js";
 
 const appDir = path.dirname(fileURLToPath(import.meta.url));
 const HOME = os.homedir();
@@ -93,7 +94,7 @@ const BUILT_IN = isWin
 
 // A minimal environment for spawned terminals — don't inherit Termina's own env
 // (which holds the launch token). Keep what a shell needs to work.
-export function terminalEnv() {
+export function terminalEnv(providerId) {
   const keep = [
     "PATH",
     "PATHEXT",
@@ -124,6 +125,7 @@ export function terminalEnv() {
       env[key] = process.env[key];
     }
   }
+  if (providerId) Object.assign(env, getApiKeyEnv(appDir, providerId));
   return env;
 }
 

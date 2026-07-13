@@ -51,10 +51,11 @@ export function worktreePath(repoRoot, missionId, workerSlug) {
   return path.join(path.dirname(repoRoot), ".termina-worktrees", `${repoName}-mission-${missionId}-${workerSlug}`);
 }
 
-// Creates an isolated worktree + branch for one worker. Refuses outright
+// Creates an isolated worktree + branch for one worker, checked out at an
+// explicit ref (defaults to the repo's current HEAD). Refuses outright
 // rather than silently reusing a dirty directory if the target path already
 // exists with uncommitted changes.
-export async function createWorktree({ repoRoot, missionId, workerSlug }) {
+export async function createWorktreeFromRef({ repoRoot, missionId, workerSlug, ref }) {
   const branch = branchName(missionId, workerSlug);
   const targetPath = worktreePath(repoRoot, missionId, workerSlug);
 
@@ -66,9 +67,13 @@ export async function createWorktree({ repoRoot, missionId, workerSlug }) {
   }
 
   await mkdir(path.dirname(targetPath), { recursive: true });
-  const head = await getHeadRef(repoRoot);
-  await git(repoRoot, ["worktree", "add", "-b", branch, targetPath, head]);
+  const resolvedRef = ref ?? (await getHeadRef(repoRoot));
+  await git(repoRoot, ["worktree", "add", "-b", branch, targetPath, resolvedRef]);
   return { path: targetPath, branch };
+}
+
+export async function createWorktree({ repoRoot, missionId, workerSlug }) {
+  return createWorktreeFromRef({ repoRoot, missionId, workerSlug });
 }
 
 // Manual, user-confirmed action only. Never deletes the branch.

@@ -4,7 +4,16 @@ import os from "node:os";
 import path from "node:path";
 import { test } from "node:test";
 
-import { appendLedger, readLedger, readMission, readReport, writeMission, writeReport } from "../../mission/store.js";
+import {
+  appendLedger,
+  readLedger,
+  readMission,
+  readReport,
+  readReportJson,
+  writeMission,
+  writeReport,
+  writeReportJson,
+} from "../../mission/store.js";
 
 async function withTempAppDir(fn) {
   const dir = await mkdtemp(path.join(os.tmpdir(), "termina-mission-test-"));
@@ -51,5 +60,19 @@ test("report round-trips through write/read", async () => {
 test("reading a report that was never written returns null", async () => {
   await withTempAppDir(async (appDir) => {
     assert.equal(readReport(appDir, "m1"), null);
+  });
+});
+
+test("report.json round-trips through writeReportJson/readReportJson", async () => {
+  await withTempAppDir(async (appDir) => {
+    const report = { summary: "did stuff", nextSteps: [{ id: "step-1", description: "x", rationale: "y" }] };
+    await writeReportJson(appDir, "m1", report);
+    assert.deepEqual(readReportJson(appDir, "m1"), report);
+  });
+});
+
+test("reading report.json that was never written returns null", async () => {
+  await withTempAppDir(async (appDir) => {
+    assert.equal(readReportJson(appDir, "does-not-exist"), null);
   });
 });

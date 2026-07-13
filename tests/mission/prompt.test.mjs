@@ -66,3 +66,20 @@ test("includes the reporting protocol instructions", () => {
   assert.ok(prompt.includes("TERMINA_EVENT:"));
   assert.ok(prompt.includes("COMPLETE"));
 });
+
+test("includes a RESUMING FROM CHECKPOINT section when worker.resumingFrom is set", () => {
+  const mission = sampleMission();
+  mission.workers[0].resumingFrom = {
+    checkpointTs: 1752345680000,
+    summary: "Worker w1 had claimed api.js and proposed a change.",
+  };
+  const prompt = buildWorkerPrompt({ mission, worker: mission.workers[0] });
+  assert.match(prompt, /RESUMING FROM CHECKPOINT/);
+  assert.match(prompt, /Worker w1 had claimed api\.js and proposed a change\./);
+});
+
+test("omits the RESUMING FROM CHECKPOINT section when worker.resumingFrom is absent", () => {
+  const mission = sampleMission();
+  const prompt = buildWorkerPrompt({ mission, worker: mission.workers[0] });
+  assert.doesNotMatch(prompt, /RESUMING FROM CHECKPOINT/);
+});

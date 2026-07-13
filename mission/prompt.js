@@ -30,6 +30,17 @@ export function buildWorkerPrompt({ mission, worker }) {
   else if (mission.launchMode === "auto") lines.push("Mode: fully autonomous — no approval prompts will interrupt you, act within your scope.");
   lines.push("");
 
+  if (worker.resumingFrom) {
+    lines.push("RESUMING FROM CHECKPOINT");
+    lines.push(
+      "You are a fresh agent continuing from a checkpoint of another worker's file state — NOT the same process. " +
+        "The files in your workspace reflect that point in time; nothing else (running processes, in-memory state) carried over.",
+    );
+    lines.push(`Checkpoint time: ${new Date(worker.resumingFrom.checkpointTs).toISOString()}`);
+    lines.push(`What had happened up to that point: ${worker.resumingFrom.summary}`);
+    lines.push("");
+  }
+
   if (worker.deliverables) {
     lines.push("DELIVERABLES");
     lines.push(worker.deliverables);

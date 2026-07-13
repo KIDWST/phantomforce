@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 
-import { parseEvents } from "../../mission/protocol.js";
+import { EVENT_TYPES, parseEvents } from "../../mission/protocol.js";
 
 test("parses a single well-formed event line", () => {
   const events = parseEvents('TERMINA_EVENT: {"type":"STARTED","detail":"beginning audit"}\n');
@@ -39,4 +39,8 @@ test("ignores lines that merely mention the marker in passing", () => {
 
 test("returns an empty array for plain output with no protocol lines", () => {
   assert.deepEqual(parseEvents("just some normal terminal output\nwith multiple lines\n"), []);
+});
+
+test("BRANCHED is a recognized event type, for Mission DVR branch records", () => {
+  assert.ok(EVENT_TYPES.includes("BRANCHED"));
 });

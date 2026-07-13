@@ -275,6 +275,10 @@ function renderMissionCreateStepObjective(body) {
   form.className = "mission-form";
   form.innerHTML = `
     <label>What's the objective?<textarea id="mf-objective" rows="3" placeholder="Prepare PhantomForce for launch. Audit the frontend, backend, security, tests, and deployment readiness.">${escapeHtml(state.objective)}</textarea></label>
+    <div class="mission-enhance-row">
+      <button type="button" id="mf-enhance" class="ghost">✨ Enhance</button>
+      <span id="mf-enhance-note" class="mission-enhance-note"></span>
+    </div>
     <label>How should it launch?
       <select id="mf-launchmode">
         ${Object.entries(LAUNCH_MODE_LABELS)
@@ -312,6 +316,45 @@ function renderMissionCreateStepObjective(body) {
   });
   document.getElementById("mf-workspace-select").addEventListener("change", (e) => {
     if (e.target.value) document.getElementById("mf-workspace").value = e.target.value;
+  });
+
+  document.getElementById("mf-enhance").addEventListener("click", async () => {
+    const textarea = document.getElementById("mf-objective");
+    const workspaceRoot = document.getElementById("mf-workspace").value.trim();
+    const objective = textarea.value.trim();
+    const errorEl = document.getElementById("mf-error");
+    const noteEl = document.getElementById("mf-enhance-note");
+    errorEl.classList.add("hidden");
+
+    if (!objective || !workspaceRoot) {
+      errorEl.textContent = "Type an objective and choose a workspace first.";
+      errorEl.classList.remove("hidden");
+      return;
+    }
+
+    const btn = document.getElementById("mf-enhance");
+    const original = objective;
+    btn.disabled = true;
+    btn.textContent = "Enhancing…";
+    try {
+      const res = await api("/api/missions/enhance", {
+        method: "POST",
+        body: JSON.stringify({ objective, workspaceRoot }),
+      }).then((r) => r.json());
+      if (!res.ok) throw new Error(res.error || "enhancement failed");
+      textarea.value = res.enhancedObjective;
+      noteEl.innerHTML = `${escapeHtml(res.whatChanged)} <button type="button" id="mf-enhance-revert" class="ghost">Revert to original</button>`;
+      document.getElementById("mf-enhance-revert").addEventListener("click", () => {
+        textarea.value = original;
+        noteEl.textContent = "";
+      });
+    } catch (err) {
+      errorEl.textContent = `Couldn't enhance the objective: ${friendlyError(err.message)}`;
+      errorEl.classList.remove("hidden");
+    } finally {
+      btn.disabled = false;
+      btn.textContent = "✨ Enhance";
+    }
   });
 
   document.getElementById("mf-cancel").addEventListener("click", () => {
@@ -560,6 +603,26 @@ async function renderMissionDetail() {
   }
   body.appendChild(table);
 
+  const timelineToggle = document.createElement("button");
+  timelineToggle.type = "button";
+  timelineToggle.className = "mw-btn timeline-toggle-btn";
+  timelineToggle.textContent = "Show Timeline (Mission DVR)";
+  const timelineContainer = document.createElement("div");
+  timelineContainer.className = "timeline-container hidden";
+  timelineToggle.addEventListener("click", async () => {
+    const showing = !timelineContainer.classList.contains("hidden");
+    if (showing) {
+      timelineContainer.classList.add("hidden");
+      timelineToggle.textContent = "Show Timeline (Mission DVR)";
+      return;
+    }
+    timelineContainer.classList.remove("hidden");
+    timelineToggle.textContent = "Hide Timeline";
+    await mountTimeline(timelineContainer, mission.id);
+  });
+  body.appendChild(timelineToggle);
+  body.appendChild(timelineContainer);
+
   const footer = document.createElement("div");
   footer.className = "mission-detail-footer";
   const synthBtn = document.createElement("button");
@@ -572,7 +635,7 @@ async function renderMissionDetail() {
     try {
       const r = await api(`/api/missions/${mission.id}/synthesize`, { method: "POST" }).then((x) => x.json());
       if (!r.ok) throw new Error(r.error);
-      renderMissionReport(body, r.markdown);
+      renderMissionReport(body, mission.id, r);
       synthBtn.textContent = "Trigger Final Synthesis";
       synthBtn.disabled = false;
     } catch (err) {
@@ -583,7 +646,7 @@ async function renderMissionDetail() {
   body.appendChild(footer);
 
   const reportRes = await api(`/api/missions/${mission.id}/report`).then((r) => r.json()).catch(() => ({ ok: false }));
-  if (reportRes.ok) renderMissionReport(body, reportRes.markdown);
+  if (reportRes.ok) renderMissionReport(body, mission.id, reportRes);
 
   clearInterval(missionRefreshTimer);
   missionRefreshTimer = setInterval(() => {
@@ -593,14 +656,120 @@ async function renderMissionDetail() {
   }, 4000);
 }
 
-function renderMissionReport(body, markdown) {
-  let pre = body.querySelector(".mission-report");
-  if (!pre) {
-    pre = document.createElement("pre");
-    pre.className = "mission-report";
-    body.appendChild(pre);
+function renderMissionReport(body, missionId, { markdown, report, approvals }) {
+  let container = body.querySelector(".phantom-report");
+  if (!container) {
+    container = document.createElement("div");
+    container.className = "phantom-report";
+    body.appendChild(container);
   }
-  pre.textContent = markdown;
+  container.innerHTML = "";
+
+  const heading = document.createElement("h3");
+  heading.textContent = "Phantom Report";
+  container.appendChild(heading);
+
+  // report/approvals are only present once synthesis has produced a
+  // structured result under this feature; a report.md written before this
+  // shipped has neither — fall back to raw-markdown rendering so history
+  // isn't lost.
+  if (!report) {
+    const pre = document.createElement("pre");
+    pre.className = "mission-report";
+    pre.textContent = markdown;
+    container.appendChild(pre);
+    return;
+  }
+
+  const summary = document.createElement("p");
+  summary.className = "phantom-report-summary";
+  summary.textContent = report.summary;
+  container.appendChild(summary);
+
+  if (report.workerFindings?.length) {
+    const findingsHeading = document.createElement("h4");
+    findingsHeading.textContent = "What each worker found";
+    container.appendChild(findingsHeading);
+    const findingsList = document.createElement("ul");
+    findingsList.className = "phantom-report-findings";
+    for (const f of report.workerFindings) {
+      const li = document.createElement("li");
+      li.innerHTML = `<b>${escapeHtml(f.workerName)}:</b> ${escapeHtml(f.found)}`;
+      findingsList.appendChild(li);
+    }
+    container.appendChild(findingsList);
+  }
+
+  if (report.nextSteps?.length) {
+    const stepsHeading = document.createElement("h4");
+    stepsHeading.textContent = "Next steps";
+    container.appendChild(stepsHeading);
+    const stepsList = document.createElement("div");
+    stepsList.className = "phantom-report-steps";
+    for (const step of report.nextSteps) {
+      stepsList.appendChild(renderPhantomStepRow(missionId, step, approvals?.[step.id]));
+    }
+    container.appendChild(stepsList);
+  }
+
+  const rawToggle = document.createElement("button");
+  rawToggle.type = "button";
+  rawToggle.className = "ghost";
+  rawToggle.textContent = "Show full report";
+  const rawPre = document.createElement("pre");
+  rawPre.className = "mission-report hidden";
+  rawPre.textContent = markdown;
+  rawToggle.addEventListener("click", () => {
+    rawPre.classList.toggle("hidden");
+    rawToggle.textContent = rawPre.classList.contains("hidden") ? "Show full report" : "Hide full report";
+  });
+  container.appendChild(rawToggle);
+  container.appendChild(rawPre);
+}
+
+function renderPhantomStepRow(missionId, step, decision) {
+  const row = document.createElement("div");
+  row.className = "phantom-step-row";
+  row.innerHTML = `
+    <div class="phantom-step-text">
+      <div class="phantom-step-desc">${escapeHtml(step.description)}</div>
+      <div class="phantom-step-rationale">${escapeHtml(step.rationale)}</div>
+    </div>
+    <div class="phantom-step-actions"></div>
+  `;
+  const actions = row.querySelector(".phantom-step-actions");
+
+  if (decision === "approved" || decision === "skipped") {
+    const tag = document.createElement("span");
+    tag.className = `phantom-step-tag phantom-step-tag-${decision}`;
+    tag.textContent = decision === "approved" ? "✓ Approved" : "Skipped";
+    actions.appendChild(tag);
+    return row;
+  }
+
+  const errorEl = document.createElement("span");
+  errorEl.className = "phantom-step-error hidden";
+
+  const decide = async (nextDecision) => {
+    errorEl.classList.add("hidden");
+    try {
+      const res = await api(`/api/missions/${missionId}/report/steps/${step.id}`, {
+        method: "POST",
+        body: JSON.stringify({ decision: nextDecision }),
+      }).then((r) => r.json());
+      if (!res.ok) throw new Error(res.error || "failed");
+      const replacement = renderPhantomStepRow(missionId, step, nextDecision);
+      row.replaceWith(replacement);
+    } catch (err) {
+      errorEl.textContent = friendlyError(err.message);
+      errorEl.classList.remove("hidden");
+    }
+  };
+
+  actions.appendChild(smallMissionBtn("Approve", () => decide("approved")));
+  actions.appendChild(smallMissionBtn("Skip", () => decide("skipped")));
+  actions.appendChild(errorEl);
+  return row;
 }
 
 function smallMissionBtn(label, onClick) {

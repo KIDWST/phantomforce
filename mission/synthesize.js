@@ -8,6 +8,18 @@ const REPORT_SCHEMA = {
   type: "object",
   properties: {
     summary: { type: "string" },
+    workerFindings: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          workerId: { type: "string" },
+          workerName: { type: "string" },
+          found: { type: "string" },
+        },
+        required: ["workerId", "workerName", "found"],
+      },
+    },
     workCompleted: { type: "array", items: { type: "string" } },
     filesChanged: { type: "array", items: { type: "string" } },
     testsRun: { type: "array", items: { type: "string" } },
@@ -19,16 +31,28 @@ const REPORT_SCHEMA = {
     failedOrIncomplete: { type: "array", items: { type: "string" } },
     recommendedIntegrationOrder: { type: "array", items: { type: "string" } },
     decisionsNeedingUser: { type: "array", items: { type: "string" } },
-    suggestedNextMission: { type: "string" },
+    nextSteps: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: {
+          description: { type: "string" },
+          rationale: { type: "string" },
+        },
+        required: ["description", "rationale"],
+      },
+    },
   },
   required: [
     "summary",
+    "workerFindings",
     "workCompleted",
     "verifiedCompletion",
     "claimedCompletion",
     "proposedWork",
     "unresolvedWork",
     "decisionsNeedingUser",
+    "nextSteps",
   ],
 };
 
@@ -64,16 +88,28 @@ export async function synthesizeMission({ mission, ledger, scratchDir }) {
 
   const report = result.structured_output;
   if (!report) throw new Error("synthesis did not return a structured report");
+  // The model isn't asked to invent step ids (unreliable — could collide or
+  // be omitted); assigned here, before anything is persisted or returned.
+  report.nextSteps = (report.nextSteps ?? []).map((step, i) => ({ id: `step-${i + 1}`, ...step }));
   return { report, costUsd: result.total_cost_usd ?? null };
 }
 
 export function renderReportMarkdown(mission, report, costUsd) {
   const list = (items) => (items && items.length ? items.map((i) => `- ${i}`).join("\n") : "_none_");
-  return `# Mission Report — ${mission.name}
+  const findings = report.workerFindings?.length
+    ? report.workerFindings.map((f) => `- **${f.workerName}:** ${f.found}`).join("\n")
+    : "_none_";
+  const steps = report.nextSteps?.length
+    ? report.nextSteps.map((s, i) => `${i + 1}. ${s.description} — ${s.rationale}`).join("\n")
+    : "_none_";
+  return `# Phantom Report — ${mission.name}
 
 **Objective:** ${mission.objective}
 
 **Cost:** ${costUsd != null ? `$${costUsd.toFixed(4)}` : "unknown"}
+
+## What each worker found
+${findings}
 
 ## Summary
 ${report.summary}
@@ -111,7 +147,7 @@ ${list(report.recommendedIntegrationOrder)}
 ## Decisions still requiring the user
 ${list(report.decisionsNeedingUser)}
 
-## Suggested next mission
-${report.suggestedNextMission || "_none_"}
+## Next steps
+${steps}
 `;
 }
