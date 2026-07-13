@@ -4,10 +4,10 @@ const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,..
 const PHASES=[{n:'Inhale',s:1.0,e:1.0,scale:false},{n:'Hold',s:1.0,e:1.0},{n:'Exhale',s:1.0,e:1.0},{n:'Hold',s:1.0,e:1.0}];
 const NAMES=['Inhale','Hold','Exhale','Hold'],SCALES=[[.34,1],[1,1],[1,.34],[.34,.34]],PHASE_MS=4000,TARGET_MS=120000;
 const core=document.querySelector('.core'),phaseEl=document.querySelector('[data-phase]'),cdEl=document.querySelector('[data-cd]'),accEl=document.querySelector('[data-acc]'),timeEl=document.querySelector('[data-time]'),tapsEl=document.querySelector('[data-taps]'),msgEl=document.querySelector('[data-msg]'),stage=document.querySelector('.stage');
-let reduced=false,started=false,done=false,startAt=0,phaseIdx=0,phaseStart=0,taps=0,accSum=0,accCount=0,scored=false,raf=0;
+let reduced=false,started=false,done=false,startAt=0,phaseIdx=0,phaseStart=0,taps=0,accSum=0,accCount=0,scored=false,raf=0,pausedAt=0;
 function fmt(ms){ms=Math.max(0,ms);const s=Math.round(ms/1000);return Math.floor(s/60)+':'+String(s%60).padStart(2,'0')}
 function accuracy(){return accCount?Math.round(accSum/accCount*100):100}
-function begin(){if(started)return;started=true;done=false;startAt=performance.now();phaseIdx=0;phaseStart=startAt;taps=0;accSum=0;accCount=0;msgEl.textContent='Breathe with the light.';host('progress',{score:0,progress:0});loop()}
+function begin(){if(started)return;started=true;done=false;startAt=performance.now();phaseIdx=0;phaseStart=startAt;taps=0;accSum=0;accCount=0;tapsEl.textContent='0';accEl.textContent='100%';msgEl.textContent='Breathe with the light.';host('progress',{score:0,progress:0});loop()}
 function setScale(v){if(reduced){core.style.transform='scale(0.6)';return}core.style.transform='scale('+v+')'}
 function loop(now){now=now||performance.now();const elapsed=now-startAt;const pElapsed=now-phaseStart;
 if(pElapsed>=PHASE_MS){phaseIdx=(phaseIdx+1)%4;phaseStart=now;scored=false;host('score',{score:accuracy(),progress:Math.min(99,Math.round(elapsed/TARGET_MS*100)),state:{taps,accuracy:accuracy()}})}
@@ -18,8 +18,8 @@ core.style.background=`radial-gradient(circle at 40% 35%,#7dffc0,#1c8f5f)`;
 const progress=Math.min(100,Math.round(elapsed/TARGET_MS*100));timeEl.textContent=fmt(TARGET_MS-elapsed);
 if(elapsed>=TARGET_MS){finish();return}
 raf=requestAnimationFrame(loop)}
-function finish(){done=true;started=false;cancelAnimationFrame(raf);phaseEl.textContent='Complete';cdEl.textContent='✓';setScale(.5);timeEl.textContent='0:00';msgEl.textContent=`Session complete. Calm accuracy ${accuracy()}% over ${taps} breaths.`;host('complete',{score:accuracy(),progress:100,state:{taps,accuracy:accuracy()}})}
-function tap(){if(done)return;if(!started){begin();return}
+function finish(){done=true;started=false;cancelAnimationFrame(raf);phaseEl.textContent='Complete';cdEl.textContent='✓';setScale(.5);timeEl.textContent='0:00';msgEl.textContent=`Session complete. Calm accuracy ${accuracy()}% over ${taps} breaths. Tap to begin again.`;host('complete',{score:accuracy(),progress:100,state:{taps,accuracy:accuracy()}})}
+function tap(){if(done){done=false;timeEl.textContent='2:00';begin();return}if(!started){begin();return}
 taps++;tapsEl.textContent=taps;
 const pElapsed=(performance.now()-phaseStart);
 // distance to nearest phase boundary (either just-started this phase, or about to end)
@@ -32,5 +32,8 @@ document.querySelector('[data-tap]').onclick=tap;
 addEventListener('keydown',e=>{if(e.code==='Space'||e.code==='Enter'){e.preventDefault();tap()}});
 stage.addEventListener('click',tap);
 addEventListener('message',e=>{if(e.data?.source==='phantomplay-host'&&e.data.type==='settings'){reduced=!!e.data.reducedMotion;document.body.classList.toggle('freeze',reduced);if(reduced)setScale(.6)}});
+document.addEventListener('visibilitychange',()=>{if(!started||done)return;
+if(document.hidden){pausedAt=performance.now();cancelAnimationFrame(raf)}
+else if(pausedAt){const d=performance.now()-pausedAt;startAt+=d;phaseStart+=d;pausedAt=0;raf=requestAnimationFrame(loop)}});
 host('ready');
 </script></body></html>

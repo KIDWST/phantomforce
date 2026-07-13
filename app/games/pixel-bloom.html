@@ -23,7 +23,7 @@ else{if(combo>0)msgEl.textContent='Fresh bloom placed.';combo=0;score+=5}
 update();
 const p=Math.min(100,Math.round(pct()/TARGET*100));
 if(pct()>=TARGET){finish()}else{host('score',{score,progress:p,state:{filled:Math.round(pct()),combo}})}}
-function finish(){done=true;document.body.classList.add('done');msgEl.textContent=`Canvas in bloom — ${Math.round(pct())}% filled. Beautifully done.`;host('complete',{score,progress:100,state:{filled:Math.round(pct()),combo}})}
+function finish(){done=true;document.body.classList.add('done');msgEl.textContent=`Canvas in bloom — ${Math.round(pct())}% filled. Tap anywhere to bloom a fresh canvas.`;host('complete',{score,progress:100,state:{filled:Math.round(pct()),combo}})}
 function update(){fillEl.textContent=Math.round(pct())+'%';scoreEl.textContent=score;comboEl.textContent=combo;barEl.style.width=Math.min(100,pct()/TARGET*100)+'%'}
 function draw(t){const w=c.clientWidth||440;g.clearRect(0,0,w,w);
 const shift=reduced?0:(t||0)*0.02;
@@ -36,8 +36,8 @@ else{g.fillStyle='#06170f';g.fillRect(X+1,Y+1,px-2,px-2)}}
 const cx=cur.x*px,cy=cur.y*px;g.strokeStyle='#effff6';g.lineWidth=2;g.strokeRect(cx+1.5,cy+1.5,px-3,px-3);
 raf=requestAnimationFrame(draw)}
 function evtCell(e){const r=c.getBoundingClientRect();const cxp=(e.clientX-r.left)/r.width*N,cyp=(e.clientY-r.top)/r.height*N;const x=Math.max(0,Math.min(N-1,Math.floor(cxp))),y=Math.max(0,Math.min(N-1,Math.floor(cyp)));cur={x,y};bloom(x,y)}
-c.addEventListener('pointerdown',e=>{e.preventDefault();if(done)return;evtCell(e)});
-addEventListener('keydown',e=>{if(done&&e.code!=='Enter')return;let handled=true;
+c.addEventListener('pointerdown',e=>{e.preventDefault();if(done){reset();return}evtCell(e)});
+addEventListener('keydown',e=>{if(done){if(e.code==='Enter'||e.code==='Space'){e.preventDefault();reset()}return}let handled=true;
 if(e.code==='ArrowLeft')cur.x=Math.max(0,cur.x-1);
 else if(e.code==='ArrowRight')cur.x=Math.min(N-1,cur.x+1);
 else if(e.code==='ArrowUp')cur.y=Math.max(0,cur.y-1);

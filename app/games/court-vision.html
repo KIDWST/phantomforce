@@ -22,7 +22,7 @@ const ang=58*Math.PI/180;
 const speed=340+power/100*(760);
 ball.vx=Math.cos(ang)*speed;ball.vy=-Math.sin(ang)*speed;ball.flying=true;phase='fly';ball.scored=false}
 let last=0;
-function loop(t){if(!last)last=t;let dt=(t-last)/1000;last=t;if(dt>0.05)dt=0.05;
+function loop(t){if(!running)return;if(!last)last=t;let dt=(t-last)/1000;last=t;if(dt>0.05)dt=0.05;
 if(phase==='aim'){power+=pdir*dt*130;if(power>=100){power=100;pdir=-1}else if(power<=0){power=0;pdir=1}}
 if(phase==='fly'){
 ball.vy+=GRAV*dt;ball.x+=ball.vx*dt;ball.y+=ball.vy*dt;
@@ -34,13 +34,13 @@ if(!ball.scored)missed();else settle()}
 }
 draw();raf=requestAnimationFrame(loop)}
 function made(){score++;document.querySelector('[data-score]').textContent=score;host('score',{score,progress:Math.min(99,score*7),state:{baskets:score,misses}});setTimeout(()=>{if(running)setupShot()},520)}
-function settle(){/*after made, ball fell through*/}
-function missed(){misses++;document.querySelector('[data-miss]').textContent=misses;
+function settle(){phase='wait'}
+function missed(){phase='wait';misses++;document.querySelector('[data-miss]').textContent=misses;
 if(misses>=3){over();return}
 host('progress',{score,progress:Math.min(99,score*7)});
-setTimeout(()=>{if(running)setupShot()},420);phase='wait'}
+setTimeout(()=>{if(running)setupShot()},420)}
 function over(){running=false;cancelAnimationFrame(raf);draw();document.querySelector('[data-result]').textContent=`You sank ${score} basket${score===1?'':'s'}.`;document.querySelector('.over').hidden=false;host('complete',{score,progress:100,state:{baskets:score,misses}})}
-function restart(){score=0;misses=0;running=true;document.querySelector('[data-score]').textContent=0;document.querySelector('[data-miss]').textContent=0;document.querySelector('.over').hidden=true;setupShot();host('progress',{score:0,progress:0})}
+function restart(){score=0;misses=0;running=true;last=0;document.querySelector('[data-score]').textContent=0;document.querySelector('[data-miss]').textContent=0;document.querySelector('.over').hidden=true;setupShot();host('progress',{score:0,progress:0});raf=requestAnimationFrame(loop)}
 function draw(){g.clearRect(0,0,W,H);
 // court floor
 g.strokeStyle='#36ff9422';g.lineWidth=1;for(let y=groundY();y<H;y+=Math.max(16,H*0.05)){g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}

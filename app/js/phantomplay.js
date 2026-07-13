@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260712-223";
+} from "./store.js?v=phantom-live-20260712-224";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -20,6 +20,12 @@ const BUILT_INS = [
   { id: "breath-pacer", title: "Breath Pacer", summary: "Match your breath to the pacer and reset in two minutes.", description: "A box-breathing companion. Follow the expanding ring through inhale, hold, exhale, hold and score your timing.", category: "Focus", tags: ["calm", "breathing", "wellness"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in", launchUrl: "/app/games/breath-pacer.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: false, version: "1.0.0", controls: "Tap or press Space on each phase", progressSupport: true, scoreSupport: true },
   { id: "court-vision", title: "Court Vision", summary: "Read the arc and power to sink the free throw.", description: "A physics free-throw shooter. The distance and rim grow with every make; three misses ends the game.", category: "Sports", tags: ["sports", "physics", "timing"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in", launchUrl: "/app/games/court-vision.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: false, version: "1.0.0", controls: "Tap or press Space to shoot", progressSupport: true, scoreSupport: true },
   { id: "pixel-bloom", title: "Pixel Bloom", summary: "Bloom a symmetric neon mandala — no timer, no pressure.", description: "A calm creative toy. Place petals that mirror four ways; build combos as the pattern fills.", category: "Creative", tags: ["calm", "creative", "relax"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in", launchUrl: "/app/games/pixel-bloom.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0", controls: "Tap cells or arrows + Space", progressSupport: true, scoreSupport: true },
+  { id: "circuit-serpent", title: "Circuit Serpent", summary: "Grow the serpent — eat packets, dodge walls and your own tail.", description: "Classic snake on a 17x17 circuit board. Speed climbs every five packets; one crash ends the run.", category: "Arcade", tags: ["snake", "classic", "reaction"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in", launchUrl: "/app/games/circuit-serpent.html", thumbnail: "/app/assets/poses/mode-dark-admin.webp", featured: false, version: "1.0.0", controls: "Arrows/WASD, swipe, or tap screen edges", progressSupport: true, scoreSupport: true },
+  { id: "echo-sequence", title: "Echo Sequence", summary: "Watch the pads light up, then echo the pattern back.", description: "A memory-sequence classic with four glowing pads and original tones. One wrong echo ends the run.", category: "Focus", tags: ["memory", "sequence", "sound"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in", launchUrl: "/app/games/echo-sequence.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: true, version: "1.0.0", controls: "Tap pads or press 1-4", progressSupport: true, scoreSupport: true },
+  { id: "signal-sweeper", title: "Signal Sweeper", summary: "Clear the grid without touching a mine — the numbers tell the truth.", description: "Minesweeper with a guaranteed-safe first reveal, flag mode, long-press flagging, and a race-the-clock score.", category: "Strategy", tags: ["logic", "classic", "mines"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in", launchUrl: "/app/games/signal-sweeper.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0", controls: "Tap to reveal, long-press or F to flag", progressSupport: true, scoreSupport: true },
+  { id: "neon-breaker", title: "Neon Breaker", summary: "Break every brick — the angle is yours to control.", description: "Breakout with real deflection physics, six brick tiers, and levels that speed up as you clear them.", category: "Arcade", tags: ["classic", "paddle", "levels"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in", launchUrl: "/app/games/neon-breaker.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.0", controls: "Drag or Arrow keys, Space to launch", progressSupport: true, scoreSupport: true },
+  { id: "type-storm", title: "Type Storm", summary: "Type the falling words before they breach your shields.", description: "A typing sprint with 200 words, combo streaks, and a pace that keeps climbing. Three shields, no mercy.", category: "Focus", tags: ["typing", "speed", "keyboard"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in", launchUrl: "/app/games/type-storm.html", thumbnail: "/app/assets/poses/mode-dark-write.webp", featured: false, version: "1.0.0", controls: "Just type — tap first on mobile", progressSupport: true, scoreSupport: true },
+  { id: "logic-lights", title: "Logic Lights", summary: "Turn every light off — each tap flips its neighbors too.", description: "Ten hand-guaranteed solvable Lights Out levels with par scores. Beat par, bank the points.", category: "Puzzle", tags: ["logic", "lights-out", "calm"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in", launchUrl: "/app/games/logic-lights.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0", controls: "Tap cells or arrows + Enter", progressSupport: true, scoreSupport: true },
 ];
 
 const ui = {
@@ -203,10 +209,37 @@ function selectedSubmission() {
   return ui.snapshot.submissions.find((item) => item.id === ui.editingSubmissionId) || null;
 }
 
+const PROTOCOL_SNIPPET = `// 1. The bridge — your game talks to PhantomPlay with postMessage:
+const host = (type, data = {}) =>
+  parent.postMessage({ source: 'phantomplay-game', type, ...data }, '*');
+
+// 2. Send these four messages:
+host('ready');                                        // once, when playable
+host('score',    { score, progress });                // whenever score changes
+host('progress', { score, progress });                // progress is 0-100
+host('complete', { score, progress: 100, state: {} });// EXACTLY once per run
+
+// 3. Honor the player's settings:
+addEventListener('message', (e) => {
+  if (e.data?.source === 'phantomplay-host' && e.data.type === 'settings') {
+    // e.data.sound === false  -> mute all audio
+    // e.data.reducedMotion    -> remove glow/animation
+  }
+});`;
+
+function starterKit() {
+  return `<section class="pp-starter-kit"><div class="pp-starter-head"><div><p class="pp-kicker">START HERE</p><h2>You're building alongside ${esc(ui.snapshot.developerSpotlight || TAK_CREATOR)} and the whole built-in library.</h2><p>Every game in the library — all ${ui.snapshot.catalog.length} of them — is a single HTML file speaking one small protocol. The starter template below is a complete working game with every platform rule explained in comments. Copy it, gut it, ship yours.</p></div></div>
+    <div class="pp-starter-grid">
+      <article><h3>1 · Play the template</h3><p>A finished 30-second game that already passes review. See what "done" feels like before writing a line.</p><a class="pp-primary" href="/app/games/starter-template.html" target="_blank" rel="noopener">Open starter template ↗</a></article>
+      <article><h3>2 · Copy the protocol</h3><p>Four messages in, one settings message out. This is the whole integration.</p><button type="button" class="pp-secondary" data-pp-copy-protocol>Copy protocol snippet</button><pre class="pp-protocol">${esc(PROTOCOL_SNIPPET)}</pre></article>
+      <article><h3>3 · Pass review</h3><p>The checklist the review queue actually uses:</p><ul><li>Start overlay + game-over overlay with Play again</li><li>Keyboard AND touch, responsive to 360px</li><li>Pause when the tab is hidden</li><li><code>complete</code> fires exactly once per run</li><li>No external requests, trackers, or popups</li><li>Honest version + player-data disclosure</li></ul></article>
+    </div></section>`;
+}
+
 function renderDeveloper() {
   if (!ui.snapshot.access.canSubmitGames) return empty("Submissions are unavailable", "This account or plan can play games but cannot submit releases.");
   const editing = selectedSubmission();
-  return `<div class="pp-developer"><section class="pp-dev-guide"><div><p class="pp-kicker">DEVELOPER DISTRIBUTION</p><h2>Bring a finished browser game to PhantomPlay.</h2><p>Submissions are reviewed for quality, age rating, privacy, controls, responsiveness, and sandbox compatibility. Approval never happens automatically.</p></div><ul><li>HTTPS or approved PhantomPlay path</li><li>Responsive keyboard + touch controls</li><li>No hidden trackers, popups, payments, or account access</li><li>Clear version and player-data disclosure</li></ul></section>
+  return `<div class="pp-developer">${starterKit()}<section class="pp-dev-guide"><div><p class="pp-kicker">DEVELOPER DISTRIBUTION</p><h2>Bring a finished browser game to PhantomPlay.</h2><p>Submissions are reviewed for quality, age rating, privacy, controls, responsiveness, and sandbox compatibility. Approval never happens automatically.</p></div><ul><li>HTTPS or approved PhantomPlay path</li><li>Responsive keyboard + touch controls</li><li>No hidden trackers, popups, payments, or account access</li><li>Clear version and player-data disclosure</li></ul></section>
     <section class="pp-dev-layout"><form class="pp-submit-form" data-pp-submit-form><header><h2>${editing ? "Update release" : "New submission"}</h2>${editing ? `<button type="button" class="pp-secondary" data-pp-cancel-edit>Cancel edit</button>` : ""}</header><input type="hidden" name="submissionId" value="${esc(editing?.id || "")}"/><label>Game title<input name="title" value="${esc(editing?.title || "")}" maxlength="90" required/></label><label>One-line summary<input name="summary" value="${esc(editing?.summary || "")}" maxlength="180" required/></label><label>Full description<textarea name="description" rows="5" maxlength="3000" required>${esc(editing?.description || "")}</textarea></label><div class="pp-form-row"><label>Category<select name="category">${[...CATEGORIES.filter((c) => c !== "All"), "Other"].map((c) => `<option ${editing?.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></label><label>Content rating<select name="contentRating"><option value="everyone" ${editing?.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${editing?.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${editing?.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label>Version<input name="version" value="${esc(editing?.version || "1.0.0")}" pattern="\\d+\\.\\d+\\.\\d+.*" required/></label></div><label>Launch URL<input name="launchUrl" value="${esc(editing?.launchUrl || "")}" placeholder="https://… or /app/games/community/…" required/></label><label>Screenshot URLs<textarea name="screenshots" rows="3" placeholder="One HTTPS URL per line" required>${esc(editing?.screenshots?.join("\n") || "")}</textarea></label><label>Controls<input name="controls" value="${esc(editing?.controls || "")}" maxlength="240" placeholder="Keyboard, touch, controller…" required/></label><label>Player data used or stored<textarea name="dataHandling" rows="3" maxlength="600" placeholder="Be specific. 'None' is acceptable when true." required>${esc(editing?.dataHandling || "")}</textarea></label><label>Tags<input name="tags" value="${esc(editing?.tags?.join(", ") || "")}" placeholder="puzzle, touch, quick"/></label><label>Release notes<textarea name="releaseNotes" rows="2"></textarea></label><div class="pp-form-actions"><button type="submit" name="action" value="draft" class="pp-secondary">Save draft</button><button type="submit" name="action" value="submit" class="pp-primary">${editing ? "Resubmit for review" : "Submit for review"}</button></div><p data-pp-form-message></p></form><section><h2>Your submissions</h2><div class="pp-submission-list">${ui.snapshot.submissions.length ? ui.snapshot.submissions.map((item) => submissionCard(item)).join("") : empty("No submissions yet", "Save a draft or send a completed game for review.")}</div></section></section>
   </div>`;
 }
@@ -417,6 +450,12 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-edit-submission]").forEach((button) => button.onclick = () => { ui.editingSubmissionId = button.dataset.ppEditSubmission; render(); mountedRoot.querySelector("[data-pp-submit-form]")?.scrollIntoView({ behavior: "smooth", block: "start" }); });
   mountedRoot.querySelector("[data-pp-cancel-edit]")?.addEventListener("click", () => { ui.editingSubmissionId = null; render(); });
   mountedRoot.querySelectorAll("[data-pp-moderate]").forEach((button) => button.onclick = () => moderate(button));
+  const copyProtocol = mountedRoot.querySelector("[data-pp-copy-protocol]");
+  if (copyProtocol) copyProtocol.addEventListener("click", async () => {
+    try { await navigator.clipboard.writeText(PROTOCOL_SNIPPET); copyProtocol.textContent = "Copied to clipboard ✓"; }
+    catch { copyProtocol.textContent = "Select the snippet below and copy"; }
+    setTimeout(() => { copyProtocol.textContent = "Copy protocol snippet"; }, 2200);
+  });
 }
 
 export function renderPhantomPlay(root, opts = {}) {
