@@ -5,6 +5,7 @@ import {
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
+const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
 const artUrl = (file) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
@@ -51,6 +52,8 @@ const ui = {
   playerPaused: false,
   settingsOpen: false,
   editingSubmissionId: null,
+  selectedDeveloperId: "",
+  developerMessage: "",
 };
 
 let mountedRoot = null;
@@ -67,6 +70,10 @@ function slugifyGame(value) {
     .replace(/['']/gu, "")
     .replace(/[^a-z0-9]+/gu, "-")
     .replace(/^-+|-+$/gu, "");
+}
+
+function slugifyDeveloper(value) {
+  return slugifyGame(value) || "developer";
 }
 
 function artSlugFor(game) {
@@ -146,6 +153,19 @@ function saveOffline(snapshot = ui.snapshot) {
   workspaceStorageSetItem(FALLBACK_KEY, JSON.stringify({ favorites: snapshot.favorites, history: snapshot.history, sound: snapshot.preferences.sound, reducedMotion: snapshot.preferences.reducedMotion }));
 }
 
+function loadDeveloperSupport() {
+  try {
+    const saved = JSON.parse(workspaceStorageGetItem(DEV_SUPPORT_KEY) || "{}");
+    return saved && typeof saved === "object" && !Array.isArray(saved) ? saved : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveDeveloperSupport(records) {
+  workspaceStorageSetItem(DEV_SUPPORT_KEY, JSON.stringify(records));
+}
+
 async function hydrate() {
   ui.loading = true;
   ui.error = "";
@@ -185,6 +205,54 @@ function playTimeLabel(value, compact = false) {
 function developerAvatarFor(game) {
   const developer = developerNameFor(game);
   return game.developerAvatar || (developer === "Tak" ? TAK_AVATAR : "");
+}
+
+function devScoreFor(developer, support = {}) {
+  const games = Array.isArray(developer.games) ? developer.games : [];
+  const releaseScore = Math.min(22, games.length * 5);
+  const featuredScore = Math.min(12, Number(developer.featuredCount) * 3);
+  const capabilityScore = Math.min(12, games.filter((game) => game.scoreSupport || game.progressSupport).length * 2);
+  const communityScore = Math.min(6, games.filter((game) => game.kind === "community").length * 3);
+  const supportScore = Math.min(8, (Number(support.supportCount) || 0) * 2 + (Number(support.donationIntentCount) || 0) * 2);
+  return Math.max(0, Math.min(100, Math.round(54 + releaseScore + featuredScore + capabilityScore + communityScore + supportScore)));
+}
+
+function developerDirectory() {
+  const supportRecords = loadDeveloperSupport();
+  const directory = new Map();
+  for (const game of ui.snapshot?.catalog || []) {
+    const name = developerNameFor(game);
+    const id = slugifyDeveloper(name);
+    const entry = directory.get(id) || { id, name, avatar: "", games: [], categories: new Set(), featuredCount: 0 };
+    entry.avatar ||= developerAvatarFor(game);
+    entry.games.push(game);
+    entry.categories.add(game.category);
+    if (game.featured) entry.featuredCount += 1;
+    directory.set(id, entry);
+  }
+  return [...directory.values()].map((developer) => {
+    const support = supportRecords[developer.id] || {};
+    const notes = Array.isArray(support.notes) ? support.notes : [];
+    return {
+      ...developer,
+      categories: [...developer.categories].filter(Boolean).sort(),
+      supportCount: Number(support.supportCount) || 0,
+      donationIntentCount: Number(support.donationIntentCount) || 0,
+      notes: notes.slice(0, 8),
+      supported: !!support.supported,
+      score: devScoreFor(developer, support),
+    };
+  }).sort((a, b) => b.score - a.score || b.games.length - a.games.length || a.name.localeCompare(b.name));
+}
+
+function selectedDeveloper() {
+  return developerDirectory().find((developer) => developer.id === ui.selectedDeveloperId) || null;
+}
+
+function savedDateLabel(value) {
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Saved";
+  return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function gameCard(game, variant = "") {
@@ -242,7 +310,7 @@ function renderHome() {
     ${gameRows(featured, "Featured", "Fast, polished games selected for PhantomPlay.")}
     ${recent.length ? gameRows(recent, "Recently played") : ""}
     ${gameRows(community, "Approved community games", "Only reviewed releases appear here.")}
-    <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Built-in PhantomPlay games by Tak: fast, stylish browser-native breaks with privacy-safe progress and real replay value.</p><button class="pp-secondary" data-pp-tab="developer">Submit a game</button></div></section>
+    <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Built-in PhantomPlay games by Tak: fast, stylish browser-native breaks with privacy-safe progress and real replay value.</p><button class="pp-secondary" data-pp-tab="developer">View developers</button></div></section>
   </div>`;
 }
 
@@ -318,11 +386,72 @@ function selectedSubmission() {
   return ui.snapshot.submissions.find((item) => item.id === ui.editingSubmissionId) || null;
 }
 
+function developerCard(developer) {
+  const previewGames = developer.games.slice(0, 4);
+  return `<article class="pp-dev-card">
+    <header>
+      <img src="${esc(developer.avatar || TAK_AVATAR)}" alt="" loading="lazy"/>
+      <div><p class="pp-kicker">DEVELOPER</p><h3>${esc(developer.name)}</h3><span>${developer.games.length} game${developer.games.length === 1 ? "" : "s"} published</span></div>
+      <strong><b>${developer.score}</b><span>Dev score</span></strong>
+    </header>
+    <div class="pp-dev-thumbs">${previewGames.map((game) => `<img src="${esc(thumbnailFor(game))}" alt="" loading="lazy"/>`).join("")}</div>
+    <p>${esc(developer.categories.join(" / ") || "PhantomPlay")} developer with ${developer.featuredCount} featured release${developer.featuredCount === 1 ? "" : "s"} and ${developer.supportCount} local support mark${developer.supportCount === 1 ? "" : "s"}.</p>
+    <div class="pp-dev-tags">${developer.categories.map((category) => `<span>${esc(category)}</span>`).join("")}</div>
+    <button type="button" class="pp-secondary" data-pp-open-dev="${esc(developer.id)}">View profile</button>
+  </article>`;
+}
+
+function renderDeveloperProfile(developer) {
+  const notes = developer.notes.length ? developer.notes.map((note) => `<li><span>${esc(savedDateLabel(note.at))}</span><p>${esc(note.text)}</p></li>`).join("") : `<li class="is-empty"><p>No private dev notes yet.</p></li>`;
+  return `<div class="pp-developer">
+    <section class="pp-dev-profile">
+      <button type="button" class="pp-secondary pp-dev-back" data-pp-dev-back>← Developers</button>
+      <header>
+        <img src="${esc(developer.avatar || TAK_AVATAR)}" alt="" loading="lazy"/>
+        <div><p class="pp-kicker">DEVELOPER PROFILE</p><h2>${esc(developer.name)}</h2><span>${developer.games.length} published game${developer.games.length === 1 ? "" : "s"} · ${developer.categories.join(" / ") || "PhantomPlay"}</span></div>
+        <strong><b>${developer.score}</b><span>Dev score</span></strong>
+      </header>
+      <div class="pp-dev-stats">
+        <span><b>${developer.games.length}</b><i>Games</i></span>
+        <span><b>${developer.featuredCount}</b><i>Featured</i></span>
+        <span><b>${developer.supportCount}</b><i>Support</i></span>
+        <span><b>${developer.donationIntentCount}</b><i>Donation intent</i></span>
+      </div>
+      <div class="pp-dev-actions">
+        <button type="button" class="pp-primary" data-pp-support-dev="${esc(developer.id)}">${developer.supported ? "Supported" : "Support dev"}</button>
+        <button type="button" class="pp-secondary" data-pp-donate-dev="${esc(developer.id)}">Log donation intent</button>
+        <p>No payment starts here. Support and donation intent are saved privately in this workspace.</p>
+      </div>
+      ${ui.developerMessage ? `<div class="pp-banner is-offline"><b>Developer note</b><span>${esc(ui.developerMessage)}</span><button type="button" data-pp-dev-message-clear>Clear</button></div>` : ""}
+    </section>
+    <section class="pp-dev-profile-grid">
+      <div class="pp-dev-notes">
+        <header><div><p class="pp-kicker">PRIVATE NOTES</p><h3>Leave dev notes</h3></div></header>
+        <textarea data-pp-dev-note-text rows="4" maxlength="800" placeholder="Feedback, feature requests, classroom fit, support ideas..."></textarea>
+        <button type="button" class="pp-secondary" data-pp-save-dev-note="${esc(developer.id)}">Save private note</button>
+        <ul>${notes}</ul>
+      </div>
+      <div class="pp-dev-games">
+        <div class="pp-section-head"><div><h2>All games by ${esc(developer.name)}</h2><p>Every approved PhantomPlay release currently in the catalog.</p></div><span>${developer.games.length} games</span></div>
+        <div class="pp-game-grid pp-game-grid-full">${developer.games.map((game) => gameCard(game)).join("")}</div>
+      </div>
+    </section>
+  </div>`;
+}
+
 function renderDeveloper() {
-  if (!ui.snapshot.access.canSubmitGames) return empty("Submissions are unavailable", "This account or plan can play games but cannot submit releases.");
-  const editing = selectedSubmission();
-  return `<div class="pp-developer"><section class="pp-dev-guide"><div><p class="pp-kicker">DEVELOPER DISTRIBUTION</p><h2>Bring a finished browser game to PhantomPlay.</h2><p>Submissions are reviewed for quality, age rating, privacy, controls, responsiveness, and sandbox compatibility. Approval never happens automatically.</p></div><ul><li>HTTPS or approved PhantomPlay path</li><li>Responsive keyboard + touch controls</li><li>No hidden trackers, popups, payments, or account access</li><li>Clear version and player-data disclosure</li></ul></section>
-    <section class="pp-dev-layout"><form class="pp-submit-form" data-pp-submit-form><header><h2>${editing ? "Update release" : "New submission"}</h2>${editing ? `<button type="button" class="pp-secondary" data-pp-cancel-edit>Cancel edit</button>` : ""}</header><input type="hidden" name="submissionId" value="${esc(editing?.id || "")}"/><label>Game title<input name="title" value="${esc(editing?.title || "")}" maxlength="90" required/></label><label>One-line summary<input name="summary" value="${esc(editing?.summary || "")}" maxlength="180" required/></label><label>Full description<textarea name="description" rows="5" maxlength="3000" required>${esc(editing?.description || "")}</textarea></label><div class="pp-form-row"><label>Category<select name="category">${[...CATEGORIES.filter((c) => c !== "All"), "Other"].map((c) => `<option ${editing?.category === c ? "selected" : ""}>${c}</option>`).join("")}</select></label><label>Content rating<select name="contentRating"><option value="everyone" ${editing?.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${editing?.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${editing?.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label>Version<input name="version" value="${esc(editing?.version || "1.0.0")}" pattern="\\d+\\.\\d+\\.\\d+.*" required/></label></div><label>Launch URL<input name="launchUrl" value="${esc(editing?.launchUrl || "")}" placeholder="https://… or /app/games/community/…" required/></label><label>Screenshot URLs<textarea name="screenshots" rows="3" placeholder="One HTTPS URL per line" required>${esc(editing?.screenshots?.join("\n") || "")}</textarea></label><label>Controls<input name="controls" value="${esc(editing?.controls || "")}" maxlength="240" placeholder="Keyboard, touch, controller…" required/></label><label>Player data used or stored<textarea name="dataHandling" rows="3" maxlength="600" placeholder="Be specific. 'None' is acceptable when true." required>${esc(editing?.dataHandling || "")}</textarea></label><label>Tags<input name="tags" value="${esc(editing?.tags?.join(", ") || "")}" placeholder="puzzle, touch, quick"/></label><label>Release notes<textarea name="releaseNotes" rows="2"></textarea></label><div class="pp-form-actions"><button type="submit" name="action" value="draft" class="pp-secondary">Save draft</button><button type="submit" name="action" value="submit" class="pp-primary">${editing ? "Resubmit for review" : "Submit for review"}</button></div><p data-pp-form-message></p></form><section><h2>Your submissions</h2><div class="pp-submission-list">${ui.snapshot.submissions.length ? ui.snapshot.submissions.map((item) => submissionCard(item)).join("") : empty("No submissions yet", "Save a draft or send a completed game for review.")}</div></section></section>
+  const developers = developerDirectory();
+  const developer = selectedDeveloper();
+  if (developer) return renderDeveloperProfile(developer);
+  return `<div class="pp-developer">
+    <section class="pp-dev-guide">
+      <div><p class="pp-kicker">DEVELOPER DIRECTORY</p><h2>Find the people building PhantomGames.</h2><p>Browse approved PhantomPlay developers by Dev score, open their profile, see every game they have in the catalog, save private notes, and mark support without starting a payment.</p></div>
+      <ul><li>Dev score is based on catalog quality signals</li><li>Profiles show all approved games</li><li>Support and donation intent stay local</li><li>No public profiles or external payment calls</li></ul>
+    </section>
+    <section class="pp-dev-directory">
+      <div class="pp-section-head"><div><h2>Developers</h2><p>Ranked by Dev score and published PhantomPlay releases.</p></div><span>${developers.length} listed</span></div>
+      ${developers.length ? `<div class="pp-dev-list">${developers.map(developerCard).join("")}</div>` : empty("No developers yet", "Approved games will create developer profiles automatically.")}
+    </section>
   </div>`;
 }
 
@@ -561,6 +690,57 @@ async function moderate(button) {
   } catch (error) { ui.error = error.message; render(); }
 }
 
+function updateDeveloperRecord(devId, updater) {
+  const records = loadDeveloperSupport();
+  const saved = records[devId] && typeof records[devId] === "object" && !Array.isArray(records[devId]) ? records[devId] : {};
+  const record = {
+    supportCount: Number(saved.supportCount) || 0,
+    donationIntentCount: Number(saved.donationIntentCount) || 0,
+    supported: !!saved.supported,
+    notes: Array.isArray(saved.notes) ? saved.notes : [],
+  };
+  updater(record);
+  records[devId] = record;
+  saveDeveloperSupport(records);
+}
+
+function supportDeveloper(devId) {
+  updateDeveloperRecord(devId, (record) => {
+    if (!record.supported) {
+      record.supported = true;
+      record.supportCount += 1;
+      record.lastSupportedAt = new Date().toISOString();
+      ui.developerMessage = "Support saved locally for this developer.";
+    } else {
+      ui.developerMessage = "You already marked local support for this developer.";
+    }
+  });
+  render();
+}
+
+function logDeveloperDonationIntent(devId) {
+  updateDeveloperRecord(devId, (record) => {
+    record.donationIntentCount += 1;
+    record.lastDonationIntentAt = new Date().toISOString();
+    ui.developerMessage = "Donation intent saved locally. No payment was started.";
+  });
+  render();
+}
+
+function saveDeveloperNote(devId, text) {
+  const cleanText = String(text || "").trim();
+  if (!cleanText) {
+    ui.developerMessage = "Write a note before saving it.";
+    render();
+    return;
+  }
+  updateDeveloperRecord(devId, (record) => {
+    record.notes = [{ id: `${Date.now()}`, text: cleanText.slice(0, 800), at: new Date().toISOString() }, ...record.notes].slice(0, 12);
+    ui.developerMessage = "Private developer note saved locally.";
+  });
+  render();
+}
+
 function bind() {
   mountedRoot.querySelectorAll("[data-pp-tab]").forEach((button) => button.onclick = () => { ui.tab = button.dataset.ppTab; render(); });
   mountedRoot.querySelectorAll("[data-pp-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppPlay));
@@ -579,6 +759,12 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-copy-room]").forEach((button) => button.onclick = async () => { try { await navigator.clipboard?.writeText(button.dataset.ppCopyRoom || ""); ui.roomMessage = `Room ${button.dataset.ppCopyRoom} code copied locally.`; } catch { ui.roomMessage = `Room code: ${button.dataset.ppCopyRoom}`; } render(); });
   mountedRoot.querySelectorAll("[data-pp-room-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppRoomPlay));
   mountedRoot.querySelectorAll("[data-pp-room-leave]").forEach((button) => button.onclick = () => leavePrivateRoom(button.dataset.ppRoomLeave));
+  mountedRoot.querySelectorAll("[data-pp-open-dev]").forEach((button) => button.onclick = () => { ui.selectedDeveloperId = button.dataset.ppOpenDev; ui.developerMessage = ""; render(); });
+  mountedRoot.querySelector("[data-pp-dev-back]")?.addEventListener("click", () => { ui.selectedDeveloperId = ""; ui.developerMessage = ""; render(); });
+  mountedRoot.querySelector("[data-pp-dev-message-clear]")?.addEventListener("click", () => { ui.developerMessage = ""; render(); });
+  mountedRoot.querySelectorAll("[data-pp-support-dev]").forEach((button) => button.onclick = () => supportDeveloper(button.dataset.ppSupportDev));
+  mountedRoot.querySelectorAll("[data-pp-donate-dev]").forEach((button) => button.onclick = () => logDeveloperDonationIntent(button.dataset.ppDonateDev));
+  mountedRoot.querySelectorAll("[data-pp-save-dev-note]").forEach((button) => button.onclick = () => saveDeveloperNote(button.dataset.ppSaveDevNote, mountedRoot.querySelector("[data-pp-dev-note-text]")?.value));
   mountedRoot.querySelector("[data-pp-player-close]")?.addEventListener("click", closePlayer);
   mountedRoot.querySelector("[data-pp-player-pause]")?.addEventListener("click", togglePlayerPause);
   mountedRoot.querySelector("[data-pp-player-restart]")?.addEventListener("click", restartPlayer);
