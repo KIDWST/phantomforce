@@ -706,7 +706,7 @@ export function renderSiteStudio(el) {
     promptInput.addEventListener("input", () => {
       const clone = JSON.parse(JSON.stringify(active));
       applyWebsiteChange(clone, promptInput.value, false);
-      preview.innerHTML = renderWebsitePreview(clone, productsFor(active), { selected: siteUi.selectedSection });
+      preview.innerHTML = renderWebsitePreview(clone, productsFor(clone), { selected: siteUi.selectedSection, cart: clone.store?.cart || {} });
     });
   }
 }
