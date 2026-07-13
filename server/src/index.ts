@@ -129,10 +129,11 @@ import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
-import { randomUUID, timingSafeEqual } from "node:crypto";
-import { appendFile, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, extname, join, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry } from "./approval/action-registry.js";
@@ -1289,6 +1290,350 @@ function requireSuperAdmin(request: FastifyRequest, reply: FastifyReply) {
   }
   return dbSession;
 }
+
+/* Local Asset Library: read-only Motionarray/desktop asset indexing.
+   This is separate from permanent multi-tenant Asset Cloud. It keeps large
+   local packages on disk, uses the existing Motionarray manager manifest when
+   present, and exposes metadata plus explicit authenticated file fetches. */
+type LocalAssetKind = "image" | "video" | "audio" | "project" | "archive" | "document" | "folder" | "other";
+type LocalAssetRecord = {
+  id: string;
+  name: string;
+  title: string;
+  kind: LocalAssetKind;
+  category: string;
+  app: string;
+  relativePath: string;
+  localPath: string;
+  servePath?: string;
+  originalZip?: string;
+  sizeBytes: number;
+  sizeLabel: string;
+  mime: string;
+  status: string;
+  safety: string;
+  tags: string[];
+  previewable: boolean;
+  updatedAt?: string;
+};
+type LocalAssetIndex = {
+  ok: boolean;
+  root: string;
+  rootLabel: string;
+  generatedAt: string;
+  count: number;
+  truncated: boolean;
+  source: "manifest" | "scan";
+  assets: LocalAssetRecord[];
+};
+
+const LOCAL_ASSET_DEFAULT_ROOT = "G:\\Motionarray download";
+const LOCAL_ASSET_MANAGER_DIR = "_PhantomForce_Asset_Manager";
+const LOCAL_ASSET_MANIFEST = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce_motionarray_manifest.json");
+const LOCAL_ASSET_CACHE = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce-local-asset-cache.json");
+const LOCAL_ASSET_SCAN_LIMIT = 2500;
+const LOCAL_ASSET_CACHE_TTL_MS = 10 * 60 * 1000;
+const LOCAL_ASSET_MIME: Record<string, { kind: LocalAssetKind; mime: string; previewable: boolean }> = {
+  ".jpg": { kind: "image", mime: "image/jpeg", previewable: true },
+  ".jpeg": { kind: "image", mime: "image/jpeg", previewable: true },
+  ".png": { kind: "image", mime: "image/png", previewable: true },
+  ".webp": { kind: "image", mime: "image/webp", previewable: true },
+  ".gif": { kind: "image", mime: "image/gif", previewable: true },
+  ".svg": { kind: "image", mime: "image/svg+xml", previewable: true },
+  ".mp4": { kind: "video", mime: "video/mp4", previewable: true },
+  ".mov": { kind: "video", mime: "video/quicktime", previewable: false },
+  ".webm": { kind: "video", mime: "video/webm", previewable: true },
+  ".mp3": { kind: "audio", mime: "audio/mpeg", previewable: true },
+  ".wav": { kind: "audio", mime: "audio/wav", previewable: true },
+  ".m4a": { kind: "audio", mime: "audio/mp4", previewable: true },
+  ".zip": { kind: "archive", mime: "application/zip", previewable: false },
+  ".psd": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".psb": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".drfx": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".dra": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".csv": { kind: "document", mime: "text/csv", previewable: false },
+  ".json": { kind: "document", mime: "application/json", previewable: false },
+  ".md": { kind: "document", mime: "text/markdown", previewable: false },
+};
+
+let localAssetIndexCache: { key: string; at: number; index: LocalAssetIndex } | null = null;
+
+function localAssetRoot() {
+  const configured = String(process.env.PHANTOMFORCE_LOCAL_ASSET_ROOT || "").trim();
+  return resolve(configured || LOCAL_ASSET_DEFAULT_ROOT);
+}
+
+function isPathInside(parent: string, child: string) {
+  const rel = relative(parent, child);
+  return !!rel && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+function localAssetId(seed: string) {
+  return createHash("sha1").update(seed.toLowerCase()).digest("hex").slice(0, 24);
+}
+
+function sizeLabel(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "unknown";
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(bytes >= 10737418240 ? 0 : 1)} GB`;
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 0 : 1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
+async function safeStat(pathname: string) {
+  try {
+    return await stat(pathname);
+  } catch {
+    return null;
+  }
+}
+
+function classifyLocalPath(pathname: string, fallbackKind: LocalAssetKind = "other") {
+  return LOCAL_ASSET_MIME[extname(pathname).toLowerCase()] || { kind: fallbackKind, mime: "application/octet-stream", previewable: false };
+}
+
+async function findPreviewFile(root: string, dir: string, depth = 0): Promise<string | null> {
+  if (depth > 3) return null;
+  let entries: any[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const sorted = entries.sort((a, b) => {
+    const aw = a.isFile() && classifyLocalPath(a.name).previewable ? 0 : a.isDirectory() ? 1 : 2;
+    const bw = b.isFile() && classifyLocalPath(b.name).previewable ? 0 : b.isDirectory() ? 1 : 2;
+    return aw - bw || a.name.localeCompare(b.name);
+  });
+  for (const entry of sorted) {
+    if (entry.name === "__MACOSX") continue;
+    const full = resolve(dir, entry.name);
+    if (!isPathInside(root, full)) continue;
+    if (entry.isFile() && classifyLocalPath(full).previewable) return full;
+    if (entry.isDirectory()) {
+      const nested = await findPreviewFile(root, full, depth + 1);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+async function recordFromManifestAsset(root: string, raw: any): Promise<LocalAssetRecord | null> {
+  const rawPath = String(raw?.local_path || raw?.original_zip || "").trim();
+  if (!rawPath) return null;
+  const resolved = resolve(rawPath);
+  if (!isPathInside(root, resolved)) return null;
+  const st = await safeStat(resolved);
+  const isDir = !!st?.isDirectory();
+  const previewPath = isDir ? await findPreviewFile(root, resolved) : null;
+  const cls = previewPath
+    ? classifyLocalPath(previewPath)
+    : isDir
+      ? { kind: "folder" as LocalAssetKind, mime: "application/x-directory", previewable: false }
+      : classifyLocalPath(resolved);
+  const sizeBytes = Number.isFinite(Number(raw?.size_bytes))
+    ? Number(raw.size_bytes)
+    : Number.isFinite(Number(raw?.size_gb))
+      ? Math.round(Number(raw.size_gb) * 1073741824)
+      : (st?.isFile() ? st.size : 0);
+  const rel = relative(root, resolved).replaceAll("\\", "/");
+  const title = String(raw?.name || basename(resolved) || "Asset").replaceAll("_", " ");
+  return {
+    id: String(raw?.id || localAssetId(rel)),
+    name: String(raw?.name || basename(resolved) || title),
+    title,
+    kind: cls.kind,
+    category: String(raw?.category || (isDir ? "Folder" : cls.kind)),
+    app: String(raw?.app || ""),
+    relativePath: rel,
+    localPath: resolved,
+    servePath: previewPath || undefined,
+    originalZip: raw?.original_zip ? String(raw.original_zip) : undefined,
+    sizeBytes,
+    sizeLabel: sizeLabel(sizeBytes),
+    mime: cls.mime,
+    status: String(raw?.status || "ready"),
+    safety: String(raw?.safety || "Read-only local asset"),
+    tags: Array.isArray(raw?.tags) ? raw.tags.map(String) : String(raw?.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean),
+    previewable: cls.previewable,
+    updatedAt: st?.mtime?.toISOString?.(),
+  };
+}
+
+async function readLocalAssetManifest(root: string): Promise<LocalAssetIndex | null> {
+  const manifestPath = resolve(root, LOCAL_ASSET_MANIFEST);
+  if (!isPathInside(root, manifestPath)) return null;
+  try {
+    const parsed = JSON.parse(await readFile(manifestPath, "utf8"));
+    const rawAssets = Array.isArray(parsed?.assets) ? parsed.assets : [];
+    const assets = (await Promise.all(rawAssets.map((asset: any) => recordFromManifestAsset(root, asset))))
+      .filter((asset): asset is LocalAssetRecord => !!asset);
+    return {
+      ok: true,
+      root,
+      rootLabel: basename(root),
+      generatedAt: String(parsed?.generated_at || new Date().toISOString()),
+      count: assets.length,
+      truncated: false,
+      source: "manifest",
+      assets,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function scanLocalAssets(root: string): Promise<LocalAssetIndex> {
+  const assets: LocalAssetRecord[] = [];
+  async function walk(dir: string, depth = 0) {
+    if (assets.length >= LOCAL_ASSET_SCAN_LIMIT || depth > 8) return;
+    let entries: any[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (assets.length >= LOCAL_ASSET_SCAN_LIMIT) return;
+      if (["$RECYCLE.BIN", "System Volume Information", "__MACOSX"].includes(entry.name)) continue;
+      const full = resolve(dir, entry.name);
+      if (!isPathInside(root, full)) continue;
+      if (entry.isDirectory()) {
+        await walk(full, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const st = await safeStat(full);
+      const cls = classifyLocalPath(full);
+      const rel = relative(root, full).replaceAll("\\", "/");
+      assets.push({
+        id: localAssetId(rel),
+        name: basename(full),
+        title: basename(full, extname(full)).replaceAll("_", " "),
+        kind: cls.kind,
+        category: cls.kind,
+        app: "",
+        relativePath: rel,
+        localPath: full,
+        servePath: cls.previewable ? full : undefined,
+        sizeBytes: st?.size || 0,
+        sizeLabel: sizeLabel(st?.size || 0),
+        mime: cls.mime,
+        status: "ready",
+        safety: "Read-only local asset",
+        tags: ["local", "motionarray", cls.kind],
+        previewable: cls.previewable,
+        updatedAt: st?.mtime?.toISOString?.(),
+      });
+    }
+  }
+  await walk(root);
+  return {
+    ok: true,
+    root,
+    rootLabel: basename(root),
+    generatedAt: new Date().toISOString(),
+    count: assets.length,
+    truncated: assets.length >= LOCAL_ASSET_SCAN_LIMIT,
+    source: "scan",
+    assets,
+  };
+}
+
+async function loadLocalAssetIndex(refresh = false): Promise<LocalAssetIndex> {
+  const root = localAssetRoot();
+  const rootStatus = await safeStat(root);
+  if (!rootStatus?.isDirectory()) {
+    return { ok: false, root, rootLabel: basename(root), generatedAt: new Date().toISOString(), count: 0, truncated: false, source: "scan", assets: [] };
+  }
+  const key = root;
+  if (!refresh && localAssetIndexCache?.key === key && Date.now() - localAssetIndexCache.at < LOCAL_ASSET_CACHE_TTL_MS) return localAssetIndexCache.index;
+  const index = await readLocalAssetManifest(root) || await scanLocalAssets(root);
+  localAssetIndexCache = { key, at: Date.now(), index };
+  try {
+    const cachePath = resolve(root, LOCAL_ASSET_CACHE);
+    if (isPathInside(root, cachePath)) {
+      await mkdir(dirname(cachePath), { recursive: true });
+      await writeFile(cachePath, JSON.stringify({ ...index, assets: index.assets.map(({ localPath, ...asset }) => asset) }, null, 2), "utf8");
+    }
+  } catch { /* cache writes are best-effort */ }
+  return index;
+}
+
+function publicLocalAsset(asset: LocalAssetRecord) {
+  return {
+    id: asset.id,
+    name: asset.name,
+    title: asset.title,
+    kind: asset.kind,
+    category: asset.category,
+    app: asset.app,
+    relative_path: asset.relativePath,
+    original_zip: asset.originalZip ? basename(asset.originalZip) : undefined,
+    size_bytes: asset.sizeBytes,
+    size_label: asset.sizeLabel,
+    mime: asset.mime,
+    status: asset.status,
+    safety: asset.safety,
+    tags: asset.tags,
+    previewable: asset.previewable,
+    has_preview: !!asset.servePath || asset.previewable,
+    updated_at: asset.updatedAt,
+  };
+}
+
+app.get("/phantom-ai/local-assets/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const index = await loadLocalAssetIndex(false);
+  const counts = index.assets.reduce<Record<string, number>>((memo, asset) => {
+    memo[asset.kind] = (memo[asset.kind] || 0) + 1;
+    return memo;
+  }, {});
+  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: index.count, counts, generated_at: index.generatedAt, truncated: index.truncated };
+});
+
+app.get("/phantom-ai/local-assets", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const q = request.query as Record<string, string | undefined>;
+  const index = await loadLocalAssetIndex(q.refresh === "1" || q.refresh === "true");
+  const search = String(q.search || "").trim().toLowerCase();
+  const kind = String(q.kind || "all").trim().toLowerCase();
+  const limit = Math.max(1, Math.min(120, Number(q.limit || 36) || 36));
+  const assets = index.assets
+    .filter((asset) => kind === "all" || asset.kind === kind || asset.category.toLowerCase().includes(kind))
+    .filter((asset) => !search || [asset.title, asset.name, asset.category, asset.app, asset.relativePath, asset.tags.join(" ")].join(" ").toLowerCase().includes(search))
+    .slice(0, limit);
+  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: index.count, returned: assets.length, truncated: index.truncated, assets: assets.map(publicLocalAsset) };
+});
+
+app.get("/phantom-ai/local-assets/:assetId/file", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const { assetId } = request.params as { assetId: string };
+  const index = await loadLocalAssetIndex(false);
+  const asset = index.assets.find((item) => item.id === assetId);
+  if (!asset) return reply.code(404).send({ ok: false, error: "local_asset_not_found" });
+  if (!asset.previewable && !asset.servePath) return reply.code(415).send({ ok: false, error: "local_asset_not_previewable" });
+  const root = localAssetRoot();
+  const resolved = resolve(asset.servePath || asset.localPath);
+  if (!isPathInside(root, resolved)) return reply.code(403).send({ ok: false, error: "local_asset_path_blocked" });
+  const st = await safeStat(resolved);
+  if (!st?.isFile()) return reply.code(404).send({ ok: false, error: "local_asset_file_missing" });
+  return reply
+    .header("content-type", asset.mime || "application/octet-stream")
+    .header("x-content-type-options", "nosniff")
+    .header("cache-control", "private, max-age=3600")
+    .send(createReadStream(resolved));
+});
+
+app.post("/phantom-ai/local-assets/refresh", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const index = await loadLocalAssetIndex(true);
+  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: index.count, generated_at: index.generatedAt, truncated: index.truncated };
+});
 
 app.get("/orgs", async (request, reply) => {
   const dbSession = requireDatabaseSession(request, reply);

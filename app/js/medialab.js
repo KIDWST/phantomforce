@@ -6,14 +6,14 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-221";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-223";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260712-221";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-221";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-221";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-221";
-import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-221";
+} from "./contenthub.js?v=phantom-live-20260712-223";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-223";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-223";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-223";
+import { assetsAvailable, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260712-223";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1067,11 +1067,23 @@ const NAV_TABS = [
   ["edit", "Edit"],
 ];
 const NAV_DRAWERS = [
+  ["assets", "Assets", "image"],
   ["templates", "Templates", "layout"],
   ["history", "History", "clock"],
   ["engine", "Engine", "cpu"],
 ];
 let activeDrawer = null;
+const localAssetsState = {
+  loaded: false,
+  loading: false,
+  search: "",
+  kind: "all",
+  assets: [],
+  count: 0,
+  source: "",
+  rootLabel: "",
+  message: "",
+};
 
 export function renderMediaStudio(el, opts = {}) {
   if (opts.initialTab && el.dataset.mlInitialTab !== opts.initialTab) {
@@ -1089,6 +1101,7 @@ export function renderMediaStudio(el, opts = {}) {
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
           ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
         </nav>
+        <button class="ml-asset-open ${activeDrawer === "assets" ? "is-active" : ""}" data-ml-drawer-open="assets" type="button">${svgIc("image")} Assets</button>
         <button class="ml-settings-gear ${activeDrawer === "settings" ? "is-active" : ""}" data-ml-open-local-settings type="button" title="Media Lab settings" aria-label="Media Lab settings">${svgIc("gear")}</button>
       </div>
       <div class="ml-body" data-ml-body></div>
@@ -1112,13 +1125,62 @@ export function renderMediaStudio(el, opts = {}) {
 
 /* ---- drawers: Templates / History / Engine / Settings — local Media Lab only ---- */
 function drawerHtml(kind, cfg, esc, opts) {
-  const titleFor = { templates: "Templates", history: "History", engine: "Engine", settings: "Media Lab settings" };
+  const titleFor = { assets: "Local Assets", templates: "Templates", history: "History", engine: "Engine", settings: "Media Lab settings" };
   return `
     <div class="ml-drawer-backdrop" data-ml-drawer-backdrop></div>
     <aside class="ml-drawer" role="dialog" aria-label="${titleFor[kind]}">
       <header class="ml-drawer-head"><b>${titleFor[kind]}</b><button class="ml-drawer-x" data-ml-drawer-close aria-label="Close">${svgIc("close")}</button></header>
-      <div class="ml-drawer-body">${kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : kind === "settings" ? mediaSettingsDrawerHtml(cfg, esc) : engineDrawerHtml(cfg, esc)}</div>
+      <div class="ml-drawer-body">${kind === "assets" ? localAssetsDrawerHtml(esc) : kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : kind === "settings" ? mediaSettingsDrawerHtml(cfg, esc) : engineDrawerHtml(cfg, esc)}</div>
     </aside>`;
+}
+function localAssetsDrawerHtml(esc) {
+  const s = localAssetsState;
+  const kinds = [
+    ["all", "All"],
+    ["image", "Images"],
+    ["video", "Video"],
+    ["project", "Projects"],
+    ["archive", "Archives"],
+    ["folder", "Templates"],
+  ];
+  return `
+    <p class="ml-drawer-note">Local Motionarray library. Nothing is uploaded to Asset Cloud; files stay on this PC and are only pulled into the editor when you choose one.</p>
+    <div class="ml-asset-controls">
+      <input class="ml-text-in" data-ml-local-search placeholder="Search Motionarray assets..." value="${esc(s.search)}"/>
+      <button class="ml-generate ml-ghost ml-inline" data-ml-local-refresh type="button">${svgIc("spark")} Refresh</button>
+    </div>
+    <div class="ml-chips ml-chips-wrap ml-local-kinds">
+      ${kinds.map(([id, label]) => `<button type="button" class="${s.kind === id ? "is-on" : ""}" data-ml-local-kind="${id}">${label}</button>`).join("")}
+    </div>
+    <div class="ml-local-summary">
+      <b>${s.loading ? "Indexing..." : `${s.count || 0} assets indexed`}</b>
+      <span>${esc(s.rootLabel || "Motionarray download")} ${s.source ? `· ${esc(s.source)}` : ""}</span>
+    </div>
+    ${s.message ? `<p class="ml-drawer-note ml-local-message">${esc(s.message)}</p>` : ""}
+    <div class="ml-local-assets" data-ml-local-assets>
+      ${s.loading
+        ? `<div class="ml-local-empty">Scanning local assets...</div>`
+        : s.assets.length
+          ? s.assets.map((asset) => localAssetCardHtml(asset, esc)).join("")
+          : `<div class="ml-local-empty">No local assets match that search.</div>`}
+    </div>`;
+}
+function localAssetCardHtml(asset, esc) {
+  const canUse = asset.kind === "image" && (!!asset.has_preview || !!asset.previewable);
+  return `
+    <article class="ml-local-asset" data-local-asset="${esc(asset.id)}">
+      <div class="ml-local-thumb" data-local-thumb="${esc(asset.id)}" data-previewable="${canUse ? "1" : "0"}">
+        ${canUse ? `<span>${svgIc(asset.kind === "video" ? "film" : "image")}</span>` : `<span>${svgIc("layout")}</span>`}
+      </div>
+      <div class="ml-local-copy">
+        <b>${esc(asset.title || asset.name)}</b>
+        <span>${esc(asset.category || asset.kind)}${asset.app ? ` · ${esc(asset.app)}` : ""}</span>
+        <i>${esc(asset.size_label || "")} ${asset.safety ? `· ${esc(asset.safety)}` : ""}</i>
+      </div>
+      <div class="ml-local-actions">
+        ${canUse ? `<button type="button" data-ml-local-use="${esc(asset.id)}">Edit</button><button type="button" data-ml-local-ref="${esc(asset.id)}">Ref</button>` : `<em>Indexed</em>`}
+      </div>
+    </article>`;
 }
 function templatesDrawerHtml(esc) {
   const visible = MEDIA_PRESETS.filter((p) => p.modality === genState.modality);
@@ -1214,7 +1276,79 @@ function mediaSettingsDrawerHtml(cfg, esc) {
       </section>
     </div>`;
 }
+async function loadLocalAssetsForDrawer(el, opts, refresh = false) {
+  if (localAssetsState.loading) return;
+  localAssetsState.loading = true;
+  localAssetsState.message = "";
+  if (!localAssetsState.loaded || refresh) renderMediaStudio(el, opts);
+  const result = refresh
+    ? await refreshLocalAssets().then(() => listLocalAssets({ search: localAssetsState.search, kind: localAssetsState.kind, limit: 60 }))
+    : await listLocalAssets({ search: localAssetsState.search, kind: localAssetsState.kind, limit: 60 });
+  localAssetsState.loading = false;
+  localAssetsState.loaded = true;
+  localAssetsState.assets = result.assets || [];
+  localAssetsState.count = result.count || localAssetsState.assets.length || 0;
+  localAssetsState.source = result.source || "";
+  localAssetsState.rootLabel = result.root_label || "";
+  localAssetsState.message = result.ok === false ? "Local asset lane is not reachable from this session yet." : "";
+  renderMediaStudio(el, opts);
+}
+async function useLocalAsset(assetId, mode, el, opts) {
+  const asset = localAssetsState.assets.find((item) => item.id === assetId);
+  const url = await localAssetBlobUrl(assetId);
+  if (!url) {
+    opts.notify?.("Media Lab", "That local asset cannot be opened in the browser editor.");
+    return;
+  }
+  if (mode === "ref") {
+    genState.ref = url;
+    session.tab = "generate";
+    activeDrawer = null;
+    opts.notify?.("Media Lab", `using ${asset?.title || "local asset"} as reference.`);
+    renderMediaStudio(el, opts);
+    return;
+  }
+  session.edit = { url, type: asset?.kind === "video" ? "video" : "image", id: assetId };
+  session.tab = "edit";
+  activeDrawer = null;
+  resetEdit();
+  opts.notify?.("Media Lab", `opened ${asset?.title || "local asset"} in the editor.`);
+  renderMediaStudio(el, opts);
+}
+async function hydrateLocalAssetThumbs(el) {
+  const nodes = [...el.querySelectorAll("[data-local-thumb][data-previewable='1']")].slice(0, 24);
+  await Promise.all(nodes.map(async (node) => {
+    const id = node.dataset.localThumb;
+    const asset = localAssetsState.assets.find((item) => item.id === id);
+    if (!id || !asset || asset.kind === "audio") return;
+    const url = await localAssetBlobUrl(id);
+    if (!url) return;
+    node.innerHTML = asset.kind === "video"
+      ? `<video src="${url}" muted playsinline preload="metadata"></video>`
+      : `<img src="${url}" alt=""/>`;
+  }));
+}
 function wireDrawer(el, kind, cfg, opts, esc) {
+  if (kind === "assets") {
+    if (!localAssetsState.loaded && !localAssetsState.loading) loadLocalAssetsForDrawer(el, opts);
+    hydrateLocalAssetThumbs(el);
+    const search = el.querySelector("[data-ml-local-search]");
+    if (search) {
+      let timer = null;
+      search.oninput = () => {
+        localAssetsState.search = search.value;
+        clearTimeout(timer);
+        timer = setTimeout(() => loadLocalAssetsForDrawer(el, opts, true), 250);
+      };
+    }
+    el.querySelectorAll("[data-ml-local-kind]").forEach((b) => b.onclick = () => {
+      localAssetsState.kind = b.dataset.mlLocalKind || "all";
+      loadLocalAssetsForDrawer(el, opts, true);
+    });
+    el.querySelector("[data-ml-local-refresh]")?.addEventListener("click", () => loadLocalAssetsForDrawer(el, opts, true));
+    el.querySelectorAll("[data-ml-local-use]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalUse, "edit", el, opts));
+    el.querySelectorAll("[data-ml-local-ref]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalRef, "ref", el, opts));
+  }
   if (kind === "templates") {
     el.querySelectorAll(".ml-drawer [data-ml-presets] button").forEach((b) => b.onclick = () => {
       const preset = MEDIA_PRESETS.find((p) => p.id === b.dataset.v);
