@@ -554,19 +554,24 @@ function createBuddyController() {
     if (menu) menu.hidden = true;
   }
 
-  function buddyHitTest(clientX, clientY, alphaThreshold = 8) {
-    if (!canvas || !ctx2 || !layer) return false;
+  function buddyRectHit(clientX, clientY) {
+    if (!canvas || !layer) return false;
     if (document.body.classList.contains("overlay-open")) return false;
     if (getComputedStyle(layer).opacity === "0") return false;
     const rect = canvas.getBoundingClientRect();
-    if (
+    return !(
       rect.width <= 0 ||
       rect.height <= 0 ||
       clientX < rect.left ||
       clientX > rect.right ||
       clientY < rect.top ||
       clientY > rect.bottom
-    ) return false;
+    );
+  }
+
+  function buddyHitTest(clientX, clientY, alphaThreshold = 8) {
+    if (!canvas || !ctx2 || !buddyRectHit(clientX, clientY)) return false;
+    const rect = canvas.getBoundingClientRect();
     try {
       const sx = Math.max(0, Math.min(canvas.width - 1, Math.floor((clientX - rect.left) * (canvas.width / rect.width))));
       const sy = Math.max(0, Math.min(canvas.height - 1, Math.floor((clientY - rect.top) * (canvas.height / rect.height))));
@@ -619,7 +624,7 @@ function createBuddyController() {
     document.addEventListener("pointerdown", (event) => {
       if (!canvas || !menu || menu.contains(event.target)) return;
       if (event.button !== 2) return;
-      if (event.target !== canvas && !buddyHitTest(event.clientX, event.clientY, 3)) return;
+      if (event.target !== canvas && !buddyRectHit(event.clientX, event.clientY)) return;
       event.preventDefault();
       event.stopPropagation();
       canvas.style.pointerEvents = "auto";
@@ -631,7 +636,7 @@ function createBuddyController() {
     }, { signal });
     document.addEventListener("contextmenu", (event) => {
       if (!canvas || !menu || menu.contains(event.target)) return;
-      if (event.target !== canvas && !buddyHitTest(event.clientX, event.clientY, 3)) return;
+      if (event.target !== canvas && !buddyRectHit(event.clientX, event.clientY)) return;
       event.preventDefault();
       event.stopPropagation();
       canvas.style.pointerEvents = "auto";
