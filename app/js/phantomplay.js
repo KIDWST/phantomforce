@@ -1,15 +1,37 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260712-211";
+} from "./store.js?v=phantom-live-20260712-225";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
+const artUrl = (file) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
+const TAK_AVATAR = artUrl("tak-avatar.webp");
+const GAME_ART_BY_SLUG = {
+  "neon-drift": artUrl("neon-drift-cover.webp"),
+  "signal-match": artUrl("signal-match-cover.webp"),
+  "focus-stack": artUrl("focus-stack-cover.webp"),
+  "word-weld": artUrl("word-weld-cover.webp"),
+  "reflex-grid": artUrl("reflex-grid-cover.webp"),
+  "penalty-kick": artUrl("penalty-kick-cover.webp"),
+};
+const CATEGORY_ART = {
+  Arcade: GAME_ART_BY_SLUG["neon-drift"],
+  Puzzle: GAME_ART_BY_SLUG["signal-match"],
+  Focus: GAME_ART_BY_SLUG["focus-stack"],
+  Strategy: GAME_ART_BY_SLUG["reflex-grid"],
+  Sports: GAME_ART_BY_SLUG["penalty-kick"],
+  Creative: GAME_ART_BY_SLUG["word-weld"],
+};
 const BUILT_INS = [
-  { id: "neon-drift", title: "Neon Drift", summary: "Dodge the signal storm and keep your streak alive.", description: "A fast one-button reaction game built for a two-minute reset between focused work blocks.", category: "Arcade", tags: ["quick", "reaction", "touch"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/neon-drift.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.0", controls: "Arrow keys, A/D, or tap left/right", progressSupport: true, scoreSupport: true },
-  { id: "signal-match", title: "Signal Match", summary: "Find the matching signals before the grid resets.", description: "A calm memory game with short rounds, keyboard support, and saved best scores.", category: "Puzzle", tags: ["memory", "calm", "puzzle"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/signal-match.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: true, version: "1.0.0", controls: "Click, tap, or use Tab + Enter", progressSupport: true, scoreSupport: true },
-  { id: "focus-stack", title: "Focus Stack", summary: "Drop each layer cleanly and build the tallest signal tower.", description: "A timing game designed for quick intentional breaks, with resumable progress and a local best score.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Phantom Labs", kind: "built_in", launchUrl: "/app/games/focus-stack.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
+  { id: "neon-drift", title: "Neon Drift", summary: "Dodge the signal storm and keep your streak alive.", description: "A fast reaction run with visible touch steering, three lives, pause, restart, and keyboard controls.", category: "Arcade", tags: ["quick", "reaction", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["neon-drift"], featured: true, version: "1.1.0", controls: "Arrow keys, A/D, or hold left/right", progressSupport: true, scoreSupport: true },
+  { id: "signal-match", title: "Signal Match", summary: "Find every matching signal with the fewest turns.", description: "A responsive memory grid with clear feedback, pause, restart, touch, and keyboard support.", category: "Puzzle", tags: ["memory", "calm", "puzzle"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/signal-match.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["signal-match"], featured: true, version: "1.1.0", controls: "Click, tap, or use Tab + Enter", progressSupport: true, scoreSupport: true },
+  { id: "focus-stack", title: "Focus Stack", summary: "Drop each layer cleanly and build the tallest signal tower.", description: "A focused timing run with a proper start, pause, restart, and resize-safe play field.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/focus-stack.html?v=1.1.0", thumbnail: GAME_ART_BY_SLUG["focus-stack"], featured: false, version: "1.1.0", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
+  { id: "word-weld", title: "Word Weld", summary: "Build as many words as you can from one shifting signal rack.", description: "A quick word-building game with tap, keyboard, score, timer, and clean reset controls.", category: "Creative", tags: ["word", "creative", "quick", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "1.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
+  { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the live cells before the grid burns out.", description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.", category: "Strategy", tags: ["reaction", "strategy", "touch", "aim"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: true, version: "1.0.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
+  { id: "penalty-kick", title: "Penalty Kick", summary: "Pick your lane, time the strike, and beat the keeper.", description: "A touch-friendly sports timing game with five shots, visible keeper reads, and saved score.", category: "Sports", tags: ["sports", "timing", "soccer", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/penalty-kick.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["penalty-kick"], featured: false, version: "1.0.0", controls: "Choose a lane, then tap shoot at the sweet spot", progressSupport: true, scoreSupport: true },
 ];
 
 const ui = {
@@ -19,9 +41,14 @@ const ui = {
   offline: false,
   query: "",
   category: "All",
+  roomMode: "classroom",
+  roomGameId: "",
+  roomMessage: "",
+  roomBusy: false,
   snapshot: null,
   player: null,
   playerReady: false,
+  playerPaused: false,
   settingsOpen: false,
   editingSubmissionId: null,
 };
@@ -31,6 +58,58 @@ let mountedOpts = null;
 let playClock = null;
 let playTickAt = 0;
 let messageBound = false;
+let keyboardBound = false;
+
+function slugifyGame(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/^community:/u, "")
+    .replace(/['']/gu, "")
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+}
+
+function artSlugFor(game) {
+  const idSlug = slugifyGame(game?.id);
+  if (GAME_ART_BY_SLUG[idSlug]) return idSlug;
+  const titleSlug = slugifyGame(game?.title);
+  return GAME_ART_BY_SLUG[titleSlug] ? titleSlug : "";
+}
+
+function isPlaceholderThumbnail(value) {
+  const thumbnail = String(value || "");
+  return !thumbnail || thumbnail.includes("/app/assets/poses/") || thumbnail.includes("brand-phantom") || thumbnail.includes("mode-dark");
+}
+
+function thumbnailFor(game) {
+  const slug = artSlugFor(game);
+  if (slug) return GAME_ART_BY_SLUG[slug];
+  if (isPlaceholderThumbnail(game?.thumbnail)) return CATEGORY_ART[game?.category] || GAME_ART_BY_SLUG["neon-drift"];
+  return game.thumbnail;
+}
+
+function developerNameFor(game) {
+  return game?.kind === "built_in" || artSlugFor(game) || game?.developer === "Phantom Labs" ? "Tak" : (game?.developer || "Tak");
+}
+
+function normalizeGame(game) {
+  const developer = developerNameFor(game);
+  return {
+    ...game,
+    developer,
+    developerAvatar: developer === "Tak" ? (game.developerAvatar || TAK_AVATAR) : game.developerAvatar,
+    thumbnail: thumbnailFor(game),
+  };
+}
+
+function normalizeSnapshot(snapshot) {
+  if (!snapshot) return snapshot;
+  return {
+    ...snapshot,
+    catalog: Array.isArray(snapshot.catalog) ? snapshot.catalog.map(normalizeGame) : [],
+    developerSpotlight: snapshot.developerSpotlight === "Phantom Labs" ? "Tak" : (snapshot.developerSpotlight || "Tak"),
+  };
+}
 
 function authHeaders(json = false) {
   const token = session.token();
@@ -51,12 +130,13 @@ function offlineState() {
     tenantId: currentTenantId(),
     actorId: "offline",
     access: { enabled: true, reason: "offline_built_ins", dailyMinuteLimit: 60, usedMinutesToday: 0, remainingMinutesToday: 60, canSubmitGames: false, canModerate: false },
-    catalog: BUILT_INS,
+    catalog: BUILT_INS.map(normalizeGame),
     favorites: Array.isArray(saved.favorites) ? saved.favorites : [],
     history: Array.isArray(saved.history) ? saved.history : [],
     preferences: { contentRating: "teen", sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    rooms: [],
     submissions: [],
-    developerSpotlight: "Phantom Labs",
+    developerSpotlight: "Tak",
     approvedCommunityCount: 0,
   };
 }
@@ -72,10 +152,10 @@ async function hydrate() {
   render();
   try {
     const payload = await api(`/api/phantomplay?tenant_id=${encodeURIComponent(currentTenantId())}`);
-    ui.snapshot = payload;
+    ui.snapshot = normalizeSnapshot(payload);
     ui.offline = false;
   } catch (error) {
-    ui.snapshot = offlineState();
+    ui.snapshot = normalizeSnapshot(offlineState());
     ui.offline = true;
     ui.error = error instanceof Error ? error.message : "PhantomPlay sync is unavailable.";
   } finally {
@@ -102,12 +182,20 @@ function playTimeLabel(value, compact = false) {
   return Number(value) >= 10000 ? (compact ? "Unlimited" : "Unlimited play") : `${Number(value) || 0}${compact ? "" : " min left"}`;
 }
 
+function developerAvatarFor(game) {
+  const developer = developerNameFor(game);
+  return game.developerAvatar || (developer === "Tak" ? TAK_AVATAR : "");
+}
+
 function gameCard(game, variant = "") {
   const favorite = ui.snapshot.favorites.includes(game.id);
   const history = historyFor(game.id);
+  const developerAvatar = developerAvatarFor(game);
+  const developer = developerNameFor(game);
+  const thumbnail = thumbnailFor(game);
   return `<article class="pp-game ${variant}" data-pp-game-card="${esc(game.id)}">
-    <div class="pp-game-art"><img src="${esc(game.thumbnail)}" alt="" loading="lazy"/><span>${esc(game.category)}</span>${game.kind === "community" ? "<em>Community</em>" : ""}</div>
-    <div class="pp-game-body"><div><p>${esc(game.developer)}</p><h3>${esc(game.title)}</h3></div><button type="button" class="pp-favorite ${favorite ? "is-on" : ""}" data-pp-favorite="${esc(game.id)}" aria-label="${favorite ? "Remove from" : "Add to"} favorites">${icon("heart")}</button>
+    <div class="pp-game-art"><img src="${esc(thumbnail)}" alt="" loading="lazy"/><span>${esc(game.category)}</span>${game.kind === "community" ? "<em>Community</em>" : ""}</div>
+    <div class="pp-game-body"><div class="pp-game-title"><p class="pp-game-developer">${developerAvatar ? `<img src="${esc(developerAvatar)}" alt="" loading="lazy"/>` : ""}<span>By ${esc(developer)}</span></p><h3>${esc(game.title)}</h3></div><button type="button" class="pp-favorite ${favorite ? "is-on" : ""}" data-pp-favorite="${esc(game.id)}" aria-label="${favorite ? "Remove from" : "Add to"} favorites">${icon("heart")}</button>
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     ${history?.canContinue ? `<div class="pp-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
@@ -128,20 +216,39 @@ function renderHome() {
   const recent = ui.snapshot.history.map((item) => ui.snapshot.catalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
   const continuing = ui.snapshot.history.filter((item) => item.canContinue).map((item) => ui.snapshot.catalog.find((game) => game.id === item.gameId)).filter(Boolean).slice(0, 4);
   const community = ui.snapshot.catalog.filter((game) => game.kind === "community").slice(0, 4);
+  const activeGameId = featured[0]?.id || ui.snapshot.catalog[0]?.id || "";
   return `<div class="pp-home">
-    <section class="pp-hero"><div><p class="pp-kicker">INTENTIONAL DOWNTIME</p><h1>Step away without leaving PhantomForce.</h1><p>Quick games, saved progress, and approved community releases in one clean break room.</p><div><button class="pp-primary" data-pp-play="${esc(featured[0]?.id || ui.snapshot.catalog[0]?.id || "")}">${icon("play")} Play a quick game</button><button class="pp-secondary" data-pp-tab="library">Browse library</button></div></div><img src="/app/assets/poses/mode-dark-ask.webp" alt="Phantom presenting PhantomPlay"/></section>
+    <section class="pp-hero">
+      <div class="pp-console-copy">
+        <p class="pp-kicker">BREAK CONSOLE</p>
+        <h1>PhantomPlay terminal</h1>
+        <p>Short private sessions, saved progress, approved releases, and clean return-to-work state.</p>
+        <div class="pp-console-actions">
+          <button class="pp-primary" data-pp-play="${esc(activeGameId)}">${icon("play")} Run quick session</button>
+          <button class="pp-secondary" data-pp-tab="library">Open library</button>
+          <button class="pp-secondary" data-pp-tab="together">Start private room</button>
+        </div>
+      </div>
+      <div class="pp-console-panel" aria-hidden="true">
+        <span>STATUS: READY</span>
+        <span>PROFILE: ${esc(ui.snapshot.actorId || "local")}</span>
+        <span>TENANT: ${esc(ui.snapshot.tenantId || currentTenantId())}</span>
+        <span>BUILD: PHANTOMPLAY</span>
+      </div>
+      <img src="/app/assets/poses/mode-dark-ask.webp" alt="Phantom presenting PhantomPlay"/>
+    </section>
     <section class="pp-quick-stats"><span><b>${esc(playTimeLabel(ui.snapshot.access.remainingMinutesToday, true))}</b><i>${ui.snapshot.access.remainingMinutesToday >= 10000 ? "internal access" : "minutes left today"}</i></span><span><b>${ui.snapshot.favorites.length}</b><i>saved games</i></span><span><b>${ui.snapshot.history.length}</b><i>played</i></span><span><b>${ui.snapshot.approvedCommunityCount}</b><i>approved community</i></span></section>
     ${continuing.length ? gameRows(continuing, "Continue playing", "Pick up from your last saved point.") : ""}
     ${gameRows(featured, "Featured", "Fast, polished games selected for PhantomPlay.")}
     ${recent.length ? gameRows(recent, "Recently played") : ""}
     ${gameRows(community, "Approved community games", "Only reviewed releases appear here.")}
-    <section class="pp-spotlight"><img src="/app/assets/poses/mode-dark-website.webp" alt=""/><div><p class="pp-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Building focused, browser-native games that respect player privacy and fit naturally inside PhantomForce.</p><button class="pp-secondary" data-pp-tab="developer">Submit a game</button></div></section>
+    <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Built-in PhantomPlay games by Tak: fast, stylish browser-native breaks with privacy-safe progress and real replay value.</p><button class="pp-secondary" data-pp-tab="developer">Submit a game</button></div></section>
   </div>`;
 }
 
 function filteredCatalog() {
   const query = ui.query.toLowerCase();
-  return ui.snapshot.catalog.filter((game) => (ui.category === "All" || game.category === ui.category) && (!query || `${game.title} ${game.summary} ${game.developer} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
+  return ui.snapshot.catalog.filter((game) => (ui.category === "All" || game.category === ui.category) && (!query || `${game.title} ${game.summary} ${developerNameFor(game)} ${game.tags.join(" ")}`.toLowerCase().includes(query)));
 }
 
 function renderLibrary() {
@@ -152,6 +259,54 @@ function renderLibrary() {
 function renderFavorites() {
   const games = ui.snapshot.catalog.filter((game) => ui.snapshot.favorites.includes(game.id));
   return games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No favorites yet", "Tap the heart on any game to save it here.");
+}
+
+function roomRoster(room) {
+  const participants = Array.isArray(room.participants) ? room.participants : [];
+  return participants.length ? participants.map((participant) => `<span class="${participant.status === "online" ? "is-online" : ""}"><b>${esc(participant.label || "Player")}</b><i>${esc(participant.role === "host" ? "host" : participant.status)}</i></span>`).join("") : "<em>No players joined yet.</em>";
+}
+
+function roomCard(room) {
+  return `<article class="pp-room-card pp-room-live">
+    <header><div><p class="pp-kicker">${room.mode === "classroom" ? "CLASSROOM ROOM" : "FRIENDS ROOM"}</p><h3>${esc(room.gameTitle)}</h3></div><strong>${esc(room.code)}</strong></header>
+    <p>Workspace-only room. Share the short code with people who are signed into the same workspace.</p>
+    <div class="pp-room-roster">${roomRoster(room)}</div>
+    <div class="pp-room-actions"><button type="button" class="pp-primary" data-pp-room-play="${esc(room.gameId)}">${icon("play")} Launch game</button><button type="button" class="pp-secondary" data-pp-copy-room="${esc(room.code)}">Copy code</button><button type="button" class="pp-secondary" data-pp-room-leave="${esc(room.code)}">Leave</button></div>
+  </article>`;
+}
+
+function renderTogether() {
+  const rooms = Array.isArray(ui.snapshot.rooms) ? ui.snapshot.rooms : [];
+  const classroomGames = ui.snapshot.catalog.filter((game) => ui.roomMode !== "classroom" || game.contentRating === "everyone");
+  const selectedGameId = classroomGames.some((game) => game.id === ui.roomGameId) ? ui.roomGameId : (classroomGames[0]?.id || "");
+  return `<div class="pp-together" data-pp-private-rooms>
+    <section class="pp-room-hero">
+      <div><p class="pp-kicker">WIRELESS PLAY / PRIVATE ROOMS</p><h2>Play PhantomGames with friends or classmates without opening a public network.</h2><p>Rooms use signed-in PhantomForce access, a short-lived join code, and the existing game sandbox. Built-in games keep their no-internet rule; the app only brokers room membership and progress state.</p></div>
+      <div class="pp-room-principles"><span>No public discovery</span><span>No direct inbound device ports</span><span>No room chat or voice</span><span>Same workspace only</span></div>
+    </section>
+    <section class="pp-room-layout">
+      <form class="pp-room-card" data-pp-create-room-form>
+        <header><div><p class="pp-kicker">CREATE</p><h3>Start a private room</h3></div><span>${ui.offline ? "Server needed" : "Ready"}</span></header>
+        <label>Mode<select data-pp-room-mode name="mode"><option value="classroom" ${ui.roomMode === "classroom" ? "selected" : ""}>Classroom</option><option value="friends" ${ui.roomMode === "friends" ? "selected" : ""}>Friends</option></select></label>
+        <label>Game<select data-pp-room-game name="gameId" ${classroomGames.length ? "" : "disabled"}>${classroomGames.map((game) => `<option value="${esc(game.id)}" ${game.id === selectedGameId ? "selected" : ""}>${esc(game.title)} · ${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</option>`).join("")}</select></label>
+        <label>Room size<input name="maxPlayers" type="number" min="2" max="${ui.roomMode === "classroom" ? "30" : "8"}" value="${ui.roomMode === "classroom" ? "12" : "6"}"/></label>
+        <button type="submit" class="pp-primary" ${ui.offline || !classroomGames.length || ui.roomBusy ? "disabled" : ""}>Create room code</button>
+        <p>Classroom mode only allows Everyone-rated games and keeps discovery off.</p>
+      </form>
+      <form class="pp-room-card" data-pp-join-room-form>
+        <header><div><p class="pp-kicker">JOIN</p><h3>Join with a code</h3></div><span>Private</span></header>
+        <label>Room code<input name="code" value="" autocomplete="off" inputmode="text" maxlength="12" placeholder="A1B2C3"/></label>
+        <button type="submit" class="pp-secondary" ${ui.offline || ui.roomBusy ? "disabled" : ""}>Join room</button>
+        <p>Codes do not list public rooms. Users must already have PhantomForce access for this workspace.</p>
+      </form>
+    </section>
+    ${ui.roomMessage ? `<div class="pp-banner ${ui.roomMessage.startsWith("Blocked") ? "is-error" : "is-offline"}"><b>Private room status</b><span>${esc(ui.roomMessage)}</span><button type="button" data-pp-room-clear>Clear</button></div>` : ""}
+    <section class="pp-room-safety">
+      <div><p class="pp-kicker">SCHOOL-SAFE DEFAULTS</p><h3>Built for education and work breaks first.</h3><p>Teacher/admin-controlled rooms, short codes, Everyone-rated classroom games, no public friends search, and no external game network calls from built-ins.</p></div>
+      <ul><li>Signed-in same-tenant join policy</li><li>Room invite expires after 90 minutes</li><li>Roster only; no private messaging</li><li>Games still run in script-only iframes</li></ul>
+    </section>
+    <section class="pp-section"><div class="pp-section-head"><div><h2>Active private rooms</h2><p>Only rooms you host or have joined are shown here.</p></div><span>${rooms.length} visible</span></div>${rooms.length ? `<div class="pp-room-grid">${rooms.map(roomCard).join("")}</div>` : empty("No private rooms yet", "Create a room or join with a code to play together.")}</section>
+  </div>`;
 }
 
 function submissionCard(item, admin = false) {
@@ -184,18 +339,19 @@ function settingsMarkup() {
 function playerMarkup() {
   if (!ui.player) return "";
   const { game, play } = ui.player;
-  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(game.thumbnail)}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span>Progress saves automatically</span></footer></div>`;
+  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
   if (!mountedRoot) return;
+  document.body.classList.toggle("phantomplay-playing", !!ui.player);
   if (ui.loading && !ui.snapshot) {
     mountedRoot.innerHTML = `<div class="pp-loading"><i></i><b>Opening PhantomPlay</b><span>Loading your library and saved progress…</span></div>`;
     return;
   }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Home"], ["library", "Library"], ["favorites", "Favorites"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
-  const content = ui.tab === "library" ? renderLibrary() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderHome();
+  const tabs = [["home", "Home"], ["library", "Library"], ["together", "Play Together"], ["favorites", "Favorites"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
+  const content = ui.tab === "library" ? renderLibrary() : ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderHome();
   mountedRoot.innerHTML = `<div class="pp-shell">
     <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE ENTERTAINMENT</p><h1>PhantomPlay</h1><span>Take a real break. Come back sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
     ${ui.offline ? `<div class="pp-banner is-offline"><b>Offline mode</b><span>Built-in games still work. Favorites and progress will sync after the server returns.</span><button data-pp-retry>Retry</button></div>` : ""}
@@ -238,10 +394,62 @@ async function launch(gameId) {
     const result = ui.offline ? offlinePlay(game) : await api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) });
     ui.player = { game: result.game || game, play: result.play };
     ui.playerReady = false;
+    ui.playerPaused = false;
     playTickAt = Date.now();
     render();
     startClock();
   } catch (error) { ui.error = error.message; render(); }
+}
+
+async function createPrivateRoom(form) {
+  const data = new FormData(form);
+  ui.roomBusy = true;
+  ui.roomMessage = "Creating a private room code…";
+  render();
+  try {
+    const result = await api("/api/phantomplay/rooms", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), mode: String(data.get("mode") || "classroom"), gameId: String(data.get("gameId") || ""), maxPlayers: Number(data.get("maxPlayers")) || undefined }) });
+    ui.roomMode = result.room?.mode || ui.roomMode;
+    ui.roomGameId = result.room?.gameId || ui.roomGameId;
+    ui.roomMessage = `Room ${result.room?.code || ""} is ready. Share the code only with signed-in people in this workspace.`;
+    await hydrate();
+  } catch (error) {
+    ui.roomMessage = `Blocked: ${error.message}`;
+    render();
+  } finally {
+    ui.roomBusy = false;
+    render();
+  }
+}
+
+async function joinPrivateRoom(form) {
+  const data = new FormData(form);
+  const code = String(data.get("code") || "").trim();
+  if (!code) { ui.roomMessage = "Blocked: enter a room code first."; render(); return; }
+  ui.roomBusy = true;
+  ui.roomMessage = "Checking private room code…";
+  render();
+  try {
+    const result = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/join`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId() }) });
+    ui.roomMessage = `Joined room ${result.room?.code || code}. Launch the game when your group is ready.`;
+    await hydrate();
+  } catch (error) {
+    ui.roomMessage = `Blocked: ${error.message}`;
+    render();
+  } finally {
+    ui.roomBusy = false;
+    render();
+  }
+}
+
+async function leavePrivateRoom(code) {
+  try {
+    await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/leave`, { method: "POST", body: JSON.stringify({ tenantId: currentTenantId() }) });
+    ui.roomMessage = `Left room ${code}.`;
+    await hydrate();
+  } catch (error) {
+    ui.roomMessage = `Blocked: ${error.message}`;
+    render();
+  }
 }
 
 function startClock() {
@@ -267,7 +475,37 @@ async function closePlayer() {
   await persistPlay(true);
   ui.player = null;
   ui.playerReady = false;
+  ui.playerPaused = false;
+  document.body.classList.remove("phantomplay-playing");
   render();
+}
+
+function postToGame(type) {
+  const frame = mountedRoot?.querySelector("[data-pp-frame]");
+  frame?.contentWindow?.postMessage({ source: "phantomplay-host", type }, "*");
+  frame?.focus?.({ preventScroll: true });
+}
+
+function togglePlayerPause() {
+  if (!ui.playerReady) return;
+  ui.playerPaused = !ui.playerPaused;
+  postToGame(ui.playerPaused ? "pause" : "resume");
+  const pauseButton = mountedRoot?.querySelector("[data-pp-player-pause]");
+  if (pauseButton) pauseButton.textContent = ui.playerPaused ? "Resume" : "Pause";
+  const state = mountedRoot?.querySelector("[data-pp-live-state]");
+  if (state) state.textContent = ui.playerPaused ? "Paused" : "Playing";
+}
+
+function restartPlayer() {
+  if (!ui.playerReady) return;
+  ui.playerPaused = false;
+  postToGame("restart");
+  const pauseButton = mountedRoot?.querySelector("[data-pp-player-pause]");
+  if (pauseButton) pauseButton.textContent = "Pause";
+  const score = mountedRoot?.querySelector("[data-pp-live-score]");
+  if (score) score.textContent = "Score 0";
+  const state = mountedRoot?.querySelector("[data-pp-live-state]");
+  if (state) state.textContent = "Playing";
 }
 
 function onGameMessage(event) {
@@ -277,6 +515,14 @@ function onGameMessage(event) {
     ui.playerReady = true;
     mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
     frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion }, "*");
+    frame.focus?.({ preventScroll: true });
+  }
+  if (event.data.type === "paused") {
+    ui.playerPaused = !!event.data.paused;
+    const pauseButton = mountedRoot.querySelector("[data-pp-player-pause]");
+    if (pauseButton) pauseButton.textContent = ui.playerPaused ? "Resume" : "Pause";
+    const state = mountedRoot.querySelector("[data-pp-live-state]");
+    if (state) state.textContent = ui.playerPaused ? "Paused" : "Playing";
   }
   if (event.data.type === "score" || event.data.type === "progress" || event.data.type === "complete") {
     const detail = { score: Number(event.data.score) || undefined, progress: event.data.type === "complete" ? 100 : Number(event.data.progress) || undefined, state: event.data.state };
@@ -325,7 +571,17 @@ function bind() {
   mountedRoot.querySelector("[data-pp-settings-close]")?.addEventListener("click", () => { ui.settingsOpen = false; render(); });
   mountedRoot.querySelectorAll("[data-pp-pref]").forEach((input) => input.onchange = () => { ui.snapshot.preferences[input.dataset.ppPref] = input.type === "checkbox" ? input.checked : input.value; updatePreferences(); });
   mountedRoot.querySelector("[data-pp-retry]")?.addEventListener("click", hydrate);
+  mountedRoot.querySelector("[data-pp-room-mode]")?.addEventListener("change", (event) => { ui.roomMode = event.target.value === "friends" ? "friends" : "classroom"; render(); });
+  mountedRoot.querySelector("[data-pp-room-game]")?.addEventListener("change", (event) => { ui.roomGameId = event.target.value; });
+  mountedRoot.querySelector("[data-pp-create-room-form]")?.addEventListener("submit", (event) => { event.preventDefault(); createPrivateRoom(event.currentTarget); });
+  mountedRoot.querySelector("[data-pp-join-room-form]")?.addEventListener("submit", (event) => { event.preventDefault(); joinPrivateRoom(event.currentTarget); });
+  mountedRoot.querySelector("[data-pp-room-clear]")?.addEventListener("click", () => { ui.roomMessage = ""; render(); });
+  mountedRoot.querySelectorAll("[data-pp-copy-room]").forEach((button) => button.onclick = async () => { try { await navigator.clipboard?.writeText(button.dataset.ppCopyRoom || ""); ui.roomMessage = `Room ${button.dataset.ppCopyRoom} code copied locally.`; } catch { ui.roomMessage = `Room code: ${button.dataset.ppCopyRoom}`; } render(); });
+  mountedRoot.querySelectorAll("[data-pp-room-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppRoomPlay));
+  mountedRoot.querySelectorAll("[data-pp-room-leave]").forEach((button) => button.onclick = () => leavePrivateRoom(button.dataset.ppRoomLeave));
   mountedRoot.querySelector("[data-pp-player-close]")?.addEventListener("click", closePlayer);
+  mountedRoot.querySelector("[data-pp-player-pause]")?.addEventListener("click", togglePlayerPause);
+  mountedRoot.querySelector("[data-pp-player-restart]")?.addEventListener("click", restartPlayer);
   mountedRoot.querySelector("[data-pp-player-fullscreen]")?.addEventListener("click", () => mountedRoot.querySelector(".pp-player-stage")?.requestFullscreen?.());
   const form = mountedRoot.querySelector("[data-pp-submit-form]");
   if (form) form.onsubmit = (event) => { event.preventDefault(); submitGame(form, event.submitter); };
@@ -338,7 +594,16 @@ export function renderPhantomPlay(root, opts = {}) {
   mountedRoot = root;
   mountedOpts = opts;
   if (!messageBound) { messageBound = true; window.addEventListener("message", onGameMessage); }
+  if (!keyboardBound) {
+    keyboardBound = true;
+    window.addEventListener("keydown", (event) => {
+      if (!ui.player) return;
+      if (event.key === "Escape") { event.preventDefault(); closePlayer(); }
+      if ((event.key === "p" || event.key === "P") && !event.ctrlKey && !event.metaKey) { event.preventDefault(); togglePlayerPause(); }
+      if ((event.key === "r" || event.key === "R") && !event.ctrlKey && !event.metaKey) { event.preventDefault(); restartPlayer(); }
+    });
+  }
   render();
   hydrate();
-  return () => { clearInterval(playClock); mountedRoot = null; mountedOpts = null; };
+  return () => { clearInterval(playClock); document.body.classList.remove("phantomplay-playing"); mountedRoot = null; mountedOpts = null; };
 }

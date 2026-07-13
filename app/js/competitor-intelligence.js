@@ -1,8 +1,8 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-211";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-216";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const TABS = [
-  ["overview", "Overview"], ["signals", "Signals"], ["opportunities", "Opportunities"],
+  ["overview", "Market radar"], ["signals", "Sources"], ["opportunities", "Opportunities"],
   ["creative", "Creative"], ["intercept", "Intercept"], ["evidence", "Evidence & audit"],
 ];
 const SIGNAL_LABELS = {
@@ -66,14 +66,36 @@ function modeCard() {
 }
 function metrics() {
   const m = ui.snapshot.metrics;
-  return `<section class="ci-metrics"><article><b>${m.competitors}</b><span>Competitors</span></article><article><b>${m.signals}</b><span>Public signals</span></article><article><b>${m.inferences}</b><span>Labeled estimates</span></article><article><b>${m.highConfidence}</b><span>High confidence</span></article><article><b>${m.audienceThemes}</b><span>Audience gaps</span></article><article class="${m.blockedRequests ? "is-alert" : ""}"><b>${m.blockedRequests}</b><span>Blocked requests</span></article></section>`;
+  return `<section class="ci-metrics"><article><b>${m.competitors}</b><span>Competitors</span></article><article><b>${m.signals}</b><span>Public signals</span></article><article><b>${m.marketMovers || 0}</b><span>Market movers</span></article><article><b>${m.activeScoutLanes || 0}</b><span>Scout lanes</span></article><article><b>${m.highConfidence}</b><span>High confidence</span></article><article class="${m.blockedRequests ? "is-alert" : ""}"><b>${m.blockedRequests}</b><span>Blocked requests</span></article></section>`;
+}
+function hostFrom(url) { try { return new URL(url).hostname.replace(/^www\./u, ""); } catch { return "public source"; } }
+function contextValue(field) { return ui.snapshot?.scout?.context?.[field] || ""; }
+function momentumLabel(value) {
+  const labels = { gaining: "UP", vulnerable: "DOWN", mixed: "MIXED", quiet: "QUIET", unwatched: "UNWATCHED" };
+  return labels[value] || "WATCH";
+}
+function scoutForm() {
+  return `<form class="ci-scout-form" data-ci-scout-form><div class="ci-form-row"><label>Business or brand<input name="businessName" maxlength="120" value="${esc(contextValue("businessName"))}" placeholder="e.g. ChicagoShots"></label><label>Location or service area<input name="location" maxlength="180" value="${esc(contextValue("location"))}" placeholder="Chicago, online, national…"></label></div><label>What do you sell?<input name="offer" maxlength="240" value="${esc(contextValue("offer"))}" placeholder="Offer, product, service, category…" required></label><label>Who buys it?<input name="audience" maxlength="240" value="${esc(contextValue("audience"))}" placeholder="Audience, segment, buyer type…"></label><label>What should Phantom watch for?<textarea name="goals" rows="3" maxlength="400" placeholder="Competitors gaining traction, pricing changes, product sales, weak reviews, content trends…">${esc(contextValue("goals"))}</textarea></label><button class="ci-primary" type="submit">Arm AI scout</button></form>`;
+}
+function scoutPanel() {
+  const scout = ui.snapshot.scout || {};
+  const needs = scout.status === "needs_context";
+  return `<section class="ci-scout ${needs ? "needs-context" : "is-ready"}"><div class="ci-scout-copy"><p class="ci-kicker">AI MARKET SCOUT</p><h2>${needs ? "Phantom needs the business map." : "Phantom is watching the market."}</h2><p>${esc(scout.briefing || "Public-source scouting is ready.")}</p>${scout.missing?.length ? `<div class="ci-missing">${scout.missing.map((item) => `<span>${esc(item)}</span>`).join("")}</div>` : ""}</div>${needs ? scoutForm() : `<div class="ci-scout-lanes">${(scout.lanes || []).map((lane) => `<article class="is-${esc(lane.status)}"><span>${esc(lane.status.replaceAll("_", " "))}</span><h3>${esc(lane.label)}</h3><p>${esc(lane.why)}</p><code>${esc(lane.query)}</code></article>`).join("")}</div>`}</section>`;
+}
+function marketBoard() {
+  const board = ui.snapshot.marketBoard || [];
+  if (!board.length) return `<section class="ci-market-empty">${empty("No market board yet", ui.snapshot.scout?.status === "needs_context" ? "Fill in the scout context and Phantom will build watch lanes before it asks for public sources." : "Scout lanes are ready. Add or connect public sources and competitors will start ranking here.", '<button class="ci-secondary" data-ci-tab="signals">Open evidence stream</button>')}</section>`;
+  return `<section class="ci-market-board">${board.map((item) => `<article class="is-${esc(item.momentum)}"><header><span class="ci-symbol">${esc(item.symbol)}</span><div><p>${esc(item.category)} · ${esc(item.domain)}</p><h3>${esc(item.name)}</h3></div><b>${item.score}</b></header><div class="ci-ticker"><span>${momentumLabel(item.momentum)}</span><i style="width:${Math.max(6, Math.min(100, item.score))}%"></i></div><dl><div><dt>Signals</dt><dd>${item.signalCount}</dd></div><div><dt>Recent</dt><dd>${item.recentSignals}</dd></div><div><dt>Confidence</dt><dd>${esc(item.confidence)}</dd></div></dl><p>${esc(item.tip)}</p><div class="ci-watch-tags">${item.watch.map((tag) => `<span>${esc(tag)}</span>`).join("")}</div><button class="ci-secondary" data-ci-fuse="${esc(item.competitorId)}">Refresh estimate</button></article>`).join("")}</section>`;
+}
+function tipsPanel() {
+  return `<section class="ci-tips"><div class="ci-section-head"><div><p class="ci-kicker">PHANTOM TIPS</p><h2>What to do next</h2></div></div><div>${(ui.snapshot.tips || []).map((item) => `<article class="is-${esc(item.tone)}"><span>${esc(item.tone)}</span><h3>${esc(item.title)}</h3><p>${esc(item.detail)}</p></article>`).join("")}</div></section>`;
 }
 function inferenceCard(item) {
   return `<article class="ci-inference"><header><div>${statusPill("ESTIMATE", "neutral")} ${statusPill(item.confidence.toUpperCase(), item.confidence === "high" ? "good" : item.confidence === "medium" ? "warn" : "neutral")}</div><time>${fmtDate(item.createdAt)}</time></header><p class="ci-overline">${esc(competitorName(item.competitorId))} · ${esc(item.area.replaceAll("_", " "))}</p><h3>${esc(item.estimate)}</h3><details><summary>Evidence and reasoning</summary><div class="ci-detail-grid"><div><h4>Supporting signals</h4><ul>${item.supportingSignals.map((signal) => `<li><a href="${esc(signal.source)}" target="_blank" rel="noopener noreferrer">${esc(signal.title)}</a><small>${fmtDate(signal.date)}</small></li>`).join("")}</ul></div><div><h4>Alternative explanations</h4><ul>${item.alternativeExplanations.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></div><div><h4>Recommended verification</h4><ul>${item.recommendedVerification.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></div><div><h4>Safe response options</h4><ul>${item.safeResponseOptions.map((text) => `<li>${esc(text)}</li>`).join("")}</ul></div></div></details><footer><span>Confidence score</span><div><i style="width:${Math.round(item.confidenceScore * 100)}%"></i></div><b>${Math.round(item.confidenceScore * 100)}%</b></footer></article>`;
 }
 function overview() {
   const latest = ui.snapshot.inferences.slice(0, 4);
-  return `${modeCard()}${metrics()}<section class="ci-overview-grid"><div><div class="ci-section-head"><div><p class="ci-kicker">LATEST ESTIMATES</p><h2>What may be changing</h2></div><button class="ci-secondary" data-ci-tab="signals">Add evidence</button></div><div class="ci-inference-list">${latest.length ? latest.map(inferenceCard).join("") : empty("No estimates yet", "Add dated public signals, then fuse them into clearly labeled estimates.", '<button class="ci-primary" data-ci-tab="signals">Start with a competitor</button>')}</div></div><aside class="ci-boundaries"><p class="ci-kicker">HARD BOUNDARIES</p><h2>Win sooner. Stay clean.</h2><p>Aggressive mode changes speed and synthesis—not access rights.</p><ul><li>Public and lawfully supplied evidence only</li><li>No identities, private groups, bypasses, or deception</li><li>No invasive targeting of individual commenters</li><li>No cloning protected expression</li><li>No outreach, publishing, or operational interference</li></ul><button class="ci-secondary" data-ci-tab="evidence">Open audit log</button></aside></section>`;
+  return `${modeCard()}${metrics()}${scoutPanel()}<section class="ci-radar-grid"><div><div class="ci-section-head"><div><p class="ci-kicker">MARKET BOARD</p><h2>Competitors moving up, down, or going quiet</h2></div><button class="ci-secondary" data-ci-tab="signals">Open sources</button></div>${marketBoard()}</div>${tipsPanel()}</section><section class="ci-overview-grid"><div><div class="ci-section-head"><div><p class="ci-kicker">LATEST ESTIMATES</p><h2>What may be changing</h2></div></div><div class="ci-inference-list">${latest.length ? latest.map(inferenceCard).join("") : empty("No estimates yet", "Phantom will produce labeled estimates after it sees public signals for a competitor.", '<button class="ci-primary" data-ci-tab="signals">Add public source</button>')}</div></div><aside class="ci-boundaries"><p class="ci-kicker">HARD BOUNDARIES</p><h2>Win sooner. Stay clean.</h2><p>Aggressive mode changes speed and synthesis, not access rights.</p><ul><li>Public and lawfully supplied evidence only</li><li>No identities, private groups, bypasses, or deception</li><li>No invasive targeting of individual commenters</li><li>No cloning protected expression</li><li>No outreach, publishing, or operational interference</li></ul><button class="ci-secondary" data-ci-tab="evidence">Open audit log</button></aside></section>`;
 }
 
 function signals() {
@@ -106,7 +128,7 @@ function content() {
 }
 function render() {
   if (!root) return;
-  root.innerHTML = `<div class="ci-shell"><header class="ci-hero"><div><p class="ci-kicker">PUBLIC-SIGNAL COMMAND</p><h1>Competitor Intelligence</h1><p>Find the opening sooner. Keep every conclusion sourced, labeled, and lawful.</p></div>${ui.snapshot ? `<div class="ci-hero-status"><span></span><div><small>MODE</small><b>${ui.snapshot.settings.aggressiveMode ? "Aggressive intelligence" : "Standard intelligence"}</b></div></div>` : ""}</header>${message()}${ui.snapshot?.access.enabled ? `<nav class="ci-tabs" aria-label="Competitor Intelligence sections">${TABS.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-ci-tab="${id}">${label}</button>`).join("")}</nav>` : ""}<main>${content()}</main></div>`;
+  root.innerHTML = `<div class="ci-shell"><header class="ci-hero"><div><p class="ci-kicker">AI CUSTOMER & MARKET INTELLIGENCE</p><h1>Customer Intelligence</h1><p>Enter the room and see who is gaining, who is exposed, what buyers are saying, and what Phantom should scout next.</p></div>${ui.snapshot ? `<div class="ci-hero-status"><span></span><div><small>SCOUT</small><b>${esc((ui.snapshot.scout?.status || "offline").replaceAll("_", " "))}</b></div></div>` : ""}</header>${message()}${ui.snapshot?.access.enabled ? `<nav class="ci-tabs" aria-label="Competitor Intelligence sections">${TABS.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-ci-tab="${id}">${label}</button>`).join("")}</nav>` : ""}<main>${content()}</main></div>`;
   bind();
 }
 function formBody(form) {
@@ -125,6 +147,7 @@ function bind() {
   root.querySelector("[data-ci-signal-search]")?.addEventListener("input", (event) => { ui.signalQuery = event.target.value; render(); root.querySelector("[data-ci-signal-search]")?.focus(); });
   const filter = root.querySelector("[data-ci-competitor-filter]"); if (filter) { filter.value = ui.competitorFilter; filter.addEventListener("change", (event) => { ui.competitorFilter = event.target.value; render(); }); }
   bindForm("[data-ci-competitor-form]", "/api/competitor-intelligence/competitors", "Competitor profile added.");
+  bindForm("[data-ci-scout-form]", "/api/competitor-intelligence/scout", "AI market scout armed.");
   bindForm("[data-ci-signal-form]", "/api/competitor-intelligence/signals", "Public signal recorded.");
   bindForm("[data-ci-gap-form]", "/api/competitor-intelligence/audience-themes", "Audience gap converted into original opportunities.", (data) => ({ ...data, sourceUrls: String(data.sourceUrls || "").split(/\r?\n/).map((item) => item.trim()).filter(Boolean) }));
   bindForm("[data-ci-opportunity-form]", "/api/competitor-intelligence/opportunities", "Original market response options prepared.");

@@ -13,6 +13,8 @@ assert.match(main, /id:\s*"intelligence"[\s\S]*label:\s*"Competitor Intel"/u, "C
 assert.match(main, /renderCompetitorIntelligence/u, "The workspace must use the intelligence renderer.");
 assert.match(index, /competitor-intelligence\.css\?v=phantom-live-/u, "The dedicated stylesheet must load.");
 assert.match(module, /Aggressive Intelligence/u, "Optional aggressive mode must be visible.");
+assert.match(module, /AI market scout|data-ci-scout-form/u, "The first-run experience must arm an AI market scout instead of waiting for manual competitor entry.");
+assert.match(module, /ci-market-board|momentumLabel/u, "The overview must render a stock-market-style competitor board.");
 assert.match(module, /data-ci-fuse/u, "Signal fusion must be interactive.");
 assert.match(module, /aggregated theme/u, "Audience gaps must require aggregation.");
 assert.match(module, /originality risk/u, "Creative analysis must expose similarity risk.");
@@ -21,6 +23,7 @@ assert.match(css, /@media\(max-width:767px\)/u, "Phone-specific responsive layou
 assert.match(staticServer, /urlPath\.startsWith\("\/api\/competitor-intelligence"\)/u, "Live admin must proxy intelligence APIs.");
 assert.match(service, /PROHIBITED_PATTERNS/u, "A server-side hard boundary policy must exist.");
 assert.match(service, /status:\s*"estimate"/u, "Inferences must be labeled estimates.");
+assert.match(service, /buildMarketBoard|updateMarketScoutContext/u, "The service must compute market board and scout readiness server-side.");
 assert.doesNotMatch(service, /from\s+["'](?:puppeteer|playwright)|child_process|execFile|spawn\(/iu, "The service must not implement scraping or bypass tooling.");
 assert.doesNotMatch(module, /fetch\([^)]*https?:\/\//u, "The UI must not call competitor sites directly.");
 

@@ -162,6 +162,8 @@ const AccessSessionTokenPayloadSchema = z.object({
 export const AccessLoginSchema = z.object({
   sessionId: z.string().min(1),
   ownerKey: z.string().optional(),
+  email: z.string().email().optional(),
+  password: z.string().optional(),
 });
 
 export function getAccessAuthConfiguration() {
@@ -410,6 +412,20 @@ export function verifyOwnerKey(provided: string | undefined): boolean {
   }
 
   return safeEqual(provided, ownerLoginKey);
+}
+
+export function verifyOwnerCredentials(providedEmail: string | undefined, providedPassword: string | undefined): boolean {
+  if (!enableOwnerProductionAuth) {
+    return false;
+  }
+
+  const normalizedEmail = (providedEmail ?? "").trim().toLowerCase();
+
+  if (!ownerEmail || !normalizedEmail || !safeEqual(normalizedEmail, ownerEmail)) {
+    return false;
+  }
+
+  return verifyOwnerKey(providedPassword);
 }
 
 export function issueAccessSessionToken(sessionId: string, options?: { ownerKey?: string }) {

@@ -10,20 +10,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260712-212";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-212";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-212";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260712-212";
+} from "./imagefilters.js?v=phantom-live-20260712-216";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-216";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-216";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260712-216";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260712-212";
+} from "./content-editor.js?v=phantom-live-20260712-216";
 import {
-  currentTenantId, currentWs, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-212";
+  currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
+} from "./store.js?v=phantom-live-20260712-216";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -57,8 +57,7 @@ const isVideo = (t) => ["reel", "short", "video"].includes(t);
 
 /* ---------------- social profiles (shared with Media Lab settings) ----------------
    A saved profile is a public identity reference, not API authorization. Analytics
-   uses local first-party workspace signals by default and clearly separates them
-   from official imports/adapters when those are connected. */
+   renders only imported or adapter-provided metrics and never invents numbers. */
 const SOCIAL_KEY = "pf.social.accounts.v1";
 const PUBLISH_PRESETS = [
   { id: "enabled", name: "Enabled", hint: "saved profiles", platforms: null },
@@ -227,20 +226,11 @@ function genPosts() {
 }
 
 /* ---------------- data API (Analytics + Hub both use this) ---------------- */
-/* Showcase posts are fabricated: invented captions, reach, commenters, and
-   "scheduled" items. Seeding them into a brand-new workspace showed a customer
-   a feed of posts they never wrote — including ones apparently queued to go out
-   in 24h — next to a panel truthfully reporting 0 media. Real content only,
-   unless someone explicitly asks for the demo dataset. */
-const CH_DEMO_FLAG = "pf.contenthub.demoData.v1";
-function demoContentEnabled() {
-  try { return localStorage.getItem(CH_DEMO_FLAG) === "on"; } catch { return false; }
-}
 export function loadContent() {
   let saved = null;
   try { saved = JSON.parse(workspaceStorageGetItem(CH_KEY) || "null"); } catch {}
   if (saved && Array.isArray(saved.posts) && saved.posts.length) return saved;
-  const data = { posts: demoContentEnabled() ? genPosts() : [], updatedAt: Date.now(), demo: demoContentEnabled() };
+  const data = { posts: genPosts(), updatedAt: Date.now() };
   try { workspaceStorageSetItem(CH_KEY, JSON.stringify(data)); } catch {}
   return data;
 }
@@ -1332,9 +1322,7 @@ function renderContentLibrary(body, data, esc, root, opts) {
       : `<p class="empty-line">No generated images or videos yet. Create media in Media Lab and it will land here automatically.</p>`}
       ${stats.trimmed ? `<p class="ch-src">Space saver active: ${stats.trimmed} older/heavier preview${stats.trimmed === 1 ? "" : "s"} kept as metadata only.</p>` : ""}
     </section>
-    ${shownPosts.length
-      ? `<div class="ch-grid ch-grid-lg">${shownPosts.map((p) => postCard(p, esc, { creator: true })).join("")}</div>`
-      : `<p class="empty-line">No published or scheduled posts yet. Connect a social account or queue a draft, and your real posts show up here.</p>`}`;
+    <div class="ch-grid ch-grid-lg">${shownPosts.map((p) => postCard(p, esc, { creator: true })).join("")}</div>`;
   wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, root, opts);
   wirePostCards(body, data, esc, root, opts);
 }
@@ -3121,34 +3109,91 @@ function openPost(p, esc) {
 }
 
 /* =========================================================================
-   ANALYTICS - real metrics first, local signals by default.
-   Official platform imports/adapters win when present. If they are not
-   connected yet, Analytics still reads PhantomForce's own local site/content
-   activity so the page is useful instead of acting empty.
+   ANALYTICS - real metrics only. A saved profile identifies what to measure;
+   it is not API authorization. KPIs render only from explicit
+   account analytics payloads. No Creator Hub inventory, seeded posts, or
+   modeled estimates leak into this page.
    ========================================================================= */
+const LIVE_ANALYTICS_PLATFORMS = new Set(["instagram", "tiktok", "youtube", "facebook"]);
+const ANALYTICS_REFRESH_MS = 15 * 60 * 1000;
+const analyticsConnectorState = {
+  loaded: false,
+  loading: false,
+  connectors: [],
+  error: "",
+};
+function analyticsAuthHeaders(extra = {}) {
+  const token = typeof session?.token === "function" ? session.token() : "";
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+async function analyticsApi(path, { method = "GET", body } = {}) {
+  const response = await fetch(path, {
+    method,
+    headers: analyticsAuthHeaders(body === undefined ? {} : { "Content-Type": "application/json" }),
+    body: body === undefined ? undefined : JSON.stringify(body),
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    if (response.status === 401) throw new Error("Sign in to check your live social connections.");
+    if (response.status === 403) throw new Error("Only a business owner or admin can manage live social connections.");
+    throw new Error(String(json?.error || `Analytics request failed (${response.status}).`));
+  }
+  return json;
+}
+function connectorStatus(platformId) {
+  return analyticsConnectorState.connectors.find((connector) => connector.id === platformId) || null;
+}
+function liveAnalyticsIsFresh(account = {}) {
+  const synced = Date.parse(account?.analytics?.syncedAt || "");
+  return account.connectMode === "live-api" && Number.isFinite(synced) && Date.now() - synced < ANALYTICS_REFRESH_MS;
+}
+async function syncLiveAnalyticsAccount(account, accounts) {
+  const response = await analyticsApi("/phantom-ai/ops/social-analytics/sync", {
+    method: "POST",
+    body: { platform: account.id },
+  });
+  account.analytics = { ...response.analytics, live: true };
+  account.enabled = true;
+  account.connectMode = "live-api";
+  account.officialConnectState = "connected";
+  account.lastConnectAt = response.analytics?.syncedAt || new Date().toISOString();
+  saveSocialAccounts(accounts);
+  return account.analytics;
+}
+async function refreshLiveAnalytics(el, accounts, opts, { force = false, platform = "" } = {}) {
+  if (analyticsConnectorState.loading) return;
+  analyticsConnectorState.loading = true;
+  analyticsConnectorState.error = "";
+  try {
+    if (!analyticsConnectorState.loaded || force) {
+      const response = await analyticsApi("/phantom-ai/ops/social-analytics/status");
+      analyticsConnectorState.connectors = Array.isArray(response?.social_analytics?.connectors)
+        ? response.social_analytics.connectors
+        : [];
+      analyticsConnectorState.loaded = true;
+    }
+    const ready = analyticsConnectorState.connectors.filter((connector) => connector.configured && (!platform || connector.id === platform));
+    for (const connector of ready) {
+      const account = accounts.find((row) => row.id === connector.id);
+      if (!account || (!force && liveAnalyticsIsFresh(account))) continue;
+      await syncLiveAnalyticsAccount(account, accounts);
+    }
+    if (force && platform && !ready.length) {
+      const connector = connectorStatus(platform);
+      throw new Error(connector?.reason || "Connect this channel in Settings before syncing live data.");
+    }
+    if (force) analyticsNotice = ready.length ? "Live platform data synced." : "No live social connector is configured yet.";
+  } catch (error) {
+    analyticsConnectorState.error = error?.message || "Live analytics could not be reached.";
+    if (force) analyticsNotice = analyticsConnectorState.error;
+  } finally {
+    analyticsConnectorState.loading = false;
+    if (el?.isConnected) renderAnalytics(el, opts, { skipAutoRefresh: true });
+  }
+}
 function numericMetric(source = {}, keys = []) {
   const key = keys.find((name) => Number.isFinite(Number(source?.[name])));
   return key ? Number(source[key]) : 0;
-}
-function postMetric(post = {}, keys = []) {
-  const metrics = post.metrics || {};
-  return keys.reduce((sum, key) => sum + (Number(metrics[key]) || 0), 0);
-}
-function postEngagement(post = {}) {
-  return postMetric(post, ["likes", "comments", "shares", "saves"]);
-}
-function localAnalyticsSeries(posts = []) {
-  const byDay = new Map();
-  posts.forEach((post) => {
-    const day = new Date(Date.parse(post.publishedAt) || Date.now()).toISOString().slice(0, 10);
-    const current = byDay.get(day) || { label: day.slice(5), reach: 0, impressions: 0, engagement: 0, followers: 0 };
-    current.reach += postMetric(post, ["reach"]);
-    current.impressions += postMetric(post, ["impressions", "views"]);
-    current.engagement += postEngagement(post);
-    current.followers += postMetric(post, ["followersGained"]);
-    byDay.set(day, current);
-  });
-  return [...byDay.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([, value]) => value).slice(-90);
 }
 function activeWorkspaceSites() {
   try {
@@ -3165,103 +3210,72 @@ function recentWorkspaceActivity() {
     return [];
   }
 }
-function accountPublishDrafts(account = {}) {
-  return loadPublishDrafts().filter((draft) => Array.isArray(draft.platforms) && draft.platforms.includes(account.id));
+function accountPublishDrafts() {
+  return loadPublishDrafts().filter((draft) => !draft.archived);
 }
 function localSignalLabel(summary = {}) {
   const parts = [
-    summary.posts ? `${summary.posts} post${summary.posts === 1 ? "" : "s"}` : "",
+    summary.posts ? `${summary.posts} published` : "",
     summary.media ? `${summary.media} media` : "",
-    summary.drafts ? `${summary.drafts} draft${summary.drafts === 1 ? "" : "s"}` : "",
-    summary.sites ? `${summary.sites} site${summary.sites === 1 ? "" : "s"}` : "",
-    summary.activity ? `${summary.activity} activity` : "",
+    summary.drafts ? `${summary.drafts} drafts` : "",
+    summary.sites ? `${summary.sites} sites` : "",
+    summary.activity ? `${summary.activity} updates` : "",
   ].filter(Boolean);
-  return parts.length ? parts.join(" · ") : "local workspace";
+  return parts.length ? parts.join(" · ") : "No first-party activity yet";
 }
-function localSignalSeries(summary = {}) {
-  const today = Date.now();
-  const seed = Math.max(1, summary.posts + summary.media + summary.drafts + summary.sites + summary.activity);
-  return [6, 5, 4, 3, 2, 1, 0].map((daysAgo, index) => {
-    const day = new Date(today - daysAgo * DAY).toISOString().slice(5, 10);
-    const weight = Math.max(1, Math.round(seed * (0.45 + index * 0.12)));
-    return {
-      label: day,
-      reach: weight,
-      impressions: weight + Math.max(0, summary.media || 0),
-      engagement: Math.max(1, Math.round(weight * 0.45)) + (summary.drafts || 0),
-      followers: 0,
-    };
-  });
-}
-function localAnalyticsFeedForAccount(account = {}, data = loadContent()) {
-  const posts = (data.posts || [])
-    .filter((post) => post.platform === account.id && post.status === "published" && !isRemoved(`post:${post.id}`));
+function localWorkspaceSignals(data = loadContent()) {
+  const posts = (data.posts || []).filter((post) => post.status === "published" && !isRemoved(`post:${post.id}`));
   const media = loadContentAssets();
-  const drafts = accountPublishDrafts(account);
+  const drafts = accountPublishDrafts();
   const sites = activeWorkspaceSites();
   const activity = recentWorkspaceActivity();
-  const summary = { posts: posts.length, media: media.length, drafts: drafts.length, sites: sites.length, activity: activity.length };
-  const signalCount = summary.posts + summary.media + summary.drafts + summary.sites + summary.activity;
-  if (!signalCount) return null;
-  const latest = posts.reduce((max, post) => Math.max(max, Date.parse(post.publishedAt) || 0), 0);
-  const localUpdatedAt = Math.max(
-    latest,
+  const timestamps = [
+    ...posts.map((post) => Date.parse(post.publishedAt || post.updatedAt || 0) || 0),
     ...media.map((asset) => Number(asset.updatedAt || asset.createdAt || 0)),
     ...drafts.map((draft) => Number(draft.updatedAt || draft.createdAt || 0)),
     ...sites.map((site) => Date.parse(site.updated || site.updatedAt || site.createdAt || 0) || 0),
     ...activity.map((row) => Date.parse(row.at || 0) || 0),
-  );
-  const reach = posts.reduce((sum, post) => sum + postMetric(post, ["reach"]), 0)
-    + summary.media * 8 + summary.drafts * 5 + summary.sites * 12 + summary.activity;
-  const impressions = posts.reduce((sum, post) => sum + postMetric(post, ["impressions", "views"]), 0)
-    + summary.media * 12 + summary.drafts * 7 + summary.sites * 18 + summary.activity;
-  const engagement = posts.reduce((sum, post) => sum + postEngagement(post), 0)
-    + summary.media * 3 + summary.drafts * 4 + summary.sites * 6 + Math.ceil(summary.activity / 2);
-  const followers = posts.reduce((sum, post) => sum + postMetric(post, ["followersGained"]), 0);
-  const hasMetrics = [reach, impressions, engagement, followers].some((value) => value > 0);
-  if (!hasMetrics) return null;
-  return {
-    reach,
-    impressions,
-    engagement,
-    followers,
-    source: "PhantomForce local site/content signals",
-    syncedAt: localUpdatedAt ? new Date(localUpdatedAt).toISOString() : new Date(data.updatedAt || Date.now()).toISOString(),
-    series: posts.length ? localAnalyticsSeries(posts) : localSignalSeries(summary),
-    firstParty: true,
+  ].filter(Boolean);
+  const summary = {
     posts: posts.length,
+    media: media.length,
+    drafts: drafts.length,
+    sites: sites.length,
+    activity: activity.length,
+  };
+  return {
+    ...summary,
+    total: Object.values(summary).reduce((sum, value) => sum + value, 0),
+    latestAt: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : "",
+    source: "PhantomForce local site/content signals",
     signalLabel: localSignalLabel(summary),
   };
 }
-function analyticsFeedForAccount(account = {}, data = loadContent()) {
+function analyticsFeedForAccount(account = {}) {
   const raw = account.analytics || account.insights || account.metrics || null;
-  if (raw && typeof raw === "object") {
-    const reach = numericMetric(raw, ["reach", "accountsReached", "account_reach"]);
-    const impressions = numericMetric(raw, ["impressions", "views", "profileViews"]);
-    const likes = numericMetric(raw, ["likes", "likeCount"]);
-    const comments = numericMetric(raw, ["comments", "commentCount"]);
-    const shares = numericMetric(raw, ["shares", "shareCount"]);
-    const saves = numericMetric(raw, ["saves", "saveCount"]);
-    const followers = numericMetric(raw, ["followers", "followersGained", "followerCount"]);
-    const engagement = numericMetric(raw, ["engagement", "engagements"]) || likes + comments + shares + saves;
-    const hasMetrics = [reach, impressions, engagement, followers].some((value) => value > 0);
-    if (hasMetrics) {
-      return {
-        reach, impressions, engagement, followers,
-        source: raw.source || raw.provider || "platform analytics",
-        syncedAt: raw.syncedAt || raw.lastSyncedAt || raw.updatedAt || account.analyticsLastSyncAt || "",
-        series: Array.isArray(raw.series) ? raw.series.slice(-90).map((point) => ({
-          label: String(point?.label || ""),
-          reach: numericMetric(point, ["reach"]),
-          impressions: numericMetric(point, ["impressions"]),
-          engagement: numericMetric(point, ["engagement"]),
-          followers: numericMetric(point, ["followers"]),
-        })) : [],
-        firstParty: false,
-      };
-    }
-  }
-  return localAnalyticsFeedForAccount(account, data);
+  if (!raw || typeof raw !== "object") return null;
+  const reach = numericMetric(raw, ["reach", "accountsReached", "account_reach"]);
+  const impressions = numericMetric(raw, ["impressions", "views", "profileViews"]);
+  const likes = numericMetric(raw, ["likes", "likeCount"]);
+  const comments = numericMetric(raw, ["comments", "commentCount"]);
+  const shares = numericMetric(raw, ["shares", "shareCount"]);
+  const saves = numericMetric(raw, ["saves", "saveCount"]);
+  const followers = numericMetric(raw, ["followers", "followersGained", "followerCount"]);
+  const engagement = numericMetric(raw, ["engagement", "engagements"]) || likes + comments + shares + saves;
+  const hasMetrics = [reach, impressions, engagement, followers].some((value) => value > 0);
+  if (!hasMetrics) return null;
+  return {
+    reach, impressions, engagement, followers,
+    source: raw.source || raw.provider || "platform analytics",
+    syncedAt: raw.syncedAt || raw.lastSyncedAt || raw.updatedAt || account.analyticsLastSyncAt || "",
+    series: Array.isArray(raw.series) ? raw.series.slice(-90).map((point) => ({
+      label: String(point?.label || ""),
+      reach: numericMetric(point, ["reach"]),
+      impressions: numericMetric(point, ["impressions"]),
+      engagement: numericMetric(point, ["engagement"]),
+      followers: numericMetric(point, ["followers"]),
+    })) : [],
+  };
 }
 function analyticsTotals(feeds = []) {
   return feeds.reduce((sum, row) => ({
@@ -3295,8 +3309,8 @@ function analyticsChart(feedRows = []) {
         ${[.2, .4, .6, .8].map((fraction) => `<line class="an-grid-line" x1="0" x2="${width}" y1="${(height * fraction).toFixed(1)}" y2="${(height * fraction).toFixed(1)}"/>`).join("")}
         ${rows.map((row) => `<path class="an-channel-line ${row.feed ? "" : "is-waiting"}" style="--channel:${row.account.color}" d="${analyticsLinePath(row.values, maxValue, width, height)}"/>`).join("")}
       </svg>
-      ${rows.some((row) => row.feed) ? "" : `<div class="an-chart-empty"><b>No activity yet</b><span>Create site/content activity or import a platform report.</span></div>`}
-      <div class="an-chart-legend">${rows.map((row) => `<span><i style="background:${row.account.color}"></i>${row.account.name}${row.feed ? (row.feed.firstParty ? " · local" : " · official") : " · waiting"}</span>`).join("")}</div>
+      ${rows.some((row) => row.feed) ? "" : `<div class="an-chart-empty"><b>Waiting for live performance</b><span>Connect one social account and this chart updates automatically.</span></div>`}
+      <div class="an-chart-legend">${rows.map((row) => `<span><i style="background:${row.account.color}"></i>${row.account.name}${row.feed ? "" : " · waiting"}</span>`).join("")}</div>
     </div>`;
 }
 function analyticsCoverage(feedRows = []) {
@@ -3307,10 +3321,9 @@ function analyticsCoverage(feedRows = []) {
     return `${row.feed ? row.account.color : "rgba(135,165,151,.13)"} ${start}% ${end}%`;
   }).join(",");
   const live = feedRows.filter((row) => row.feed).length;
-  const official = feedRows.filter((row) => row.feed && !row.feed.firstParty).length;
   return `<div class="an-coverage">
     <div class="an-coverage-ring" style="background:conic-gradient(${stops || "rgba(135,165,151,.13) 0 100%"})"><span><b>${live}/${feedRows.length}</b><i>reporting</i></span></div>
-    <div class="an-coverage-copy"><b>Channel coverage</b><p>${live ? `${live} source${live === 1 ? "" : "s"} active (${official} official, ${live - official} local).` : "Waiting for local activity or official reports."}</p></div>
+    <div class="an-coverage-copy"><b>Channel coverage</b><p>${live ? `${live} verified data source${live === 1 ? "" : "s"} active.` : "Connect your channels to activate reporting."}</p></div>
   </div>`;
 }
 let analyticsNotice = "";
@@ -3318,19 +3331,28 @@ function accountAnalyticsRow(row, esc) {
   const account = row.account;
   const feed = row.feed;
   const saved = socialStatus(account) === "linked";
+  const connector = connectorStatus(account.id);
+  const live = account.connectMode === "live-api" && !!feed;
+  const canSync = !!connector?.configured;
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
       <span><b>${K(feed.reach)}</b>reach</span><span><b>${K(feed.impressions)}</b>views</span><span><b>${K(feed.engagement)}</b>engagement</span><span><b>${K(feed.followers)}</b>followers</span>
-    </div><div class="an-channel-source"><b>${esc(feed.source)}</b><i>${feed.firstParty ? esc(feed.signalLabel || `${feed.posts || 0} local posts`) : feed.syncedAt ? esc(ago(feed.syncedAt)) : "official"}</i></div>`
-    : `<div class="an-channel-empty"><b>${saved ? "Profile saved" : "Channel ready"}</b><span>${saved ? "No local activity yet. Import an official report if this account has external metrics." : "Add a profile or create content to start local analytics."}</span></div>`}
+    </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? esc(ago(feed.syncedAt)) : "current"}</i></div>`
+    : `<div class="an-channel-empty"><b>${canSync ? "Ready to sync" : saved ? "Profile saved" : "Not connected"}</b><span>${canSync ? "Official read-only analytics are ready." : "Connect this account in Settings to start live data."}</span></div>`}
     <div class="an-channel-actions">
-      <label class="btn ${feed ? "btn-ghost" : "btn-primary"}">${feed ? "Import official report" : "Import report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label>
-      ${feed && !feed.firstParty ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear</button>` : ""}
+      ${canSync ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up live connection</button>`}
+      <details class="an-import-backup"><summary aria-label="More data options">More</summary><small>Backup only · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import official report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
+      ${feed ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear data</button>` : ""}
     </div>
   </article>`;
 }
 function wireAnalyticsActions(el, accounts, opts) {
+  el.querySelectorAll("[data-an-sync]").forEach((button) => button.onclick = async () => {
+    button.disabled = true;
+    analyticsNotice = `Syncing ${button.dataset.anSync}…`;
+    await refreshLiveAnalytics(el, accounts, opts, { force: true, platform: button.dataset.anSync });
+  });
   el.querySelectorAll("[data-an-import]").forEach((input) => input.onchange = async () => {
     const account = accounts.find((row) => row.id === input.dataset.anImport);
     const file = input.files?.[0];
@@ -3341,7 +3363,8 @@ function wireAnalyticsActions(el, accounts, opts) {
         source: `${account.name} analytics export`,
       });
       account.enabled = true;
-      account.connectMode = account.connectMode || "report-import";
+      account.connectMode = "report-import";
+      account.officialConnectState = account.officialConnectState || "not_configured";
       saveSocialAccounts(accounts);
       analyticsNotice = `${account.name} metrics imported from ${file.name}.`;
     } catch (error) {
@@ -3360,16 +3383,15 @@ function wireAnalyticsActions(el, accounts, opts) {
     renderAnalytics(el, opts);
   });
 }
-export function renderAnalytics(el, opts = {}) {
+export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   const esc = opts.esc || ((s) => String(s));
   const accounts = loadSocialAccounts();
-  const localData = loadContent();
+  const localSignals = localWorkspaceSignals(loadContent());
   const linked = accounts.filter((acct) => socialStatus(acct) === "linked");
   const displayAccounts = linked.length ? linked : accounts.filter((account) => ["instagram", "tiktok", "youtube", "facebook"].includes(account.id));
-  const feedRows = displayAccounts.map((account) => ({ account, feed: analyticsFeedForAccount(account, localData) }));
+  const feedRows = displayAccounts.map((account) => ({ account, feed: analyticsFeedForAccount(account) }));
   const liveRows = feedRows.filter((row) => row.feed);
-  const officialRows = liveRows.filter((row) => !row.feed.firstParty);
-  const localRows = liveRows.filter((row) => row.feed.firstParty);
+  const liveApiRows = liveRows.filter((row) => row.account.connectMode === "live-api");
   const totals = analyticsTotals(liveRows);
   const maxEngagement = Math.max(1, ...feedRows.map((row) => row.feed?.engagement || 0));
   el.innerHTML = `
@@ -3377,21 +3399,36 @@ export function renderAnalytics(el, opts = {}) {
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Business intelligence</p>
-          <h3>${liveRows.length ? "Site + content signals are live." : "Your analytics command center."}</h3>
-          <p>${liveRows.length ? `Auto-filled from PhantomForce local site/content activity${officialRows.length ? " plus official platform reports" : ""}. Import reports only when you want platform-grade numbers.` : "Create site/content activity or import official CSV, TSV, or JSON reports to activate the dashboard."}</p>
+          <h3>${liveApiRows.length ? "Live performance at a glance." : localSignals.total ? "Your business activity is live." : "Connect your channels for live data."}</h3>
+          <p>${liveApiRows.length ? "Official platform connections refresh automatically. Report files are available only as a backup." : localSignals.total ? "PhantomForce is already tracking your publishing, media, sites, and drafts. Connect social accounts to add official reach and engagement." : "Connect YouTube, Instagram, Facebook, or TikTok once. PhantomForce will keep this page current for you."}</p>
         </div>
-        ${linked.length ? `<span class="an-src">${svgIc("up")} ${liveRows.length}/${displayAccounts.length} source${displayAccounts.length === 1 ? "" : "s"} · ${officialRows.length} official · ${localRows.length} local</span>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Add profiles</button>`}
+        <div class="an-hero-actions">
+          ${analyticsConnectorState.connectors.some((connector) => connector.configured) ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect accounts</button>`}
+          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live</span>
+        </div>
       </section>
-      ${analyticsNotice ? `<div class="an-flash">${esc(analyticsNotice)}</div>` : ""}
+      ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
+      <section class="ch-card an-first-party-card">
+        <div class="ch-card-h"><div><p class="ch-eyebrow">Your activity</p><h3>PhantomForce workspace</h3></div><span class="an-live-label">${localSignals.total ? "Live now" : "Waiting"}</span></div>
+        <p class="an-first-party-copy">${esc(localSignals.source)}${localSignals.latestAt ? ` · updated ${esc(ago(localSignals.latestAt))}` : ""}</p>
+        <div class="an-first-party-metrics">
+          <span><b>${localSignals.posts}</b>Published</span>
+          <span><b>${localSignals.media}</b>Media</span>
+          <span><b>${localSignals.drafts}</b>Drafts</span>
+          <span><b>${localSignals.sites}</b>Sites</span>
+          <span><b>${localSignals.activity}</b>Updates</span>
+        </div>
+        <small>${esc(localSignals.signalLabel)}</small>
+      </section>
       <div class="ch-kpis an-kpis">
-        ${kpi(officialRows.length ? "Reach" : "Local signals", K(totals.reach), liveRows.length ? "site/content + reports" : "waiting for data")}
-        ${kpi(officialRows.length ? "Views" : "Content activity", K(totals.impressions), liveRows.length ? "views + impressions" : "waiting for data")}
+        ${kpi("Reach", K(totals.reach), liveRows.length ? "reported reach" : "waiting for data")}
+        ${kpi("Views", K(totals.impressions), liveRows.length ? "views + impressions" : "waiting for data")}
         ${kpi("Engagement", K(totals.engagement), liveRows.length ? "likes + comments + shares" : "waiting for data")}
-        ${kpi("Followers", K(totals.followers), liveRows.length ? "reported or local gains" : "waiting for data")}
+        ${kpi("Followers", K(totals.followers), liveRows.length ? "latest reported total" : "waiting for data")}
       </div>
       <div class="an-visual-grid">
         <section class="ch-card an-trend-card">
-          <div class="ch-card-h"><div><p class="ch-eyebrow">Performance trend</p><h3>${officialRows.length ? "Reach and views" : "Workspace activity"}</h3></div><span class="an-live-label">${officialRows.length ? "Official + local" : liveRows.length ? "Local signals" : "Awaiting data"}</span></div>
+          <div class="ch-card-h"><div><p class="ch-eyebrow">Performance trend</p><h3>Reach and views</h3></div><span class="an-live-label">${liveRows.length ? "Live + verified" : "Waiting for connection"}</span></div>
           ${analyticsChart(feedRows)}
         </section>
         <section class="ch-card an-coverage-card">
@@ -3403,10 +3440,15 @@ export function renderAnalytics(el, opts = {}) {
         <div class="ch-card-h"><div><p class="ch-eyebrow">Channel comparison</p><h3>Engagement by platform</h3></div></div>
         <div class="ch-bars">${feedRows.map((row) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${row.account.color}"></i>${esc(row.account.name)}</span><span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round((row.feed?.engagement || 0) / maxEngagement * 100)}%;background:${row.account.color}"></span></span><b class="ch-bar-val">${K(row.feed?.engagement || 0)}</b></div>`).join("")}</div>
       </section>
-      <div class="an-section-head"><div><p class="ch-eyebrow">Sources</p><h3>Connected data sources</h3></div><span>Auto · CSV · TSV · JSON</span></div>
+      <div class="an-section-head"><div><p class="ch-eyebrow">Sources</p><h3>Live channel connections</h3></div><span>Official read-only APIs</span></div>
       <section class="an-channel-list" aria-label="Social analytics channels">
         ${feedRows.map((row) => accountAnalyticsRow(row, esc)).join("")}
       </section>
     </div>`;
   wireAnalyticsActions(el, accounts, opts);
+  const syncAll = el.querySelector("[data-an-sync-all]");
+  if (syncAll) syncAll.onclick = () => refreshLiveAnalytics(el, accounts, opts, { force: true });
+  if (!renderOptions.skipAutoRefresh && !analyticsConnectorState.loaded && !analyticsConnectorState.loading) {
+    void refreshLiveAnalytics(el, accounts, opts);
+  }
 }

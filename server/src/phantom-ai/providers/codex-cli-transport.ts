@@ -165,7 +165,7 @@ export async function callCodexCliChat(
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", scriptPath],
       {
         cwd,
-        timeout: Number.isFinite(timeout) ? Math.min(Math.max(timeout, 15000), 180000) : 120000,
+        timeout: Number.isFinite(timeout) ? Math.min(Math.max(timeout, 4000), 180000) : 120000,
         windowsHide: true,
         maxBuffer: 8 * 1024 * 1024,
       },

@@ -51,6 +51,7 @@ import {
   requireAdminAccessSession,
   requireAccessSession,
   requireClientWorkspaceView,
+  verifyOwnerCredentials,
   verifyAccessSessionTokenSid,
 } from "./access/session.js";
 import {
@@ -135,7 +136,7 @@ import { tmpdir } from "node:os";
 import { dirname, extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
-import { actionRegistry } from "./approval/action-registry.js";
+import { actionRegistry, isActionImplemented } from "./approval/action-registry.js";
 import { createFalconBroker } from "./falcon/broker.js";
 import {
   appendApprovalQueueTransition,
@@ -172,6 +173,10 @@ import {
 } from "./phantom-ai/agent-actions.js";
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
+import {
+  getSocialAnalyticsConnectorStatus,
+  syncSocialAnalytics,
+} from "./connectors/social-analytics-connector.js";
 import {
   getHermesInteractionMemoryStoreStatus,
   normalizeHermesInteractionMemoryStoreLimit,
@@ -221,9 +226,13 @@ import {
   updateVacationModeSettings,
 } from "./phantom-ai/vacation-mode.js";
 import {
+  createPhantomPlayRoom,
   createPhantomPlaySubmission,
+  getPhantomPlayRoom,
   getPhantomPlaySnapshot,
   getPhantomPlayStoreStatus,
+  joinPhantomPlayRoom,
+  leavePhantomPlayRoom,
   moderatePhantomPlaySubmission,
   startPhantomPlaySession,
   updatePhantomPlayProfile,
@@ -242,6 +251,7 @@ import {
   fuseCompetitorSignals,
   getCompetitorIntelligenceSnapshot,
   getCompetitorIntelligenceStoreStatus,
+  updateMarketScoutContext,
   updateAggressiveMode,
 } from "./phantom-ai/competitor-intelligence.js";
 import {
@@ -392,6 +402,9 @@ const CustomizationPreviewBodySchema = z.object({ tenant_id: z.string().trim().m
 const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ summary: z.string().trim().max(240).optional(), expected_version: z.number().int().positive().optional() });
 const CustomizationRollbackBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), version: z.number().int().positive() });
 const CustomizationAssistantBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), message: z.string().trim().min(1).max(1200) });
+const SocialAnalyticsSyncSchema = z.object({
+  platform: z.enum(["youtube", "instagram", "facebook", "tiktok"]),
+});
 
 function safeCustomizationTenantId(value: unknown, fallback: string) {
   if (typeof value !== "string") return fallback;
@@ -871,8 +884,22 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
     });
   }
 
+  let ownerKeyForToken = parsed.data.ownerKey;
+
+  if (authConfiguration.ownerProductionAuthEnabled && parsed.data.password) {
+    if (!verifyOwnerCredentials(parsed.data.email, parsed.data.password)) {
+      return reply.code(401).send({
+        ok: false,
+        error: "Invalid owner email or password.",
+        sessions: [],
+      });
+    }
+
+    ownerKeyForToken = parsed.data.password;
+  }
+
   const token = issueAccessSessionToken(parsed.data.sessionId, {
-    ownerKey: parsed.data.ownerKey,
+    ownerKey: ownerKeyForToken,
   });
 
   if (!token) {
@@ -1891,11 +1918,39 @@ function parsePhantomAiChatProvider(value: unknown) {
 }
 
 type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli";
+type AdminPhantomAiRouteTier = "instant" | "standard" | "deep";
 
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
   if (value === "claude_cli" || value === "claude") return "claude_cli";
   return "codex";
+}
+
+function parseAdminPhantomAiRouteTier(value: unknown): AdminPhantomAiRouteTier {
+  if (value === "instant" || value === "standard" || value === "deep") return value;
+  return "standard";
+}
+
+function parseRequestedAdminModel(value: unknown) {
+  if (typeof value !== "string") return null;
+  const model = value.trim();
+  if (!model || model.length > 100) return null;
+  return /^[\w./:@+-]+$/.test(model) ? model : null;
+}
+
+function parseAdminMaxProviderMs(value: unknown) {
+  const numeric = typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+  if (!Number.isFinite(numeric)) return null;
+  return Math.min(Math.max(Math.round(numeric), 3000), 60000);
+}
+
+function parseAllowProviderFallback(value: unknown, routeTier: AdminPhantomAiRouteTier) {
+  if (typeof value === "boolean") return value;
+  if (typeof value === "string") {
+    if (value.toLowerCase() === "true") return true;
+    if (value.toLowerCase() === "false") return false;
+  }
+  return routeTier !== "instant";
 }
 
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
@@ -1920,6 +1975,13 @@ function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
    failures offline, prefers the last healthy lane, and restores the chosen
    lane after background health recovery. Provider details stay in Developer. */
 type AdminPhantomAiProviderId = AdminProviderId;
+
+function parseAllowedAdminProviders(value: unknown): AdminPhantomAiProviderId[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const providers = Array.from(new Set(value.filter((item: unknown): item is AdminPhantomAiProviderId =>
+    item === "codex_cli" || item === "claude_cli" || item === "openrouter_glm" || item === "local_ollama")));
+  return providers.length ? providers : undefined;
+}
 
 function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPhantomAiProviderId {
   if (lane === "claude_cli") return "claude_cli";
@@ -1949,6 +2011,9 @@ type AdminPhantomAiChatContext = {
   sensitivityLevel: SensitivityLevel;
   approvalRequired: boolean;
   executionMode: "approval" | "auto";
+  requestedModelId?: string | null;
+  routeTier?: AdminPhantomAiRouteTier;
+  maxProviderMs?: number | null;
 };
 
 /* Fallback attempts get shorter per-provider timeouts than a direct single-lane
@@ -1963,7 +2028,24 @@ const ADMIN_CHAT_FALLBACK_TIMEOUT_MS = {
   local_ollama: 25000,
 } as const;
 
+const ADMIN_CHAT_INSTANT_TIMEOUT_MS = {
+  codex_cli: 5000,
+  claude_cli: 7000,
+  openrouter_glm: 5000,
+  local_ollama: 5000,
+} as const;
+
+function adminPhantomAiProviderTimeoutMs(providerId: AdminPhantomAiProviderId, ctx: AdminPhantomAiChatContext) {
+  const tier = ctx.routeTier ?? "standard";
+  const base = tier === "instant" ? ADMIN_CHAT_INSTANT_TIMEOUT_MS[providerId] : ADMIN_CHAT_FALLBACK_TIMEOUT_MS[providerId];
+  if (typeof ctx.maxProviderMs === "number" && Number.isFinite(ctx.maxProviderMs)) {
+    return Math.min(Math.max(Math.round(ctx.maxProviderMs), 3000), base);
+  }
+  return base;
+}
+
 async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, ctx: AdminPhantomAiChatContext) {
+  const timeoutMs = adminPhantomAiProviderTimeoutMs(providerId, ctx);
   if (providerId === "codex_cli") {
     return callCodexCliChat(
       {
@@ -1979,7 +2061,8 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       {
         env: {
           ...process.env,
-          PHANTOM_CODEX_TIMEOUT_MS: String(ADMIN_CHAT_FALLBACK_TIMEOUT_MS.codex_cli),
+          PHANTOM_CODEX_TIMEOUT_MS: String(timeoutMs),
+          ...(ctx.requestedModelId ? { PHANTOM_CODEX_MODEL: ctx.requestedModelId } : {}),
         },
       },
     );
@@ -1994,7 +2077,7 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       sensitivityLevel: ctx.sensitivityLevel,
       approvalRequired: ctx.approvalRequired,
       executionMode: ctx.executionMode,
-      timeoutMs: ADMIN_CHAT_FALLBACK_TIMEOUT_MS.claude_cli,
+      timeoutMs,
     });
   }
   if (providerId === "openrouter_glm") {
@@ -2015,7 +2098,8 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
           ...process.env,
           PHANTOM_LIVE_PROVIDERS_ENABLED: "true",
           PHANTOM_OPENROUTER_TRANSPORT_ENABLED: "true",
-          PHANTOM_OPENROUTER_TIMEOUT_MS: String(ADMIN_CHAT_FALLBACK_TIMEOUT_MS.openrouter_glm),
+          PHANTOM_OPENROUTER_TIMEOUT_MS: String(timeoutMs),
+          ...(ctx.requestedModelId ? { OPENROUTER_MODEL: ctx.requestedModelId } : {}),
         },
       },
     );
@@ -2037,7 +2121,8 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
         ...process.env,
         OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434",
         PHANTOM_LOCAL_MODEL_AVAILABLE: "true",
-        PHANTOM_OLLAMA_TIMEOUT_MS: String(ADMIN_CHAT_FALLBACK_TIMEOUT_MS.local_ollama),
+        PHANTOM_OLLAMA_TIMEOUT_MS: String(timeoutMs),
+        ...(ctx.requestedModelId ? { PHANTOM_OLLAMA_MODEL: ctx.requestedModelId } : {}),
       },
     },
   );
@@ -2077,10 +2162,12 @@ async function runAdminPhantomAiChatWithFallback(
   requestedLane: AdminPhantomAiModelLane,
   ctx: AdminPhantomAiChatContext,
   allowedProviders?: AdminPhantomAiProviderId[],
+  options: { allowFallback?: boolean } = {},
 ) {
   const requestedPrimaryProviderId = adminPhantomAiProviderIdForLane(requestedLane);
   const allowed = Array.isArray(allowedProviders) && allowedProviders.length ? new Set(allowedProviders) : null;
-  const filteredOrder = adminProviderAttemptOrder(requestedPrimaryProviderId).filter((providerId) => !allowed || allowed.has(providerId));
+  const attemptOrder = options.allowFallback === false ? [requestedPrimaryProviderId] : adminProviderAttemptOrder(requestedPrimaryProviderId);
+  const filteredOrder = attemptOrder.filter((providerId) => !allowed || allowed.has(providerId));
   const order = filteredOrder.length ? filteredOrder : allowed ? [...allowed] : [requestedPrimaryProviderId];
   const primaryProviderId = order[0];
   const attempts: AdminPhantomAiChatAttempt[] = [];
@@ -2110,6 +2197,16 @@ async function runAdminPhantomAiChatWithFallback(
 
 function buildAdminPhantomAiAllProvidersFailedMessage() {
   return "I couldn't complete that just now. Your request is still here — try again in a moment.";
+}
+
+const INSTANT_ADMIN_CHAT_TASK_TYPES = new Set(["identity", "capability", "question", "chat"]);
+const INSTANT_ADMIN_CHAT_BLOCKLIST = /\b(?:build|create|draft|write|make|fix|debug|code|implement|analy[sz]e|research|compare|summari[sz]e|plan|strategy|proposal|website|site|content|video|image|media|schedule|client|lead|transaction|accounting|bank|security|deploy|send|post|upload|delete|weather|forecast|current|latest|today|tomorrow|yesterday|price|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b/i;
+
+function isInstantAdminChatSafe(normalized: { task_type: string; user_request: string }) {
+  const text = normalized.user_request.trim();
+  if (!INSTANT_ADMIN_CHAT_TASK_TYPES.has(normalized.task_type)) return false;
+  if (!text || text.length > 180 || text.split(/\s+/).filter(Boolean).length > 22) return false;
+  return !INSTANT_ADMIN_CHAT_BLOCKLIST.test(text);
 }
 
 type PendingPrivacyIntent = {
@@ -3455,6 +3552,47 @@ app.patch("/api/phantomplay/plays/:id", async (request, reply) => {
   return play ? { ok: true, session, play } : reply.code(404).send({ ok: false, error: "Play session was not found." });
 });
 
+app.post("/api/phantomplay/rooms", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  try {
+    return { ok: true, session, ...(await createPhantomPlayRoom(session, (request.body ?? {}) as Record<string, unknown>, { entitled: access.entitled })) };
+  } catch (error) {
+    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Private room creation was blocked." });
+  }
+});
+
+app.get("/api/phantomplay/rooms/:code", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { code?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const room = await getPhantomPlayRoom(session, { code: params.code, tenantId: query.tenant_id });
+  return room ? { ok: true, session, room } : reply.code(404).send({ ok: false, error: "Private room was not found." });
+});
+
+app.post("/api/phantomplay/rooms/:code/join", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const access = await phantomPlayAccess(session);
+  const params = request.params as { code?: string };
+  try {
+    const result = await joinPhantomPlayRoom(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code }, { entitled: access.entitled });
+    return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
+  } catch (error) {
+    return reply.code(403).send({ ok: false, error: error instanceof Error ? error.message : "Private room join was blocked." });
+  }
+});
+
+app.post("/api/phantomplay/rooms/:code/leave", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const params = request.params as { code?: string };
+  const result = await leavePhantomPlayRoom(session, { ...((request.body ?? {}) as Record<string, unknown>), code: params.code });
+  return result ? { ok: true, session, ...result } : reply.code(404).send({ ok: false, error: "Private room was not found." });
+});
+
 app.post("/api/phantomplay/submissions", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
@@ -3557,6 +3695,12 @@ app.patch("/api/competitor-intelligence/mode", async (request, reply) => {
   if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan.", reason: access.reason });
   try { return { ok: true, settings: await updateAggressiveMode(session, (request.body ?? {}) as Record<string, unknown>, access) }; }
   catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/scout", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, scout: await updateMarketScoutContext(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
 });
 
 app.post("/api/competitor-intelligence/competitors", async (request, reply) => {
@@ -4954,6 +5098,43 @@ app.get("/phantom-ai/ops/finance-connector/status", async (request, reply) => {
   return { ok: true, session, read_only: true, finance_connector: getFinanceConnectorStatus() };
 });
 
+app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  return {
+    ok: true,
+    session,
+    read_only: true,
+    social_analytics: getSocialAnalyticsConnectorStatus(),
+  };
+});
+
+app.post("/phantom-ai/ops/social-analytics/sync", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = SocialAnalyticsSyncSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const status = getSocialAnalyticsConnectorStatus();
+  const connector = status.connectors.find((item) => item.id === parsed.data.platform);
+  if (!connector?.configured) {
+    return reply.code(409).send({
+      ok: false,
+      error: `${connector?.name || "That channel"} is not connected. Add the official API connection in Settings first.`,
+      connector,
+    });
+  }
+  try {
+    const analytics = await syncSocialAnalytics(parsed.data.platform);
+    return { ok: true, session, read_only: true, analytics };
+  } catch (error) {
+    return reply.code(502).send({
+      ok: false,
+      error: error instanceof Error ? error.message.slice(0, 400) : "The platform analytics sync failed.",
+      connector,
+    });
+  }
+});
+
 app.get("/phantom-ai/ops/send-readiness/status", async (request, reply) => {
   // Admin-only checkpoint for the future approved-send architecture. This is
   // status-only and never creates a send request, provider call, queue item, or
@@ -6058,6 +6239,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     task_type?: unknown;
     sensitivity_level?: unknown;
     execution_mode?: unknown;
+    requested_model?: unknown;
+    route_tier?: unknown;
+    max_provider_ms?: unknown;
+    allow_provider_fallback?: unknown;
     user_request?: unknown;
     business_summary?: unknown;
     module_data?: unknown;
@@ -6081,7 +6266,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       ? body.message
       : typeof body.user_request === "string"
         ? body.user_request
-        : "Summarize the current PhantomForce workspace.";
+      : "Summarize the current PhantomForce workspace.";
   const normalized = buildModelRouterRequestFromBody(
     {
       ...body,
@@ -6090,11 +6275,20 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     session,
     "chat",
   );
+  const adminModelLane = parseAdminPhantomAiModelLane(body.admin_model ?? body.model_lane ?? body.provider);
+  const adminProviderRoute = adminPhantomAiProviderRoute(adminModelLane);
+  const adminModelLabel = adminPhantomAiModelLabel(adminModelLane);
+  const adminExecutionMode = body.execution_mode === "auto" ? "auto" : "approval";
+  const adminRouteTier = parseAdminPhantomAiRouteTier(body.route_tier);
+  const requestedModelId = parseRequestedAdminModel(body.requested_model);
+  const maxProviderMs = parseAdminMaxProviderMs(body.max_provider_ms);
+  const allowProviderFallback = parseAllowProviderFallback(body.allow_provider_fallback, adminRouteTier);
+  const allowedAdminProviders = parseAllowedAdminProviders(body.allowed_providers);
   /* Asset Cloud retrieval — structured and permission-aware. Matching
      assets from THIS org's library ride into context as one compact module
      (never whole folders); assets flagged aiReferenceAllowed:false or
      deprecated are filtered inside the search. Failures never break chat. */
-  {
+  if (adminRouteTier !== "instant") {
     const dbSession = asDatabaseSession(session);
     if (dbSession?.orgId && process.env.DATABASE_URL) {
       try {
@@ -6121,6 +6315,117 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     return privacyFirstLocationReply;
   }
 
+  if (session.canManageAccess && adminRouteTier === "instant" && isInstantAdminChatSafe(normalized)) {
+    const instantChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
+      requestId: normalized.request_id,
+      businessName: normalized.business_name,
+      taskType: normalized.task_type,
+      userMessage: normalized.user_request,
+      compactContext: "Fast casual chat. No business memory required unless the user explicitly asks for PhantomForce, a client, an organization, files, money, security, or current/live facts.",
+      sensitivityLevel: normalized.sensitivity_level,
+      approvalRequired: false,
+      executionMode: adminExecutionMode,
+      requestedModelId,
+      routeTier: adminRouteTier,
+      maxProviderMs,
+    }, allowedAdminProviders, { allowFallback: false });
+    const respondingProviderId = instantChat.providerId;
+    const respondingLane = adminPhantomAiLaneForProviderId(respondingProviderId);
+    const respondingLabel = adminPhantomAiProviderLabel(respondingProviderId);
+    const respondingProviderRoute = adminPhantomAiProviderRoute(respondingLane);
+    const modelResult = instantChat.result;
+    const resultStatus = "status" in modelResult ? modelResult.status : "error";
+    const resultOutput = "output_text" in modelResult ? String(modelResult.output_text || "") : "";
+    const providerCalled = "provider_called" in modelResult ? Boolean(modelResult.provider_called) : false;
+    const networkCallPerformed =
+      "network_call_performed" in modelResult ? Boolean(modelResult.network_call_performed) : providerCalled;
+    const requestBodyPrepared = "request_body_prepared" in modelResult ? Boolean(modelResult.request_body_prepared) : false;
+    const allProvidersFailed = instantChat.allFailed;
+
+    return {
+      ok: true,
+      session,
+      provider_choice: "phantom",
+      admin_model_lane: publicAdminPhantomAiModelLane(respondingLane),
+      admin_model_label: respondingLabel,
+      admin_model_requested_lane: publicAdminPhantomAiModelLane(adminModelLane),
+      admin_execution_mode: adminExecutionMode,
+      model_id: "model_id" in modelResult ? modelResult.model_id : respondingProviderId,
+      message: {
+        role: "assistant",
+        content: allProvidersFailed
+          ? buildAdminPhantomAiAllProvidersFailedMessage()
+          : resultOutput,
+      },
+      private_brain:
+        respondingProviderId === "codex_cli" && "provider_id" in modelResult && modelResult.provider_id === "codex_cli"
+          ? {
+              status: modelResult.status,
+              model_id: modelResult.model_id,
+              seconds: modelResult.seconds,
+              admin_only: modelResult.admin_only,
+              localhost_only: modelResult.localhost_only,
+              approval_executed: modelResult.approval_executed,
+              external_action_executed: modelResult.external_action_executed,
+              queue_written: modelResult.queue_written,
+              ledger_written: modelResult.ledger_written,
+            }
+          : null,
+      fallback: {
+        used: false,
+        all_failed: allProvidersFailed,
+        requested_provider: adminPhantomAiProviderLabel(instantChat.primaryProviderId),
+        responding_provider: respondingLabel,
+        attempts: instantChat.attempts,
+      },
+      hermes: {
+        context_used: false,
+        ledger_written: false,
+        provider_route: respondingProviderRoute,
+        route_tier: "instant",
+        recalled_memory_count: 0,
+      },
+      brain: {
+        context_used: false,
+        suggested_intent: normalized.task_type,
+        risk_level: "low",
+        needs_approval: false,
+        micro_prompt: "Fast casual chat; business memory intentionally skipped.",
+        relevant_memory_count: 0,
+        used_memory_ids: [],
+        active_rules: [],
+        reasons: ["instant_route"],
+      },
+      memory_scope: buildMemoryScopeProof(normalized),
+      memory_context: {
+        scope: normalized.memory_scope,
+        recalled_memory_count: 0,
+        compact_context_chars: 0,
+        redaction: "not_used_for_instant_route",
+      },
+      provider_request_body_created: requestBodyPrepared,
+      live_provider_called: providerCalled,
+      network_call_performed: networkCallPerformed,
+      approval_executed: false,
+      queue_written: false,
+      external_action_executed: false,
+      route_tier: adminRouteTier,
+      provider_timeout_ms: adminPhantomAiProviderTimeoutMs(respondingProviderId, {
+        requestId: normalized.request_id,
+        businessName: normalized.business_name,
+        taskType: normalized.task_type,
+        userMessage: normalized.user_request,
+        compactContext: "",
+        sensitivityLevel: normalized.sensitivity_level,
+        approvalRequired: false,
+        executionMode: adminExecutionMode,
+        routeTier: adminRouteTier,
+        maxProviderMs,
+      }),
+      result_status: resultStatus,
+    };
+  }
+
   const brainOptions = brainStoreOptionsForSession(session, normalized);
   const brainContext = await composeBrainContext(session, {
     message: normalized.user_request,
@@ -6133,10 +6438,6 @@ app.post("/phantom-ai/chat", async (request, reply) => {
   const brainAugmentedSummary = buildBrainAugmentedSummary(normalized, brainContext);
 
   if (session.canManageAccess) {
-    const adminModelLane = parseAdminPhantomAiModelLane(body.admin_model ?? body.model_lane ?? body.provider);
-    const adminProviderRoute = adminPhantomAiProviderRoute(adminModelLane);
-    const adminModelLabel = adminPhantomAiModelLabel(adminModelLane);
-    const adminExecutionMode = body.execution_mode === "auto" ? "auto" : "approval";
     if (/^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/i.test(normalized.user_request.trim())) {
       return {
         ok: true,
@@ -6196,10 +6497,6 @@ app.post("/phantom-ai/chat", async (request, reply) => {
         : [],
     });
     const approvalRequired = brainContext.needsApproval || preview.decision.approval_required || preview.action_preview.approval_required;
-    const allowedAdminProviders: AdminPhantomAiProviderId[] | undefined = Array.isArray(body.allowed_providers)
-      ? Array.from(new Set(body.allowed_providers.filter((value: unknown): value is AdminPhantomAiProviderId =>
-          value === "codex_cli" || value === "claude_cli" || value === "openrouter_glm" || value === "local_ollama")))
-      : undefined;
     const fallbackChat = await runAdminPhantomAiChatWithFallback(adminModelLane, {
       requestId: normalized.request_id,
       businessName: normalized.business_name,
@@ -6209,7 +6506,10 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       sensitivityLevel: preview.decision.sensitivity_level,
       approvalRequired,
       executionMode: adminExecutionMode,
-    }, allowedAdminProviders);
+      requestedModelId,
+      routeTier: adminRouteTier,
+      maxProviderMs,
+    }, allowedAdminProviders, { allowFallback: allowProviderFallback });
     const respondingProviderId = fallbackChat.providerId;
     const respondingLane = adminPhantomAiLaneForProviderId(respondingProviderId);
     const respondingLabel = adminPhantomAiProviderLabel(respondingProviderId);
@@ -7008,7 +7308,7 @@ app.post("/actions/validate", async (request, reply) => {
     ok: true,
     actionType: parsed.data.type,
     policy: parsed.data.policy,
-    handlerState: handler ? "registered" : "not-implemented",
+    handlerState: isActionImplemented(handler) ? "registered" : "not-implemented",
   };
 });
 

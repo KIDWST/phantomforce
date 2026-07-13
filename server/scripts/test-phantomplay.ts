@@ -19,12 +19,19 @@ process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
 const owner: AccessSession = { id: "owner", userId: "owner-user", label: "Owner Studio", role: "admin", canManageAccess: true, orgId: "org-owner", orgRole: "owner", isSuperAdmin: true };
 const playerA: AccessSession = { id: "player-a", userId: "player-a", label: "Player A", role: "client", canManageAccess: false, orgId: "org-a", orgRole: "member" };
 const playerB: AccessSession = { id: "player-b", userId: "player-b", label: "Player B", role: "client", canManageAccess: false, orgId: "org-b", orgRole: "member" };
+const classmateA: AccessSession = { id: "classmate-a", userId: "classmate-a", label: "Classmate A", role: "client", canManageAccess: false, orgId: "school-one", orgRole: "member" };
+const classmateB: AccessSession = { id: "classmate-b", userId: "classmate-b", label: "Classmate B", role: "client", canManageAccess: false, orgId: "school-one", orgRole: "member" };
+const outsider: AccessSession = { id: "outsider", userId: "outsider", label: "Outside Player", role: "client", canManageAccess: false, orgId: "outside-school", orgRole: "member" };
 
 try {
   const play = await import("../src/phantom-ai/phantomplay.js");
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
-  assert(initial.catalog.length === 3, "Three real built-in games should ship.");
+  assert(initial.catalog.length === 6, "Six real built-in games should ship.");
+  const builtInIds = new Set(initial.catalog.map((game) => game.id));
+  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick"]) {
+    assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
+  }
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
   assert(initial.access.canSubmitGames === false, "The snapshot should honor the plan submission decision.");
 
@@ -42,6 +49,19 @@ try {
   await play.updatePhantomPlaySession(playerA, replay.play.id, { secondsDelta: 10, score: 20, progress: 100, ended: true });
   const afterReplay = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30 });
   assert(afterReplay.history[0]?.score === 420 && afterReplay.history[0]?.seconds === 85, "History should keep the best score and total play time across sessions.");
+
+  const privateRoom = await play.createPhantomPlayRoom(classmateA, { gameId: "signal-match", mode: "classroom", maxPlayers: 4 }, { entitled: true });
+  assert(privateRoom.room.code.length >= 6, "Private rooms should issue a short join code.");
+  assert(privateRoom.room.mode === "classroom" && privateRoom.room.safety.contentPolicy === "everyone_rating_required", "Classroom rooms should enforce Everyone-rated games.");
+  assert(privateRoom.room.safety.publicDiscovery === false && privateRoom.room.safety.directPeerConnection === false && privateRoom.room.safety.inboundDevicePorts === false, "Private rooms must avoid public discovery and direct device exposure.");
+  assert(privateRoom.room.safety.chat === false && privateRoom.room.safety.voice === false && privateRoom.room.safety.externalGameNetworking === false, "Private rooms must not add chat, voice, or game-side external networking.");
+  const joinedRoom = await play.joinPhantomPlayRoom(classmateB, { code: privateRoom.room.code }, { entitled: true });
+  assert(joinedRoom?.room.participantCount === 2, "A classmate in the same workspace should be able to join with a room code.");
+  const privateSnapshot = await play.getPhantomPlaySnapshot(classmateB, { entitled: true, dailyMinuteLimit: 30 });
+  assert(privateSnapshot.rooms.some((room) => room.code === privateRoom.room.code), "Joined private rooms should appear in the student's PhantomPlay snapshot.");
+  const outsiderView = await play.getPhantomPlayRoom(outsider, { code: privateRoom.room.code });
+  assert(outsiderView === null, "Room codes must not work across tenant boundaries.");
+  await play.leavePhantomPlayRoom(classmateB, { code: privateRoom.room.code });
 
   let invalidRejected = false;
   try { await play.createPhantomPlaySubmission(owner, { title: "Bad", submit: true }); } catch { invalidRejected = true; }
@@ -84,6 +104,29 @@ try {
   const approved = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30 });
   assert(approved.catalog.some((game) => game.title === "Community Circuit" && game.kind === "community"), "Only an approved release should enter the player catalog.");
 
+  const staleStock = await play.createPhantomPlaySubmission(owner, {
+    title: "Word Weld",
+    summary: "Weld letters into as many words as you can before time runs out.",
+    description: "A stock PhantomPlay word game record that simulates an older catalog entry with a Phantom pose screenshot and old developer credit.",
+    category: "Puzzle",
+    contentRating: "everyone",
+    developerName: "Phantom Labs",
+    launchUrl: "https://games.example.test/word-weld/",
+    screenshots: ["/app/assets/poses/mode-dark-ask.webp"],
+    tags: ["word", "puzzle", "touch"],
+    controls: "Keyboard and touch input.",
+    dataHandling: "No player data is read or stored by the game.",
+    version: "1.0.0",
+    releaseNotes: "Legacy catalog normalization fixture.",
+    submit: true,
+  });
+  await play.moderatePhantomPlaySubmission(owner, staleStock.submission.id, { decision: "approved", note: "Approved legacy stock fixture." });
+  const normalizedStock = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30 });
+  const wordWeld = normalizedStock.catalog.find((game) => game.title === "Word Weld");
+  assert(wordWeld?.developer === "Tak", "Stock PhantomPlay titles must show Tak, not stale Phantom Labs credit.");
+  assert(wordWeld?.thumbnail.includes("word-weld-cover.webp") && !wordWeld.thumbnail.includes("/app/assets/poses/"), "Stock PhantomPlay titles must replace old Phantom pose thumbnails with game-specific art.");
+  assert(wordWeld?.developerAvatar?.includes("tak-avatar.webp"), "Stock PhantomPlay titles must include Tak's avatar.");
+
   await play.moderatePhantomPlaySubmission(owner, created.submission.id, { decision: "disabled", note: "Disabled for release test." });
   const disabled = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30 });
   assert(!disabled.catalog.some((game) => game.title === "Community Circuit"), "A disabled release must disappear from the catalog immediately.");
@@ -93,8 +136,8 @@ try {
   assert(limitBlocked, "Daily plan time limits must block new sessions after use.");
 
   await play.updatePhantomPlayProfile(playerB, { gameId: "signal-match", favorite: true });
-  const persisted = JSON.parse(await readFile(process.env.PHANTOMFORCE_PHANTOMPLAY_PATH, "utf8")) as { profiles: Record<string, unknown>; submissions: unknown[] };
-  assert(Object.keys(persisted.profiles).length >= 2 && persisted.submissions.length === 1, "Player and release state should be durable.");
+  const persisted = JSON.parse(await readFile(process.env.PHANTOMFORCE_PHANTOMPLAY_PATH, "utf8")) as { profiles: Record<string, unknown>; rooms: unknown[]; submissions: unknown[] };
+  assert(Object.keys(persisted.profiles).length >= 2 && persisted.rooms.length >= 1 && persisted.submissions.length === 2, "Player, private room, and release state should be durable.");
 
   const { app } = await import("../src/index.js");
   const unauthenticated = await app.inject({ method: "GET", url: "/api/phantomplay" });
@@ -112,11 +155,16 @@ try {
   assert(clientCatalog.statusCode === 200 && clientCatalog.json().access.canModerate === false, "Client accounts must not receive moderation access.");
   const clientPlay = await app.inject({ method: "POST", url: "/api/phantomplay/plays", headers: { Authorization: `Bearer ${clientToken}` }, payload: { gameId: "signal-match" } });
   assert(clientPlay.statusCode === 403 && clientPlay.json().error === "read_only_plan", "The existing free-plan write boundary must block a legacy read-only client.");
+  const ownerRoom = await app.inject({ method: "POST", url: "/api/phantomplay/rooms", headers: { Authorization: `Bearer ${ownerToken}` }, payload: { gameId: "signal-match", mode: "classroom", maxPlayers: 4 } });
+  assert(ownerRoom.statusCode === 200 && ownerRoom.json().room.safety.publicDiscovery === false, "The private room API should create non-public rooms for privileged local operators.");
+  const ownerRoomCode = ownerRoom.json().room.code;
+  const ownerRoomFetch = await app.inject({ method: "GET", url: `/api/phantomplay/rooms/${ownerRoomCode}`, headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(ownerRoomFetch.statusCode === 200 && ownerRoomFetch.json().room.code === ownerRoomCode, "The private room API should return joined/hosted room state only through authenticated routes.");
   const clientModeration = await app.inject({ method: "POST", url: `/api/phantomplay/submissions/${created.submission.id}/moderate`, headers: { Authorization: `Bearer ${clientToken}` }, payload: { decision: "approved" } });
   assert(clientModeration.statusCode === 403, "The moderation route must reject client sessions.");
   await app.close();
 
-  console.log(JSON.stringify({ ok: true, builtInGames: initial.catalog.length, savedScore: saved?.score, tenantIsolation: true, privateUrlRejected, versionCount: updated?.submission.versions.length, moderationBlocked: playerModerationBlocked, routeAuth: true, communityApproval: true, disabledRemoved: true, timeLimitBlocked: limitBlocked }));
+  console.log(JSON.stringify({ ok: true, builtInGames: initial.catalog.length, savedScore: saved?.score, tenantIsolation: true, privateRooms: true, privateUrlRejected, versionCount: updated?.submission.versions.length, moderationBlocked: playerModerationBlocked, routeAuth: true, communityApproval: true, disabledRemoved: true, timeLimitBlocked: limitBlocked }));
 } finally {
   await rm(root, { recursive: true, force: true });
 }

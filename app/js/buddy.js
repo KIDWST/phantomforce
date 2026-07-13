@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-214";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-216";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260712-214";
+} from "./companion-preferences.js?v=phantom-live-20260712-216";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -111,6 +111,8 @@ function createBuddyController() {
   let nextWanderAt = 0;
   let lastPaintAt = 0;
   let geometryRaf = 0;
+  let revealAt = 0;
+  let revealed = false;
 
   function mobile() { return window.matchMedia("(max-width: 720px)").matches; }
   function reduceMotion() { return reduceMotionQuery.matches || prefs.motionLevel === "reduced" || prefs.motionLevel === "none"; }
@@ -269,7 +271,7 @@ function createBuddyController() {
   function createLayer() {
     if (layer) return;
     layer = document.createElement("div");
-    layer.className = "buddy is-docked";
+    layer.className = "buddy is-docked is-booting";
     layer.setAttribute("data-buddy", "");
     layer.innerHTML = `
       <div class="buddy-say" data-buddy-say hidden></div>
@@ -313,6 +315,8 @@ function createBuddyController() {
     menu = layer.querySelector("[data-buddy-menu]");
     ctx2 = canvas.getContext("2d");
     character = createPhantomCharacter({ small: true });
+    revealed = false;
+    revealAt = performance.now() + 720;
     bindEvents();
     configureCanvas({ snap: true });
   }
@@ -327,6 +331,8 @@ function createBuddyController() {
     }
     if (layer) layer.remove();
     layer = canvas = sayEl = menu = ctx2 = character = null;
+    revealed = false;
+    revealAt = 0;
   }
 
   function syncMenuControls() {
@@ -767,6 +773,12 @@ function createBuddyController() {
       });
       if (portrait) ctx2.restore();
       updatePointerHitState(true);
+      if (!revealed && now >= revealAt) {
+        revealed = true;
+        layer.classList.remove("is-booting");
+        layer.classList.add("is-ready");
+        updatePointerHitState(true);
+      }
     };
     requestAnimationFrame(frame);
   }

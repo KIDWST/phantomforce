@@ -67,16 +67,38 @@ export type MysteryEvidence = {
   observations: string; sourceReference: string; legitimatelyObtained: true; noDeceptionConfirmed: true; createdAt: string;
 };
 export type AuditRecord = { id: string; tenantId: string; actorId: string; action: string; result: "allowed" | "blocked"; reason: string; alternative: string; createdAt: string };
+export type ScoutContext = { businessName: string; location: string; offer: string; audience: string; goals: string; createdAt: string; updatedAt: string };
+type ScoutLane = { id: string; label: string; status: "needs_context" | "queued" | "watching" | "source_ready"; query: string; why: string };
+type MarketBoardItem = {
+  competitorId: string; name: string; symbol: string; category: string; domain: string; score: number;
+  momentum: "gaining" | "vulnerable" | "mixed" | "quiet" | "unwatched"; confidence: "none" | Confidence;
+  signalCount: number; recentSignals: number; lastSignalAt: string | null; tip: string; watch: string[];
+};
 
 type TenantState = {
-  settings: { aggressiveMode: boolean; modeChangedAt: string | null; publicSourcesOnly: true; individualTargeting: false; externalActions: false };
+  settings: { aggressiveMode: boolean; modeChangedAt: string | null; publicSourcesOnly: true; individualTargeting: false; externalActions: false; scoutContext: ScoutContext | null; scoutEnabled: boolean; scoutCadence: "manual" | "daily"; lastScoutRunAt: string | null };
   competitors: CompetitorRecord[]; signals: SignalRecord[]; inferences: InferenceRecord[]; audienceThemes: AudienceTheme[];
   creativeAnalyses: CreativeAnalysis[]; interceptions: InterceptionPackage[]; opportunities: ResearchOpportunity[];
   mysteryEvidence: MysteryEvidence[]; audit: AuditRecord[];
 };
 type Store = { version: 1; tenants: Record<string, TenantState> };
-const freshTenant = (): TenantState => ({ settings: { aggressiveMode: false, modeChangedAt: null, publicSourcesOnly: true, individualTargeting: false, externalActions: false }, competitors: [], signals: [], inferences: [], audienceThemes: [], creativeAnalyses: [], interceptions: [], opportunities: [], mysteryEvidence: [], audit: [] });
+const freshTenant = (): TenantState => ({ settings: { aggressiveMode: false, modeChangedAt: null, publicSourcesOnly: true, individualTargeting: false, externalActions: false, scoutContext: null, scoutEnabled: false, scoutCadence: "manual", lastScoutRunAt: null }, competitors: [], signals: [], inferences: [], audienceThemes: [], creativeAnalyses: [], interceptions: [], opportunities: [], mysteryEvidence: [], audit: [] });
 let writeChain = Promise.resolve();
+
+function normalizeTenantState(state: TenantState): TenantState {
+  const fresh = freshTenant();
+  state.settings = { ...fresh.settings, ...(state.settings || {}) };
+  state.competitors = Array.isArray(state.competitors) ? state.competitors : [];
+  state.signals = Array.isArray(state.signals) ? state.signals : [];
+  state.inferences = Array.isArray(state.inferences) ? state.inferences : [];
+  state.audienceThemes = Array.isArray(state.audienceThemes) ? state.audienceThemes : [];
+  state.creativeAnalyses = Array.isArray(state.creativeAnalyses) ? state.creativeAnalyses : [];
+  state.interceptions = Array.isArray(state.interceptions) ? state.interceptions : [];
+  state.opportunities = Array.isArray(state.opportunities) ? state.opportunities : [];
+  state.mysteryEvidence = Array.isArray(state.mysteryEvidence) ? state.mysteryEvidence : [];
+  state.audit = Array.isArray(state.audit) ? state.audit : [];
+  return state;
+}
 
 function clean(value: unknown, max = 1000) { return redactSensitiveText(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, max); }
 function url(value: unknown, required = true) {
@@ -106,7 +128,7 @@ async function save(store: Store) {
   await writeChain;
 }
 async function mutate<T>(tenantId: string, fn: (state: TenantState, store: Store) => T | Promise<T>) {
-  const store = await load(); const state = store.tenants[tenantId] ?? freshTenant(); store.tenants[tenantId] = state;
+  const store = await load(); const state = normalizeTenantState(store.tenants[tenantId] ?? freshTenant()); store.tenants[tenantId] = state;
   try { const result = await fn(state, store); await save(store); return result; }
   catch (error) { await save(store); throw error; }
 }
@@ -146,11 +168,193 @@ function buildInferences(tenantId: string, state: TenantState, competitorId: str
   }).filter(Boolean) as InferenceRecord[];
 }
 
+const GROWTH_SIGNALS: SignalType[] = ["pricing_page", "landing_page", "public_ad", "ad_volume", "social_cadence", "content_format", "release_note", "documentation", "app_store_note", "job_listing", "employee_role", "partnership", "event_appearance", "newsletter", "search_pattern"];
+const WEAKNESS_SIGNALS: SignalType[] = ["public_review", "customer_complaint", "community_discussion"];
+const SOURCE_LANES = [
+  ["local", "Local competitors", "map pack, local rankings, service area directories"],
+  ["reviews", "Review pressure", "public reviews, complaints, objections, support gaps"],
+  ["offers", "Offer and pricing", "pricing pages, landing pages, package changes"],
+  ["ads", "Ad and content heat", "public ad volume, social cadence, content format shifts"],
+  ["products", "Product sales and launches", "release notes, app updates, marketplace or product-page changes"],
+  ["hiring", "Investment clues", "job listings, roles, partnerships, events"],
+] as const;
+
+function daysAgo(value: string) {
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? (Date.now() - time) / 86400000 : 9999;
+}
+function recentSignal(signal: SignalRecord, days = 45) { return daysAgo(signal.observedAt) <= days; }
+function symbolFor(name: string) {
+  const letters = clean(name, 80).split(/\s+/).filter(Boolean).map((part) => part[0]?.toUpperCase()).join("");
+  return (letters || "CI").slice(0, 3);
+}
+function domainFor(website: string) {
+  try { return new URL(website).hostname.replace(/^www\./u, ""); } catch { return "unknown"; }
+}
+function contextMissing(context: ScoutContext | null) {
+  const missing: string[] = [];
+  if (!context?.businessName) missing.push("business name");
+  if (!context?.offer) missing.push("offer");
+  if (!context?.location) missing.push("location or service area");
+  if (!context?.audience) missing.push("audience");
+  return missing;
+}
+function contextReady(context: ScoutContext | null) {
+  return Boolean(context?.offer && (context.location || context.audience || context.businessName));
+}
+function scoutQuery(context: ScoutContext | null, lane: typeof SOURCE_LANES[number]) {
+  const offer = context?.offer || "[offer]";
+  const location = context?.location || "[location]";
+  const audience = context?.audience || "[audience]";
+  const base = lane[0] === "local" ? `${offer} ${location} competitors`
+    : lane[0] === "reviews" ? `${offer} ${location} reviews complaints`
+      : lane[0] === "offers" ? `${offer} pricing packages ${location}`
+        : lane[0] === "ads" ? `${offer} ${audience} ads content examples`
+          : lane[0] === "products" ? `${offer} product launch sales trends ${location}`
+            : `${offer} hiring partnerships ${location}`;
+  return base.replace(/\s+/g, " ").trim();
+}
+function buildScout(state: TenantState) {
+  const context = state.settings.scoutContext;
+  const missing = contextMissing(context);
+  const ready = contextReady(context);
+  const signals = state.signals.length;
+  const competitors = state.competitors.length;
+  const status = !ready ? "needs_context" : competitors ? "watching" : "ready_to_discover";
+  const lanes: ScoutLane[] = SOURCE_LANES.map((lane) => ({
+    id: lane[0],
+    label: lane[1],
+    status: !ready ? "needs_context" : signals ? "watching" : "queued",
+    query: scoutQuery(context, lane),
+    why: lane[2],
+  }));
+  return {
+    enabled: state.settings.scoutEnabled,
+    status,
+    context,
+    missing,
+    lastRunAt: state.settings.lastScoutRunAt,
+    briefing: !ready
+      ? "Phantom needs the business, offer, audience, and service area before it can build a useful competitor map."
+      : competitors
+        ? "Phantom is ranking known competitors by public-signal momentum and turning gaps into safe response ideas."
+        : "Phantom has enough context to start discovery. Add public sources or connect a search provider to convert scout lanes into verified competitors.",
+    lanes,
+  };
+}
+function boardTip(momentum: MarketBoardItem["momentum"], positives: number, weaknesses: number, opportunities: number) {
+  if (momentum === "unwatched") return "Scout their homepage, reviews, pricing, ads, and jobs before making a move.";
+  if (momentum === "vulnerable") return "They look exposed. Build proof around the customer pain and verify recency before publishing.";
+  if (momentum === "gaining") return "They have heat. Watch the offer and prepare a differentiated comparison or category guide.";
+  if (momentum === "mixed") return "Mixed signals. Separate what they are pushing from what customers are resisting.";
+  if (opportunities > 0) return "There are response options ready. Turn the best one into a tracked campaign.";
+  return positives || weaknesses ? "Keep collecting public sources until the pattern is strong enough to act on." : "No recent signal yet. Put this competitor on the scout queue.";
+}
+function buildMarketBoard(state: TenantState): MarketBoardItem[] {
+  return state.competitors.map((item) => {
+    const signals = state.signals.filter((entry) => entry.competitorId === item.id);
+    const recent = signals.filter((entry) => recentSignal(entry));
+    const inferences = state.inferences.filter((entry) => entry.competitorId === item.id);
+    const themes = state.audienceThemes.filter((entry) => entry.competitorId === item.id);
+    const opportunities = state.opportunities.filter((entry) => entry.competitorId === item.id).length;
+    const growth = recent.filter((entry) => GROWTH_SIGNALS.includes(entry.type)).length + inferences.filter((entry) => ["upcoming_offer", "investment", "market_direction", "content_priority", "positioning"].includes(entry.area)).length;
+    const weakness = recent.filter((entry) => WEAKNESS_SIGNALS.includes(entry.type)).length + inferences.filter((entry) => ["customer_pain", "operational_weakness"].includes(entry.area)).length + themes.length;
+    const score = Math.max(5, Math.min(95, Math.round(48 + growth * 7 + opportunities * 5 - weakness * 6 + Math.min(recent.length, 8) * 2)));
+    const momentum: MarketBoardItem["momentum"] = !signals.length ? "unwatched" : growth >= weakness + 2 ? "gaining" : weakness >= growth + 1 ? "vulnerable" : growth && weakness ? "mixed" : recent.length ? "quiet" : "quiet";
+    const confidence: MarketBoardItem["confidence"] = signals.length >= 6 ? "high" : signals.length >= 3 ? "medium" : signals.length ? "low" : "none";
+    const newest = signals.map((entry) => entry.observedAt).sort().at(-1) || null;
+    return {
+      competitorId: item.id,
+      name: item.name,
+      symbol: symbolFor(item.name),
+      category: item.category || "Competitor",
+      domain: domainFor(item.website),
+      score,
+      momentum,
+      confidence,
+      signalCount: signals.length,
+      recentSignals: recent.length,
+      lastSignalAt: newest,
+      tip: boardTip(momentum, growth, weakness, opportunities),
+      watch: [
+        growth ? "offer heat" : "offer baseline",
+        weakness ? "customer pain" : "review scan",
+        opportunities ? "response ready" : "opportunity scan",
+      ],
+    };
+  }).sort((a, b) => b.score - a.score || b.recentSignals - a.recentSignals || a.name.localeCompare(b.name));
+}
+function buildTips(state: TenantState, board: MarketBoardItem[]) {
+  const tips: Array<{ title: string; detail: string; tone: "good" | "warn" | "hot" | "neutral" }> = [];
+  const scout = buildScout(state);
+  if (scout.status === "needs_context") tips.push({ title: "Scout needs context", detail: "Add your offer, location, audience, and business name so Phantom can build the first watch lanes.", tone: "warn" });
+  const vulnerable = board.find((item) => item.momentum === "vulnerable");
+  if (vulnerable) tips.push({ title: `${vulnerable.name} looks exposed`, detail: vulnerable.tip, tone: "hot" });
+  const gaining = board.find((item) => item.momentum === "gaining");
+  if (gaining) tips.push({ title: `${gaining.name} has heat`, detail: gaining.tip, tone: "good" });
+  if (!board.length && scout.status !== "needs_context") tips.push({ title: "Discovery queue ready", detail: "Use the scout lanes to collect public sources, then Phantom will rank the market board automatically.", tone: "neutral" });
+  if (!tips.length) tips.push({ title: "Keep the board sourced", detail: "Add recent public signals and Phantom will update momentum, confidence, and response options.", tone: "neutral" });
+  return tips.slice(0, 4);
+}
+
 export function competitorIntelligencePolicyCheck(text: string) { return policy(clean(text, 3000)); }
 
 export async function getCompetitorIntelligenceSnapshot(session: AccessSession, options: { tenantId?: unknown; entitled: boolean; aggressiveEntitled: boolean; competitorLimit: number; signalLimit: number }) {
-  const tenantId = tenantFor(session, options.tenantId); const store = await load(); const state = store.tenants[tenantId] ?? freshTenant();
-  return { tenantId, access: { enabled: options.entitled, aggressiveAvailable: options.aggressiveEntitled, canManage: session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin", competitorLimit: options.competitorLimit, signalLimit: options.signalLimit }, signalTypes: SIGNAL_TYPES, settings: state.settings, competitors: state.competitors, signals: state.signals, inferences: state.inferences, audienceThemes: state.audienceThemes, creativeAnalyses: state.creativeAnalyses, interceptions: state.interceptions, opportunities: state.opportunities, mysteryEvidence: state.mysteryEvidence, audit: state.audit.slice(0, 100), metrics: { competitors: state.competitors.length, signals: state.signals.length, inferences: state.inferences.length, highConfidence: state.inferences.filter((entry) => entry.confidence === "high").length, audienceThemes: state.audienceThemes.length, blockedRequests: state.audit.filter((entry) => entry.result === "blocked").length } };
+  const tenantId = tenantFor(session, options.tenantId); const store = await load(); const state = normalizeTenantState(store.tenants[tenantId] ?? freshTenant());
+  const marketBoard = buildMarketBoard(state);
+  const scout = buildScout(state);
+  return {
+    tenantId,
+    access: { enabled: options.entitled, aggressiveAvailable: options.aggressiveEntitled, canManage: session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin", competitorLimit: options.competitorLimit, signalLimit: options.signalLimit },
+    signalTypes: SIGNAL_TYPES,
+    settings: state.settings,
+    scout,
+    marketBoard,
+    tips: buildTips(state, marketBoard),
+    competitors: state.competitors,
+    signals: state.signals,
+    inferences: state.inferences,
+    audienceThemes: state.audienceThemes,
+    creativeAnalyses: state.creativeAnalyses,
+    interceptions: state.interceptions,
+    opportunities: state.opportunities,
+    mysteryEvidence: state.mysteryEvidence,
+    audit: state.audit.slice(0, 100),
+    metrics: {
+      competitors: state.competitors.length,
+      signals: state.signals.length,
+      inferences: state.inferences.length,
+      highConfidence: state.inferences.filter((entry) => entry.confidence === "high").length,
+      audienceThemes: state.audienceThemes.length,
+      blockedRequests: state.audit.filter((entry) => entry.result === "blocked").length,
+      marketMovers: marketBoard.filter((entry) => entry.momentum === "gaining" || entry.momentum === "vulnerable").length,
+      activeScoutLanes: scout.lanes.filter((entry) => entry.status !== "needs_context").length,
+    },
+  };
+}
+
+export async function updateMarketScoutContext(session: AccessSession, body: Record<string, unknown>) {
+  const tenantId = tenantFor(session, body.tenantId);
+  return mutate(tenantId, (state) => {
+    const existing = state.settings.scoutContext;
+    const at = now();
+    const context: ScoutContext = {
+      businessName: clean(body.businessName ?? existing?.businessName, 120),
+      location: clean(body.location ?? existing?.location, 180),
+      offer: clean(body.offer ?? existing?.offer, 240),
+      audience: clean(body.audience ?? existing?.audience, 240),
+      goals: clean(body.goals ?? existing?.goals, 400),
+      createdAt: existing?.createdAt || at,
+      updatedAt: at,
+    };
+    if (!context.businessName && !context.location && !context.offer && !context.audience) throw new Error("Add your business, offer, location, or audience so Phantom can start the scout.");
+    requireAllowed(state, tenantId, session, "market_scout_context", `${context.businessName} ${context.location} ${context.offer} ${context.audience} ${context.goals}`);
+    state.settings.scoutContext = context;
+    state.settings.scoutEnabled = true;
+    state.settings.lastScoutRunAt = at;
+    publicAudit(state, tenantId, session.id, "market_scout_context", "allowed", "AI market scout context saved; generated public-source watch lanes.");
+    return buildScout(state);
+  });
 }
 
 export async function updateAggressiveMode(session: AccessSession, body: Record<string, unknown>, access: { aggressiveEntitled: boolean }) {

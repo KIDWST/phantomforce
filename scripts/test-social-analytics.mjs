@@ -29,7 +29,7 @@ assert.match(contentHubSource, /PhantomForce local site\/content signals/);
 assert.match(contentHubSource, /signalLabel/);
 assert.match(contentHubSource, /activeWorkspaceSites/);
 assert.match(contentHubSource, /Import official report/);
-assert.match(contentHubSource, /Auto · CSV · TSV · JSON/);
+assert.match(contentHubSource, /Backup only · CSV · TSV · JSON/);
 assert.match(contentHubSource, /an-channel-line/);
 assert.match(contentHubSource, /an-coverage-ring/);
 console.log("Social analytics import checks passed.");

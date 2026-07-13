@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+  <title>Word Weld</title>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#010605;color:#eafff4;font-family:system-ui,sans-serif;user-select:none;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}body{display:grid;place-items:center;padding:max(14px,env(safe-area-inset-top)) 14px max(14px,env(safe-area-inset-bottom));background:radial-gradient(circle at 50% 8%,#17402e,#020807 58%)}main{width:min(760px,100%);height:100%;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:12px}header{display:flex;align-items:center;justify-content:space-between;gap:12px}h1{margin:0;color:#5effac;font-size:42px;line-height:1}.hud{display:flex;gap:8px;font:800 11px ui-monospace;color:#88ffc2}.hud span{padding:8px 10px;border:1px solid #41ffa144;border-radius:999px;background:#06120d}.word{min-height:64px;display:flex;align-items:center;justify-content:center;border:1px solid #41ffa155;border-radius:16px;background:#03100bcc;font-size:30px;font-weight:900;letter-spacing:.12em}.rack{display:grid;grid-template-columns:repeat(7,1fr);gap:9px;align-self:center}.rack button{aspect-ratio:1;border:1px solid #41ffa155;border-radius:15px;background:linear-gradient(145deg,#0c2a1c,#03110c);color:#dffff0;font-size:34px;font-weight:900;cursor:pointer;touch-action:manipulation}.rack button:disabled{opacity:.28}.rack button:focus-visible{outline:2px solid #5effac}.actions{display:grid;grid-template-columns:1fr 1fr;gap:9px}.actions button{min-height:48px;border:1px solid #41ffa155;border-radius:13px;background:#07150f;color:#dffff0;font-weight:900}.actions button.primary{background:#54ffa8;color:#021009;border-color:#54ffa8}.log{min-height:110px;overflow:auto;padding:12px;border:1px solid #41ffa12d;border-radius:13px;color:#a9c5b7;background:#020807bb}.log b{color:#5effac}.pause,.start{position:fixed;z-index:6;inset:0;display:grid;place-items:center;background:#010504de;backdrop-filter:blur(5px)}.pause[hidden],.start[hidden]{display:none}.pause div,.start div{text-align:center;max-width:440px;padding:24px}.pause h2,.start h2{margin:0;color:#5effac;font-size:46px}.pause p,.start p{color:#a9c5b7}.pause button,.start button{min-width:150px;min-height:48px;border:0;border-radius:999px;background:#54ffa8;color:#021009;font-weight:900}@media(max-width:560px){body{padding:10px}h1{font-size:31px}.hud{font-size:9px}.rack{gap:6px}.rack button{border-radius:11px;font-size:24px}.word{min-height:54px;font-size:22px}.log{font-size:13px}.actions button{min-height:44px}}
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>Word Weld</h1><div class="hud"><span data-score>0 pts</span><span data-time>90s</span></div></header>
+    <div class="word" data-word aria-live="polite">WORD</div>
+    <div class="rack" data-rack></div>
+    <div class="actions"><button type="button" data-clear>Clear</button><button class="primary" type="button" data-submit>Submit</button></div>
+    <div class="log" data-log>Make words with 3+ letters. Enter submits.</div>
+  </main>
+  <div class="start"><div><h2>Word Weld</h2><p>Build words from the rack before the timer runs out.</p><button type="button">Start</button></div></div>
+  <div class="pause" hidden><div><h2>Paused</h2><p>Your rack is saved.</p><button type="button">Resume</button></div></div>
+  <script>
+    const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
+    const banks=['SIGNALS','PHANTOM','CONTENT','MARKETS','FOCUSAI','GROWTHS','SYSTEMS','CREATOR','CASHBOX','LAUNCHS'],common=new Set(['signal','signals','sign','sing','gain','gains','phantom','atom','path','than','man','math','content','tone','note','net','ten','one','market','mark','team','make','take','rate','focus','suit','fast','growth','grow','throw','system','stem','sets','creator','create','react','trace','cash','box','launch','lunch','haunt','host','ghost']);
+    const rackEl=document.querySelector('[data-rack]'),wordEl=document.querySelector('[data-word]'),scoreEl=document.querySelector('[data-score]'),timeEl=document.querySelector('[data-time]'),logEl=document.querySelector('[data-log]'),startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause');
+    let letters=[],used=[],word='',score=0,time=90,timer=0,paused=false,started=false,found=new Set();
+    function shuffle(a){for(let i=a.length-1;i;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]]}return a}
+    function newRack(){letters=shuffle((banks[Math.floor(Math.random()*banks.length)]||'PHANTOM').split('')).slice(0,7);used=letters.map(()=>false);word='';render()}
+    function render(){wordEl.textContent=word||'WORD';scoreEl.textContent=`${score} pts`;timeEl.textContent=`${time}s`;rackEl.innerHTML=letters.map((l,i)=>`<button type="button" data-i="${i}" ${used[i]?'disabled':''}>${l}</button>`).join('');rackEl.querySelectorAll('button').forEach(b=>b.onclick=()=>pick(Number(b.dataset.i)))}
+    function pick(i){if(paused||!started||used[i])return;used[i]=true;word+=letters[i];render()}
+    function clearWord(){used=letters.map(()=>false);word='';render()}
+    function log(text){logEl.innerHTML=`<b>${text}</b><br>${logEl.textContent}`.slice(0,900)}
+    function submit(){const value=word.toLowerCase();if(value.length<3){log('Use at least 3 letters.');return}if(found.has(value)){log('Already welded.');clearWord();return}const valid=common.has(value)||value.length>=5; if(!valid){log(`${word} did not hold.`);clearWord();return}found.add(value);score+=value.length*10+(value.length>=6?25:0);log(`+${value.length*10} ${word}`);host('score',{score,progress:Math.min(98,Math.round(score/6)),state:{found:found.size,time}});newRack()}
+    function end(){clearInterval(timer);started=false;startEl.hidden=false;startEl.querySelector('h2').textContent='Time';startEl.querySelector('p').textContent=`You welded ${found.size} words for ${score} points.`;startEl.querySelector('button').textContent='Play again';host('complete',{score,progress:100,state:{found:found.size}})}
+    function start(){score=0;time=90;found=new Set();started=true;paused=false;startEl.hidden=true;pauseEl.hidden=true;newRack();clearInterval(timer);timer=setInterval(()=>{if(paused||!started)return;time--;render();if(time<=0)end()},1000);host('progress',{score:0,progress:0,state:{found:0}})}
+    function setPaused(next){if(!started)return;paused=next;pauseEl.hidden=!paused;host('paused',{paused})}
+    document.querySelector('[data-clear]').onclick=clearWord;document.querySelector('[data-submit]').onclick=submit;startEl.querySelector('button').onclick=start;pauseEl.querySelector('button').onclick=()=>setPaused(false);
+    addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();submit()}else if(e.key==='Backspace'){word=word.slice(0,-1);used=letters.map(()=>false);render()}else if(e.key==='p'||e.key==='P'){setPaused(!paused)}else if(/^[a-z]$/i.test(e.key)){const i=letters.findIndex((l,j)=>!used[j]&&l.toLowerCase()===e.key.toLowerCase());if(i>=0)pick(i)}});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
+    addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='restart')start()});
+    render();host('ready');
+  </script>
+</body>
+</html>

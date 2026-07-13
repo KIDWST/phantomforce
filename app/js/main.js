@@ -6,37 +6,37 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-212";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-212";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-212";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-212";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-216";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-216";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-212";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-212";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-212";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-212";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-212";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-212";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-212";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-212";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-212";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-212";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-212";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-214";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-212";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-212";
+} from "./store.js?v=phantom-live-20260712-225";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-225";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-225";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-225";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-225";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-225";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-225";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-225";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-225";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-225";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-225";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-225";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-225";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-225";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-225";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-225";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-225";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-225";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-225";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-225";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-212";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-212";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-212";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-212";
+} from "./orgs.js?v=phantom-live-20260712-225";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-225";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-225";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-225";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260712-212";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-212";
+} from "./customization.js?v=phantom-live-20260712-225";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-225";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -147,28 +147,34 @@ function showGate() {
       <h1>Sign in to Phantom.</h1>
       <form class="owner-login" data-owner-login>
         <label>
-          <span>Owner key</span>
-          <input type="password" data-owner-key autocomplete="current-password" placeholder="Enter owner key" autofocus />
+          <span>Email</span>
+          <input type="email" data-owner-email autocomplete="username" placeholder="jordan@phantomforce.online" autofocus required />
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" data-owner-password autocomplete="current-password" placeholder="Password" required />
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
           <b>Launch Business Manager</b>
-          <i>Owner brain session required. This host opens the full operating layer.</i>
+          <i>Owner account required. This host opens the full operating layer.</i>
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
       <p class="gate-note">The private gateway protects this route. PhantomForce owns the visible login and session.</p>`;
     const form = card.querySelector("[data-owner-login]");
-    const input = card.querySelector("[data-owner-key]");
+    const emailInput = card.querySelector("[data-owner-email]");
+    const passwordInput = card.querySelector("[data-owner-password]");
     const error = card.querySelector("[data-owner-error]");
     form.onsubmit = async (event) => {
       event.preventDefault();
       error.hidden = true;
-      const ownerKey = input.value.trim();
-      if (!ownerKey) { error.textContent = "Enter the owner key."; error.hidden = false; return; }
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
       form.classList.add("is-loading");
       try {
-        ctx.session = await ownerLogin(ownerKey);
+        ctx.session = await ownerLogin(email, password);
         enterPhantom();
       } catch (err) {
         session.clear();
@@ -497,6 +503,15 @@ function goNav(id) {
   else if (item.ws) renderWorkspacePage(item.ws, true);
 }
 
+function missionMapPrompts() {
+  return [
+    "Create a task to qualify school prospects for PhantomPlay classroom games",
+    "Create a task to build the PhantomForce CRM prospect map for creators, businesses, and schools",
+    "Create a task to set up the next client onboarding workflow",
+    "Create a task to prepare Managed Growth Ops follow-up for active leads",
+  ];
+}
+
 function openOperationsMap() {
   if (activePageId) renderDashboardPage(true);
   if (openId === "operations-map") {
@@ -504,6 +519,7 @@ function openOperationsMap() {
     return;
   }
   const summary = flowSummary();
+  const prompts = missionMapPrompts();
   clearOverlayOnly();
   openId = "operations-map";
   document.body.classList.add("overlay-open");
@@ -513,13 +529,33 @@ function openOperationsMap() {
       <section class="overlay-panel">
         <header class="overlay-head">
           <div>
-            <p class="overlay-kicker">Operations map</p>
-            <h2>Live systems map</h2>
+            <p class="overlay-kicker">Mission business map</p>
+            <h2>Task creation keeper</h2>
             <p class="overlay-sub">${esc(summary.text)}</p>
           </div>
           <button class="overlay-x" data-map-close aria-label="Close operations map">✕</button>
         </header>
-        <div class="overlay-body">
+        <div class="overlay-body mission-map-body">
+          <section class="mission-map-keeper" aria-label="Mission task creation keeper">
+            <div class="mission-map-copy">
+              <p class="mission-map-kicker">Tell Phantom to create a task</p>
+              <h3>I'll map the road to success.</h3>
+              <p>Describe the outcome in plain English. Phantom turns it into a mission path with leads, follow-up, approvals, owner work, and proof - without sending, publishing, charging, or exposing anything.</p>
+            </div>
+            <div class="mission-map-road" aria-label="Road to success">
+              ${["Capture outcome", "Find client lane", "Set follow-up", "Draft offer/content", "Queue approvals", "Report progress"].map((step, i) => `
+                <span><b>${i + 1}</b>${esc(step)}</span>
+              `).join("")}
+            </div>
+            <div class="mission-map-prompts" aria-label="Task prompt starters">
+              ${prompts.map((prompt) => `
+                <button class="mission-map-prompt" type="button" data-map-prompt="${esc(prompt)}">
+                  <span>${esc(prompt)}</span>
+                  <small>Load into chat</small>
+                </button>
+              `).join("")}
+            </div>
+          </section>
           <section class="flowmap flowmap-modal is-map-open" aria-label="Live operations map">
             <div class="flow-stage" data-flowmap tabindex="-1"></div>
           </section>
@@ -947,7 +983,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-212";
+const POSE_VERSION = "phantom-live-20260712-225";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1902,6 +1938,20 @@ function wireDeck() {
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     if (e.target.closest("[data-map-open]")) { openOperationsMap(); return; }
     if (e.target.closest("[data-map-close]")) { closeOperationsMap(); return; }
+    const mapPrompt = e.target.closest("[data-map-prompt]");
+    if (mapPrompt) {
+      const prompt = mapPrompt.dataset.mapPrompt || "";
+      closeOperationsMap();
+      renderDashboardPage(true);
+      setTimeout(() => {
+        const input = $("[data-command-input]");
+        if (!input) return;
+        input.value = prompt;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        focusCommandInput();
+      }, reduceMotion ? 0 : 80);
+      return;
+    }
     const opener = e.target.closest("[data-open-ws]");
     if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
     if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }

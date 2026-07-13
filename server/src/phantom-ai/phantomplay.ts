@@ -21,6 +21,7 @@ export type PhantomPlayGame = {
   tags: string[];
   contentRating: PhantomPlayRating;
   developer: string;
+  developerAvatar?: string;
   kind: "built_in" | "community";
   launchUrl: string;
   thumbnail: string;
@@ -29,6 +30,26 @@ export type PhantomPlayGame = {
   controls: string;
   progressSupport: boolean;
   scoreSupport: boolean;
+};
+
+const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
+const artUrl = (file: string) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
+const TAK_AVATAR = artUrl("tak-avatar.webp");
+const GAME_ART_BY_SLUG: Record<string, string> = {
+  "neon-drift": artUrl("neon-drift-cover.webp"),
+  "signal-match": artUrl("signal-match-cover.webp"),
+  "focus-stack": artUrl("focus-stack-cover.webp"),
+  "word-weld": artUrl("word-weld-cover.webp"),
+  "reflex-grid": artUrl("reflex-grid-cover.webp"),
+  "penalty-kick": artUrl("penalty-kick-cover.webp"),
+};
+const CATEGORY_ART: Record<string, string> = {
+  Arcade: GAME_ART_BY_SLUG["neon-drift"],
+  Puzzle: GAME_ART_BY_SLUG["signal-match"],
+  Focus: GAME_ART_BY_SLUG["focus-stack"],
+  Strategy: GAME_ART_BY_SLUG["reflex-grid"],
+  Sports: GAME_ART_BY_SLUG["penalty-kick"],
+  Creative: GAME_ART_BY_SLUG["word-weld"],
 };
 
 type PlaySession = {
@@ -55,6 +76,46 @@ type PlayerProfile = {
     allowCommunityGames: boolean;
   };
   updatedAt: string;
+};
+
+type PhantomPlayRoomMode = "friends" | "classroom";
+type PhantomPlayRoomStatus = "open" | "locked" | "ended" | "expired";
+type PhantomPlayRoomParticipant = {
+  actorId: string;
+  label: string;
+  role: "host" | "player";
+  status: "online" | "left";
+  joinedAt: string;
+  lastSeenAt: string;
+};
+
+export type PhantomPlayRoom = {
+  id: string;
+  code: string;
+  tenantId: string;
+  hostActorId: string;
+  hostLabel: string;
+  gameId: string;
+  gameTitle: string;
+  mode: PhantomPlayRoomMode;
+  status: PhantomPlayRoomStatus;
+  maxPlayers: number;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  participants: PhantomPlayRoomParticipant[];
+  safety: {
+    transport: "workspace_relay";
+    joinPolicy: "signed_in_same_tenant_code";
+    publicDiscovery: false;
+    directPeerConnection: false;
+    inboundDevicePorts: false;
+    chat: false;
+    voice: false;
+    externalGameNetworking: false;
+    inviteTtlMinutes: number;
+    contentPolicy: "everyone_rating_required" | "profile_content_setting";
+  };
 };
 
 export type PhantomPlaySubmission = {
@@ -84,6 +145,7 @@ export type PhantomPlaySubmission = {
 type PhantomPlayStore = {
   version: 1;
   profiles: Record<string, PlayerProfile>;
+  rooms: PhantomPlayRoom[];
   submissions: PhantomPlaySubmission[];
 };
 
@@ -96,13 +158,14 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     category: "Arcade",
     tags: ["quick", "reaction", "keyboard", "touch"],
     contentRating: "everyone",
-    developer: "Phantom Labs",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/neon-drift.html",
-    thumbnail: "/app/assets/poses/mode-dark-video.webp",
+    launchUrl: "/app/games/neon-drift.html?v=1.1.0",
+    thumbnail: GAME_ART_BY_SLUG["neon-drift"],
     featured: true,
-    version: "1.0.0",
-    controls: "Arrow keys, A/D, or tap left/right",
+    version: "1.1.0",
+    controls: "Arrow keys, A/D, or hold left/right",
     progressSupport: true,
     scoreSupport: true,
   },
@@ -114,12 +177,13 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     category: "Puzzle",
     tags: ["memory", "calm", "puzzle", "touch"],
     contentRating: "everyone",
-    developer: "Phantom Labs",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/signal-match.html",
-    thumbnail: "/app/assets/poses/mode-dark-image.webp",
+    launchUrl: "/app/games/signal-match.html?v=1.1.0",
+    thumbnail: GAME_ART_BY_SLUG["signal-match"],
     featured: true,
-    version: "1.0.0",
+    version: "1.1.0",
     controls: "Click, tap, or use Tab + Enter",
     progressSupport: true,
     scoreSupport: true,
@@ -132,13 +196,71 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     category: "Focus",
     tags: ["timing", "focus", "quick", "touch"],
     contentRating: "everyone",
-    developer: "Phantom Labs",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/focus-stack.html",
-    thumbnail: "/app/assets/poses/mode-dark-website.webp",
+    launchUrl: "/app/games/focus-stack.html?v=1.1.0",
+    thumbnail: GAME_ART_BY_SLUG["focus-stack"],
+    featured: false,
+    version: "1.1.0",
+    controls: "Space, Enter, click, or tap",
+    progressSupport: true,
+    scoreSupport: true,
+  },
+  {
+    id: "word-weld",
+    title: "Word Weld",
+    summary: "Build as many words as you can from one shifting signal rack.",
+    description: "A quick word-building game with tap, keyboard, score, timer, and clean reset controls.",
+    category: "Creative",
+    tags: ["word", "creative", "quick", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/word-weld.html?v=1.0.0",
+    thumbnail: GAME_ART_BY_SLUG["word-weld"],
+    featured: true,
+    version: "1.0.0",
+    controls: "Keyboard, tap letters, Enter to submit",
+    progressSupport: true,
+    scoreSupport: true,
+  },
+  {
+    id: "reflex-grid",
+    title: "Reflex Grid",
+    summary: "Hit the live cells before the grid burns out.",
+    description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.",
+    category: "Strategy",
+    tags: ["reaction", "strategy", "touch", "aim"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/reflex-grid.html?v=1.0.0",
+    thumbnail: GAME_ART_BY_SLUG["reflex-grid"],
+    featured: true,
+    version: "1.0.0",
+    controls: "Click, tap, or use number keys",
+    progressSupport: true,
+    scoreSupport: true,
+  },
+  {
+    id: "penalty-kick",
+    title: "Penalty Kick",
+    summary: "Pick your lane, time the strike, and beat the keeper.",
+    description: "A touch-friendly sports timing game with five shots, visible keeper reads, and saved score.",
+    category: "Sports",
+    tags: ["sports", "timing", "soccer", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/penalty-kick.html?v=1.0.0",
+    thumbnail: GAME_ART_BY_SLUG["penalty-kick"],
     featured: false,
     version: "1.0.0",
-    controls: "Space, Enter, click, or tap",
+    controls: "Choose a lane, then tap shoot at the sweet spot",
     progressSupport: true,
     scoreSupport: true,
   },
@@ -150,6 +272,7 @@ const now = () => new Date().toISOString();
 const clamp = (value: unknown, min: number, max: number) => Math.max(min, Math.min(max, Number(value) || 0));
 const safeRating = (value: unknown): PhantomPlayRating => value === "mature" || value === "teen" ? value : "everyone";
 const safeVersion = (value: unknown) => /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i.test(clean(value, 40)) ? clean(value, 40) : "1.0.0";
+const ROOM_TTL_MINUTES = 90;
 const privateHost = (hostname: string) => {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (host === "localhost" || [".localhost", ".local", ".internal", ".lan", ".home"].some((suffix) => host.endsWith(suffix)) || host === "0.0.0.0" || host === "::1") return true;
@@ -180,6 +303,47 @@ const safeScreenshot = (value: unknown) => {
   return publicHttpsUrl(url);
 };
 
+function slugifyGame(value: unknown) {
+  return clean(value, 180).toLowerCase()
+    .replace(/^community:/u, "")
+    .replace(/['']/gu, "")
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+}
+
+function artSlugFor(game: Pick<PhantomPlayGame, "id" | "title">) {
+  const idSlug = slugifyGame(game.id);
+  if (GAME_ART_BY_SLUG[idSlug]) return idSlug;
+  const titleSlug = slugifyGame(game.title);
+  return GAME_ART_BY_SLUG[titleSlug] ? titleSlug : "";
+}
+
+function isPlaceholderThumbnail(value: unknown) {
+  const thumbnail = clean(value, 700);
+  return !thumbnail || thumbnail.includes("/app/assets/poses/") || thumbnail.includes("brand-phantom") || thumbnail.includes("mode-dark");
+}
+
+function thumbnailFor(game: PhantomPlayGame) {
+  const slug = artSlugFor(game);
+  if (slug) return GAME_ART_BY_SLUG[slug];
+  if (isPlaceholderThumbnail(game.thumbnail)) return CATEGORY_ART[game.category] || GAME_ART_BY_SLUG["neon-drift"];
+  return game.thumbnail;
+}
+
+function developerNameFor(game: PhantomPlayGame) {
+  return game.kind === "built_in" || artSlugFor(game) || game.developer === "Phantom Labs" ? "Tak" : (game.developer || "Tak");
+}
+
+function normalizeGameArt(game: PhantomPlayGame): PhantomPlayGame {
+  const developer = developerNameFor(game);
+  return {
+    ...game,
+    developer,
+    developerAvatar: developer === "Tak" ? (game.developerAvatar || TAK_AVATAR) : game.developerAvatar,
+    thumbnail: thumbnailFor(game),
+  };
+}
+
 function tenantIdFor(session: AccessSession, requested?: unknown) {
   const own = session.orgId || session.clientId || session.id || "phantomforce";
   if (!session.canManageAccess) return clean(own, 100) || "phantomforce";
@@ -188,6 +352,10 @@ function tenantIdFor(session: AccessSession, requested?: unknown) {
 
 function actorIdFor(session: AccessSession) {
   return clean(session.userId || session.id, 120) || "anonymous";
+}
+
+function actorLabelFor(session: AccessSession) {
+  return clean(session.label || session.userId || session.id, 90) || "Player";
 }
 
 function profileKey(tenantId: string, actorId: string) {
@@ -211,10 +379,11 @@ async function readStore(): Promise<PhantomPlayStore> {
     return {
       version: 1,
       profiles: parsed.profiles && typeof parsed.profiles === "object" ? parsed.profiles : {},
+      rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
       submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [],
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, profiles: {}, submissions: [] };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, profiles: {}, rooms: [], submissions: [] };
     throw error;
   }
 }
@@ -240,7 +409,7 @@ function ensureProfile(store: PhantomPlayStore, tenantId: string, actorId: strin
 }
 
 function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
-  return store.submissions.filter((item) => item.status === "approved" && item.launchUrl).map((item) => ({
+  return store.submissions.filter((item) => item.status === "approved" && item.launchUrl).map((item) => normalizeGameArt({
     id: `community:${item.id}`,
     title: item.title,
     summary: item.summary,
@@ -261,7 +430,7 @@ function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
 }
 
 function catalogFor(store: PhantomPlayStore, profile: PlayerProfile) {
-  const all = [...PHANTOMPLAY_BUILT_IN_GAMES, ...(profile.preferences.allowCommunityGames ? communityGames(store) : [])];
+  const all = [...PHANTOMPLAY_BUILT_IN_GAMES, ...(profile.preferences.allowCommunityGames ? communityGames(store) : [])].map(normalizeGameArt);
   return all.filter((game) => ratingRank[game.contentRating] <= ratingRank[profile.preferences.contentRating]);
 }
 
@@ -285,6 +454,71 @@ function historySummary(profile: PlayerProfile) {
     seconds: item.totalSeconds,
     canContinue: item.latest.progress > 0 && item.latest.progress < 100,
   }));
+}
+
+function roomStatus(room: PhantomPlayRoom): PhantomPlayRoomStatus {
+  if (room.status === "ended") return "ended";
+  if (Date.parse(room.expiresAt) <= Date.now()) return "expired";
+  return room.status;
+}
+
+function activeParticipantCount(room: PhantomPlayRoom) {
+  return room.participants.filter((participant) => participant.status === "online").length;
+}
+
+function roomView(room: PhantomPlayRoom) {
+  const status = roomStatus(room);
+  return {
+    ...room,
+    status,
+    participantCount: activeParticipantCount(room),
+    safety: {
+      transport: "workspace_relay" as const,
+      joinPolicy: "signed_in_same_tenant_code" as const,
+      publicDiscovery: false as const,
+      directPeerConnection: false as const,
+      inboundDevicePorts: false as const,
+      chat: false as const,
+      voice: false as const,
+      externalGameNetworking: false as const,
+      inviteTtlMinutes: ROOM_TTL_MINUTES,
+      contentPolicy: room.safety?.contentPolicy || (room.mode === "classroom" ? "everyone_rating_required" : "profile_content_setting"),
+    },
+  };
+}
+
+function roomsForSnapshot(store: PhantomPlayStore, tenantId: string, actorId: string, session: AccessSession) {
+  return store.rooms
+    .filter((room) => room.tenantId === tenantId)
+    .filter((room) => ["open", "locked"].includes(roomStatus(room)))
+    .filter((room) => session.canManageAccess || room.participants.some((participant) => participant.actorId === actorId))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 20)
+    .map(roomView);
+}
+
+function pruneRooms(store: PhantomPlayStore) {
+  store.rooms = (store.rooms || [])
+    .filter((room) => room.status !== "ended")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 120);
+}
+
+function roomCode(value: unknown) {
+  return clean(value, 24).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+}
+
+function freshRoomCode(store: PhantomPlayStore, tenantId: string) {
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const code = randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase();
+    if (!store.rooms.some((room) => room.tenantId === tenantId && room.code === code && ["open", "locked"].includes(roomStatus(room)))) return code;
+  }
+  throw new Error("Could not create a unique private room code.");
+}
+
+function findRoom(store: PhantomPlayStore, tenantId: string, code: unknown) {
+  const normalized = roomCode(code);
+  return normalized ? store.rooms.find((room) => room.tenantId === tenantId && room.code === normalized) : undefined;
 }
 
 function todaySeconds(profile: PlayerProfile) {
@@ -316,8 +550,9 @@ export async function getPhantomPlaySnapshot(session: AccessSession, options: { 
     favorites: profile.favorites,
     history: historySummary(profile),
     preferences: profile.preferences,
+    rooms: roomsForSnapshot(store, tenantId, actorId, session),
     submissions: store.submissions.filter((item) => item.developerId === actorId || session.canManageAccess).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-    developerSpotlight: catalog.find((game) => game.featured)?.developer || "Phantom Labs",
+    developerSpotlight: catalog.find((game) => game.featured)?.developer || "Tak",
     approvedCommunityCount: communityGames(store).length,
   };
 }
@@ -380,6 +615,112 @@ export async function updatePhantomPlaySession(session: AccessSession, playId: s
   profile.updatedAt = play.updatedAt;
   await writeStore(store);
   return play;
+}
+
+export async function createPhantomPlayRoom(session: AccessSession, input: Record<string, unknown>, limits: { entitled?: boolean } = {}) {
+  if (limits.entitled === false) throw new Error("PhantomPlay private rooms are not included in this plan.");
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const profile = ensureProfile(store, tenantId, actorId);
+  const gameId = clean(input.gameId, 180);
+  const game = catalogFor(store, profile).find((item) => item.id === gameId);
+  if (!game) throw new Error("Choose an available PhantomPlay game for this room.");
+  const mode: PhantomPlayRoomMode = input.mode === "friends" ? "friends" : "classroom";
+  if (mode === "classroom" && game.contentRating !== "everyone") throw new Error("Classroom rooms can only use Everyone-rated games.");
+  const maxLimit = mode === "classroom" ? 30 : 8;
+  const requestedMax = Number(input.maxPlayers);
+  const maxPlayers = Number.isFinite(requestedMax) ? Math.floor(clamp(requestedMax, 2, maxLimit)) : (mode === "classroom" ? 12 : 6);
+  const timestamp = now();
+  pruneRooms(store);
+  const room: PhantomPlayRoom = {
+    id: `pp-room-${randomUUID()}`,
+    code: freshRoomCode(store, tenantId),
+    tenantId,
+    hostActorId: actorId,
+    hostLabel: actorLabelFor(session),
+    gameId: game.id,
+    gameTitle: game.title,
+    mode,
+    status: "open",
+    maxPlayers,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    expiresAt: new Date(Date.now() + ROOM_TTL_MINUTES * 60_000).toISOString(),
+    participants: [{ actorId, label: actorLabelFor(session), role: "host", status: "online", joinedAt: timestamp, lastSeenAt: timestamp }],
+    safety: {
+      transport: "workspace_relay",
+      joinPolicy: "signed_in_same_tenant_code",
+      publicDiscovery: false,
+      directPeerConnection: false,
+      inboundDevicePorts: false,
+      chat: false,
+      voice: false,
+      externalGameNetworking: false,
+      inviteTtlMinutes: ROOM_TTL_MINUTES,
+      contentPolicy: mode === "classroom" ? "everyone_rating_required" : "profile_content_setting",
+    },
+  };
+  store.rooms.unshift(room);
+  await writeStore(store);
+  return { room: roomView(room) };
+}
+
+export async function getPhantomPlayRoom(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const room = findRoom(await readStore(), tenantId, input.code);
+  if (!room) return null;
+  const actorId = actorIdFor(session);
+  if (!session.canManageAccess && !room.participants.some((participant) => participant.actorId === actorId)) return null;
+  return roomView(room);
+}
+
+export async function joinPhantomPlayRoom(session: AccessSession, input: Record<string, unknown>, limits: { entitled?: boolean } = {}) {
+  if (limits.entitled === false) throw new Error("PhantomPlay private rooms are not included in this plan.");
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const room = findRoom(store, tenantId, input.code);
+  if (!room) return null;
+  const status = roomStatus(room);
+  if (status === "expired") {
+    room.status = "expired";
+    await writeStore(store);
+    throw new Error("This room code has expired.");
+  }
+  if (status !== "open") throw new Error("This private room is not open for joining.");
+  const existing = room.participants.find((participant) => participant.actorId === actorId);
+  if (!existing && activeParticipantCount(room) >= room.maxPlayers) throw new Error("This private room is full.");
+  const timestamp = now();
+  if (existing) {
+    existing.status = "online";
+    existing.lastSeenAt = timestamp;
+    existing.label = actorLabelFor(session);
+  } else {
+    room.participants.push({ actorId, label: actorLabelFor(session), role: "player", status: "online", joinedAt: timestamp, lastSeenAt: timestamp });
+  }
+  room.updatedAt = timestamp;
+  await writeStore(store);
+  return { room: roomView(room) };
+}
+
+export async function leavePhantomPlayRoom(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const room = findRoom(store, tenantId, input.code);
+  if (!room) return null;
+  const participant = room.participants.find((item) => item.actorId === actorId);
+  if (!participant && !session.canManageAccess) return null;
+  const timestamp = now();
+  if (participant) {
+    participant.status = "left";
+    participant.lastSeenAt = timestamp;
+  }
+  if (room.hostActorId === actorId || (session.canManageAccess && input.end === true)) room.status = "locked";
+  room.updatedAt = timestamp;
+  await writeStore(store);
+  return { room: roomView(room) };
 }
 
 function submissionInput(input: Record<string, unknown>) {
@@ -474,5 +815,5 @@ export async function moderatePhantomPlaySubmission(session: AccessSession, subm
 
 export async function getPhantomPlayStoreStatus() {
   const store = await readStore();
-  return { provider: "local_json", pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMPLAY_PATH), profiles: Object.keys(store.profiles).length, submissions: store.submissions.length, approvedCommunityGames: communityGames(store).length };
+  return { provider: "local_json", pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMPLAY_PATH), profiles: Object.keys(store.profiles).length, rooms: store.rooms.filter((room) => ["open", "locked"].includes(roomStatus(room))).length, submissions: store.submissions.length, approvedCommunityGames: communityGames(store).length };
 }

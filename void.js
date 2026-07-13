@@ -52,8 +52,12 @@ const REGISTER_ENDPOINT =
   (location.hostname === "127.0.0.1" || location.hostname === "localhost")
     ? "http://127.0.0.1:8788/register"
     : "https://ai.phantomforce.online/register";
+// HTTP 200 only means the signup was recorded — /register still answers 200 when
+// the mail provider refused the send. Trust the body's `emailed` flag, never the
+// status code, or we promise an email that never left.
 async function registerForDemo(name, email) {
-  if (!REGISTER_ENDPOINT) return true; // no endpoint -> optimistic local preview
+  const miss = { reached: false, emailed: false };
+  if (!REGISTER_ENDPOINT) return miss;
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), 22000);
   try {
@@ -63,8 +67,10 @@ async function registerForDemo(name, email) {
       body: JSON.stringify({ name, email }),
       signal: ctrl.signal,
     });
-    return r.ok;
-  } catch { return false; }
+    if (!r.ok) return miss;
+    const data = await r.json().catch(() => ({}));
+    return { reached: true, emailed: !!data.emailed };
+  } catch { return miss; }
   finally { clearTimeout(timer); }
 }
 const VISITOR_KEY = "pf.visitor.v1";
@@ -299,17 +305,21 @@ function initConversation() {
       downloadStatus.className = "download-status";
       downloadStatus.textContent = "Sending your PhantomForce setup/demo link...";
     }
-    registerForDemo(name, email).then((ok) => {
+    registerForDemo(name, email).then(({ reached, emailed }) => {
       // the highest-emotion moment on the page gets a real reaction
-      if (ok) setCharMood("happy", "happy", 2200, "laugh");
+      if (emailed) setCharMood("happy", "happy", 2200, "laugh");
       else setCharMood("talking", "sad", 3000, "sheepish");
       if (!downloadStatus) return;
       downloadStatus.hidden = false;
-      downloadStatus.className = `download-status ${ok ? "ok" : "err"}`;
-      downloadStatus.textContent = ok
+      downloadStatus.className = `download-status ${emailed ? "ok" : "err"}`;
+      // Reached but not emailed: the details ARE saved, the mail just didn't go.
+      // Say so plainly rather than sending them to an inbox with nothing in it.
+      downloadStatus.textContent = emailed
         ? "Check your email — your PhantomForce setup/demo link is on its way."
-        : "Couldn't reach me just now. Try again in a moment.";
-      if (ok) downloadForm.classList.add("sent");
+        : reached
+          ? "Got your details — but the email didn't go out. Jordan will follow up directly."
+          : "Couldn't reach me just now. Try again in a moment.";
+      if (emailed) downloadForm.classList.add("sent");
     }).finally(() => {
       if (btn) btn.disabled = false;
     });

@@ -1,10 +1,10 @@
-import { session as accessSession, ago } from "./store.js?v=phantom-live-20260712-211";
+import { session as accessSession, ago } from "./store.js?v=phantom-live-20260712-216";
 
 const esc = (value = "") => String(value).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
 const cacheKey = "pf.vacation.statusCache.v2";
 const taskLabels = { phone_call: "Take a call", attend_meeting: "Attend a meeting", lead_follow_up: "Follow up with a lead", booking_coordination: "Handle a booking", client_message: "Handle a client message", research: "Research something", exception_triage: "Handle an exception", other: "Other human work" };
 
-let state = { loading: true, error: "", status: null, activity: [], approvals: [], tasks: [] };
+let state = { loading: true, error: "", authRequired: false, status: null, activity: [], approvals: [], tasks: [] };
 
 function authHeaders(extra = {}) {
   const token = typeof accessSession?.token === "function" ? accessSession.token() : "";
@@ -14,7 +14,11 @@ function authHeaders(extra = {}) {
 async function api(path, options = {}) {
   const response = await fetch(path, { ...options, headers: authHeaders({ ...(options.body ? { "Content-Type": "application/json" } : {}), ...(options.headers || {}) }) });
   const data = await response.json().catch(() => ({}));
-  if (!response.ok || data.ok === false) throw new Error(data.error || data.message || `Away Mode request failed (${response.status})`);
+  if (!response.ok || data.ok === false) {
+    const error = new Error(data.error || data.message || `Away Mode request failed (${response.status})`);
+    error.status = response.status;
+    throw error;
+  }
   return data;
 }
 
@@ -158,15 +162,22 @@ function readinessCard(items) {
 
 function render(el) {
   if (state.loading) { el.innerHTML = `<div class="vm-loading">Loading Away Mode…</div>`; return; }
+  if (state.authRequired) {
+    el.innerHTML = `<div class="vm-error"><b>Away Mode needs a signed-in session.</b><span>This workspace is browsing without a server sign-in, so live coverage status is not available. Sign in from the access gate with your owner account, then come back here.</span><button class="btn" data-retry>Retry</button></div>`;
+    return;
+  }
   if (state.error) { el.innerHTML = `<div class="vm-error"><b>Away Mode could not load.</b><span>${esc(state.error)}</span><button class="btn" data-retry>Retry</button></div>`; return; }
   const s = state.status;
   el.innerHTML = `<div class="vm">${statusHero(s)}${metrics(s)}<div class="vm-grid vm-grid-power">${coveragePlan(s)}${walletCard(s)}${taskForm()}${tasksCard(state.tasks)}${exceptionsCard(state.approvals)}${activityCard(state.activity)}${readinessCard(s.readiness || [])}</div></div>`;
 }
 
 async function refresh(el) {
-  state = { ...state, loading: true, error: "" };
+  state = { ...state, loading: true, error: "", authRequired: false };
   render(el);
-  try { await load(); } catch (error) { state = { ...state, loading: false, error: error.message || "Away Mode could not load." }; }
+  try { await load(); } catch (error) {
+    const authRequired = error?.status === 401;
+    state = { ...state, loading: false, authRequired, error: authRequired ? "" : error.message || "Away Mode could not load." };
+  }
   render(el);
 }
 
@@ -205,6 +216,15 @@ export function renderVacationMode(el, opts = {}) {
       }
       if (button.dataset.opCancel) { await mutate(el, `/api/vacation-mode/operator-tasks/${encodeURIComponent(button.dataset.opCancel)}/cancel`); notify("Operator desk", "Request canceled and reserved credits released."); return; }
       if (button.dataset.approval) { await mutate(el, `/api/vacation-mode/approvals/${encodeURIComponent(button.dataset.approval)}/decision`, "POST", { decision: button.dataset.decision }); notify("Away Mode", "Decision recorded."); }
-    } catch (error) { notify("Away Mode", error.message || "Action failed."); state = { ...state, loading: false, error: error.message || "Action failed." }; render(el); }
+    } catch (error) {
+      if (error?.status === 401) {
+        notify("Away Mode", "Sign in with your owner account to use Away Mode.");
+        state = { ...state, loading: false, authRequired: true, error: "" };
+      } else {
+        notify("Away Mode", error.message || "Action failed.");
+        state = { ...state, loading: false, error: error.message || "Action failed." };
+      }
+      render(el);
+    }
   });
 }

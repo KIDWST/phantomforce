@@ -1,0 +1,38 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+
+const { freshEditState } = await import("../app/js/imagefilters.js?v=phantom-live-20260712-216");
+const { cloneImageEditState } = await import("../app/js/content-editor.js?v=phantom-live-20260712-216");
+
+const source = freshEditState();
+source.paint = {
+  size: 44,
+  opacity: 62,
+  strokes: [
+    { mode: "erase", color: "#ffffff", size: 30, opacity: 100, points: [{ x: 0.2, y: 0.3 }, { x: 0.25, y: 0.35 }] },
+    { mode: "paint", color: "#41ffa1", size: 18, opacity: 72, points: [{ x: 0.5, y: 0.5 }] },
+  ],
+};
+
+const snapshot = cloneImageEditState(source);
+source.paint.strokes[0].points[0].x = 0.99;
+source.paint.strokes.push({ mode: "paint", color: "#000000", size: 1, opacity: 1, points: [] });
+
+assert.equal(snapshot.paint.strokes.length, 2, "paint history snapshots must not share the live strokes array");
+assert.equal(snapshot.paint.strokes[0].points[0].x, 0.2, "paint stroke points must be deep-cloned for undo");
+assert.equal(snapshot.paint.strokes[0].mode, "erase", "eraser strokes must survive history clone");
+
+const restored = cloneImageEditState(snapshot);
+restored.paint.strokes[0].points[0].y = 0.88;
+assert.equal(snapshot.paint.strokes[0].points[0].y, 0.3, "redo snapshots must not share nested point objects");
+
+const mediaSrc = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
+const cssSrc = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
+
+assert.match(mediaSrc, /ctx\.globalCompositeOperation\s*=\s*erase\s*\?\s*"destination-out"/, "eraser must use destination-out compositing");
+assert.match(mediaSrc, /ctx\.globalAlpha\s*=\s*erase\s*\?\s*1\s*:/, "eraser must cut fully transparent pixels");
+assert.match(mediaSrc, /opacity:\s*mlPaintMode === "erase"\s*\?\s*100\s*:/, "new eraser strokes must record full opacity");
+assert.match(mediaSrc, /updateEditHistoryControls\(body\)/, "undo/redo controls must refresh without a full remount");
+assert.match(cssSrc, /\.ml-canvas\s*\{[\s\S]*background-image:/, "transparent erased pixels need a visible checkerboard backdrop");
+
+console.log("medialab editor tests passed");

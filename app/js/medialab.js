@@ -1913,29 +1913,83 @@ function drawPaintStrokes(canvas, state = editState) {
     const points = stroke.points || [];
     if (!points.length) return;
     ctx.save();
-    ctx.globalAlpha = Math.max(0.05, Math.min(1, (stroke.opacity ?? 84) / 100));
-    ctx.globalCompositeOperation = stroke.mode === "erase" ? "destination-out" : "source-over";
-    ctx.strokeStyle = stroke.color || mlPaintColor;
-    ctx.lineWidth = Math.max(2, Number(stroke.size || paint.size || 26));
+    const erase = stroke.mode === "erase";
+    const width = Math.max(2, Number(stroke.size || paint.size || 26));
+    ctx.globalAlpha = erase ? 1 : Math.max(0.05, Math.min(1, (stroke.opacity ?? 84) / 100));
+    ctx.globalCompositeOperation = erase ? "destination-out" : "source-over";
+    ctx.strokeStyle = erase ? "rgba(0,0,0,1)" : (stroke.color || mlPaintColor);
+    ctx.fillStyle = ctx.strokeStyle;
+    ctx.lineWidth = width;
     ctx.beginPath();
+    if (points.length === 1) {
+      const p = points[0];
+      ctx.arc(p.x * canvas.width, p.y * canvas.height, width / 2, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+      return;
+    }
     points.forEach((point, index) => {
       const x = point.x * canvas.width;
       const y = point.y * canvas.height;
       if (index) ctx.lineTo(x, y);
       else ctx.moveTo(x, y);
     });
-    if (points.length === 1) {
-      const p = points[0];
-      ctx.lineTo(p.x * canvas.width + 0.01, p.y * canvas.height + 0.01);
-    }
     ctx.stroke();
     ctx.restore();
   });
   ctx.restore();
 }
+function fitEditorCanvas(canvas) {
+  const wrap = canvas?.closest?.(".ml-canvas-wrap");
+  if (!wrap || !canvas.width || !canvas.height) return;
+  const cs = getComputedStyle(wrap);
+  const padX = parseFloat(cs.paddingLeft || "0") + parseFloat(cs.paddingRight || "0");
+  const padY = parseFloat(cs.paddingTop || "0") + parseFloat(cs.paddingBottom || "0");
+  const availableW = Math.max(1, wrap.clientWidth - padX);
+  const availableH = Math.max(1, wrap.clientHeight - padY);
+  const scale = Math.min(availableW / canvas.width, availableH / canvas.height, 1.5);
+  canvas.style.width = `${Math.max(1, Math.floor(canvas.width * scale))}px`;
+  canvas.style.height = `${Math.max(1, Math.floor(canvas.height * scale))}px`;
+}
 function paintActiveCanvas(canvas, img, state = editState) {
   paintEdit(canvas, img, state);
   drawPaintStrokes(canvas, state);
+  fitEditorCanvas(canvas);
+}
+function updateEditHistoryControls(body) {
+  if (!body?.querySelector) return;
+  const paint = editorPaintState();
+  const strokes = paint.strokes.length;
+  const undo = body.querySelector("[data-ml-undo]");
+  const redo = body.querySelector("[data-ml-redo]");
+  const paintSummary = body.querySelector("[data-ml-paint-summary]");
+  const clearPaint = body.querySelector("[data-ml-clear-paint]");
+  const flip = body.querySelector("[data-ml-flip]");
+  if (undo) undo.disabled = !mlEditHistory.length;
+  if (redo) redo.disabled = !mlEditFuture.length;
+  if (paintSummary) paintSummary.textContent = strokes ? `${strokes} stroke${strokes === 1 ? "" : "s"}` : "Paint";
+  if (clearPaint) clearPaint.disabled = !strokes;
+  if (flip) flip.classList.toggle("is-on", !!editState.flip);
+  const crop = { aspect: "original", x: 0.5, y: 0.5, zoom: 1, ...(editState.crop || {}) };
+  const cropValues = {
+    zoom: Math.round(crop.zoom * 100),
+    x: Math.round(crop.x * 100),
+    y: Math.round(crop.y * 100),
+  };
+  Object.entries(cropValues).forEach(([key, value]) => {
+    const slider = body.querySelector(`[data-ml-crop-slider="${key}"]`);
+    const out = body.querySelector(`[data-crop-out="${key}"]`);
+    if (slider) slider.value = String(value);
+    if (out) out.textContent = key === "zoom" ? `${value}%` : String(value);
+  });
+  const paintSize = body.querySelector("[data-ml-paint-size]");
+  const paintOpacity = body.querySelector("[data-ml-paint-opacity]");
+  const sizeOut = body.querySelector('[data-paint-out="size"]');
+  const opacityOut = body.querySelector('[data-paint-out="opacity"]');
+  if (paintSize) paintSize.value = String(paint.size);
+  if (paintOpacity) paintOpacity.value = String(paint.opacity);
+  if (sizeOut) sizeOut.textContent = String(paint.size);
+  if (opacityOut) opacityOut.textContent = String(paint.opacity);
 }
 function editPromptLanguage(id = editState.promptLanguage || "camera-raw") {
   return EDIT_PROMPT_LANGUAGES.find((row) => row.id === id) || EDIT_PROMPT_LANGUAGES[0];
@@ -2104,7 +2158,7 @@ function renderEdit(body, cfg, opts, root) {
           </div>
         </details>
         <details class="ml-edit-section" ${mlPaintMode !== "select" ? "open" : ""}>
-          <summary><span>Brush & eraser</span><b>${paintState.strokes.length ? `${paintState.strokes.length} strokes` : "Paint"}</b></summary>
+          <summary><span>Brush & eraser</span><b data-ml-paint-summary>${paintState.strokes.length ? `${paintState.strokes.length} strokes` : "Paint"}</b></summary>
           <div class="ml-edit-section-body">
             <div class="ml-seg ml-seg-sm ml-paint-mode" data-ml-paint-mode>
               <button type="button" class="${mlPaintMode === "select" ? "is-on" : ""}" data-v="select">Select</button>
@@ -2144,6 +2198,7 @@ function renderEdit(body, cfg, opts, root) {
   const markerLayer = body.querySelector("[data-ml-bokeh-markers]");
   loadEditorAssetCache(root, opts);
   const repaint = () => { if (canvas._img) { paintActiveCanvas(canvas, canvas._img, editState); positionMarkers(); } };
+  const refreshEditor = () => { syncSliders(body); repaint(); updateEditHistoryControls(body); };
   const positionMarkers = () => {
     if (!markerLayer) return;
     const spots = editState.bokeh?.spots || [];
@@ -2155,6 +2210,16 @@ function renderEdit(body, cfg, opts, root) {
       el.style.top = `${canvasRect.top - markerRect.top + spots[i].y * canvasRect.height}px`;
     });
   };
+  if (window.ResizeObserver) {
+    const fitObserver = new ResizeObserver(() => {
+      if (!canvas.isConnected) { fitObserver.disconnect(); return; }
+      if (canvas._img) {
+        fitEditorCanvas(canvas);
+        positionMarkers();
+      }
+    });
+    fitObserver.observe(canvas.closest(".ml-canvas-wrap"));
+  }
   if (mlBokehPicking) canvas.classList.add("is-picking");
   const pickHint = body.querySelector("[data-ml-pick-hint]");
   if (pickHint) pickHint.hidden = !mlBokehPicking;
@@ -2183,8 +2248,19 @@ function renderEdit(body, cfg, opts, root) {
   window.addEventListener("resize", mlEditResizeHandler);
   // wire tools
   body.querySelector("[data-ml-tutorial]")?.addEventListener("click", () => { mlShowTutorial = !mlShowTutorial; renderMediaStudio(root, opts); });
-  body.querySelector("[data-ml-undo]")?.addEventListener("click", () => { if (!mlEditHistory.length) return; mlEditFuture.push(cloneEditState()); restoreEdit(mlEditHistory.pop()); renderMediaStudio(root, opts); });
-  body.querySelector("[data-ml-redo]")?.addEventListener("click", () => { if (!mlEditFuture.length) return; mlEditHistory.push(cloneEditState()); restoreEdit(mlEditFuture.pop()); renderMediaStudio(root, opts); });
+  updateEditHistoryControls(body);
+  body.querySelector("[data-ml-undo]")?.addEventListener("click", () => {
+    if (!mlEditHistory.length) return;
+    mlEditFuture.push(cloneEditState());
+    restoreEdit(mlEditHistory.pop());
+    refreshEditor();
+  });
+  body.querySelector("[data-ml-redo]")?.addEventListener("click", () => {
+    if (!mlEditFuture.length) return;
+    mlEditHistory.push(cloneEditState());
+    restoreEdit(mlEditFuture.pop());
+    refreshEditor();
+  });
   const before = body.querySelector("[data-ml-before]");
   const showBefore = () => { if (canvas._img) paintEdit(canvas, canvas._img, { ...freshEditState(), loadedUrl: editState.loadedUrl }); };
   if (before) {
@@ -2197,13 +2273,14 @@ function renderEdit(body, cfg, opts, root) {
     renderMediaStudio(root, opts);
   });
   body.querySelectorAll("[data-ml-crop-slider]").forEach((slider) => {
-    slider.onpointerdown = () => rememberEdit();
+    slider.onpointerdown = () => { rememberEdit(); updateEditHistoryControls(body); };
     slider.oninput = () => {
       const key = slider.dataset.mlCropSlider;
       editState.crop[key] = key === "zoom" ? (+slider.value / 100) : (+slider.value / 100);
       repaint();
       const out = body.querySelector(`[data-crop-out="${key}"]`);
       if (out) out.textContent = key === "zoom" ? `${slider.value}%` : slider.value;
+      updateEditHistoryControls(body);
     };
   });
   body.querySelector("[data-ml-autoframe]")?.addEventListener("click", () => {
@@ -2220,7 +2297,7 @@ function renderEdit(body, cfg, opts, root) {
   body.querySelector("[data-ml-clean]")?.addEventListener("click", () => {
     rememberEdit();
     Object.assign(editState, { brightness: 103, contrast: 108, saturate: 108, hue: 0, blur: 0 });
-    syncSliders(body); repaint();
+    refreshEditor();
     if (opts.notify) opts.notify("Media Lab", "Cleaned up light and color.");
   });
   body.querySelector("[data-ml-rembg]")?.addEventListener("click", async (event) => {
@@ -2240,11 +2317,20 @@ function renderEdit(body, cfg, opts, root) {
     button.disabled = false; button.textContent = "Remove background";
     if (opts.notify) opts.notify("Media Lab", result.message || "Background removal is not connected.");
   });
-  body.querySelectorAll("[data-ml-slider]").forEach((s) => { s.onpointerdown = () => rememberEdit(); s.oninput = () => { editState[s.dataset.mlSlider] = +s.value; repaint(); const o = body.querySelector(`[data-out="${s.dataset.mlSlider}"]`); if (o) o.textContent = s.value; }; });
-  body.querySelectorAll("[data-ml-rot]").forEach((b) => b.onclick = () => { rememberEdit(); editState.rotate = (editState.rotate + (+b.dataset.mlRot) + 360) % 360; repaint(); });
-  const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { rememberEdit(); editState.flip = !editState.flip; flip.classList.toggle("is-on"); repaint(); };
-  body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { rememberEdit(); applyFilterPreset(b.dataset.v, editState); syncSliders(body); repaint(); });
-  const tin = body.querySelector("[data-ml-text]"); if (tin) { tin.onfocus = () => rememberEdit(); tin.oninput = () => { editState.text = tin.value; repaint(); }; }
+  body.querySelectorAll("[data-ml-slider]").forEach((s) => {
+    s.onpointerdown = () => { rememberEdit(); updateEditHistoryControls(body); };
+    s.oninput = () => {
+      editState[s.dataset.mlSlider] = +s.value;
+      repaint();
+      const o = body.querySelector(`[data-out="${s.dataset.mlSlider}"]`);
+      if (o) o.textContent = s.value;
+      updateEditHistoryControls(body);
+    };
+  });
+  body.querySelectorAll("[data-ml-rot]").forEach((b) => b.onclick = () => { rememberEdit(); editState.rotate = (editState.rotate + (+b.dataset.mlRot) + 360) % 360; refreshEditor(); });
+  const flip = body.querySelector("[data-ml-flip]"); if (flip) flip.onclick = () => { rememberEdit(); editState.flip = !editState.flip; refreshEditor(); };
+  body.querySelectorAll("[data-ml-filter] button").forEach((b) => b.onclick = () => { rememberEdit(); applyFilterPreset(b.dataset.v, editState); refreshEditor(); });
+  const tin = body.querySelector("[data-ml-text]"); if (tin) { tin.onfocus = () => { rememberEdit(); updateEditHistoryControls(body); }; tin.oninput = () => { editState.text = tin.value; repaint(); updateEditHistoryControls(body); }; }
   body.querySelectorAll("[data-ml-bokeh-pick]").forEach((b) => b.onclick = () => { mlBokehPicking = !mlBokehPicking; renderMediaStudio(root, opts); });
   body.querySelector("[data-ml-bokeh-auto]")?.addEventListener("click", () => {
     if (!canvas._img) return;
@@ -2284,26 +2370,29 @@ function renderEdit(body, cfg, opts, root) {
     editorPaintState().size = +paintSize.value;
     const out = body.querySelector(`[data-paint-out="size"]`);
     if (out) out.textContent = paintSize.value;
+    updateEditHistoryControls(body);
   };
   const paintOpacity = body.querySelector("[data-ml-paint-opacity]");
   if (paintOpacity) paintOpacity.oninput = () => {
     editorPaintState().opacity = +paintOpacity.value;
     const out = body.querySelector(`[data-paint-out="opacity"]`);
     if (out) out.textContent = paintOpacity.value;
+    updateEditHistoryControls(body);
   };
   body.querySelector("[data-ml-clear-paint]")?.addEventListener("click", () => {
     rememberEdit();
     editorPaintState().strokes = [];
-    repaint();
-    renderMediaStudio(root, opts);
+    refreshEditor();
   });
   canvas.onpointerdown = (event) => {
     if (mlPaintMode === "select" || mlBokehPicking) return;
     event.preventDefault();
     rememberEdit();
+    updateEditHistoryControls(body);
     const paint = editorPaintState();
-    const stroke = { mode: mlPaintMode === "erase" ? "erase" : "paint", color: mlPaintColor, size: paint.size, opacity: paint.opacity, points: [canvasEditPoint(event, canvas)] };
+    const stroke = { mode: mlPaintMode === "erase" ? "erase" : "paint", color: mlPaintColor, size: paint.size, opacity: mlPaintMode === "erase" ? 100 : paint.opacity, points: [canvasEditPoint(event, canvas)] };
     paint.strokes.push(stroke);
+    updateEditHistoryControls(body);
     canvas.setPointerCapture?.(event.pointerId);
     canvas.onpointermove = (moveEvent) => {
       stroke.points.push(canvasEditPoint(moveEvent, canvas));
@@ -2314,6 +2403,7 @@ function renderEdit(body, cfg, opts, root) {
       canvas.onpointerup = null;
       canvas.onpointercancel = null;
       repaint();
+      updateEditHistoryControls(body);
     };
     repaint();
   };

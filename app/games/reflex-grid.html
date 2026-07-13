@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; img-src data:; connect-src 'none'; media-src 'none'; frame-src 'none'">
+  <title>Reflex Grid</title>
+  <style>
+    *{box-sizing:border-box}html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020807;color:#eafff4;font-family:system-ui,sans-serif;touch-action:manipulation;user-select:none;overscroll-behavior:none;-webkit-tap-highlight-color:transparent}body{display:grid;place-items:center;padding:max(12px,env(safe-area-inset-top)) 12px max(12px,env(safe-area-inset-bottom));background:radial-gradient(circle at 50% 10%,#173b2c,#020807 62%)}main{width:min(680px,100%);height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto;gap:12px}header{display:flex;align-items:center;justify-content:space-between;gap:10px}h1{margin:0;font-size:42px;line-height:1;color:#60ffac}.hud{display:flex;gap:8px;font:900 11px ui-monospace;color:#80ffc0}.hud span{padding:8px 10px;border:1px solid #41ffa144;border-radius:999px;background:#06120d}.grid{align-self:center;display:grid;grid-template-columns:repeat(4,1fr);gap:9px}.cell{aspect-ratio:1;border:1px solid #41ffa130;border-radius:16px;background:#06130e;color:#bffff0;font-weight:900;font-size:18px;cursor:pointer;transition:transform .12s,background .12s,border-color .12s}.cell.live{background:#45ffa1;color:#021009;box-shadow:0 0 28px #41ffa166;border-color:#45ffa1;transform:scale(1.03)}.cell.bad{background:#ff4f751f;border-color:#ff4f75}.footer{display:flex;gap:9px}.footer button{flex:1;min-height:48px;border:1px solid #41ffa155;border-radius:13px;background:#07150f;color:#dffff0;font-weight:900}.footer button.primary{background:#54ffa8;color:#021009;border-color:#54ffa8}.pause,.start{position:fixed;z-index:6;inset:0;display:grid;place-items:center;background:#010504df;backdrop-filter:blur(5px)}.pause[hidden],.start[hidden]{display:none}.pause div,.start div{text-align:center;max-width:430px;padding:24px}.pause h2,.start h2{margin:0;color:#5effac;font-size:46px}.pause p,.start p{color:#a9c5b7}.pause button,.start button{min-width:150px;min-height:48px;border:0;border-radius:999px;background:#54ffa8;color:#021009;font-weight:900}@media(max-width:560px){h1{font-size:31px}.hud{font-size:9px}.grid{gap:6px}.cell{border-radius:11px}.footer button{min-height:44px}}
+  </style>
+</head>
+<body>
+  <main>
+    <header><h1>Reflex Grid</h1><div class="hud"><span data-score>0</span><span data-left>30 left</span><span data-lives>3 lives</span></div></header>
+    <div class="grid" data-grid></div>
+    <div class="footer"><button type="button" data-pause>Pause</button><button type="button" class="primary" data-restart>Restart</button></div>
+  </main>
+  <div class="start"><div><h2>Reflex Grid</h2><p>Tap the glowing cell. Wrong taps cost lives.</p><button type="button">Start</button></div></div>
+  <div class="pause" hidden><div><h2>Paused</h2><p>Ready when you are.</p><button type="button">Resume</button></div></div>
+  <script>
+    const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
+    const grid=document.querySelector('[data-grid]'),scoreEl=document.querySelector('[data-score]'),leftEl=document.querySelector('[data-left]'),livesEl=document.querySelector('[data-lives]'),startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause');
+    let live=-1,score=0,left=30,lives=3,started=false,paused=false,timer=0,speed=950;
+    function render(){scoreEl.textContent=`${score}`;leftEl.textContent=`${left} left`;livesEl.textContent=`${lives} lives`;grid.innerHTML=Array.from({length:16},(_,i)=>`<button class="cell ${i===live?'live':''}" data-i="${i}" type="button">${i===live?'HIT':i+1}</button>`).join('');grid.querySelectorAll('button').forEach(b=>b.onclick=()=>pick(Number(b.dataset.i)))}
+    function next(){if(!started||paused)return;live=Math.floor(Math.random()*16);render();clearTimeout(timer);timer=setTimeout(()=>{if(!started||paused)return;lives--;host('score',{score,progress:Math.round((30-left)/30*100),state:{lives,left}});if(lives<=0)finish('Missed signal');else next()},speed)}
+    function pick(i){if(!started||paused)return;if(i===live){score+=10+Math.max(0,30-left);left--;speed=Math.max(360,speed-18);host('score',{score,progress:Math.round((30-left)/30*100),state:{lives,left}});if(left<=0)finish('Grid clear');else next()}else{lives--;render();host('score',{score,progress:Math.round((30-left)/30*100),state:{lives,left}});if(lives<=0)finish('Overloaded')}}
+    function finish(title){clearTimeout(timer);started=false;live=-1;render();startEl.hidden=false;startEl.querySelector('h2').textContent=title;startEl.querySelector('p').textContent=`Score ${score}. ${left} signals left.`;startEl.querySelector('button').textContent='Play again';host('complete',{score,progress:100,state:{lives,left}})}
+    function start(){score=0;left=30;lives=3;speed=950;started=true;paused=false;startEl.hidden=true;pauseEl.hidden=true;host('progress',{score:0,progress:0,state:{lives,left}});next()}
+    function setPaused(nextState){if(!started)return;paused=nextState;pauseEl.hidden=!paused;host('paused',{paused});if(!paused)next()}
+    document.querySelector('[data-pause]').onclick=()=>setPaused(true);document.querySelector('[data-restart]').onclick=start;startEl.querySelector('button').onclick=start;pauseEl.querySelector('button').onclick=()=>setPaused(false);
+    addEventListener('keydown',e=>{if(e.key==='p'||e.key==='P')setPaused(!paused);const n=Number(e.key);if(n>=1&&n<=9)pick(n-1)});
+    document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
+    addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='restart')start()});
+    render();host('ready');
+  </script>
+</body>
+</html>

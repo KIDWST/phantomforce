@@ -19,6 +19,9 @@ const client: AccessSession = { id: "client", label: "Client", role: "client", c
 
 try {
   const intel = await import("../src/phantom-ai/competitor-intelligence.js");
+  const scout = await intel.updateMarketScoutContext(owner, { businessName: "Owner Studio", location: "Chicago", offer: "premium photo and media services", audience: "local brands and creators", goals: "Find competitors gaining traction, weak reviews, product sales, and pricing changes." });
+  assert(scout.status === "ready_to_discover" && scout.lanes.length >= 4, "Scout context should arm proactive public-source discovery lanes.");
+
   const created = await intel.createCompetitor(owner, { name: "Example Rival", website: "https://rival.example.test", category: "Service" }, 10);
   assert(created.name === "Example Rival", "Competitor profile should persist.");
 
@@ -62,6 +65,9 @@ try {
   const clientSnapshot = await intel.getCompetitorIntelligenceSnapshot(client, { entitled: true, aggressiveEntitled: false, competitorLimit: 3, signalLimit: 100 });
   assert(ownerSnapshot.signals.length === 2 && clientSnapshot.signals.length === 0, "Intelligence records must be tenant-isolated.");
   assert(ownerSnapshot.metrics.blockedRequests >= 2, "Blocked requests must be visible in the admin audit metrics.");
+  assert(ownerSnapshot.scout.status === "watching" && ownerSnapshot.metrics.activeScoutLanes >= 4, "Snapshot should expose AI scout readiness.");
+  assert(ownerSnapshot.marketBoard[0]?.name === "Example Rival" && ownerSnapshot.marketBoard[0].signalCount === 2, "Snapshot should expose a stock-market-style competitor board from public signals.");
+  assert(ownerSnapshot.tips.length > 0, "Snapshot should include next best action tips.");
 
   const { app } = await import("../src/index.js");
   const unauth = await app.inject({ method: "GET", url: "/api/competitor-intelligence" });
@@ -71,6 +77,8 @@ try {
   const token = (login.json() as { token: string }).token;
   const snapshotResponse = await app.inject({ method: "GET", url: "/api/competitor-intelligence", headers: { Authorization: `Bearer ${token}` } });
   assert(snapshotResponse.statusCode === 200 && snapshotResponse.json().access.aggressiveAvailable === true, "Admin API snapshot should expose aggressive mode readiness.");
+  const scoutResponse = await app.inject({ method: "POST", url: "/api/competitor-intelligence/scout", headers: { Authorization: `Bearer ${token}` }, payload: { businessName: "Route Studio", offer: "AI website builder", location: "Chicago", audience: "small businesses" } });
+  assert(scoutResponse.statusCode === 200 && scoutResponse.json().scout.status !== "needs_context", "Scout route should save market context and return active lanes.");
   const blockedResponse = await app.inject({ method: "POST", url: "/api/competitor-intelligence/policy-check", headers: { Authorization: `Bearer ${token}` }, payload: { action: "bypass a CAPTCHA and rotate IP addresses" } });
   assert(blockedResponse.statusCode === 200 && blockedResponse.json().result.allowed === false, "Policy route must return and audit a blocked decision without execution.");
   await app.close();
