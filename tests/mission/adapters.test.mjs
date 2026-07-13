@@ -3,9 +3,10 @@ import { test } from "node:test";
 
 import { AGENT_PROVIDERS, isAgentProvider, isLaunchMode } from "../../mission/adapters.js";
 
-test("claude and codex are both recognized agent providers", () => {
+test("claude, codex, and openrouter are all recognized agent providers", () => {
   assert.equal(isAgentProvider("claude"), true);
   assert.equal(isAgentProvider("codex"), true);
+  assert.equal(isAgentProvider("openrouter"), true);
 });
 
 test("a plain shell profile is not an agent provider", () => {
@@ -54,4 +55,20 @@ test("codex auto mode uses the documented --ask-for-approval never, not the dang
   assert.ok(args.includes("--sandbox workspace-write"));
   assert.ok(args.includes("--ask-for-approval never"));
   assert.ok(!args.includes("dangerously-bypass"));
+});
+
+test("openrouter buildArgs runs the agent script with the given mode", () => {
+  const args = AGENT_PROVIDERS.openrouter.buildArgs("auto").join(" ");
+  assert.ok(args.includes("--mode auto"));
+  assert.ok(args.includes("agent.mjs"));
+});
+
+test("openrouter buildArgs includes --usage-log when a path is given", () => {
+  const args = AGENT_PROVIDERS.openrouter.buildArgs("approval", { usageLogPath: "C:\\some\\path\\usage.jsonl" }).join(" ");
+  assert.ok(args.includes("--usage-log"));
+  assert.ok(args.includes("usage.jsonl"));
+});
+
+test("openrouter buildArgs with no opts still works (backward compatible default)", () => {
+  assert.doesNotThrow(() => AGENT_PROVIDERS.openrouter.buildArgs("plan"));
 });

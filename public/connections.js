@@ -2,9 +2,10 @@
    accounts, no logins; this is single-user, local-only Termina. Shares
    globals from app.js/mission.js (api, escapeHtml, friendlyError). */
 
-const CONNECTION_PROVIDER_LABELS = {
-  claude: "Claude (Anthropic)",
-  codex: "Codex (OpenAI)",
+const CONNECTION_PROVIDER_META = {
+  claude: { label: "Claude (Anthropic)" },
+  codex: { label: "Codex (OpenAI)" },
+  openrouter: { label: "OpenRouter", extraField: { label: "Model", placeholder: "z-ai/glm-5.2" } },
 };
 
 document.getElementById("connections-btn").addEventListener("click", () => {
@@ -25,21 +26,22 @@ async function renderConnections() {
   const connections = res.ok ? res.connections : {};
   body.innerHTML = "";
 
-  for (const [provider, label] of Object.entries(CONNECTION_PROVIDER_LABELS)) {
-    body.appendChild(renderConnectionRow(provider, label, connections[provider]));
+  for (const [provider, meta] of Object.entries(CONNECTION_PROVIDER_META)) {
+    body.appendChild(renderConnectionRow(provider, meta, connections[provider]));
   }
 }
 
-function renderConnectionRow(provider, label, entry) {
+function renderConnectionRow(provider, meta, entry) {
   const row = document.createElement("div");
   row.className = "connection-row";
   row.innerHTML = `
     <div class="connection-row-head">
-      <b>${escapeHtml(label)}</b>
+      <b>${escapeHtml(meta.label)}</b>
       <span class="connection-status">${entry ? `Connected — saved key ending •••${escapeHtml(entry.last4)}` : "Using system default"}</span>
     </div>
     <div class="connection-row-actions">
       <input type="password" class="connection-key-input" placeholder="Paste API key" />
+      ${meta.extraField ? `<input type="text" class="connection-extra-input" placeholder="${escapeHtml(meta.extraField.placeholder)}" value="${escapeHtml(entry?.extra ?? "")}" />` : ""}
       <button type="button" class="mw-btn connection-save">Save</button>
       ${entry ? `<button type="button" class="mw-btn connection-remove">Remove</button>` : ""}
     </div>
@@ -49,6 +51,7 @@ function renderConnectionRow(provider, label, entry) {
   const errorEl = row.querySelector(".connection-error");
   row.querySelector(".connection-save").addEventListener("click", async () => {
     const input = row.querySelector(".connection-key-input");
+    const extraInput = row.querySelector(".connection-extra-input");
     const apiKey = input.value.trim();
     errorEl.classList.add("hidden");
     if (!apiKey) {
@@ -56,7 +59,10 @@ function renderConnectionRow(provider, label, entry) {
       errorEl.classList.remove("hidden");
       return;
     }
-    const res = await api(`/api/connections/${provider}`, { method: "POST", body: JSON.stringify({ apiKey }) }).then((r) => r.json());
+    const res = await api(`/api/connections/${provider}`, {
+      method: "POST",
+      body: JSON.stringify({ apiKey, extra: extraInput?.value.trim() || undefined }),
+    }).then((r) => r.json());
     if (!res.ok) {
       errorEl.textContent = friendlyError(res.error);
       errorEl.classList.remove("hidden");

@@ -16,6 +16,18 @@
 //   which both CLIs describe as unsafe outside an externally-sandboxed
 //   environment. Choosing this mode is the user's own explicit call per
 //   mission; Termina doesn't default to it.
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const agentScriptPath = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "openrouter-agent", "agent.mjs");
+
+// Single-quote escaping for a pwsh -Command string — same shape already
+// established in mission/claude-print.js, duplicated locally since
+// adapters.js has no existing dependency on claude-print.js.
+function psQuote(value) {
+  return `'${String(value).replace(/'/g, "''")}'`;
+}
+
 export const AGENT_PROVIDERS = {
   claude: {
     label: "Claude CLI",
@@ -30,6 +42,14 @@ export const AGENT_PROVIDERS = {
       if (mode === "plan") return ["-NoLogo", "-NoExit", "-Command", "codex --sandbox read-only --ask-for-approval on-request"];
       const approval = mode === "auto" ? "never" : "on-request";
       return ["-NoLogo", "-NoExit", "-Command", `codex --sandbox workspace-write --ask-for-approval ${approval}`];
+    },
+  },
+  openrouter: {
+    label: "OpenRouter",
+    buildArgs: (mode, opts = {}) => {
+      let command = `node ${psQuote(agentScriptPath)} --mode ${mode}`;
+      if (opts.usageLogPath) command += ` --usage-log ${psQuote(opts.usageLogPath)}`;
+      return ["-NoLogo", "-NoExit", "-Command", command];
     },
   },
 };

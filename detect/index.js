@@ -7,10 +7,12 @@ import { createLineAwareStripper } from "./line-aware-strip.js";
 import { genericPack } from "./packs/generic.js";
 import { claudePack } from "./packs/claude.js";
 import { codexPack } from "./packs/codex.js";
+import { openrouterPack } from "./packs/openrouter.js";
 
 const PACKS = {
   claude: claudePack,
   codex: codexPack,
+  openrouter: openrouterPack,
 };
 
 const WINDOW_SIZE = 4000;

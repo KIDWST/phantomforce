@@ -49,6 +49,15 @@ const BUILT_IN = isWin
         note: "Launches the Claude CLI in a shell.",
       },
       {
+        id: "openrouter",
+        label: "OpenRouter CLI",
+        command: PWSH,
+        args: ["-NoLogo", "-NoExit", "-Command", `node ${JSON.stringify(path.join(appDir, "openrouter-agent", "agent.mjs"))} --mode approval`],
+        cwd: HOME,
+        detector: "openrouter",
+        note: "Launches the OpenRouter agent (model configured via Connections) in a shell.",
+      },
+      {
         id: "cmd",
         label: "Command Prompt",
         command: "cmd.exe",

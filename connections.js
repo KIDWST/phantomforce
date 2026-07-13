@@ -12,6 +12,11 @@ import path from "node:path";
 export const CONNECTION_PROVIDERS = {
   claude: { label: "Claude (Anthropic)", envVar: "ANTHROPIC_API_KEY" },
   codex: { label: "Codex (OpenAI)", envVar: "OPENAI_API_KEY" },
+  openrouter: {
+    label: "OpenRouter",
+    envVar: "OPENROUTER_API_KEY",
+    extraField: { name: "model", envVar: "OPENROUTER_MODEL", label: "Model", placeholder: "z-ai/glm-5.2" },
+  },
 };
 
 function termDir(appDir) {
@@ -50,7 +55,7 @@ function writeRaw(appDir, all) {
   writeFileSync(connectionsPath(appDir), JSON.stringify(all, null, 2), "utf8");
 }
 
-export async function saveConnection(appDir, provider, apiKey) {
+export async function saveConnection(appDir, provider, apiKey, extra) {
   const key = getOrCreateKey(appDir);
   const iv = randomBytes(12);
   const cipher = createCipheriv("aes-256-gcm", key, iv);
@@ -62,17 +67,19 @@ export async function saveConnection(appDir, provider, apiKey) {
     ciphertext: ciphertext.toString("base64"),
     last4: apiKey.slice(-4),
     connectedAt: Date.now(),
+    extra: extra ?? null,
   };
   writeRaw(appDir, all);
 }
 
 // Metadata only — never includes iv/authTag/ciphertext. Safe to serialize
-// straight to an API response.
+// straight to an API response. `extra` (e.g. a model slug) is a plain,
+// non-secret value, safe to expose alongside the rest of the metadata.
 export function readConnections(appDir) {
   const all = readRaw(appDir);
   const out = {};
   for (const [provider, entry] of Object.entries(all)) {
-    out[provider] = { connected: true, last4: entry.last4, connectedAt: entry.connectedAt };
+    out[provider] = { connected: true, last4: entry.last4, connectedAt: entry.connectedAt, extra: entry.extra ?? null };
   }
   return out;
 }
@@ -96,7 +103,9 @@ export function getApiKeyEnv(appDir, provider) {
     const decipher = createDecipheriv("aes-256-gcm", key, Buffer.from(entry.iv, "base64"));
     decipher.setAuthTag(Buffer.from(entry.authTag, "base64"));
     const plain = Buffer.concat([decipher.update(Buffer.from(entry.ciphertext, "base64")), decipher.final()]);
-    return { [meta.envVar]: plain.toString("utf8") };
+    const env = { [meta.envVar]: plain.toString("utf8") };
+    if (meta.extraField && entry.extra) env[meta.extraField.envVar] = entry.extra;
+    return env;
   } catch {
     return {};
   }

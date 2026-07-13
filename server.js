@@ -114,11 +114,13 @@ async function pollTokenUsage(session) {
   const adapter = TOKEN_ADAPTERS[worker.provider];
   let usage = null;
   let estimated = true;
+  let adapterCostUsd = null;
   if (adapter) {
-    const transcript = await adapter.findTranscript(worker.cwd, claudeProjectsDir);
+    const transcript = await adapter.findTranscript(worker.cwd, claudeProjectsDir, worker.usageLogPath);
     if (transcript) {
       const real = await adapter.readUsage(transcript);
       usage = { inputTokens: real.inputTokens, outputTokens: real.outputTokens, model: real.model };
+      adapterCostUsd = typeof real.costUsd === "number" ? real.costUsd : null;
       estimated = false;
     }
   }
@@ -128,7 +130,7 @@ async function pollTokenUsage(session) {
     const est = estimateFromChars(charCount);
     usage = { inputTokens: est.inputTokens, outputTokens: est.outputTokens, model: null };
   }
-  const costUsd = costForUsage({ model: usage.model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
+  const costUsd = adapterCostUsd ?? costForUsage({ model: usage.model, inputTokens: usage.inputTokens, outputTokens: usage.outputTokens });
 
   const payload = JSON.stringify({ type: "tokens", workerId: session.workerId, ...usage, costUsd, estimated });
   for (const socket of session.sockets) {
@@ -422,10 +424,14 @@ async function createMissionWorkers({ mission, roles }) {
         branch = wt.branch;
       }
 
+      const usageLogPath =
+        providerId === "openrouter"
+          ? path.join(appDir, ".termina", "missions", mission.id, "openrouter-usage", `${workerId}.jsonl`)
+          : undefined;
       const workerProfile = {
         ...providerProfile,
         cwd,
-        args: AGENT_PROVIDERS[providerId].buildArgs(mode),
+        args: AGENT_PROVIDERS[providerId].buildArgs(mode, { usageLogPath }),
       };
       const sessionId = `mission-${mission.id}-${workerId}`;
       const session = startSession(sessionId, workerProfile, { cols: 100, rows: 28, missionId: mission.id, workerId });
@@ -442,6 +448,7 @@ async function createMissionWorkers({ mission, roles }) {
         sessionId,
         cwd,
         branch,
+        usageLogPath,
         status: session.status === "error" ? "failed" : "starting",
       });
     }
@@ -596,7 +603,7 @@ const server = http.createServer((req, res) => {
       .then(async (body) => {
         const apiKey = String(body.apiKey ?? "").trim();
         if (!apiKey) return sendJson(res, 400, { ok: false, error: "api_key_required" });
-        await saveConnection(appDir, provider, apiKey);
+        await saveConnection(appDir, provider, apiKey, body.extra ? String(body.extra) : undefined);
         return sendJson(res, 200, { ok: true, connections: readConnections(appDir) });
       })
       .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
@@ -740,7 +747,7 @@ const server = http.createServer((req, res) => {
     const workerProfile = {
       ...providerProfile,
       cwd: worker.cwd,
-      args: AGENT_PROVIDERS[providerId].buildArgs(worker.mode),
+      args: AGENT_PROVIDERS[providerId].buildArgs(worker.mode, { usageLogPath: worker.usageLogPath }),
     };
     const session = startSession(newSessionId, workerProfile, { cols: 100, rows: 28, missionId, workerId });
     worker.sessionId = newSessionId;
@@ -822,7 +829,11 @@ const server = http.createServer((req, res) => {
 
         const providerId = isAgentProvider(sourceWorker.provider) ? sourceWorker.provider : "claude";
         const providerProfile = profileById.get(providerId);
-        const workerProfile = { ...providerProfile, cwd: wt.path, args: AGENT_PROVIDERS[providerId].buildArgs(sourceWorker.mode) };
+        const usageLogPath =
+          providerId === "openrouter"
+            ? path.join(appDir, ".termina", "missions", missionId, "openrouter-usage", `${newWorkerId}.jsonl`)
+            : undefined;
+        const workerProfile = { ...providerProfile, cwd: wt.path, args: AGENT_PROVIDERS[providerId].buildArgs(sourceWorker.mode, { usageLogPath }) };
         const sessionId = `mission-${missionId}-${newWorkerId}`;
         const session = startSession(sessionId, workerProfile, { cols: 100, rows: 28, missionId, workerId: newWorkerId });
 
@@ -838,6 +849,7 @@ const server = http.createServer((req, res) => {
           sessionId,
           cwd: wt.path,
           branch: wt.branch,
+          usageLogPath,
           status: session.status === "error" ? "failed" : "starting",
           resumingFrom: {
             checkpointTs: checkpoint.ts,

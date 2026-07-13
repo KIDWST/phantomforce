@@ -7,6 +7,7 @@
 import { existsSync, statSync } from "node:fs";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
+import { readUsage } from "../openrouter-agent/usage-log.mjs";
 
 // Matches Claude Code's own project-directory naming exactly (verified
 // against a real ~/.claude/projects/<name> directory for a known cwd on
@@ -106,9 +107,38 @@ export function costForUsage({ model, inputTokens, outputTokens }) {
   return (inputTokens / 1_000_000) * rate.input + (outputTokens / 1_000_000) * rate.output;
 }
 
+// Unlike Claude's adapter (which discovers a transcript by scanning a
+// directory), the OpenRouter agent's usage-log path is already known —
+// Termina itself chose it at spawn time (mission/adapters.js's buildArgs
+// --usage-log) — so findTranscript here just returns what it's given.
+async function findOpenrouterTranscript(_cwd, _claudeProjectsDir, usageLogPath) {
+  return usageLogPath ?? null;
+}
+
+// Returns its own costUsd directly (summed from whatever OpenRouter's
+// response actually reported, null if none of the entries had one) —
+// bypasses costForUsage's per-model rate table entirely, since OpenRouter's
+// own reported cost (when present) is more accurate than a guessed rate
+// Termina would otherwise have to maintain per OpenRouter model.
+async function readOpenrouterUsage(logPath) {
+  const entries = await readUsage(logPath);
+  let inputTokens = 0;
+  let outputTokens = 0;
+  let model = null;
+  let costUsd = null;
+  for (const e of entries) {
+    inputTokens += e.promptTokens ?? 0;
+    outputTokens += e.completionTokens ?? 0;
+    if (e.model) model = e.model;
+    if (typeof e.costUsd === "number") costUsd = (costUsd ?? 0) + e.costUsd;
+  }
+  return { inputTokens, outputTokens, cacheTokens: 0, model, costUsd };
+}
+
 // codex: null — no confirmed local transcript format for the Codex CLI at
 // time of writing; the tracker falls back to estimateFromChars for it.
 export const TOKEN_ADAPTERS = {
   claude: { findTranscript: findClaudeTranscript, readUsage: readClaudeUsage },
   codex: null,
+  openrouter: { findTranscript: findOpenrouterTranscript, readUsage: readOpenrouterUsage },
 };

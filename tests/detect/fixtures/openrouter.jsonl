@@ -1,0 +1,4 @@
+{"name": "idle prompt", "raw": "OpenRouter agent — model z-ai/glm-5.2, mode auto\r\nopenrouter▸ ", "expect": "waiting"}
+{"name": "approval prompt", "raw": "APPROVE write_file({\"path\":\"app.js\"})? (y/n) ", "expect": "needs_approval"}
+{"name": "tool call announcement", "raw": "→ read_file({\"path\":\"app.js\"})\r\n", "expect": "running"}
+{"name": "error line", "raw": "[error] OpenRouter request failed: HTTP 500\r\n", "expect": "failed"}

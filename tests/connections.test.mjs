@@ -75,3 +75,24 @@ test("CONNECTION_PROVIDERS maps claude/codex to their real env var names", () =>
   assert.equal(CONNECTION_PROVIDERS.claude.envVar, "ANTHROPIC_API_KEY");
   assert.equal(CONNECTION_PROVIDERS.codex.envVar, "OPENAI_API_KEY");
 });
+
+test("CONNECTION_PROVIDERS.openrouter declares a model extraField", () => {
+  assert.equal(CONNECTION_PROVIDERS.openrouter.envVar, "OPENROUTER_API_KEY");
+  assert.equal(CONNECTION_PROVIDERS.openrouter.extraField.envVar, "OPENROUTER_MODEL");
+});
+
+test("saveConnection stores and getApiKeyEnv returns an extraField value", async () => {
+  await withTempAppDir(async (appDir) => {
+    await saveConnection(appDir, "openrouter", "sk-or-test123", "z-ai/glm-5.2");
+    const env = getApiKeyEnv(appDir, "openrouter");
+    assert.equal(env.OPENROUTER_API_KEY, "sk-or-test123");
+    assert.equal(env.OPENROUTER_MODEL, "z-ai/glm-5.2");
+  });
+});
+
+test("readConnections exposes the extra value as metadata (it's not a secret)", async () => {
+  await withTempAppDir(async (appDir) => {
+    await saveConnection(appDir, "openrouter", "sk-or-test123", "z-ai/glm-5.2");
+    assert.equal(readConnections(appDir).openrouter.extra, "z-ai/glm-5.2");
+  });
+});
