@@ -21,6 +21,8 @@ assert.equal(jsonResult.followers, 900);
 
 assert.throws(() => parseAnalyticsReport("Name,Title\nA,B"), /No recognized metrics/);
 const contentHubSource = readFileSync(new URL("../app/js/contenthub.js", import.meta.url), "utf8");
-assert.match(contentHubSource, /social-analytics\.js/);
-assert.match(contentHubSource, /parseAnalyticsReport/);
-console.log("Social analytics import checks passed.");
+assert.match(contentHubSource, /\/api\/social-analytics\/sync/);
+assert.match(contentHubSource, /an-visual-grid/);
+assert.match(contentHubSource, /Live channel sync/);
+assert.doesNotMatch(contentHubSource, />Import report</);
+console.log("Social analytics dashboard checks passed.");

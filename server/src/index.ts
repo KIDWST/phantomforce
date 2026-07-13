@@ -328,6 +328,10 @@ import {
   buildProviderFundingRecordContract,
   evaluateProviderFundingApprovalContract,
 } from "./phantom-ai/provider-funding-approval-contract.js";
+import {
+  getSocialAnalyticsSnapshot,
+  syncSocialAnalytics,
+} from "./phantom-ai/social-analytics.js";
 import { getProviderReadinessReport } from "./phantom-ai/provider-readiness.js";
 import type {
   ActorRole,
@@ -453,6 +457,19 @@ const HiggsfieldDraftSchema = z.object({
   media_role: z.enum(["image", "start-image", "end-image", "video", "audio"]).optional().default("video"),
   product_url: z.string().trim().max(600).optional().default(""),
   generate_audio: z.enum(["", "true", "false", "yes", "no"]).optional().default(""),
+});
+
+const SocialAnalyticsProfileSchema = z.object({
+  id: z.enum(["instagram", "tiktok", "youtube", "facebook"]),
+  handle: z.string().trim().max(160).optional(),
+  url: z.string().trim().url().max(500).optional(),
+  name: z.string().trim().max(80).optional(),
+});
+
+const SocialAnalyticsSyncSchema = z.object({
+  tenant_id: z.string().trim().max(80).optional(),
+  profiles: z.array(SocialAnalyticsProfileSchema).max(4),
+  force: z.boolean().optional(),
 });
 
 const BrainMemoryCreateSchema = z.object({
@@ -3591,6 +3608,29 @@ for (const [route, handler] of intelligenceCreateRoutes) {
     try { return { ok: true, result: await handler(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
   });
 }
+
+function socialAnalyticsTenant(session: AccessSession, requested: unknown) {
+  if (session.canManageAccess && typeof requested === "string" && requested.trim()) return requested.trim();
+  return session.canManageAccess ? "phantomforce-owner" : (session.clientId || session.id);
+}
+
+app.get("/api/social-analytics", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const tenantId = socialAnalyticsTenant(session, query.tenant_id);
+  return { ok: true, snapshot: await getSocialAnalyticsSnapshot(tenantId) };
+});
+
+app.post("/api/social-analytics/sync", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = SocialAnalyticsSyncSchema.safeParse(request.body);
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = socialAnalyticsTenant(session, parsed.data.tenant_id);
+  const snapshot = await syncSocialAnalytics(tenantId, parsed.data.profiles, { force: parsed.data.force === true });
+  return { ok: true, snapshot };
+});
 
 function buildHermesInteractionMemoryPreviewFromBody(
   body: {

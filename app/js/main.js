@@ -6,37 +6,37 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-212";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-212";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-212";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-212";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-212";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-212";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-212";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-212";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-212";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-212";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-212";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-212";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-212";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-212";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-212";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-212";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-212";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-212";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-212";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-212";
+} from "./store.js?v=phantom-live-20260712-213";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-213";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-213";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-213";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-213";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-213";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-213";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-213";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-213";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-213";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-213";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-213";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-213";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-213";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-213";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-213";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-213";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-213";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-213";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-213";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-212";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-212";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-212";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-212";
+} from "./orgs.js?v=phantom-live-20260712-213";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-213";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-213";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-213";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260712-212";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-212";
+} from "./customization.js?v=phantom-live-20260712-213";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-213";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -147,28 +147,34 @@ function showGate() {
       <h1>Sign in to Phantom.</h1>
       <form class="owner-login" data-owner-login>
         <label>
-          <span>Owner key</span>
-          <input type="password" data-owner-key autocomplete="current-password" placeholder="Enter owner key" autofocus />
+          <span>Email</span>
+          <input type="email" data-owner-email autocomplete="username" placeholder="you@phantomforce.com" autofocus required />
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" data-owner-password autocomplete="current-password" placeholder="Password" required />
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
           <b>Launch Business Manager</b>
-          <i>Owner brain session required. This host opens the full operating layer.</i>
+          <i>Owner account required. This host opens the full operating layer.</i>
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
       <p class="gate-note">The private gateway protects this route. PhantomForce owns the visible login and session.</p>`;
     const form = card.querySelector("[data-owner-login]");
-    const input = card.querySelector("[data-owner-key]");
+    const emailInput = card.querySelector("[data-owner-email]");
+    const passwordInput = card.querySelector("[data-owner-password]");
     const error = card.querySelector("[data-owner-error]");
     form.onsubmit = async (event) => {
       event.preventDefault();
       error.hidden = true;
-      const ownerKey = input.value.trim();
-      if (!ownerKey) { error.textContent = "Enter the owner key."; error.hidden = false; return; }
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
       form.classList.add("is-loading");
       try {
-        ctx.session = await ownerLogin(ownerKey);
+        ctx.session = await ownerLogin(email, password);
         enterPhantom();
       } catch (err) {
         session.clear();
@@ -901,7 +907,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-212";
+const POSE_VERSION = "phantom-live-20260712-213";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1888,7 +1894,6 @@ const mediaOpts = () => ({
   openSettings: () => routeWorkspace("settings"),
   openWorkspace: (id) => routeWorkspace(id),
   focusCommand: () => { renderDashboardPage(true); focusCommandInput(80); },
-  renderPending: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
 
 /* Owner-only runtime lanes. Keep the product vocabulary clean here too:
@@ -2489,10 +2494,8 @@ function renderDeveloperPage(body) {
 }
 
 function renderMediaLabSuite(body, initialTab = "create") {
-  let activeTab = initialTab === "content" ? "content" : "create";
   const opts = mediaOpts();
-  const paint = () => {
-    body.innerHTML = `
+  body.innerHTML = `
       <section class="media-suite" data-media-suite>
         <header class="media-suite-head">
           <div>
@@ -2500,25 +2503,15 @@ function renderMediaLabSuite(body, initialTab = "create") {
             <h2>Media Lab</h2>
             <p>Generate, edit, organize, and publish from the same tab.</p>
           </div>
-          <nav class="media-suite-tabs" role="tablist" aria-label="Media Lab sections">
-            <button class="${activeTab === "create" ? "is-active" : ""}" data-media-suite-tab="create" type="button" role="tab" aria-selected="${activeTab === "create"}">${svg("media")} Create & Edit</button>
-            <button class="${activeTab === "content" ? "is-active" : ""}" data-media-suite-tab="content" type="button" role="tab" aria-selected="${activeTab === "content"}">${svg("doc")} Content Hub</button>
-          </nav>
         </header>
         <div class="media-suite-body" data-media-suite-body></div>
       </section>`;
-    const target = $("[data-media-suite-body]", body);
-    if (activeTab === "content") renderContentHub(target, opts);
-    else renderMediaStudio(target, opts);
-    $$("[data-media-suite-tab]", body).forEach((button) => {
-      button.onclick = () => {
-        activeTab = button.dataset.mediaSuiteTab === "content" ? "content" : "create";
-        try { history.replaceState(null, "", `#page/${activeTab === "content" ? "content" : "media"}`); } catch {}
-        paint();
-      };
-    });
-  };
-  paint();
+  const target = $("[data-media-suite-body]", body);
+  renderMediaStudio(target, {
+    ...opts,
+    initialTab: initialTab === "content" ? "content" : "generate",
+    renderContentHub: (host) => renderContentHub(host, opts),
+  });
 }
 
 const CUSTOM = {

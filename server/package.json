@@ -26,6 +26,7 @@
     "test:customization": "tsx scripts/test-customization-platform.ts",
     "test:phantomplay": "tsx scripts/test-phantomplay.ts",
     "test:competitor-intelligence": "tsx scripts/test-competitor-intelligence.ts",
+    "test:social-analytics": "tsx scripts/test-social-analytics.ts",
     "test:auth:prisma-dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-prisma-dev.ps1",
     "test:auth:production-fail-closed": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-production-fail-closed.ps1",
     "test:auth:owner-production": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/test-auth-owner-production.ps1",

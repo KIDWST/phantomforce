@@ -6,14 +6,14 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-212";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-213";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260712-212";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-212";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-212";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-212";
-import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-212";
+} from "./contenthub.js?v=phantom-live-20260712-213";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-213";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-213";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-213";
+import { assetsAvailable, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-213";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1063,9 +1063,10 @@ function consumePromptIntent(opts = {}) {
 
 const NAV_TABS = [
   ["generate", "Create"],
-  ["library", "Media Pool"],
   ["pending", "Pending"],
+  ["library", "Media Pool"],
   ["edit", "Edit"],
+  ["content", "Content Hub"],
 ];
 const NAV_DRAWERS = [
   ["templates", "Templates", "layout"],
@@ -1073,8 +1074,13 @@ const NAV_DRAWERS = [
   ["engine", "Engine", "cpu"],
 ];
 let activeDrawer = null;
+let pendingJobs = [];
 
 export function renderMediaStudio(el, opts = {}) {
+  if (opts.initialTab && el.dataset.mlInitialTab !== opts.initialTab) {
+    session.tab = opts.initialTab;
+    el.dataset.mlInitialTab = opts.initialTab;
+  }
   consumeEditIntent(opts);
   consumePromptIntent(opts);
   const esc = opts.esc || ((s) => String(s));
@@ -1083,7 +1089,6 @@ export function renderMediaStudio(el, opts = {}) {
   el.innerHTML = `
     <div class="ml">
       <div class="ml-topbar">
-        <button class="ml-back" data-ml-back type="button" aria-label="Go back"><span aria-hidden="true">&larr;</span><em>Back</em></button>
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
           ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
         </nav>
@@ -1092,10 +1097,6 @@ export function renderMediaStudio(el, opts = {}) {
       <div class="ml-body" data-ml-body></div>
       ${activeDrawer ? drawerHtml(activeDrawer, cfg, esc, opts) : ""}
     </div>`;
-  el.querySelector("[data-ml-back]")?.addEventListener("click", () => {
-    if (window.history.length > 1) window.history.back();
-    else opts.openWorkspace?.("home");
-  });
   el.querySelectorAll("[data-ml-tab]").forEach((b) => b.onclick = () => { session.tab = b.dataset.mlTab; activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelectorAll("[data-ml-drawer-open]").forEach((b) => b.onclick = () => { activeDrawer = activeDrawer === b.dataset.mlDrawerOpen ? null : b.dataset.mlDrawerOpen; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-open-local-settings]")?.addEventListener("click", () => { activeDrawer = activeDrawer === "settings" ? null : "settings"; renderMediaStudio(el, opts); });
@@ -1107,6 +1108,7 @@ export function renderMediaStudio(el, opts = {}) {
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
   else if (session.tab === "library") renderLibrary(body, opts, el);
+  else if (session.tab === "content") opts.renderContentHub?.(body, opts);
 }
 
 /* ---- drawers: Templates / History / Engine / Settings — local Media Lab only ---- */
@@ -1249,10 +1251,26 @@ function wireDrawer(el, kind, cfg, opts, esc) {
 }
 
 function renderPending(body) {
+  const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  if (pendingJobs.length) {
+    body.innerHTML = `
+      <div class="ml-pending-list" aria-label="Pending media jobs">
+        ${pendingJobs.map((job) => `
+          <article class="ml-pending-card">
+            <img class="ml-pending-phantom" src="/app/assets/poses/conjure.webp" alt="" loading="lazy" />
+            <div class="ml-pending-copy">
+              <span>Generating</span>
+              <b>${esc(job.prompt || "Untitled media request")}</b>
+              <i>${esc(job.modality)} · ${esc(job.aspect)} · ${esc(job.style)} · started ${Math.max(1, Math.round((Date.now() - job.startedAt) / 60000))}m ago</i>
+            </div>
+          </article>`).join("")}
+      </div>`;
+    return;
+  }
   body.innerHTML = `
     <div class="ml-idle">
       <b>No pending media.</b>
-      <i>Generate an image or video when you are ready. Outputs land under Generated.</i>
+      <i>Generate an image or video when you are ready. Active jobs wait here, then move into Media Pool when they finish.</i>
     </div>`;
 }
 
@@ -1344,7 +1362,7 @@ function renderGenerate(body, cfg, opts, root) {
 
         ${!genState.provider ? `<button class="ml-settings-needed" data-ml-open-settings type="button">${svgIc("gear")} Connect Media Lab</button>` : ""}
 
-        <button class="ml-generate ml-hero" data-ml-generate ${genState.busy || !genState.provider ? "disabled" : ""}>
+        <button class="ml-generate ml-hero" data-ml-generate ${!genState.provider ? "disabled" : ""}>
           <span class="ml-generate-glow" aria-hidden="true"></span>
           <span class="ml-generate-main">${genState.busy ? `${svgIc("spark")} <span data-ml-busy-label>Working…</span>` : `${svgIc("bolt")} Generate ${genState.modality === "video" ? "cut" : "image"}`}</span>
           <i class="ml-generate-hint">${genState.busy ? "Phantom is handling the rest" : "Phantom handles the rest"}</i>
@@ -1362,7 +1380,7 @@ function renderGenerate(body, cfg, opts, root) {
             </span>
           </header>
           <div class="ml-stage-view">
-            ${genState.busy ? skeletons(genState.modality === "video" ? 1 : genState.count) : resultsHtml(esc)}
+            ${resultsHtml(esc)}
           </div>
           <footer class="ml-stage-meta">${settingsChips(esc)}</footer>
         </div>
@@ -1384,7 +1402,7 @@ function nextStepsHtml(esc) {
       <div class="ml-next-head">${svgIc("spark")}<b>Next steps</b><span>Choose what happens to this cut</span></div>
       <div class="ml-next-grid">
         <button class="ml-next-card is-neon" data-ml-next="save" ${unsavedCount ? "" : "disabled"}>
-          ${svgIc("check")}<b>Save to library</b><span>${unsavedCount ? `${unsavedCount} unsaved` : "All saved"}</span>
+          ${svgIc("check")}<b>Save to Media Pool</b><span>${unsavedCount ? `${unsavedCount} unsaved` : "All saved"}</span>
         </button>
         <button class="ml-next-card is-cyan" data-ml-next="hub">
           ${svgIc("hub")}<b>Open in Creator Hub</b><span>Auto-captured already</span>
@@ -1515,11 +1533,20 @@ const IDLE_HINTS = [
 ];
 function resultsHtml(esc) {
   const recent = session.assets.filter((a) => a.fromGen);
+  if (genState.busy) return `
+    <div class="ml-wait-card">
+      <img class="ml-wait-phantom" src="/app/assets/poses/conjure.webp" alt="" loading="lazy" />
+      <div class="ml-wait-copy">
+        <span>Media is generating</span>
+        <b>Keep creating while Phantom works.</b>
+        <i>Your media is being generated. Create more now while you wait. Jobs show up in Pending, and completed assets move into Media Pool. Happy creating.</i>
+      </div>
+    </div>`;
   if (!recent.length) return `
     <div class="ml-idle">
       <div class="ml-idle-orb" aria-hidden="true"><span></span><span></span><span></span></div>
       <b>Create with context</b>
-      <i>Phantom preps the brief, creates the media, reviews the output, and turns it into campaigns, sites, and follow-ups. Finished media lands here — and in Creator Hub.</i>
+      <i>Phantom preps the brief, creates the media, reviews the output, and turns it into campaigns, sites, and follow-ups. Finished media lands in Media Pool and is also captured for Creator Hub.</i>
       <div class="ml-board" aria-hidden="true">
         ${["1:1", "4:5", "16:9", "9:16", "3:2"].map((r, i) => `<span class="ml-board-cell" style="--d:${(i * 0.4).toFixed(1)}s" data-ratio="${r}"></span>`).join("")}
       </div>
@@ -1537,7 +1564,7 @@ function tileHtml(a, esc) {
     ${a.meta && a.meta.preview ? `<span class="ml-badge">preview</span>` : `<span class="ml-badge ml-badge-live">live</span>`}
     <figcaption class="ml-tile-bar">
       <button data-tile-act="edit" data-id="${a.id}" title="Edit" aria-label="Edit">${svgIc("edit")}</button>
-      <button data-tile-act="save" data-id="${a.id}" title="Save to library" aria-label="Save to library">${svgIc("check")}</button>
+      <button data-tile-act="save" data-id="${a.id}" title="Save to Media Pool" aria-label="Save to Media Pool">${svgIc("check")}</button>
       <button data-tile-act="download" data-id="${a.id}" title="Download" aria-label="Download">${svgIc("upload")}</button>
       <button data-tile-act="regen" data-id="${a.id}" title="Regenerate" aria-label="Regenerate">${svgIc("spark")}</button>
       <button data-tile-act="ref" data-id="${a.id}" title="Use as reference" aria-label="Use as reference">${svgIc("image")}</button>
@@ -1680,7 +1707,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
   body.querySelector("[data-ml-next='save']")?.addEventListener("click", () => {
     const recent = session.assets.filter((a) => a.fromGen && !a.saved);
     recent.forEach((a) => { a.saved = true; captureForContentHub(a); });
-    if (opts.notify) opts.notify("Media Factory", `saved ${recent.length} generation${recent.length === 1 ? "" : "s"} to the library.`);
+    if (opts.notify) opts.notify("Media Factory", `saved ${recent.length} generation${recent.length === 1 ? "" : "s"} to Media Pool.`);
     renderGenerate(body, cfg, opts, root);
   });
   body.querySelector("[data-ml-next='hub']")?.addEventListener("click", () => opts.openWorkspace && opts.openWorkspace("content"));
@@ -1706,6 +1733,7 @@ function paintJobLog(body, esc) {
 }
 
 async function runGenerate(body, cfg, opts, root, esc) {
+  let pendingJob = null;
   if (!genState.prompt.trim()) { const t = body.querySelector("[data-ml-prompt]"); if (t) { t.focus(); t.classList.add("shake"); setTimeout(() => t.classList.remove("shake"), 500); } return; }
   /* Approval is opt-in (Settings > "Require approval before paid generation",
      off by default) — the owner already knows they're spending their own
@@ -1721,6 +1749,15 @@ async function runGenerate(body, cfg, opts, root, esc) {
       return;
     }
   }
+  pendingJob = {
+    id: `pending-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    prompt: genState.prompt,
+    modality: genState.modality,
+    aspect: genState.aspect,
+    style: genState.style,
+    startedAt: Date.now(),
+  };
+  pendingJobs.unshift(pendingJob);
   genState.busy = true;
   renderGenerate(body, cfg, opts, root);
   /* A draft/render can legitimately take a while — a frozen "Rendering…"
@@ -1796,6 +1833,7 @@ async function runGenerate(body, cfg, opts, root, esc) {
     }
   } finally {
     clearInterval(busyTimer);
+    if (pendingJob) pendingJobs = pendingJobs.filter((job) => job.id !== pendingJob.id);
     if (genState.busy) refreshGeneratePanel(body, cfg, opts, root);
   }
 }
@@ -1806,7 +1844,7 @@ function tileAction(act, id, cfg, opts, root, esc, body) {
   if (act === "download") return downloadAsset(a);
   if (act === "regen") { runGenerate(body, cfg, opts, root, esc); return; }
   if (act === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); return; }
-  if (act === "save") { a.saved = true; captureForContentHub(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to the library."); renderMediaStudio(root, opts); return; }
+  if (act === "save") { a.saved = true; captureForContentHub(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to Media Pool."); renderMediaStudio(root, opts); return; }
   if (act === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); return; }
   if (act === "remove") {
     session.assets = session.assets.filter((x) => x.id !== id);
@@ -1822,7 +1860,7 @@ function renderLibrary(body, opts, root) {
   const assets = session.assets;
   body.innerHTML = assets.length
     ? `<div class="ml-grid ml-grid-lib">${assets.map((a) => tileHtml(a, esc)).join("")}</div>`
-    : `<div class="ml-empty">${svgIc("image")}<b>No assets yet</b><i>Everything you generate or edit lands here for the session.</i></div>`;
+    : `<div class="ml-empty">${svgIc("image")}<b>No assets yet</b><i>Everything you generate or edit lands in this one pool for the session.</i></div>`;
   body.querySelectorAll("[data-tile-act]").forEach((b) => b.onclick = () => {
     const a = assets.find((x) => x.id === b.dataset.id); if (!a) return;
     if (b.dataset.tileAct === "download") downloadAsset(a);
@@ -1863,7 +1901,7 @@ function restoreEdit(next) {
 function renderEdit(body, cfg, opts, root) {
   const esc = opts.esc || ((s) => String(s));
   if (!session.edit) {
-    body.innerHTML = `<div class="ml-empty">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, choose one from your library, or upload.</i>
+    body.innerHTML = `<div class="ml-empty">${svgIc("edit")}<b>Pick something to edit</b><i>Generate an image, choose one from Media Pool, or upload.</i>
       <div class="ml-edit-pick"><button class="ml-generate ml-inline" data-ml-upload>${svgIc("upload")} Upload an image</button>
       ${session.assets[0] ? `<button class="ml-generate ml-inline ml-ghost" data-ml-fromlib>Use latest generation</button>` : ""}</div>
       <input type="file" accept="image/*" data-ml-editfile hidden /></div>`;
@@ -1946,7 +1984,7 @@ function renderEdit(body, cfg, opts, root) {
           <div class="ml-edit-section-body"><p class="ml-hint">Describe a look, like “brighter product photo” or “moody night.”</p><div class="ml-prompt-wrap"><input class="ml-text-in" data-ml-aiedit placeholder="Describe the change…"/><button class="ml-enhance" data-ml-runai>Apply</button></div></div>
         </details>
         <div class="ml-editor-actions">
-          <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to library</button>
+          <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to Media Pool</button>
           <button class="ml-generate ml-ghost" data-ml-layeredit>Open layer editor</button>
           <button class="ml-generate ml-ghost" data-ml-dledit>${svgIc("upload")} Download</button>
           <button class="ml-link" data-ml-resetedit>Reset</button>
@@ -2108,7 +2146,7 @@ function renderEdit(body, cfg, opts, root) {
     // landing the tab switch on live DOM first avoids it getting silently overwritten.
     session.tab = "library";
     renderMediaStudio(root, opts);
-    if (opts.notify) opts.notify("Media Factory", "saved an edited image to the library.");
+    if (opts.notify) opts.notify("Media Factory", "saved an edited image to Media Pool.");
   };
   body.querySelector("[data-ml-dledit]").onclick = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.92);
@@ -2152,7 +2190,7 @@ function tutorialMarkup() {
     ["Fix it fast", "Clean up balances light and color. Remove background uses the connected local media engine when it is available."],
     ["Check your work", "Hold Before to compare with the original. Undo and redo are always above the image."],
     ["Go deeper only when needed", "Open Quick looks, Fine tune, Focus blur, Text, or Ask Phantom. Closed sections stay out of your way."],
-    ["Keep the result", "Save to library keeps the edit inside PhantomForce. Download saves a WebP copy to your device."],
+    ["Keep the result", "Save to Media Pool keeps the edit inside PhantomForce. Download saves a WebP copy to your device."],
   ];
   return `
     <div class="ch-lb-tutorial">
