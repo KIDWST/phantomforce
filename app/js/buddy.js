@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-003";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-004";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260713-003";
+} from "./companion-preferences.js?v=phantom-live-20260713-004";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -304,6 +304,11 @@ function createBuddyController() {
     canvas = layer.querySelector("[data-buddy-canvas]");
     sayEl = layer.querySelector("[data-buddy-say]");
     menu = layer.querySelector("[data-buddy-menu]");
+    /* The layer moves via transform, and a transformed ancestor becomes the
+       containing block for position:fixed children — leaving the menu inside
+       would offset its viewport coordinates by the phantom's position and
+       throw it off-screen. It must live directly under <body>. */
+    document.body.appendChild(menu);
     ctx2 = canvas.getContext("2d");
     character = createPhantomCharacter({ small: true });
     bindEvents();
@@ -319,6 +324,7 @@ function createBuddyController() {
       eventAbort = null;
     }
     if (layer) layer.remove();
+    if (menu) menu.remove(); // re-parented to <body>, so the layer no longer owns it
     layer = canvas = sayEl = menu = ctx2 = character = null;
   }
 
