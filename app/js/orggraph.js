@@ -17,6 +17,10 @@ const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => (
    "system" is deliberately neutral slate: infrastructure, not identity. */
 const TYPE_COLORS = {
   organization: "#41ffa1",
+  "managed-growth": "#2ef2a0",
+  "client-setup": "#73f59b",
+  "crm-lead": "#41d7ff",
+  proposal: "#f5d76e",
   "business-profile": "#2fd0c0",
   website: "#3b82f6",
   asset: "#9ac232",

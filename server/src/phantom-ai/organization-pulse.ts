@@ -21,6 +21,11 @@ import { listAutomationJobs } from "./automation-engine.js";
 import { getCompetitorIntelligenceSnapshot } from "./competitor-intelligence.js";
 import { listBrainMemories, readBrainEvents } from "./neural-spine.js";
 import { PHANTOMPLAY_BUILT_IN_GAMES } from "./phantomplay.js";
+import { getClientSetupDocument } from "../client-setup/client-setup-store.js";
+import { getCrmPipelineDocument } from "../crm/crm-pipeline-store.js";
+import { buildManagedGrowthReport, type ManagedGrowthReport } from "../managed-growth/managed-growth-report.js";
+import { getProposalDocument } from "../proposals/proposal-store.js";
+import { getWorkspaceApprovalDocument } from "../workspace-approvals/workspace-approval-store.js";
 
 type Unavailable = { available: false; reason: string };
 type Section<T> = ({ available: true } & T) | Unavailable;
@@ -32,6 +37,22 @@ export type OrganizationPulse = {
   agentRuns: Section<{ running: number; failed: number; recent: Array<{ id: string; title: string; state: string; operation: string }> }>;
   automations: Section<{ total: number; enabled: number; failing: Array<{ id: string; name: string; lastSummary: string }> }>;
   competitors: Section<{ businessName: string; category: string; competitorCount: number; signalCount: number; inferenceCount: number; competitorsWithoutSignals: number; discoveryRuns: number }>;
+  managedGrowth: Section<{
+    summary: string;
+    activeClients: number;
+    pendingClients: number;
+    setupCompleteness: number;
+    openLeads: number;
+    followUpsDue: number;
+    proposalPipeline: number;
+    wonValue: number;
+    pendingWorkspaceApprovals: number;
+    blockerCount: number;
+    criticalBlockers: number;
+    nextActions: Array<{ title: string; detail: string; surface: string; requiresApproval: boolean }>;
+    sourceDocuments: number;
+    socialAnalyticsStatus: "not_connected_here";
+  }>;
   memories: Section<{ total: number; neverRecalled: number; recent: string[] }>;
   assets: Section<{ total: number; recent: Array<{ id: string; title: string; kind: string }>; unusedRecent: number }>;
   sites: Section<{ total: number; names: string[] }>;
@@ -82,10 +103,47 @@ async function readSites(orgId: string) {
   return { total: sites.length, names: sites.slice(0, 6).map((site) => String(site.name ?? site.slug ?? "site")) };
 }
 
+function metricValue(report: ManagedGrowthReport, id: string) {
+  return Number(report.metrics.find((metric) => metric.id === id)?.value ?? 0);
+}
+
+async function buildManagedGrowthPulseSection(tenantId: string, actor: string) {
+  const [clientSetup, crm, proposals, approvals] = await Promise.all([
+    getClientSetupDocument(tenantId, actor),
+    getCrmPipelineDocument(tenantId, actor),
+    getProposalDocument(tenantId, actor),
+    getWorkspaceApprovalDocument(tenantId, actor),
+  ]);
+  const report = buildManagedGrowthReport({ tenantId, clientSetup, crm, proposals, approvals });
+  return {
+    report,
+    documents: { clientSetup, crm, proposals, approvals },
+    summary: report.summary,
+    activeClients: report.setup.activeConfigured,
+    pendingClients: report.setup.pendingConfigured,
+    setupCompleteness: metricValue(report, "setup_completeness"),
+    openLeads: metricValue(report, "open_leads"),
+    followUpsDue: metricValue(report, "follow_ups_due"),
+    proposalPipeline: metricValue(report, "proposal_pipeline"),
+    wonValue: metricValue(report, "won_value"),
+    pendingWorkspaceApprovals: metricValue(report, "pending_approvals"),
+    blockerCount: report.blockers.length,
+    criticalBlockers: report.blockers.filter((blocker) => blocker.severity === "critical").length,
+    nextActions: report.nextActions.slice(0, 5).map((action) => ({
+      title: action.title,
+      detail: action.detail,
+      surface: action.surface,
+      requiresApproval: action.requiresApproval,
+    })),
+    sourceDocuments: report.sourceDocuments.length,
+    socialAnalyticsStatus: report.safety.socialAnalyticsStatus,
+  };
+}
+
 export async function getOrganizationPulse(session: AccessSession, access: PulseAccess): Promise<OrganizationPulse> {
   const { tenantId, orgId } = access;
 
-  const [approvals, agentRuns, automations, competitors, memories, assets, sites] = await Promise.all([
+  const [approvals, agentRuns, automations, competitors, managedGrowth, memories, assets, sites] = await Promise.all([
     safe("Approval queue", async () => {
       const queue = await readApprovalQueueRecords({ limit: 200 });
       const mine = queue.records.filter((record) => record.approval?.tenant_context?.tenant_id === tenantId);
@@ -140,6 +198,26 @@ export async function getOrganizationPulse(session: AccessSession, access: Pulse
         discoveryRuns: snapshot.discoveryRuns.length,
       };
     }),
+    safe("Managed Growth Ops", async () => {
+      const section = await buildManagedGrowthPulseSection(tenantId, session.id);
+      return {
+        available: true as const,
+        summary: section.summary,
+        activeClients: section.activeClients,
+        pendingClients: section.pendingClients,
+        setupCompleteness: section.setupCompleteness,
+        openLeads: section.openLeads,
+        followUpsDue: section.followUpsDue,
+        proposalPipeline: section.proposalPipeline,
+        wonValue: section.wonValue,
+        pendingWorkspaceApprovals: section.pendingWorkspaceApprovals,
+        blockerCount: section.blockerCount,
+        criticalBlockers: section.criticalBlockers,
+        nextActions: section.nextActions,
+        sourceDocuments: section.sourceDocuments,
+        socialAnalyticsStatus: section.socialAnalyticsStatus,
+      };
+    }),
     safe("Brain memories", async () => {
       const result = await listBrainMemories(session, { limit: 100, readOnly: true });
       // Platform bootstrap notes are seeded guidance, not organization
@@ -165,7 +243,7 @@ export async function getOrganizationPulse(session: AccessSession, access: Pulse
   return {
     tenantId,
     generatedAt: new Date().toISOString(),
-    approvals, agentRuns, automations, competitors, memories, assets, sites,
+    approvals, agentRuns, automations, competitors, managedGrowth, memories, assets, sites,
     phantomplay: { available: true, builtInGames: PHANTOMPLAY_BUILT_IN_GAMES.length },
   };
 }
@@ -190,6 +268,12 @@ export function buildWorkspaceAwarenessText(pulse: OrganizationPulse): string {
   }
   if (pulse.automations.available && pulse.automations.failing.length) {
     lines.push(`- Automations failing: ${pulse.automations.failing.map((job) => job.name).join(", ")}`);
+  }
+  if (pulse.managedGrowth.available) {
+    const growth = pulse.managedGrowth;
+    lines.push(`- Managed Growth Ops: ${growth.openLeads} open lead(s), ${growth.followUpsDue} due follow-up(s), $${growth.proposalPipeline} proposal pipeline, ${growth.pendingWorkspaceApprovals} workspace approval(s) waiting, setup ${growth.setupCompleteness}%`);
+    if (growth.nextActions.length) lines.push(`- Next growth action: ${growth.nextActions[0].title} (${growth.nextActions[0].surface})`);
+    if (growth.socialAnalyticsStatus === "not_connected_here") lines.push("- Social performance is not counted here unless official OAuth/API syncs or imported reports exist");
   }
   if (pulse.competitors.available && pulse.competitors.competitorCount) {
     lines.push(`- Competitor intel: tracking ${pulse.competitors.competitorCount} competitor(s), ${pulse.competitors.signalCount} public signal(s), ${pulse.competitors.inferenceCount} estimate(s)${pulse.competitors.competitorsWithoutSignals ? `; ${pulse.competitors.competitorsWithoutSignals} competitor(s) have no evidence yet` : ""}`);
@@ -239,6 +323,93 @@ export async function getOrganizationGraph(session: AccessSession, access: Pulse
   const mark = (node: GraphNode, reason: string) => {
     node.disconnected = true; node.reason = reason; gaps.push({ nodeId: node.id, reason });
   };
+
+  /* Managed Growth Ops spine — setup slots, CRM, proposals, and workspace
+     approvals. This makes the brain map show the business operating state
+     Phantom actually owns, not just memory and competitor records. */
+  try {
+    const managed = await buildManagedGrowthPulseSection(tenantId, session.id);
+    const report = managed.report;
+    const reportNode = `managed-growth:${tenantId}`;
+    const growthNode: GraphNode = {
+      id: reportNode,
+      type: "managed-growth",
+      label: "Managed Growth Ops",
+      source: "managed-growth-report",
+      state: report.summary,
+    };
+    if (managed.criticalBlockers) mark(growthNode, `${managed.criticalBlockers} critical managed-growth blocker(s) need attention.`);
+    nodes.push(growthNode);
+    edges.push({ from: orgNode, to: reportNode, kind: "operates" });
+
+    const now = Date.now();
+    for (const slot of managed.documents.clientSetup.slots) {
+      const id = `client-setup:${slot.slotId}`;
+      const name = slot.organizationName || `${slot.slotKind === "pending" ? "Pending" : "Active"} client slot ${slot.slotId}`;
+      const node: GraphNode = {
+        id,
+        type: "client-setup",
+        label: name.slice(0, 48),
+        source: "client-setup.json",
+        state: `${slot.status || "empty"} · ${Math.max(0, Number(slot.completeness?.score || 0))}%`,
+      };
+      if (!slot.organizationName || slot.status === "empty") {
+        mark(node, "Client setup slot is not configured yet.");
+      } else if (slot.completeness?.blockers?.length) {
+        mark(node, slot.completeness.blockers[0].slice(0, 120));
+      }
+      nodes.push(node);
+      edges.push({ from: reportNode, to: id, kind: "configures" });
+    }
+
+    for (const lead of managed.documents.crm.leads.filter((item) => ["new", "follow-up", "proposal"].includes(item.status)).slice(0, 10)) {
+      const id = `crm-lead:${lead.id}`;
+      const node: GraphNode = {
+        id,
+        type: "crm-lead",
+        label: (lead.company || lead.name || "CRM lead").slice(0, 48),
+        source: "crm-pipeline.json",
+        state: lead.status,
+      };
+      const due = Date.parse(lead.due || "");
+      if (["new", "follow-up"].includes(lead.status) && Number.isFinite(due) && due <= now) {
+        mark(node, "Follow-up is due now.");
+      }
+      nodes.push(node);
+      edges.push({ from: reportNode, to: id, kind: "tracks" });
+      if (lead.setupSlotId) edges.push({ from: `client-setup:${lead.setupSlotId}`, to: id, kind: "belongs_to" });
+    }
+
+    for (const proposal of managed.documents.proposals.proposals.filter((item) => ["draft", "sent-ready", "sent", "won"].includes(item.status)).slice(0, 10)) {
+      const id = `proposal:${proposal.id}`;
+      const node: GraphNode = {
+        id,
+        type: "proposal",
+        label: (proposal.client || "Proposal").slice(0, 48),
+        source: "proposals.json",
+        state: `${proposal.status} · $${proposal.price || 0}`,
+      };
+      if (proposal.status === "sent-ready") mark(node, "Send-ready proposal still needs the correct approval path before any external send.");
+      nodes.push(node);
+      edges.push({ from: reportNode, to: id, kind: "prices" });
+      if (proposal.leadId) edges.push({ from: `crm-lead:${proposal.leadId}`, to: id, kind: "converted_to" });
+      if (proposal.setupSlotId) edges.push({ from: `client-setup:${proposal.setupSlotId}`, to: id, kind: "belongs_to" });
+    }
+
+    for (const approval of managed.documents.approvals.approvals.slice(0, 10)) {
+      const id = `workspace-approval:${approval.id}`;
+      const node: GraphNode = {
+        id,
+        type: "approval",
+        label: approval.title.slice(0, 48),
+        source: "workspace-approvals.json",
+        state: approval.status,
+      };
+      if (approval.status === "pending") mark(node, "Workspace approval is waiting on an owner or admin decision.");
+      nodes.push(node);
+      edges.push({ from: reportNode, to: id, kind: "awaits_decision" });
+    }
+  } catch { /* non-fatal; pulse reports managed-growth read failures */ }
 
   /* Competitor intelligence — competitors, signals, estimates, dossiers */
   if (access.competitorEntitled) {
@@ -446,6 +617,20 @@ export async function getOrganizationOpportunities(
       why: "Work stopped mid-flight. Review what broke; most runs can be retried once the cause is fixed.",
       provenance: { source: "agent-runs.jsonl" },
       action: { label: "Review runs", route: "automation" },
+    });
+  }
+  if (pulse.managedGrowth.available) {
+    const growth = pulse.managedGrowth;
+    growth.nextActions.slice(0, 3).forEach((nextAction, index) => {
+      const urgent = growth.criticalBlockers > 0 || growth.followUpsDue > 0 || growth.pendingWorkspaceApprovals > 0;
+      push({
+        id: `managed-growth:${index}:${nextAction.surface}`,
+        impact: urgent || nextAction.requiresApproval ? "high" : growth.blockerCount > 0 ? "medium" : "low",
+        title: nextAction.title,
+        why: `${nextAction.detail} Backed by ${growth.sourceDocuments} server document(s): client setup, CRM, proposals, and workspace approvals.`,
+        provenance: { source: "managed-growth-report", nodeId: `managed-growth:${pulse.tenantId}` },
+        action: { label: `Open ${nextAction.surface}`, route: nextAction.surface },
+      });
     });
   }
   if (pulse.competitors.available) {

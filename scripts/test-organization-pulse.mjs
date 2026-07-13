@@ -10,6 +10,7 @@ const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf
 const pulse = read("server/src/phantom-ai/organization-pulse.ts");
 const index = read("server/src/index.ts");
 const proxy = read("ops/admin-live/admin-static-server.mjs");
+const orgGraph = read("app/js/orggraph.js");
 
 // 1. Honesty contract: unavailable sections must carry a reason, never fake data.
 assert.match(pulse, /available: false; reason: string/, "Pulse sections must model unavailability with a reason");
@@ -62,5 +63,26 @@ assert.ok(!/Math\.random\(\)|fakeOpportunit|sampleOpportunit/i.test(pulse), "No 
 assert.match(index, /app\.get\("\/api\/organization\/opportunities"/, "Opportunities endpoint must exist");
 assert.match(index, /getOrganizationOpportunities\(session, \{/, "Chat must receive graph-derived opportunities");
 assert.match(index, /\}, pulse\)/, "Chat must reuse the computed pulse (no double reads)");
+
+// 10. Managed Growth Ops: the organization pulse must include the real
+//     business operating spine, not just memory, competitors, or local UI
+//     fallbacks.
+assert.match(pulse, /getClientSetupDocument/u, "Pulse must read Client Setup documents.");
+assert.match(pulse, /getCrmPipelineDocument/u, "Pulse must read CRM pipeline documents.");
+assert.match(pulse, /getProposalDocument/u, "Pulse must read proposal documents.");
+assert.match(pulse, /getWorkspaceApprovalDocument/u, "Pulse must read workspace approval documents.");
+assert.match(pulse, /buildManagedGrowthReport/u, "Pulse must derive Managed Growth Ops from the shared report builder.");
+assert.match(pulse, /managedGrowth: Section/u, "Pulse contract must expose Managed Growth Ops.");
+assert.match(pulse, /Managed Growth Ops:/u, "Chat awareness must include Managed Growth Ops counts.");
+assert.match(pulse, /socialAnalyticsStatus/u, "Managed Growth Ops awareness must preserve social analytics honesty.");
+assert.match(pulse, /type: "managed-growth"/u, "Graph must expose a Managed Growth Ops node.");
+assert.match(pulse, /type: "client-setup"/u, "Graph must expose client setup nodes.");
+assert.match(pulse, /type: "crm-lead"/u, "Graph must expose CRM lead nodes.");
+assert.match(pulse, /type: "proposal"/u, "Graph must expose proposal nodes.");
+assert.match(pulse, /source: "managed-growth-report"/u, "Managed Growth opportunities must carry report provenance.");
+assert.match(orgGraph, /"managed-growth"/u, "Client graph must style Managed Growth nodes explicitly.");
+assert.match(orgGraph, /"client-setup"/u, "Client graph must style client setup nodes explicitly.");
+assert.match(orgGraph, /"crm-lead"/u, "Client graph must style CRM lead nodes explicitly.");
+assert.match(orgGraph, /proposal/u, "Client graph must style proposal nodes explicitly.");
 
 console.log("Organization Pulse and Brain Graph safety checks passed.");
