@@ -20,6 +20,9 @@ const files = {
   customizationServer: "server/src/customization/customization-service.ts",
   moduleRegistry: "server/src/customization/module-registry.ts",
   customizationClient: "app/js/customization.js",
+  clientSetupStore: "server/src/client-setup/client-setup-store.ts",
+  clientSetupUi: "app/js/clientsetup.js",
+  staticServer: "ops/admin-live/admin-static-server.mjs",
   authBoundaryTest: "scripts/test-auth-boundaries.mjs",
   pageWorkerTest: "scripts/test-page-worker.mjs",
 };
@@ -55,20 +58,35 @@ assert.ok(has("publicHosts", /CLIENT_PUBLIC_HOST = "app\.phantomforce\.online"/u
 assert.ok(has("userAccounts", /canManageAccess:\s*isSuperAdmin/u), "canManageAccess must stay platform-super-admin scoped.");
 
 const hasServerClientSetupProfile =
-  /model\s+(ClientSetup|ClientSetupProfile|OrganizationSetup|BusinessSetup)\s+\{/u.test(src.schema);
+  /model\s+(ClientSetup|ClientSetupProfile|OrganizationSetup|BusinessSetup)\s+\{/u.test(src.schema)
+  || (/ClientSetupDocument/u.test(src.clientSetupStore) && /saveClientSetupSlot/u.test(src.clientSetupStore) && /\/api\/client-setup/u.test(src.index));
 const hasBusinessTemplateFields =
-  /\b(businessType|businessTemplate|templateKey|setupCompleteness|leadSources|approvalRules|reportingPreferences|socialWorkflow|mediaWorkflow)\b/u.test(src.schema);
+  /\b(businessType|businessTemplate|templateKey|setupCompleteness|leadSources|approvalRules|reportingPreferences|socialWorkflow|mediaWorkflow)\b/u.test(src.schema)
+  || /\b(businessTemplate|leadSources|approvalRules|reportingPreferences|socialMediaWorkflow)\b/u.test(src.clientSetupStore);
 const hasServerLeadsPipelineModel =
   /model\s+(Lead|Prospect|Deal|Pipeline|FollowUp)\s+\{/u.test(src.schema);
 const hasServicePackageModel =
-  /model\s+(Service|Package|Offer)\s+\{/u.test(src.schema);
+  /model\s+(Service|Package|Offer)\s+\{/u.test(src.schema)
+  || /\bservicesPackages\b/u.test(src.clientSetupStore);
+const hasClientSetupUi =
+  /renderClientSetupConsole/u.test(src.clientSetupUi)
+  && /active-1/u.test(src.clientSetupUi)
+  && /pending-1/u.test(src.clientSetupUi)
+  && /setup completeness/i.test(src.clientSetupUi);
+const clientSetupApiIsProxied = /urlPath\.startsWith\("\/api\/client-setup"\)/u.test(src.staticServer);
+
+assert.ok(hasServerClientSetupProfile, "Client setup state must be server-backed by a setup document or Prisma model.");
+assert.ok(hasBusinessTemplateFields, "Client setup must persist business template and workflow fields.");
+assert.ok(hasServicePackageModel, "Client setup must persist service/package configuration.");
+assert.ok(hasClientSetupUi, "Client Setup UI must exist with active/pending slots and completeness.");
+assert.ok(clientSetupApiIsProxied, "Static app server must proxy /api/client-setup for local testing.");
 
 if (!hasServerClientSetupProfile) {
   blocker(
     "BLOCK-CLIENT-SETUP-PROFILE",
     "P0",
     ["2 active client organization slots", "1 pending client slot", "setup completeness", "next setup action"],
-    "Prisma has Org and ClientAccess, but no ClientSetup/OrganizationSetup profile model that stores setup state.",
+    "No ClientSetup/OrganizationSetup profile model or server JSON setup document that stores setup state was found.",
     "Add an org-scoped setup profile/table or JSON field with status, slot type, template, completeness, next action, and blockers.",
   );
 }
@@ -78,7 +96,7 @@ if (!hasBusinessTemplateFields) {
     "BLOCK-BUSINESS-TEMPLATE-CONFIG",
     "P1",
     ["business type/template selection", "lead sources", "social/media workflow", "approval rules", "reporting preferences"],
-    "No schema fields for business template, lead sources, workflow preferences, approval rules, or reporting preferences were found.",
+    "No schema/store fields for business template, lead sources, workflow preferences, approval rules, or reporting preferences were found.",
     "Persist setup configuration server-side before presenting it as real organization setup.",
   );
 }
@@ -98,7 +116,7 @@ if (!hasServicePackageModel) {
     "BLOCK-SERVICE-PACKAGE-CONFIG",
     "P1",
     ["services/packages configuration", "package-aware reporting", "setup completeness"],
-    "Services/packages exist as local PACKAGES/RETAINERS and site product parsing, not as org-scoped persisted service-package records.",
+    "Services/packages exist as local PACKAGES/RETAINERS and site product parsing, not as org-scoped persisted service-package/setup records.",
     "Add service/package/offer records or an org setup config section that can be reused by CRM, sites, media, and reporting.",
   );
 }
@@ -147,9 +165,16 @@ const evidence = {
     finding(
       "PERSIST-CUSTOMIZATION",
       "mixed_real_and_fallback",
-      "Module customization exists server-side, but client setup preferences are not yet modeled as setup records.",
-      "Module registry/customization service handles modules/theme/navigation/policies; setup-specific business template and workflow config fields are absent from schema.",
+      "Module customization exists server-side and complements, but does not replace, the dedicated client setup records.",
+      "Module registry/customization service handles modules/theme/navigation/policies; client setup uses a separate tenant-scoped setup document for onboarding configuration.",
       [files.moduleRegistry, files.customizationServer, files.customizationClient, files.schema],
+    ),
+    finding(
+      "PERSIST-CLIENT-SETUP",
+      "real_server_backed",
+      "Client setup now has a tenant-scoped server document, API routes, and a browser console for 2 active organization slots plus 1 pending slot.",
+      "client-setup-store persists business template, modules, services/packages, lead sources, social/media workflow, approval rules, reporting preferences, completeness, next action, blockers, and audit entries.",
+      [files.clientSetupStore, files.index, files.clientSetupUi, files.staticServer],
     ),
   ],
   organizationClientData: [
@@ -188,15 +213,15 @@ const evidence = {
     finding(
       "MODULE-REGISTRY",
       "real_server_backed",
-      "Platform modules have canonical definitions, role lists, dependencies, and protected/required flags.",
-      "PLATFORM_MODULES defines dashboard, crm, media, sites, accounting, PhantomPlay, intelligence, memory, automation, approvals, workforce, analytics, settings, developer.",
+      "Platform modules have canonical definitions, role lists, dependencies, and protected/required flags, including Client Setup.",
+      "PLATFORM_MODULES defines dashboard, crm, clientsetup, media, sites, accounting, PhantomPlay, intelligence, memory, automation, approvals, workforce, analytics, settings, developer.",
       [files.moduleRegistry],
     ),
     finding(
       "WORKFLOW-ACTIONS",
       "real_server_backed",
       "Action/Approval/Task/FalconJob persistence exists for approval-gated workflows.",
-      "Prisma models and routes exist for actions, approvals, tasks, and agent runs; workflow-specific client setup is not modeled yet.",
+      "Prisma models and routes exist for actions, approvals, tasks, and agent runs; CRM execution-specific lead/follow-up records still need a server pipeline.",
       [files.schema, files.index],
     ),
   ],
@@ -208,23 +233,24 @@ const evidence = {
     },
   ],
   product02Readiness: {
-    twoActiveClientOrganizations: hasServerClientSetupProfile ? "partially_ready" : "blocked",
-    onePendingClientSlot: hasServerClientSetupProfile ? "partially_ready" : "blocked",
-    businessTemplateSelection: hasBusinessTemplateFields ? "partially_ready" : "blocked",
+    twoActiveClientOrganizations: hasServerClientSetupProfile && hasClientSetupUi ? "ready_setup_slots" : "blocked",
+    onePendingClientSlot: hasServerClientSetupProfile && hasClientSetupUi ? "ready_setup_slot" : "blocked",
+    businessTemplateSelection: hasBusinessTemplateFields && hasClientSetupUi ? "ready_setup_console" : "blocked",
     moduleEnableDisable: "partially_ready_via_customization_modules",
-    servicesPackagesConfiguration: hasServicePackageModel ? "partially_ready" : "blocked",
-    leadSourcesConfiguration: hasBusinessTemplateFields ? "partially_ready" : "blocked",
-    socialMediaWorkflowConfiguration: hasBusinessTemplateFields ? "partially_ready" : "blocked",
-    approvalRulesConfiguration: hasBusinessTemplateFields ? "partially_ready" : "blocked",
-    reportingPreferences: hasBusinessTemplateFields ? "partially_ready" : "blocked",
-    setupCompletenessScore: hasServerClientSetupProfile ? "partially_ready" : "blocked",
-    nextSetupAction: hasServerClientSetupProfile ? "partially_ready" : "blocked",
-    blockersVisible: "ready_in_audit_output",
+    servicesPackagesConfiguration: hasServicePackageModel && hasClientSetupUi ? "ready_setup_console" : "blocked",
+    leadSourcesConfiguration: hasBusinessTemplateFields && hasClientSetupUi ? "ready_setup_console" : "blocked",
+    socialMediaWorkflowConfiguration: hasBusinessTemplateFields && hasClientSetupUi ? "ready_setup_console" : "blocked",
+    approvalRulesConfiguration: hasBusinessTemplateFields && hasClientSetupUi ? "ready_setup_console" : "blocked",
+    reportingPreferences: hasBusinessTemplateFields && hasClientSetupUi ? "ready_setup_console" : "blocked",
+    setupCompletenessScore: hasServerClientSetupProfile && hasClientSetupUi ? "ready_setup_console" : "blocked",
+    nextSetupAction: hasServerClientSetupProfile && hasClientSetupUi ? "ready_setup_console" : "blocked",
+    blockersVisible: "ready_in_setup_console_and_audit_output",
+    remainingServerCrmPipeline: hasServerLeadsPipelineModel ? "partially_ready" : "blocked_next_product_step",
   },
   blockers,
 };
 
-assert.ok(blockers.length >= 4, "Audit should surface the current client setup blockers.");
+assert.ok(blockers.some((item) => item.id === "BLOCK-SERVER-CRM-PIPELINE"), "Audit should still surface the remaining server CRM pipeline blocker.");
 assert.equal(evidence.product02Readiness.moduleEnableDisable, "partially_ready_via_customization_modules");
 
 console.log(JSON.stringify({ ok: true, ...evidence }, null, 2));

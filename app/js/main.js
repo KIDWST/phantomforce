@@ -26,6 +26,7 @@ import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phanto
 import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-247";
 import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-247";
 import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-247";
+import { renderClientSetupConsole } from "./clientsetup.js?v=phantom-live-20260713-247";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
 } from "./orgs.js?v=phantom-live-20260713-247";
@@ -397,6 +398,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
 const BASE_NAV = [
   { id: "dashboard",  label: "Dashboard",    icon: "grid",  view: "main" },
   { id: "crm",        label: "Clients",      icon: "users", ws: "leads" },
+  { id: "clientsetup", label: "Client Setup", icon: "users", ws: "clientsetup" },
   { id: "media",      label: "Media Lab",    icon: "media", ws: "media" },
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
@@ -420,6 +422,7 @@ let navEntitlements = { loaded: false, features: null, limits: null };
 const MOBILE_LABEL_OVERRIDES = {
   dashboard: "Home",
   crm: "Clients",
+  clientsetup: "Setup",
   money: "Accounting",
   sites: "Sites",
   media: "Media",
@@ -2755,6 +2758,7 @@ const CUSTOM = {
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
+  clientsetup: { title: "Client Setup", kicker: "Owner setup console", custom: true, wide: true, render: (body) => renderClientSetupConsole(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },

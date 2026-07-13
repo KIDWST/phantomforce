@@ -16,6 +16,7 @@
     "test:content-planner": "node scripts/test-content-planner.mjs",
     "test:page-worker": "node scripts/test-page-worker.mjs",
     "test:client-setup-audit": "node scripts/audit-client-setup-data-model.mjs",
+    "test:client-setup-console": "node scripts/test-client-setup-console.mjs",
     "test:phantomplay": "node scripts/test-phantomplay.mjs && npm run test:phantomplay --workspace @phantomforce/server",
     "test:competitor-intelligence": "node scripts/test-competitor-intelligence.mjs && npm run test:competitor-intelligence --workspace @phantomforce/server",
     "test:workspace-site-builder": "node scripts/test-workspace-site-builder.mjs",

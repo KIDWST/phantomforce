@@ -386,6 +386,14 @@ import {
   rollbackOrganizationConfiguration,
   type CustomizationEntitlements,
 } from "./customization/customization-service.js";
+import {
+  CLIENT_SETUP_BUSINESS_TEMPLATES,
+  CLIENT_SETUP_MODULES,
+  getClientSetupDocument,
+  isClientSetupSlotId,
+  publicClientSetupDocument,
+  saveClientSetupSlot,
+} from "./client-setup/client-setup-store.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -429,6 +437,8 @@ const CustomizationPreviewBodySchema = z.object({ tenant_id: z.string().trim().m
 const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ summary: z.string().trim().max(240).optional(), expected_version: z.number().int().positive().optional() });
 const CustomizationRollbackBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), version: z.number().int().positive() });
 const CustomizationAssistantBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), message: z.string().trim().min(1).max(1200) });
+const ClientSetupTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
+const ClientSetupSlotBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), slot: z.unknown() });
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
 });
@@ -452,6 +462,15 @@ function customizationEntitlements(session: AccessSession, tenantId: string): Cu
     coBranded: internalPhantomForce || modules.has("co-branded") || modules.has("white-label"),
     whiteLabel: internalPhantomForce || modules.has("white-label"),
   };
+}
+
+function clientSetupTenantForSession(session: AccessSession, requestedTenantId?: string) {
+  if (session.canManageAccess) return safeCustomizationTenantId(requestedTenantId, "phantomforce-owner");
+  return safeCustomizationTenantId(session.orgId || session.clientId, `client-${session.id}`);
+}
+
+function canManageClientSetup(session: AccessSession) {
+  return session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin";
 }
 
 await app.register(cors, {
@@ -830,6 +849,49 @@ app.post("/phantom-ai/customization/assistant-plan", async (request, reply) => {
   if (!plan.understood) return reply.status(422).send({ ok: false, error: "I could not map that request to a safe workspace setting yet.", plan });
   const preview = await previewConfigurationChange({ tenantId, actor: session.id, patch: plan.patch, entitlements: customizationEntitlements(session, tenantId) });
   return { ok: true, tenant_id: tenantId, plan, preview, provider_called: false, source_code_edited: false, requires_approval: true };
+});
+
+app.get("/api/client-setup", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = ClientSetupTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = clientSetupTenantForSession(session, parsed.data.tenant_id);
+  const document = await getClientSetupDocument(tenantId, session.id);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    can_manage: canManageClientSetup(session),
+    document: publicClientSetupDocument(document),
+    templates: CLIENT_SETUP_BUSINESS_TEMPLATES,
+    modules: CLIENT_SETUP_MODULES,
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  };
+});
+
+app.post("/api/client-setup/slots/:slotId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canManageClientSetup(session)) {
+    return reply.status(403).send({ ok: false, error: "Saving client setup requires workspace owner/admin access." });
+  }
+  const { slotId } = request.params as { slotId: string };
+  if (!isClientSetupSlotId(slotId)) return reply.status(404).send({ ok: false, error: "Unknown setup slot." });
+  const parsed = ClientSetupSlotBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = clientSetupTenantForSession(session, parsed.data.tenant_id);
+  const result = await saveClientSetupSlot({ tenantId, slotId, slot: parsed.data.slot, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    slot: result.slot,
+    document: publicClientSetupDocument(result.document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  };
 });
 
 function requestPublicHost(request: FastifyRequest) {

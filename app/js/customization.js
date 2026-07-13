@@ -8,6 +8,7 @@ const clone = (value) => JSON.parse(JSON.stringify(value));
 const PLATFORM_MODULES = [
   ["dashboard", "Dashboard", true, ["owner", "admin", "manager", "member", "client"]],
   ["crm", "Clients", true, ["owner", "admin", "manager", "member"]],
+  ["clientsetup", "Client Setup", true, ["owner", "admin", "manager"]],
   ["media", "Media Lab", true, ["owner", "admin", "manager", "member"]],
   ["sites", "Websites", true, ["owner", "admin", "manager", "member"]],
   ["money", "Accounting", true, ["owner", "admin", "manager"]],
