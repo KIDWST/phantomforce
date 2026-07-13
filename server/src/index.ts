@@ -256,6 +256,11 @@ import {
   updateAggressiveMode,
 } from "./phantom-ai/competitor-intelligence.js";
 import {
+  buildWorkspaceAwarenessText,
+  getOrganizationGraph,
+  getOrganizationPulse,
+} from "./phantom-ai/organization-pulse.js";
+import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
 } from "./phantom-ai/security-scan-scheduler.js";
@@ -4174,6 +4179,49 @@ app.post("/api/competitor-intelligence/dossier", async (request, reply) => {
   try { return { ok: true, dossier: await runCompetitorDossier(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
 });
 
+/* ============================================================================
+   ORGANIZATION PULSE + BRAIN GRAPH
+   One tenant-scoped aggregation over every real store: live attention data
+   for the dashboard and a real-entity graph with honest gap detection. */
+
+async function pulseAccessFor(session: AccessSession, requestedTenant: unknown) {
+  const ciAccess = await competitorIntelligenceAccess(session);
+  const dbSession = asDatabaseSession(session);
+  const canManage = Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin");
+  const own = session.orgId || session.clientId || session.id;
+  // Non-managing sessions are pinned to their own tenant — the requested id
+  // is honored only for platform admins/owners (same rule as every store).
+  const requested = typeof requestedTenant === "string" && requestedTenant.trim() ? requestedTenant.trim().slice(0, 120) : "";
+  return {
+    tenantId: canManage && requested ? requested : own,
+    orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+    competitorEntitled: ciAccess.entitled,
+    canManage,
+  };
+}
+
+app.get("/api/organization/pulse", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, pulse: await getOrganizationPulse(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Pulse could not be assembled." });
+  }
+});
+
+app.get("/api/organization/graph", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, graph: await getOrganizationGraph(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Graph could not be assembled." });
+  }
+});
+
 app.patch("/api/competitor-intelligence/mode", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
@@ -6774,6 +6822,25 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       } catch { /* retrieval is additive only */ }
     }
   }
+
+  /* Workspace pulse — live org state (approvals waiting, failed runs,
+     competitor coverage, asset inventory) so Phantom answers from what the
+     business is ACTUALLY doing right now, not memory alone. Additive only. */
+  try {
+    const dbSession = asDatabaseSession(session);
+    const ciAccess = await competitorIntelligenceAccess(session);
+    const pulse = await getOrganizationPulse(session, {
+      tenantId: normalized.tenant_id,
+      orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+      competitorEntitled: ciAccess.entitled,
+      canManage: Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin"),
+    });
+    normalized.module_data.push({
+      module: "workspace_pulse",
+      summary: buildWorkspaceAwarenessText(pulse).slice(0, 900),
+      items: [],
+    });
+  } catch { /* awareness is additive only */ }
 
   const chatMemoryKey = buildChatMemoryKey(session, normalized);
   const privacyFirstLocationReply = await buildPrivacyFirstLocationReply(normalized.user_request, session, chatMemoryKey);
