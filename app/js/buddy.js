@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-230";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-231";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260712-230";
+} from "./companion-preferences.js?v=phantom-live-20260712-231";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -554,6 +554,28 @@ function createBuddyController() {
     if (menu) menu.hidden = true;
   }
 
+  function buddyHitTest(clientX, clientY, alphaThreshold = 8) {
+    if (!canvas || !ctx2 || !layer) return false;
+    if (document.body.classList.contains("overlay-open")) return false;
+    if (getComputedStyle(layer).opacity === "0") return false;
+    const rect = canvas.getBoundingClientRect();
+    if (
+      rect.width <= 0 ||
+      rect.height <= 0 ||
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom
+    ) return false;
+    try {
+      const sx = Math.max(0, Math.min(canvas.width - 1, Math.floor((clientX - rect.left) * (canvas.width / rect.width))));
+      const sy = Math.max(0, Math.min(canvas.height - 1, Math.floor((clientY - rect.top) * (canvas.height / rect.height))));
+      return ctx2.getImageData(sx, sy, 1, 1).data[3] > alphaThreshold;
+    } catch {
+      return true;
+    }
+  }
+
   function handleMenuAction(action) {
     if (action === "ask") focusChat();
     else if (action === "notifications") document.querySelector("[data-notif-btn]")?.click();
@@ -575,19 +597,7 @@ function createBuddyController() {
     const now = performance.now();
     if (!force && now - lastHitTestAt < 30) return;
     lastHitTestAt = now;
-    const rect = canvas.getBoundingClientRect();
-    let over = false;
-    if (rect.width > 0 && rect.height > 0 &&
-        lastPointer.x >= rect.left && lastPointer.x <= rect.right &&
-        lastPointer.y >= rect.top && lastPointer.y <= rect.bottom &&
-        !document.body.classList.contains("overlay-open") &&
-        getComputedStyle(layer).opacity !== "0") {
-      try {
-        const sx = Math.max(0, Math.min(canvas.width - 1, Math.floor((lastPointer.x - rect.left) * (canvas.width / rect.width))));
-        const sy = Math.max(0, Math.min(canvas.height - 1, Math.floor((lastPointer.y - rect.top) * (canvas.height / rect.height))));
-        over = ctx2.getImageData(sx, sy, 1, 1).data[3] > 8;
-      } catch { over = true; }
-    }
+    const over = buddyHitTest(lastPointer.x, lastPointer.y);
     canvas.style.pointerEvents = over ? "auto" : "none";
   }
 
@@ -606,9 +616,28 @@ function createBuddyController() {
     window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; updatePointerHitState(); }, { passive: true, signal });
     window.addEventListener("resize", () => { configureCanvas({ snap: true }); if (docked || mobile()) dock(); }, { passive: true, signal });
     document.addEventListener("scroll", scheduleGeometryRefresh, { passive: true, capture: true, signal });
+    document.addEventListener("pointerdown", (event) => {
+      if (!canvas || !menu || menu.contains(event.target)) return;
+      if (event.button !== 2) return;
+      if (event.target !== canvas && !buddyHitTest(event.clientX, event.clientY, 3)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      canvas.style.pointerEvents = "auto";
+      setState("curious", 1200);
+      openMenu(event.clientX, event.clientY);
+    }, { capture: true, signal });
     document.addEventListener("click", (event) => {
       if (menu && !menu.hidden && !menu.contains(event.target) && event.target !== canvas) closeMenu();
     }, { signal });
+    document.addEventListener("contextmenu", (event) => {
+      if (!canvas || !menu || menu.contains(event.target)) return;
+      if (event.target !== canvas && !buddyHitTest(event.clientX, event.clientY, 3)) return;
+      event.preventDefault();
+      event.stopPropagation();
+      canvas.style.pointerEvents = "auto";
+      setState("curious", 1200);
+      openMenu(event.clientX, event.clientY);
+    }, { capture: true, signal });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeMenu();
     }, { signal });
@@ -662,10 +691,6 @@ function createBuddyController() {
       updateCompanionPrefs({ roamingEnabled: false, startDocked: true, dockLocation: "sidebar" });
       dock();
       say("Back home.", 1500);
-    }, { signal });
-    canvas.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      openMenu(event.clientX, event.clientY);
     }, { signal });
     canvas.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusChat(); }

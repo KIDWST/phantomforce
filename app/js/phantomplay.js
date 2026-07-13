@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260712-230";
+} from "./store.js?v=phantom-live-20260712-231";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -262,7 +262,7 @@ function gameCard(game, variant = "") {
   const developer = developerNameFor(game);
   const thumbnail = thumbnailFor(game);
   return `<article class="pp-game ${variant}" data-pp-game-card="${esc(game.id)}">
-    <div class="pp-game-art"><img src="${esc(thumbnail)}" alt="" loading="lazy"/><span>${esc(game.category)}</span>${game.kind === "community" ? "<em>Community</em>" : ""}</div>
+    <div class="pp-game-art"><img src="${esc(thumbnail)}" alt="" loading="lazy"/><span>${esc(game.category)}</span>${game.kind === "community" ? "<em>Prototype</em>" : ""}</div>
     <div class="pp-game-body"><div class="pp-game-title"><p class="pp-game-developer">${developerAvatar ? `<img src="${esc(developerAvatar)}" alt="" loading="lazy"/>` : ""}<span>By ${esc(developer)}</span></p><h3>${esc(game.title)}</h3></div><button type="button" class="pp-favorite ${favorite ? "is-on" : ""}" data-pp-favorite="${esc(game.id)}" aria-label="${favorite ? "Remove from" : "Add to"} favorites">${icon("heart")}</button>
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
@@ -288,29 +288,29 @@ function renderHome() {
   return `<div class="pp-home">
     <section class="pp-hero">
       <div class="pp-console-copy">
-        <p class="pp-kicker">BREAK CONSOLE</p>
-        <h1>PhantomPlay terminal</h1>
-        <p>Short private sessions, saved progress, approved releases, and clean return-to-work state.</p>
+        <p class="pp-kicker">GAME SANDBOX</p>
+        <h1>Build, playtest, and tune games here.</h1>
+        <p>PhantomPlay is not a marketplace. It is a sandbox where indie devs make playable builds, invite feedback, test with people, and export when the game is ready.</p>
         <div class="pp-console-actions">
           <button class="pp-primary" data-pp-play="${esc(activeGameId)}">${icon("play")} Run quick session</button>
-          <button class="pp-secondary" data-pp-tab="library">Open library</button>
-          <button class="pp-secondary" data-pp-tab="together">Start private room</button>
+          <button class="pp-secondary" data-pp-tab="library">Open play lab</button>
+          <button class="pp-secondary" data-pp-tab="together">Start playtest room</button>
         </div>
       </div>
       <div class="pp-console-panel" aria-hidden="true">
         <span>STATUS: READY</span>
         <span>PROFILE: ${esc(ui.snapshot.actorId || "local")}</span>
         <span>TENANT: ${esc(ui.snapshot.tenantId || currentTenantId())}</span>
-        <span>BUILD: PHANTOMPLAY</span>
+        <span>SANDBOX: PHANTOMPLAY</span>
       </div>
       <img src="/app/assets/poses/mode-dark-ask.webp" alt="Phantom presenting PhantomPlay"/>
     </section>
-    <section class="pp-quick-stats"><span><b>${esc(playTimeLabel(ui.snapshot.access.remainingMinutesToday, true))}</b><i>${ui.snapshot.access.remainingMinutesToday >= 10000 ? "internal access" : "minutes left today"}</i></span><span><b>${ui.snapshot.favorites.length}</b><i>saved games</i></span><span><b>${ui.snapshot.history.length}</b><i>played</i></span><span><b>${ui.snapshot.approvedCommunityCount}</b><i>approved community</i></span></section>
+    <section class="pp-quick-stats"><span><b>${esc(playTimeLabel(ui.snapshot.access.remainingMinutesToday, true))}</b><i>${ui.snapshot.access.remainingMinutesToday >= 10000 ? "internal access" : "minutes left today"}</i></span><span><b>${ui.snapshot.favorites.length}</b><i>saved games</i></span><span><b>${ui.snapshot.history.length}</b><i>played</i></span><span><b>${ui.snapshot.approvedCommunityCount}</b><i>reviewed prototypes</i></span></section>
     ${continuing.length ? gameRows(continuing, "Continue playing", "Pick up from your last saved point.") : ""}
-    ${gameRows(featured, "Featured", "Fast, polished games selected for PhantomPlay.")}
+    ${gameRows(featured, "Ready to play", "Fast, polished builds selected for the play lab.")}
     ${recent.length ? gameRows(recent, "Recently played") : ""}
-    ${gameRows(community, "Approved community games", "Only reviewed releases appear here.")}
-    <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">DEVELOPER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>Built-in PhantomPlay games by Tak: fast, stylish browser-native breaks with privacy-safe progress and real replay value.</p><button class="pp-secondary" data-pp-tab="developer">View developers</button></div></section>
+    ${gameRows(community, "Shared prototypes", "Reviewed builds from dev rooms appear here when they are safe to test.")}
+    <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">SANDBOX BUILDER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>PhantomPlay is for creators who want a private build room, playtest feedback, version notes, and a clean path to ship later.</p><button class="pp-secondary" data-pp-tab="developer">Open dev rooms</button></div></section>
   </div>`;
 }
 
@@ -321,7 +321,7 @@ function filteredCatalog() {
 
 function renderLibrary() {
   const games = filteredCatalog();
-  return `<section class="pp-library"><div class="pp-library-tools"><label>${icon("search")}<input type="search" data-pp-search value="${esc(ui.query)}" placeholder="Search games, categories, developers…"/></label><div class="pp-categories">${CATEGORIES.map((category) => `<button type="button" class="${ui.category === category ? "is-active" : ""}" data-pp-category="${esc(category)}">${esc(category)}</button>`).join("")}</div></div>${games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No matching games", "Try a different search or category.")}</section>`;
+  return `<section class="pp-library"><div class="pp-library-tools"><label>${icon("search")}<input type="search" data-pp-search value="${esc(ui.query)}" placeholder="Search playable builds, categories, builders…"/></label><div class="pp-categories">${CATEGORIES.map((category) => `<button type="button" class="${ui.category === category ? "is-active" : ""}" data-pp-category="${esc(category)}">${esc(category)}</button>`).join("")}</div></div>${games.length ? `<div class="pp-game-grid pp-game-grid-full">${games.map((game) => gameCard(game)).join("")}</div>` : empty("No matching builds", "Try a different search or category.")}</section>`;
 }
 
 function renderFavorites() {
@@ -349,7 +349,7 @@ function renderTogether() {
   const selectedGameId = classroomGames.some((game) => game.id === ui.roomGameId) ? ui.roomGameId : (classroomGames[0]?.id || "");
   return `<div class="pp-together" data-pp-private-rooms>
     <section class="pp-room-hero">
-      <div><p class="pp-kicker">WIRELESS PLAY / PRIVATE ROOMS</p><h2>Play PhantomGames with friends or classmates without opening a public network.</h2><p>Rooms use signed-in PhantomForce access, a short-lived join code, and the existing game sandbox. Built-in games keep their no-internet rule; the app only brokers room membership and progress state.</p></div>
+      <div><p class="pp-kicker">PLAYTEST ROOMS</p><h2>Test builds with friends, classmates, or collaborators without becoming a public game portal.</h2><p>Rooms use signed-in PhantomForce access, a short-lived join code, and the existing game sandbox. Built-in games keep their no-internet rule; the app only brokers room membership and progress state.</p></div>
       <div class="pp-room-principles"><span>No public discovery</span><span>No direct inbound device ports</span><span>No room chat or voice</span><span>Same workspace only</span></div>
     </section>
     <section class="pp-room-layout">
@@ -370,16 +370,16 @@ function renderTogether() {
     </section>
     ${ui.roomMessage ? `<div class="pp-banner ${ui.roomMessage.startsWith("Blocked") ? "is-error" : "is-offline"}"><b>Private room status</b><span>${esc(ui.roomMessage)}</span><button type="button" data-pp-room-clear>Clear</button></div>` : ""}
     <section class="pp-room-safety">
-      <div><p class="pp-kicker">SCHOOL-SAFE DEFAULTS</p><h3>Built for education and work breaks first.</h3><p>Teacher/admin-controlled rooms, short codes, Everyone-rated classroom games, no public friends search, and no external game network calls from built-ins.</p></div>
+      <div><p class="pp-kicker">SANDBOX DEFAULTS</p><h3>Built for private playtests first.</h3><p>Admin-controlled rooms, short codes, Everyone-rated classroom games, no public friends search, and no external game network calls from built-ins.</p></div>
       <ul><li>Signed-in same-tenant join policy</li><li>Room invite expires after 90 minutes</li><li>Roster only; no private messaging</li><li>Games still run in script-only iframes</li></ul>
     </section>
-    <section class="pp-section"><div class="pp-section-head"><div><h2>Active private rooms</h2><p>Only rooms you host or have joined are shown here.</p></div><span>${rooms.length} visible</span></div>${rooms.length ? `<div class="pp-room-grid">${rooms.map(roomCard).join("")}</div>` : empty("No private rooms yet", "Create a room or join with a code to play together.")}</section>
+    <section class="pp-section"><div class="pp-section-head"><div><h2>Active playtest rooms</h2><p>Only rooms you host or have joined are shown here.</p></div><span>${rooms.length} visible</span></div>${rooms.length ? `<div class="pp-room-grid">${rooms.map(roomCard).join("")}</div>` : empty("No playtest rooms yet", "Create a room or join with a code to test together.")}</section>
   </div>`;
 }
 
 function submissionCard(item, admin = false) {
   const canEdit = !admin && ["draft", "changes_requested", "rejected"].includes(item.status);
-  return `<article class="pp-submission"><header><div><p>${esc(item.developerName)} · v${esc(item.version)}</p><h3>${esc(item.title || "Untitled game")}</h3></div><span class="is-${esc(item.status)}">${esc(item.status.replaceAll("_", " "))}</span></header><p>${esc(item.summary || "No summary yet.")}</p><div class="pp-submission-meta"><span>${esc(item.category)}</span><span>${esc(item.contentRating)}</span><span>${item.screenshots.length} screenshots</span><span>${item.versions.length} versions</span></div>${item.moderationNote ? `<blockquote>${esc(item.moderationNote)}</blockquote>` : ""}${canEdit ? `<button type="button" class="pp-secondary" data-pp-edit-submission="${esc(item.id)}">Edit release</button>` : ""}${admin && item.status !== "disabled" ? `<div class="pp-moderate"><input type="text" data-pp-note="${esc(item.id)}" maxlength="1000" placeholder="Moderation note"/><label><input type="checkbox" data-pp-featured="${esc(item.id)}"/> Feature if approved</label><div><button data-pp-moderate="approved" data-id="${esc(item.id)}">Approve</button><button data-pp-moderate="changes_requested" data-id="${esc(item.id)}">Request changes</button><button data-pp-moderate="rejected" data-id="${esc(item.id)}">Reject</button><button data-pp-moderate="disabled" data-id="${esc(item.id)}">Disable</button></div></div>` : ""}</article>`;
+  return `<article class="pp-submission"><header><div><p>${esc(item.developerName)} · v${esc(item.version)}</p><h3>${esc(item.title || "Untitled build")}</h3></div><span class="is-${esc(item.status)}">${esc(item.status.replaceAll("_", " "))}</span></header><p>${esc(item.summary || "No summary yet.")}</p><div class="pp-submission-meta"><span>${esc(item.category)}</span><span>${esc(item.contentRating)}</span><span>${item.screenshots.length} screenshots</span><span>${item.versions.length} versions</span></div>${item.moderationNote ? `<blockquote>${esc(item.moderationNote)}</blockquote>` : ""}${canEdit ? `<button type="button" class="pp-secondary" data-pp-edit-submission="${esc(item.id)}">Edit build</button>` : ""}${admin && item.status !== "disabled" ? `<div class="pp-moderate"><input type="text" data-pp-note="${esc(item.id)}" maxlength="1000" placeholder="Review note"/><label><input type="checkbox" data-pp-featured="${esc(item.id)}"/> Add to Play Lab if approved</label><div><button data-pp-moderate="approved" data-id="${esc(item.id)}">Approve</button><button data-pp-moderate="changes_requested" data-id="${esc(item.id)}">Request changes</button><button data-pp-moderate="rejected" data-id="${esc(item.id)}">Reject</button><button data-pp-moderate="disabled" data-id="${esc(item.id)}">Disable</button></div></div>` : ""}</article>`;
 }
 
 function selectedSubmission() {
@@ -391,11 +391,11 @@ function developerCard(developer) {
   return `<article class="pp-dev-card">
     <header>
       <img src="${esc(developer.avatar || TAK_AVATAR)}" alt="" loading="lazy"/>
-      <div><p class="pp-kicker">DEVELOPER</p><h3>${esc(developer.name)}</h3><span>${developer.games.length} game${developer.games.length === 1 ? "" : "s"} published</span></div>
+      <div><p class="pp-kicker">DEV ROOM</p><h3>${esc(developer.name)}</h3><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"}</span></div>
       <strong><b>${developer.score}</b><span>Dev score</span></strong>
     </header>
     <div class="pp-dev-thumbs">${previewGames.map((game) => `<img src="${esc(thumbnailFor(game))}" alt="" loading="lazy"/>`).join("")}</div>
-    <p>${esc(developer.categories.join(" / ") || "PhantomPlay")} developer with ${developer.featuredCount} featured release${developer.featuredCount === 1 ? "" : "s"} and ${developer.supportCount} local support mark${developer.supportCount === 1 ? "" : "s"}.</p>
+    <p>${esc(developer.categories.join(" / ") || "PhantomPlay")} builder with ${developer.featuredCount} lab-ready build${developer.featuredCount === 1 ? "" : "s"} and ${developer.supportCount} local support mark${developer.supportCount === 1 ? "" : "s"}.</p>
     <div class="pp-dev-tags">${developer.categories.map((category) => `<span>${esc(category)}</span>`).join("")}</div>
     <button type="button" class="pp-secondary" data-pp-open-dev="${esc(developer.id)}">View profile</button>
   </article>`;
@@ -405,34 +405,34 @@ function renderDeveloperProfile(developer) {
   const notes = developer.notes.length ? developer.notes.map((note) => `<li><span>${esc(savedDateLabel(note.at))}</span><p>${esc(note.text)}</p></li>`).join("") : `<li class="is-empty"><p>No private dev notes yet.</p></li>`;
   return `<div class="pp-developer">
     <section class="pp-dev-profile">
-      <button type="button" class="pp-secondary pp-dev-back" data-pp-dev-back>← Developers</button>
+      <button type="button" class="pp-secondary pp-dev-back" data-pp-dev-back>← Dev Rooms</button>
       <header>
         <img src="${esc(developer.avatar || TAK_AVATAR)}" alt="" loading="lazy"/>
-        <div><p class="pp-kicker">DEVELOPER PROFILE</p><h2>${esc(developer.name)}</h2><span>${developer.games.length} published game${developer.games.length === 1 ? "" : "s"} · ${developer.categories.join(" / ") || "PhantomPlay"}</span></div>
+        <div><p class="pp-kicker">DEV ROOM</p><h2>${esc(developer.name)}</h2><span>${developer.games.length} playable build${developer.games.length === 1 ? "" : "s"} · ${developer.categories.join(" / ") || "PhantomPlay"}</span></div>
         <strong><b>${developer.score}</b><span>Dev score</span></strong>
       </header>
       <div class="pp-dev-stats">
-        <span><b>${developer.games.length}</b><i>Games</i></span>
-        <span><b>${developer.featuredCount}</b><i>Featured</i></span>
+        <span><b>${developer.games.length}</b><i>Builds</i></span>
+        <span><b>${developer.featuredCount}</b><i>Lab ready</i></span>
         <span><b>${developer.supportCount}</b><i>Support</i></span>
-        <span><b>${developer.donationIntentCount}</b><i>Donation intent</i></span>
+        <span><b>${developer.donationIntentCount}</b><i>Collab intent</i></span>
       </div>
       <div class="pp-dev-actions">
-        <button type="button" class="pp-primary" data-pp-support-dev="${esc(developer.id)}">${developer.supported ? "Supported" : "Support dev"}</button>
-        <button type="button" class="pp-secondary" data-pp-donate-dev="${esc(developer.id)}">Log donation intent</button>
-        <p>No payment starts here. Support and donation intent are saved privately in this workspace.</p>
+        <button type="button" class="pp-primary" data-pp-support-dev="${esc(developer.id)}">${developer.supported ? "Supported" : "Support builder"}</button>
+        <button type="button" class="pp-secondary" data-pp-donate-dev="${esc(developer.id)}">Mark collab interest</button>
+        <p>No payment starts here. Support and collaboration interest are saved privately in this workspace.</p>
       </div>
       ${ui.developerMessage ? `<div class="pp-banner is-offline"><b>Developer note</b><span>${esc(ui.developerMessage)}</span><button type="button" data-pp-dev-message-clear>Clear</button></div>` : ""}
     </section>
     <section class="pp-dev-profile-grid">
       <div class="pp-dev-notes">
-        <header><div><p class="pp-kicker">PRIVATE NOTES</p><h3>Leave dev notes</h3></div></header>
-        <textarea data-pp-dev-note-text rows="4" maxlength="800" placeholder="Feedback, feature requests, classroom fit, support ideas..."></textarea>
+        <header><div><p class="pp-kicker">PRIVATE NOTES</p><h3>Playtest notes</h3></div></header>
+        <textarea data-pp-dev-note-text rows="4" maxlength="800" placeholder="Feedback, tuning ideas, bugs, controls, art direction..."></textarea>
         <button type="button" class="pp-secondary" data-pp-save-dev-note="${esc(developer.id)}">Save private note</button>
         <ul>${notes}</ul>
       </div>
       <div class="pp-dev-games">
-        <div class="pp-section-head"><div><h2>All games by ${esc(developer.name)}</h2><p>Every approved PhantomPlay release currently in the catalog.</p></div><span>${developer.games.length} games</span></div>
+        <div class="pp-section-head"><div><h2>Playable builds by ${esc(developer.name)}</h2><p>Every reviewed PhantomPlay build currently available to test.</p></div><span>${developer.games.length} builds</span></div>
         <div class="pp-game-grid pp-game-grid-full">${developer.games.map((game) => gameCard(game)).join("")}</div>
       </div>
     </section>
@@ -445,24 +445,24 @@ function renderDeveloper() {
   if (developer) return renderDeveloperProfile(developer);
   return `<div class="pp-developer">
     <section class="pp-dev-guide">
-      <div><p class="pp-kicker">DEVELOPER DIRECTORY</p><h2>Find the people building PhantomGames.</h2><p>Browse approved PhantomPlay developers by Dev score, open their profile, see every game they have in the catalog, save private notes, and mark support without starting a payment.</p></div>
-      <ul><li>Dev score is based on catalog quality signals</li><li>Profiles show all approved games</li><li>Support and donation intent stay local</li><li>No public profiles or external payment calls</li></ul>
+      <div><p class="pp-kicker">DEV ROOMS</p><h2>A private sandbox for people making games.</h2><p>Open builder rooms, test playable prototypes, leave private notes, track versions, and decide what is ready to share. PhantomPlay is where the game gets sharper before it goes anywhere public.</p></div>
+      <ul><li>Dev score is based on build quality signals</li><li>Profiles show reviewed playable prototypes</li><li>Support and collaboration intent stay local</li><li>No public payments or public profiles</li></ul>
     </section>
     <section class="pp-dev-directory">
-      <div class="pp-section-head"><div><h2>Developers</h2><p>Ranked by Dev score and published PhantomPlay releases.</p></div><span>${developers.length} listed</span></div>
-      ${developers.length ? `<div class="pp-dev-list">${developers.map(developerCard).join("")}</div>` : empty("No developers yet", "Approved games will create developer profiles automatically.")}
+      <div class="pp-section-head"><div><h2>Dev Rooms</h2><p>Ranked by build quality, playtest history, and lab-ready prototypes.</p></div><span>${developers.length} rooms</span></div>
+      ${developers.length ? `<div class="pp-dev-list">${developers.map(developerCard).join("")}</div>` : empty("No dev rooms yet", "Reviewed builds will create dev rooms automatically.")}
     </section>
   </div>`;
 }
 
 function renderAdmin() {
   if (!ui.snapshot.access.canModerate) return empty("Moderation is protected", "Platform admin access is required.");
-  return `<section class="pp-admin"><div class="pp-section-head"><div><h2>Game review queue</h2><p>Approve only releases that pass the PhantomPlay security and quality checklist.</p></div><span>${ui.snapshot.submissions.length} submissions</span></div><div class="pp-submission-list">${ui.snapshot.submissions.length ? ui.snapshot.submissions.map((item) => submissionCard(item, true)).join("") : empty("Queue clear", "No developer submissions are waiting.")}</div></section>`;
+  return `<section class="pp-admin"><div class="pp-section-head"><div><h2>Sandbox safety review</h2><p>Approve only playable builds that pass the PhantomPlay security, content, and quality checklist.</p></div><span>${ui.snapshot.submissions.length} builds</span></div><div class="pp-submission-list">${ui.snapshot.submissions.length ? ui.snapshot.submissions.map((item) => submissionCard(item, true)).join("") : empty("Queue clear", "No developer builds are waiting.")}</div></section>`;
 }
 
 function settingsMarkup() {
   const p = ui.snapshot.preferences;
-  return `<aside class="pp-settings ${ui.settingsOpen ? "is-open" : ""}" ${ui.settingsOpen ? "" : "hidden"}><header><div><p class="pp-kicker">PLAY SETTINGS</p><h2>Your break, your limits.</h2></div><button data-pp-settings-close aria-label="Close settings">×</button></header><label>Content allowed<select data-pp-pref="contentRating"><option value="everyone" ${p.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${p.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${p.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label class="pp-switch"><input type="checkbox" data-pp-pref="sound" ${p.sound ? "checked" : ""}/><span></span>Sound</label><label class="pp-switch"><input type="checkbox" data-pp-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/><span></span>Reduce motion</label><label class="pp-switch"><input type="checkbox" data-pp-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/><span></span>Show approved community games</label><p>PhantomPlay never changes your work, agents, files, or business data while you play.</p></aside>`;
+  return `<aside class="pp-settings ${ui.settingsOpen ? "is-open" : ""}" ${ui.settingsOpen ? "" : "hidden"}><header><div><p class="pp-kicker">PLAY SETTINGS</p><h2>Your break, your limits.</h2></div><button data-pp-settings-close aria-label="Close settings">×</button></header><label>Content allowed<select data-pp-pref="contentRating"><option value="everyone" ${p.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${p.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${p.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label class="pp-switch"><input type="checkbox" data-pp-pref="sound" ${p.sound ? "checked" : ""}/><span></span>Sound</label><label class="pp-switch"><input type="checkbox" data-pp-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/><span></span>Reduce motion</label><label class="pp-switch"><input type="checkbox" data-pp-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/><span></span>Show reviewed prototypes</label><p>PhantomPlay never changes your work, agents, files, or business data while you play.</p></aside>`;
 }
 
 function playerMarkup() {
@@ -479,10 +479,10 @@ function render() {
     return;
   }
   const snapshot = ui.snapshot || offlineState();
-  const tabs = [["home", "Home"], ["library", "Library"], ["together", "Play Together"], ["favorites", "Favorites"], ["developer", "Developers"], ...(snapshot.access.canModerate ? [["admin", "Admin"]] : [])];
+  const tabs = [["home", "Sandbox"], ["library", "Play Lab"], ["together", "Playtest Rooms"], ["favorites", "Saved"], ["developer", "Dev Rooms"], ...(snapshot.access.canModerate ? [["admin", "Safety Review"]] : [])];
   const content = ui.tab === "library" ? renderLibrary() : ui.tab === "together" ? renderTogether() : ui.tab === "favorites" ? renderFavorites() : ui.tab === "developer" ? renderDeveloper() : ui.tab === "admin" ? renderAdmin() : renderHome();
   mountedRoot.innerHTML = `<div class="pp-shell">
-    <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE ENTERTAINMENT</p><h1>PhantomPlay</h1><span>Take a real break. Come back sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
+    <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
     ${ui.offline ? `<div class="pp-banner is-offline"><b>Offline mode</b><span>Built-in games still work. Favorites and progress will sync after the server returns.</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
     <nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav>
@@ -722,7 +722,7 @@ function logDeveloperDonationIntent(devId) {
   updateDeveloperRecord(devId, (record) => {
     record.donationIntentCount += 1;
     record.lastDonationIntentAt = new Date().toISOString();
-    ui.developerMessage = "Donation intent saved locally. No payment was started.";
+    ui.developerMessage = "Collaboration interest saved locally. No payment was started.";
   });
   render();
 }
@@ -746,7 +746,7 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppPlay));
   mountedRoot.querySelectorAll("[data-pp-favorite]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); updateFavorite(button.dataset.ppFavorite); });
   mountedRoot.querySelectorAll("[data-pp-category]").forEach((button) => button.onclick = () => { ui.category = button.dataset.ppCategory; render(); });
-  mountedRoot.querySelector("[data-pp-search]")?.addEventListener("input", (event) => { ui.query = event.target.value; const list = mountedRoot.querySelector(".pp-game-grid-full"); if (list) list.innerHTML = filteredCatalog().map((game) => gameCard(game)).join("") || empty("No matching games", "Try a different search or category."); bind(); });
+  mountedRoot.querySelector("[data-pp-search]")?.addEventListener("input", (event) => { ui.query = event.target.value; const list = mountedRoot.querySelector(".pp-game-grid-full"); if (list) list.innerHTML = filteredCatalog().map((game) => gameCard(game)).join("") || empty("No matching builds", "Try a different search or category."); bind(); });
   mountedRoot.querySelector("[data-pp-settings]")?.addEventListener("click", () => { ui.settingsOpen = true; render(); });
   mountedRoot.querySelector("[data-pp-settings-close]")?.addEventListener("click", () => { ui.settingsOpen = false; render(); });
   mountedRoot.querySelectorAll("[data-pp-pref]").forEach((input) => input.onchange = () => { ui.snapshot.preferences[input.dataset.ppPref] = input.type === "checkbox" ? input.checked : input.value; updatePreferences(); });

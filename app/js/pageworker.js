@@ -1,10 +1,11 @@
 /* PhantomForce page worker prompts.
-   Prompt-first local intelligence for major workspaces. This is not a
-   questionnaire: one messy user ask becomes inferred intent, assumptions,
-   draftable actions, and one blocking question max. Nothing external runs. */
+   AI-backed page intelligence for major workspaces. This is not a
+   questionnaire: one messy user ask becomes inferred intent, backend analysis,
+   draftable actions, and one blocking question max. External actions stay
+   approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity } from "./store.js?v=phantom-live-20260712-230";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260712-230";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260712-231";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260712-231";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -88,13 +89,6 @@ const DEFAULT_WORKER = {
 };
 
 const SKIP_PAGES = new Set([
-  "media",
-  "sites",
-  "content",
-  "assets",
-  "intelligence",
-  "vacation",
-  "phantomplay",
   "settings",
   "developer",
   "activity",
@@ -102,6 +96,15 @@ const SKIP_PAGES = new Set([
   "account",
   "customize",
 ]);
+
+const BACKEND_TIMEOUT_MS = 45000;
+const THINKING_LINES = [
+  "Phantom is asking the backend brain and trying not to look too dramatic about it.",
+  "Checking context, memory, and page intent before we make a confident mess.",
+  "Running the real AI path now. The local heuristic has been asked to sit down.",
+  "Thinking through the boring safety stuff first so the useful answer can be sharp.",
+  "Consulting the private brain, then I’ll bring back the clean version.",
+];
 
 function workerFor(pageId) {
   return PAGE_WORKERS[pageId] || DEFAULT_WORKER;
@@ -376,19 +379,204 @@ function analyzePrompt(pageId, prompt) {
   };
 }
 
-function renderPlan(card, pageId, prompt) {
-  const out = card.querySelector("[data-page-worker-output]");
-  if (!out) return;
-  const analysis = analyzePrompt(pageId, prompt);
-  const pageAction = runPageAction(pageId, prompt);
-  if (prompt.trim()) rememberPrompt(pageId, prompt, analysis);
+function thinkingLine(pageId, prompt) {
+  const key = `${currentWs()}:${pageId}:${prompt}`;
+  let hash = 0;
+  for (const char of key) hash = ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+  return THINKING_LINES[Math.abs(hash) % THINKING_LINES.length];
+}
+
+function renderThinking(out, pageId, prompt) {
   out.hidden = false;
+  out.classList.add("is-thinking");
+  out.innerHTML = `
+    <div class="page-worker-thinking">
+      <span>AI backend thinking</span>
+      <b>${esc(thinkingLine(pageId, prompt))}</b>
+      <p>Pulling page context, scoped memory, and safety gates before reporting the result.</p>
+      <i aria-hidden="true"></i>
+    </div>`;
+}
+
+function backendTextFrom(payload) {
+  return String(
+    payload?.message?.content
+    || payload?.content
+    || payload?.output_text
+    || payload?.reply
+    || "",
+  ).trim();
+}
+
+function backendStatusLabel(backend) {
+  const payload = backend?.payload || {};
+  return backend?.provider
+    || payload.admin_model_label
+    || payload.model_id
+    || (payload.live_provider_called ? "live provider" : "backend answered");
+}
+
+function backendContentHtml(content) {
+  return String(content || "")
+    .trim()
+    .split(/\n{2,}/)
+    .filter(Boolean)
+    .map((block) => `<p>${esc(block).replace(/\n/g, "<br>")}</p>`)
+    .join("");
+}
+
+function sessionActorId() {
+  const saved = typeof session?.get === "function" ? session.get() : null;
+  return saved?.sessionId || saved?.name || saved?.email || "owner-admin";
+}
+
+function pageContextModules(pageId, prompt, analysis) {
+  const worker = workerFor(pageId);
+  const modules = [{
+    module: "page_worker_request",
+    summary: `User is on ${worker.title} for ${wsName(currentWs())}. Answer the outcome prompt with concise, useful next steps.`,
+    items: [
+      { title: "Prompt", status: analysis.intent, detail: compactPrompt(prompt) || "No prompt entered yet." },
+      { title: "Safety", status: RISKY.test(prompt) ? "approval_required" : "draft_safe", detail: "Do not send, post, deploy, delete, charge, upload, expose, or message externally." },
+      { title: "Page", status: pageId, detail: worker.helper },
+    ],
+  }];
+  if (analysis.memoryHits.length) {
+    modules.push({
+      module: "workspace_memory_hits",
+      summary: `${analysis.memoryHits.length} relevant saved or recent context hints were available.`,
+      items: analysis.memoryHits.map((hit) => ({
+        title: String(hit.title || hit.source || "Memory").slice(0, 90),
+        status: String(hit.source || "memory").slice(0, 40),
+        detail: String(hit.body || "").slice(0, 220),
+      })),
+    });
+  }
+  const socialAccounts = visible(store.state.socialAccounts || []).slice(0, 8).map((account) => ({
+    title: String(account.platform || account.network || account.name || "Social account").slice(0, 80),
+    status: String(account.connected || account.oauthConnected ? "connected" : account.status || "saved").slice(0, 50),
+    detail: [account.handle, account.username, account.displayName, account.label].filter(Boolean).join(" · ").slice(0, 180),
+  }));
+  if (socialAccounts.length) {
+    modules.push({
+      module: "saved_social_accounts",
+      summary: `${socialAccounts.length} saved account profile${socialAccounts.length === 1 ? "" : "s"} are visible for this workspace.`,
+      items: socialAccounts,
+    });
+  }
+  const recent = historyFor(pageId).map((item) => ({
+    title: String(item.intent || "Recent page prompt").slice(0, 90),
+    status: "recent",
+    detail: String(item.summary || item.prompt || "").slice(0, 220),
+  }));
+  if (recent.length) {
+    modules.push({
+      module: "recent_page_outcomes",
+      summary: `${recent.length} recent page prompt${recent.length === 1 ? "" : "s"} from this workspace.`,
+      items: recent,
+    });
+  }
+  return modules;
+}
+
+function backendPrompt(pageId, prompt, analysis) {
+  const worker = workerFor(pageId);
+  return [
+    "You are PhantomForce's page outcome worker inside Jordan's private business command center.",
+    "Use the provided page context, saved memory hints, and safety gates to answer the user's outcome prompt.",
+    "Be direct, useful, and slightly funny, but do not ramble.",
+    "Never say the work is queued. If you cannot execute something directly, say what draft/result you can prepare now.",
+    "Never claim that you posted, sent, uploaded, deployed, charged, scraped private data, or changed external systems.",
+    "If exactly one detail blocks the work, end with: Before we proceed, answer this: <one question>.",
+    "If there is enough context, start with: Done: <result>.",
+    "",
+    `Workspace: ${wsName(currentWs())}`,
+    `Page: ${worker.title} (${pageId})`,
+    `Local intent: ${analysis.intent}`,
+    `Local confidence: ${analysis.confidence}%`,
+    `User outcome prompt: ${prompt}`,
+    "",
+    "Local draft path:",
+    analysis.actions.slice(0, 6).map((step, index) => `${index + 1}. ${step}`).join("\n"),
+  ].join("\n");
+}
+
+async function askBackendForPageOutcome(pageId, prompt, analysis) {
+  if (!String(prompt || "").trim()) return { content: "", error: "" };
+  if (typeof fetch !== "function") return { content: "", error: "AI backend fetch is unavailable in this browser." };
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timeout = controller ? setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS) : null;
+  const token = typeof session?.token === "function" ? session.token() : "";
+  const headers = { "Content-Type": "application/json" };
+  if (token) headers.Authorization = `Bearer ${token}`;
+  try {
+    const response = await fetch("/phantom-ai/chat", {
+      method: "POST",
+      headers,
+      signal: controller?.signal,
+      body: JSON.stringify({
+        message: backendPrompt(pageId, prompt, analysis),
+        user_request: prompt,
+        provider: "phantom",
+        admin_model: "codex",
+        model_lane: "codex",
+        route_tier: "standard",
+        max_provider_ms: BACKEND_TIMEOUT_MS,
+        allow_provider_fallback: true,
+        execution_mode: "approval",
+        task_type: `page_outcome_${pageId}`,
+        tenant_id: currentTenantId(),
+        workspace_id: currentWs(),
+        business_name: wsName(currentWs()),
+        actor_user_id: sessionActorId(),
+        business_summary: `${wsName(currentWs())} workspace page worker. Convert one outcome prompt into an answer, safe draft path, and at most one blocking question.`,
+        module_data: pageContextModules(pageId, prompt, analysis),
+      }),
+    });
+    const raw = await response.text();
+    let payload = {};
+    try { payload = raw ? JSON.parse(raw) : {}; }
+    catch { payload = { message: { content: raw } }; }
+    if (!response.ok) {
+      return { content: "", error: `AI backend returned HTTP ${response.status}.`, payload };
+    }
+    const content = backendTextFrom(payload);
+    if (!content) return { content: "", error: "AI backend returned no message content.", payload };
+    return {
+      content,
+      provider: payload.admin_model_label || payload.model_id || payload.provider_choice || "",
+      payload,
+    };
+  } catch (error) {
+    return {
+      content: "",
+      error: error?.name === "AbortError"
+        ? "AI backend took too long to answer."
+        : `AI backend could not be reached: ${error?.message || "unknown error"}.`,
+    };
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+function renderPageWorkerResult(out, analysis, pageAction, backend) {
+  const hasBackendAnswer = Boolean(backend?.content);
+  out.classList.remove("is-thinking");
   out.innerHTML = `
     <div class="page-worker-intel-head">
-      <span>Aggressive intelligence mode</span>
+      <span>${hasBackendAnswer ? "AI backend result" : "Local fallback result"}</span>
       <b>${esc(analysis.intent)}</b>
-      <em>${analysis.confidence}% inferred</em>
+      <em>${esc(hasBackendAnswer ? backendStatusLabel(backend) : (backend?.error || "needs prompt"))}</em>
     </div>
+    ${hasBackendAnswer ? `
+      <div class="page-worker-backend-result">
+        <span>Report</span>
+        ${backendContentHtml(backend.content)}
+      </div>` : backend?.error ? `
+      <div class="page-worker-backend-result is-fallback">
+        <span>Backend check</span>
+        <p>${esc(backend.error)} Phantom kept the local result visible instead of going blank.</p>
+      </div>` : ""}
     <p class="page-worker-understood">${esc(analysis.understood)}</p>
     <div class="page-worker-intel-grid">
       <article>
@@ -409,28 +597,53 @@ function renderPlan(card, pageId, prompt) {
     ${pageActionHtml(pageAction)}
     ${analysis.memoryHits.length ? `<div class="page-worker-memory"><span>Context used</span>${analysis.memoryHits.map((hit) => `<p><b>${esc(hit.source)}:</b> ${esc(hit.title)} — ${esc(String(hit.body || "").slice(0, 120))}</p>`).join("")}</div>` : ""}
     <div class="page-worker-gate ${analysis.question ? "needs-input" : "ready"}">
-      <b>${analysis.question ? "One blocking question" : "No more fields needed"}</b>
+      <b>${analysis.question ? "Before we proceed, answer this:" : "Done. Ready to draft."}</b>
       <span>${esc(analysis.question || "Phantom has enough to draft locally. External moves still require approval.")}</span>
     </div>`;
-  pushActivity("Page Intelligence", pageAction ? pageAction.summary : (analysis.question ? `needs one detail for ${analysis.intent.toLowerCase()}.` : `prepared ${analysis.intent.toLowerCase()} from one prompt.`));
+}
+
+async function renderPlan(card, pageId, prompt) {
+  const out = card.querySelector("[data-page-worker-output]");
+  if (!out) return;
+  const analysis = analyzePrompt(pageId, prompt);
+  renderThinking(out, pageId, prompt);
+  const backend = await askBackendForPageOutcome(pageId, prompt, analysis);
+  const pageAction = runPageAction(pageId, prompt);
+  if (prompt.trim()) rememberPrompt(pageId, prompt, analysis);
+  renderPageWorkerResult(out, analysis, pageAction, backend);
+  pushActivity("Page Intelligence", pageAction ? pageAction.summary : (analysis.question ? `needs one detail for ${analysis.intent.toLowerCase()}.` : `${backend?.content ? "AI backend answered" : "Local fallback prepared"} ${analysis.intent.toLowerCase()} from one prompt.`));
   store.save();
-  return { analysis, pageAction };
+  return { analysis, pageAction, backend };
 }
 
 export function mountPageWorkers(root = document, opts = {}) {
   root.querySelectorAll("[data-page-worker-form]").forEach((form) => {
     if (form.dataset.pageWorkerBound) return;
     form.dataset.pageWorkerBound = "1";
-    form.addEventListener("submit", (event) => {
+    form.addEventListener("submit", async (event) => {
       event.preventDefault();
       const card = form.closest("[data-page-worker]");
+      if (!card) return;
       const pageId = card?.dataset.pageWorker || "page";
       const input = form.querySelector("[data-page-worker-input]");
+      const button = form.querySelector("button");
       const prompt = input?.value || "";
-      const result = renderPlan(card, pageId, prompt);
-      opts.notify?.("Phantom", result?.pageAction?.summary || "I inferred the missing pieces from one prompt. No field-by-field setup.");
-      if (result?.pageAction?.refreshWorkspace) {
-        setTimeout(() => opts.openWorkspace?.(pageId), 320);
+      if (form.dataset.pageWorkerBusy === "1") return;
+      form.dataset.pageWorkerBusy = "1";
+      card?.setAttribute("aria-busy", "true");
+      if (button) button.disabled = true;
+      try {
+        const result = await renderPlan(card, pageId, prompt);
+        opts.notify?.("Phantom", result?.pageAction?.summary || (result?.backend?.content
+          ? "AI backend analyzed the prompt and reported the result."
+          : "I could not get a backend answer, so I kept the local fallback result visible."));
+        if (result?.pageAction?.refreshWorkspace) {
+          setTimeout(() => opts.openWorkspace?.(pageId), 320);
+        }
+      } finally {
+        delete form.dataset.pageWorkerBusy;
+        card?.removeAttribute("aria-busy");
+        if (button) button.disabled = false;
       }
     });
   });
