@@ -318,7 +318,7 @@ function isLeadsProspectPrompt(pageId, prompt = "") {
     || (/\b(who|companies|businesses|people|organizations)\b[\s\S]{0,80}\b(interested|could\s+use|would\s+need|could\s+buy|could\s+hire|need\s+phantomforce)\b/i.test(text));
 }
 
-function runPageAction(pageId, prompt) {
+export function runPageAction(pageId, prompt) {
   if (!isLeadsProspectPrompt(pageId, prompt)) return null;
   const buildout = createCrmProspectBuildout(
     /\b(client|lead|crm|pipeline|prospect|contact)\b/i.test(prompt)

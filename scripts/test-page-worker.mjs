@@ -53,4 +53,50 @@ assert.match(css, /\.page-worker-output li::before/u, "Plain-English step bullet
 assert.match(css, /\.page-worker-action-result/u, "Local page actions must have visible result styling.");
 assert.match(index, /phantom-live-20260713-\d+/u, "Index cache id must exist for the app bundle.");
 
+function installMemoryStorage(name) {
+  if (globalThis[name]) return;
+  const storage = new Map();
+  globalThis[name] = {
+    getItem: (key) => storage.has(String(key)) ? storage.get(String(key)) : null,
+    setItem: (key, value) => { storage.set(String(key), String(value)); },
+    removeItem: (key) => { storage.delete(String(key)); },
+    clear: () => { storage.clear(); },
+  };
+}
+
+installMemoryStorage("localStorage");
+installMemoryStorage("sessionStorage");
+
+const pageWorkerBuildId = worker.match(/store\.js\?v=([^"']+)/)?.[1] || "";
+const pageWorkerQuery = pageWorkerBuildId ? `?v=${pageWorkerBuildId}` : "";
+const { runPageAction } = await import(`../app/js/pageworker.js${pageWorkerQuery}`);
+const { ctx, store } = await import(`../app/js/store.js${pageWorkerQuery}`);
+
+ctx.session = { role: "admin", name: "Jordan", ws: "phantomforce" };
+store.state.leads = [];
+store.state.tasks = [];
+store.state.activity = [];
+
+let fetchCalled = false;
+globalThis.fetch = async () => {
+  fetchCalled = true;
+  throw new Error("Clients page CRM local action must not require backend fetch.");
+};
+
+const pageAction = runPageAction(
+  "leads",
+  "find and add clients who could use PhantomForce: gyms, schools, creators, service companies, and warm prospects",
+);
+
+assert.equal(fetchCalled, false, "Clients page CRM local action should not call the backend.");
+assert.equal(pageAction?.type, "prospect-buildout", "Clients page should execute the CRM prospect buildout action.");
+assert.equal(pageAction?.refreshWorkspace, true, "Clients page should request a workspace refresh after CRM cards are created.");
+assert.ok(store.state.leads.length >= 4, "Clients page prompt should create multiple CRM prospect lanes.");
+assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include creator prospects.");
+assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include school prospects.");
+assert.ok(store.state.leads.some((lead) => /local service|gym|service/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include local service or gym prospects.");
+assert.ok(store.state.leads.every((lead) => /No external outreach|contact details|live relationship claims/i.test(lead.notes)), "CRM cards must not invent live contacts or outreach claims.");
+assert.ok(store.state.tasks.some((task) => /Qualify PhantomForce CRM prospect map/i.test(task.title)), "Clients page prompt should create a qualification task.");
+assert.match(pageAction.summary, /ready in Clients/i, "Clients page action should report visible CRM results.");
+
 console.log("Page worker prompt checks passed.");
