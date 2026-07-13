@@ -69,6 +69,8 @@ for (const game of games) {
   assert.match(game, /event\.data\.type==='restart'/u, "Every built-in game must respond to host restart controls.");
   const inlineScript = game.match(/<script>([\s\S]*?)<\/script>/u)?.[1] || "";
   assert.doesNotThrow(() => new Function(inlineScript), "Every built-in game script must parse.");
+  assert.match(game, /data-score/u, "Every built-in game must expose a visible score HUD.");
+  assert.match(game, /host\([^;]*\{score/u, "Every built-in game must report score updates to PhantomPlay.");
 }
 
 assert.match(games[0], /\.start\[hidden\][^{]*\{display:none\}/u, "Neon Drift's start overlay must actually leave the play field.");

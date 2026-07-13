@@ -11,7 +11,7 @@
 </head>
 <body>
   <canvas aria-label="Focus Stack play field"></canvas>
-  <div class="hud"><div><span>HEIGHT</span><b data-score>0</b></div><div><span>BEST</span><b data-best>0</b></div></div>
+  <div class="hud"><div><span>SCORE</span><b data-score>0</b></div><div><span>HEIGHT</span><b data-height>0</b></div><div><span>BEST</span><b data-best>0</b></div></div>
   <button class="hint" type="button">Tap / Space to drop</button>
   <div class="overlay start"><div><h1>Focus Stack</h1><p>Drop each moving layer on the tower. Clean overlaps build higher; misses end the run.</p><button type="button">Start stacking</button></div></div>
   <div class="overlay pause" hidden><div><h1>Paused</h1><p>Your tower is waiting.</p><button type="button">Resume</button></div></div>
@@ -20,13 +20,13 @@
     const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*'),c=document.querySelector('canvas'),g=c.getContext('2d'),startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),resultEl=document.querySelector('.result');
     let W=0,H=0,blocks=[],moving=null,score=0,best=0,speed=0,dir=1,running=false,paused=false,reduced=false;
 
-    function updateHud(){document.querySelector('[data-score]').textContent=score;document.querySelector('[data-best]').textContent=best}
+    function updateHud(){document.querySelector('[data-score]').textContent=score*10;document.querySelector('[data-height]').textContent=score;document.querySelector('[data-best]').textContent=best}
     function makeBase(){const h=Math.max(22,H*.035);blocks=[{x:W*.22,y:H*.86,w:W*.56,h,color:'#2dff99'}];moving={x:W*.05,y:H*.82,w:blocks[0].w,h,color:'#60ffc0'};speed=2.35*devicePixelRatio;dir=1;score=0;updateHud();draw()}
     function resize(){const oldW=W||1,oldH=H||1;W=c.width=Math.max(320,Math.round(innerWidth*devicePixelRatio));H=c.height=Math.max(480,Math.round(innerHeight*devicePixelRatio));if(!blocks.length){makeBase();return}const sx=W/oldW,sy=H/oldH;blocks=blocks.map(block=>({...block,x:block.x*sx,y:block.y*sy,w:block.w*sx,h:block.h*sy}));if(moving)moving={...moving,x:moving.x*sx,y:moving.y*sy,w:moving.w*sx,h:moving.h*sy};speed*=sx;draw()}
     function startRun(){makeBase();running=true;paused=false;startEl.hidden=true;pauseEl.hidden=true;resultEl.hidden=true;host('progress',{score:0,progress:0,state:{height:0}})}
     function setPaused(next){if(!running)return;paused=next;pauseEl.hidden=!paused;host('paused',{paused})}
     function drop(){if(!running||paused||!moving)return;const base=blocks[blocks.length-1],left=Math.max(moving.x,base.x),right=Math.min(moving.x+moving.w,base.x+base.w),overlap=right-left;if(overlap<8*devicePixelRatio){finish(false);return}moving.x=left;moving.w=overlap;blocks.push({...moving});score++;best=Math.max(best,score);updateHud();host('score',{score:score*10,progress:Math.min(96,score*8),state:{height:score}});if(score>=12){finish(true);return}const nextY=Math.max(H*.18,base.y-blocks[0].h);moving={x:dir>0?0:W-overlap,y:nextY-blocks[0].h,w:overlap,h:blocks[0].h,color:`hsl(${145+score*6} 100% 65%)`};speed+=.18*devicePixelRatio}
-    function finish(win){running=false;paused=false;resultEl.hidden=false;resultEl.querySelector('h1').textContent=win?'Perfect tower':'Tower slipped';resultEl.querySelector('[data-result]').textContent=win?`You stacked all ${score} layers.`:`You reached ${score} layer${score===1?'':'s'}. Try for a cleaner drop.`;host('complete',{score:score*10,progress:100,state:{height:score}})}
+    function finish(win){running=false;paused=false;resultEl.hidden=false;resultEl.querySelector('h1').textContent=win?'Perfect tower':'Tower slipped';resultEl.querySelector('[data-result]').textContent=win?`Score ${score*10}. You stacked all ${score} layers.`:`Score ${score*10}. You reached ${score} layer${score===1?'':'s'}. Try for a cleaner drop.`;host('complete',{score:score*10,progress:100,state:{height:score}})}
     function loop(){if(running&&!paused&&moving){moving.x+=speed*dir;if(moving.x<=0){moving.x=0;dir=1}else if(moving.x+moving.w>=W){moving.x=W-moving.w;dir=-1}draw()}requestAnimationFrame(loop)}
     function draw(){g.clearRect(0,0,W,H);g.strokeStyle='#36ff941a';g.lineWidth=Math.max(1,devicePixelRatio);for(let y=H*.15;y<H;y+=H*.08){g.beginPath();g.moveTo(0,y);g.lineTo(W,y);g.stroke()}[...blocks,moving].forEach(block=>{if(!block)return;g.fillStyle=block.color;g.shadowColor=block.color;g.shadowBlur=reduced?0:18*devicePixelRatio;g.fillRect(block.x,block.y,block.w,block.h)});g.shadowBlur=0}
 
