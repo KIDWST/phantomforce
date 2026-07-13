@@ -28,11 +28,14 @@ try {
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
   assert(initial.catalog.length === 6, "Six real built-in games should ship.");
+  assert(play.PHANTOMPLAY_ENGINE.version === "2.0-large-map" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
+  assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
   for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick"]) {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
+  assert(initial.catalog.find((game) => game.id === "neon-drift")?.version === "1.2.2", "Neon Drift should ship the faster arcade tuning.");
   assert(initial.access.canSubmitGames === false, "The snapshot should honor the plan submission decision.");
 
   await play.updatePhantomPlayProfile(playerA, { gameId: "neon-drift", favorite: true, preferences: { contentRating: "everyone", allowCommunityGames: true } });
@@ -42,6 +45,9 @@ try {
   const started = await play.startPhantomPlaySession(playerA, { gameId: "neon-drift" }, { entitled: true, dailyMinuteLimit: 30 });
   const saved = await play.updatePhantomPlaySession(playerA, started.play.id, { secondsDelta: 75, score: 420, progress: 35, state: { lane: 2 } });
   assert(saved?.seconds === 75 && saved.score === 420 && saved.progress === 35, "Progress, score, duration, and state should save.");
+  const largeState = Object.fromEntries(Array.from({ length: 120 }, (_, index) => [`chunk-${index}`, `tile-data-${index}`.repeat(80)]));
+  const largeSaved = await play.updatePhantomPlaySession(playerA, started.play.id, { state: largeState });
+  assert(Object.keys(largeSaved?.state || {}).length > 30, "Bigger games should be able to persist more than a tiny arcade state.");
   const afterPlay = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30 });
   assert(afterPlay.history[0]?.canContinue === true, "An unfinished session should appear in Continue Playing.");
   assert(afterPlay.access.usedMinutesToday === 2, "Daily play usage should be derived from durable sessions.");

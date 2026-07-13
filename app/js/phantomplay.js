@@ -1,12 +1,18 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260712-231";
+} from "./store.js?v=phantom-live-20260713-233";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
 const DEV_SUPPORT_KEY = "pf.phantomplay.developerSupport.v1";
 const CATEGORIES = ["All", "Arcade", "Puzzle", "Focus", "Strategy", "Sports", "Creative"];
+const PHANTOMPLAY_ENGINE = {
+  version: "2.0-large-map",
+  saveStateBytes: 262144,
+  largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
+  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
+};
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
 const artUrl = (file) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
 const TAK_AVATAR = artUrl("tak-avatar.webp");
@@ -27,7 +33,7 @@ const CATEGORY_ART = {
   Creative: GAME_ART_BY_SLUG["word-weld"],
 };
 const BUILT_INS = [
-  { id: "neon-drift", title: "Neon Drift", summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.", description: "A real arcade shooter: move with WASD/arrow keys or touch-drag, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.", category: "Arcade", tags: ["shooter", "powerups", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.2.1", thumbnail: GAME_ART_BY_SLUG["neon-drift"], featured: true, version: "1.2.1", controls: "WASD/arrow keys to fly. Auto-fire is always on. Touch and drag on mobile.", progressSupport: true, scoreSupport: true },
+  { id: "neon-drift", title: "Neon Drift", summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.", description: "A real arcade shooter: move with WASD/arrow keys or touch-drag, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.", category: "Arcade", tags: ["shooter", "powerups", "arcade", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/neon-drift.html?v=1.2.2", thumbnail: GAME_ART_BY_SLUG["neon-drift"], featured: true, version: "1.2.2", controls: "WASD/arrow keys to fly. Auto-fire is always on. Touch and drag on mobile.", progressSupport: true, scoreSupport: true, engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "signal-match", title: "Signal Match", summary: "Find every matching signal with the fewest turns.", description: "A responsive memory grid with clear score, feedback, pause, restart, touch, and keyboard support.", category: "Puzzle", tags: ["memory", "calm", "puzzle"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/signal-match.html?v=1.1.1", thumbnail: GAME_ART_BY_SLUG["signal-match"], featured: true, version: "1.1.1", controls: "Click, tap, or use Tab + Enter", progressSupport: true, scoreSupport: true },
   { id: "focus-stack", title: "Focus Stack", summary: "Drop each layer cleanly and build the tallest signal tower.", description: "A focused timing run with a visible score, proper start, pause, restart, and resize-safe play field.", category: "Focus", tags: ["timing", "focus", "quick"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/focus-stack.html?v=1.1.1", thumbnail: GAME_ART_BY_SLUG["focus-stack"], featured: false, version: "1.1.1", controls: "Space, Enter, click, or tap", progressSupport: true, scoreSupport: true },
   { id: "word-weld", title: "Word Weld", summary: "Build as many words as you can from one shifting signal rack.", description: "A quick word-building game with tap, keyboard, score, timer, and clean reset controls.", category: "Creative", tags: ["word", "creative", "quick", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "1.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
@@ -62,6 +68,7 @@ let playClock = null;
 let playTickAt = 0;
 let messageBound = false;
 let keyboardBound = false;
+let playerClosing = false;
 
 function slugifyGame(value) {
   return String(value ?? "")
@@ -114,6 +121,7 @@ function normalizeSnapshot(snapshot) {
   return {
     ...snapshot,
     catalog: Array.isArray(snapshot.catalog) ? snapshot.catalog.map(normalizeGame) : [],
+    engine: snapshot.engine || PHANTOMPLAY_ENGINE,
     developerSpotlight: snapshot.developerSpotlight === "Phantom Labs" ? "Tak" : (snapshot.developerSpotlight || "Tak"),
   };
 }
@@ -141,6 +149,7 @@ function offlineState() {
     favorites: Array.isArray(saved.favorites) ? saved.favorites : [],
     history: Array.isArray(saved.history) ? saved.history : [],
     preferences: { contentRating: "teen", sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
+    engine: PHANTOMPLAY_ENGINE,
     rooms: [],
     submissions: [],
     developerSpotlight: "Tak",
@@ -465,10 +474,15 @@ function settingsMarkup() {
   return `<aside class="pp-settings ${ui.settingsOpen ? "is-open" : ""}" ${ui.settingsOpen ? "" : "hidden"}><header><div><p class="pp-kicker">PLAY SETTINGS</p><h2>Your break, your limits.</h2></div><button data-pp-settings-close aria-label="Close settings">×</button></header><label>Content allowed<select data-pp-pref="contentRating"><option value="everyone" ${p.contentRating === "everyone" ? "selected" : ""}>Everyone</option><option value="teen" ${p.contentRating === "teen" ? "selected" : ""}>Teen</option><option value="mature" ${p.contentRating === "mature" ? "selected" : ""}>Mature</option></select></label><label class="pp-switch"><input type="checkbox" data-pp-pref="sound" ${p.sound ? "checked" : ""}/><span></span>Sound</label><label class="pp-switch"><input type="checkbox" data-pp-pref="reducedMotion" ${p.reducedMotion ? "checked" : ""}/><span></span>Reduce motion</label><label class="pp-switch"><input type="checkbox" data-pp-pref="allowCommunityGames" ${p.allowCommunityGames ? "checked" : ""}/><span></span>Show reviewed prototypes</label><p>PhantomPlay never changes your work, agents, files, or business data while you play.</p></aside>`;
 }
 
+function engineFor(game) {
+  return { ...PHANTOMPLAY_ENGINE, ...(ui.snapshot?.engine || {}), game: game?.engine || { tier: "standard", minVersion: PHANTOMPLAY_ENGINE.version } };
+}
+
 function playerMarkup() {
   if (!ui.player) return "";
   const { game, play } = ui.player;
-  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Progress saves automatically</span></footer></div>`;
+  const engine = engineFor(game);
+  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
 }
 
 function render() {
@@ -600,19 +614,24 @@ async function persistPlay(ended, detail = {}) {
 }
 
 async function closePlayer() {
+  if (playerClosing) return;
+  playerClosing = true;
+  postToGame("exit", { focus: false });
+  if (document.fullscreenElement) await document.exitFullscreen?.().catch(() => undefined);
   clearInterval(playClock);
   await persistPlay(true);
   ui.player = null;
   ui.playerReady = false;
   ui.playerPaused = false;
   document.body.classList.remove("phantomplay-playing");
+  playerClosing = false;
   render();
 }
 
-function postToGame(type) {
+function postToGame(type, options = {}) {
   const frame = mountedRoot?.querySelector("[data-pp-frame]");
-  frame?.contentWindow?.postMessage({ source: "phantomplay-host", type }, "*");
-  frame?.focus?.({ preventScroll: true });
+  frame?.contentWindow?.postMessage({ source: "phantomplay-host", type, engine: ui.player ? engineFor(ui.player.game) : PHANTOMPLAY_ENGINE }, "*");
+  if (options.focus !== false) frame?.focus?.({ preventScroll: true });
 }
 
 function togglePlayerPause() {
@@ -640,10 +659,14 @@ function restartPlayer() {
 function onGameMessage(event) {
   const frame = mountedRoot?.querySelector("[data-pp-frame]");
   if (!ui.player || !frame || event.source !== frame.contentWindow || !event.data || event.data.source !== "phantomplay-game") return;
+  if (event.data.type === "exit") {
+    closePlayer();
+    return;
+  }
   if (event.data.type === "ready") {
     ui.playerReady = true;
     mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
-    frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion }, "*");
+    frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion, engine: engineFor(ui.player.game) }, "*");
     frame.focus?.({ preventScroll: true });
   }
   if (event.data.type === "paused") {
@@ -765,7 +788,7 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-support-dev]").forEach((button) => button.onclick = () => supportDeveloper(button.dataset.ppSupportDev));
   mountedRoot.querySelectorAll("[data-pp-donate-dev]").forEach((button) => button.onclick = () => logDeveloperDonationIntent(button.dataset.ppDonateDev));
   mountedRoot.querySelectorAll("[data-pp-save-dev-note]").forEach((button) => button.onclick = () => saveDeveloperNote(button.dataset.ppSaveDevNote, mountedRoot.querySelector("[data-pp-dev-note-text]")?.value));
-  mountedRoot.querySelector("[data-pp-player-close]")?.addEventListener("click", closePlayer);
+  mountedRoot.querySelectorAll("[data-pp-player-close]").forEach((button) => button.addEventListener("click", closePlayer));
   mountedRoot.querySelector("[data-pp-player-pause]")?.addEventListener("click", togglePlayerPause);
   mountedRoot.querySelector("[data-pp-player-restart]")?.addEventListener("click", restartPlayer);
   mountedRoot.querySelector("[data-pp-player-fullscreen]")?.addEventListener("click", () => mountedRoot.querySelector(".pp-player-stage")?.requestFullscreen?.());

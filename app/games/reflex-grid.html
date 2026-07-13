@@ -30,7 +30,7 @@
     document.querySelector('[data-pause]').onclick=()=>setPaused(true);document.querySelector('[data-restart]').onclick=start;startEl.querySelector('button').onclick=start;pauseEl.querySelector('button').onclick=()=>setPaused(false);
     addEventListener('keydown',e=>{if(e.key==='p'||e.key==='P')setPaused(!paused);const n=Number(e.key);if(n>=1&&n<=9)pick(n-1)});
     document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
-    addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='restart')start()});
+    addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='exit')setPaused(true);if(event.data.type==='restart')start()});
     render();host('ready');
   </script>
 </body>

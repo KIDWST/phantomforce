@@ -12,6 +12,10 @@ const retryableWriteCodes = new Set(["EPERM", "EACCES", "EBUSY"]);
 
 export type PhantomPlayRating = "everyone" | "teen" | "mature";
 export type PhantomPlaySubmissionStatus = "draft" | "submitted" | "changes_requested" | "approved" | "rejected" | "disabled";
+export type PhantomPlayEngineProfile = {
+  tier: string;
+  minVersion: string;
+};
 
 export type PhantomPlayGame = {
   id: string;
@@ -31,9 +35,16 @@ export type PhantomPlayGame = {
   controls: string;
   progressSupport: boolean;
   scoreSupport: boolean;
+  engine?: PhantomPlayEngineProfile;
 };
 
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
+export const PHANTOMPLAY_ENGINE = {
+  version: "2.0-large-map",
+  saveStateBytes: 262_144,
+  largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
+  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
+} as const;
 const artUrl = (file: string) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
 const TAK_AVATAR = artUrl("tak-avatar.webp");
 const GAME_ART_BY_SLUG: Record<string, string> = {
@@ -162,13 +173,14 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/neon-drift.html?v=1.2.1",
+    launchUrl: "/app/games/neon-drift.html?v=1.2.2",
     thumbnail: GAME_ART_BY_SLUG["neon-drift"],
     featured: true,
-    version: "1.2.1",
+    version: "1.2.2",
     controls: "WASD/arrow keys to fly. Auto-fire is always on. Touch and drag on mobile.",
     progressSupport: true,
     scoreSupport: true,
+    engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
   },
   {
     id: "signal-match",
@@ -555,6 +567,22 @@ function todaySeconds(profile: PlayerProfile) {
   return profile.sessions.filter((item) => item.startedAt.startsWith(day)).reduce((sum, item) => sum + item.seconds, 0);
 }
 
+function safePlayState(value: unknown): PlaySession["state"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const state: PlaySession["state"] = {};
+  const entries = Object.entries(value as Record<string, unknown>).slice(0, 200);
+  for (const [key, raw] of entries) {
+    const cleanKey = clean(key, 80);
+    if (!cleanKey) continue;
+    state[cleanKey] = typeof raw === "string" ? clean(raw, 4000) : typeof raw === "number" || typeof raw === "boolean" || raw === null ? raw : null;
+    while (Buffer.byteLength(JSON.stringify(state), "utf8") > PHANTOMPLAY_ENGINE.saveStateBytes) {
+      delete state[cleanKey];
+      return state;
+    }
+  }
+  return state;
+}
+
 export async function getPhantomPlaySnapshot(session: AccessSession, options: { tenantId?: unknown; entitled?: boolean; dailyMinuteLimit?: number; canSubmitGames?: boolean } = {}) {
   const tenantId = tenantIdFor(session, options.tenantId);
   const actorId = actorIdFor(session);
@@ -579,6 +607,7 @@ export async function getPhantomPlaySnapshot(session: AccessSession, options: { 
     favorites: profile.favorites,
     history: historySummary(profile),
     preferences: profile.preferences,
+    engine: PHANTOMPLAY_ENGINE,
     rooms: roomsForSnapshot(store, tenantId, actorId, session),
     submissions: store.submissions.filter((item) => item.developerId === actorId || session.canManageAccess).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     developerSpotlight: catalog.find((game) => game.featured)?.developer || "Tak",
@@ -637,7 +666,7 @@ export async function updatePhantomPlaySession(session: AccessSession, playId: s
   if (input.score !== undefined) play.score = Math.max(play.score ?? 0, Math.floor(clamp(input.score, 0, 1_000_000_000)));
   if (input.progress !== undefined) play.progress = Math.floor(clamp(input.progress, 0, 100));
   if (input.state && typeof input.state === "object" && !Array.isArray(input.state)) {
-    play.state = Object.fromEntries(Object.entries(input.state as Record<string, unknown>).slice(0, 30).map(([key, value]) => [clean(key, 50), typeof value === "string" ? clean(value, 300) : typeof value === "number" || typeof value === "boolean" || value === null ? value : null]));
+    play.state = safePlayState(input.state);
   }
   if (input.ended === true) play.endedAt = now();
   play.updatedAt = now();

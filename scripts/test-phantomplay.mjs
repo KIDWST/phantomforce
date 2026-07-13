@@ -44,6 +44,13 @@ assert.match(module, /Request changes/u, "Admin moderation controls must exist."
 assert.match(module, /data-pp-favorite/u, "Favorites must be interactive.");
 assert.match(module, /data-pp-player-pause/u, "The player must expose pause and resume controls.");
 assert.match(module, /data-pp-player-restart/u, "The player must expose a restart control.");
+assert.match(module, /data-pp-player-close/u, "The player must expose close controls.");
+assert.match(module, /postToGame\("exit"/u, "Closing the player must notify the game before teardown.");
+assert.match(module, /document\.exitFullscreen/u, "Closing the player must escape fullscreen mode.");
+assert.match(module, /PHANTOMPLAY_ENGINE/u, "The player must publish an engine capability profile.");
+assert.match(module, /saveStateBytes:\s*262144/u, "The engine must support larger save-state payloads for bigger games.");
+assert.match(module, /largeMap:\s*\{/u, "The engine must advertise large-map support.");
+assert.match(module, /engine:\s*engineFor/u, "Game settings must include engine capabilities.");
 assert.match(module, /frame\.focus/u, "The active game frame must receive keyboard focus.");
 for (const slug of gameSlugs) {
   assert.match(module, new RegExp(`id:\\s*"${slug}"`, "u"), `${slug} must be registered in the frontend built-in catalog.`);
@@ -53,6 +60,7 @@ assert.match(css, /@media\s*\(max-width:\s*767px\)/u, "Phone-specific responsive
 assert.match(css, /\.pp-dev-list/u, "Developer directory cards must be styled.");
 assert.match(css, /\.pp-dev-profile/u, "Developer profile views must be styled.");
 assert.match(css, /\.pp-dev-notes/u, "Developer notes must be styled.");
+assert.match(css, /\.pp-player-exit/u, "The player needs a stage-level exit control over the game iframe.");
 assert.match(css, /workspace-page:has\(\.pp-player\)[^{]*\.workspace-page-body\{[^}]*transform:none!important/u, "The game player must escape the animated page containing block.");
 assert.match(staticServer, /urlPath\.startsWith\("\/api\/phantomplay"\)/u, "The live admin server must proxy PhantomPlay API routes.");
 
@@ -66,6 +74,7 @@ for (const game of games) {
   assert.doesNotMatch(game, /https?:\/\//u, "Built-in games must not call external services.");
   assert.doesNotMatch(game, /font-size:clamp\([^;]*vw/u, "Game type must not scale directly with viewport width.");
   assert.match(game, /event\.data\.type==='pause'/u, "Every built-in game must respond to host pause controls.");
+  assert.match(game, /event\.data\.type==='exit'/u, "Every built-in game must respond to host exit controls.");
   assert.match(game, /event\.data\.type==='restart'/u, "Every built-in game must respond to host restart controls.");
   const inlineScript = game.match(/<script>([\s\S]*?)<\/script>/u)?.[1] || "";
   assert.doesNotThrow(() => new Function(inlineScript), "Every built-in game script must parse.");
@@ -75,7 +84,10 @@ for (const game of games) {
 
 assert.match(games[0], /\.start\[hidden\][^{]*\{display:none\}/u, "Neon Drift's start overlay must actually leave the play field.");
 assert.match(neonDrift, /invuln/u, "Neon Drift must give the ship a short grace window after damage.");
-assert.match(neonDrift, /maxSpeed=\.00105/u, "Neon Drift ship speed must stay tuned for arcade responsiveness.");
+assert.match(neonDrift, /maxSpeed=\.0018/u, "Neon Drift ship speed must stay tuned for fast arcade responsiveness.");
+assert.match(neonDrift, /accel=\.0000084\*W/u, "Neon Drift needs punchier acceleration.");
+assert.match(neonDrift, /Math\.max\(130,390-wave\*18\)/u, "Neon Drift waves should spawn quickly enough to stay exciting.");
+assert.match(neonDrift, /t\*\.000055/u, "Neon Drift background motion should feel fast enough.");
 assert.match(neonDrift, /e\.y>1\.12\)\{e\.dead=true\}/u, "Escaped enemies should leave the field without damaging the player.");
 assert.doesNotMatch(neonDrift, /e\.y>1\.08\)\{e\.dead=true;damage\(\)\}/u, "Escaped enemies must not cause invisible hull damage.");
 assert.doesNotMatch(games[2], /function size\(\)\{[^}]*reset\(\)/u, "Focus Stack must not erase a run when the mobile viewport resizes.");

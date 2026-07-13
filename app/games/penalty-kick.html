@@ -34,7 +34,7 @@
     lanes.forEach((button,i)=>button.onclick=()=>chooseLane(i));document.querySelector('[data-shoot]').onclick=shoot;document.querySelector('[data-pause]').onclick=()=>setPaused(true);startEl.querySelector('button').onclick=start;pauseEl.querySelector('button').onclick=()=>setPaused(false);
     addEventListener('keydown',e=>{if(e.key==='ArrowLeft'){e.preventDefault();chooseLane(selected-1)}if(e.key==='ArrowRight'){e.preventDefault();chooseLane(selected+1)}if(e.key===' '||e.key==='Enter'){e.preventDefault();if(started)shoot();else start()}if(e.key==='p'||e.key==='P')setPaused(!paused)});
     document.addEventListener('visibilitychange',()=>{if(document.hidden)setPaused(true)});
-    addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='restart')start()});
+    addEventListener('message',event=>{if(event.data?.source!=='phantomplay-host')return;if(event.data.type==='pause')setPaused(true);if(event.data.type==='resume')setPaused(false);if(event.data.type==='exit')setPaused(true);if(event.data.type==='restart')start()});
     render();host('ready');
   </script>
 </body>
