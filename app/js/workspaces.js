@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260713-002";
+} from "./store.js?v=phantom-live-20260713-003";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260713-002";
+} from "./orgs.js?v=phantom-live-20260713-003";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -22,6 +22,7 @@ const kv = (k, v) => `<div class="kv"><span>${esc(k)}</span><b>${v}</b></div>`;
 const empty = (msg) => `<div class="ws-empty">${esc(msg)}</div>`;
 const wsTag = (id) => (isAdmin() && currentWs() === "phantomforce") ? `<span class="ws-tag">${esc(wsName(id))}</span>` : "";
 const memoryUi = { query: "", category: "all", brainOpen: false };
+const leadsUi = { prompt: "", notice: "" };
 const workerUi = { filter: "all", notice: "", selectedId: "", tab: "overview", preview: null, view: "map" };
 // Transient pan/zoom/search state for the fullscreen Workers "web" canvas -
 // not persisted, resets whenever the user leaves and re-enters Web view.
@@ -77,12 +78,203 @@ async function copyText(el, text) {
 }
 
 /* =============================== LEADS =============================== */
+const LEAD_ARCHETYPES = [
+  {
+    match: /\b(school|schools|academy|academies|college|colleges|student|students|athletic|booster|pta)\b/i,
+    name: "School programs",
+    company: "Local schools and booster clubs",
+    source: "Phantom prospect prompt",
+    value: 1250,
+    next: "Research athletic directors, activities leads, and booster contacts; draft a season/event media offer.",
+    notes: "Best angle: event coverage, sponsor assets, team media days, parent-friendly photo/video packages.",
+    tags: ["schools", "seasonal", "community"],
+    fit: 84,
+    qualification: ["Current event or season coming up", "Decision maker listed publicly", "Budget from booster/PTA/sponsor lane"],
+    outreach: "Quick opener: noticed your upcoming season/events and can help turn them into sponsor-ready media plus parent-facing content.",
+  },
+  {
+    match: /\b(gym|gyms|fitness|trainer|trainers|training|martial|boxing|sports performance|coach|coaches)\b/i,
+    name: "Gym owners",
+    company: "Independent gyms and training studios",
+    source: "Phantom prospect prompt",
+    value: 950,
+    next: "Find owner/head coach, check current content cadence, and draft a membership-growth content offer.",
+    notes: "Best angle: transformation stories, class reels, lead capture, review push, and local SEO proof.",
+    tags: ["fitness", "local", "content"],
+    fit: 88,
+    qualification: ["Owner-visible contact path", "Recent classes/events posted", "Needs member acquisition or retention"],
+    outreach: "Quick opener: I can turn your classes/results into a weekly content and lead-follow-up engine without adding work to your staff.",
+  },
+  {
+    match: /\b(creator|creators|influencer|influencers|podcast|streamer|youtube|tiktok|instagram|content creator)\b/i,
+    name: "Creators",
+    company: "Local creators and coaches",
+    source: "Phantom prospect prompt",
+    value: 750,
+    next: "Identify creators with inconsistent packaging; draft a media-kit, clip, and sponsor-ready workflow.",
+    notes: "Best angle: polish their offer, repurpose clips, organize their content hub, and make brand outreach easier.",
+    tags: ["creator", "media", "sponsor"],
+    fit: 79,
+    qualification: ["Active public profile", "Clear niche", "Needs packaging, clips, or sponsor assets"],
+    outreach: "Quick opener: your content has the raw material; I can package it into clips, sponsor assets, and a cleaner offer path.",
+  },
+  {
+    match: /\b(service|services|plumber|plumbing|hvac|roof|roofing|landscap|electric|contractor|cleaning|home service|repair)\b/i,
+    name: "Service companies",
+    company: "Home and local service companies",
+    source: "Phantom prospect prompt",
+    value: 1500,
+    next: "Find businesses with weak websites or slow follow-up; draft a lead-capture and missed-call recovery offer.",
+    notes: "Best angle: more booked jobs, stronger reviews, faster quote follow-up, and a simple service landing page.",
+    tags: ["services", "lead capture", "reviews"],
+    fit: 91,
+    qualification: ["Website/contact form friction", "Review gaps or stale content", "High-value jobs with quote workflow"],
+    outreach: "Quick opener: I help service businesses stop losing quote requests by tightening the website, follow-up, and review loop.",
+  },
+  {
+    match: /\b(warm|referral|referred|past client|old client|previous client|follow.?up|followups|follow ups)\b/i,
+    name: "Warm prospects",
+    company: "Referral and warm-contact list",
+    source: "Phantom prospect prompt",
+    value: 1200,
+    next: "Gather names from referrals, past conversations, and warm DMs; draft low-pressure reactivation messages.",
+    notes: "Best angle: do not cold pitch. Re-open the relationship with proof, a specific helpful idea, and a simple next step.",
+    tags: ["warm", "referral", "follow-up"],
+    fit: 94,
+    qualification: ["Prior relationship exists", "Recent business trigger", "Permission-safe contact path"],
+    outreach: "Quick opener: thought of your business because I found a quick way to tighten your follow-up/content flow. Want me to send the idea?",
+  },
+  {
+    match: /\b(restaurant|restaurants|bar|bars|cafe|coffee|food|venue|salon|spa|retail|store|boutique)\b/i,
+    name: "Local storefronts",
+    company: "Restaurants, venues, and retail operators",
+    source: "Phantom prospect prompt",
+    value: 1050,
+    next: "Find owners with event/menu/service changes; draft a local promo and content refresh offer.",
+    notes: "Best angle: foot traffic, offers, seasonal promos, short-form video, and review recovery.",
+    tags: ["storefront", "promo", "local"],
+    fit: 82,
+    qualification: ["Public offer/menu/event activity", "Needs fresh content", "Clear booking or visit CTA"],
+    outreach: "Quick opener: I can turn your current specials/events into a cleaner local campaign and follow-up path.",
+  },
+];
+
+const LEAD_STOPWORDS = new Set(["find", "add", "want", "need", "looking", "for", "prospects", "clients", "client", "leads", "lead", "businesses", "business"]);
+
+function normalizeLeadKey(text) {
+  return String(text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+function leadWorkspaceId() {
+  return currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+}
+
+function splitLeadPrompt(prompt) {
+  return String(prompt || "")
+    .replace(/[.;]/g, ",")
+    .split(/,|\band\b|\bor\b|\+|&/i)
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function templateFromSegment(segment) {
+  const found = LEAD_ARCHETYPES.find((item) => item.match.test(segment));
+  if (found) return found;
+  const words = normalizeLeadKey(segment).split(/\s+/).filter((w) => w && !LEAD_STOPWORDS.has(w));
+  const label = title(words.join(" ") || segment || "Custom prospects");
+  return {
+    name: label,
+    company: `${label} prospects`,
+    source: "Phantom prospect prompt",
+    value: 850,
+    next: `Research real ${label.toLowerCase()} targets, confirm fit, and draft a direct outreach angle.`,
+    notes: "Custom lane from your prompt. Phantom created the CRM card and next steps; add real names or connect discovery to enrich it.",
+    tags: ["custom", "needs-enrichment"],
+    fit: 72,
+    qualification: ["Real business/contact confirmed", "Clear problem PhantomForce can solve", "Approval-safe outreach path"],
+    outreach: `Quick opener: I found a practical way PhantomForce could help ${label.toLowerCase()} save time or win more work.`,
+  };
+}
+
+function leadDraftText(lead) {
+  if (!lead) return "No lead selected.";
+  return [
+    `Prospect: ${lead.company}`,
+    `Angle: ${lead.notes || lead.next}`,
+    `Next: ${lead.next}`,
+    lead.outreach ? `Draft opener: ${lead.outreach}` : "",
+    "Nothing sends until you approve it.",
+  ].filter(Boolean).join("\n");
+}
+
+function createProspectsFromPrompt(prompt) {
+  const ws = leadWorkspaceId();
+  const segments = splitLeadPrompt(prompt);
+  const templates = [];
+  segments.forEach((segment) => {
+    const template = templateFromSegment(segment);
+    const key = normalizeLeadKey(template.company || template.name);
+    if (!templates.some((item) => normalizeLeadKey(item.company || item.name) === key)) templates.push(template);
+  });
+  if (!templates.length) return { created: [], skipped: 0 };
+  const existing = new Set(store.state.leads.map((lead) => normalizeLeadKey(`${lead.ws}:${lead.company || lead.name}`)));
+  const created = [];
+  let skipped = 0;
+  templates.slice(0, 12).forEach((template, index) => {
+    const key = normalizeLeadKey(`${ws}:${template.company || template.name}`);
+    if (existing.has(key)) {
+      skipped += 1;
+      return;
+    }
+    const lead = {
+      id: uid("lead"),
+      ws,
+      name: template.name,
+      company: template.company,
+      source: template.source,
+      status: "new",
+      value: template.value,
+      next: template.next,
+      due: new Date(Date.now() + (index + 1) * 86400000).toISOString(),
+      owner: "Lead Hunter",
+      notes: template.notes,
+      proposalId: null,
+      tags: template.tags || [],
+      fitScore: template.fit,
+      qualification: template.qualification || [],
+      outreach: template.outreach || "",
+      promptSeed: prompt,
+      requiresApproval: true,
+      enriched: false,
+    };
+    created.push(lead);
+    existing.add(key);
+  });
+  if (created.length) {
+    store.state.leads.unshift(...created);
+    pushActivity("Lead Hunter", `built ${created.length} prospect card${created.length === 1 ? "" : "s"} from the Clients prompt. Outreach is draft-only until approved.`, ws);
+  }
+  return { created, skipped };
+}
+
 function renderLeads(el, rerender) {
   const leads = visible(store.state.leads);
   const lanes = [
     ["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["won", "Won"], ["lost", "Lost"],
   ];
   el.innerHTML = `
+    <section class="lead-intel">
+      <div>
+        <p>Client intelligence</p>
+        <h3>Build the client base.</h3>
+        <span>Tell Phantom who to find. It creates prospect cards, qualification steps, and approval-safe outreach angles.</span>
+      </div>
+      <form class="lead-intel-form" data-lead-form>
+        <input data-lead-prompt value="${esc(leadsUi.prompt)}" placeholder="schools, gyms, creators, service companies, warm prospects..." />
+        <button class="btn btn-primary" type="submit">Run</button>
+      </form>
+    </section>
+    ${leadsUi.notice ? `<div class="lead-intel-result">${esc(leadsUi.notice)}</div>` : ""}
     <div class="ws-toolbar">
       <p class="ws-note">Every lead moves draft → approval → send-ready. Nothing goes out without you.</p>
       <button class="btn btn-primary" data-act="add">+ Capture lead</button>
@@ -97,9 +289,12 @@ function renderLeads(el, rerender) {
               ${wsTag(l.ws)}
               <h4>${esc(l.name)}</h4>
               <p class="record-sub">${esc(l.company)} · ${esc(l.source)} · ${fmtMoney(l.value)}</p>
+              ${(l.fitScore || (l.tags && l.tags.length)) ? `<div class="lead-meta">${l.fitScore ? `<span>Fit ${esc(l.fitScore)}%</span>` : ""}${(l.tags || []).slice(0, 3).map((tag) => `<span>${esc(tag)}</span>`).join("")}</div>` : ""}
               <p class="record-next">▸ ${esc(l.next)}${["new", "follow-up"].includes(l.status) ? ` <i>(${daysUntil(l.due) <= 0 ? "due today" : "in " + daysUntil(l.due) + "d"})</i>` : ""}</p>
               <p class="record-notes">${esc(l.notes)}</p>
+              ${(l.qualification && l.qualification.length) ? `<ul class="lead-checks">${l.qualification.slice(0, 3).map((item) => `<li>${esc(item)}</li>`).join("")}</ul>` : ""}
               <div class="record-actions">
+                ${l.outreach ? `<button class="btn" data-act="copy-outreach" data-id="${l.id}">Copy outreach angle</button>` : ""}
                 ${l.status === "new" ? `<button class="btn" data-act="advance" data-id="${l.id}">Start follow-up</button>` : ""}
                 ${["new", "follow-up"].includes(l.status) ? `<button class="btn" data-act="propose" data-id="${l.id}">Convert to proposal</button>` : ""}
                 ${l.status === "proposal" ? `<button class="btn btn-good" data-act="won" data-id="${l.id}">Mark won</button><button class="btn btn-quiet" data-act="lost" data-id="${l.id}">Mark lost</button>` : ""}
@@ -111,6 +306,26 @@ function renderLeads(el, rerender) {
       }).join("")}
     </div>`;
   const find = (id) => store.state.leads.find((l) => l.id === id);
+  const form = el.querySelector("[data-lead-form]");
+  if (form) {
+    form.addEventListener("submit", (event) => {
+      event.preventDefault();
+      const input = form.querySelector("[data-lead-prompt]");
+      const prompt = input?.value?.trim() || "";
+      leadsUi.prompt = prompt;
+      if (!prompt) {
+        leadsUi.notice = "Tell Phantom who to target first: schools, gyms, creators, service companies, warm prospects, or any niche.";
+        rerender();
+        return;
+      }
+      const { created, skipped } = createProspectsFromPrompt(prompt);
+      leadsUi.notice = created.length
+        ? `Created ${created.length} prospect card${created.length === 1 ? "" : "s"} from your prompt${skipped ? ` and skipped ${skipped} duplicate${skipped === 1 ? "" : "s"}` : ""}. Outreach is draft-only until approved.`
+        : `No new cards created${skipped ? ` — ${skipped} matching prospect lane${skipped === 1 ? " already exists" : "s already exist"}` : ""}.`;
+      store.save();
+      rerender();
+    });
+  }
   bindActions(el, {
     add: () => {
       const name = prompt("Lead name (person or business):");
@@ -125,6 +340,7 @@ function renderLeads(el, rerender) {
       if (l) pushActivity("Lead Hunter", `removed lead: ${l.name}.`, l.ws);
       store.save(); rerender();
     },
+    "copy-outreach": (id, btn) => copyText(btn, leadDraftText(find(id))),
     advance: (id) => { const l = find(id); l.status = "follow-up"; store.save(); rerender(); },
     propose: (id) => {
       const l = find(id);
@@ -1035,7 +1251,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260713-002")
+      import("./brain.js?v=phantom-live-20260713-003")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });

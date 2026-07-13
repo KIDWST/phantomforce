@@ -2,13 +2,13 @@
 
 import {
   store, uid, visible, currentWs, wsName, pushActivity, ago,
-} from "./store.js?v=phantom-live-20260713-002";
+} from "./store.js?v=phantom-live-20260713-003";
 import {
   esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
-} from "./workspaces.js?v=phantom-live-20260713-002";
+} from "./workspaces.js?v=phantom-live-20260713-003";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun,
-} from "./orgs.js?v=phantom-live-20260713-002";
+} from "./orgs.js?v=phantom-live-20260713-003";
 
 const siteUi = { activeSiteId: null, device: "desktop", selectedSection: -1 };
 
