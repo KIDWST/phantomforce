@@ -73,6 +73,17 @@ const MAX_CONTEXT_CHARS = 5000;
 const MAX_MESSAGE_CHARS = 1600;
 const MAX_RESPONSE_CHARS = 5000;
 
+export type LocalOllamaModelInfo = {
+  name: string;
+  model: string;
+  display_name: string;
+  modified_at: string | null;
+  size: number | null;
+  family: string | null;
+  parameter_size: string | null;
+  quantization_level: string | null;
+};
+
 function normalizeBaseUrl(value: string | undefined) {
   return (value?.trim() || DEFAULT_OLLAMA_BASE_URL).replace(/\/+$/, "");
 }
@@ -181,7 +192,7 @@ function extractUsage(json: unknown): LocalOllamaChatResult["usage"] {
   };
 }
 
-async function listInstalledOllamaModels(baseUrl: string, fetchImpl: LocalOllamaFetch) {
+async function fetchInstalledOllamaModels(baseUrl: string, fetchImpl: LocalOllamaFetch) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), DEFAULT_OLLAMA_PROBE_TIMEOUT_MS);
   try {
@@ -198,20 +209,113 @@ async function listInstalledOllamaModels(baseUrl: string, fetchImpl: LocalOllama
     const models = (json as { models?: unknown }).models;
     if (!Array.isArray(models)) return null;
 
-    return new Set(
-      models.flatMap((model) => {
+    return models.flatMap((model): LocalOllamaModelInfo[] => {
         if (!model || typeof model !== "object") return [];
-        const record = model as { name?: unknown; model?: unknown };
+        const record = model as {
+          name?: unknown;
+          model?: unknown;
+          modified_at?: unknown;
+          size?: unknown;
+          details?: unknown;
+        };
         const name = typeof record.name === "string" ? record.name : "";
         const modelId = typeof record.model === "string" ? record.model : "";
-        return [name, modelId].filter(Boolean);
-      }),
-    );
+        const id = modelId || name;
+        if (!id) return [];
+        const details = record.details && typeof record.details === "object"
+          ? record.details as Record<string, unknown>
+          : {};
+        return [{
+          name: name || id,
+          model: id,
+          display_name: id.replace(/:latest$/, ""),
+          modified_at: typeof record.modified_at === "string" ? record.modified_at : null,
+          size: typeof record.size === "number" && Number.isFinite(record.size) ? record.size : null,
+          family: typeof details.family === "string" ? details.family : null,
+          parameter_size: typeof details.parameter_size === "string" ? details.parameter_size : null,
+          quantization_level: typeof details.quantization_level === "string" ? details.quantization_level : null,
+        }];
+      });
   } catch {
     return null;
   } finally {
     clearTimeout(timer);
   }
+}
+
+function hasExplicitLocalModel(env: NodeJS.ProcessEnv | Record<string, string | undefined>) {
+  return Boolean(
+    env.PHANTOM_LOCAL_GLM_MODEL?.trim() ||
+    env.PHANTOM_OLLAMA_MODEL?.trim() ||
+    env.OLLAMA_MODEL?.trim(),
+  );
+}
+
+async function listInstalledOllamaModels(baseUrl: string, fetchImpl: LocalOllamaFetch) {
+  const models = await fetchInstalledOllamaModels(baseUrl, fetchImpl);
+  if (!models) return null;
+  return new Set(models.flatMap((model) => [model.name, model.model, model.display_name].filter(Boolean)));
+}
+
+export async function getLocalOllamaStatus(
+  options: {
+    env?: NodeJS.ProcessEnv | Record<string, string | undefined>;
+    fetchImpl?: LocalOllamaFetch;
+  } = {},
+) {
+  const env = options.env ?? process.env;
+  const baseUrl = normalizeBaseUrl(env.OLLAMA_BASE_URL);
+  const selectedModel = hasExplicitLocalModel(env) ? resolveLocalModel(env) : "local-auto";
+  const fallbackModel = selectedModel === "local-auto" ? null : resolveFallbackModel(env, selectedModel);
+  const fetchImpl = options.fetchImpl ?? (globalThis.fetch as unknown as LocalOllamaFetch | undefined);
+  const localOnly = isLocalOllamaBaseUrl(baseUrl);
+
+  if (!localOnly && env.PHANTOM_ALLOW_REMOTE_OLLAMA !== "true") {
+    return {
+      ok: true,
+      provider_id: "local_ollama" as const,
+      base_url: baseUrl,
+      reachable: false,
+      local_only: false,
+      blocked: true,
+      error: "OLLAMA_BASE_URL must be localhost unless PHANTOM_ALLOW_REMOTE_OLLAMA=true.",
+      selected_model: selectedModel,
+      fallback_model: fallbackModel,
+      model_count: 0,
+      installed_models: [] as LocalOllamaModelInfo[],
+    };
+  }
+
+  if (!fetchImpl) {
+    return {
+      ok: true,
+      provider_id: "local_ollama" as const,
+      base_url: baseUrl,
+      reachable: false,
+      local_only: localOnly,
+      blocked: false,
+      error: "No server fetch implementation is available.",
+      selected_model: selectedModel,
+      fallback_model: fallbackModel,
+      model_count: 0,
+      installed_models: [] as LocalOllamaModelInfo[],
+    };
+  }
+
+  const installedModels = await fetchInstalledOllamaModels(baseUrl, fetchImpl);
+  return {
+    ok: true,
+    provider_id: "local_ollama" as const,
+    base_url: baseUrl,
+    reachable: Array.isArray(installedModels),
+    local_only: localOnly,
+    blocked: false,
+    error: Array.isArray(installedModels) ? null : "Ollama is not reachable on this machine.",
+    selected_model: selectedModel,
+    fallback_model: fallbackModel,
+    model_count: installedModels?.length ?? 0,
+    installed_models: installedModels ?? [],
+  };
 }
 
 export async function callLocalOllamaChat(
@@ -268,7 +372,11 @@ export async function callLocalOllamaChat(
 
   const installedModels = await listInstalledOllamaModels(baseUrl, fetchImpl);
   if (installedModels && !installedModels.has(requestedModelId)) {
-    if (fallbackModelId && installedModels.has(fallbackModelId)) {
+    const autoPickAllowed = !hasExplicitLocalModel(env) || requestedModelId === "local-auto";
+    if (autoPickAllowed && installedModels.size) {
+      modelId = Array.from(installedModels)[0];
+      fallbackUsed = modelId !== requestedModelId;
+    } else if (fallbackModelId && installedModels.has(fallbackModelId)) {
       modelId = fallbackModelId;
       fallbackUsed = true;
     } else {

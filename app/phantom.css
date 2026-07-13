@@ -852,6 +852,85 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .ws-empty { padding: 34px 20px; text-align: center; color: var(--dim); border: 1px dashed var(--line); border-radius: 16px; font-size: 13.5px; }
 .hint-inline { font-size: 11.5px; color: var(--dim); align-self: center; }
 
+.lead-intel {
+  display: grid;
+  grid-template-columns: minmax(230px, 0.8fr) minmax(320px, 1.6fr);
+  align-items: center;
+  gap: 18px;
+  margin-bottom: 18px;
+  padding: 18px;
+  border: 1px solid rgba(65, 255, 161, 0.25);
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 75% 50%, rgba(65, 255, 161, 0.14), transparent 42%),
+    linear-gradient(135deg, rgba(18, 116, 77, 0.28), rgba(2, 10, 9, 0.72));
+  box-shadow: var(--edge-hi);
+}
+.lead-intel p {
+  margin: 0 0 5px;
+  font: 800 10px "DM Mono", monospace;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--neon);
+}
+.lead-intel h3 { margin: 0 0 4px; font-size: clamp(20px, 2.2vw, 27px); letter-spacing: -0.02em; }
+.lead-intel span { display: block; max-width: 520px; color: var(--dim); font-size: 13px; line-height: 1.5; }
+.lead-intel-form {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid rgba(65, 255, 161, 0.22);
+  border-radius: 16px;
+  background: rgba(0, 0, 0, 0.26);
+}
+.lead-intel-form input {
+  width: 100%;
+  min-height: 48px;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: #eafff4;
+  font: 700 14px "Space Grotesk", sans-serif;
+}
+.lead-intel-form input::placeholder { color: rgba(216, 242, 229, 0.48); }
+.lead-intel-form .btn { min-width: 76px; justify-content: center; border-radius: 999px; }
+.lead-intel-result {
+  margin: -4px 0 16px;
+  padding: 10px 13px;
+  border: 1px solid rgba(65, 255, 161, 0.20);
+  border-radius: 13px;
+  background: rgba(65, 255, 161, 0.07);
+  color: #caffdf;
+  font: 700 12px/1.35 "DM Mono", monospace;
+}
+.lead-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin: 0 0 8px;
+}
+.lead-meta span {
+  padding: 3px 7px;
+  border: 1px solid rgba(65, 255, 161, 0.20);
+  border-radius: 999px;
+  background: rgba(65, 255, 161, 0.06);
+  color: #9dffc4;
+  font: 800 9px "DM Mono", monospace;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.lead-checks {
+  margin: 0 0 9px;
+  padding: 9px 10px 9px 28px;
+  border: 1px solid rgba(65, 255, 161, 0.10);
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.18);
+  color: #c7ead6;
+  font-size: 11.5px;
+  line-height: 1.45;
+}
+
 .stack { display: grid; gap: 12px; }
 .card-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 13px; }
 
@@ -2483,12 +2562,17 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 @media (max-width: 980px) {
   .deck-body { grid-template-columns: 1fr; }
   .rail { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
+  .lead-intel { grid-template-columns: 1fr; }
   .lane-row { grid-template-columns: repeat(2, minmax(0, 1fr)); overflow-x: visible; }
   .mission-map-body { grid-template-columns: 1fr; }
   .mission-map-road { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
 @media (max-width: 640px) {
   html, body { overflow-x: hidden; }
+  .lead-intel { padding: 14px; border-radius: 15px; }
+  .lead-intel-form { grid-template-columns: 1fr; }
+  .lead-intel-form input { min-height: 44px; }
+  .lead-intel-form .btn { width: 100%; min-height: 42px; }
   .lane-row {
     grid-template-columns: 1fr;
     overflow-x: visible;
@@ -2929,7 +3013,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   letter-spacing: -0.01em;
 }
 .workspace-page-body {
-  padding: clamp(14px, 1.8vw, 22px);
+  padding: clamp(10px, 1.2vw, 16px);
   overflow: visible;
 }
 .workspace-page-wide .workspace-page-body {
@@ -3862,7 +3946,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 /* Compact, denser page head just for the Media Lab workspace — same title
    size as every other workspace page (.workspace-page-head h1's shared
    default), only the padding shrinks to make room for Media Lab's own
-   Create/Media Pool/Pending/Edit tab row directly below it. */
+   Create/Pending/Edit tab row directly below it. */
 .workspace-page[data-workspace-page="media"] .workspace-page-head { padding: 8px clamp(18px, 2vw, 28px) 6px; }
 .workspace-page[data-workspace-page="media"] .workspace-page-kicker { margin-bottom: 1px; }
 .workspace-page[data-workspace-page="media"] .workspace-page-body { padding-top: 8px; }
@@ -3909,6 +3993,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-settings-gear .ic { width: 15px; height: 15px; }
 .ml-settings-gear:hover,
 .ml-settings-gear.is-active { border-color: var(--line-strong); background: rgba(65,255,161,0.08); box-shadow: 0 0 16px rgba(65,255,161,0.16); }
+.ml-asset-open {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px;
+  padding: 0 12px; border: 1px solid var(--line); border-radius: 11px;
+  background: rgba(65,255,161,0.055); color: #cfeedd; cursor: pointer;
+  font: 700 12px "Space Grotesk", sans-serif; white-space: nowrap;
+}
+.ml-asset-open .ic { width: 14px; height: 14px; color: var(--neon); }
+.ml-asset-open:hover,
+.ml-asset-open.is-active { border-color: var(--line-strong); color: var(--ink); background: rgba(65,255,161,0.1); }
 .ml-engine-mini {
   margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px;
   border: 1px solid var(--line); border-radius: 999px; background: rgba(0,0,0,0.22);
@@ -3953,6 +4046,73 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-engine-drawer-rows span { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 9px; background: rgba(0,0,0,0.22); }
 .ml-engine-drawer-rows b { color: var(--dim); font-weight: 500; }
 .ml-engine-drawer-rows i { font-style: normal; color: #d9ffe9; text-align: right; }
+.ml-asset-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 10px; }
+.ml-local-kinds { margin-bottom: 10px; }
+.ml-local-summary {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(0,0,0,0.22);
+}
+.ml-local-summary b { color: var(--neon); font-size: 12px; }
+.ml-local-summary span { color: var(--dim); font: 700 9px "DM Mono", monospace; letter-spacing: 0.07em; text-transform: uppercase; }
+.ml-local-message { color: var(--warn); }
+.ml-local-assets { display: grid; gap: 9px; }
+.ml-local-empty { padding: 18px; border: 1px dashed var(--line); border-radius: 13px; color: var(--dim); text-align: center; font-size: 12px; }
+.ml-local-asset {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  padding: 8px; border: 1px solid var(--line); border-radius: 13px;
+  background: linear-gradient(145deg, rgba(65,255,161,0.055), rgba(0,0,0,0.18));
+}
+.ml-local-thumb {
+  width: 56px; height: 56px; display: grid; place-items: center; overflow: hidden; border-radius: 11px;
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(65,255,161,0.12); color: var(--neon);
+}
+.ml-local-thumb img,
+.ml-local-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ml-local-thumb span { display: grid; place-items: center; width: 100%; height: 100%; }
+.ml-local-thumb .ic { width: 20px; height: 20px; }
+.ml-local-copy { min-width: 0; display: grid; gap: 2px; }
+.ml-local-copy b { color: var(--ink); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-local-copy span,
+.ml-local-copy i { color: var(--dim); font-size: 10.5px; line-height: 1.25; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-local-actions { display: flex; flex-direction: column; gap: 5px; }
+.ml-local-actions button,
+.ml-local-actions em {
+  min-width: 48px; min-height: 25px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 8px; background: rgba(65,255,161,0.07);
+  color: #dfffee; font: 700 10px "Space Grotesk"; font-style: normal;
+}
+.ml-local-actions button { cursor: pointer; }
+.ml-local-actions button:hover { border-color: var(--neon); background: rgba(65,255,161,0.13); }
+.ml-local-actions em { color: var(--dim); background: rgba(0,0,0,0.18); }
+/* drag & drop: local-asset cards + OS file drops */
+.ml-local-asset[draggable="true"] { cursor: grab; }
+.ml-local-asset[draggable="true"]:active { cursor: grabbing; }
+.ml-asset-dragging .ml-drawer-backdrop { pointer-events: none; }
+.ml-asset-dragging .ml-tabs { overflow: visible; }
+.ml-asset-dragging [data-ml-dropzone] { position: relative; z-index: 250; }
+[data-ml-dropzone].is-ml-droptarget {
+  position: relative;
+  box-shadow: inset 0 0 0 2px rgba(65,255,161,0.55);
+  border-radius: 10px;
+}
+[data-ml-dropzone].is-ml-droptarget::after {
+  content: attr(data-ml-dropzone-label);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 4px 10px; border-radius: 999px; border: 1px solid var(--neon);
+  background: rgba(2,22,13,0.94); color: var(--neon);
+  font: 700 10px "Space Grotesk", sans-serif; letter-spacing: 0.03em;
+  white-space: nowrap; pointer-events: none; z-index: 260;
+}
+[data-ml-dropzone].is-ml-droptarget.is-dragover {
+  box-shadow: inset 0 0 0 2px var(--neon), 0 0 18px rgba(65,255,161,0.4);
+}
+.ml-os-drop-overlay {
+  position: fixed; inset: 0; z-index: 320;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(1,12,7,0.78); border: 2px dashed rgba(65,255,161,0.8);
+  color: var(--neon); font: 800 15px "Space Grotesk", sans-serif; letter-spacing: 0.02em;
+  pointer-events: none; text-align: center; padding: 20px;
+}
 .ml-drawer-settings { display: grid; gap: 14px; }
 .ml-drawer-section {
   display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line);
@@ -5043,6 +5203,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .set-field { display: flex; flex-direction: column; gap: 6px; }
 .set-field span { font: 600 9.5px "DM Mono", monospace; letter-spacing: 0.14em; text-transform: uppercase; color: var(--dim); }
 .set-field em { font-size: 11px; color: var(--dim-2); font-style: normal; }
+.set-field textarea { min-height: 96px; resize: vertical; padding: 12px; border: 1px solid var(--line); border-radius: 12px; background: rgba(0,0,0,0.3); color: var(--ink); font: inherit; outline: none; }
+.set-field textarea:focus { border-color: var(--neon); box-shadow: 0 0 0 3px rgba(65,255,161,0.08); }
+.set-field.is-muted { opacity: .62; }
+.set-status-pill { align-self: flex-start; border: 1px solid rgba(255,209,102,.28); border-radius: 999px; padding: 8px 12px; color: var(--warn); background: rgba(255,209,102,.08); font: 700 10px "DM Mono", monospace; letter-spacing: .12em; text-transform: uppercase; }
+.set-status-pill.is-on { border-color: rgba(65,255,161,.35); color: var(--neon); background: rgba(65,255,161,.1); }
+.set-module-card { display: grid; gap: 16px; border: 1px solid rgba(65,255,161,.18); border-radius: 16px; padding: 18px; background: linear-gradient(135deg, rgba(4,28,20,.72), rgba(6,14,18,.82)); }
+.set-module-card-main { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 14px; align-items: start; }
+.set-module-card h3 { margin: 0 0 6px; }
+.set-actions-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 @media (max-width: 760px) {
   .set-settings-layout { grid-template-columns: 1fr; }
   .set-category-nav { grid-template-columns: 1fr; }
@@ -5369,6 +5538,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .developer-lane-copy { min-width: 0; display: grid; gap: 2px; }
 .developer-lane-copy b { color: var(--ink); font-size: 13px; }
 .developer-lane-copy i { color: var(--dim); font-size: 11px; font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.developer-lane-copy small { color: var(--neon); font: 500 10px "DM Mono", monospace; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .developer-lane-control label { display: grid; gap: 4px; min-width: 0; }
 .developer-lane-control label span {
   color: var(--dim); font: 700 9px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase;
@@ -7088,6 +7258,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   }
 }
 
+/* PhantomPlay runtime owns the screen while a game is open. The companion must
+   not float over, cover, or distract from the game iframe. */
+body.phantomplay-playing .buddy,
+body.phantomplay-playing .buddy-menu,
+body.phantomplay-playing .buddy-say {
+  display: none !important;
+  pointer-events: none !important;
+}
+
 @media (max-width: 390px) {
   .mobile-bottom-nav { left: 8px; right: 8px; padding: 6px 12px; }
   .mobile-bottom-item { flex-basis: 54px; min-height: 46px; font-size: 8.5px; }
@@ -7932,21 +8111,21 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 }
 .console .hero2-stage {
   position: absolute;
-  top: clamp(76px, 8cqw, 118px);
-  right: clamp(-132px, -7cqw, -42px);
-  bottom: clamp(72px, 7cqw, 110px);
-  width: clamp(640px, 70cqw, 1040px);
+  top: clamp(40px, 5cqw, 76px);
+  right: clamp(-102px, -5cqw, -22px);
+  bottom: clamp(145px, 13cqw, 188px);
+  width: clamp(580px, 58cqw, 900px);
   min-height: 0;
   height: auto;
-  align-items: center;
+  align-items: end;
   justify-items: end;
   transform: none;
   pointer-events: none;
-  opacity: 0.54;
+  opacity: 0.68;
   z-index: 1;
   mix-blend-mode: screen;
-  -webkit-mask-image: radial-gradient(circle at 58% 50%, #000 0 62%, rgba(0, 0, 0, 0.84) 74%, transparent 96%);
-  mask-image: radial-gradient(circle at 58% 50%, #000 0 62%, rgba(0, 0, 0, 0.84) 74%, transparent 96%);
+  -webkit-mask-image: linear-gradient(180deg, #000 0 78%, rgba(0, 0, 0, 0.86) 88%, transparent 100%);
+  mask-image: linear-gradient(180deg, #000 0 78%, rgba(0, 0, 0, 0.86) 88%, transparent 100%);
 }
 /* the WebGL glow layer has no .console-scoped rule of its own upstream, so
    without this it silently inherits whichever plain .phantom-webgl rule
@@ -7960,14 +8139,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   min-height: 0;
 }
 .console .phantom-mode-stage {
-  width: min(100%, 960px);
+  width: min(100%, 860px);
   height: 100%;
   aspect-ratio: auto;
   filter: saturate(1.22) contrast(1.12) drop-shadow(0 0 72px rgba(65, 255, 161, 0.42));
 }
 .console .phantom-mode-pose {
-  width: min(98%, 900px);
-  max-height: 100%;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  object-fit: contain;
   opacity: 0.96;
 }
 .console .hero2-stage .ghost-canvas {
@@ -7978,15 +8160,29 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   display: none;
 }
 
+@media (min-width: 768px) {
+  .console .hero2-stage > .phantom-mode-stage {
+    position: absolute;
+    inset: 0;
+    width: 100% !important;
+    max-width: none;
+    height: 100% !important;
+    max-height: 100%;
+    margin: 0;
+    display: grid;
+    place-items: end center;
+  }
+}
+
 @container (min-width: 900px) {
   .console .hero2-stage {
-    top: clamp(76px, 8cqw, 118px);
-    right: clamp(-132px, -7cqw, -42px);
-    bottom: clamp(72px, 7cqw, 110px);
-    width: clamp(640px, 70cqw, 1040px);
+    top: clamp(40px, 5cqw, 76px);
+    right: clamp(-102px, -5cqw, -22px);
+    bottom: clamp(145px, 13cqw, 188px);
+    width: clamp(580px, 58cqw, 900px);
     min-height: 0;
     transform: none;
-    opacity: 0.54;
+    opacity: 0.68;
   }
 }
 
@@ -7995,26 +8191,30 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     width: 100%;
   }
   .console .hero2-stage {
-    top: clamp(58px, 7cqw, 90px);
-    right: clamp(-58px, -5cqw, -18px);
-    bottom: clamp(82px, 8cqw, 118px);
-    width: clamp(520px, 68cqw, 760px);
+    top: clamp(42px, 6cqw, 78px);
+    right: clamp(-42px, -4cqw, -10px);
+    bottom: clamp(142px, 13cqw, 168px);
+    width: clamp(440px, 56cqw, 660px);
     min-height: 0;
     height: auto !important;
+    align-items: end;
     justify-items: end;
     transform: none;
-    opacity: 0.42;
-    -webkit-mask-image: radial-gradient(circle at 68% 56%, #000 0 52%, rgba(0, 0, 0, 0.82) 68%, transparent 93%);
-    mask-image: radial-gradient(circle at 68% 56%, #000 0 52%, rgba(0, 0, 0, 0.82) 68%, transparent 93%);
+    opacity: 0.58;
+    -webkit-mask-image: linear-gradient(180deg, #000 0 76%, rgba(0, 0, 0, 0.84) 88%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0 76%, rgba(0, 0, 0, 0.84) 88%, transparent 100%);
   }
   .console .phantom-mode-stage {
-    width: min(100%, 720px) !important;
+    width: min(100%, 640px) !important;
     max-width: none;
     height: 100%;
   }
   .console .phantom-mode-pose {
-    width: min(94%, 680px) !important;
-    max-height: 100% !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: contain;
     opacity: 0.88;
   }
   .console .hero2-stage .ghost-canvas {
@@ -8077,17 +8277,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     padding-right: min(36%, 270px);
   }
   .console .hero2-stage {
-    top: clamp(142px, 18cqw, 190px);
-    right: clamp(-72px, -8cqw, -42px);
-    bottom: clamp(76px, 9cqw, 106px);
-    width: clamp(430px, 62cqw, 560px);
+    top: clamp(98px, 14cqw, 146px);
+    right: clamp(-48px, -6cqw, -24px);
+    bottom: clamp(148px, 15cqw, 178px);
+    width: clamp(380px, 54cqw, 500px);
     height: auto !important;
     min-height: 0 !important;
-    opacity: 0.4;
+    opacity: 0.58;
     z-index: 1;
     justify-items: end;
-    -webkit-mask-image: radial-gradient(circle at 70% 55%, #000 0 52%, rgba(0, 0, 0, 0.78) 68%, transparent 94%);
-    mask-image: radial-gradient(circle at 70% 55%, #000 0 52%, rgba(0, 0, 0, 0.78) 68%, transparent 94%);
+    -webkit-mask-image: linear-gradient(180deg, #000 0 76%, rgba(0, 0, 0, 0.84) 88%, transparent 100%);
+    mask-image: linear-gradient(180deg, #000 0 76%, rgba(0, 0, 0, 0.84) 88%, transparent 100%);
   }
   .console .phantom-mode-stage {
     width: min(100%, 560px) !important;
@@ -8096,8 +8296,11 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     transform: none;
   }
   .console .phantom-mode-pose {
-    width: min(94%, 520px) !important;
-    max-height: 100% !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: contain;
     opacity: 0.86;
   }
   .console .hero2-stage .ghost-canvas {
@@ -8109,6 +8312,41 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
     left: auto;
     transform: scale(1.04);
     opacity: 0.14;
+  }
+}
+
+/* Keep the desktop/tablet dashboard Phantom staged above the command bar
+   instead of sinking behind the composer as the viewport or zoom level changes. */
+@media (min-width: 768px) {
+  .phantom .console .hero2-stage {
+    display: grid !important;
+    align-items: end !important;
+    justify-items: center !important;
+    overflow: hidden !important;
+  }
+
+  .phantom .console .hero2-stage > .phantom-mode-stage {
+    position: absolute !important;
+    inset: 0 !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    margin: 0 !important;
+    display: grid !important;
+    place-items: end center !important;
+    aspect-ratio: auto !important;
+    transform: none !important;
+  }
+
+  .phantom .console .hero2-stage > .phantom-mode-stage > .phantom-mode-pose {
+    display: block !important;
+    width: 100% !important;
+    max-width: none !important;
+    height: 100% !important;
+    max-height: none !important;
+    object-fit: contain !important;
+    object-position: center bottom !important;
   }
 }
 
@@ -8483,6 +8721,17 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ap-job-id i { font-style: normal; font-size: 10.5px; color: var(--dim); }
 .ap-run-now { flex: 0 0 auto; padding: 5px 10px; font-size: 11px; }
 .ap-job-desc { margin: 0; font-size: 11.5px; color: var(--dim); line-height: 1.5; }
+.ap-job-benefit { margin: -2px 0 0; font-size: 11.5px; color: #caffe1; line-height: 1.45; }
+.ap-job-meta { display: flex; gap: 5px; flex-wrap: wrap; }
+.ap-job-meta span {
+  padding: 3px 7px; border-radius: 999px; background: rgba(65, 255, 161, 0.07);
+  color: #a6ffd0; font: 700 9px "DM Mono", monospace; letter-spacing: 0.06em; text-transform: uppercase;
+}
+.ap-job-setup { display: flex; gap: 5px; flex-wrap: wrap; }
+.ap-job-setup i {
+  font-style: normal; padding: 3px 7px; border: 1px solid rgba(255, 209, 102, 0.18); border-radius: 999px;
+  color: #ffe3ab; background: rgba(255, 209, 102, 0.06); font-size: 10px;
+}
 .ap-job-foot { display: flex; flex-direction: column; gap: 2px; padding-top: 7px; border-top: 1px solid var(--line); }
 .ap-job-status { align-self: flex-start; font: 700 9px "DM Mono", monospace; letter-spacing: 0.08em; text-transform: uppercase; padding: 2px 7px; border-radius: 999px; background: rgba(0,0,0,0.24); }
 .ap-job-status.ap-tone-on { color: #baffd9; }
@@ -10903,14 +11152,16 @@ body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy-canvas {
   color: var(--dim);
 }
 
-.media-suite-tabs {
+.media-suite-tabs,
+.media-suite-link {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: flex-end;
 }
 
-.media-suite-tabs button {
+.media-suite-tabs button,
+.media-suite-link {
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -10923,9 +11174,11 @@ body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy-canvas {
   cursor: pointer;
   font-weight: 800;
   transition: .18s ease;
+  text-decoration: none;
 }
 
-.media-suite-tabs button.is-active {
+.media-suite-tabs button.is-active,
+.media-suite-link:hover {
   border-color: color-mix(in srgb, var(--neon) 70%, transparent);
   background: color-mix(in srgb, var(--neon) 14%, transparent);
   color: var(--ink);
@@ -10986,7 +11239,8 @@ body:has(.phantom .app-main > .console:not(.console-workspace)) .buddy-canvas {
     flex-direction: column;
   }
 
-  .media-suite-tabs {
+  .media-suite-tabs,
+  .media-suite-link {
     width: 100%;
     justify-content: flex-start;
   }

@@ -132,7 +132,8 @@ function providerIdForRequest(settings, intent, deepReasoning = false) {
 
 function modelLaneForProvider(providerId) {
   if (providerId === "claude") return "claude_cli";
-  if (providerId === "openrouter" || providerId === "local") return "glm_5_2";
+  if (providerId === "openrouter") return "glm_5_2";
+  if (providerId === "local") return "local_ollama";
   return "codex";
 }
 

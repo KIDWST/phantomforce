@@ -15,7 +15,7 @@ const SIGNAL_LABELS = {
 };
 const GAP_TYPES = [["question", "Ignored question"], ["complaint", "Weakly handled complaint"], ["pricing", "Pricing confusion"], ["feature", "Desired feature"], ["trust", "Trust concern"], ["segment", "Underserved segment"], ["objection", "Purchase objection"]];
 const EVENT_TYPES = ["Price increase", "Product discontinuation", "Negative feedback spike", "New feature launch", "Rebrand", "Service outage", "Geographic expansion", "Audience shift", "Major campaign", "New subscription tier", "Policy change", "Public limitation"];
-const ui = { tab: "overview", loading: true, error: "", notice: "", snapshot: null, signalQuery: "", competitorFilter: "all" };
+const ui = { tab: "discover", loading: true, error: "", notice: "", snapshot: null, signalQuery: "", competitorFilter: "all", editingProfile: false, busy: "" };
 let root = null;
 let opts = null;
 
@@ -231,6 +231,48 @@ function overview() {
   return `${modeCard()}${metrics()}${marketMap()}${scoutPanel()}<section class="ci-radar-grid"><div><div class="ci-section-head"><div><p class="ci-kicker">${starter ? "MARKET INDEX" : "MARKET BOARD"}</p><h2>${starter ? "Competitors Phantom should watch first" : "Competitors moving up, down, or going quiet"}</h2></div><button class="ci-secondary" data-ci-tab="signals">Open sources</button></div>${marketBoard()}</div>${tipsPanel()}</section><section class="ci-overview-grid"><div><div class="ci-section-head"><div><p class="ci-kicker">LATEST ESTIMATES</p><h2>${latest.length ? "What may be changing" : "Live estimates need public evidence"}</h2></div></div><div class="ci-inference-list">${latest.length ? latest.map(inferenceCard).join("") : empty("No live estimates yet", "Starter competitors are modeled baselines. Track a competitor and add public signals before Phantom labels confirmed movement.", '<button class="ci-primary" data-ci-tab="signals">Add public source</button>')}</div></div><aside class="ci-boundaries"><p class="ci-kicker">HARD BOUNDARIES</p><h2>Win sooner. Stay clean.</h2><p>Aggressive mode changes speed and synthesis, not access rights.</p><ul><li>Public and lawfully supplied evidence only</li><li>No identities, private groups, bypasses, or deception</li><li>No invasive targeting of individual commenters</li><li>No cloning protected expression</li><li>No outreach, publishing, or operational interference</li></ul><button class="ci-secondary" data-ci-tab="evidence">Open audit log</button></aside></section>`;
 }
 
+function webDiscoveryBanner() {
+  const w = ui.snapshot.webDiscovery || { connected: false, provider: "none", detail: "" };
+  return `<div class="ci-web-status is-${w.connected ? "on" : "off"}"><span>${w.connected ? "◉" : "○"}</span><div><b>${w.connected ? `Automatic web discovery connected (${esc(w.provider)})` : "Automatic web discovery not connected"}</b><small>${esc(w.detail)}</small></div></div>`;
+}
+function profileSummary(p) {
+  const rows = [["Category", p.category], ["What you sell", p.offering], ["Who you serve", p.audience], ["Where", p.geography], ["Positioning", p.positioning]].filter(([, v]) => v);
+  const chips = (list) => (list || []).map((t) => `<span class="ci-chip">${esc(t)}</span>`).join("");
+  return `<div class="ci-profile-view"><dl>${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join("") || '<div><dt>Profile</dt><dd>Not set yet</dd></div>'}</dl>${(p.differentiators || []).length ? `<div class="ci-chip-row"><small>Differentiators</small>${chips(p.differentiators)}</div>` : ""}${(p.keywords || []).length ? `<div class="ci-chip-row"><small>Keywords</small>${chips(p.keywords)}</div>` : ""}</div>`;
+}
+function profileForm(p) {
+  const list = (arr) => (arr || []).join(", ");
+  return `<form data-ci-profile-form class="ci-profile-form"><div class="ci-form-row"><label>Business name<input name="businessName" maxlength="120" value="${esc(p.businessName)}"></label><label>Category<input name="category" maxlength="120" placeholder="Local photography studio, B2B SaaS…" value="${esc(p.category)}"></label></div><label>What you sell<textarea name="offering" rows="2" maxlength="400" placeholder="The core product or service and outcome">${esc(p.offering)}</textarea></label><div class="ci-form-row"><label>Who you serve<input name="audience" maxlength="300" placeholder="Your ideal customer" value="${esc(p.audience)}"></label><label>Where<input name="geography" maxlength="160" placeholder="City, region, or 'online'" value="${esc(p.geography)}"></label></div><label>One-line positioning<input name="positioning" maxlength="400" placeholder="How you want to be seen vs alternatives" value="${esc(p.positioning)}"></label><div class="ci-form-row"><label>Differentiators<input name="differentiators" placeholder="Comma separated" value="${esc(list(p.differentiators))}"></label><label>Keywords<input name="keywords" placeholder="Comma separated" value="${esc(list(p.keywords))}"></label></div><div class="ci-profile-actions"><button class="ci-primary" type="submit">Save profile</button><button class="ci-secondary" type="button" data-ci-profile-cancel>Cancel</button></div></form>`;
+}
+function leadCard(lead) {
+  return `<article class="ci-lead"><header><h4>${esc(lead.archetype)}</h4></header><p>${esc(lead.description)}</p><div class="ci-lead-grid"><div><h5>Where to look</h5><ul>${lead.whereToFind.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div><div><h5>Try these public searches</h5><ul class="ci-queries">${lead.exampleQueries.map((q) => `<li><a href="https://www.google.com/search?q=${encodeURIComponent(q)}" target="_blank" rel="noopener noreferrer">${esc(q)} ↗</a></li>`).join("")}</ul></div></div><footer>${lead.signalsToWatch.map((s) => `<span class="ci-chip">${esc(SIGNAL_LABELS[s] || s)}</span>`).join("")}</footer></article>`;
+}
+function discoveryCard(run) {
+  return `<section class="ci-discovery"><div class="ci-section-head"><div><p class="ci-kicker">AI-GENERATED STARTING POINTS · ${esc(run.segment)}</p><h2>Where your competitors are — and how to find them</h2></div><span class="ci-time">${fmtDate(run.createdAt)}</span></div><p class="ci-basis">Based on: ${esc(run.basis)}</p><div class="ci-lead-list">${run.leads.map(leadCard).join("")}</div><details class="ci-builder"><summary>All ${run.searchQueries.length} public search queries + directories</summary><div class="ci-detail-grid"><div><h4>Search queries</h4><ul class="ci-queries">${run.searchQueries.map((q) => `<li><a href="https://www.google.com/search?q=${encodeURIComponent(q)}" target="_blank" rel="noopener noreferrer">${esc(q)} ↗</a></li>`).join("")}</ul></div><div><h4>Directories & sources to check</h4><ul>${run.directories.map((d) => `<li>${esc(d)}</li>`).join("")}</ul></div></div></details><p class="ci-disclaimer">${esc(run.disclaimer)}</p></section>`;
+}
+function dossierCard(d) {
+  return `<article class="ci-dossier"><header><div>${statusPill("DEEP DIVE", "hot")}<h3>${esc(d.competitorName)}</h3></div><time>${fmtDate(d.createdAt)}</time></header><p>${esc(d.focus)}</p><div class="ci-dossier-sources">${d.sources.map((s) => `<div class="ci-dossier-source"><div class="ci-dossier-source-head"><a href="${esc(s.url)}" target="_blank" rel="noopener noreferrer">${esc(s.source)} ↗</a>${statusPill(SIGNAL_LABELS[s.signalType] || s.signalType, "neutral")}</div><p>${esc(s.whatItReveals)}</p><ul>${s.questions.map((q) => `<li>${esc(q)}</li>`).join("")}</ul></div>`).join("")}</div><div class="ci-detail-grid"><div><h4>Priority checklist</h4><ul>${d.priorityChecklist.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div><div><h4>Hypotheses to test</h4><ul>${d.hypothesisPrompts.map((t) => `<li>${esc(t)}</li>`).join("")}</ul></div></div><p class="ci-disclaimer">${esc(d.disclaimer)}</p></article>`;
+}
+function discover() {
+  const s = ui.snapshot;
+  const profile = s.businessProfile;
+  const runs = s.discoveryRuns || [];
+  const dossiers = s.dossiers || [];
+  const canManage = s.access.canManage;
+  const profileBlock = ui.editingProfile
+    ? profileForm(profile || { businessName: "", category: "", offering: "", audience: "", geography: "", positioning: "", differentiators: [], keywords: [] })
+    : `${profileSummary(profile || {})}${canManage ? `<button class="ci-secondary" data-ci-edit-profile>${profile && !profile.autoSeeded ? "Edit profile" : "Set up profile"}</button>` : ""}`;
+  return `<section class="ci-discover">
+    <div class="ci-profile-card ${profile && profile.autoSeeded ? "is-seeded" : ""}"><div class="ci-section-head"><div><p class="ci-kicker">WHAT PHANTOM KNOWS ABOUT YOU</p><h2>Business profile</h2></div>${profile && profile.autoSeeded ? statusPill("AUTO-DRAFTED — CONFIRM", "warn") : profile ? statusPill("SAVED", "good") : ""}</div><p class="ci-hint">Phantom uses this to find the right competitors and dig into each one. The more accurate it is, the sharper the leads.</p>${profileBlock}</div>
+    ${webDiscoveryBanner()}
+    <div class="ci-discover-cta"><div><h2>Find my competitors</h2><p>Generate a targeted list of who to watch, where they show up, and the exact public searches to run — from your profile.</p></div><button class="ci-primary" data-ci-discover ${ui.busy === "discover" ? "disabled" : ""}>${ui.busy === "discover" ? "Analyzing…" : "Find competitors"}</button></div>
+    ${runs.length ? discoveryCard(runs[0]) : empty("No discovery run yet", "Confirm your profile, then run discovery to get competitor leads and search queries.")}
+    <div class="ci-section-head"><div><p class="ci-kicker">DEEP DIVE</p><h2>Investigate a competitor</h2></div></div>
+    ${s.competitors.length ? `<div class="ci-dossier-launch">${s.competitors.map((c) => `<article><div><h3>${esc(c.name)}</h3><a href="${esc(c.website)}" target="_blank" rel="noopener noreferrer">${esc((() => { try { return new URL(c.website).hostname; } catch { return c.website; } })())}</a></div><button class="ci-primary" data-ci-dossier="${esc(c.id)}" ${ui.busy === "dossier:" + c.id ? "disabled" : ""}>${ui.busy === "dossier:" + c.id ? "Building…" : "Deep dive"}</button></article>`).join("")}</div>` : empty("No competitors yet", "Add a competitor in the Signals tab, or run discovery above to find who to add.", '<button class="ci-primary" data-ci-tab="signals">Add a competitor</button>')}
+    ${dossiers.map(dossierCard).join("")}
+  </section>`;
+}
+
 function signals() {
   const filtered = ui.snapshot.signals.filter((item) => (ui.competitorFilter === "all" || item.competitorId === ui.competitorFilter) && (!ui.signalQuery || `${item.title} ${item.summary}`.toLowerCase().includes(ui.signalQuery.toLowerCase())));
   const starterStrip = (ui.snapshot.starterCompetitors || []).slice(0, 8).map((item) => `<article class="is-starter"><div><h3>${esc(item.name)}</h3><a href="${esc(item.website)}" target="_blank" rel="noopener noreferrer">${esc(new URL(item.website).hostname)}</a><small>${esc(item.category)}</small></div><button class="ci-primary" data-ci-track-starter="${esc(item.id)}">Track</button></article>`).join("");
@@ -258,7 +300,7 @@ function content() {
   if (ui.loading) return `<div class="ci-loading"><i></i><i></i><i></i><p>Loading public-signal intelligence…</p></div>`;
   if (!ui.snapshot) return empty("Intelligence is unavailable", ui.error || "The protected service did not respond.", '<button class="ci-primary" data-ci-retry>Try again</button>');
   if (!ui.snapshot.access.enabled) return empty("Competitor Intelligence is not included", "Ask the workspace owner about a plan with public-signal intelligence.");
-  return ({ overview, signals, opportunities, creative, intercept, evidence }[ui.tab] || overview)();
+  return ({ discover, overview, signals, opportunities, creative, intercept, evidence }[ui.tab] || overview)();
 }
 function render() {
   if (!root) return;
@@ -292,6 +334,26 @@ function bind() {
   }));
   root.querySelector("[data-ci-signal-search]")?.addEventListener("input", (event) => { ui.signalQuery = event.target.value; render(); root.querySelector("[data-ci-signal-search]")?.focus(); });
   const filter = root.querySelector("[data-ci-competitor-filter]"); if (filter) { filter.value = ui.competitorFilter; filter.addEventListener("change", (event) => { ui.competitorFilter = event.target.value; render(); }); }
+  root.querySelector("[data-ci-edit-profile]")?.addEventListener("click", () => { ui.editingProfile = true; render(); });
+  root.querySelector("[data-ci-profile-cancel]")?.addEventListener("click", () => { ui.editingProfile = false; render(); });
+  root.querySelector("[data-ci-discover]")?.addEventListener("click", async () => {
+    ui.busy = "discover"; ui.error = ""; ui.notice = ""; render();
+    const ok = await run("/api/competitor-intelligence/discover", {}, "Competitor discovery generated from your profile.");
+    ui.busy = ""; render();
+  });
+  root.querySelectorAll("[data-ci-dossier]").forEach((button) => button.addEventListener("click", async () => {
+    ui.busy = `dossier:${button.dataset.ciDossier}`; ui.error = ""; ui.notice = ""; render();
+    const ok = await run("/api/competitor-intelligence/dossier", { competitorId: button.dataset.ciDossier }, "Deep-dive research plan generated.");
+    ui.busy = ""; render();
+  }));
+  root.querySelector("[data-ci-profile-form]")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const form = event.currentTarget; const button = form.querySelector('button[type="submit"]'); if (button) button.disabled = true;
+    ui.notice = ""; ui.error = "";
+    try {
+      await api("/api/competitor-intelligence/business-profile", { method: "PUT", body: JSON.stringify({ ...formBody(form), tenantId: currentTenantId() }) });
+      ui.editingProfile = false; ui.notice = "Business profile saved."; await refresh(true);
+    } catch (error) { ui.error = error instanceof Error ? error.message : "Profile could not be saved."; if (button) button.disabled = false; render(); }
+  });
   bindForm("[data-ci-competitor-form]", "/api/competitor-intelligence/competitors", "Competitor profile added.");
   bindForm("[data-ci-scout-form]", "/api/competitor-intelligence/scout", "AI market scout armed.");
   bindForm("[data-ci-signal-form]", "/api/competitor-intelligence/signals", "Public signal recorded.");
@@ -304,5 +366,5 @@ function bind() {
 }
 
 export function renderCompetitorIntelligence(target, options = {}) {
-  root = target; opts = options; ui.tab = "overview"; refresh();
+  root = target; opts = options; ui.tab = "discover"; ui.editingProfile = false; ui.busy = ""; refresh();
 }

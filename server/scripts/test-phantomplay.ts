@@ -10,6 +10,7 @@ function assert(condition: unknown, message: string): asserts condition {
 
 const root = await mkdtemp(join(tmpdir(), "phantomplay-"));
 process.env.PHANTOMFORCE_PHANTOMPLAY_PATH = join(root, "phantomplay.json");
+process.env.PHANTOMFORCE_CUSTOMIZATION_DIR = join(root, "customization");
 process.env.NODE_ENV = "development";
 process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
@@ -156,8 +157,29 @@ try {
   const ownerToken = await login("admin-jordan");
   const clientToken = await login("client-sports-demo");
   const ownerCatalog = await app.inject({ method: "GET", url: "/api/phantomplay", headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(ownerCatalog.statusCode === 403 && ownerCatalog.json().reason === "module_disabled", "PhantomPlay should be disabled by default even for a new owner workspace.");
+  const disabledClientCatalog = await app.inject({ method: "GET", url: "/api/phantomplay", headers: { Authorization: `Bearer ${clientToken}` } });
+  assert(disabledClientCatalog.statusCode === 403 && disabledClientCatalog.json().reason === "module_disabled", "New client workspaces should not expose PhantomPlay until it is enabled.");
+  const modulePatch = await app.inject({
+    method: "PATCH",
+    url: "/phantom-ai/customization/workspace-modules",
+    headers: { Authorization: `Bearer ${ownerToken}` },
+    payload: {
+      tenant_id: "client-sports-demo",
+      module_id: "phantomplay",
+      enabled: true,
+      accessMode: "entire_organization",
+      allowedMemberIds: [],
+      activityEnabled: true,
+      challengesEnabled: true,
+    },
+  });
+  assert(modulePatch.statusCode === 200 && modulePatch.json().organization_data_deleted === false && modulePatch.json().notifications_sent === false, "Enabling PhantomPlay should preserve org data and avoid notifications.");
+  const moduleStatus = await app.inject({ method: "GET", url: "/phantom-ai/customization/workspace-modules?tenant_id=client-sports-demo", headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(moduleStatus.statusCode === 200 && moduleStatus.json().modules?.[0]?.enabled === true && moduleStatus.json().modules?.[0]?.accessMode === "entire_organization", "Workspace module status should report the saved PhantomPlay access mode.");
+  const ownerManagedCatalog = await app.inject({ method: "GET", url: "/api/phantomplay?tenant_id=client-sports-demo", headers: { Authorization: `Bearer ${ownerToken}` } });
+  assert(ownerManagedCatalog.statusCode === 200 && ownerManagedCatalog.json().access.canModerate === true, "Platform admin should receive moderation access after enabling the target workspace.");
   const clientCatalog = await app.inject({ method: "GET", url: "/api/phantomplay", headers: { Authorization: `Bearer ${clientToken}` } });
-  assert(ownerCatalog.statusCode === 200 && ownerCatalog.json().access.canModerate === true, "Platform admin should receive moderation access.");
   assert(clientCatalog.statusCode === 200 && clientCatalog.json().access.canModerate === false, "Client accounts must not receive moderation access.");
   const clientPlay = await app.inject({ method: "POST", url: "/api/phantomplay/plays", headers: { Authorization: `Bearer ${clientToken}` }, payload: { gameId: "signal-match" } });
   assert(clientPlay.statusCode === 403 && clientPlay.json().error === "read_only_plan", "The existing free-plan write boundary must block a legacy read-only client.");

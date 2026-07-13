@@ -130,10 +130,11 @@ import { buildDeploymentModelStatus } from "./access/deployment-model.js";
 import { paywallPreHandler } from "./access/paywall-guard.js";
 import { getPaywallDecision } from "./access/paywall.js";
 import { listSubscriptions, setSubscription } from "./access/subscription-store.js";
-import { randomUUID, timingSafeEqual } from "node:crypto";
-import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { createHash, randomUUID, timingSafeEqual } from "node:crypto";
+import { createReadStream } from "node:fs";
+import { appendFile, mkdir, readFile, readdir, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { dirname, extname, join, resolve, sep } from "node:path";
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createAccessStorageSnapshot } from "./access/access-storage.js";
 import { actionRegistry, isActionImplemented } from "./approval/action-registry.js";
@@ -243,6 +244,24 @@ import {
   updatePhantomPlaySubmission,
 } from "./phantom-ai/phantomplay.js";
 import {
+  getPhantomPlayDeveloperAnalytics,
+  getPhantomPlayDiscovery,
+  getPhantomPlayGamePage,
+  getPhantomPlayLeaderboard,
+  getPhantomPlayResumeState,
+  getPhantomPlayV2Snapshot,
+  getPhantomPlayV2StoreStatus,
+  getPhantomPlayWorkspacePolicy,
+  heartbeatPhantomPlayPresence,
+  mutatePhantomPlayFriend,
+  phantomPlayV2Enabled,
+  registerPhantomPlayV2Games,
+  setPhantomPlayFollow,
+  setPhantomPlayWishlist,
+  updatePhantomPlayWorkspacePolicy,
+  upsertPhantomPlayReview,
+} from "./phantom-ai/phantomplay-v2.js";
+import {
   auditCompetitorIntelligenceRequest,
   createAudienceTheme,
   createCompetitor,
@@ -252,11 +271,18 @@ import {
   createResearchOpportunity,
   createSignal,
   fuseCompetitorSignals,
+  getBusinessProfile,
   getCompetitorIntelligenceSnapshot,
   getCompetitorIntelligenceStoreStatus,
   updateMarketScoutContext,
   updateAggressiveMode,
 } from "./phantom-ai/competitor-intelligence.js";
+import {
+  buildWorkspaceAwarenessText,
+  getOrganizationGraph,
+  getOrganizationOpportunities,
+  getOrganizationPulse,
+} from "./phantom-ai/organization-pulse.js";
 import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
@@ -317,7 +343,7 @@ import {
 } from "./phantom-ai/windows-media-session.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
-import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
+import { callLocalOllamaChat, getLocalOllamaStatus } from "./phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
 import {
   adminProviderAttemptOrder,
@@ -367,6 +393,8 @@ const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const appStaticRoot = resolve(moduleDir, "..", "..", "app");
+const downloadsRoot = resolve(moduleDir, "..", "..", "downloads");
+const installManifestVersion = "phantomforce-install-consent-2026-07-12";
 const appStaticTypes: Record<string, string> = {
   ".css": "text/css; charset=utf-8",
   ".html": "text/html; charset=utf-8",
@@ -378,6 +406,8 @@ const appStaticTypes: Record<string, string> = {
   ".png": "image/png",
   ".svg": "image/svg+xml; charset=utf-8",
   ".webp": "image/webp",
+  ".txt": "text/plain; charset=utf-8",
+  ".zip": "application/zip",
 };
 
 /* Build fingerprint captured once at boot: the git commit this Hermes
@@ -427,6 +457,53 @@ function customizationEntitlements(session: AccessSession, tenantId: string): Cu
     internalPhantomForce,
     coBranded: internalPhantomForce || modules.has("co-branded") || modules.has("white-label"),
     whiteLabel: internalPhantomForce || modules.has("white-label"),
+  };
+}
+
+function customizationActorRole(session: AccessSession) {
+  if (session.canManageAccess || session.isSuperAdmin) return "owner";
+  return session.orgRole || session.role || "client";
+}
+
+function actorModuleIds(session: AccessSession) {
+  return [session.userId, session.id, session.email, session.authSessionId].filter(Boolean).map((value) => String(value));
+}
+
+function canManageWorkspaceModules(session: AccessSession, tenantId: string) {
+  if (session.canManageAccess || session.isSuperAdmin) return true;
+  const ownTenant = session.orgId || session.clientId;
+  return ownTenant === tenantId && (session.orgRole === "owner" || session.orgRole === "admin");
+}
+
+async function moduleAccessForSession(session: AccessSession, moduleId: string, requestedTenantId?: unknown) {
+  const tenantId = customizationTenantForSession(session, typeof requestedTenantId === "string" ? requestedTenantId : undefined);
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const module = state.configuration.modules.find((item) => item.id === moduleId);
+  const role = customizationActorRole(session);
+  const canManage = canManageWorkspaceModules(session, tenantId);
+  const allowedMemberIds = module?.allowedMemberIds ?? [];
+  let allowed = Boolean(module?.enabled && module.roles.includes(role));
+  if (moduleId === "phantomplay" && allowed) {
+    const accessMode = module?.accessMode ?? "owner_only";
+    if (accessMode === "owner_only") allowed = canManage;
+    else if (accessMode === "selected_members") {
+      allowed = canManage || actorModuleIds(session).some((id) => allowedMemberIds.includes(id));
+    }
+  }
+  return {
+    tenantId,
+    module,
+    role,
+    canManage,
+    allowed,
+    reason: !module?.enabled
+      ? "module_disabled"
+      : !module.roles.includes(role)
+        ? "role_not_allowed"
+        : allowed
+          ? "allowed"
+          : "member_not_allowed",
+    configurationVersion: state.configuration.version,
   };
 }
 
@@ -718,6 +795,81 @@ app.get("/phantom-ai/customization/config", async (request, reply) => {
   };
 });
 
+app.get("/phantom-ai/customization/workspace-modules", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CustomizationTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const phantomPlayAccess = await moduleAccessForSession(session, "phantomplay", tenantId);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    can_manage: canManageWorkspaceModules(session, tenantId),
+    modules: state.configuration.modules
+      .filter((module) => module.id === "phantomplay")
+      .map((module) => ({
+        id: module.id,
+        label: module.label,
+        enabled: module.enabled,
+        accessMode: module.accessMode ?? "owner_only",
+        allowedMemberIds: module.allowedMemberIds ?? [],
+        activityEnabled: module.activityEnabled ?? false,
+        challengesEnabled: module.challengesEnabled ?? false,
+        canAccess: phantomPlayAccess.allowed,
+        accessReason: phantomPlayAccess.reason,
+      })),
+    version: state.configuration.version,
+    provider_called: false,
+  };
+});
+
+app.patch("/phantom-ai/customization/workspace-modules", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = WorkspaceModuleUpdateBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = customizationTenantForSession(session, parsed.data.tenant_id);
+  if (!canManageWorkspaceModules(session, tenantId)) {
+    return reply.code(403).send({ ok: false, error: "Managing workspace modules requires an organization owner or administrator." });
+  }
+  const state = await getOrganizationConfiguration(tenantId, session.id);
+  const patch = {
+    modules: state.configuration.modules.map((module) => module.id === parsed.data.module_id
+      ? {
+          ...module,
+          enabled: parsed.data.enabled,
+          accessMode: parsed.data.accessMode,
+          allowedMemberIds: parsed.data.accessMode === "selected_members" ? parsed.data.allowedMemberIds : [],
+          activityEnabled: parsed.data.enabled && parsed.data.activityEnabled,
+          challengesEnabled: parsed.data.enabled && parsed.data.challengesEnabled,
+        }
+      : module),
+  };
+  try {
+    const result = await publishConfigurationChange({
+      tenantId,
+      actor: session.id,
+      patch,
+      summary: parsed.data.enabled ? "Updated PhantomPlay workspace module access" : "Disabled PhantomPlay workspace module",
+      expectedVersion: state.configuration.version,
+      entitlements: customizationEntitlements(session, tenantId),
+    });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      result,
+      organization_data_deleted: false,
+      notifications_sent: false,
+      provider_called: false,
+    };
+  } catch (error) {
+    if (error instanceof z.ZodError) return reply.status(400).send({ ok: false, error: error.flatten() });
+    return reply.status(409).send({ ok: false, error: error instanceof Error ? error.message : "Workspace module could not be updated." });
+  }
+});
+
 app.get("/phantom-ai/customization/versions", async (request, reply) => {
   const session = requireAdminAccessSession(request, reply);
   if (!session) return reply;
@@ -842,6 +994,66 @@ app.get("/app/*", async (request, reply) => {
   }
 });
 
+app.get("/api/install/manifest", async () => {
+  const bytes = await readFile(resolve(downloadsRoot, "phantomforce-install-manifest.json"), "utf8");
+  return JSON.parse(bytes) as Record<string, unknown>;
+});
+
+const InstallAcceptSchema = z.object({
+  accepted: z.literal(true),
+  manifestVersion: z.string().default(installManifestVersion),
+  name: z.string().trim().min(1).max(160).optional(),
+  email: z.string().trim().email().max(254).optional(),
+  source: z.string().trim().max(80).optional(),
+});
+
+app.post("/api/install/accept", async (request, reply) => {
+  const parsed = InstallAcceptSchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.code(400).send({ ok: false, error: parsed.error.flatten() });
+  if (parsed.data.manifestVersion !== installManifestVersion) {
+    return reply.code(409).send({ ok: false, error: "Install terms changed. Refresh and accept the current PhantomForce install terms.", current: installManifestVersion });
+  }
+  const record = {
+    id: randomUUID(),
+    acceptedAt: new Date().toISOString(),
+    manifestVersion: parsed.data.manifestVersion,
+    source: parsed.data.source || "download",
+    name: parsed.data.name || null,
+    emailDomain: parsed.data.email?.split("@").pop()?.toLowerCase() || null,
+    userAgent: String(request.headers["user-agent"] || "").slice(0, 220),
+  };
+  const logPath = resolve(process.env.PHANTOMFORCE_INSTALL_ACCEPTANCE_LOG || join(tmpdir(), "phantomforce", "install-acceptance.ndjson"));
+  await mkdir(dirname(logPath), { recursive: true });
+  await appendFile(logPath, `${JSON.stringify(record)}\n`, "utf8");
+  return { ok: true, receipt: record.id, acceptedAt: record.acceptedAt, manifestVersion: installManifestVersion };
+});
+
+app.get("/downloads/*", async (request, reply) => {
+  const query = (request.query ?? {}) as { accepted?: unknown };
+  if (query.accepted !== installManifestVersion) {
+    return reply.code(403).send({
+      ok: false,
+      error: "acceptance_required",
+      manifestVersion: installManifestVersion,
+      manifestUrl: "/api/install/manifest",
+      acceptUrl: "/api/install/accept",
+    });
+  }
+  const rawPath = String((request.params as { "*": string })["*"] || "");
+  if (!rawPath || rawPath.includes("\0")) return reply.code(400).send({ ok: false, error: "Invalid download path." });
+  const assetPath = resolve(downloadsRoot, rawPath.replace(/^[/\\]+/, ""));
+  if (assetPath !== downloadsRoot && !assetPath.startsWith(`${downloadsRoot}${sep}`)) {
+    return reply.code(403).send({ ok: false, error: "Download path is outside the PhantomForce package bundle." });
+  }
+  try {
+    const bytes = await readFile(assetPath);
+    const contentType = appStaticTypes[extname(assetPath).toLowerCase()] ?? "application/octet-stream";
+    return reply.header("content-type", contentType).header("cache-control", "no-store").send(bytes);
+  } catch {
+    return reply.code(404).send({ ok: false, error: "download_not_found" });
+  }
+});
+
 app.get("/sessions", async (request) => {
   const authConfiguration = getAccessAuthConfiguration();
   const publicHost = requestPublicHost(request);
@@ -851,7 +1063,9 @@ app.get("/sessions", async (request) => {
     auth: {
       ...authConfiguration,
     },
-    sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
+    sessions: authConfiguration.ownerProductionAuthEnabled
+      ? []
+      : filterSessionsForPublicHost(publicHost, listAccessSessions()),
   };
 });
 
@@ -1120,6 +1334,402 @@ function requireSuperAdmin(request: FastifyRequest, reply: FastifyReply) {
   }
   return dbSession;
 }
+
+/* Local Asset Library: read-only Motionarray/desktop asset indexing.
+   This is separate from permanent multi-tenant Asset Cloud. It keeps large
+   local packages on disk, uses the existing Motionarray manager manifest when
+   present, and exposes metadata plus explicit authenticated file fetches. */
+type LocalAssetKind = "image" | "video" | "audio" | "project" | "archive" | "document" | "folder" | "other";
+type LocalAssetRecord = {
+  id: string;
+  name: string;
+  title: string;
+  kind: LocalAssetKind;
+  category: string;
+  app: string;
+  relativePath: string;
+  localPath: string;
+  servePath?: string;
+  originalZip?: string;
+  sizeBytes: number;
+  sizeLabel: string;
+  mime: string;
+  status: string;
+  safety: string;
+  tags: string[];
+  previewable: boolean;
+  updatedAt?: string;
+};
+type LocalAssetIndex = {
+  ok: boolean;
+  root: string;
+  rootLabel: string;
+  generatedAt: string;
+  count: number;
+  truncated: boolean;
+  source: "manifest" | "scan" | "cache";
+  assets: LocalAssetRecord[];
+};
+
+const LOCAL_ASSET_DEFAULT_ROOT = "G:\\Motionarray download";
+const LOCAL_ASSET_MANAGER_DIR = "_PhantomForce_Asset_Manager";
+const LOCAL_ASSET_MANIFEST = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce_motionarray_manifest.json");
+const LOCAL_ASSET_CACHE = join(LOCAL_ASSET_MANAGER_DIR, "PhantomForce_Ready", "phantomforce-local-asset-cache.json");
+const LOCAL_ASSET_SCAN_LIMIT = 2500;
+const LOCAL_ASSET_CACHE_TTL_MS = 10 * 60 * 1000;
+const LOCAL_ASSET_MIME: Record<string, { kind: LocalAssetKind; mime: string; previewable: boolean }> = {
+  ".jpg": { kind: "image", mime: "image/jpeg", previewable: true },
+  ".jpeg": { kind: "image", mime: "image/jpeg", previewable: true },
+  ".png": { kind: "image", mime: "image/png", previewable: true },
+  ".webp": { kind: "image", mime: "image/webp", previewable: true },
+  ".gif": { kind: "image", mime: "image/gif", previewable: true },
+  ".svg": { kind: "image", mime: "image/svg+xml", previewable: true },
+  ".mp4": { kind: "video", mime: "video/mp4", previewable: true },
+  ".mov": { kind: "video", mime: "video/quicktime", previewable: false },
+  ".webm": { kind: "video", mime: "video/webm", previewable: true },
+  ".mp3": { kind: "audio", mime: "audio/mpeg", previewable: true },
+  ".wav": { kind: "audio", mime: "audio/wav", previewable: true },
+  ".m4a": { kind: "audio", mime: "audio/mp4", previewable: true },
+  ".zip": { kind: "archive", mime: "application/zip", previewable: false },
+  ".psd": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".psb": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".drfx": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".dra": { kind: "project", mime: "application/octet-stream", previewable: false },
+  ".csv": { kind: "document", mime: "text/csv", previewable: false },
+  ".json": { kind: "document", mime: "application/json", previewable: false },
+  ".md": { kind: "document", mime: "text/markdown", previewable: false },
+};
+
+let localAssetIndexCache: { key: string; at: number; index: LocalAssetIndex } | null = null;
+
+function localAssetRoot() {
+  const configured = String(process.env.PHANTOMFORCE_LOCAL_ASSET_ROOT || "").trim();
+  return resolve(configured || LOCAL_ASSET_DEFAULT_ROOT);
+}
+
+/* The label shown in the product. Never the folder basename: that leaks
+   third-party service names and the owner's disk layout into customer UI. */
+function localAssetLabel() {
+  return String(process.env.PHANTOMFORCE_LOCAL_ASSET_LABEL || "").trim() || "Local library";
+}
+
+function isPathInside(parent: string, child: string) {
+  const rel = relative(parent, child);
+  return !!rel && rel !== ".." && !rel.startsWith(`..${sep}`) && !isAbsolute(rel);
+}
+
+function localAssetId(seed: string) {
+  return createHash("sha1").update(seed.toLowerCase()).digest("hex").slice(0, 24);
+}
+
+function sizeLabel(bytes: number) {
+  if (!Number.isFinite(bytes) || bytes <= 0) return "unknown";
+  if (bytes >= 1073741824) return `${(bytes / 1073741824).toFixed(bytes >= 10737418240 ? 0 : 1)} GB`;
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(bytes >= 10485760 ? 0 : 1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
+async function safeStat(pathname: string) {
+  try {
+    return await stat(pathname);
+  } catch {
+    return null;
+  }
+}
+
+function classifyLocalPath(pathname: string, fallbackKind: LocalAssetKind = "other") {
+  return LOCAL_ASSET_MIME[extname(pathname).toLowerCase()] || { kind: fallbackKind, mime: "application/octet-stream", previewable: false };
+}
+
+async function findPreviewFile(root: string, dir: string, depth = 0): Promise<string | null> {
+  if (depth > 3) return null;
+  let entries: any[];
+  try {
+    entries = await readdir(dir, { withFileTypes: true });
+  } catch {
+    return null;
+  }
+  const sorted = entries.sort((a, b) => {
+    const aw = a.isFile() && classifyLocalPath(a.name).previewable ? 0 : a.isDirectory() ? 1 : 2;
+    const bw = b.isFile() && classifyLocalPath(b.name).previewable ? 0 : b.isDirectory() ? 1 : 2;
+    return aw - bw || a.name.localeCompare(b.name);
+  });
+  for (const entry of sorted) {
+    if (entry.name === "__MACOSX") continue;
+    const full = resolve(dir, entry.name);
+    if (!isPathInside(root, full)) continue;
+    if (entry.isFile() && classifyLocalPath(full).previewable) return full;
+    if (entry.isDirectory()) {
+      const nested = await findPreviewFile(root, full, depth + 1);
+      if (nested) return nested;
+    }
+  }
+  return null;
+}
+
+async function recordFromManifestAsset(root: string, raw: any): Promise<LocalAssetRecord | null> {
+  const rawPath = String(raw?.local_path || raw?.original_zip || "").trim();
+  if (!rawPath) return null;
+  const resolved = resolve(rawPath);
+  if (!isPathInside(root, resolved)) return null;
+  const st = await safeStat(resolved);
+  const isDir = !!st?.isDirectory();
+  const previewPath = isDir ? await findPreviewFile(root, resolved) : null;
+  const cls = previewPath
+    ? classifyLocalPath(previewPath)
+    : isDir
+      ? { kind: "folder" as LocalAssetKind, mime: "application/x-directory", previewable: false }
+      : classifyLocalPath(resolved);
+  const sizeBytes = Number.isFinite(Number(raw?.size_bytes))
+    ? Number(raw.size_bytes)
+    : Number.isFinite(Number(raw?.size_gb))
+      ? Math.round(Number(raw.size_gb) * 1073741824)
+      : (st?.isFile() ? st.size : 0);
+  const rel = relative(root, resolved).replaceAll("\\", "/");
+  const title = String(raw?.name || basename(resolved) || "Asset").replaceAll("_", " ");
+  return {
+    id: String(raw?.id || localAssetId(rel)),
+    name: String(raw?.name || basename(resolved) || title),
+    title,
+    kind: cls.kind,
+    category: String(raw?.category || (isDir ? "Folder" : cls.kind)),
+    app: String(raw?.app || ""),
+    relativePath: rel,
+    localPath: resolved,
+    servePath: previewPath || undefined,
+    originalZip: raw?.original_zip ? String(raw.original_zip) : undefined,
+    sizeBytes,
+    sizeLabel: sizeLabel(sizeBytes),
+    mime: cls.mime,
+    status: String(raw?.status || "ready"),
+    safety: String(raw?.safety || "Read-only local asset"),
+    tags: Array.isArray(raw?.tags) ? raw.tags.map(String) : String(raw?.tags || "").split(",").map((tag) => tag.trim()).filter(Boolean),
+    previewable: cls.previewable,
+    updatedAt: st?.mtime?.toISOString?.(),
+  };
+}
+
+async function readLocalAssetManifest(root: string): Promise<LocalAssetIndex | null> {
+  const manifestPath = resolve(root, LOCAL_ASSET_MANIFEST);
+  if (!isPathInside(root, manifestPath)) return null;
+  try {
+    const parsed = JSON.parse(await readFile(manifestPath, "utf8"));
+    const rawAssets = Array.isArray(parsed?.assets) ? parsed.assets : [];
+    const assets = (await Promise.all(rawAssets.map((asset: any) => recordFromManifestAsset(root, asset))))
+      .filter((asset): asset is LocalAssetRecord => !!asset);
+    return {
+      ok: true,
+      root,
+      rootLabel: localAssetLabel(),
+      generatedAt: String(parsed?.generated_at || new Date().toISOString()),
+      count: assets.length,
+      truncated: false,
+      source: "manifest",
+      assets,
+    };
+  } catch {
+    return null;
+  }
+}
+
+async function scanLocalAssets(root: string): Promise<LocalAssetIndex> {
+  const assets: LocalAssetRecord[] = [];
+  async function walk(dir: string, depth = 0) {
+    if (assets.length >= LOCAL_ASSET_SCAN_LIMIT || depth > 8) return;
+    let entries: any[];
+    try {
+      entries = await readdir(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (assets.length >= LOCAL_ASSET_SCAN_LIMIT) return;
+      if (["$RECYCLE.BIN", "System Volume Information", "__MACOSX", LOCAL_ASSET_MANAGER_DIR].includes(entry.name)) continue;
+      const full = resolve(dir, entry.name);
+      if (!isPathInside(root, full)) continue;
+      if (entry.isDirectory()) {
+        await walk(full, depth + 1);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const st = await safeStat(full);
+      const cls = classifyLocalPath(full);
+      const rel = relative(root, full).replaceAll("\\", "/");
+      assets.push({
+        id: localAssetId(rel),
+        name: basename(full),
+        title: basename(full, extname(full)).replaceAll("_", " "),
+        kind: cls.kind,
+        category: cls.kind,
+        app: "",
+        relativePath: rel,
+        localPath: full,
+        servePath: cls.previewable ? full : undefined,
+        sizeBytes: st?.size || 0,
+        sizeLabel: sizeLabel(st?.size || 0),
+        mime: cls.mime,
+        status: "ready",
+        safety: "Read-only local asset",
+        tags: ["local", "library", cls.kind],
+        previewable: cls.previewable,
+        updatedAt: st?.mtime?.toISOString?.(),
+      });
+    }
+  }
+  await walk(root);
+  return {
+    ok: true,
+    root,
+    rootLabel: localAssetLabel(),
+    generatedAt: new Date().toISOString(),
+    count: assets.length,
+    truncated: assets.length >= LOCAL_ASSET_SCAN_LIMIT,
+    source: "scan",
+    assets,
+  };
+}
+
+/* Cold starts must be instant: the previous version WROTE a disk cache but
+   never read it, so every server restart forced a full rescan on first open.
+   Now the disk cache is served immediately (localPath rebuilt from
+   relativePath) while a fresh scan replaces it in the background. */
+let localAssetRefreshInFlight: Promise<LocalAssetIndex> | null = null;
+
+async function readLocalAssetDiskCache(root: string): Promise<LocalAssetIndex | null> {
+  try {
+    const cachePath = resolve(root, LOCAL_ASSET_CACHE);
+    if (!isPathInside(root, cachePath)) return null;
+    const parsed = JSON.parse(await readFile(cachePath, "utf8"));
+    if (!Array.isArray(parsed?.assets)) return null;
+    const assets = (parsed.assets as Array<Record<string, unknown>>).flatMap((asset) => {
+      const relativePath = String(asset.relativePath ?? "");
+      if (!relativePath) return [];
+      const localPath = resolve(root, relativePath);
+      if (!isPathInside(root, localPath)) return [];
+      return [{ ...(asset as unknown as LocalAssetRecord), localPath }];
+    });
+    return {
+      ok: true, root, rootLabel: localAssetLabel(),
+      generatedAt: String(parsed.generatedAt || new Date().toISOString()),
+      count: assets.length, truncated: Boolean(parsed.truncated), source: "cache", assets,
+    };
+  } catch { return null; }
+}
+
+async function rebuildLocalAssetIndex(root: string): Promise<LocalAssetIndex> {
+  const index = await readLocalAssetManifest(root) || await scanLocalAssets(root);
+  localAssetIndexCache = { key: root, at: Date.now(), index };
+  try {
+    const cachePath = resolve(root, LOCAL_ASSET_CACHE);
+    if (isPathInside(root, cachePath)) {
+      await mkdir(dirname(cachePath), { recursive: true });
+      await writeFile(cachePath, JSON.stringify({ ...index, assets: index.assets.map(({ localPath, ...asset }) => asset) }, null, 2), "utf8");
+    }
+  } catch { /* cache writes are best-effort */ }
+  return index;
+}
+
+async function loadLocalAssetIndex(refresh = false): Promise<LocalAssetIndex> {
+  const root = localAssetRoot();
+  const rootStatus = await safeStat(root);
+  if (!rootStatus?.isDirectory()) {
+    return { ok: false, root, rootLabel: localAssetLabel(), generatedAt: new Date().toISOString(), count: 0, truncated: false, source: "scan", assets: [] };
+  }
+  const key = root;
+  if (!refresh && localAssetIndexCache?.key === key && Date.now() - localAssetIndexCache.at < LOCAL_ASSET_CACHE_TTL_MS) return localAssetIndexCache.index;
+  if (refresh) {
+    localAssetRefreshInFlight ??= rebuildLocalAssetIndex(root).finally(() => { localAssetRefreshInFlight = null; });
+    return localAssetRefreshInFlight;
+  }
+  // Cold start: serve the persisted index instantly and rescan behind it.
+  const disk = await readLocalAssetDiskCache(root);
+  if (disk && disk.assets.length) {
+    localAssetIndexCache = { key, at: Date.now() - LOCAL_ASSET_CACHE_TTL_MS + 60_000, index: disk };
+    localAssetRefreshInFlight ??= rebuildLocalAssetIndex(root).finally(() => { localAssetRefreshInFlight = null; });
+    return disk;
+  }
+  localAssetRefreshInFlight ??= rebuildLocalAssetIndex(root).finally(() => { localAssetRefreshInFlight = null; });
+  return localAssetRefreshInFlight;
+}
+
+function publicLocalAsset(asset: LocalAssetRecord) {
+  return {
+    id: asset.id,
+    name: asset.name,
+    title: asset.title,
+    kind: asset.kind,
+    category: asset.category,
+    app: asset.app,
+    relative_path: asset.relativePath,
+    original_zip: asset.originalZip ? basename(asset.originalZip) : undefined,
+    size_bytes: asset.sizeBytes,
+    size_label: asset.sizeLabel,
+    mime: asset.mime,
+    status: asset.status,
+    safety: asset.safety,
+    tags: asset.tags,
+    previewable: asset.previewable,
+    has_preview: !!asset.servePath || asset.previewable,
+    updated_at: asset.updatedAt,
+  };
+}
+
+app.get("/phantom-ai/local-assets/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const index = await loadLocalAssetIndex(false);
+  const counts = index.assets.reduce<Record<string, number>>((memo, asset) => {
+    memo[asset.kind] = (memo[asset.kind] || 0) + 1;
+    return memo;
+  }, {});
+  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: index.count, counts, generated_at: index.generatedAt, truncated: index.truncated };
+});
+
+app.get("/phantom-ai/local-assets", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const q = request.query as Record<string, string | undefined>;
+  const index = await loadLocalAssetIndex(q.refresh === "1" || q.refresh === "true");
+  if (!index.ok && (session.canManageAccess || session.isSuperAdmin)) {
+    (index as { detail?: string }).detail = `Local folder not found at ${index.root}. Set PHANTOMFORCE_LOCAL_ASSET_ROOT in server/.env to your asset folder and restart Hermes.`;
+  }
+  const search = String(q.search || "").trim().toLowerCase();
+  const kind = String(q.kind || "all").trim().toLowerCase();
+  const limit = Math.max(1, Math.min(120, Number(q.limit || 36) || 36));
+  const assets = index.assets
+    .filter((asset) => kind === "all" || asset.kind === kind || asset.category.toLowerCase().includes(kind))
+    .filter((asset) => !search || [asset.title, asset.name, asset.category, asset.app, asset.relativePath, asset.tags.join(" ")].join(" ").toLowerCase().includes(search))
+    .slice(0, limit);
+  return { ok: index.ok, detail: (index as { detail?: string }).detail, root_label: index.rootLabel, source: index.source, count: index.count, returned: assets.length, truncated: index.truncated, assets: assets.map(publicLocalAsset) };
+});
+
+app.get("/phantom-ai/local-assets/:assetId/file", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const { assetId } = request.params as { assetId: string };
+  const index = await loadLocalAssetIndex(false);
+  const asset = index.assets.find((item) => item.id === assetId);
+  if (!asset) return reply.code(404).send({ ok: false, error: "local_asset_not_found" });
+  if (!asset.previewable && !asset.servePath) return reply.code(415).send({ ok: false, error: "local_asset_not_previewable" });
+  const root = localAssetRoot();
+  const resolved = resolve(asset.servePath || asset.localPath);
+  if (!isPathInside(root, resolved)) return reply.code(403).send({ ok: false, error: "local_asset_path_blocked" });
+  const st = await safeStat(resolved);
+  if (!st?.isFile()) return reply.code(404).send({ ok: false, error: "local_asset_file_missing" });
+  return reply
+    .header("content-type", asset.mime || "application/octet-stream")
+    .header("x-content-type-options", "nosniff")
+    .header("cache-control", "private, max-age=3600")
+    .send(createReadStream(resolved));
+});
+
+app.post("/phantom-ai/local-assets/refresh", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const index = await loadLocalAssetIndex(true);
+  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: index.count, generated_at: index.generatedAt, truncated: index.truncated };
+});
 
 app.get("/orgs", async (request, reply) => {
   const dbSession = requireDatabaseSession(request, reply);
@@ -1934,6 +2544,7 @@ type AdminPhantomAiRouteTier = "instant" | "standard" | "deep";
 
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
+  if (value === "local_ollama" || value === "ollama" || value === "local") return "local_ollama";
   if (value === "claude_cli" || value === "claude") return "claude_cli";
   return "codex";
 }
@@ -1967,6 +2578,7 @@ function parseAllowProviderFallback(value: unknown, routeTier: AdminPhantomAiRou
 
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
   if (lane === "glm_5_2") return "Local GLM";
+  if (lane === "local_ollama") return "Local Ollama";
   if (lane === "claude_cli") return "Claude CLI";
   return "Private Brain";
 }
@@ -1976,6 +2588,7 @@ function publicAdminPhantomAiModelLane(lane: AdminPhantomAiModelLane) {
 }
 
 function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
+  if (lane === "local_ollama") return "local" as const;
   if (lane === "glm_5_2") return "local" as const;
   if (lane === "claude_cli") return "claude" as const;
   return "local" as const;
@@ -1997,6 +2610,7 @@ function parseAllowedAdminProviders(value: unknown): AdminPhantomAiProviderId[] 
 
 function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPhantomAiProviderId {
   if (lane === "claude_cli") return "claude_cli";
+  if (lane === "local_ollama") return "local_ollama";
   if (lane === "glm_5_2") return process.env.PHANTOM_FORCE_OPENROUTER_GLM === "true" ? "openrouter_glm" : "local_ollama";
   return "codex_cli";
 }
@@ -2004,6 +2618,7 @@ function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPh
 function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): AdminPhantomAiModelLane {
   if (providerId === "claude_cli") return "claude_cli";
   if (providerId === "codex_cli") return "codex";
+  if (providerId === "local_ollama") return "local_ollama";
   return "glm_5_2";
 }
 
@@ -2132,6 +2747,7 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       env: {
         ...process.env,
         OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434",
+        ...(ctx.requestedModel && ctx.requestedModel !== "local-auto" ? { PHANTOM_OLLAMA_MODEL: ctx.requestedModel } : {}),
         PHANTOM_LOCAL_MODEL_AVAILABLE: "true",
         PHANTOM_OLLAMA_TIMEOUT_MS: String(timeoutMs),
         ...(ctx.requestedModelId ? { PHANTOM_OLLAMA_MODEL: ctx.requestedModelId } : {}),
@@ -2679,6 +3295,24 @@ app.get("/phantom-ai/provider-status", async (request, reply) => {
         ledger_bytes: ledgerStatus.bytes,
       },
     },
+  };
+});
+
+app.get("/phantom-ai/local-models/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    ollama: await getLocalOllamaStatus(),
+    provider_manager: getAdminProviderManagerStatus(),
+    provider_called: false,
+    model_called: false,
+    prompts_sent: false,
   };
 });
 
@@ -3498,9 +4132,19 @@ app.post("/api/vacation-mode/check-in", async (request, reply) => {
    platform moderation. Games run in a browser sandbox; these routes never
    proxy game traffic or expose internal infrastructure. */
 
-async function phantomPlayAccess(session: AccessSession) {
-  if (session.canManageAccess || session.isSuperAdmin) {
-    return { entitled: true, dailyMinuteLimit: 1_000_000, submissionLimit: 100_000, reason: "platform_admin" };
+async function phantomPlayAccess(session: AccessSession, requestedTenantId?: unknown) {
+  const moduleAccess = await moduleAccessForSession(session, "phantomplay", requestedTenantId);
+  if (!moduleAccess.allowed) {
+    return {
+      entitled: false,
+      dailyMinuteLimit: 0,
+      submissionLimit: 0,
+      reason: moduleAccess.reason,
+      moduleAccess,
+    };
+  }
+  if (session.canManageAccess || session.isSuperAdmin || moduleAccess.canManage) {
+    return { entitled: true, dailyMinuteLimit: 1_000_000, submissionLimit: 100_000, reason: "workspace_module", moduleAccess };
   }
   if (session.orgId) {
     try {
@@ -3510,9 +4154,10 @@ async function phantomPlayAccess(session: AccessSession) {
         dailyMinuteLimit: decision.entitlements.limits.phantomPlayMinutesPerDay,
         submissionLimit: decision.entitlements.limits.gameSubmissions,
         reason: decision.reason,
+        moduleAccess,
       };
     } catch {
-      return { entitled: false, dailyMinuteLimit: 0, submissionLimit: 0, reason: "entitlements_unavailable" };
+      return { entitled: false, dailyMinuteLimit: 0, submissionLimit: 0, reason: "entitlements_unavailable", moduleAccess };
     }
   }
   return {
@@ -3520,6 +4165,7 @@ async function phantomPlayAccess(session: AccessSession) {
     dailyMinuteLimit: session.subscriptionActive === false ? 0 : 60,
     submissionLimit: 0,
     reason: session.subscriptionActive === false ? "subscription_inactive" : "legacy_session",
+    moduleAccess,
   };
 }
 
@@ -3527,11 +4173,26 @@ app.get("/api/phantomplay", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const query = (request.query ?? {}) as { tenant_id?: unknown };
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, query.tenant_id);
+  if (!access.entitled) {
+    return reply.code(403).send({
+      ok: false,
+      error: access.reason === "module_disabled"
+        ? "PhantomPlay is not enabled for this workspace."
+        : "PhantomPlay is not available to this account.",
+      reason: access.reason,
+      tenant_id: access.moduleAccess.tenantId,
+      module: {
+        enabled: access.moduleAccess.module?.enabled ?? false,
+        accessMode: access.moduleAccess.module?.accessMode ?? "owner_only",
+      },
+      provider_called: false,
+    });
+  }
   return {
     ok: true,
     session,
-    ...(await getPhantomPlaySnapshot(session, { tenantId: query.tenant_id, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 })),
+    ...(await getPhantomPlaySnapshot(session, { tenantId: access.moduleAccess.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 })),
     subscription: access,
     storage: session.canManageAccess ? await getPhantomPlayStoreStatus() : undefined,
   };
@@ -3540,7 +4201,7 @@ app.get("/api/phantomplay", async (request, reply) => {
 app.patch("/api/phantomplay/profile", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available for this plan.", reason: access.reason });
   return { ok: true, session, ...(await updatePhantomPlayProfile(session, (request.body ?? {}) as Record<string, unknown>)) };
 });
@@ -3548,7 +4209,7 @@ app.patch("/api/phantomplay/profile", async (request, reply) => {
 app.post("/api/phantomplay/plays", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   try {
     return { ok: true, session, ...(await startPhantomPlaySession(session, (request.body ?? {}) as Record<string, unknown>, { entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit })) };
   } catch (error) {
@@ -3560,6 +4221,8 @@ app.patch("/api/phantomplay/plays/:id", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
   const params = request.params as { id?: string };
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "PhantomPlay is not available to this account.", reason: access.reason });
   const play = params.id ? await updatePhantomPlaySession(session, params.id.slice(0, 180), (request.body ?? {}) as Record<string, unknown>) : null;
   return play ? { ok: true, session, play } : reply.code(404).send({ ok: false, error: "Play session was not found." });
 });
@@ -3608,9 +4271,10 @@ app.post("/api/phantomplay/rooms/:code/leave", async (request, reply) => {
 app.post("/api/phantomplay/submissions", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
   const body = (request.body ?? {}) as Record<string, unknown>;
-  const snapshot = await getPhantomPlaySnapshot(session, { tenantId: body.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 });
+  const access = await phantomPlayAccess(session, body.tenantId);
+  if (!access.entitled) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or workspace.", reason: access.reason });
+  const snapshot = await getPhantomPlaySnapshot(session, { tenantId: access.moduleAccess.tenantId, entitled: access.entitled, dailyMinuteLimit: access.dailyMinuteLimit, canSubmitGames: access.submissionLimit > 0 });
   if (!access.entitled || !snapshot.access.canSubmitGames || access.submissionLimit < 1) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or plan." });
   if (snapshot.submissions.length >= access.submissionLimit && !session.canManageAccess) return reply.code(403).send({ ok: false, error: "This plan's game submission limit has been reached." });
   try {
@@ -3623,7 +4287,7 @@ app.post("/api/phantomplay/submissions", async (request, reply) => {
 app.patch("/api/phantomplay/submissions/:id", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
-  const access = await phantomPlayAccess(session);
+  const access = await phantomPlayAccess(session, (request.body as Record<string, unknown> | undefined)?.tenantId);
   if (!access.entitled || access.submissionLimit < 1) return reply.code(403).send({ ok: false, error: "Game submissions are not enabled for this account or plan." });
   const params = request.params as { id?: string };
   try {
@@ -3644,6 +4308,143 @@ app.post("/api/phantomplay/submissions/:id/moderate", async (request, reply) => 
   } catch (error) {
     return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "Moderation decision could not be saved." });
   }
+});
+
+/* ---- PhantomPlay V2: platform layer (social, community, workspace, dev hub) ----
+   Additive routes over ./phantom-ai/phantomplay-v2.ts. V1 routes above are
+   untouched. PHANTOMFORCE_PHANTOMPLAY_V2_ENABLED=false turns all of this off
+   (including V2 game registration) and V1 behaves exactly as before. */
+
+if (phantomPlayV2Enabled()) registerPhantomPlayV2Games();
+
+function phantomPlayV2Gate(reply: FastifyReply) {
+  if (phantomPlayV2Enabled()) return true;
+  reply.code(404).send({ ok: false, error: "phantomplay_v2_disabled" });
+  return false;
+}
+
+function phantomPlayV2Error(reply: FastifyReply, error: unknown) {
+  return reply.code(400).send({ ok: false, error: error instanceof Error ? error.message : "PhantomPlay request could not be completed." });
+}
+
+app.get("/api/phantomplay/v2", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return {
+    ok: true,
+    session,
+    ...(await getPhantomPlayV2Snapshot(session, { tenantId: query.tenant_id })),
+    storage: session.canManageAccess ? await getPhantomPlayV2StoreStatus() : undefined,
+  };
+});
+
+app.post("/api/phantomplay/v2/presence", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  try { return { ok: true, ...(await heartbeatPhantomPlayPresence(session, (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.post("/api/phantomplay/v2/friends", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  try { await mutatePhantomPlayFriend(session, (request.body ?? {}) as Record<string, unknown>); return { ok: true }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.get("/api/phantomplay/v2/games/:id", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { id?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  const page = params.id ? await getPhantomPlayGamePage(session, params.id.slice(0, 180), { tenantId: query.tenant_id }) : null;
+  return page ? { ok: true, ...page } : reply.code(404).send({ ok: false, error: "That game is not in the catalog." });
+});
+
+app.post("/api/phantomplay/v2/games/:id/review", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await upsertPhantomPlayReview(session, String(params.id || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.post("/api/phantomplay/v2/games/:id/wishlist", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { id?: string };
+  try { return { ok: true, ...(await setPhantomPlayWishlist(session, String(params.id || "").slice(0, 180), (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.post("/api/phantomplay/v2/follows", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  try { return { ok: true, ...(await setPhantomPlayFollow(session, (request.body ?? {}) as Record<string, unknown>)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
+});
+
+app.get("/api/phantomplay/v2/discovery", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayDiscovery(session, { tenantId: query.tenant_id })) };
+});
+
+app.get("/api/phantomplay/v2/leaderboard/:gameId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { gameId?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayLeaderboard(session, String(params.gameId || "").slice(0, 180), { tenantId: query.tenant_id })) };
+});
+
+app.get("/api/phantomplay/v2/resume/:gameId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const params = request.params as { gameId?: string };
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayResumeState(session, String(params.gameId || "").slice(0, 180), { tenantId: query.tenant_id })) };
+});
+
+app.get("/api/phantomplay/v2/developer/analytics", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayDeveloperAnalytics(session, { tenantId: query.tenant_id })) };
+});
+
+app.get("/api/phantomplay/v2/workspace-policy", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  return { ok: true, ...(await getPhantomPlayWorkspacePolicy(session, { tenantId: query.tenant_id })) };
+});
+
+app.patch("/api/phantomplay/v2/workspace-policy", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!phantomPlayV2Gate(reply)) return reply;
+  const body = (request.body ?? {}) as Record<string, unknown>;
+  // Workspace policy is an org-owner/admin control, mirroring how V1 gates
+  // submissions: platform admins always may; org members need an admin role.
+  const isWorkspaceAdmin = session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin";
+  if (!isWorkspaceAdmin) return reply.code(403).send({ ok: false, error: "Workspace policy requires an admin or owner role." });
+  try { return { ok: true, ...(await updatePhantomPlayWorkspacePolicy(session, body)) }; }
+  catch (error) { return phantomPlayV2Error(reply, error); }
 });
 
 /* ============================================================================
@@ -3695,9 +4496,89 @@ app.get("/api/competitor-intelligence", async (request, reply) => {
     ok: true,
     session,
     ...(await getCompetitorIntelligenceSnapshot(session, { tenantId: query.tenant_id, ...access })),
+    webDiscovery: getWebDiscoveryStatus(),
     subscription: access,
     storage: session.canManageAccess ? await getCompetitorIntelligenceStoreStatus() : undefined,
   };
+});
+
+app.get("/api/competitor-intelligence/business-profile", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try { return { ok: true, ...(await getBusinessProfile(session, query.tenant_id)) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.put("/api/competitor-intelligence/business-profile", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, ...(await saveBusinessProfile(session, (request.body ?? {}) as Record<string, unknown>)) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/discover", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, discovery: await runCompetitorDiscovery(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+app.post("/api/competitor-intelligence/dossier", async (request, reply) => {
+  const session = requireAccessSession(request, reply); if (!session) return reply;
+  const access = await competitorIntelligenceAccess(session); if (!access.entitled) return reply.code(403).send({ ok: false, error: "Competitor Intelligence is not available for this plan." });
+  try { return { ok: true, dossier: await runCompetitorDossier(session, (request.body ?? {}) as Record<string, unknown>) }; } catch (error) { return intelligenceError(reply, error); }
+});
+
+/* ============================================================================
+   ORGANIZATION PULSE + BRAIN GRAPH
+   One tenant-scoped aggregation over every real store: live attention data
+   for the dashboard and a real-entity graph with honest gap detection. */
+
+async function pulseAccessFor(session: AccessSession, requestedTenant: unknown) {
+  const ciAccess = await competitorIntelligenceAccess(session);
+  const dbSession = asDatabaseSession(session);
+  const canManage = Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin");
+  const own = session.orgId || session.clientId || session.id;
+  // Non-managing sessions are pinned to their own tenant — the requested id
+  // is honored only for platform admins/owners (same rule as every store).
+  const requested = typeof requestedTenant === "string" && requestedTenant.trim() ? requestedTenant.trim().slice(0, 120) : "";
+  return {
+    tenantId: canManage && requested ? requested : own,
+    orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+    competitorEntitled: ciAccess.entitled,
+    canManage,
+  };
+}
+
+app.get("/api/organization/pulse", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, pulse: await getOrganizationPulse(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Pulse could not be assembled." });
+  }
+});
+
+app.get("/api/organization/graph", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, graph: await getOrganizationGraph(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Graph could not be assembled." });
+  }
+});
+
+app.get("/api/organization/opportunities", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, ...(await getOrganizationOpportunities(session, await pulseAccessFor(session, query.tenant_id))) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Opportunities could not be assembled." });
+  }
 });
 
 app.patch("/api/competitor-intelligence/mode", async (request, reply) => {
@@ -6318,6 +7199,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     allowed_providers?: unknown;
     admin_model?: unknown;
     model_lane?: unknown;
+    requested_model?: unknown;
     message?: unknown;
     tenant_id?: unknown;
     business_name?: unknown;
@@ -6394,6 +7276,35 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       } catch { /* retrieval is additive only */ }
     }
   }
+
+  /* Workspace pulse — live org state (approvals waiting, failed runs,
+     competitor coverage, asset inventory) so Phantom answers from what the
+     business is ACTUALLY doing right now, not memory alone. Additive only. */
+  try {
+    const dbSession = asDatabaseSession(session);
+    const ciAccess = await competitorIntelligenceAccess(session);
+    const pulse = await getOrganizationPulse(session, {
+      tenantId: normalized.tenant_id,
+      orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+      competitorEntitled: ciAccess.entitled,
+      canManage: Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin"),
+    });
+    const opportunityReport = await getOrganizationOpportunities(session, {
+      tenantId: normalized.tenant_id,
+      orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+      competitorEntitled: ciAccess.entitled,
+      canManage: Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin"),
+    }, pulse);
+    normalized.module_data.push({
+      module: "workspace_pulse",
+      summary: buildWorkspaceAwarenessText(pulse).slice(0, 900),
+      items: opportunityReport.opportunities.slice(0, 3).map((opportunity) => ({
+        title: `Opportunity (${opportunity.impact}): ${opportunity.title}`.slice(0, 120),
+        status: opportunity.action.label.slice(0, 60),
+        detail: opportunity.why.slice(0, 200),
+      })),
+    });
+  } catch { /* awareness is additive only */ }
 
   const chatMemoryKey = buildChatMemoryKey(session, normalized);
   const privacyFirstLocationReply = await buildPrivacyFirstLocationReply(normalized.user_request, session, chatMemoryKey);
