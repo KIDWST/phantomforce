@@ -27,7 +27,7 @@ try {
   const play = await import("../src/phantom-ai/phantomplay.js");
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
-  assert(initial.catalog.length === 8, "Eight real built-in games should ship.");
+  assert(initial.catalog.length === 20, "Twenty real built-in games should ship (8 trunk originals + 12 adopted from origin/main).");
   assert(play.PHANTOMPLAY_ENGINE.version === "2.0-large-map" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
   assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));

@@ -276,6 +276,12 @@ import {
   updateAggressiveMode,
 } from "./phantom-ai/competitor-intelligence.js";
 import {
+  buildWorkspaceAwarenessText,
+  getOrganizationGraph,
+  getOrganizationOpportunities,
+  getOrganizationPulse,
+} from "./phantom-ai/organization-pulse.js";
+import {
   getAutonomousSecurityScanStatus,
   startAutonomousSecurityScanScheduler,
 } from "./phantom-ai/security-scan-scheduler.js";
@@ -3904,6 +3910,58 @@ for (const [route, handler] of intelligenceCreateRoutes) {
   });
 }
 
+/* ============================================================================
+   ORGANIZATION PULSE + BRAIN GRAPH
+   One tenant-scoped aggregation over real stores: live attention data for the
+   dashboard, graph, and chat context. */
+
+async function pulseAccessFor(session: AccessSession, requestedTenant: unknown) {
+  const ciAccess = await competitorIntelligenceAccess(session);
+  const dbSession = asDatabaseSession(session);
+  const canManage = Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin");
+  const own = session.orgId || session.clientId || session.id;
+  const requested = typeof requestedTenant === "string" && requestedTenant.trim() ? requestedTenant.trim().slice(0, 120) : "";
+  return {
+    tenantId: canManage && requested ? requested : own,
+    orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+    competitorEntitled: ciAccess.entitled,
+    canManage,
+  };
+}
+
+app.get("/api/organization/pulse", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, pulse: await getOrganizationPulse(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Pulse could not be assembled." });
+  }
+});
+
+app.get("/api/organization/graph", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, graph: await getOrganizationGraph(session, await pulseAccessFor(session, query.tenant_id)) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Graph could not be assembled." });
+  }
+});
+
+app.get("/api/organization/opportunities", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, ...(await getOrganizationOpportunities(session, await pulseAccessFor(session, query.tenant_id))) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Opportunities could not be assembled." });
+  }
+});
+
 function buildHermesInteractionMemoryPreviewFromBody(
   body: {
     tenant_id?: unknown;
@@ -6549,6 +6607,35 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       } catch { /* retrieval is additive only */ }
     }
   }
+
+  /* Workspace pulse — live org state (approvals waiting, failed runs,
+     competitor coverage, asset inventory) so Phantom answers from what the
+     business is ACTUALLY doing right now, not memory alone. Additive only. */
+  try {
+    const dbSession = asDatabaseSession(session);
+    const ciAccess = await competitorIntelligenceAccess(session);
+    const pulse = await getOrganizationPulse(session, {
+      tenantId: normalized.tenant_id,
+      orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+      competitorEntitled: ciAccess.entitled,
+      canManage: Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin"),
+    });
+    const opportunityReport = await getOrganizationOpportunities(session, {
+      tenantId: normalized.tenant_id,
+      orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+      competitorEntitled: ciAccess.entitled,
+      canManage: Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin"),
+    }, pulse);
+    normalized.module_data.push({
+      module: "workspace_pulse",
+      summary: buildWorkspaceAwarenessText(pulse).slice(0, 900),
+      items: opportunityReport.opportunities.slice(0, 3).map((opportunity) => ({
+        title: `Opportunity (${opportunity.impact}): ${opportunity.title}`.slice(0, 120),
+        status: opportunity.action.label.slice(0, 60),
+        detail: opportunity.why.slice(0, 200),
+      })),
+    });
+  } catch { /* awareness is additive only */ }
 
   const chatMemoryKey = buildChatMemoryKey(session, normalized);
   const privacyFirstLocationReply = await buildPrivacyFirstLocationReply(normalized.user_request, session, chatMemoryKey);

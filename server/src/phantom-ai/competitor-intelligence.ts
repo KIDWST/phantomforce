@@ -89,20 +89,29 @@ type AutoScoutReport = {
   }>;
   opportunities: Array<{ title: string; detail: string; action: string; impact: number; tone: "good" | "warn" | "hot" | "neutral" }>;
 };
+export type BusinessProfile = {
+  businessName: string; category: string; location: string; offer: string; audience: string; goals: string; createdAt: string; updatedAt: string;
+};
+export type DiscoveryRun = { id: string; tenantId: string; status: "completed" | "blocked" | "draft"; summary: string; createdAt: string };
+export type CompetitorDossier = { id: string; tenantId: string; competitorId: string; summary: string; sourceUrls: string[]; createdAt: string };
 
 type TenantState = {
   settings: { aggressiveMode: boolean; modeChangedAt: string | null; publicSourcesOnly: true; individualTargeting: false; externalActions: false; scoutContext: ScoutContext | null; scoutEnabled: boolean; scoutCadence: "manual" | "daily"; lastScoutRunAt: string | null };
+  businessProfile: BusinessProfile | null; discoveryRuns: DiscoveryRun[]; dossiers: CompetitorDossier[];
   competitors: CompetitorRecord[]; signals: SignalRecord[]; inferences: InferenceRecord[]; audienceThemes: AudienceTheme[];
   creativeAnalyses: CreativeAnalysis[]; interceptions: InterceptionPackage[]; opportunities: ResearchOpportunity[];
   mysteryEvidence: MysteryEvidence[]; audit: AuditRecord[];
 };
 type Store = { version: 1; tenants: Record<string, TenantState> };
-const freshTenant = (): TenantState => ({ settings: { aggressiveMode: false, modeChangedAt: null, publicSourcesOnly: true, individualTargeting: false, externalActions: false, scoutContext: null, scoutEnabled: false, scoutCadence: "manual", lastScoutRunAt: null }, competitors: [], signals: [], inferences: [], audienceThemes: [], creativeAnalyses: [], interceptions: [], opportunities: [], mysteryEvidence: [], audit: [] });
+const freshTenant = (): TenantState => ({ settings: { aggressiveMode: false, modeChangedAt: null, publicSourcesOnly: true, individualTargeting: false, externalActions: false, scoutContext: null, scoutEnabled: false, scoutCadence: "manual", lastScoutRunAt: null }, businessProfile: null, discoveryRuns: [], dossiers: [], competitors: [], signals: [], inferences: [], audienceThemes: [], creativeAnalyses: [], interceptions: [], opportunities: [], mysteryEvidence: [], audit: [] });
 let writeChain = Promise.resolve();
 
 function normalizeTenantState(state: TenantState): TenantState {
   const fresh = freshTenant();
   state.settings = { ...fresh.settings, ...(state.settings || {}) };
+  state.businessProfile = state.businessProfile && typeof state.businessProfile === "object" ? state.businessProfile : null;
+  state.discoveryRuns = Array.isArray(state.discoveryRuns) ? state.discoveryRuns : [];
+  state.dossiers = Array.isArray(state.dossiers) ? state.dossiers : [];
   state.competitors = Array.isArray(state.competitors) ? state.competitors : [];
   state.signals = Array.isArray(state.signals) ? state.signals : [];
   state.inferences = Array.isArray(state.inferences) ? state.inferences : [];
@@ -113,6 +122,22 @@ function normalizeTenantState(state: TenantState): TenantState {
   state.mysteryEvidence = Array.isArray(state.mysteryEvidence) ? state.mysteryEvidence : [];
   state.audit = Array.isArray(state.audit) ? state.audit : [];
   return state;
+}
+
+function profileFromState(state: TenantState): BusinessProfile | null {
+  if (state.businessProfile?.businessName) return state.businessProfile;
+  const scout = state.settings.scoutContext;
+  if (!scout?.businessName) return null;
+  return {
+    businessName: scout.businessName,
+    category: scout.offer || "category not set",
+    location: scout.location,
+    offer: scout.offer,
+    audience: scout.audience,
+    goals: scout.goals,
+    createdAt: scout.createdAt,
+    updatedAt: scout.updatedAt,
+  };
 }
 
 function clean(value: unknown, max = 1000) { return redactSensitiveText(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, max); }
@@ -484,6 +509,9 @@ export async function getCompetitorIntelligenceSnapshot(session: AccessSession, 
     access: { enabled: options.entitled, aggressiveAvailable: options.aggressiveEntitled, canManage: session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin", competitorLimit: options.competitorLimit, signalLimit: options.signalLimit },
     signalTypes: SIGNAL_TYPES,
     settings: state.settings,
+    businessProfile: profileFromState(state),
+    discoveryRuns: state.discoveryRuns,
+    dossiers: state.dossiers,
     scout,
     autoScout,
     marketBoardMode,

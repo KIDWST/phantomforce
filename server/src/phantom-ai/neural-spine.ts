@@ -137,6 +137,7 @@ export type BrainStoreOptions = {
   memoryPath?: string;
   eventsPath?: string;
   tenantId?: string | null;
+  readOnly?: boolean;
 };
 
 function resolveBrainMemoryPath(pathFromEnv = process.env.PHANTOM_BRAIN_MEMORY_PATH) {
@@ -392,7 +393,7 @@ export async function listBrainMemories(
   session: AccessSession,
   options: BrainStoreOptions & { includeInactive?: boolean; limit?: number; type?: unknown } = {},
 ) {
-  await ensureBrainBootstrapMemories(session, options);
+  if (!options.readOnly) await ensureBrainBootstrapMemories(session, options);
   const { memoryPath } = storePaths(options);
   const scope = scopeForSession(session, options);
   const read = await readJsonl(memoryPath, isMemoryRecord, 5000);

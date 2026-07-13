@@ -47,6 +47,7 @@ export const PHANTOMPLAY_ENGINE = {
 } as const;
 const artUrl = (file: string) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
 const TAK_AVATAR = artUrl("tak-avatar.webp");
+const TAK_CREATOR = "Tak";
 const GAME_ART_BY_SLUG: Record<string, string> = {
   "neon-drift": artUrl("neon-drift-cover.webp"),
   "signal-match": artUrl("signal-match-cover.webp"),
@@ -318,6 +319,90 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     progressSupport: true,
     scoreSupport: true,
     engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
+  },
+  {
+    id: "color-rush", title: "Color Rush", summary: "Catch only the target color as the tiles fall faster.",
+    description: "Four falling columns and a rotating target color. Catch the right hue, ignore the rest, keep three lives.",
+    category: "Arcade", tags: ["reaction", "color", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/color-rush.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
+    controls: "A/S/D/F or tap a column", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "tile-flow", title: "Tile Flow", summary: "Rotate the pipes to connect the signal end to end.",
+    description: "Eight hand-verified solvable levels. Turn each tile until the flow reaches the exit.",
+    category: "Puzzle", tags: ["logic", "calm", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/tile-flow.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0",
+    controls: "Click/tap to rotate, arrows to move", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "tower-tactics", title: "Tower Tactics", summary: "Slide and merge matching tiles to build the highest number.",
+    description: "A tight 4x4 merge puzzle. Plan your slides — the board fills fast when you stop thinking ahead.",
+    category: "Strategy", tags: ["merge", "strategy", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/tower-tactics.html", thumbnail: "/app/assets/poses/mode-dark-admin.webp", featured: false, version: "1.0.0",
+    controls: "Arrow keys or swipe", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "breath-pacer", title: "Breath Pacer", summary: "Match your breath to the pacer and reset in two minutes.",
+    description: "A box-breathing companion. Follow the expanding ring through inhale, hold, exhale, hold and score your timing.",
+    category: "Focus", tags: ["calm", "breathing", "wellness", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/breath-pacer.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: false, version: "1.0.0",
+    controls: "Tap or press Space on each phase", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "court-vision", title: "Court Vision", summary: "Read the arc and power to sink the free throw.",
+    description: "A physics free-throw shooter. The distance and rim grow with every make; three misses ends the game.",
+    category: "Sports", tags: ["sports", "physics", "timing", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/court-vision.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: false, version: "1.0.0",
+    controls: "Tap or press Space to shoot", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "pixel-bloom", title: "Pixel Bloom", summary: "Bloom a symmetric neon mandala — no timer, no pressure.",
+    description: "A calm creative toy. Place petals that mirror four ways; build combos as the pattern fills.",
+    category: "Creative", tags: ["calm", "creative", "relax", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/pixel-bloom.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
+    controls: "Tap cells or arrows + Space", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "circuit-serpent", title: "Circuit Serpent", summary: "Grow the serpent — eat packets, dodge walls and your own tail.",
+    description: "Classic snake on a 17x17 circuit board. Speed climbs every five packets; one crash ends the run.",
+    category: "Arcade", tags: ["snake", "classic", "reaction", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/circuit-serpent.html", thumbnail: "/app/assets/poses/mode-dark-admin.webp", featured: false, version: "1.0.0",
+    controls: "Arrows/WASD, swipe, or tap screen edges", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "echo-sequence", title: "Echo Sequence", summary: "Watch the pads light up, then echo the pattern back.",
+    description: "A memory-sequence classic with four glowing pads and original tones. One wrong echo ends the run.",
+    category: "Focus", tags: ["memory", "sequence", "sound", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/echo-sequence.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: true, version: "1.0.0",
+    controls: "Tap pads or press 1-4", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "signal-sweeper", title: "Signal Sweeper", summary: "Clear the grid without touching a mine — the numbers tell the truth.",
+    description: "Minesweeper with a guaranteed-safe first reveal, flag mode, long-press flagging, and a race-the-clock score.",
+    category: "Strategy", tags: ["logic", "classic", "mines", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/signal-sweeper.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0",
+    controls: "Tap to reveal, long-press or F to flag", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "neon-breaker", title: "Neon Breaker", summary: "Break every brick — the angle is yours to control.",
+    description: "Breakout with real deflection physics, six brick tiers, and levels that speed up as you clear them.",
+    category: "Arcade", tags: ["classic", "paddle", "levels", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/neon-breaker.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.0",
+    controls: "Drag or Arrow keys, Space to launch", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "type-storm", title: "Type Storm", summary: "Type the falling words before they breach your shields.",
+    description: "A typing sprint with 200 words, combo streaks, and a pace that keeps climbing. Three shields, no mercy.",
+    category: "Focus", tags: ["typing", "speed", "keyboard", "words"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/type-storm.html", thumbnail: "/app/assets/poses/mode-dark-write.webp", featured: false, version: "1.0.0",
+    controls: "Just type — tap first on mobile", progressSupport: true, scoreSupport: true,
+  },
+  {
+    id: "logic-lights", title: "Logic Lights", summary: "Turn every light off — each tap flips its neighbors too.",
+    description: "Ten hand-guaranteed solvable Lights Out levels with par scores. Beat par, bank the points.",
+    category: "Puzzle", tags: ["logic", "lights-out", "calm", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
+    launchUrl: "/app/games/logic-lights.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
+    controls: "Tap cells or arrows + Enter", progressSupport: true, scoreSupport: true,
   },
 ];
 
