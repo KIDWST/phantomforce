@@ -15,7 +15,6 @@ const appFiles = [index, main, module, ...games];
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
 assert.match(main, /renderPhantomPlay/u, "The workspace must use the PhantomPlay renderer.");
-assert.match(read("../app/js/customization.js"), /canAccessConfiguredModule[\s\S]*module\.id !== "phantomplay"[\s\S]*selected_members/u, "PhantomPlay nav access must be controlled by the workspace module configuration.");
 assert.match(main, /sessionId:\s*kind === "admin" \? "admin-jordan" : "client-sports-demo"/u, "Local UI tests must obtain a real protected demo session when the local backend is available.");
 assert.match(index, /phantomplay\.css\?v=phantom-live-/u, "The dedicated PhantomPlay stylesheet must be loaded.");
 assert.match(module, /sandbox="allow-scripts"/u, "Games must launch in a script-only sandbox.");

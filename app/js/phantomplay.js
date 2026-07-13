@@ -49,7 +49,6 @@ const ui = {
   tab: "home",
   loading: true,
   error: "",
-  notice: "",
   offline: false,
   query: "",
   category: "All",
@@ -153,7 +152,6 @@ function offlineState() {
     catalog: BUILT_INS.map(normalizeGame),
     favorites: Array.isArray(saved.favorites) ? saved.favorites : [],
     history: Array.isArray(saved.history) ? saved.history : [],
-    leaderboards: { overall: [], byGame: [] },
     preferences: { contentRating: "teen", sound: saved.sound !== false, reducedMotion: !!saved.reducedMotion, allowCommunityGames: true },
     engine: PHANTOMPLAY_ENGINE,
     rooms: [],
@@ -211,16 +209,6 @@ function icon(name) {
 
 function historyFor(gameId) {
   return ui.snapshot?.history?.find((item) => item.gameId === gameId) || null;
-}
-
-function fallbackLeaderboards(snapshot = ui.snapshot) {
-  const history = Array.isArray(snapshot?.history) ? snapshot.history : [];
-  const catalog = Array.isArray(snapshot?.catalog) ? snapshot.catalog : [];
-  const rows = history.filter((item) => item.score != null).map((item) => {
-    const game = catalog.find((entry) => entry.id === item.gameId);
-    return { gameId: item.gameId, gameTitle: game?.title || item.gameId, player: "You", score: Number(item.score) || 0, seconds: Number(item.seconds) || 0, updatedAt: item.lastPlayedAt, isYou: true };
-  }).sort((a, b) => b.score - a.score || a.seconds - b.seconds);
-  return { overall: rows.slice(0, 10), byGame: catalog.map((game) => ({ gameId: game.id, gameTitle: game.title, rows: rows.filter((row) => row.gameId === game.id).slice(0, 5) })).filter((board) => board.rows.length) };
 }
 
 function playTimeLabel(value, compact = false) {
@@ -292,7 +280,7 @@ function gameCard(game, variant = "") {
     <p>${esc(game.summary)}</p>
     <div class="pp-game-meta"><span>${esc(game.contentRating === "everyone" ? "Everyone" : game.contentRating)}</span><span>v${esc(game.version)}</span>${history?.score != null ? `<span>Best ${history.score}</span>` : ""}</div>
     ${history?.canContinue ? `<div class="pp-progress"><i style="width:${Math.max(3, Math.min(100, history.progress))}%"></i></div>` : ""}
-    <div class="pp-game-actions"><button class="pp-play" type="button" data-pp-play="${esc(game.id)}">${icon("play")} ${history?.canContinue ? "Continue" : "Play now"}</button><button class="pp-support" type="button" data-pp-support="${esc(game.developer)}">Support this creator</button></div></div>
+    <button class="pp-play" type="button" data-pp-play="${esc(game.id)}">${icon("play")} ${history?.canContinue ? "Continue" : "Play now"}</button></div>
   </article>`;
 }
 
@@ -337,20 +325,6 @@ function renderHome() {
     ${gameRows(community, "Shared prototypes", "Reviewed builds from dev rooms appear here when they are safe to test.")}
     <section class="pp-spotlight"><img src="${esc(TAK_AVATAR)}" alt=""/><div><p class="pp-kicker">SANDBOX BUILDER SPOTLIGHT</p><h2>${esc(ui.snapshot.developerSpotlight)}</h2><p>PhantomPlay is for creators who want a private build room, playtest feedback, version notes, and a clean path to ship later.</p><button class="pp-secondary" data-pp-tab="developer">Open dev rooms</button></div></section>
   </div>`;
-}
-
-function leaderboardRows(rows = []) {
-  return rows.length ? rows.map((row, index) => `<li class="${row.isYou ? "is-you" : ""}"><b>#${index + 1}</b><span>${esc(row.player)}</span><strong>${Number(row.score).toLocaleString()}</strong><em>${esc(row.gameTitle || "")}</em></li>`).join("") : `<li class="is-empty"><span>No scores yet. Play a game and claim the board.</span></li>`;
-}
-
-function renderLeaderboardPreview() {
-  const boards = (ui.snapshot.leaderboards?.overall?.length || ui.snapshot.leaderboards?.byGame?.length) ? ui.snapshot.leaderboards : fallbackLeaderboards();
-  return `<section class="pp-leaderboard pp-leaderboard-preview"><div class="pp-section-head"><div><h2>Phantom leaderboard</h2><p>Compare scores across players without exposing private game behavior.</p></div><button type="button" data-pp-tab="leaderboard">View board</button></div><ol>${leaderboardRows((boards.overall || []).slice(0, 5))}</ol></section>`;
-}
-
-function renderLeaderboard() {
-  const boards = (ui.snapshot.leaderboards?.overall?.length || ui.snapshot.leaderboards?.byGame?.length) ? ui.snapshot.leaderboards : fallbackLeaderboards();
-  return `<section class="pp-leaderboard"><div class="pp-section-head"><div><h2>Phantom leaderboard</h2><p>Top scores across PhantomPlay creator games.</p></div></div><ol>${leaderboardRows(boards.overall || [])}</ol><div class="pp-board-grid">${(boards.byGame || []).map((board) => `<article><h3>${esc(board.gameTitle)}</h3><ol>${leaderboardRows(board.rows || [])}</ol></article>`).join("") || empty("No leaderboard data yet", "Play a score-enabled game to seed the first leaderboard.")}</div></section>`;
 }
 
 function filteredCatalog() {
@@ -529,9 +503,8 @@ function render() {
     <header class="pp-top"><div><p class="pp-kicker">PHANTOMFORCE GAME SANDBOX</p><h1>PhantomPlay</h1><span>Play, build, test, and return to work sharper.</span></div><div><span class="pp-access ${snapshot.access.enabled ? "is-ready" : "is-blocked"}">${snapshot.access.enabled ? esc(playTimeLabel(snapshot.access.remainingMinutesToday)) : "Plan restricted"}</span><button class="pp-settings-button" data-pp-settings aria-label="Play settings">${icon("settings")}</button></div></header>
     ${ui.offline ? `<div class="pp-banner is-offline"><b>Offline mode</b><span>Built-in games still work. Favorites and progress will sync after the server returns.</span><button data-pp-retry>Retry</button></div>` : ""}
     ${ui.error && !ui.offline ? `<div class="pp-banner is-error"><b>PhantomPlay needs attention</b><span>${esc(ui.error)}</span><button data-pp-retry>Retry</button></div>` : ""}
-    ${ui.notice ? `<div class="pp-banner is-notice"><b>Creator support</b><span>${esc(ui.notice)}</span><button data-pp-clear-notice>OK</button></div>` : ""}
     <nav class="pp-tabs" aria-label="PhantomPlay sections">${tabs.map(([id, label]) => `<button type="button" class="${ui.tab === id ? "is-active" : ""}" data-pp-tab="${id}">${esc(label)}</button>`).join("")}</nav>
-    <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "This optional workspace module is separate from core PhantomForce operations. Ask a workspace owner to enable access if your team uses it.")}</main>
+    <main class="pp-content">${snapshot.access.enabled ? content : empty("PhantomPlay is unavailable", "Ask your business owner to enable PhantomPlay for this plan.")}</main>
     ${settingsMarkup()}${playerMarkup()}
   </div>`;
   bind();
@@ -572,7 +545,6 @@ async function launch(gameId) {
     playTickAt = Date.now();
     render();
     startClock();
-    armReadyWatchdog();
   } catch (error) { ui.error = error.message; render(); }
 }
 
@@ -651,7 +623,6 @@ async function closePlayer() {
   postToGame("exit", { focus: false });
   if (document.fullscreenElement) await document.exitFullscreen?.().catch(() => undefined);
   clearInterval(playClock);
-  clearTimeout(readyWatchdog);
   await persistPlay(true);
   ui.player = null;
   ui.playerReady = false;
@@ -698,7 +669,6 @@ function onGameMessage(event) {
   }
   if (event.data.type === "ready") {
     ui.playerReady = true;
-    clearTimeout(readyWatchdog);
     mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
     frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion, engine: engineFor(ui.player.game) }, "*");
     frame.focus?.({ preventScroll: true });
@@ -800,8 +770,6 @@ function saveDeveloperNote(devId, text) {
 
 function bind() {
   mountedRoot.querySelectorAll("[data-pp-tab]").forEach((button) => button.onclick = () => { ui.tab = button.dataset.ppTab; render(); });
-  mountedRoot.querySelectorAll("[data-pp-support]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); ui.notice = `${button.dataset.ppSupport || "This creator"} support is queued for the creator profile/payments layer. For now, favorites and leaderboard plays help boost discovery.`; render(); });
-  mountedRoot.querySelector("[data-pp-clear-notice]")?.addEventListener("click", () => { ui.notice = ""; render(); });
   mountedRoot.querySelectorAll("[data-pp-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppPlay));
   mountedRoot.querySelectorAll("[data-pp-favorite]").forEach((button) => button.onclick = (event) => { event.stopPropagation(); updateFavorite(button.dataset.ppFavorite); });
   mountedRoot.querySelectorAll("[data-pp-category]").forEach((button) => button.onclick = () => { ui.category = button.dataset.ppCategory; render(); });
@@ -833,12 +801,6 @@ function bind() {
   mountedRoot.querySelectorAll("[data-pp-edit-submission]").forEach((button) => button.onclick = () => { ui.editingSubmissionId = button.dataset.ppEditSubmission; render(); mountedRoot.querySelector("[data-pp-submit-form]")?.scrollIntoView({ behavior: "smooth", block: "start" }); });
   mountedRoot.querySelector("[data-pp-cancel-edit]")?.addEventListener("click", () => { ui.editingSubmissionId = null; render(); });
   mountedRoot.querySelectorAll("[data-pp-moderate]").forEach((button) => button.onclick = () => moderate(button));
-  const copyProtocol = mountedRoot.querySelector("[data-pp-copy-protocol]");
-  if (copyProtocol) copyProtocol.addEventListener("click", async () => {
-    try { await navigator.clipboard.writeText(PROTOCOL_SNIPPET); copyProtocol.textContent = "Copied to clipboard ✓"; }
-    catch { copyProtocol.textContent = "Select the snippet below and copy"; }
-    setTimeout(() => { copyProtocol.textContent = "Copy protocol snippet"; }, 2200);
-  });
 }
 
 export function renderPhantomPlay(root, opts = {}) {

@@ -1089,13 +1089,13 @@ function consumeEditIntent(opts = {}) {
     type: "image",
     url: intent.url,
     saved: true,
-    meta: { prompt: intent.prompt || "", title: intent.title || "Content Hub edit" },
+    meta: { prompt: intent.prompt || "", title: intent.title || "Creator Hub edit" },
   };
   if (!session.assets.some((item) => item.id === asset.id)) session.assets.unshift(asset);
   session.edit = { url: asset.url, type: "image", id: asset.id };
   session.tab = "edit";
   resetEdit();
-  opts.notify?.("Media Factory", `loaded ${intent.title || "Content Hub asset"} for local edit.`);
+  opts.notify?.("Media Factory", `loaded ${intent.title || "Creator Hub asset"} for local edit.`);
 }
 
 function consumePromptIntent(opts = {}) {
@@ -1117,7 +1117,6 @@ const NAV_TABS = [
   ["edit", "Edit"],
 ];
 const NAV_DRAWERS = [
-  ["assets", "Assets", "image"],
   ["templates", "Templates", "layout"],
   ["history", "History", "clock"],
   ["engine", "Engine", "cpu"],
@@ -1126,110 +1125,49 @@ let activeDrawer = null;
 let pendingJobs = [];
 
 export function renderMediaStudio(el, opts = {}) {
-  if (opts.initialTab && el.dataset.mlInitialTab !== opts.initialTab) {
-    session.tab = opts.initialTab;
-    el.dataset.mlInitialTab = opts.initialTab;
-  }
   consumeEditIntent(opts);
   consumePromptIntent(opts);
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   if (session.tab === "briefs") session.tab = "pending";
-  if (activeDrawer !== "assets") localAssetsDrawerSynced = false;
-  /* while a local-asset drag is live, the tab buttons stand in as drop targets
-     for surfaces that only exist on their own tab */
-  const tabDropAttrs = (id) => {
-    if (id === "edit" && session.tab !== "edit") return ` data-ml-dropzone="edit" data-ml-dropzone-label="Drop to open in editor"`;
-    if (id === "generate" && session.tab !== "generate") return ` data-ml-dropzone="ref" data-ml-dropzone-label="Drop to use as reference"`;
-    return "";
-  };
   el.innerHTML = `
     <div class="ml">
       <div class="ml-topbar">
+        <button class="ml-back" data-ml-back type="button" aria-label="Go back"><span aria-hidden="true">&larr;</span><em>Back</em></button>
         <nav class="ml-tabs" role="tablist" aria-label="Media Lab views">
-          ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}"${tabDropAttrs(id)}>${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
+          ${NAV_TABS.map(([id, label]) => `<button class="ml-tab ${session.tab === id && !activeDrawer ? "is-active" : ""}" role="tab" aria-selected="${session.tab === id && !activeDrawer}" data-ml-tab="${id}">${label}${id === "library" && session.assets.length ? ` · ${session.assets.length}` : ""}</button>`).join("")}
         </nav>
-        <button class="ml-asset-open ${activeDrawer === "assets" ? "is-active" : ""}" data-ml-drawer-open="assets" type="button">${svgIc("image")} Assets</button>
         <button class="ml-settings-gear ${activeDrawer === "settings" ? "is-active" : ""}" data-ml-open-local-settings type="button" title="Media Lab settings" aria-label="Media Lab settings">${svgIc("gear")}</button>
       </div>
       <div class="ml-body" data-ml-body></div>
       ${activeDrawer ? drawerHtml(activeDrawer, cfg, esc, opts) : ""}
     </div>`;
+  el.querySelector("[data-ml-back]")?.addEventListener("click", () => {
+    if (window.history.length > 1) window.history.back();
+    else opts.openWorkspace?.("home");
+  });
   el.querySelectorAll("[data-ml-tab]").forEach((b) => b.onclick = () => { session.tab = b.dataset.mlTab; activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelectorAll("[data-ml-drawer-open]").forEach((b) => b.onclick = () => { activeDrawer = activeDrawer === b.dataset.mlDrawerOpen ? null : b.dataset.mlDrawerOpen; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-open-local-settings]")?.addEventListener("click", () => { activeDrawer = activeDrawer === "settings" ? null : "settings"; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-drawer-close]")?.addEventListener("click", () => { activeDrawer = null; renderMediaStudio(el, opts); });
   el.querySelector("[data-ml-drawer-backdrop]")?.addEventListener("click", () => { activeDrawer = null; renderMediaStudio(el, opts); });
-  ensureMediaLabDnd(el, opts);
   wireDrawer(el, activeDrawer, cfg, opts, esc);
   const body = el.querySelector("[data-ml-body]");
   if (session.tab === "generate") renderGenerate(body, cfg, opts, el);
   else if (session.tab === "pending") (opts.renderPending ? opts.renderPending(body) : renderPending(body));
   else if (session.tab === "edit") renderEdit(body, cfg, opts, el);
-  else if (session.tab === "library") {
-    session.tab = "generate";
-    renderGenerate(body, cfg, opts, el);
-  }
+  else if (session.tab === "library") renderLibrary(body, opts, el);
 }
 
 /* ---- drawers: Templates / History / Engine / Settings — local Media Lab only ---- */
 function drawerHtml(kind, cfg, esc, opts) {
-  const titleFor = { assets: "Local Assets", templates: "Templates", history: "History", engine: "Engine", settings: "Media Lab settings" };
+  const titleFor = { templates: "Templates", history: "History", engine: "Engine", settings: "Media Lab settings" };
   return `
     <div class="ml-drawer-backdrop" data-ml-drawer-backdrop></div>
     <aside class="ml-drawer" role="dialog" aria-label="${titleFor[kind]}">
       <header class="ml-drawer-head"><b>${titleFor[kind]}</b><button class="ml-drawer-x" data-ml-drawer-close aria-label="Close">${svgIc("close")}</button></header>
-      <div class="ml-drawer-body">${kind === "assets" ? localAssetsDrawerHtml(esc) : kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : kind === "settings" ? mediaSettingsDrawerHtml(cfg, esc) : engineDrawerHtml(cfg, esc)}</div>
+      <div class="ml-drawer-body">${kind === "templates" ? templatesDrawerHtml(esc) : kind === "history" ? historyDrawerHtml(esc) : kind === "settings" ? mediaSettingsDrawerHtml(cfg, esc) : engineDrawerHtml(cfg, esc)}</div>
     </aside>`;
-}
-function localAssetsDrawerHtml(esc) {
-  const s = localAssetsState;
-  const kinds = [
-    ["all", "All"],
-    ["image", "Images"],
-    ["video", "Video"],
-    ["project", "Projects"],
-    ["archive", "Archives"],
-    ["folder", "Templates"],
-  ];
-  return `
-    <p class="ml-drawer-note">Your local media library on this PC. Nothing is uploaded to Asset Cloud; files stay on this machine and are only pulled into the editor when you choose one.</p>
-    <div class="ml-asset-controls">
-      <input class="ml-text-in" data-ml-local-search placeholder="Search local assets..." value="${esc(s.search)}"/>
-      <button class="ml-generate ml-ghost ml-inline" data-ml-local-refresh type="button">${svgIc("spark")} Refresh</button>
-    </div>
-    <div class="ml-chips ml-chips-wrap ml-local-kinds">
-      ${kinds.map(([id, label]) => `<button type="button" class="${s.kind === id ? "is-on" : ""}" data-ml-local-kind="${id}">${label}</button>`).join("")}
-    </div>
-    <div class="ml-local-summary">
-      <b>${s.loading ? "Indexing..." : `${s.count || 0} assets indexed`}</b>
-      <span>${esc(s.rootLabel || "Local library")} ${s.source ? `· ${esc(s.source)}` : ""}</span>
-    </div>
-    ${s.message ? `<p class="ml-drawer-note ml-local-message">${esc(s.message)}</p>` : ""}
-    <div class="ml-local-assets" data-ml-local-assets>
-      ${s.loading
-        ? `<div class="ml-local-empty">Scanning local assets...</div>`
-        : s.assets.length
-          ? s.assets.map((asset) => localAssetCardHtml(asset, esc)).join("")
-          : `<div class="ml-local-empty">No local assets match that search.</div>`}
-    </div>`;
-}
-function localAssetCardHtml(asset, esc) {
-  const canUse = asset.kind === "image" && (!!asset.has_preview || !!asset.previewable);
-  return `
-    <article class="ml-local-asset" data-local-asset="${esc(asset.id)}"${canUse ? ` draggable="true" title="Drag onto the editor or the reference slot"` : ""}>
-      <div class="ml-local-thumb" data-local-thumb="${esc(asset.id)}" data-previewable="${canUse ? "1" : "0"}">
-        ${canUse ? `<span>${svgIc(asset.kind === "video" ? "film" : "image")}</span>` : `<span>${svgIc("layout")}</span>`}
-      </div>
-      <div class="ml-local-copy">
-        <b>${esc(asset.title || asset.name)}</b>
-        <span>${esc(asset.category || asset.kind)}${asset.app ? ` · ${esc(asset.app)}` : ""}</span>
-        <i>${esc(asset.size_label || "")} ${asset.safety ? `· ${esc(asset.safety)}` : ""}</i>
-      </div>
-      <div class="ml-local-actions">
-        ${canUse ? `<button type="button" data-ml-local-use="${esc(asset.id)}">Edit</button><button type="button" data-ml-local-ref="${esc(asset.id)}">Ref</button>` : `<em>Indexed</em>`}
-      </div>
-    </article>`;
 }
 function templatesDrawerHtml(esc) {
   const visible = MEDIA_PRESETS.filter((p) => p.modality === genState.modality);
@@ -1325,245 +1263,7 @@ function mediaSettingsDrawerHtml(cfg, esc) {
       </section>
     </div>`;
 }
-function applyLocalAssetsResult(result = {}) {
-  localAssetsState.assets = result.assets || [];
-  localAssetsState.count = result.count || localAssetsState.assets.length || 0;
-  localAssetsState.source = result.source || "";
-  localAssetsState.rootLabel = result.root_label || "";
-  // the server's `detail` is the admin's next move — surface it when present
-  localAssetsState.message = result.ok === false
-    ? (String(result.detail || "").trim() || "Local asset lane is not reachable from this session yet.")
-    : "";
-}
-function paintLocalAssets(el, opts) {
-  localAssetsState.viewHash = localAssetsSnapshotHash();
-  renderMediaStudio(el, opts);
-}
-async function loadLocalAssetsForDrawer(el, opts, refresh = false) {
-  const seq = ++localAssetsFetchSeq; // newest request wins; stale responses are dropped
-  const cacheKey = localAssetsCacheKey();
-  const cached = localAssetsCacheGet(cacheKey);
-  localAssetsState.message = "";
-  if (cached) {
-    // instant open: paint the last successful listing, no "Scanning..." flash
-    applyLocalAssetsResult({ ok: true, ...cached });
-    localAssetsState.loading = false;
-    localAssetsState.loaded = true;
-    mlLocalStats.paintedFromCache = true;
-  } else {
-    localAssetsState.loading = true;
-  }
-  if (localAssetsState.viewHash !== localAssetsSnapshotHash()) paintLocalAssets(el, opts);
-  const query = { search: localAssetsState.search, kind: localAssetsState.kind, limit: 60 };
-  const result = refresh
-    ? await refreshLocalAssets().then(() => listLocalAssets(query))
-    : await listLocalAssets(query);
-  if (seq !== localAssetsFetchSeq) return;
-  localAssetsState.loading = false;
-  localAssetsState.loaded = true;
-  applyLocalAssetsResult(result);
-  if (result.ok !== false) localAssetsCachePut(cacheKey, result);
-  // background refresh repaints only when the data actually changed
-  if (activeDrawer === "assets" && localAssetsState.viewHash !== localAssetsSnapshotHash()) paintLocalAssets(el, opts);
-}
-async function useLocalAsset(assetId, mode, el, opts) {
-  const asset = localAssetsState.assets.find((item) => item.id === assetId);
-  const url = await localAssetBlobUrl(assetId);
-  if (!url) {
-    opts.notify?.("Media Lab", "That local asset cannot be opened in the browser editor.");
-    return;
-  }
-  if (mode === "ref") {
-    genState.ref = url;
-    session.tab = "generate";
-    activeDrawer = null;
-    opts.notify?.("Media Lab", `using ${asset?.title || "local asset"} as reference.`);
-    renderMediaStudio(el, opts);
-    return;
-  }
-  session.edit = { url, type: asset?.kind === "video" ? "video" : "image", id: assetId };
-  session.tab = "edit";
-  activeDrawer = null;
-  resetEdit();
-  opts.notify?.("Media Lab", `opened ${asset?.title || "local asset"} in the editor.`);
-  renderMediaStudio(el, opts);
-}
-/* assetId -> object URL, reused across drawer opens so reopening is instant */
-const localThumbUrlCache = new Map();
-function paintLocalThumb(node, asset, url) {
-  node.innerHTML = asset.kind === "video"
-    ? `<video src="${url}" muted playsinline preload="metadata"></video>`
-    : `<img src="${url}" alt=""/>`;
-}
-async function hydrateLocalAssetThumbs(el) {
-  const nodes = [...el.querySelectorAll("[data-local-thumb][data-previewable='1']")].slice(0, 24);
-  const pending = [];
-  for (const node of nodes) {
-    const id = node.dataset.localThumb;
-    const asset = localAssetsState.assets.find((item) => item.id === id);
-    if (!id || !asset || asset.kind === "audio") continue;
-    const cachedUrl = localThumbUrlCache.get(id);
-    if (cachedUrl) {
-      mlLocalStats.thumbCacheHits += 1;
-      paintLocalThumb(node, asset, cachedUrl);
-      continue;
-    }
-    pending.push({ node, asset, id });
-  }
-  // small fetch pool: at most 4 blob loads in flight, top (first visible) cards first
-  let next = 0;
-  const worker = async () => {
-    while (next < pending.length) {
-      const job = pending[next++];
-      const url = await localAssetBlobUrl(job.id).catch(() => null);
-      if (!url) continue;
-      localThumbUrlCache.set(job.id, url);
-      if (job.node.isConnected) paintLocalThumb(job.node, job.asset, url);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(4, pending.length) }, () => worker()));
-}
-/* ---- drag & drop: local-asset cards onto editor/reference, plus OS files ----
-   All listeners are delegated on the studio mount and bound exactly once
-   (the mount survives re-renders even though innerHTML is replaced often). */
-const LOCAL_ASSET_DRAG_MIME = "application/x-pf-local-asset";
-let mlDragAssetId = null;
-let mlOsDragDepth = 0;
-
-function mlDropzones(el) { return [...el.querySelectorAll("[data-ml-dropzone]")]; }
-function mlSetDropzonesActive(el, on) {
-  el.classList.toggle("ml-asset-dragging", on);
-  mlDropzones(el).forEach((zone) => {
-    zone.classList.toggle("is-ml-droptarget", on);
-    if (!on) zone.classList.remove("is-dragover");
-  });
-}
-function mlOsOverlay(el, show) {
-  let overlay = el.querySelector("[data-ml-os-overlay]");
-  if (show && !overlay) {
-    overlay = document.createElement("div");
-    overlay.className = "ml-os-drop-overlay";
-    overlay.setAttribute("data-ml-os-overlay", "");
-    overlay.innerHTML = `<b>Drop media to open in the editor</b>`;
-    el.appendChild(overlay);
-  }
-  if (!show && overlay) overlay.remove();
-}
-function mlEndDrag(el) {
-  mlDragAssetId = null;
-  mlOsDragDepth = 0;
-  mlSetDropzonesActive(el, false);
-  mlOsOverlay(el, false);
-}
-function openDroppedFileInEditor(fileObj, el, opts) {
-  const type = /^video\//i.test(fileObj.type || "") ? "video" : "image";
-  const url = URL.createObjectURL(fileObj);
-  session.edit = { url, type, id: `dropped-${fileObj.name}` };
-  session.tab = "edit";
-  activeDrawer = null;
-  resetEdit();
-  renderMediaStudio(el, opts);
-  opts.notify?.("Media Lab", `opened ${fileObj.name} in the editor.`);
-}
-function ensureMediaLabDnd(el, opts) {
-  el.__mlDndOpts = opts; // handlers always read the latest render's opts
-  if (el.dataset.mlDndBound === "1") return;
-  el.dataset.mlDndBound = "1";
-  const currentOpts = () => el.__mlDndOpts || {};
-  const isFileDrag = (e) => [...(e.dataTransfer?.types || [])].includes("Files");
-  const isAssetDrag = (e) => mlDragAssetId != null || [...(e.dataTransfer?.types || [])].includes(LOCAL_ASSET_DRAG_MIME);
-
-  el.addEventListener("dragstart", (e) => {
-    const card = e.target?.closest?.("[data-local-asset][draggable='true']");
-    if (!card || !e.dataTransfer) return;
-    mlDragAssetId = card.dataset.localAsset || null;
-    if (!mlDragAssetId) return;
-    try {
-      e.dataTransfer.setData(LOCAL_ASSET_DRAG_MIME, mlDragAssetId);
-      e.dataTransfer.effectAllowed = "copy";
-      const thumb = card.querySelector("[data-local-thumb] img, [data-local-thumb] video");
-      if (thumb) e.dataTransfer.setDragImage(thumb, 28, 28);
-    } catch {}
-    mlSetDropzonesActive(el, true);
-  });
-  el.addEventListener("dragend", () => mlEndDrag(el));
-  el.addEventListener("dragenter", (e) => {
-    if (!isFileDrag(e) || isAssetDrag(e)) return;
-    e.preventDefault();
-    mlOsDragDepth += 1;
-    mlOsOverlay(el, true);
-  });
-  el.addEventListener("dragleave", (e) => {
-    if (!isFileDrag(e) || isAssetDrag(e)) return;
-    mlOsDragDepth = Math.max(0, mlOsDragDepth - 1);
-    if (!mlOsDragDepth) mlOsOverlay(el, false);
-  });
-  // preventDefault scoped to the studio root — never let the browser navigate
-  // away to a dropped file anywhere on the Media Lab surface
-  el.addEventListener("dragover", (e) => {
-    const asset = isAssetDrag(e);
-    const files = !asset && isFileDrag(e);
-    if (!asset && !files) return;
-    e.preventDefault();
-    if (e.dataTransfer) e.dataTransfer.dropEffect = "copy";
-    if (asset) {
-      const zone = e.target?.closest?.("[data-ml-dropzone]");
-      mlDropzones(el).forEach((z) => z.classList.toggle("is-dragover", z === zone));
-    } else {
-      mlOsOverlay(el, true);
-    }
-  });
-  el.addEventListener("drop", (e) => {
-    const dndOpts = currentOpts();
-    let assetId = "";
-    try { assetId = e.dataTransfer?.getData?.(LOCAL_ASSET_DRAG_MIME) || ""; } catch {}
-    if (!assetId && isAssetDrag(e)) assetId = mlDragAssetId || "";
-    if (assetId) {
-      e.preventDefault();
-      const zone = e.target?.closest?.("[data-ml-dropzone]");
-      mlEndDrag(el);
-      // same code path as the card buttons — drop is just another way in
-      if (zone) useLocalAsset(assetId, zone.dataset.mlDropzone === "ref" ? "ref" : "edit", el, dndOpts);
-      return;
-    }
-    if (!isFileDrag(e)) return;
-    e.preventDefault();
-    mlEndDrag(el);
-    if (e.target?.closest?.("[data-ml-drop]")) return; // Shot Builder's reference uploader owns drops on itself
-    const fileObj = [...(e.dataTransfer?.files || [])].find((f) => /^(image|video)\//i.test(f.type || ""));
-    if (!fileObj) {
-      dndOpts.notify?.("Media Lab", "Only image or video files can be dropped into the editor.");
-      return;
-    }
-    openDroppedFileInEditor(fileObj, el, dndOpts);
-  });
-}
-
 function wireDrawer(el, kind, cfg, opts, esc) {
-  if (kind === "assets") {
-    if (!localAssetsDrawerSynced) {
-      localAssetsDrawerSynced = true;
-      // paints cache instantly, then refreshes once per drawer open in the background
-      loadLocalAssetsForDrawer(el, opts);
-    }
-    hydrateLocalAssetThumbs(el);
-    const search = el.querySelector("[data-ml-local-search]");
-    if (search) {
-      let timer = null;
-      search.oninput = () => {
-        localAssetsState.search = search.value;
-        clearTimeout(timer);
-        timer = setTimeout(() => loadLocalAssetsForDrawer(el, opts, true), 250);
-      };
-    }
-    el.querySelectorAll("[data-ml-local-kind]").forEach((b) => b.onclick = () => {
-      localAssetsState.kind = b.dataset.mlLocalKind || "all";
-      loadLocalAssetsForDrawer(el, opts, true);
-    });
-    el.querySelector("[data-ml-local-refresh]")?.addEventListener("click", () => loadLocalAssetsForDrawer(el, opts, true));
-    el.querySelectorAll("[data-ml-local-use]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalUse, "edit", el, opts));
-    el.querySelectorAll("[data-ml-local-ref]").forEach((b) => b.onclick = () => useLocalAsset(b.dataset.mlLocalRef, "ref", el, opts));
-  }
   if (kind === "templates") {
     el.querySelectorAll(".ml-drawer [data-ml-presets] button").forEach((b) => b.onclick = () => {
       const preset = MEDIA_PRESETS.find((p) => p.id === b.dataset.v);
@@ -1693,7 +1393,7 @@ function renderGenerate(body, cfg, opts, root) {
         </div>
 
         <label class="ml-field"><span>Reference</span>
-          <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop data-ml-dropzone="ref" data-ml-dropzone-label="Drop to use as reference">
+          <div class="ml-drop ${genState.ref ? "has-ref" : ""}" data-ml-drop>
             ${genState.ref
               ? `<img src="${genState.ref}" alt="reference"/><span class="ml-drop-copy"><b>Reference attached</b><i>Style, logo, continuity</i></span><button class="ml-drop-x" data-ml-clearref aria-label="Remove reference image">${svgIc("close")}</button>`
               : `<span class="ml-drop-ic">${svgIc("upload")}</span><span class="ml-drop-copy"><b>Add reference image</b><i>Optional — style, logo, continuity</i></span><button class="ml-drop-browse" type="button">Browse files</button>`}
@@ -2579,7 +2279,7 @@ function renderEdit(body, cfg, opts, root) {
   ensureEditorComposition();
   body.innerHTML = `
     <div class="ml-editor">
-      <div class="ml-canvas-wrap" data-ml-dropzone="edit" data-ml-dropzone-label="Drop to open in editor">
+      <div class="ml-canvas-wrap">
         ${mlEditLoadError ? `<div class="ch-lb-load-error"><b>Couldn't load this image</b><span>${esc(mlEditLoadError)}</span></div>` : ""}
         <div class="ml-edit-topbar" aria-label="Edit history and preview">
           <button type="button" data-ml-undo ${mlEditHistory.length ? "" : "disabled"} title="Undo">${svgIc("undo")}</button>

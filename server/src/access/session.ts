@@ -589,9 +589,7 @@ export function requireAccessSession(request: FastifyRequest, reply: FastifyRepl
         : enableDemoAuth
           ? "/auth/demo-login"
           : "/auth/session-login",
-      sessions: enableOwnerProductionAuth
-        ? []
-        : filterSessionsForPublicHost(publicHost, listAccessSessions()),
+      sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
     });
     return undefined;
   }

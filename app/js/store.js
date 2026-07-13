@@ -1182,7 +1182,7 @@ const MODEL_DISPLAY_LABELS = {
   "glm-5": "Standard", "openrouter-auto": "Auto-routed",
   "claude-cli": "Claude default", "claude-sonnet": "Sonnet", "claude-opus": "Opus",
   "codex-default": "Codex default", "codex-high": "High reasoning", "codex-fast": "Fast",
-  "z-ai/glm-5.2": "GLM 5.2", "local-auto": "Auto-detect Ollama", "local-ollama": "Ollama auto", "local-glm": "Local GLM",
+  "z-ai/glm-5.2": "GLM 5.2", "local-auto": "Automatic local", "local-glm": "Local GLM",
   "llama3": "Fast", "mistral": "Balanced", "custom-local": "Custom",
   "custom": "Custom",
 };
@@ -1196,13 +1196,12 @@ export const PHANTOM_LANES = [
   { id: "claude", name: "Phantom Reasoning", role: "Strategy, copy, review", defaultTarget: "claude_cli" },
   { id: "codex", name: "Phantom Code", role: "Code, repo work, implementation", defaultTarget: "codex" },
   { id: "openrouter", name: "Phantom Router", role: "Flexible cloud routing", defaultTarget: "glm_5_2" },
-  { id: "local", name: "Phantom Local", role: "Private/local-first work", defaultTarget: "local_ollama" },
+  { id: "local", name: "Phantom Local", role: "Private/local-first work", defaultTarget: "glm_5_2" },
 ];
 export const PHANTOM_LANE_TARGETS = [
   { id: "claude_cli", name: "Claude CLI", provider: "phantom", models: ["claude-cli", "claude-sonnet", "claude-opus"] },
   { id: "codex", name: "Codex / Private Operator", provider: "phantom", models: ["codex-default", "codex-high", "codex-fast"] },
   { id: "glm_5_2", name: "GLM / OpenRouter Route", provider: "openrouter_glm", models: ["z-ai/glm-5.2", "openrouter-auto", "local-glm"] },
-  { id: "local_ollama", name: "Ollama / Local PC", provider: "local_ollama", models: ["local-auto"], allowCustomModel: true },
 ];
 export function phantomLaneTargetName(id) {
   return PHANTOM_LANE_TARGETS.find((target) => target.id === id)?.name || id;
@@ -1214,9 +1213,7 @@ function normalizePhantomLaneConfig(input = {}) {
     const existing = saved.lanes?.[lane.id] || {};
     const target = PHANTOM_LANE_TARGETS.some((item) => item.id === existing.target) ? existing.target : lane.defaultTarget;
     const targetDef = PHANTOM_LANE_TARGETS.find((item) => item.id === target) || PHANTOM_LANE_TARGETS[0];
-    const model = targetDef.models.includes(existing.model) || (targetDef.allowCustomModel && typeof existing.model === "string" && existing.model.trim())
-      ? existing.model
-      : targetDef.models[0];
+    const model = targetDef.models.includes(existing.model) ? existing.model : targetDef.models[0];
     lanes[lane.id] = { target, model };
   }
   return { lanes, updatedAt: saved.updatedAt || null };

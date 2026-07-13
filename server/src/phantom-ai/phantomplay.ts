@@ -163,8 +163,6 @@ type PhantomPlayStore = {
   submissions: PhantomPlaySubmission[];
 };
 
-const TAK_CREATOR = "Tak";
-
 export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "neon-drift",
@@ -192,7 +190,7 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     summary: "Find the matching signals before the grid resets.",
     description: "A calm memory game with short rounds, a visible score, keyboard support, and saved best scores.",
     category: "Puzzle",
-    tags: ["memory", "flash", "puzzle", "touch"],
+    tags: ["memory", "calm", "puzzle", "touch"],
     contentRating: "everyone",
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
@@ -648,7 +646,6 @@ export async function getPhantomPlaySnapshot(session: AccessSession, options: { 
       canModerate: session.canManageAccess || session.isSuperAdmin === true,
     },
     catalog,
-    leaderboards: phantomLeaderboards(store, catalog, actorId),
     favorites: profile.favorites,
     history: historySummary(profile),
     preferences: profile.preferences,

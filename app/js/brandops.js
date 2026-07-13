@@ -67,15 +67,7 @@ async function runAutopilotJobNow(id) {
   }
 }
 
-const AUTOPILOT_CATEGORY_LABEL = {
-  health: "System health",
-  ops: "Business operations",
-  content: "Content & marketing",
-  intelligence: "Competitor intelligence",
-  security: "Security protection",
-  crm: "CRM discovery",
-  outreach: "Outreach prep",
-};
+const AUTOPILOT_CATEGORY_LABEL = { health: "System health", ops: "Business operations", content: "Content & marketing" };
 const AUTOPILOT_CADENCE_LABEL = { daily: "Daily", weekly: "Weekly", monthly: "Monthly" };
 
 const AGENT_STATE = {
@@ -100,7 +92,6 @@ const RECIPES = [
 
 const TABS = [
   ["configured", "Configured"],
-  ["autopilot", "Always-on"],
   ["recipes", "Recipes"],
   ["logs", "Logs"],
   ["safety", "Safety rules"],
@@ -151,13 +142,6 @@ function autopilotJobCard(job) {
       <button class="btn btn-quiet ap-run-now" type="button" data-ap-run="${esc(job.id)}" ${busy || !job.enabled ? "disabled" : ""}>${busy ? "Running…" : "Run now"}</button>
     </div>
     <p class="ap-job-desc">${esc(job.description)}</p>
-    ${job.benefit ? `<p class="ap-job-benefit">${esc(job.benefit)}</p>` : ""}
-    <div class="ap-job-meta">
-      ${job.output ? `<span>${esc(job.output)}</span>` : ""}
-      ${job.approval_required ? `<span>Approval-gated</span>` : `<span>Read-only</span>`}
-      ${job.external_action ? `<span>External action</span>` : `<span>No external writes</span>`}
-    </div>
-    ${Array.isArray(job.setup_fields) && job.setup_fields.length ? `<div class="ap-job-setup">${job.setup_fields.map((field) => `<i>${esc(field)}</i>`).join("")}</div>` : ""}
     <div class="ap-job-foot">
       <span class="ap-job-status ap-tone-${tone}">${job.last_status ? esc(job.last_status) : "not run yet"}</span>
       <span>${job.last_summary ? esc(job.last_summary) : "No runs logged yet."}</span>
@@ -332,9 +316,9 @@ function autopilotDeveloperTab() {
   }
   const jobs = autopilotJobs || [];
   const activeCount = jobs.filter((j) => j.enabled).length;
-  const categories = ["security", "intelligence", "crm", "outreach", "content", "ops", "health"];
+  const categories = ["health", "ops", "content"];
   return `<div class="ap-wrap">
-    <p class="bm-hint">Tell Phantom about the business first — website, store, emails, CRM/source, offer, audience, and competitors. These automations start on for every account, but the better the profile, the sharper the results. Sends, posts, spending, uploads, CRM writes, and publishing still require approval.</p>
+    <p class="bm-hint">These are real, scheduled server jobs — daily/weekly/monthly — that run fully autonomously and log every result to the Hermes ledger. Every one is read-only/prep-only: none of them send, post, pay, or publish. Flip a switch to turn a job off; "Run now" fires it immediately for a live check.</p>
     <div class="au-summary" aria-label="Autopilot summary">
       <span><b>${jobs.length}</b><i>Jobs defined</i></span>
       <span><b>${activeCount}</b><i>Turned on</i></span>
@@ -638,14 +622,13 @@ export function renderAutomation(el, opts = {}) {
   const off = Math.max(0, count - running);
 
   const panel = auTab === "configured" ? configuredAutomationTab(agents)
-    : auTab === "autopilot" ? autopilotDeveloperTab()
     : auTab === "recipes" ? recipesTab()
     : auTab === "logs" ? logsTab()
     : safetyTab();
 
   el.innerHTML = `
     <div class="au">
-      <div class="bm-note au-note"><i></i>Tell Phantom about your business — website, store, emails, CRM/source, offer, audience, and competitors — so automations use the right data from day one.</div>
+      <div class="bm-note au-note"><i></i>Configured automations live here. Switch them on or off manually, edit the details in the row, and use Vacation Mode from its own tab.</div>
       <div class="au-summary" aria-label="Automation summary">
         <span><b>${count}</b><i>Configured</i></span>
         <span><b>${running}</b><i>On</i></span>
@@ -657,9 +640,6 @@ export function renderAutomation(el, opts = {}) {
       </nav>
       <section class="bm-card au-card">${panel}</section>
     </div>`;
-
-  if (auTab === "autopilot") loadAutopilotDiagnostics(el, paint);
-  if (auTab === "autopilot") wireAutopilotDiagnostics(el, notify, paint);
 
   el.querySelectorAll("[data-au-tab]").forEach((btn) => btn.onclick = () => { auTab = btn.dataset.auTab; paint(); });
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { createReadStream, existsSync, readFileSync } from "node:fs";
-import { access, readdir, stat } from "node:fs/promises";
+import { access, stat } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import { createServer } from "node:http";
@@ -121,7 +121,6 @@ function shouldProxy(urlPath) {
     || urlPath.startsWith("/api/vacation-mode")
     || urlPath.startsWith("/api/phantomplay")
     || urlPath.startsWith("/api/competitor-intelligence")
-    || urlPath.startsWith("/api/organization")
     || urlPath.startsWith("/phantom-ai/")
     /* multi-tenant org APIs + published-site hosting live on Hermes */
     || urlPath.startsWith("/orgs/")
@@ -817,14 +816,6 @@ createServer(async (req, res) => {
     }
     let jobsRunning = 0;
     for (const job of mediaJobs.values()) if (job.status === "running") jobsRunning += 1;
-    // Games inventory: the player shows an infinite spinner when a game file
-    // is missing from this disk, so /health lists exactly what is servable —
-    // one URL answers "why doesn't game X open" for any support conversation.
-    let games = [];
-    try {
-      const entries = await readdir(path.join(repoRoot, "app", "games"));
-      games = entries.filter((name) => name.endsWith(".html")).sort();
-    } catch { games = []; }
     send(res, 200, JSON.stringify({
       ok: true,
       service: "phantomforce-admin-static",
@@ -832,8 +823,6 @@ createServer(async (req, res) => {
       source_hash: sourceHash,
       api_origin: apiOrigin,
       jobs_running: jobsRunning,
-      games_on_disk: games,
-      games_count: games.length,
       creative_transport: creativeEngine.transport,
       cli_fallback_enabled: creativeEngine.cliFallbackEnabled,
       ...(creativeEngine.cliFallbackEnabled
@@ -874,14 +863,6 @@ createServer(async (req, res) => {
     const info = await stat(target);
     if (info.isDirectory()) target = path.join(target, "index.html");
   } catch {
-    // The SPA fallback must never swallow game files: serving index.html into
-    // the sandboxed game iframe looks like a game that "won't open" (the
-    // player waits forever for a 'ready' that index.html never sends). A
-    // missing game is a hard 404 that tells the player exactly what is wrong.
-    if (urlPath.startsWith("/app/games/")) {
-      send(res, 404, `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#020806;color:#effff6;font-family:system-ui"><div style="text-align:center;padding:20px"><h1 style="color:#ff9ba3;font-size:22px">Game file missing on this server</h1><p style="color:#8ba99a;max-width:420px">${urlPath.split("/").pop()} is not on this machine's disk. The next git sync should restore it; check /health → games_on_disk.</p></div><script>try{parent.postMessage({source:"phantomplay-game",type:"error",reason:"missing_file",file:${JSON.stringify(decodeURIComponent(urlPath))}},"*")}catch(e){}</script></body>`, "text/html; charset=utf-8");
-      return;
-    }
     if (req.url?.startsWith("/app/") && !(await fileExists(target))) {
       target = path.join(repoRoot, "app", "index.html");
     }
@@ -891,10 +872,6 @@ createServer(async (req, res) => {
     const info = await stat(target);
     if (!info.isFile()) throw new Error("not a file");
   } catch {
-    if (urlPath.startsWith("/app/games/")) {
-      send(res, 404, `<!doctype html><meta charset="utf-8"><body style="margin:0;display:grid;place-items:center;min-height:100vh;background:#020806;color:#effff6;font-family:system-ui"><div style="text-align:center;padding:20px"><h1 style="color:#ff9ba3;font-size:22px">Game file missing on this server</h1><p style="color:#8ba99a;max-width:420px">${urlPath.split("/").pop()} is not on this machine's disk. The next git sync should restore it; check /health → games_on_disk.</p></div><script>try{parent.postMessage({source:"phantomplay-game",type:"error",reason:"missing_file",file:${JSON.stringify(decodeURIComponent(urlPath))}},"*")}catch(e){}</script></body>`, "text/html; charset=utf-8");
-      return;
-    }
     send(res, 404, "Not found");
     return;
   }

@@ -64,7 +64,7 @@ async function registerForDemo(name, email) {
     const r = await fetch(REGISTER_ENDPOINT, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name, email, installConsent }),
+      body: JSON.stringify({ name, email }),
       signal: ctrl.signal,
     });
     if (!r.ok) return miss;
@@ -141,7 +141,6 @@ function initConversation() {
   const downloadForm = document.querySelector("[data-download-form]");
   const downloadName = document.querySelector("[data-download-name]");
   const downloadEmail = document.querySelector("[data-download-email]");
-  const downloadAccept = document.querySelector("[data-download-accept]");
   const downloadStatus = document.querySelector("[data-download-status]");
   const hint = document.querySelector("[data-hint]");
   if (!say) return;
@@ -297,15 +296,6 @@ function initConversation() {
         downloadStatus.textContent = "Enter a valid email so I can send the setup/demo link.";
       }
       downloadEmail?.focus();
-      return;
-    }
-    if (!downloadAccept?.checked) {
-      if (downloadStatus) {
-        downloadStatus.hidden = false;
-        downloadStatus.className = "download-status err";
-        downloadStatus.textContent = "Accept the PhantomForce install terms before downloading.";
-      }
-      downloadAccept?.focus();
       return;
     }
     const btn = downloadForm.querySelector("button[type='submit']");

@@ -18,6 +18,13 @@
   still fine if you prefer review, but it is no longer required.
 
 ## Recent, merged & live (newest first)
+- **PhantomPlay V2 graft + trunk restore (2026-07-13)** — origin/main and this local
+  trunk diverged badly (39 vs 72 commits); a naive merge produced chimera code and was
+  rolled back (backup/pre-v2-merge-20260713). PhantomPlay V2 (phantomplay-v2.ts, /api/
+  phantomplay/v2/*, opt-in phantomplay-v2.js shell, Phantom Rumble + Sudoku Signal) is
+  grafted onto THIS line and also lives on origin/main (eddc9d5). WHOEVER OWNS THE 72
+  LOCAL COMMITS: please reconcile with origin/main deliberately (organization-pulse,
+  workspace module gating, and the 15 origin-line games need a semantic merge, not -X ours).
 - **Competitor Intelligence + optional Aggressive Mode (2026-07-12)** —
   tenant-scoped public-signal evidence, labeled weak-signal inferences,
   aggregated audience-gap mining, originality-risk checks, bounded market

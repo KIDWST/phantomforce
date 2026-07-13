@@ -94,39 +94,6 @@ export function currentCustomization() {
   return activeConfiguration;
 }
 
-function currentActorIds() {
-  const raw = session.get?.() || {};
-  return [
-    raw.userId,
-    raw.id,
-    raw.email,
-    raw.authSessionId,
-  ].filter(Boolean).map((value) => String(value).trim());
-}
-
-function roleForCustomization(role = "owner") {
-  const raw = session.get?.() || {};
-  return raw.orgRole || role;
-}
-
-export function canAccessConfiguredModule(moduleId, role = "owner") {
-  if (!activeConfiguration) return true;
-  const module = normalizedModuleState(activeConfiguration.modules.find((item) => item.id === moduleId), moduleId);
-  if (!module) return true;
-  if (!module.enabled) return false;
-  const effectiveRole = roleForCustomization(role);
-  if (!module.roles.includes(effectiveRole)) return false;
-  if (module.id !== "phantomplay") return true;
-  if (module.accessMode === "entire_organization") return true;
-  if (module.accessMode === "owner_only") return ["owner", "admin"].includes(effectiveRole) || session.get?.()?.canManageAccess === true;
-  if (module.accessMode === "selected_members") {
-    if (["owner", "admin"].includes(effectiveRole) || session.get?.()?.canManageAccess === true) return true;
-    const actorIds = currentActorIds();
-    return actorIds.some((id) => module.allowedMemberIds?.includes(id));
-  }
-  return false;
-}
-
 export function applyOrganizationCustomization(configuration = activeConfiguration) {
   if (!configuration) return;
   activeConfiguration = configuration;
@@ -149,19 +116,16 @@ export function applyOrganizationCustomization(configuration = activeConfigurati
 }
 
 export function customizeNavigation(baseItems, role = "owner") {
-  if (!activeConfiguration) return baseItems.filter((item) => item.optionalModule !== true);
+  if (!activeConfiguration) return baseItems;
   const states = new Map(activeConfiguration.modules.map((module) => [module.id, module]));
   return baseItems
     .filter((item) => {
-      const state = normalizedModuleState(states.get(item.id), item.id);
+      const state = states.get(item.id);
       if (!state) return true;
-      return canAccessConfiguredModule(item.id, role);
+      return state.enabled && state.roles.includes(role);
     })
     .map((item) => {
-      const state = normalizedModuleState(states.get(item.id), item.id);
-      /* Dashboard is the platform home. Older org customizations may still
-         carry "Business HQ"; keep the new product language stable here. */
-      if (item.id === "dashboard") return { ...item, label: item.label, customizationOrder: state?.order };
+      const state = states.get(item.id);
       return state ? { ...item, label: state.label, customizationOrder: state.order } : item;
     })
     .sort((left, right) => (left.customizationOrder ?? 999) - (right.customizationOrder ?? 999));

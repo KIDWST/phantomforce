@@ -14,7 +14,6 @@ const SETTINGS_TABS = [
   { id: "loop", label: "Loop routing", category: "AI Brain" },
   { id: "chat", label: "Chat behavior", category: "AI Brain" },
   { id: "workspace", label: "Workspace Studio", category: "Workspace" },
-  { id: "modules", label: "Workspace Modules", category: "Workspace" },
   { id: "companion", label: "Companion", category: "Workspace" },
   { id: "media", label: "Media & social", category: "Media" },
 ];
@@ -58,33 +57,18 @@ const PROVIDERS = [
   },
   {
     id: "local",
-    name: "Local / Ollama",
+    name: "Local",
     short: "PC",
-    role: "Ollama models installed on this computer",
-    models: ["local-auto"],
-    allowCustomModel: true,
+    role: "Private models running on this computer",
+    models: ["local-auto", "local-glm"],
   },
 ];
-
-let localModelStatus = {
-  loaded: false,
-  loading: false,
-  error: null,
-  baseUrl: "http://127.0.0.1:11434",
-  models: [],
-};
 
 const PROVIDER_MODES = [
   { id: "smart", name: "Smart Mix", note: "Phantom picks the best provider and falls back automatically." },
   { id: "single", name: "One provider", note: "Use only the provider you choose." },
   { id: "multiple", name: "Multiple", note: "Choose the providers Phantom is allowed to use." },
 ];
-
-function providerModels(provider) {
-  if (provider.id !== "local") return provider.models;
-  const installed = localModelStatus.models.map((model) => model.model).filter(Boolean);
-  return [...new Set(["local-auto", ...installed])];
-}
 
 const DEFAULT_SETTINGS = {
   provider: "claude",
@@ -150,9 +134,7 @@ function normalizeSettings(value) {
   const brainMode = ["local", "api", "subscription"].includes(input.brainMode) ? input.brainMode : DEFAULT_SETTINGS.brainMode;
   const models = { ...DEFAULT_SETTINGS.models, ...(input.models || {}) };
   for (const option of PROVIDERS) {
-    if (!providerModels(option).includes(models[option.id]) && !(option.allowCustomModel && typeof models[option.id] === "string" && models[option.id].trim())) {
-      models[option.id] = option.models[0];
-    }
+    if (!option.models.includes(models[option.id])) models[option.id] = option.models[0];
   }
   const requestedProviders = Array.isArray(input.selectedProviders) ? input.selectedProviders : DEFAULT_SETTINGS.selectedProviders;
   let selectedProviders = [...new Set(requestedProviders.filter((id) => PROVIDERS.some((providerOption) => providerOption.id === id)))];
@@ -194,33 +176,13 @@ function optionList(options, selected) {
   return options.map((option) => `<option value="${esc(option.id || option)}" ${(option.id || option) === selected ? "selected" : ""}>${esc(option.label || option)}</option>`).join("");
 }
 
-const moduleAuthHeaders = (json = false) => {
-  const token = session.token();
-  return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
-};
-
-async function moduleApi(path, options = {}) {
-  const response = await fetch(path, { ...options, headers: { ...moduleAuthHeaders(Boolean(options.body)), ...(options.headers || {}) } });
-  const payload = await response.json().catch(() => null);
-  if (!response.ok) throw new Error(typeof payload?.error === "string" ? payload.error : `Workspace module request failed (${response.status}).`);
-  return payload;
-}
-
 function renderProviderCards(settings) {
   return PROVIDERS.map((provider) => `
     <button class="set-model-card ${settings.selectedProviders.includes(provider.id) ? "is-active" : ""} ${settings.provider === provider.id ? "is-preferred" : ""}" type="button" data-ai-provider="${esc(provider.id)}" aria-pressed="${settings.selectedProviders.includes(provider.id) ? "true" : "false"}">
       <span class="set-provider-mark">${esc(provider.short)}</span>
-      <span class="set-provider-copy"><b>${esc(provider.name)}</b><i>${esc(provider.id === "local" ? localProviderStatusText() : provider.role)}</i></span>
+      <span class="set-provider-copy"><b>${esc(provider.name)}</b><i>${esc(provider.role)}</i></span>
       <span class="set-provider-check">${settings.selectedProviders.includes(provider.id) ? "✓" : "+"}</span>
     </button>`).join("");
-}
-
-function localProviderStatusText() {
-  if (localModelStatus.loading) return "Checking Ollama on this PC...";
-  if (localModelStatus.loaded && localModelStatus.models.length) return `${localModelStatus.models.length} Ollama model${localModelStatus.models.length === 1 ? "" : "s"} installed`;
-  if (localModelStatus.loaded) return "Ollama reachable, no local models found";
-  if (localModelStatus.error) return localModelStatus.error;
-  return "Reads installed Ollama models from this computer";
 }
 
 function renderProviderModeCards(settings) {
@@ -234,46 +196,10 @@ function renderSelectedModelControls(settings) {
   return settings.selectedProviders.map((providerId) => {
     const provider = providerFor(providerId);
     const selectedModel = settings.models[provider.id] || provider.models[0];
-    const models = providerModels(provider);
     return `<label class="set-control set-provider-model"><span>${esc(provider.name)} model</span>
-      <select data-ai-provider-model="${provider.id}">
-        ${models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}
-      </select>
-      ${provider.id === "local" ? `<i>${esc(localProviderStatusText())}</i>` : ""}
+      <select data-ai-provider-model="${provider.id}">${provider.models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(modelDisplayLabel(model))}</option>`).join("")}</select>
     </label>`;
   }).join("");
-}
-
-function localModelLabel(modelId) {
-  if (modelId === "local-auto") return localModelStatus.models.length ? "Auto - best installed Ollama model" : "Auto - read Ollama";
-  const model = localModelStatus.models.find((item) => item.model === modelId || item.name === modelId);
-  const suffix = [model?.parameter_size, model?.quantization_level].filter(Boolean).join(" ");
-  return `${model?.display_name || modelId}${suffix ? ` (${suffix})` : ""}`;
-}
-
-async function refreshLocalModels(el, opts, rerender = true) {
-  if (localModelStatus.loading) return;
-  localModelStatus = { ...localModelStatus, loading: true, error: null };
-  try {
-    const payload = await moduleApi("/phantom-ai/local-models/status");
-    const ollama = payload.ollama || {};
-    localModelStatus = {
-      loaded: true,
-      loading: false,
-      error: ollama.error || null,
-      baseUrl: ollama.base_url || "http://127.0.0.1:11434",
-      models: Array.isArray(ollama.installed_models) ? ollama.installed_models : [],
-    };
-  } catch (error) {
-    localModelStatus = {
-      ...localModelStatus,
-      loaded: true,
-      loading: false,
-      error: error instanceof Error ? error.message : "Could not read Ollama on this PC.",
-      models: [],
-    };
-  }
-  if (rerender && el?.isConnected) renderOperatorSettings(el, opts);
 }
 
 function loopProviderName(id) {
@@ -317,8 +243,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   if (!el) return;
   const settings = loadOperatorSettings();
   const activeProvider = providerFor(settings.provider);
-  const activeProviderModels = providerModels(activeProvider);
-  const activeModel = settings.models[activeProvider.id] || activeProviderModels[0] || activeProvider.models[0];
+  const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
   const loop = loadPhantomLoop();
   const brainLabel = settings.providerMode === "smart"
     ? "Smart Mix"
@@ -335,7 +260,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
         <em class="chat-mini-saved" data-mini-saved hidden>Saved — applies to the next message</em>
       </div>
       <div class="chat-mini-summary">
-        <span><b>${esc(brainLabel)}</b><i>${settings.providerMode === "smart" ? "Automatic routing and fallback" : `${esc(activeProvider.name)} · ${esc(activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel))}`}</i></span>
+        <span><b>${esc(brainLabel)}</b><i>${settings.providerMode === "smart" ? "Automatic routing and fallback" : `${esc(activeProvider.name)} · ${esc(modelDisplayLabel(activeModel))}`}</i></span>
         <span><b>${loop.enabled ? "Loop on" : "Loop off"}</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Replies stay with Phantom"}</i></span>
       </div>
       <div class="chat-mini-fields">
@@ -347,7 +272,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
           </select>
         </label>
         <label class="chat-mini-field chat-mini-wide"><span>Preferred model</span>
-          <select data-mini-model ${settings.providerMode === "smart" ? "disabled" : ""}>${activeProviderModels.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(activeProvider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}</select>
+          <select data-mini-model ${settings.providerMode === "smart" ? "disabled" : ""}>${activeProvider.models.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(modelDisplayLabel(model))}</option>`).join("")}</select>
         </label>
       </div>
       <div class="chat-mini-loop">
@@ -435,12 +360,6 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   if (full) full.onclick = () => {
     if (typeof opts.openSettings === "function") opts.openSettings();
   };
-
-  if (settings.provider === "local" && settings.providerMode !== "smart" && !localModelStatus.loaded && !localModelStatus.loading) {
-    refreshLocalModels(el, opts, false).then(() => {
-      if (el?.isConnected) renderOperatorMiniSettings(el, opts);
-    });
-  }
 }
 
 const ROUTING_MODES = [
@@ -529,12 +448,6 @@ function renderModelTab(settings, activeProvider, activeModel) {
           </label>` : ""}
         <p class="set-label">Models</p>
         <div class="set-control-grid set-provider-models">${renderSelectedModelControls(settings)}</div>
-        ${settings.selectedProviders.includes("local") ? `
-          <div class="set-rule-list">
-            <span>Local means Ollama on this PC: ${esc(localModelStatus.baseUrl)}</span>
-            <span>${esc(localProviderStatusText())}</span>
-            <button class="btn btn-quiet" type="button" data-local-model-refresh>Re-read Ollama models</button>
-          </div>` : ""}
         <div class="set-control-grid set-response-controls">
           <label class="set-control"><span>Response style</span>
             <select data-ai-field="responseStyle">${optionList([
@@ -683,130 +596,12 @@ function renderCompanionTab() {
     </div>`;
 }
 
-function selectedMemberHelp(module) {
-  const ids = module.allowedMemberIds || [];
-  return ids.length ? `${ids.length} selected` : "No selected members yet";
-}
-
-async function renderWorkspaceModulesTab(el, opts = {}) {
-  if (!el) return;
-  el.innerHTML = `<div class="set-section"><p class="set-note">Loading workspace modules...</p></div>`;
-  try {
-    const payload = await moduleApi(`/phantom-ai/customization/workspace-modules?tenant_id=${encodeURIComponent(currentTenantId())}`);
-    const module = payload.modules?.find((item) => item.id === "phantomplay") || {
-      id: "phantomplay",
-      label: "PhantomPlay",
-      enabled: false,
-      accessMode: "owner_only",
-      allowedMemberIds: [],
-      activityEnabled: false,
-      challengesEnabled: false,
-    };
-    const canManage = payload.can_manage === true;
-    const enabled = module.enabled === true;
-    el.innerHTML = `
-      <div class="set-section">
-        <div class="set-section-head">
-          <div>
-            <p class="set-eyebrow">Workspace Modules</p>
-            <h3>Optional modules stay out of the way until enabled.</h3>
-            <p class="set-note">Core business tools remain prioritized. Optional modules can be enabled per organization without changing PhantomForce operations.</p>
-          </div>
-          <span class="set-status-pill ${enabled ? "is-on" : ""}">${enabled ? "Enabled" : "Disabled"}</span>
-        </div>
-        <article class="set-module-card">
-          <div class="set-module-card-main">
-            <span class="set-provider-mark">PP</span>
-            <div>
-              <p class="set-eyebrow">Optional module</p>
-              <h3>PhantomPlay</h3>
-              <p class="set-note">Give your team an optional place to recharge, compete, and participate in workspace activities. PhantomPlay remains completely separate from core business operations.</p>
-              <p class="set-note">Disabling it does not affect Clients, Accounting, Automations, Approvals, Workforce, Analytics, Media Lab, or any core PhantomForce feature.</p>
-            </div>
-          </div>
-          <div class="set-grid set-grid-two">
-            <label class="set-inline"><input type="checkbox" data-module-enabled ${enabled ? "checked" : ""} ${canManage ? "" : "disabled"}/> PhantomPlay available</label>
-            <label class="set-field">
-              <span>Access</span>
-              <select data-module-access ${canManage && enabled ? "" : "disabled"}>
-                <option value="owner_only" ${module.accessMode === "owner_only" ? "selected" : ""}>Owner only</option>
-                <option value="selected_members" ${module.accessMode === "selected_members" ? "selected" : ""}>Selected members</option>
-                <option value="entire_organization" ${module.accessMode === "entire_organization" ? "selected" : ""}>Entire organization</option>
-              </select>
-            </label>
-            <label class="set-inline"><input type="checkbox" data-module-activity ${module.activityEnabled ? "checked" : ""} ${canManage && enabled ? "" : "disabled"}/> Workspace activity</label>
-            <label class="set-inline"><input type="checkbox" data-module-challenges ${module.challengesEnabled ? "checked" : ""} ${canManage && enabled ? "" : "disabled"}/> Team challenges</label>
-          </div>
-          <label class="set-field ${module.accessMode === "selected_members" ? "" : "is-muted"}">
-            <span>Selected member IDs</span>
-            <textarea data-module-member-ids rows="3" ${canManage && enabled && module.accessMode === "selected_members" ? "" : "disabled"} placeholder="Paste user IDs, emails, or auth IDs, one per line.">${esc((module.allowedMemberIds || []).join("\n"))}</textarea>
-            <i>${esc(selectedMemberHelp(module))}</i>
-          </label>
-          <div class="set-actions-row">
-            <button class="btn btn-primary" type="button" data-module-save ${canManage ? "" : "disabled"}>${enabled ? "Save module access" : "Enable PhantomPlay"}</button>
-            ${enabled ? `<button class="btn btn-quiet" type="button" data-module-disable ${canManage ? "" : "disabled"}>Disable PhantomPlay</button>` : ""}
-          </div>
-          <p class="set-note" data-module-message>${canManage ? "" : "Only organization owners and workspace administrators can configure this module."}</p>
-        </article>
-      </div>`;
-
-    const message = el.querySelector("[data-module-message]");
-    const readDraft = () => {
-      const accessMode = el.querySelector("[data-module-access]")?.value || "owner_only";
-      return {
-        tenant_id: currentTenantId(),
-        module_id: "phantomplay",
-        enabled: el.querySelector("[data-module-enabled]")?.checked === true,
-        accessMode,
-        allowedMemberIds: String(el.querySelector("[data-module-member-ids]")?.value || "").split(/\n|,/).map((item) => item.trim()).filter(Boolean),
-        activityEnabled: el.querySelector("[data-module-activity]")?.checked === true,
-        challengesEnabled: el.querySelector("[data-module-challenges]")?.checked === true,
-      };
-    };
-    const syncControls = () => {
-      const enabledNow = el.querySelector("[data-module-enabled]")?.checked === true;
-      const access = el.querySelector("[data-module-access]");
-      const activity = el.querySelector("[data-module-activity]");
-      const challenges = el.querySelector("[data-module-challenges]");
-      const memberBox = el.querySelector("[data-module-member-ids]");
-      const memberWrap = memberBox?.closest(".set-field");
-      const selectedMode = access?.value || "owner_only";
-      if (access) access.disabled = !(canManage && enabledNow);
-      if (activity) activity.disabled = !(canManage && enabledNow);
-      if (challenges) challenges.disabled = !(canManage && enabledNow);
-      if (memberBox) memberBox.disabled = !(canManage && enabledNow && selectedMode === "selected_members");
-      memberWrap?.classList.toggle("is-muted", selectedMode !== "selected_members");
-      const save = el.querySelector("[data-module-save]");
-      if (save) save.textContent = enabledNow ? (module.enabled === true ? "Save module access" : "Enable PhantomPlay") : "Save module access";
-    };
-    const saveDraft = async (draft) => {
-      if (!draft.enabled && !window.confirm("Disabling PhantomPlay hides it from your workspace. Existing progress and settings will be preserved.")) return;
-      if (draft.enabled && module.enabled !== true && !window.confirm("Enable PhantomPlay for the selected workspace members?")) return;
-      if (message) message.textContent = "Saving module access...";
-      await moduleApi("/phantom-ai/customization/workspace-modules", { method: "PATCH", body: JSON.stringify(draft) });
-      if (message) message.textContent = draft.enabled ? "PhantomPlay is now available to the selected workspace members." : "PhantomPlay is hidden. Progress and settings were preserved.";
-      if (typeof opts.onWorkspaceApplied === "function") opts.onWorkspaceApplied();
-      await renderWorkspaceModulesTab(el, opts);
-    };
-    el.querySelector("[data-module-access]")?.addEventListener("change", () => {
-      syncControls();
-    });
-    el.querySelector("[data-module-enabled]")?.addEventListener("change", syncControls);
-    syncControls();
-    el.querySelector("[data-module-save]")?.addEventListener("click", () => saveDraft(readDraft()).catch((error) => { if (message) message.textContent = error.message; }));
-    el.querySelector("[data-module-disable]")?.addEventListener("click", () => saveDraft({ ...readDraft(), enabled: false }).catch((error) => { if (message) message.textContent = error.message; }));
-  } catch (error) {
-    el.innerHTML = `<div class="set-section"><div class="cust-empty"><b>Workspace modules could not load.</b><span>${esc(error instanceof Error ? error.message : "Check the private backend connection and try again.")}</span></div></div>`;
-  }
-}
-
 export function renderOperatorSettings(el, opts = {}) {
   const settings = loadOperatorSettings();
   const activeProvider = providerFor(settings.provider);
   const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
   const mediaMountId = `media-settings-${Math.random().toString(36).slice(2)}`;
   const workspaceMountId = `workspace-studio-${Math.random().toString(36).slice(2)}`;
-  const modulesMountId = `workspace-modules-${Math.random().toString(36).slice(2)}`;
   const initialTab = opts.initialTab && SETTINGS_TABS.some((tab) => tab.id === opts.initialTab) ? opts.initialTab : null;
   const activeTab = initialTab || loadSettingsTab();
   if (initialTab) saveSettingsTab(initialTab);
@@ -816,7 +611,6 @@ export function renderOperatorSettings(el, opts = {}) {
     loop: () => renderLoopAdvancedSection(),
     chat: () => renderChatBehaviorTab(settings),
     workspace: () => `<div id="${workspaceMountId}" class="set-workspace-mount"></div>`,
-    modules: () => `<div id="${modulesMountId}" class="set-workspace-mount"></div>`,
     companion: () => renderCompanionTab(),
     media: () => `<div id="${mediaMountId}"></div>`,
   };
@@ -894,9 +688,6 @@ export function renderOperatorSettings(el, opts = {}) {
     settings.provider = preferred.value;
     saveAndRender();
   };
-
-  const localRefresh = el.querySelector("[data-local-model-refresh]");
-  if (localRefresh) localRefresh.onclick = () => refreshLocalModels(el, opts);
 
   el.querySelectorAll("[data-ai-field]").forEach((field) => {
     field.onchange = () => {
@@ -1006,12 +797,5 @@ export function renderOperatorSettings(el, opts = {}) {
         }
       },
     });
-  }
-
-  const modulesMount = el.querySelector(`#${modulesMountId}`);
-  if (modulesMount) renderWorkspaceModulesTab(modulesMount, opts);
-
-  if (activeTab === "model" && settings.selectedProviders.includes("local") && !localModelStatus.loaded && !localModelStatus.loading) {
-    refreshLocalModels(el, opts);
   }
 }

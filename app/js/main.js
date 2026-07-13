@@ -32,6 +32,8 @@ import {
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-247";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-247";
 import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-247";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260713-247";
+const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
 import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260713-247";
 import {
   customizeNavigation,
@@ -399,16 +401,16 @@ const BASE_NAV = [
   { id: "assets",     label: "Asset Cloud",  icon: "media", ws: "assets", dbOnly: true },
   { id: "sites",      label: "Websites",     icon: "site",  ws: "sites" },
   { id: "money",      label: "Accounting",   icon: "dollar", ws: "money" },
+  { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay" },
   { id: "memory",     label: "Memory",       icon: "brain", ws: "memory" },
   { id: "automation", label: "Automations",  icon: "auto",  ws: "automation" },
   { id: "approvals",  label: "Approvals",    icon: "check", ws: "approvals", badge: true },
   { id: "workers",    label: "Workforce",    icon: "users", ws: "workforce" },
   { id: "intelligence", label: "Competitor Intel", icon: "chart", ws: "intelligence" },
   { id: "analytics",  label: "Analytics",    icon: "chart", ws: "analytics" },
-  { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings", navZone: "bottom" },
-  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true, navZone: "bottom" },
-  { id: "vacation",   label: "Away Mode",    icon: "auto",  ws: "vacation", statusPill: true, navZone: "bottom" },
-  { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true, optionalModule: true },
+  { id: "vacation",   label: "Away Mode", icon: "auto", ws: "vacation", statusPill: true },
+  { id: "developer",  label: "Developer",    icon: "dev",   ws: "developer", ownerOnly: true },
+  { id: "settings",   label: "Settings",     icon: "cog",   ws: "settings" },
 ];
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
 let navEntitlements = { loaded: false, features: null, limits: null };
@@ -425,7 +427,7 @@ const MOBILE_LABEL_OVERRIDES = {
   automation: "Auto",
   approvals: "Approvals",
   analytics: "Analytics",
-  intelligence: "Competitor",
+  intelligence: "Intel",
   vacation: "Away",
   developer: "Developer",
 };
@@ -861,7 +863,7 @@ const ACCOUNT_TIERS = [
     price: "$2,500/mo",
     badge: "Growth",
     copy: "Operator-grade system for growth: creator workflow, Media Lab, accounting visibility, and owner controls.",
-    features: ["Phantom AI operator", "Content Hub + Media Lab", "Accounting-aware ops"],
+    features: ["Phantom AI operator", "Creator Hub + Media Lab", "Accounting-aware ops"],
   },
   {
     id: "elite",
@@ -1432,7 +1434,7 @@ const QUICK = [
   { label: "Create new content", icon: "spark",  run: "Create campaign media" },
   { label: "Start video campaign", icon: "film",  run: "Create a launch video" },
   { label: "Check cashflow", icon: "chart",   run: "What's my cash flow?" },
-  { label: "Open Content Hub", icon: "upload",   open: "content" },
+  { label: "Open media library", icon: "upload",   open: "media" },
   { label: "View approval queue", icon: "check",   open: "approvals" },
 ];
 function renderQuick() {
@@ -1449,63 +1451,6 @@ function greeting() {
   const h = new Date().getHours();
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
-/* Server truth for the bell: /api/organization/pulse tells us what is
-   actually pending/failing/running on the backend, beyond the client store,
-   and /api/organization/opportunities contributes the top high-impact
-   recommendation from the live graph analysis. Both share the 60s cache and
-   fail independently; on fetch failure we show nothing extra (no fake data). */
-let serverPulse = null;
-let serverPulseTenant = "";
-let serverPulseAt = 0;
-let serverPulseInFlight = null;
-let serverOpportunity = null; // top high-impact opportunity only, or null
-let serverOpportunityTenant = "";
-async function fetchServerAttention(force = false) {
-  const tenant = currentTenantId();
-  if (!force && serverPulse && serverPulseTenant === tenant && Date.now() - serverPulseAt < 60000) return serverPulse;
-  if (serverPulseInFlight) return serverPulseInFlight;
-  serverPulseInFlight = (async () => {
-    const token = session.token();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const getJson = async (path) => {
-      const ctrl = new AbortController();
-      const timer = setTimeout(() => ctrl.abort(), 8000);
-      try {
-        const r = await fetch(`${path}?tenant_id=${encodeURIComponent(tenant)}`, { headers, signal: ctrl.signal });
-        const d = await r.json().catch(() => null);
-        return r.ok ? d : null;
-      } finally { clearTimeout(timer); }
-    };
-    const [pulseData, oppData] = await Promise.all([
-      getJson("/api/organization/pulse").catch(() => null), // keep last known pulse; never invent items
-      getJson("/api/organization/opportunities").catch(() => null),
-    ]);
-    if (pulseData?.ok && pulseData.pulse) { serverPulse = pulseData.pulse; serverPulseTenant = tenant; serverPulseAt = Date.now(); }
-    if (oppData?.ok && Array.isArray(oppData.opportunities)) {
-      serverOpportunity = oppData.opportunities.find((o) => o?.impact === "high" && o.title && o.action?.route) || null;
-      serverOpportunityTenant = tenant;
-    }
-    serverPulseInFlight = null;
-    return serverPulse;
-  })();
-  return serverPulseInFlight;
-}
-function serverAttentionItems() {
-  const pulse = serverPulse && serverPulseTenant === currentTenantId() ? serverPulse : null;
-  const items = [];
-  const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
-  const pending = pulse?.approvals?.available ? pulse.approvals.pending || 0 : 0;
-  if (pending > 0) items.push({ icon: "check", tone: "warn", title: `${plural(pending, "approval")} waiting on you`, sub: "Server-confirmed approval queue", open: "approvals" });
-  const failed = pulse?.agentRuns?.available ? pulse.agentRuns.failed || 0 : 0;
-  if (failed > 0) items.push({ icon: "bolt", tone: "warn", title: `${plural(failed, "agent run")} failed — work stopped`, sub: "Open Automations to see what broke", open: "automation" });
-  const running = pulse?.agentRuns?.available ? pulse.agentRuns.running || 0 : 0;
-  if (running > 0) items.push({ icon: "clock", tone: "ok", title: `${plural(running, "job")} running now`, sub: "Agents are working in the background", open: "automation" });
-  const failing = pulse?.automations?.available ? pulse.automations.failing || [] : [];
-  if (failing.length > 0) items.push({ icon: "bolt", tone: "warn", title: `Automation failing: ${failing[0].name || failing[0].id}`, sub: failing[0].lastSummary || `${failing.length} automation(s) reporting failures`, open: "automation" });
-  const opp = serverOpportunity && serverOpportunityTenant === currentTenantId() ? serverOpportunity : null;
-  if (opp) items.push({ icon: "bolt", tone: "ok", title: `Opportunity: ${opp.title}`, sub: `${opp.action.label || "Open"} — from live graph analysis`, open: opp.action.route });
-  return items;
-}
 function attentionItems() {
   const items = [];
   visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
@@ -1516,7 +1461,6 @@ function attentionItems() {
     .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
   visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
     .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
-  items.push(...serverAttentionItems());
   return items;
 }
 /* ============================ notifications ============================ */
@@ -1688,10 +1632,6 @@ function renderConsole() {
   renderPlanMeta();
   renderUser();
   renderNotifs();
-  /* Fire-and-forget: pull server truth for the bell, then repaint the badge
-     (and the open menu) once it lands. Failures change nothing. */
-  const pulseBefore = serverPulseAt;
-  fetchServerAttention().then(() => { if (serverPulseAt !== pulseBefore) renderNotifs(); }).catch(() => {});
   renderHero();
   renderChips();
   renderModePose(activeMode);
@@ -2206,43 +2146,27 @@ function laneTargetForId(id) {
 function laneTargetOptions(selected) {
   return PHANTOM_LANE_TARGETS.map((target) => `<option value="${esc(target.id)}" ${target.id === selected ? "selected" : ""}>${esc(target.name)}</option>`).join("");
 }
-function localModelOptions(localModels) {
-  const installed = Array.isArray(localModels?.installed_models) ? localModels.installed_models : [];
-  return [...new Set(["local-auto", ...installed.map((model) => model.model || model.name).filter(Boolean)])];
-}
-function localModelLabel(modelId, localModels) {
-  if (modelId === "local-auto") return localModels?.model_count ? "Auto - best installed Ollama model" : "Auto - read Ollama";
-  const model = (localModels?.installed_models || []).find((item) => item.model === modelId || item.name === modelId);
-  const suffix = [model?.parameter_size, model?.quantization_level].filter(Boolean).join(" ");
-  return `${model?.display_name || modelId}${suffix ? ` (${suffix})` : ""}`;
-}
-function laneModelOptions(targetId, selectedModel, localModels = null) {
+function laneModelOptions(targetId, selectedModel) {
   const target = laneTargetForId(targetId);
-  const models = target.id === "local_ollama" ? localModelOptions(localModels) : target.models;
-  return models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(target.id === "local_ollama" ? localModelLabel(model, localModels) : model)}</option>`).join("");
+  return target.models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(model)}</option>`).join("");
 }
-function renderBrainLaneControls(localModels = null) {
+function renderBrainLaneControls() {
   const cfg = loadPhantomLaneConfig();
   return PHANTOM_LANES.map((lane) => {
     const selected = cfg.lanes?.[lane.id] || {};
     const target = laneTargetForId(selected.target || lane.defaultTarget);
-    const models = target.id === "local_ollama" ? localModelOptions(localModels) : target.models;
-    const model = models.includes(selected.model) || (target.allowCustomModel && typeof selected.model === "string" && selected.model.trim()) ? selected.model : models[0];
-    const localHint = lane.id === "local" && target.id === "local_ollama"
-      ? `<small>${localModels?.reachable ? `${Number(localModels.model_count || 0)} Ollama model${localModels.model_count === 1 ? "" : "s"} on this PC` : esc(localModels?.error || "Ollama status waiting")}</small>`
-      : "";
+    const model = target.models.includes(selected.model) ? selected.model : target.models[0];
     return `
       <div class="developer-lane-control" data-dev-lane-row="${esc(lane.id)}">
         <div class="developer-lane-copy">
           <b>${esc(lane.name)}</b>
           <i>${esc(lane.role)}</i>
-          ${localHint}
         </div>
         <label><span>Backend</span>
           <select data-dev-lane-target="${esc(lane.id)}">${laneTargetOptions(target.id)}</select>
         </label>
         <label><span>Model</span>
-          <select data-dev-lane-model="${esc(lane.id)}">${laneModelOptions(target.id, model, localModels)}</select>
+          <select data-dev-lane-model="${esc(lane.id)}">${laneModelOptions(target.id, model)}</select>
         </label>
         <em data-dev-lane-current="${esc(lane.id)}">${esc(phantomLaneTargetName(target.id))}</em>
       </div>`;
@@ -2276,21 +2200,6 @@ async function fetchProviderManagerStatus() {
     const payload = await response.json().catch(() => null);
     const manager = payload?.status?.provider_manager;
     return response.ok && manager ? manager : null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchLocalModelStatus() {
-  try {
-    const token = session.token();
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
-    const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), 8000);
-    const response = await fetch("/phantom-ai/local-models/status", { headers, signal: ctrl.signal });
-    clearTimeout(timer);
-    const payload = await response.json().catch(() => null);
-    return response.ok && payload?.ollama ? payload.ollama : null;
   } catch {
     return null;
   }
@@ -2500,7 +2409,7 @@ function animateDevCount(el, target) {
 }
 
 let devRefreshTimer = 0;
-function wireDeveloperSection(body, opts, localModels = null) {
+function wireDeveloperSection(body, opts) {
   const showLaneSaved = () => {
     const saved = body.querySelector("[data-dev-lane-saved]");
     if (!saved) return;
@@ -2518,7 +2427,7 @@ function wireDeveloperSection(body, opts, localModels = null) {
     const nextModel = patch.model || (target.id === current.target ? current.model : target.models[0]) || target.models[0];
     cfg.lanes[laneId] = {
       target: target.id,
-      model: target.models.includes(nextModel) || (target.allowCustomModel && typeof nextModel === "string" && nextModel.trim()) ? nextModel : target.models[0],
+      model: target.models.includes(nextModel) ? nextModel : target.models[0],
     };
     return savePhantomLaneConfig(cfg);
   };
@@ -2528,7 +2437,7 @@ function wireDeveloperSection(body, opts, localModels = null) {
       const cfg = saveLane(laneId, { target: select.value });
       const selected = cfg.lanes[laneId];
       const model = body.querySelector(`[data-dev-lane-model="${laneId}"]`);
-      if (model) model.innerHTML = laneModelOptions(selected.target, selected.model, localModels);
+      if (model) model.innerHTML = laneModelOptions(selected.target, selected.model);
       const current = body.querySelector(`[data-dev-lane-current="${laneId}"]`);
       if (current) current.textContent = phantomLaneTargetName(selected.target);
       showLaneSaved();
@@ -2562,7 +2471,7 @@ function wireDeveloperSection(body, opts, localModels = null) {
   });
 }
 
-function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaHealth, providerManager, localModels }, opts) {
+function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaHealth, providerManager }, opts) {
   const s = ctx.session || {};
   const w = workforce;
   const summary = w?.summary;
@@ -2721,7 +2630,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
         <div class="developer-lane-groups">
           <div class="developer-lane-group developer-lane-group-wide">
             <b>Phantom routing lanes</b>
-            <div class="developer-lane-controls">${renderBrainLaneControls(localModels)}</div>
+            <div class="developer-lane-controls">${renderBrainLaneControls()}</div>
             <p class="developer-lane-saved" data-dev-lane-saved hidden>Saved — next message uses this routing.</p>
           </div>
           <div class="developer-lane-group">
@@ -2748,7 +2657,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       </section>
     </div>`;
 
-  wireDeveloperSection(body, opts, localModels);
+  wireDeveloperSection(body, opts);
   const autopilotMount = body.querySelector("[data-dev-autopilot]");
   if (autopilotMount) renderDeveloperAutopilotPanel(autopilotMount, opts);
   const agentRunsMount = body.querySelector("[data-dev-agent-runs]");
@@ -2757,18 +2666,17 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
 }
 
 async function loadDeveloperData(body, opts) {
-  const [wfResult, rembg, mediaHealth, providerManager, localModels] = await Promise.all([
+  const [wfResult, rembg, mediaHealth, providerManager] = await Promise.all([
     fetchAgentWorkforceStatus(24),
     getRembgStatus(),
     getMediaEngineHealth(),
     fetchProviderManagerStatus(),
-    fetchLocalModelStatus(),
   ]);
   if (!document.body.contains(body)) return;
   renderDeveloperContent(body, {
     workforce: wfResult.ok ? wfResult.workforce : null,
     workforceError: wfResult.ok ? null : wfResult.error,
-    rembg, mediaHealth, providerManager, localModels,
+    rembg, mediaHealth, providerManager,
   }, opts);
 }
 
@@ -2807,29 +2715,43 @@ function renderDeveloperPage(body) {
   }, 30000);
 }
 
-function renderMediaLabSuite(body) {
+function renderMediaLabSuite(body, initialTab = "create") {
+  let activeTab = initialTab === "content" ? "content" : "create";
   const opts = mediaOpts();
-  body.innerHTML = `
+  const paint = () => {
+    body.innerHTML = `
       <section class="media-suite" data-media-suite>
         <header class="media-suite-head">
           <div>
-            <p class="media-suite-kicker">Creation workspace</p>
+            <p class="media-suite-kicker">One creative workspace</p>
             <h2>Media Lab</h2>
-            <p>Create and edit here. Finished work moves to Content Hub for planning, publishing, and analytics.</p>
+            <p>Generate, edit, organize, and publish from the same tab.</p>
           </div>
-          <button class="media-suite-link" data-open-ws="content" type="button">${svg("doc")} Open Content Hub</button>
+          <nav class="media-suite-tabs" role="tablist" aria-label="Media Lab sections">
+            <button class="${activeTab === "create" ? "is-active" : ""}" data-media-suite-tab="create" type="button" role="tab" aria-selected="${activeTab === "create"}">${svg("media")} Create & Edit</button>
+            <button class="${activeTab === "content" ? "is-active" : ""}" data-media-suite-tab="content" type="button" role="tab" aria-selected="${activeTab === "content"}">${svg("doc")} Content Hub</button>
+          </nav>
         </header>
         <div class="media-suite-body" data-media-suite-body></div>
       </section>`;
-  const target = $("[data-media-suite-body]", body);
-  renderMediaStudio(target, opts);
-  $("[data-open-ws='content']", body)?.addEventListener("click", () => opts.openWorkspace?.("content"));
+    const target = $("[data-media-suite-body]", body);
+    if (activeTab === "content") renderContentHub(target, opts);
+    else renderMediaStudio(target, opts);
+    $$("[data-media-suite-tab]", body).forEach((button) => {
+      button.onclick = () => {
+        activeTab = button.dataset.mediaSuiteTab === "content" ? "content" : "create";
+        try { history.replaceState(null, "", `#page/${activeTab === "content" ? "content" : "media"}`); } catch {}
+        paint();
+      };
+    });
+  };
+  paint();
 }
 
 const CUSTOM = {
-  media: { title: "Media Lab", kicker: "Create and edit", custom: true, wide: true, render: (body) => renderMediaLabSuite(body) },
+  media: { title: "Media Lab", kicker: "Create, organize, and publish", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "create") },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
-  content: { title: "Content Hub", kicker: "Library, ideas, drafts, publishing, and performance", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
+  content: { title: "Media Lab", kicker: "Content Hub inside Media Lab", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "content") },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
@@ -2865,38 +2787,6 @@ function clearOverlayOnly() {
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
 }
-/* Build staleness watchdog: the sync script records its outcome in the
-   served manifest. If this machine stopped updating (blocked sync or no
-   sync in 24h), owners see WHY in the product instead of silently living
-   on an old build. Admin-only; missing manifest (fresh checkout, GitHub
-   Pages) shows nothing. */
-let syncBannerShown = false;
-async function checkBuildFreshness() {
-  if (syncBannerShown || !isAdmin()) return;
-  let manifest = null;
-  try {
-    const response = await fetch("/app/.phantomforce-sync.json", { cache: "no-store" });
-    if (!response.ok) return;
-    manifest = await response.json();
-  } catch { return; }
-  if (!manifest || typeof manifest !== "object") return;
-  const syncedAt = Date.parse(manifest.synced_at || "");
-  const staleMs = Number.isFinite(syncedAt) ? Date.now() - syncedAt : 0;
-  const blocked = manifest.sync_status === "blocked";
-  const stale = staleMs > 24 * 60 * 60 * 1000;
-  if (!blocked && !stale) return;
-  syncBannerShown = true;
-  const bar = document.createElement("div");
-  bar.className = "build-stale-banner";
-  bar.setAttribute("role", "alert");
-  const when = Number.isFinite(syncedAt) ? new Date(syncedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "unknown";
-  bar.innerHTML = `<b>${blocked ? "Updates are blocked on this computer" : "This computer hasn't updated recently"}</b>
-    <span>${esc(String(manifest.sync_reason || `Last successful sync: ${when}. Check the sync log if this persists.`))}</span>
-    <button type="button" aria-label="Dismiss">&times;</button>`;
-  bar.querySelector("button").onclick = () => bar.remove();
-  document.body.prepend(bar);
-}
-
 function renderDashboardPage(pushHash = true) {
   activePageId = null;
   activeNav = "dashboard";
@@ -2905,7 +2795,6 @@ function renderDashboardPage(pushHash = true) {
   setGhostMood("idle", { emotion: "happy", ms: 1200 });
   stageReact("dashboard", 520);
   renderConsole();
-  checkBuildFreshness();
   if (pushHash && location.hash) {
     try { history.pushState(null, "", location.pathname + location.search); } catch {}
   }

@@ -155,7 +155,7 @@ function createBuddyController() {
     const hasSidebar = window.innerWidth > 900;
     const inSidebarDock = hasSidebar && prefs.dockLocation === "sidebar";
     return {
-      left: inSidebarDock ? 10 : hasSidebar ? 214 : 14,
+      left: inSidebarDock ? 10 : hasSidebar ? 236 : 14,
       right: 18,
       top: hasSidebar ? 88 : 72,
       bottom: mobile() ? 98 : 24,
@@ -164,9 +164,9 @@ function createBuddyController() {
 
   function sizeForPrefs() {
     const map = {
-      compact: mobile() ? 60 : 58,
-      standard: mobile() ? 68 : 64,
-      large: mobile() ? 78 : 74,
+      compact: mobile() ? 68 : 72,
+      standard: mobile() ? 76 : 84,
+      large: mobile() ? 90 : 98,
     };
     return map[prefs.size] || map.standard;
   }
@@ -195,8 +195,8 @@ function createBuddyController() {
     const halfX = buddyWidth / 2;
     const halfY = buddyHeight / 2;
     const zone = sidebarDockZone();
-    const minX = zone.left + 20 + halfX;
-    const maxX = Math.min(zone.left + zone.width - 12 - halfX, minX + 18);
+    const minX = zone.left + 6 + halfX;
+    const maxX = zone.left + zone.width - 6 - halfX;
     const minY = zone.top + halfY;
     const maxY = zone.bottom - halfY;
     return {
@@ -216,7 +216,7 @@ function createBuddyController() {
     if (dock === "sidebar") {
       const bounds = sidebarPatrolBounds();
       return {
-        x: bounds.minX,
+        x: (bounds.minX + bounds.maxX) / 2,
         y: bounds.maxY,
       };
     }
@@ -313,11 +313,6 @@ function createBuddyController() {
     canvas = layer.querySelector("[data-buddy-canvas]");
     sayEl = layer.querySelector("[data-buddy-say]");
     menu = layer.querySelector("[data-buddy-menu]");
-    /* The layer moves via transform, and a transformed ancestor becomes the
-       containing block for position:fixed children — leaving the menu inside
-       would offset its viewport coordinates by the phantom's position and
-       throw it off-screen. It must live directly under <body>. */
-    document.body.appendChild(menu);
     ctx2 = canvas.getContext("2d");
     character = createPhantomCharacter({ small: true });
     revealed = false;
@@ -335,7 +330,6 @@ function createBuddyController() {
       eventAbort = null;
     }
     if (layer) layer.remove();
-    if (menu) menu.remove(); // re-parented to <body>, so the layer no longer owns it
     layer = canvas = sayEl = menu = ctx2 = character = null;
     revealed = false;
     revealAt = 0;
@@ -474,9 +468,10 @@ function createBuddyController() {
     if (!force && now < nextWanderAt) return;
     if (docked && prefs.dockLocation === "sidebar" && !mobile() && motionAllowed() && !userBusy()) {
       const bounds = sidebarPatrolBounds();
-      tx = bounds.minX + Math.random() * Math.max(1, bounds.maxX - bounds.minX);
-      ty = bounds.maxY - Math.random() * Math.min(18, Math.max(1, bounds.maxY - bounds.minY));
-      nextWanderAt = now + 4200 + Math.random() * 5200;
+      const height = Math.max(1, bounds.maxY - bounds.minY);
+      tx = (bounds.minX + bounds.maxX) / 2;
+      ty = bounds.minY + height * (0.25 + Math.random() * 0.5);
+      nextWanderAt = now + 2600 + Math.random() * 3000;
       return;
     }
     if (!roamingAllowed() || docked || userBusy()) {

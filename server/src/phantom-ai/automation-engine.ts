@@ -9,25 +9,19 @@
    real recurring activity instead of only live chat turns. */
 
 import { randomUUID } from "node:crypto";
-import { execFile } from "node:child_process";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import { promisify } from "node:util";
 
 import { appendHermesLedgerRecord, getHermesLedgerStatus } from "./hermes-ledger.js";
 import { detectRembg } from "./rembg-bridge.js";
 import { loadToolRegistry, buildToolLanePreview } from "./tool-lane.js";
 import { getAutonomousSecurityScanStatus } from "./security-scan-scheduler.js";
-import { getCompetitorIntelligenceStoreStatus, getWebDiscoveryStatus } from "./competitor-intelligence.js";
 import { getAccessAuthConfiguration } from "../access/session.js";
 import { buildProductionReadinessReport } from "../access/production-readiness.js";
 import { prisma } from "../access/prisma-runtime.js";
 import { getContentAssetStorageProvider } from "./content-asset-storage.js";
-import { getSalesConnectorStatus } from "../connectors/sales-connector.js";
 
-const execFileAsync = promisify(execFile);
-
-const ENGINE_VERSION = "2026.07.13-autopilot-v2";
+const ENGINE_VERSION = "2026.07.10-autopilot-v1";
 const DEFAULT_STATE_DIR = path.join(process.cwd(), ".local", "automation-engine");
 const STATE_DIR = process.env.PHANTOMFORCE_AUTOMATION_STATE_DIR ?? DEFAULT_STATE_DIR;
 const STATE_FILE = path.join(STATE_DIR, "state.json");
@@ -39,7 +33,7 @@ const CADENCE_MS = {
   monthly: 27 * 24 * 60 * 60 * 1000,
 } as const;
 
-export type AutomationCategory = "health" | "ops" | "content" | "intelligence" | "security" | "crm" | "outreach";
+export type AutomationCategory = "health" | "ops" | "content";
 export type AutomationCadence = keyof typeof CADENCE_MS;
 
 type AutomationRunOutcome = {
@@ -55,11 +49,6 @@ type AutomationJobDefinition = {
   category: AutomationCategory;
   cadence: AutomationCadence;
   description: string;
-  benefit?: string;
-  output?: string;
-  setup_fields?: string[];
-  approval_required?: boolean;
-  external_action?: boolean;
   run: () => Promise<AutomationRunOutcome>;
 };
 
@@ -101,65 +90,6 @@ function phantomCutBaseUrl() {
 function keyedMediaProviders(data: Record<string, unknown> | null): string[] {
   const media = data && typeof data.media === "object" && data.media ? (data.media as Record<string, unknown>) : {};
   return Object.keys(media).filter((key) => Boolean(media[key]));
-}
-
-function envList(...names: string[]) {
-  return names
-    .flatMap((name) => String(process.env[name] ?? "").split(/[\n,;]/))
-    .map((item) => item.trim())
-    .filter(Boolean);
-}
-
-async function commandProbe(command: string, args: string[], timeoutMs = 5000) {
-  try {
-    const { stdout, stderr } = await execFileAsync(command, args, {
-      timeout: timeoutMs,
-      windowsHide: true,
-      maxBuffer: 1024 * 128,
-    });
-    return { ok: true, output: `${stdout || stderr}`.trim().slice(0, 800) };
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return { ok: false, output: message.slice(0, 800) };
-  }
-}
-
-async function windowsDefenderProbe() {
-  if (process.platform !== "win32") return { ok: false, output: "Windows Defender probe is only available on Windows." };
-  const script = "try { $s=Get-MpComputerStatus; [pscustomobject]@{ AntivirusEnabled=$s.AntivirusEnabled; RealTimeProtectionEnabled=$s.RealTimeProtectionEnabled; AntispywareEnabled=$s.AntispywareEnabled; QuickScanAge=$s.QuickScanAge; FullScanAge=$s.FullScanAge; AMServiceEnabled=$s.AMServiceEnabled } | ConvertTo-Json -Compress } catch { $_.Exception.Message }";
-  return commandProbe("powershell.exe", ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", script], 8000);
-}
-
-async function clamAvProbe() {
-  return commandProbe("clamscan", ["--version"], 5000);
-}
-
-function publicDomains() {
-  return envList("PHANTOM_PUBLIC_DOMAINS", "PHANTOMFORCE_PUBLIC_DOMAINS", "PUBLIC_BUSINESS_DOMAINS")
-    .map((domain) => domain.replace(/^https?:\/\//i, "").replace(/\/.*$/, "").toLowerCase())
-    .filter((domain) => /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain))
-    .slice(0, 12);
-}
-
-async function checkPublicDomain(domain: string) {
-  const res = await fetchJsonWithTimeout(`https://${domain}`, 6500);
-  return { domain, ok: res.ok, status: res.status };
-}
-
-function monitoredIdentityTargets() {
-  const emails = envList("PHANTOM_MONITORED_EMAILS", "BUSINESS_SECURITY_EMAILS", "BREACH_MONITOR_EMAILS").slice(0, 40);
-  const domains = publicDomains();
-  return { emails, domains };
-}
-
-function breachProviderStatus() {
-  const providers = [
-    ["HIBP_API_KEY", "Have I Been Pwned"],
-    ["DEHASHED_API_KEY", "DeHashed"],
-    ["INTELX_API_KEY", "Intelligence X"],
-  ] as const;
-  const configured = providers.filter(([key]) => Boolean((process.env[key] ?? "").trim())).map(([, label]) => label);
-  return { configured, count: configured.length };
 }
 
 const JOB_DEFINITIONS: AutomationJobDefinition[] = [
@@ -269,85 +199,6 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
       };
     },
   },
-  {
-    id: "public-attack-surface-watch",
-    name: "Public Attack Surface Watch",
-    category: "security",
-    cadence: "daily",
-    description: "Checks configured public business domains for reachability and logs a lightweight posture receipt.",
-    benefit: "Gives every new account a basic outside-in website/domain watch without exposing scanner tooling.",
-    output: "Daily domain reachability digest and owner next-action.",
-    setup_fields: ["business website", "public domains", "owner email"],
-    approval_required: false,
-    external_action: false,
-    run: async () => {
-      const domains = publicDomains();
-      if (!domains.length) {
-        return {
-          ok: true,
-          summary: "No public domains configured yet. Add the business website/domain so Phantom can watch the public surface.",
-          next_action: "Tell Phantom the business website or set PHANTOM_PUBLIC_DOMAINS.",
-        };
-      }
-      const checks = await Promise.all(domains.map(checkPublicDomain));
-      const failing = checks.filter((item) => !item.ok);
-      return {
-        ok: failing.length === 0,
-        summary: `${checks.length} public domain(s) checked — ${failing.length} unreachable or flagged.`,
-        next_action: failing.length ? `Review ${failing.map((item) => `${item.domain}${item.status ? ` (${item.status})` : ""}`).join(", ")}.` : "No action needed.",
-      };
-    },
-  },
-  {
-    id: "local-antivirus-posture",
-    name: "Local Antivirus Posture",
-    category: "security",
-    cadence: "daily",
-    description: "Checks local antivirus posture through ClamAV when available and Windows Defender on Windows.",
-    benefit: "Lets Phantom notice when the operator machine is not protected before work keeps piling up.",
-    output: "Daily antivirus availability/status receipt.",
-    setup_fields: ["ClamAV optional", "Windows Defender optional", "local machine access"],
-    approval_required: false,
-    external_action: false,
-    run: async () => {
-      const [clam, defender] = await Promise.all([clamAvProbe(), windowsDefenderProbe()]);
-      const ok = clam.ok || /true/i.test(defender.output);
-      const parts = [
-        clam.ok ? `ClamAV: ${clam.output.split(/\r?\n/)[0]}` : "ClamAV: not detected",
-        defender.ok ? `Defender: ${defender.output}` : "Defender: unavailable",
-      ];
-      return {
-        ok,
-        summary: parts.join(" · ").slice(0, 340),
-        next_action: ok ? "No action needed." : "Install/enable ClamAV or verify OS antivirus protection.",
-      };
-    },
-  },
-  {
-    id: "leaked-data-watch",
-    name: "Leaked Data & Password Watch",
-    category: "security",
-    cadence: "daily",
-    description: "Checks whether breach-monitoring providers and monitored emails/domains are configured; never stores passwords.",
-    benefit: "Pushes every business to protect exposed accounts, leaked emails, and password reuse risk.",
-    output: "Daily breach-watch readiness digest and setup gaps.",
-    setup_fields: ["business emails", "business domains", "breach provider key"],
-    approval_required: false,
-    external_action: false,
-    run: async () => {
-      const targets = monitoredIdentityTargets();
-      const providers = breachProviderStatus();
-      const targetCount = targets.emails.length + targets.domains.length;
-      const ready = providers.count > 0 && targetCount > 0;
-      return {
-        ok: ready,
-        summary: ready
-          ? `Breach watch ready: ${targetCount} monitored identifier(s), provider(s): ${providers.configured.join(", ")}. No passwords stored.`
-          : `Breach watch needs setup: ${targetCount} identifier(s), ${providers.count} provider(s) configured.`,
-        next_action: ready ? "Run provider-backed checks from the approved security lane." : "Add business emails/domains and a lawful breach-monitoring provider key.",
-      };
-    },
-  },
   // ---------------- business operations ----------------
   {
     id: "access-auth-posture",
@@ -433,54 +284,6 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
     },
   },
   {
-    id: "crm-discovery-pulse",
-    name: "CRM Discovery Pulse",
-    category: "crm",
-    cadence: "daily",
-    description: "Counts discoverable contacts and checks whether CRM import/sync connectors are safely available.",
-    benefit: "New accounts immediately learn that Phantom can organize clients, leads, and follow-up once contacts are connected.",
-    output: "Daily contact/source readiness digest.",
-    setup_fields: ["contacts", "CRM provider", "lead source", "business email"],
-    approval_required: false,
-    external_action: false,
-    run: async () => {
-      const sales = getSalesConnectorStatus();
-      const contactCount = prisma ? await prisma.contact.count().catch(() => 0) : 0;
-      return {
-        ok: contactCount > 0,
-        summary: `${contactCount} contact(s) discoverable. Sales connector: ${sales.status}; live CRM sync: ${sales.live ? "on" : "off"}.`,
-        next_action: contactCount > 0
-          ? "Use Outreach Prep to draft the next touches; external sends still wait for approval."
-          : "Import or add contacts so Phantom can build follow-up queues.",
-      };
-    },
-  },
-  {
-    id: "daily-outreach-prep",
-    name: "Daily Outreach Prep",
-    category: "outreach",
-    cadence: "daily",
-    description: "Selects a safe daily batch target and prepares outreach copy guidance; it never sends messages.",
-    benefit: "Shows every owner how Phantom can turn CRM/contact data into daily revenue motion without manual hunting.",
-    output: "10-20 daily outreach targets queued for draft/review when contacts exist.",
-    setup_fields: ["contacts", "offer", "business voice", "approval owner"],
-    approval_required: true,
-    external_action: false,
-    run: async () => {
-      const contactCount = prisma ? await prisma.contact.count().catch(() => 0) : 0;
-      const batchSize = Math.min(20, Math.max(10, contactCount || 10));
-      const ready = contactCount > 0;
-      return {
-        ok: ready,
-        summary: ready
-          ? `Outreach prep ready: choose ${Math.min(batchSize, contactCount)} of ${contactCount} contact(s), draft personalized touches, send nothing.`
-          : "Outreach prep is on, but there are no contacts yet. It will prepare 10-20 daily drafts once CRM/contact data exists.",
-        next_action: ready ? "Open Clients or tell Phantom the offer to draft today's outreach packet." : "Add/import contacts and tell Phantom the business offer.",
-        risks: ["Any email, social DM, SMS, or CRM write must be owner-approved before execution."],
-      };
-    },
-  },
-  {
     id: "content-asset-cleanup",
     name: "Content Asset Cleanup",
     category: "ops",
@@ -495,49 +298,6 @@ const JOB_DEFINITIONS: AutomationJobDefinition[] = [
           ? `Deleted ${result.deletedCount} expired content asset(s) past the 30-day retention window.`
           : "No expired content assets to delete.",
         next_action: "No action needed.",
-      };
-    },
-  },
-  // ---------------- competitor intelligence ----------------
-  {
-    id: "competitor-intel-scan",
-    name: "Competitor Intel Scan",
-    category: "intelligence",
-    cadence: "daily",
-    description: "Checks the competitor-intelligence store and public-web discovery readiness for this installation.",
-    benefit: "Every account starts with an always-on competitor watch lane instead of a blank intelligence page.",
-    output: "Daily competitor/profile/signal readiness digest.",
-    setup_fields: ["business category", "business website", "geography", "competitors"],
-    approval_required: false,
-    external_action: false,
-    run: async () => {
-      const [storeStatus, web] = await Promise.all([getCompetitorIntelligenceStoreStatus(), Promise.resolve(getWebDiscoveryStatus())]);
-      return {
-        ok: true,
-        summary: `Competitor store ${storeStatus.exists ? "exists" : "not started"} (${storeStatus.bytes} bytes). Web discovery: ${web.connected ? `connected via ${web.provider}` : "manual/search-provider not connected"}.`,
-        next_action: web.connected ? "Run discovery from Competitor Intel when the business profile is ready." : "Tell Phantom your business category/website, then connect a lawful search provider or use generated search checklists.",
-      };
-    },
-  },
-  {
-    id: "competitor-signal-review",
-    name: "Competitor Signal Review",
-    category: "intelligence",
-    cadence: "weekly",
-    description: "Keeps the competitor research loop alive by checking whether public signals/dossiers have been recorded.",
-    benefit: "Turns competitor intel into a habit: watch pricing, offers, reviews, creative changes, and market openings.",
-    output: "Weekly prompt to add/fuse public signals or refresh dossiers.",
-    setup_fields: ["competitors", "public signal URLs", "offer positioning"],
-    approval_required: false,
-    external_action: false,
-    run: async () => {
-      const storeStatus = await getCompetitorIntelligenceStoreStatus();
-      return {
-        ok: storeStatus.exists && storeStatus.bytes > 20,
-        summary: storeStatus.exists
-          ? `Competitor intelligence store is present (${storeStatus.bytes} bytes). Weekly review should add dated public signals and fuse estimates.`
-          : "No competitor intelligence store yet. Start by saving the business profile and adding one public competitor.",
-        next_action: "Open Competitor Intel and add public signals, audience gaps, or a deep-dive dossier.",
       };
     },
   },
@@ -716,11 +476,6 @@ export async function listAutomationJobs() {
       cadence: job.cadence,
       description: job.description,
       parent_worker_id: `autopilot-${job.category}`,
-      benefit: job.benefit ?? "Keeps PhantomForce useful without waiting for manual dashboard clicks.",
-      output: job.output ?? "Proof-logged status digest.",
-      setup_fields: job.setup_fields ?? [],
-      approval_required: job.approval_required ?? false,
-      external_action: job.external_action ?? false,
       enabled: jobState.enabled,
       last_run_at: jobState.last_run_at,
       last_status: jobState.last_status,
@@ -732,9 +487,7 @@ export async function listAutomationJobs() {
 }
 
 export function getAutomationJobDefinitions() {
-  return JOB_DEFINITIONS.map(({ id, name, category, cadence, description, benefit, output, setup_fields, approval_required, external_action }) => ({
-    id, name, category, cadence, description, benefit, output, setup_fields, approval_required, external_action,
-  }));
+  return JOB_DEFINITIONS.map(({ id, name, category, cadence, description }) => ({ id, name, category, cadence, description }));
 }
 
 type LoggerLike = { info: (message: string) => void; warn: (message: string) => void };
