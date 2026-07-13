@@ -317,6 +317,10 @@ function shellMarkup(active, sites, products) {
       </div>
 
       <div class="ss-editbar">
+        <div class="ss-modebar" role="tablist" aria-label="Website tools">
+          <button type="button" role="tab" aria-selected="${siteUi.panel === "website"}" class="${siteUi.panel === "website" ? "is-active" : ""}" data-ss-panel="website">Website</button>
+          <button type="button" role="tab" aria-selected="${siteUi.panel === "store"}" class="${siteUi.panel === "store" ? "is-active" : ""}" data-ss-panel="store">Store <span>${products.length}</span></button>
+        </div>
         <div class="ss-devbar" role="group" aria-label="Preview device">
           ${[["desktop", "Desktop"], ["tablet", "Tablet"], ["phone", "Phone"]].map(([id, label]) =>
             `<button type="button" class="${siteUi.device === id ? "is-active" : ""}" data-ss-device="${id}">${label}</button>`).join("")}
@@ -344,8 +348,10 @@ function shellMarkup(active, sites, products) {
         </div>
       </div>
 
-      <main class="ss-simple-main">
-        <div class="ss-simple-preview ss-device-${esc(siteUi.device)}" data-ss-preview>${renderWebsitePreview(active, products, { selected: siteUi.selectedSection })}</div>
+      <main class="ss-simple-main ${siteUi.panel === "store" ? "has-store-console" : ""}">
+        <div class="ss-simple-preview ss-device-${esc(siteUi.device)}" data-ss-preview>${renderWebsitePreview(active, products, { selected: siteUi.selectedSection, interactive: true, cart: ensureSiteStore(active).cart })}</div>
+        ${siteUi.panel === "store" ? productEditorMarkup(active) : ""}
+        ${siteUi.cartOpen ? cartMarkup(active) : ""}
       </main>
 
       ${siteUi.selectedSection >= 0 && active.sections[siteUi.selectedSection] !== undefined ? `
@@ -367,7 +373,10 @@ function shellMarkup(active, sites, products) {
         <button class="btn btn-primary" type="submit">Update website</button>
       </form>
 
+      ${siteUi.confirmation ? `<div class="ss-order-confirmation"><b>Test order confirmed</b><span>${esc(siteUi.confirmation)} · No payment was charged.</span></div>` : ""}
+
       <p class="ss-simple-status">Last edited ${ago(active.updated || new Date().toISOString())}</p>
+      ${siteUi.checkoutOpen ? checkoutMarkup(active) : ""}
     </section>`;
 }
 
@@ -396,16 +405,20 @@ export function renderSiteStudio(el) {
   }
 
   el.querySelectorAll("[data-ss-switch]").forEach((select) => {
-    select.onchange = () => { siteUi.activeSiteId = select.value; rerender(); };
+    select.onchange = () => { siteUi.activeSiteId = select.value; siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null; rerender(); };
   });
 
   el.querySelectorAll("[data-ss-site]").forEach((button) => {
-    button.onclick = () => { siteUi.activeSiteId = button.dataset.ssSite; rerender(); };
+    button.onclick = () => { siteUi.activeSiteId = button.dataset.ssSite; siteUi.cartOpen = false; siteUi.checkoutOpen = false; siteUi.confirmation = null; rerender(); };
   });
 
   el.querySelectorAll("[data-act='ss-new-site']").forEach((button) => {
     button.onclick = () => {
       createWebsite("");
+      siteUi.panel = "website";
+      siteUi.cartOpen = false;
+      siteUi.checkoutOpen = false;
+      siteUi.confirmation = null;
       rerender();
     };
   });
@@ -417,6 +430,9 @@ export function renderSiteStudio(el) {
       if (target && !confirm(`Delete the website "${target.title}"? This removes its content and revision history and cannot be undone.`)) return;
       store.state.sites = store.state.sites.filter((site) => site.id !== button.dataset.id);
       siteUi.activeSiteId = store.state.sites[0]?.id || null;
+      siteUi.cartOpen = false;
+      siteUi.checkoutOpen = false;
+      siteUi.confirmation = null;
       if (target) pushActivity("Websites", `deleted ${target.title}.`, target.ws);
       store.save();
       rerender();
@@ -450,6 +466,7 @@ export function renderSiteStudio(el) {
         ? `${site.sections[siteUi.selectedSection]}: ${prompt}`
         : prompt;
       applyWebsiteChange(site, target);
+      if (site.catalog?.length) siteUi.panel = "store";
       store.save();
       rerender();
     };
@@ -460,6 +477,109 @@ export function renderSiteStudio(el) {
     button.onclick = () => { siteUi.device = button.dataset.ssDevice; rerender(); };
   });
 
+  el.querySelectorAll("[data-ss-panel]").forEach((button) => {
+    button.onclick = () => { siteUi.panel = button.dataset.ssPanel; siteUi.cartOpen = false; rerender(); };
+  });
+
+  const productAdd = el.querySelector("[data-ss-product-add]");
+  if (productAdd && active) productAdd.onsubmit = (event) => {
+    event.preventDefault();
+    const data = new FormData(productAdd);
+    const name = String(data.get("name") || "").trim();
+    const price = Number(data.get("price"));
+    if (!name || !Number.isFinite(price) || price < 0) return;
+    snapshotSite(active, `add product ${name}`);
+    active.catalog.push({
+      id: uid("prod"), name: name.slice(0, 64), price,
+      cadence: data.get("cadence") === "monthly" ? "monthly" : "one_time",
+      desc: String(data.get("desc") || "").trim().slice(0, 180), visible: true,
+    });
+    active.kind = "Store";
+    active.design.storeEnabled = true;
+    active.store.enabled = true;
+    if (!active.sections.some((section) => /^(store|products)$/i.test(section))) active.sections.push("Store");
+    if (!active.sections.some((section) => /^checkout$/i.test(section))) active.sections.push("Checkout");
+    active.updated = new Date().toISOString();
+    pushActivity("Websites", `added ${name} to ${active.title}.`, active.ws);
+    store.save(); rerender();
+  };
+
+  el.querySelectorAll("[data-ss-product-save]").forEach((button) => {
+    button.onclick = () => {
+      if (!active) return;
+      const product = active.catalog.find((item) => item.id === button.dataset.ssProductSave);
+      const row = button.closest("[data-ss-product-row]");
+      if (!product || !row) return;
+      const name = row.querySelector("[name='name']")?.value.trim();
+      const price = Number(row.querySelector("[name='price']")?.value);
+      if (!name || !Number.isFinite(price) || price < 0) return;
+      snapshotSite(active, `edit product ${product.name}`);
+      product.name = name.slice(0, 64);
+      product.price = price;
+      product.cadence = row.querySelector("[name='cadence']")?.value === "monthly" ? "monthly" : "one_time";
+      product.desc = row.querySelector("[name='desc']")?.value.trim().slice(0, 180) || "";
+      active.updated = new Date().toISOString();
+      store.save(); rerender();
+    };
+  });
+
+  el.querySelectorAll("[data-ss-product-delete]").forEach((button) => {
+    button.onclick = () => {
+      if (!active) return;
+      const product = active.catalog.find((item) => item.id === button.dataset.ssProductDelete);
+      if (!product) return;
+      snapshotSite(active, `remove product ${product.name}`);
+      active.catalog = active.catalog.filter((item) => item.id !== product.id);
+      delete active.store.cart[product.id];
+      active.updated = new Date().toISOString();
+      store.save(); rerender();
+    };
+  });
+
+  el.querySelectorAll("[data-ss-cart-add]").forEach((button) => {
+    button.onclick = () => {
+      if (!active) return;
+      const id = button.dataset.ssCartAdd;
+      active.store.cart[id] = Number(active.store.cart[id] || 0) + 1;
+      siteUi.cartOpen = true;
+      siteUi.confirmation = null;
+      store.save(); rerender();
+    };
+  });
+  el.querySelectorAll("[data-ss-cart-open]").forEach((button) => { button.onclick = () => { siteUi.cartOpen = true; rerender(); }; });
+  el.querySelectorAll("[data-ss-cart-close]").forEach((button) => { button.onclick = () => { siteUi.cartOpen = false; rerender(); }; });
+  const updateCart = (id, next) => {
+    if (!active) return;
+    if (next <= 0) delete active.store.cart[id]; else active.store.cart[id] = next;
+    store.save(); rerender();
+  };
+  el.querySelectorAll("[data-ss-cart-inc]").forEach((button) => { button.onclick = () => updateCart(button.dataset.ssCartInc, Number(active?.store.cart[button.dataset.ssCartInc] || 0) + 1); });
+  el.querySelectorAll("[data-ss-cart-dec]").forEach((button) => { button.onclick = () => updateCart(button.dataset.ssCartDec, Number(active?.store.cart[button.dataset.ssCartDec] || 0) - 1); });
+  el.querySelectorAll("[data-ss-cart-remove]").forEach((button) => { button.onclick = () => updateCart(button.dataset.ssCartRemove, 0); });
+  el.querySelectorAll("[data-ss-checkout-open]").forEach((button) => { button.onclick = () => { siteUi.checkoutOpen = true; siteUi.cartOpen = false; rerender(); }; });
+  el.querySelectorAll("[data-ss-checkout-close]").forEach((button) => { button.onclick = () => { siteUi.checkoutOpen = false; rerender(); }; });
+
+  const checkoutForm = el.querySelector("[data-ss-checkout-form]");
+  if (checkoutForm && active) checkoutForm.onsubmit = (event) => {
+    event.preventDefault();
+    const items = cartItems(active);
+    if (!items.length) return;
+    const data = new FormData(checkoutForm);
+    const receipt = `PF-TEST-${Date.now().toString(36).toUpperCase()}`;
+    active.store.orders.unshift({
+      id: uid("order"), receipt, at: new Date().toISOString(), status: "test_confirmed",
+      customer: { name: String(data.get("name") || "").trim(), email: String(data.get("email") || "").trim() },
+      items: items.map(({ product, qty }) => ({ productId: product.id, name: product.name, price: product.price, cadence: product.cadence, qty })),
+      total: cartTotal(active),
+    });
+    active.store.cart = {};
+    active.updated = new Date().toISOString();
+    siteUi.checkoutOpen = false;
+    siteUi.confirmation = receipt;
+    pushActivity("Websites", `completed test checkout ${receipt} on ${active.title}; no payment was charged.`, active.ws);
+    store.save(); rerender();
+  };
+
   const undoBtn = el.querySelector("[data-act='ss-undo']");
   if (undoBtn && active) undoBtn.onclick = () => {
     /* undo = restore the newest snapshot */
@@ -469,6 +589,8 @@ export function renderSiteStudio(el) {
     Object.assign(active, snap.data, { history: kept });
     active.design = { ...snap.data.design };
     active.sections = [...snap.data.sections];
+    active.catalog = JSON.parse(JSON.stringify(snap.data.catalog || []));
+    active.store = JSON.parse(JSON.stringify(snap.data.store || {}));
     active.updated = new Date().toISOString();
     pushActivity("Websites", `undid the last edit on ${active.title}.`, active.ws);
     store.save();

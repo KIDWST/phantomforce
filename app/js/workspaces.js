@@ -492,10 +492,10 @@ export function extractStoreProducts(promptText) {
   const prompt = String(promptText || "");
   if (!/\b(?:store|shop|product|package|sprint|checkout|price|pricing)\b/i.test(prompt)) return [];
   const products = [];
-  const pattern = /(?:\b(?:add|include)\b|[,;]|\band\b)\s*(?:and\s+)?(?:an?\s+)?([a-z0-9][a-z0-9&'+/ -]{1,70}?)\s+(?:for|at)?\s*\$(\d+(?:,\d{3})*(?:\.\d{1,2})?)(\s*(?:\/\s*mo(?:nth)?|per\s+month|monthly))?/gi;
+  const pattern = /(?:\b(?:add|include)\b|[,;]|\band\b)\s*(?:and\s+)?(?:an?\s+)?([a-z0-9][a-z0-9&'+/ -]{1,70}?)\s+(?:for|at)?\s*\$(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?![\d,])(\s*(?:\/\s*mo(?:nth)?|per\s+month|monthly))?/gi;
   for (const match of prompt.matchAll(pattern)) {
     const name = match[1]
-      .replace(/^(?:the|a|an)\s+/i, "")
+      .replace(/^(?:the|a|an|add|include)\s+/i, "")
       .replace(/\s+/g, " ")
       .trim();
     const price = Number(match[2].replace(/,/g, ""));
