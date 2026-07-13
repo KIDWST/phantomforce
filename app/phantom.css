@@ -3914,6 +3914,35 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-local-actions button { cursor: pointer; }
 .ml-local-actions button:hover { border-color: var(--neon); background: rgba(65,255,161,0.13); }
 .ml-local-actions em { color: var(--dim); background: rgba(0,0,0,0.18); }
+/* drag & drop: local-asset cards + OS file drops */
+.ml-local-asset[draggable="true"] { cursor: grab; }
+.ml-local-asset[draggable="true"]:active { cursor: grabbing; }
+.ml-asset-dragging .ml-drawer-backdrop { pointer-events: none; }
+.ml-asset-dragging .ml-tabs { overflow: visible; }
+.ml-asset-dragging [data-ml-dropzone] { position: relative; z-index: 250; }
+[data-ml-dropzone].is-ml-droptarget {
+  position: relative;
+  box-shadow: inset 0 0 0 2px rgba(65,255,161,0.55);
+  border-radius: 10px;
+}
+[data-ml-dropzone].is-ml-droptarget::after {
+  content: attr(data-ml-dropzone-label);
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  padding: 4px 10px; border-radius: 999px; border: 1px solid var(--neon);
+  background: rgba(2,22,13,0.94); color: var(--neon);
+  font: 700 10px "Space Grotesk", sans-serif; letter-spacing: 0.03em;
+  white-space: nowrap; pointer-events: none; z-index: 260;
+}
+[data-ml-dropzone].is-ml-droptarget.is-dragover {
+  box-shadow: inset 0 0 0 2px var(--neon), 0 0 18px rgba(65,255,161,0.4);
+}
+.ml-os-drop-overlay {
+  position: fixed; inset: 0; z-index: 320;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(1,12,7,0.78); border: 2px dashed rgba(65,255,161,0.8);
+  color: var(--neon); font: 800 15px "Space Grotesk", sans-serif; letter-spacing: 0.02em;
+  pointer-events: none; text-align: center; padding: 20px;
+}
 .ml-drawer-settings { display: grid; gap: 14px; }
 .ml-drawer-section {
   display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line);
