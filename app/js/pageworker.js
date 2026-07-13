@@ -1,8 +1,9 @@
 /* PhantomForce page worker prompts.
-   Lightweight, local-first intake that makes every major page feel like a
-   worker can take the request. This does not execute external actions; it
-   explains the next steps in plain English and leaves execution to the page's
-   existing controls. */
+   Prompt-first local intelligence for major workspaces. This is not a
+   questionnaire: one messy user ask becomes inferred intent, assumptions,
+   draftable actions, and one blocking question max. Nothing external runs. */
+
+import { store, visible, currentWs, wsName, pushActivity } from "./store.js?v=phantom-live-20260712-227";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -13,123 +14,69 @@ const esc = (value = "") => String(value)
 
 const PAGE_WORKERS = {
   automation: {
-    eyebrow: "Automation worker",
-    title: "Tell Phantom what should repeat.",
+    eyebrow: "Automation intelligence",
+    title: "Prompt it. Phantom fills the blanks.",
     placeholder: "Enter your automation here and we’ll go through what we can do for you...",
-    helper: "Example: every weekday, find new leads, draft follow-ups, and put anything risky in Approvals.",
-    steps: [
-      "Find the trigger: when this should start.",
-      "Check the apps, files, or data it needs.",
-      "Draft the workflow in simple steps.",
-      "Mark sends, posts, deletes, spending, and client messages for approval.",
-      "Save it as an automation you can turn on when it looks right.",
-    ],
+    helper: "No forms first. Phantom infers trigger, tools, safety rules, and the smallest runnable draft.",
+    action: "Draft approval-gated automation",
   },
   sites: {
-    eyebrow: "Website worker",
-    title: "Tell Phantom what to build or change.",
+    eyebrow: "Website intelligence",
+    title: "Prompt the site change.",
     placeholder: "Describe the page, store, section, form, or offer you want...",
-    helper: "Use this for site edits, store ideas, checkout plans, or landing pages.",
-    steps: [
-      "Turn your request into a page or store plan.",
-      "Check the current site structure before changing anything.",
-      "Draft the new section, copy, layout, or product block.",
-      "Preview the change so you can review it first.",
-      "Keep publishing behind the existing approval controls.",
-    ],
+    helper: "Phantom assumes structure, copy, layout, and proof needs from the prompt and current workspace.",
+    action: "Draft site or store update",
   },
   content: {
-    eyebrow: "Content worker",
-    title: "Tell Phantom what content you need.",
+    eyebrow: "Creator intelligence",
+    title: "Prompt the campaign.",
     placeholder: "Ask for posts, ideas, captions, a schedule, or a campaign plan...",
-    helper: "Finished content moves through Content Hub instead of scattered notes.",
-    steps: [
-      "Turn the ask into a post, campaign, or content plan.",
-      "Match it to the right platform and format.",
-      "Draft the copy, creative angle, and publish notes.",
-      "Place it in drafts, calendar, or review.",
-      "Leave posting gated until the account is connected and approved.",
-    ],
+    helper: "Phantom infers platform, format, caption angle, approval path, and next draft without asking for every field.",
+    action: "Create campaign draft",
   },
   assets: {
-    eyebrow: "Asset worker",
-    title: "Tell Phantom what to find or organize.",
+    eyebrow: "Asset intelligence",
+    title: "Prompt the asset move.",
     placeholder: "Ask to sort files, find a logo, tag assets, or clean up a folder...",
-    helper: "Use this when you want your files easier to use.",
-    steps: [
-      "Identify the file type and business it belongs to.",
-      "Group related files together.",
-      "Add useful tags and plain names.",
-      "Flag missing, duplicate, or low-quality assets.",
-      "Keep originals safe while preparing working copies.",
-    ],
+    helper: "Phantom infers file type, business, tags, safe copies, and cleanup intent.",
+    action: "Prepare asset plan",
   },
   intelligence: {
-    eyebrow: "Research worker",
-    title: "Tell Phantom who or what to watch.",
+    eyebrow: "Research intelligence",
+    title: "Prompt the watch mission.",
     placeholder: "Name a competitor, offer, market, or customer question...",
-    helper: "This uses public signals only and labels guesses as guesses.",
-    steps: [
-      "Collect public signals that are safe to review.",
-      "Group repeated customer questions and complaints.",
-      "Separate confirmed facts from estimates.",
-      "Create original response ideas, not copied content.",
-      "Show sources and safe next moves.",
-    ],
+    helper: "Phantom turns a vague target into public-signal research, hypotheses, and safe next moves.",
+    action: "Run public research plan",
   },
   analytics: {
-    eyebrow: "Analytics worker",
-    title: "Ask what is working.",
+    eyebrow: "Analytics intelligence",
+    title: "Prompt the business question.",
     placeholder: "Ask why a post worked, what changed, or what to do next...",
-    helper: "Plain-English answers first, numbers second.",
-    steps: [
-      "Find the metric or content you care about.",
-      "Compare it against recent activity.",
-      "Call out the simple reason it may be up or down.",
-      "Suggest one clear next move.",
-      "Keep deeper reporting available when you need it.",
-    ],
+    helper: "Phantom answers from connected data and local activity first, then says exactly what is missing.",
+    action: "Analyze performance question",
   },
   vacation: {
-    eyebrow: "Away worker",
-    title: "Tell Phantom what to cover while you’re away.",
+    eyebrow: "Away intelligence",
+    title: "Prompt the coverage plan.",
     placeholder: "Describe what should keep moving while you’re gone...",
-    helper: "Away Mode is for coverage, follow-ups, drafts, and urgent alerts.",
-    steps: [
-      "List the work that should continue.",
-      "Check what can be handled automatically.",
-      "Queue risky sends, posts, money, or client moves for review.",
-      "Track what happened in the activity feed.",
-      "Surface urgent items first.",
-    ],
+    helper: "Phantom infers safe coverage, review gates, and urgent alerts without opening a control panel first.",
+    action: "Draft Away Mode coverage",
   },
   phantomplay: {
-    eyebrow: "Play worker",
+    eyebrow: "Play intelligence",
     title: "Ask PhantomPlay for the right break.",
     placeholder: "Ask for a quick focus game, saved progress, or a game type...",
-    helper: "Intentional downtime stays separate from business work.",
-    steps: [
-      "Pick the right game length and category.",
-      "Load the safe play surface.",
-      "Save score and progress when supported.",
-      "Keep developer submissions in review.",
-      "Return you to work cleanly.",
-    ],
+    helper: "Phantom picks the shortest useful break and keeps it separate from business execution.",
+    action: "Choose focused break",
   },
 };
 
 const DEFAULT_WORKER = {
-  eyebrow: "Page worker",
-  title: "Tell Phantom what you need here.",
+  eyebrow: "Page intelligence",
+  title: "Prompt the outcome.",
   placeholder: "Ask for the outcome you want on this page...",
-  helper: "Phantom turns the ask into clear next steps before anything risky happens.",
-  steps: [
-    "Understand the outcome you want.",
-    "Check the current workspace context.",
-    "Draft the cleanest next steps.",
-    "Use the right page tools instead of making you hunt.",
-    "Bring risky actions back for review first.",
-  ],
+  helper: "Phantom infers what matters, fills missing details from context, and keeps risky actions approval-gated.",
+  action: "Infer next action",
 };
 
 const SKIP_PAGES = new Set(["media", "settings", "developer", "activity", "promptlibrary", "account"]);
@@ -150,31 +97,252 @@ export function pageWorkerHtml(pageId, def = {}) {
       </div>
       <form class="page-worker-form" data-page-worker-form>
         <textarea data-page-worker-input rows="1" placeholder="${esc(worker.placeholder)}" aria-label="${esc(worker.title)}"></textarea>
-        <button type="submit" aria-label="Plan this request">Plan</button>
+        <button type="submit" aria-label="Run page intelligence">Run</button>
       </form>
       <div class="page-worker-output" data-page-worker-output hidden></div>
     </section>`;
 }
 
-function stepsFor(pageId, prompt) {
-  const worker = workerFor(pageId);
-  const text = prompt.trim();
-  const actionLine = text
-    ? `You asked: “${text.slice(0, 160)}${text.length > 160 ? "…" : ""}”`
-    : "Tell Phantom the outcome and it will shape the work.";
-  return { actionLine, steps: worker.steps };
+const HISTORY_KEY = "pf.pageworker.intelligence.v1";
+const STOP_WORDS = new Set("the a an and or but to for from with without into onto of in on at by is are was were be been being it this that these those me my our your you we they he she them then than as do does did can could should would will just really very".split(" "));
+const PLATFORM_PATTERNS = [
+  ["Instagram", /\b(instagram|ig|reels?)\b/i],
+  ["TikTok", /\b(tiktok|tik tok)\b/i],
+  ["YouTube", /\b(youtube|shorts?)\b/i],
+  ["Facebook", /\b(facebook|fb|meta)\b/i],
+  ["LinkedIn", /\b(linkedin)\b/i],
+  ["Website", /\b(website|site|landing page|store)\b/i],
+];
+const RISKY = /\b(send|publish|post|deploy|delete|charge|spend|email|dm|message|upload|public|live)\b/i;
+const URGENT = /\b(now|today|asap|tonight|this week|urgent|quick|fast|same day|immediately)\b/i;
+const MONEY = /\$[\d,]+|\b\d+\s?(?:dollars|bucks|usd)\b/i;
+const URL = /\bhttps?:\/\/[^\s]+|\b[a-z0-9-]+\.(?:com|online|net|org|co)\b/i;
+
+function tokenize(value = "") {
+  return String(value).toLowerCase().match(/[a-z0-9]{3,}/g)?.filter((word) => !STOP_WORDS.has(word)) || [];
+}
+
+function readHistory() {
+  try { return JSON.parse(localStorage.getItem(HISTORY_KEY) || "{}") || {}; }
+  catch { return {}; }
+}
+
+function writeHistory(history) {
+  try { localStorage.setItem(HISTORY_KEY, JSON.stringify(history)); } catch {}
+}
+
+function rememberPrompt(pageId, prompt, analysis) {
+  const ws = currentWs();
+  const history = readHistory();
+  const bucket = Array.isArray(history[ws]?.[pageId]) ? history[ws][pageId] : [];
+  const next = [{
+    prompt: String(prompt || "").slice(0, 420),
+    intent: analysis.intent,
+    summary: analysis.understood,
+    createdAt: Date.now(),
+  }, ...bucket].slice(0, 8);
+  history[ws] = { ...(history[ws] || {}), [pageId]: next };
+  writeHistory(history);
+}
+
+function historyFor(pageId) {
+  const ws = currentWs();
+  return (readHistory()[ws]?.[pageId] || []).slice(0, 3);
+}
+
+function relevantMemory(prompt, pageId) {
+  const words = new Set(tokenize(`${prompt} ${pageId}`));
+  if (!words.size) return [];
+  const rows = [
+    ...visible(store.state.memory || []).map((item) => ({
+      title: item.title || item.category || "Memory",
+      body: item.summary || item.text || "",
+      source: "Saved memory",
+    })),
+    ...historyFor(pageId).map((item) => ({
+      title: item.intent || "Recent prompt",
+      body: item.summary || item.prompt || "",
+      source: "Recent page prompt",
+    })),
+  ];
+  return rows
+    .map((item) => {
+      const haystack = tokenize(`${item.title} ${item.body}`);
+      const score = haystack.reduce((sum, word) => sum + (words.has(word) ? 1 : 0), 0);
+      return { ...item, score };
+    })
+    .filter((item) => item.score > 0)
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 3);
+}
+
+function detectedPlatforms(prompt) {
+  return PLATFORM_PATTERNS.filter(([, pattern]) => pattern.test(prompt)).map(([name]) => name);
+}
+
+function inferredIntent(pageId, prompt) {
+  const text = prompt.toLowerCase();
+  if (/\b(caption|post|reel|campaign|content|publish|schedule)\b/.test(text)) return "Content campaign";
+  if (/\b(website|site|landing|store|page|checkout|booking)\b/.test(text)) return "Website/store build";
+  if (/\b(automate|automation|every|recurring|workflow|autopilot)\b/.test(text)) return "Automation draft";
+  if (/\b(lead|client|follow[- ]?up|proposal|quote|close)\b/.test(text)) return "Revenue operation";
+  if (/\b(analy[sz]e|analytics|metric|views|reach|engagement|why)\b/.test(text)) return "Performance analysis";
+  if (/\b(asset|logo|file|folder|image|photo|edit|organize)\b/.test(text)) return "Asset operation";
+  return workerFor(pageId).action || "Workspace operation";
+}
+
+function compactPrompt(prompt) {
+  const clean = String(prompt || "").trim().replace(/\s+/g, " ");
+  return clean ? clean.slice(0, 180) + (clean.length > 180 ? "..." : "") : "";
+}
+
+function extractedSignals(prompt, pageId) {
+  const platforms = detectedPlatforms(prompt);
+  const signals = [
+    ["Workspace", wsName(currentWs())],
+    ["Surface", workerFor(pageId).eyebrow.replace(/\s*intelligence$/i, "")],
+    ["Urgency", URGENT.test(prompt) ? "fast lane" : "normal"],
+    ["Risk gate", RISKY.test(prompt) ? "approval required" : "safe draft first"],
+  ];
+  if (platforms.length) signals.push(["Platforms", platforms.join(", ")]);
+  const money = prompt.match(MONEY)?.[0];
+  if (money) signals.push(["Money", money]);
+  const url = prompt.match(URL)?.[0];
+  if (url) signals.push(["Reference", url]);
+  return signals;
+}
+
+function assumptionsFor(pageId, prompt, memoryHits) {
+  const assumptions = [
+    `Use ${wsName(currentWs())} as the active business unless the prompt names another one.`,
+    "Do not send, post, deploy, delete, charge, or expose anything without approval.",
+    "Prefer draft/output first, then review, then approved execution.",
+  ];
+  if (!detectedPlatforms(prompt).length && pageId === "content") assumptions.push("Default platforms: enabled social accounts first, then Instagram/TikTok style if no account is chosen.");
+  if (pageId === "automation") assumptions.push("Default trigger is manual/approval-gated until the user explicitly enables a schedule.");
+  if (pageId === "sites") assumptions.push("Default deliverable is a previewable section/page draft, not a public publish.");
+  if (memoryHits.length) assumptions.push(`Use ${memoryHits.length} relevant saved/recent context hint${memoryHits.length === 1 ? "" : "s"} before asking more.`);
+  return assumptions;
+}
+
+function actionDrafts(pageId, prompt, intent) {
+  const text = compactPrompt(prompt) || "the requested outcome";
+  const common = [
+    `Parse the prompt into: goal, audience, asset/input, deadline, and approval risk.`,
+    `Create a first draft for "${text}" using page context instead of a blank form.`,
+  ];
+  const byPage = {
+    automation: [
+      "Infer trigger, condition, action, review gate, and off switch.",
+      "Put risky output into Approvals; keep the automation disabled until reviewed.",
+      "Show the user the editable workflow name and mission after the draft exists.",
+    ],
+    content: [
+      "Infer platform set, caption angle, CTA, format, and preview state.",
+      "Generate the caption plus platform-specific variants and keep publishing gated.",
+      "Place the result in Draft Queue or Post/Publish composer, not scattered notes.",
+    ],
+    sites: [
+      "Infer page type, section order, offer, proof, CTA, and visual tone.",
+      "Draft the section/page locally and keep publish/deploy locked.",
+      "Show a preview with the smallest editable fields after the draft exists.",
+    ],
+    analytics: [
+      "Answer from connected data and first-party local activity before requesting imports.",
+      "Separate real metrics from missing connectors and give one next move.",
+      "Flag the exact connector/report only if it is truly missing.",
+    ],
+    intelligence: [
+      "Use public-safe research framing and separate facts from guesses.",
+      "Extract competitor, offer, customer pain, and response opportunity.",
+      "Return a short attack plan for positioning, content, or sales.",
+    ],
+    assets: [
+      "Infer asset category, usage, tags, and whether to copy instead of mutate originals.",
+      "Prepare a clean working set and note missing assets.",
+      "Use Asset Cloud/Media Lab paths before asking for uploads.",
+    ],
+    vacation: [
+      "Infer what can continue safely and what must wait for approval.",
+      "Create coverage buckets: drafts, alerts, follow-ups, and blockers.",
+      "Keep external actions locked unless Away Mode explicitly allows them.",
+    ],
+  };
+  return [...common, ...(byPage[pageId] || [
+    `Route this as ${intent}.`,
+    "Use the current page tools automatically before asking the user to hunt for controls.",
+    "Return a visible draft/action packet with approval status.",
+  ])];
+}
+
+function blockingQuestion(prompt, pageId) {
+  const words = tokenize(prompt);
+  if (!prompt.trim()) return "What outcome do you want on this page?";
+  if (words.length <= 2) return "Give me one sentence with the outcome, and I’ll infer the rest.";
+  if (pageId === "analytics" && /\b(why|what worked|performance)\b/i.test(prompt) && !visible(store.state.socialAccounts || []).length) {
+    return "Which account or channel should I treat as the source if no connector is live yet?";
+  }
+  return "";
+}
+
+function analyzePrompt(pageId, prompt) {
+  const memoryHits = relevantMemory(prompt, pageId);
+  const intent = inferredIntent(pageId, prompt);
+  const question = blockingQuestion(prompt, pageId);
+  const signals = extractedSignals(prompt, pageId);
+  const assumptions = assumptionsFor(pageId, prompt, memoryHits);
+  const understood = prompt.trim()
+    ? `Phantom understood this as ${intent.toLowerCase()}: ${compactPrompt(prompt)}`
+    : "Phantom is waiting for one outcome prompt. No field-by-field setup needed.";
+  const confidence = question ? 58 : Math.min(94, 72 + signals.length * 3 + memoryHits.length * 4);
+  return {
+    intent,
+    understood,
+    confidence,
+    signals,
+    assumptions,
+    actions: actionDrafts(pageId, prompt, intent),
+    memoryHits,
+    question,
+  };
 }
 
 function renderPlan(card, pageId, prompt) {
   const out = card.querySelector("[data-page-worker-output]");
   if (!out) return;
-  const { actionLine, steps } = stepsFor(pageId, prompt);
+  const analysis = analyzePrompt(pageId, prompt);
+  if (prompt.trim()) rememberPrompt(pageId, prompt, analysis);
   out.hidden = false;
   out.innerHTML = `
-    <b>${esc(actionLine)}</b>
-    <ul>
-      ${steps.map((step) => `<li>${esc(step)}</li>`).join("")}
-    </ul>`;
+    <div class="page-worker-intel-head">
+      <span>Aggressive intelligence mode</span>
+      <b>${esc(analysis.intent)}</b>
+      <em>${analysis.confidence}% inferred</em>
+    </div>
+    <p class="page-worker-understood">${esc(analysis.understood)}</p>
+    <div class="page-worker-intel-grid">
+      <article>
+        <span>Signals</span>
+        <div class="page-worker-chips">
+          ${analysis.signals.map(([k, v]) => `<i><b>${esc(k)}</b>${esc(v)}</i>`).join("")}
+        </div>
+      </article>
+      <article>
+        <span>Assumptions Phantom will use</span>
+        <ul>${analysis.assumptions.map((item) => `<li>${esc(item)}</li>`).join("")}</ul>
+      </article>
+      <article>
+        <span>Draftable next moves</span>
+        <ul>${analysis.actions.map((step) => `<li>${esc(step)}</li>`).join("")}</ul>
+      </article>
+    </div>
+    ${analysis.memoryHits.length ? `<div class="page-worker-memory"><span>Context used</span>${analysis.memoryHits.map((hit) => `<p><b>${esc(hit.source)}:</b> ${esc(hit.title)} — ${esc(String(hit.body || "").slice(0, 120))}</p>`).join("")}</div>` : ""}
+    <div class="page-worker-gate ${analysis.question ? "needs-input" : "ready"}">
+      <b>${analysis.question ? "One blocking question" : "No more fields needed"}</b>
+      <span>${esc(analysis.question || "Phantom has enough to draft locally. External moves still require approval.")}</span>
+    </div>`;
+  pushActivity("Page Intelligence", analysis.question ? `needs one detail for ${analysis.intent.toLowerCase()}.` : `prepared ${analysis.intent.toLowerCase()} from one prompt.`);
+  store.save();
 }
 
 export function mountPageWorkers(root = document, opts = {}) {
@@ -188,9 +356,7 @@ export function mountPageWorkers(root = document, opts = {}) {
       const input = form.querySelector("[data-page-worker-input]");
       const prompt = input?.value || "";
       renderPlan(card, pageId, prompt);
-      opts.notify?.("Phantom", pageId === "automation"
-        ? "I mapped the automation request into plain-English steps."
-        : "I mapped the request into plain-English steps.");
+      opts.notify?.("Phantom", "I inferred the missing pieces from one prompt. No field-by-field setup.");
     });
   });
   root.querySelectorAll("[data-page-worker-input]").forEach((input) => {
