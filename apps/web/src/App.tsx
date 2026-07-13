@@ -2,12 +2,15 @@ import {
   Activity,
   AlertTriangle,
   ArrowRight,
+  BarChart3,
   Bell,
   Bot,
+  Building2,
   CalendarDays,
   Check,
   Clock3,
   Command,
+  CreditCard,
   FileAudio,
   FileImage,
   FileVideo,
@@ -18,15 +21,18 @@ import {
   Lock,
   Mail,
   MessageSquare,
+  Palette,
   Play,
   Plus,
   RefreshCcw,
+  Rocket,
   Search,
   Send,
   Settings,
   ShieldCheck,
   Sparkles,
   SquareCheckBig,
+  Target,
   ToggleLeft,
   UserRound,
   Users,
@@ -37,6 +43,7 @@ import { DragEvent, FormEvent, ReactNode, useEffect, useMemo, useState } from "r
 
 type Route =
   | "command"
+  | "analytics"
   | "content"
   | "play"
   | "inbox"
@@ -370,6 +377,7 @@ type CreateJobStatus = "queued" | "rendering" | "ready" | "failed";
 
 type CreateJob = {
   id: string;
+  workspaceId: string;
   mode: CreateMode;
   title: string;
   prompt: string;
@@ -390,6 +398,55 @@ type VoiceboxRuntimeStatus = {
   reason: string;
 };
 
+type SocialProviderId = "instagram" | "facebook" | "tiktok" | "youtube" | "linkedin" | "x";
+
+type SocialProviderStatus = {
+  id: SocialProviderId;
+  name: string;
+  configured: boolean;
+  connected: boolean;
+  analyticsReady: boolean;
+  authUrl: string | null;
+  scopes: string[];
+  reason: string;
+};
+
+type SocialOauthAttempt = {
+  providerId: SocialProviderId;
+  providerName: string;
+  status: "already_connected" | "ready_to_open_oauth" | "missing_oauth_config";
+  authUrl: string | null;
+  reason: string;
+};
+
+type SocialAnalyticsSnapshot = {
+  connectedProviders: number;
+  analyticsReadyProviders: number;
+  metrics: Array<{ label: string; value: string; delta: string }>;
+  providerBreakdown: Array<{
+    providerId: SocialProviderId;
+    providerName: string;
+    followers: number;
+    reach: number;
+    engagement: number;
+    posts: number;
+  }>;
+  reason: string;
+};
+
+type BrandProfile = {
+  businessName: string;
+  industry: string;
+  audience: string;
+  offer: string;
+  tone: string;
+  colors: string;
+  goals: string;
+  planId: "free" | "starter" | "growth";
+  completedAt: string;
+  version: string;
+};
+
 type AppSession = {
   id: string;
   label: string;
@@ -406,6 +463,13 @@ const initialSessions: AppSession[] = [
     label: "Jordan / PhantomForce Admin",
     role: "admin",
     canManageAccess: true,
+  },
+  {
+    id: "client-one",
+    label: "Customer One new account",
+    role: "client",
+    clientId: "client-one",
+    canManageAccess: false,
   },
   {
     id: "client-chicagoshots",
@@ -432,6 +496,7 @@ const initialSessions: AppSession[] = [
 
 const navItems: Array<{ id: Route; label: string; icon: ReactNode }> = [
   { id: "command", label: "Command", icon: <Command size={18} /> },
+  { id: "analytics", label: "Analytics", icon: <BarChart3 size={18} /> },
   { id: "content", label: "Media Lab", icon: <FileImage size={18} /> },
   { id: "play", label: "Break Room", icon: <Play size={18} /> },
   { id: "inbox", label: "Inbox", icon: <Inbox size={18} /> },
@@ -581,7 +646,7 @@ const connections: Connection[] = [
   },
   {
     id: "media-lab",
-    name: "Media Lab effects library",
+    name: "Media Lab effects catalog",
     description: "Motion effects, templates, presets, and production references with raw source downloads blocked.",
     status: "ready",
     scopes: ["Catalog metadata", "Rendered derivatives", "Rights review"],
@@ -589,6 +654,18 @@ const connections: Connection[] = [
 ];
 
 const initialClientAccess: ClientAccess[] = [
+  {
+    id: "client-one",
+    business: "Customer One",
+    owner: "New customer",
+    plan: "Free preview",
+    paymentStatus: "paid",
+    accessStatus: "active",
+    gateway: "Pangolin",
+    privateRoute: "app.phantomforce.online/customer-one",
+    modules: ["Command", "Media Lab", "Tasks", "Approvals", "Activity"],
+    lastAudit: "Brand intake required before workspace setup",
+  },
   {
     id: "client-chicagoshots",
     business: "ChicagoShots",
@@ -656,9 +733,29 @@ const API_BASE_URL =
   (import.meta as ImportMeta & { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL ??
   "http://127.0.0.1:5190";
 const MONEY_DEMO_CLIENT_ID = "client-money-demo";
+const BRAND_ONBOARDING_VERSION = "2026-07-12-brand-intake-v1";
 
 function makeId(prefix: string) {
   return `${prefix}-${Date.now()}-${Math.round(Math.random() * 1000)}`;
+}
+
+function brandProfileStorageKey(clientId: string) {
+  return `phantomforce:brand-profile:${BRAND_ONBOARDING_VERSION}:${clientId}`;
+}
+
+function loadBrandProfile(clientId: string): BrandProfile | null {
+  try {
+    const stored = window.localStorage.getItem(brandProfileStorageKey(clientId));
+    if (!stored) return null;
+    const profile = JSON.parse(stored) as BrandProfile;
+    return profile.version === BRAND_ONBOARDING_VERSION ? profile : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveBrandProfile(clientId: string, profile: BrandProfile) {
+  window.localStorage.setItem(brandProfileStorageKey(clientId), JSON.stringify(profile));
 }
 
 function normalizeModuleKey(moduleKey: string) {
@@ -704,6 +801,12 @@ function App() {
   );
   const [createJobs, setCreateJobs] = useState<CreateJob[]>([]);
   const [voiceboxStatus, setVoiceboxStatus] = useState<VoiceboxRuntimeStatus | null>(null);
+  const [socialProviders, setSocialProviders] = useState<SocialProviderStatus[]>([]);
+  const [socialAnalytics, setSocialAnalytics] = useState<SocialAnalyticsSnapshot | null>(null);
+  const [socialOauthAttempts, setSocialOauthAttempts] = useState<SocialOauthAttempt[]>([]);
+  const [socialAnalyticsBusy, setSocialAnalyticsBusy] = useState(false);
+  const [socialAnalyticsStatus, setSocialAnalyticsStatus] = useState("Connect social accounts to start combined analytics.");
+  const [brandProfiles, setBrandProfiles] = useState<Record<string, BrandProfile>>({});
   const [phantomPlaySnapshot, setPhantomPlaySnapshot] = useState<PhantomPlaySnapshot | null>(null);
   const [phantomPlayBusy, setPhantomPlayBusy] = useState(false);
   const [phantomPlayStatus, setPhantomPlayStatus] = useState("PhantomPlay has not loaded yet.");
@@ -723,11 +826,18 @@ function App() {
     [activeSessionId],
   );
   const canManageAccess = activeSession.canManageAccess;
+  const activeWorkspaceId = activeSession.clientId ?? "admin-jordan";
+  const activeBrandProfile = activeSession.clientId ? brandProfiles[activeSession.clientId] ?? null : null;
+  const needsBrandOnboarding = signedIn && activeSession.role === "client" && Boolean(activeSession.clientId) && !activeBrandProfile;
   const visibleClientAccess = useMemo(() => {
     if (canManageAccess) return clientAccess;
     return clientAccess.filter((client) => client.id === activeSession.clientId);
   }, [activeSession.clientId, canManageAccess, clientAccess]);
-  const hasActiveBackgroundJob = createJobs.some((job) => job.status === "queued" || job.status === "rendering");
+  const workspaceCreateJobs = useMemo(
+    () => createJobs.filter((job) => job.workspaceId === activeWorkspaceId),
+    [activeWorkspaceId, createJobs],
+  );
+  const hasActiveBackgroundJob = workspaceCreateJobs.some((job) => job.status === "queued" || job.status === "rendering");
 
   function sessionHeaders(json = false): Record<string, string> {
     const headers: Record<string, string> = json ? { "Content-Type": "application/json" } : {};
@@ -741,9 +851,20 @@ function App() {
 
   async function signIn(sessionId: string) {
     const session = initialSessions.find((item) => item.id === sessionId) ?? initialSessions[0];
+    const storedBrandProfile = session.clientId ? loadBrandProfile(session.clientId) : null;
     setActiveSessionId(session.id);
-    setSelectedOrg(session.clientId ? session.label.replace(" client", "") : "PhantomForce Pilot");
+    setSelectedOrg(storedBrandProfile?.businessName ?? (session.clientId ? "New customer setup" : "PhantomForce Pilot"));
     setSessionToken("");
+    if (session.clientId && storedBrandProfile) {
+      setBrandProfiles((current) => ({ ...current, [session.clientId as string]: storedBrandProfile }));
+      setCreatePrompt(
+        `Create a polished launch asset for ${storedBrandProfile.businessName}: ${storedBrandProfile.offer}. Use a ${storedBrandProfile.tone} tone for ${storedBrandProfile.audience}.`,
+      );
+    } else if (session.clientId) {
+      setCreatePrompt("After brand setup, PhantomForce will write prompts around this customer's business.");
+    } else {
+      setCreatePrompt("Create a 20 second product launch video with a confident voiceover and three social cutdowns.");
+    }
 
     try {
       const response = await fetch(`${API_BASE_URL}/auth/demo-login`, {
@@ -764,6 +885,29 @@ function App() {
 
     setSignedIn(true);
     setRoute("command");
+  }
+
+  function completeBrandOnboarding(clientId: string, profile: BrandProfile) {
+    saveBrandProfile(clientId, profile);
+    setBrandProfiles((current) => ({ ...current, [clientId]: profile }));
+    setSelectedOrg(profile.businessName);
+    setRoute("command");
+    setCreatePrompt(
+      `Create a polished launch asset for ${profile.businessName}: ${profile.offer}. Use a ${profile.tone} tone for ${profile.audience}.`,
+    );
+    setClientAccess((current) =>
+      current.map((client) =>
+        client.id === clientId
+          ? {
+              ...client,
+              business: profile.businessName,
+              plan: profile.planId === "free" ? "Free preview" : profile.planId === "starter" ? "$49 Starter" : "$199 Growth",
+              lastAudit: "Brand identity captured during first-run onboarding",
+            }
+          : client,
+      ),
+    );
+    addActivity("Brand setup completed", `${profile.businessName} is ready for a clean workspace.`, "ok");
   }
 
   async function refreshWorkspaceModule(clientId: string, moduleKey?: string) {
@@ -938,7 +1082,7 @@ function App() {
         return;
       }
 
-      addActivity("Media Lab gated", data.error ?? "Effects library access is waiting on the backend guard.", "warn");
+      addActivity("Media Lab gated", data.error ?? "Effects catalog access is waiting on the backend guard.", "warn");
     } catch {
       addActivity("Media Lab offline", "The effects catalog API is waiting on the backend.", "warn");
     } finally {
@@ -989,6 +1133,12 @@ function App() {
     void refreshMediaLabCatalog();
     void refreshVoiceboxStatus();
   }, [contentHubTab, route, sessionToken, signedIn]);
+
+  useEffect(() => {
+    if (!signedIn || (route !== "analytics" && route !== "connections")) return;
+
+    void refreshSocialAnalytics();
+  }, [route, sessionToken, signedIn]);
 
   useEffect(() => {
     if (!signedIn || route !== "play") return;
@@ -1096,6 +1246,71 @@ function App() {
     });
   }
 
+  async function refreshSocialAnalytics() {
+    setSocialAnalyticsBusy(true);
+    try {
+      const [statusResponse, summaryResponse] = await Promise.all([
+        fetch(`${API_BASE_URL}/analytics/social/status`, { headers: sessionHeaders() }),
+        fetch(`${API_BASE_URL}/analytics/social/summary`, { headers: sessionHeaders() }),
+      ]);
+      const statusData = (await statusResponse.json()) as { providers?: SocialProviderStatus[]; error?: string };
+      const summaryData = (await summaryResponse.json()) as { snapshot?: SocialAnalyticsSnapshot; error?: string };
+
+      if (!statusResponse.ok) throw new Error(statusData.error ?? "Social connector status is unavailable.");
+      if (!summaryResponse.ok) throw new Error(summaryData.error ?? "Social analytics are unavailable.");
+
+      setSocialProviders(statusData.providers ?? []);
+      setSocialAnalytics(summaryData.snapshot ?? null);
+      setSocialAnalyticsStatus(summaryData.snapshot?.reason ?? "Social analytics loaded.");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Social analytics are offline.";
+      setSocialAnalyticsStatus(message);
+      addActivity("Social analytics offline", message, "warn");
+    } finally {
+      setSocialAnalyticsBusy(false);
+    }
+  }
+
+  async function connectAllSocials() {
+    setSocialAnalyticsBusy(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/analytics/social/oauth-all`, {
+        method: "POST",
+        headers: sessionHeaders(true),
+        body: JSON.stringify({}),
+      });
+      const data = (await response.json()) as { attempts?: SocialOauthAttempt[]; providers?: SocialProviderStatus[]; error?: string };
+      if (!response.ok) throw new Error(data.error ?? "Could not start social OAuth.");
+
+      const attempts = data.attempts ?? [];
+      setSocialOauthAttempts(attempts);
+      setSocialProviders(data.providers ?? []);
+
+      const openable = attempts.filter((attempt) => attempt.status === "ready_to_open_oauth" && attempt.authUrl);
+      openable.forEach((attempt) => {
+        window.open(attempt.authUrl as string, `_blank`, "noopener,noreferrer");
+      });
+
+      const missing = attempts.filter((attempt) => attempt.status === "missing_oauth_config").length;
+      const already = attempts.filter((attempt) => attempt.status === "already_connected").length;
+      const detail = openable.length
+        ? `Opened ${openable.length} OAuth windows. ${missing} providers still need app credentials.`
+        : already
+          ? `${already} providers are already connected. ${missing} providers need app credentials.`
+          : `${missing} providers need OAuth app credentials before PhantomForce can open login.`;
+
+      setSocialAnalyticsStatus(detail);
+      addActivity("Connect all socials attempted", detail, missing ? "warn" : "ok");
+      void refreshSocialAnalytics();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Connect all socials failed.";
+      setSocialAnalyticsStatus(message);
+      addActivity("Connect all socials failed", message, "warn");
+    } finally {
+      setSocialAnalyticsBusy(false);
+    }
+  }
+
   async function startCreateJob() {
     const prompt = createPrompt.trim();
     if (!prompt) return;
@@ -1112,6 +1327,7 @@ function App() {
     };
     const job: CreateJob = {
       id: makeId("create"),
+      workspaceId: activeWorkspaceId,
       mode: createMode,
       title: modeLabels[createMode],
       prompt,
@@ -1787,6 +2003,20 @@ function App() {
     );
   }
 
+  if (needsBrandOnboarding && activeSession.clientId) {
+    return (
+      <BrandOnboardingScreen
+        session={activeSession}
+        onComplete={(profile) => completeBrandOnboarding(activeSession.clientId as string, profile)}
+        onBack={() => {
+          setSignedIn(false);
+          setSessionToken("");
+          setSelectedOrg("PhantomForce Pilot");
+        }}
+      />
+    );
+  }
+
   return (
     <div className="app-shell">
       <aside className="sidebar">
@@ -1862,6 +2092,17 @@ function App() {
             events={events}
           />
         ) : null}
+        {route === "analytics" ? (
+          <SocialAnalyticsView
+            snapshot={socialAnalytics}
+            providers={socialProviders}
+            attempts={socialOauthAttempts}
+            busy={socialAnalyticsBusy}
+            status={socialAnalyticsStatus}
+            refresh={refreshSocialAnalytics}
+            connectAll={connectAllSocials}
+          />
+        ) : null}
         {route === "content" ? (
           <ContentHubView
             activeTab={contentHubTab}
@@ -1870,7 +2111,7 @@ function App() {
             setCreateMode={setCreateMode}
             createPrompt={createPrompt}
             setCreatePrompt={setCreatePrompt}
-            createJobs={createJobs}
+            createJobs={workspaceCreateJobs}
             startCreateJob={startCreateJob}
             voiceboxStatus={voiceboxStatus}
             refreshVoiceboxStatus={refreshVoiceboxStatus}
@@ -1923,7 +2164,9 @@ function App() {
           />
         ) : null}
         {route === "activity" ? <ActivityView activity={activity} /> : null}
-        {route === "connections" ? <ConnectionsView /> : null}
+        {route === "connections" ? (
+          <ConnectionsView socialProviders={socialProviders} connectAll={connectAllSocials} />
+        ) : null}
         {route === "settings" ? (
           <SettingsView
             category={settingsCategory}
@@ -1967,6 +2210,239 @@ function App() {
         ))}
       </nav>
     </div>
+  );
+}
+
+function BrandOnboardingScreen({
+  session,
+  onComplete,
+  onBack,
+}: {
+  session: AppSession;
+  onComplete: (profile: BrandProfile) => void;
+  onBack: () => void;
+}) {
+  const [step, setStep] = useState<"identity" | "plan">("identity");
+  const [draft, setDraft] = useState({
+    businessName: "",
+    industry: "",
+    audience: "",
+    offer: "",
+    tone: "",
+    colors: "",
+    goals: "",
+  });
+  const [planId, setPlanId] = useState<BrandProfile["planId"]>("free");
+
+  const readyForPlan = Object.values(draft).every((value) => value.trim().length > 0);
+  const planOptions: Array<{
+    id: BrandProfile["planId"];
+    name: string;
+    price: string;
+    detail: string;
+    icon: ReactNode;
+  }> = [
+    {
+      id: "free",
+      name: "Free preview",
+      price: "$0",
+      detail: "See the workspace, create sample assets, and understand the flow.",
+      icon: <Sparkles size={19} />,
+    },
+    {
+      id: "starter",
+      name: "Starter",
+      price: "$49",
+      detail: "A focused business workspace with Media Lab and approval-gated tasks.",
+      icon: <Rocket size={19} />,
+    },
+    {
+      id: "growth",
+      name: "Growth",
+      price: "$199",
+      detail: "More automation, publishing support, and deeper operating-room setup.",
+      icon: <CreditCard size={19} />,
+    },
+  ];
+
+  function updateDraft(field: keyof typeof draft, value: string) {
+    setDraft((current) => ({ ...current, [field]: value }));
+  }
+
+  function submitIdentity(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!readyForPlan) return;
+    setStep("plan");
+  }
+
+  function finish() {
+    onComplete({
+      ...draft,
+      businessName: draft.businessName.trim(),
+      industry: draft.industry.trim(),
+      audience: draft.audience.trim(),
+      offer: draft.offer.trim(),
+      tone: draft.tone.trim(),
+      colors: draft.colors.trim(),
+      goals: draft.goals.trim(),
+      planId,
+      completedAt: new Date().toISOString(),
+      version: BRAND_ONBOARDING_VERSION,
+    });
+  }
+
+  return (
+    <main className="brand-onboarding-screen">
+      <button className="ghost-small onboarding-back" type="button" onClick={onBack}>
+        <ArrowRight size={15} />
+        Change login
+      </button>
+      <section className="brand-intake-hero">
+        <div className="brand-orbit" aria-hidden="true">
+          <span />
+          <span />
+          <span />
+        </div>
+        <span className="panel-label">New customer setup</span>
+        <h1>Tell PhantomForce what this business actually is.</h1>
+        <p>
+          {session.label} starts clean. Brand identity comes first, then plan choice, then a fresh workspace.
+        </p>
+        <div className="intake-progress" aria-label="Setup progress">
+          <span className="active">Brand</span>
+          <b />
+          <span className={step === "plan" ? "active" : ""}>Plan</span>
+          <b />
+          <span>Workspace</span>
+        </div>
+      </section>
+
+      {step === "identity" ? (
+        <form className="brand-intake-panel" onSubmit={submitIdentity}>
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">Brand interview</span>
+              <h2>Answer the setup questions.</h2>
+            </div>
+            <span className="safe-pill">
+              <Lock size={15} />
+              Clean account
+            </span>
+          </div>
+
+          <div className="brand-question-grid">
+            <label>
+              <Building2 size={18} />
+              Business name
+              <input
+                value={draft.businessName}
+                onChange={(event) => updateDraft("businessName", event.target.value)}
+                placeholder="Customer One Studio"
+              />
+            </label>
+            <label>
+              <Target size={18} />
+              Industry
+              <input
+                value={draft.industry}
+                onChange={(event) => updateDraft("industry", event.target.value)}
+                placeholder="Restaurant, HVAC, sports team, creator brand..."
+              />
+            </label>
+            <label>
+              <Users size={18} />
+              Ideal customer
+              <input
+                value={draft.audience}
+                onChange={(event) => updateDraft("audience", event.target.value)}
+                placeholder="Who should the content attract?"
+              />
+            </label>
+            <label>
+              <Sparkles size={18} />
+              Main offer
+              <input
+                value={draft.offer}
+                onChange={(event) => updateDraft("offer", event.target.value)}
+                placeholder="What do they sell or want people to do?"
+              />
+            </label>
+            <label>
+              <MessageSquare size={18} />
+              Voice and tone
+              <input
+                value={draft.tone}
+                onChange={(event) => updateDraft("tone", event.target.value)}
+                placeholder="Premium, funny, local, bold, calm..."
+              />
+            </label>
+            <label>
+              <Palette size={18} />
+              Colors or visual identity
+              <input
+                value={draft.colors}
+                onChange={(event) => updateDraft("colors", event.target.value)}
+                placeholder="Black and gold, clean white, neon green..."
+              />
+            </label>
+          </div>
+
+          <label className="brand-goal-field">
+            <Rocket size={18} />
+            What should PhantomForce help them accomplish first?
+            <textarea
+              value={draft.goals}
+              onChange={(event) => updateDraft("goals", event.target.value)}
+              placeholder="Generate launch content, book more calls, clean up social posts, build a weekly media rhythm..."
+            />
+          </label>
+
+          <button className="primary-action" type="submit" disabled={!readyForPlan}>
+            <ArrowRight size={18} />
+            Continue to plan
+          </button>
+        </form>
+      ) : (
+        <section className="brand-intake-panel plan-step">
+          <div className="section-head">
+            <div>
+              <span className="eyebrow">Choose plan</span>
+              <h2>Pick how {draft.businessName} starts.</h2>
+            </div>
+            <button className="ghost-small" type="button" onClick={() => setStep("identity")}>
+              Edit answers
+            </button>
+          </div>
+
+          <div className="plan-choice-grid">
+            {planOptions.map((plan) => (
+              <button
+                className={planId === plan.id ? "plan-choice active" : "plan-choice"}
+                key={plan.id}
+                type="button"
+                onClick={() => setPlanId(plan.id)}
+              >
+                <span>{plan.icon}</span>
+                <strong>{plan.name}</strong>
+                <b>{plan.price}</b>
+                <small>{plan.detail}</small>
+              </button>
+            ))}
+          </div>
+
+          <div className="brand-summary-strip">
+            <span>{draft.industry}</span>
+            <span>{draft.audience}</span>
+            <span>{draft.tone}</span>
+          </div>
+
+          <button className="primary-action" type="button" onClick={finish}>
+            <Check size={18} />
+            Create clean workspace
+          </button>
+        </section>
+      )}
+    </main>
   );
 }
 
@@ -2546,7 +3022,7 @@ function ContentHubView({
   const pendingJobs = createJobs.filter((job) => job.status !== "ready");
   const tabs: Array<{ id: ContentHubTab; label: string }> = [
     { id: "create", label: "Create" },
-    { id: "library", label: "Library" },
+    { id: "library", label: "Media Pool" },
     { id: "calendar", label: "Calendar" },
     { id: "distribution", label: "Distribution" },
   ];
@@ -2598,8 +3074,8 @@ function ContentHubView({
         <section className="content-placeholder">
           <EmptyState
             icon={<FileText size={22} />}
-            title="Created assets land here"
-            detail="Finished photo, video, voice, and edited-media records appear here after generation."
+            title="Media Pool"
+            detail="Finished photo, video, voice, and edited media land in one place after generation."
           />
         </section>
       ) : null}
@@ -2862,7 +3338,7 @@ function MediaLabView({
         <section className="media-category-panel">
           <div className="section-head">
             <div>
-              <span className="eyebrow">Library map</span>
+              <span className="eyebrow">Media Pool map</span>
               <h3>Effects by category</h3>
             </div>
             <span className="safe-pill">
@@ -3557,9 +4033,184 @@ function AccessView({
   );
 }
 
-function ConnectionsView() {
+function SocialAnalyticsView({
+  snapshot,
+  providers,
+  attempts,
+  busy,
+  status,
+  refresh,
+  connectAll,
+}: {
+  snapshot: SocialAnalyticsSnapshot | null;
+  providers: SocialProviderStatus[];
+  attempts: SocialOauthAttempt[];
+  busy: boolean;
+  status: string;
+  refresh: () => void | Promise<void>;
+  connectAll: () => void | Promise<void>;
+}) {
+  const metrics = snapshot?.metrics ?? [
+    { label: "Total reach", value: "-", delta: "Load analytics" },
+    { label: "Engagement", value: "-", delta: "Waiting" },
+    { label: "Audience", value: "-", delta: "Waiting" },
+  ];
+  const readyCount = providers.filter((provider) => provider.analyticsReady).length;
+
   return (
-    <Page title="Connections and modules" kicker="Backend power">
+    <Page
+      title="Social analytics"
+      kicker="All channels"
+      action={
+        <button className="primary-small" type="button" onClick={() => void connectAll()} disabled={busy}>
+          <Link2 size={16} />
+          {busy ? "Trying socials" : "OAuth all socials"}
+        </button>
+      }
+    >
+      <section className="social-analytics-hero">
+        <div>
+          <span className="eyebrow">Combined reach engine</span>
+          <h3>Every platform should roll into one business view.</h3>
+          <p>{status}</p>
+        </div>
+        <button className="ghost-small" type="button" onClick={() => void refresh()} disabled={busy}>
+          <RefreshCcw size={15} />
+          Refresh analytics
+        </button>
+      </section>
+
+      <div className="social-metric-grid">
+        {metrics.map((metric) => (
+          <article key={metric.label}>
+            <span>{metric.label}</span>
+            <strong>{metric.value}</strong>
+            <small>{metric.delta}</small>
+          </article>
+        ))}
+        <article>
+          <span>Ready sources</span>
+          <strong>{readyCount}/{providers.length || 6}</strong>
+          <small>{snapshot?.reason ?? "Waiting for connector status"}</small>
+        </article>
+      </div>
+
+      <section className="social-provider-panel">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">OAuth status</span>
+            <h3>Provider health</h3>
+          </div>
+          <span className="safe-pill">
+            <ShieldCheck size={15} />
+            Backend tokens required
+          </span>
+        </div>
+        <div className="social-provider-grid">
+          {providers.map((provider) => (
+            <article
+              className={`social-provider-card ${
+                provider.analyticsReady ? "ready" : provider.configured ? "configured" : "missing"
+              }`}
+              key={provider.id}
+            >
+              <div className="record-top">
+                <h3>{provider.name}</h3>
+                <span className={`status-badge ${provider.analyticsReady ? "connected" : provider.configured ? "ready" : "locked"}`}>
+                  {provider.analyticsReady ? "analytics" : provider.configured ? "oauth ready" : "needs setup"}
+                </span>
+              </div>
+              <p>{provider.reason}</p>
+              <div className="scope-list">
+                {provider.scopes.slice(0, 3).map((scope) => (
+                  <span key={scope}>{scope}</span>
+                ))}
+              </div>
+              {provider.authUrl && !provider.analyticsReady ? (
+                <a className="provider-oauth-link" href={provider.authUrl} target="_blank" rel="noreferrer">
+                  Authorize {provider.name}
+                </a>
+              ) : null}
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="social-provider-panel">
+        <div className="section-head">
+          <div>
+            <span className="eyebrow">Combined breakdown</span>
+            <h3>Analytics feed</h3>
+          </div>
+        </div>
+        {snapshot?.providerBreakdown.length ? (
+          <div className="social-breakdown-list">
+            {snapshot.providerBreakdown.map((provider) => (
+              <article key={provider.providerId}>
+                <strong>{provider.providerName}</strong>
+                <span>{provider.reach.toLocaleString()} reach</span>
+                <span>{provider.engagement.toLocaleString()} engagements</span>
+                <span>{provider.followers.toLocaleString()} followers</span>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <EmptyState
+            icon={<BarChart3 size={20} />}
+            title="No readable analytics yet"
+            detail="Use OAuth all socials, then make sure each provider grants analytics or insights scopes."
+          />
+        )}
+      </section>
+
+      {attempts.length ? (
+        <section className="social-attempt-panel">
+          <div className="section-head compact">
+            <h3>Last OAuth-all attempt</h3>
+            <span>{attempts.length} providers</span>
+          </div>
+          {attempts.map((attempt) => (
+            <article key={attempt.providerId}>
+              <strong>{attempt.providerName}</strong>
+              <span>{attempt.status.replace(/_/g, " ")}</span>
+              <p>{attempt.reason}</p>
+            </article>
+          ))}
+        </section>
+      ) : null}
+    </Page>
+  );
+}
+
+function ConnectionsView({
+  socialProviders = [],
+  connectAll,
+}: {
+  socialProviders?: SocialProviderStatus[];
+  connectAll?: () => void | Promise<void>;
+}) {
+  return (
+    <Page
+      title="Connections and modules"
+      kicker="Backend power"
+      action={
+        connectAll ? (
+          <button className="primary-small" type="button" onClick={() => void connectAll()}>
+            <Link2 size={16} />
+            OAuth all socials
+          </button>
+        ) : null
+      }
+    >
+      {socialProviders.length ? (
+        <section className="social-mini-strip">
+          {socialProviders.map((provider) => (
+            <span key={provider.id} className={provider.analyticsReady ? "ready" : provider.configured ? "configured" : "missing"}>
+              {provider.name}: {provider.analyticsReady ? "analytics" : provider.configured ? "oauth ready" : "setup needed"}
+            </span>
+          ))}
+        </section>
+      ) : null}
       <div className="connection-grid">
         {connections.map((connection) => (
           <article className={`connection-card ${connection.status}`} key={connection.id}>

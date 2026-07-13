@@ -78,6 +78,11 @@ import {
   getVoiceboxStatus,
   listVoiceboxProfiles,
 } from "./voicebox/voicebox-client.js";
+import {
+  buildConnectAllSocialsPlan,
+  getSocialAnalyticsSnapshot,
+  listSocialProviderStatuses,
+} from "./connectors/social-analytics.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -439,6 +444,48 @@ app.post("/content/create/voice", async (request, reply) => {
       error: message,
     });
   }
+});
+
+app.get("/analytics/social/status", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    providers: listSocialProviderStatuses(),
+  };
+});
+
+app.post("/analytics/social/oauth-all", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    ...buildConnectAllSocialsPlan(),
+  };
+});
+
+app.get("/analytics/social/summary", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    snapshot: await getSocialAnalyticsSnapshot(),
+  };
 });
 
 app.get("/sessions", async () => {
