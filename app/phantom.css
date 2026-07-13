@@ -5057,6 +5057,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .developer-lane-copy { min-width: 0; display: grid; gap: 2px; }
 .developer-lane-copy b { color: var(--ink); font-size: 13px; }
 .developer-lane-copy i { color: var(--dim); font-size: 11px; font-style: normal; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.developer-lane-copy small { color: var(--neon); font: 500 10px "DM Mono", monospace; letter-spacing: 0.04em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .developer-lane-control label { display: grid; gap: 4px; min-width: 0; }
 .developer-lane-control label span {
   color: var(--dim); font: 700 9px "DM Mono", monospace; letter-spacing: 0.1em; text-transform: uppercase;

@@ -6,37 +6,37 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260712-227";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-227";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-227";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-227";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-227";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-227";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-227";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-227";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-227";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260712-227";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260712-227";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260712-227";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260712-227";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260712-227";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260712-227";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260712-227";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260712-227";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260712-227";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260712-227";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260712-227";
+} from "./store.js?v=phantom-live-20260713-001";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260713-001";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260713-001";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-001";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-001";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-001";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-001";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-001";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-001";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260713-001";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260713-001";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260713-001";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260713-001";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260713-001";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260713-001";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260713-001";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260713-001";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-001";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-001";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-001";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260712-227";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-227";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-227";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-227";
+} from "./orgs.js?v=phantom-live-20260713-001";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-001";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-001";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-001";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260712-227";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260712-227";
+} from "./customization.js?v=phantom-live-20260713-001";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260713-001";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -911,7 +911,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260712-227";
+const POSE_VERSION = "phantom-live-20260713-001";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1991,27 +1991,43 @@ function laneTargetForId(id) {
 function laneTargetOptions(selected) {
   return PHANTOM_LANE_TARGETS.map((target) => `<option value="${esc(target.id)}" ${target.id === selected ? "selected" : ""}>${esc(target.name)}</option>`).join("");
 }
-function laneModelOptions(targetId, selectedModel) {
-  const target = laneTargetForId(targetId);
-  return target.models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(model)}</option>`).join("");
+function localModelOptions(localModels) {
+  const installed = Array.isArray(localModels?.installed_models) ? localModels.installed_models : [];
+  return [...new Set(["local-auto", ...installed.map((model) => model.model || model.name).filter(Boolean)])];
 }
-function renderBrainLaneControls() {
+function localModelLabel(modelId, localModels) {
+  if (modelId === "local-auto") return localModels?.model_count ? "Auto - best installed Ollama model" : "Auto - read Ollama";
+  const model = (localModels?.installed_models || []).find((item) => item.model === modelId || item.name === modelId);
+  const suffix = [model?.parameter_size, model?.quantization_level].filter(Boolean).join(" ");
+  return `${model?.display_name || modelId}${suffix ? ` (${suffix})` : ""}`;
+}
+function laneModelOptions(targetId, selectedModel, localModels = null) {
+  const target = laneTargetForId(targetId);
+  const models = target.id === "local_ollama" ? localModelOptions(localModels) : target.models;
+  return models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(target.id === "local_ollama" ? localModelLabel(model, localModels) : model)}</option>`).join("");
+}
+function renderBrainLaneControls(localModels = null) {
   const cfg = loadPhantomLaneConfig();
   return PHANTOM_LANES.map((lane) => {
     const selected = cfg.lanes?.[lane.id] || {};
     const target = laneTargetForId(selected.target || lane.defaultTarget);
-    const model = target.models.includes(selected.model) ? selected.model : target.models[0];
+    const models = target.id === "local_ollama" ? localModelOptions(localModels) : target.models;
+    const model = models.includes(selected.model) || (target.allowCustomModel && typeof selected.model === "string" && selected.model.trim()) ? selected.model : models[0];
+    const localHint = lane.id === "local" && target.id === "local_ollama"
+      ? `<small>${localModels?.reachable ? `${Number(localModels.model_count || 0)} Ollama model${localModels.model_count === 1 ? "" : "s"} on this PC` : esc(localModels?.error || "Ollama status waiting")}</small>`
+      : "";
     return `
       <div class="developer-lane-control" data-dev-lane-row="${esc(lane.id)}">
         <div class="developer-lane-copy">
           <b>${esc(lane.name)}</b>
           <i>${esc(lane.role)}</i>
+          ${localHint}
         </div>
         <label><span>Backend</span>
           <select data-dev-lane-target="${esc(lane.id)}">${laneTargetOptions(target.id)}</select>
         </label>
         <label><span>Model</span>
-          <select data-dev-lane-model="${esc(lane.id)}">${laneModelOptions(target.id, model)}</select>
+          <select data-dev-lane-model="${esc(lane.id)}">${laneModelOptions(target.id, model, localModels)}</select>
         </label>
         <em data-dev-lane-current="${esc(lane.id)}">${esc(phantomLaneTargetName(target.id))}</em>
       </div>`;
@@ -2045,6 +2061,21 @@ async function fetchProviderManagerStatus() {
     const payload = await response.json().catch(() => null);
     const manager = payload?.status?.provider_manager;
     return response.ok && manager ? manager : null;
+  } catch {
+    return null;
+  }
+}
+
+async function fetchLocalModelStatus() {
+  try {
+    const token = session.token();
+    const headers = token ? { Authorization: `Bearer ${token}` } : {};
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), 8000);
+    const response = await fetch("/phantom-ai/local-models/status", { headers, signal: ctrl.signal });
+    clearTimeout(timer);
+    const payload = await response.json().catch(() => null);
+    return response.ok && payload?.ollama ? payload.ollama : null;
   } catch {
     return null;
   }
@@ -2254,7 +2285,7 @@ function animateDevCount(el, target) {
 }
 
 let devRefreshTimer = 0;
-function wireDeveloperSection(body, opts) {
+function wireDeveloperSection(body, opts, localModels = null) {
   const showLaneSaved = () => {
     const saved = body.querySelector("[data-dev-lane-saved]");
     if (!saved) return;
@@ -2272,7 +2303,7 @@ function wireDeveloperSection(body, opts) {
     const nextModel = patch.model || (target.id === current.target ? current.model : target.models[0]) || target.models[0];
     cfg.lanes[laneId] = {
       target: target.id,
-      model: target.models.includes(nextModel) ? nextModel : target.models[0],
+      model: target.models.includes(nextModel) || (target.allowCustomModel && typeof nextModel === "string" && nextModel.trim()) ? nextModel : target.models[0],
     };
     return savePhantomLaneConfig(cfg);
   };
@@ -2282,7 +2313,7 @@ function wireDeveloperSection(body, opts) {
       const cfg = saveLane(laneId, { target: select.value });
       const selected = cfg.lanes[laneId];
       const model = body.querySelector(`[data-dev-lane-model="${laneId}"]`);
-      if (model) model.innerHTML = laneModelOptions(selected.target, selected.model);
+      if (model) model.innerHTML = laneModelOptions(selected.target, selected.model, localModels);
       const current = body.querySelector(`[data-dev-lane-current="${laneId}"]`);
       if (current) current.textContent = phantomLaneTargetName(selected.target);
       showLaneSaved();
@@ -2316,7 +2347,7 @@ function wireDeveloperSection(body, opts) {
   });
 }
 
-function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaHealth, providerManager }, opts) {
+function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaHealth, providerManager, localModels }, opts) {
   const s = ctx.session || {};
   const w = workforce;
   const summary = w?.summary;
@@ -2475,7 +2506,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
         <div class="developer-lane-groups">
           <div class="developer-lane-group developer-lane-group-wide">
             <b>Phantom routing lanes</b>
-            <div class="developer-lane-controls">${renderBrainLaneControls()}</div>
+            <div class="developer-lane-controls">${renderBrainLaneControls(localModels)}</div>
             <p class="developer-lane-saved" data-dev-lane-saved hidden>Saved — next message uses this routing.</p>
           </div>
           <div class="developer-lane-group">
@@ -2502,7 +2533,7 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
       </section>
     </div>`;
 
-  wireDeveloperSection(body, opts);
+  wireDeveloperSection(body, opts, localModels);
   const autopilotMount = body.querySelector("[data-dev-autopilot]");
   if (autopilotMount) renderDeveloperAutopilotPanel(autopilotMount, opts);
   const agentRunsMount = body.querySelector("[data-dev-agent-runs]");
@@ -2511,17 +2542,18 @@ function renderDeveloperContent(body, { workforce, workforceError, rembg, mediaH
 }
 
 async function loadDeveloperData(body, opts) {
-  const [wfResult, rembg, mediaHealth, providerManager] = await Promise.all([
+  const [wfResult, rembg, mediaHealth, providerManager, localModels] = await Promise.all([
     fetchAgentWorkforceStatus(24),
     getRembgStatus(),
     getMediaEngineHealth(),
     fetchProviderManagerStatus(),
+    fetchLocalModelStatus(),
   ]);
   if (!document.body.contains(body)) return;
   renderDeveloperContent(body, {
     workforce: wfResult.ok ? wfResult.workforce : null,
     workforceError: wfResult.ok ? null : wfResult.error,
-    rembg, mediaHealth, providerManager,
+    rembg, mediaHealth, providerManager, localModels,
   }, opts);
 }
 
