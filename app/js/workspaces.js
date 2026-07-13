@@ -638,7 +638,7 @@ export function renderWebsitePreview(site, products, opts = {}) {
   const siteStore = ensureSiteStore(site);
   const theme = design.theme || "neon";
   const showProducts = design.storeEnabled || site.kind === "Store";
-  const sections = site.sections.slice(0, 8);
+  const sections = site.sections.slice(0, 12);
   const listedProducts = products.filter((product) => product.visible !== false).slice(0, 12);
   const gallery = Array.isArray(site.gallery) ? site.gallery.slice(0, 6) : [];
   /* selectable: the editor passes selected (index) so a clicked section
