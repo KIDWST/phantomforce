@@ -1412,8 +1412,8 @@ function renderContentLibrary(body, data, esc, root, opts) {
     <section class="ch-card ch-created-media">
       <div class="ch-card-h ch-library-head">
         <div>
-          <h3>Created media</h3>
-          <span class="ch-src">auto-saved from Media Lab · clears after ${CONTENT_ASSET_LIMITS.retentionDays} days</span>
+          <h3>Post sources</h3>
+          <span class="ch-src">selected from Media Pool or PC upload · clears after ${CONTENT_ASSET_LIMITS.retentionDays} days</span>
         </div>
         <div class="ch-storage">
           <span>${formatBytes(stats.bytes)} / ${formatBytes(stats.budgetBytes)}</span>
@@ -1447,7 +1447,7 @@ function renderContentLibrary(body, data, esc, root, opts) {
         <button class="ch-tool" data-ch-upload-local type="button">Upload local</button>`}
       </div>
       ${shownAssets.length ? `<div class="ch-asset-grid">${shownAssets.map((asset) => contentAssetCard(asset, esc)).join("")}</div>`
-      : `<p class="empty-line">No generated images or videos yet. Create media in Media Lab and it will land here automatically.</p>`}
+      : `<p class="empty-line">No post source media yet. Save media in Media Lab, select from PC, or open Publish to build a post.</p>`}
       ${stats.trimmed ? `<p class="ch-src">Space saver active: ${stats.trimmed} older/heavier preview${stats.trimmed === 1 ? "" : "s"} kept as metadata only.</p>` : ""}
     </section>
     <div class="ch-grid ch-grid-lg">${shownPosts.map((p) => postCard(p, esc, { creator: true })).join("")}</div>`;
@@ -2986,7 +2986,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
         id: `upload-${Date.now()}-${i}`,
         type: file.type.startsWith("video/") ? "video" : "image",
         title: file.name.replace(/\.[^.]+$/, "") || "Local upload",
-        prompt: "Local file imported into Creator Hub.",
+        prompt: "Local file selected as a Publish source.",
         source: "Local upload",
         provider: "local",
         model: "browser-file",
@@ -2996,7 +2996,7 @@ function wireLibraryActions(body, data, assets, shownAssets, shownPosts, esc, ro
       });
     }
     uploadInput.value = "";
-    opts.notify?.("Creator Hub", `Imported ${files.length} local file${files.length === 1 ? "" : "s"} into the library.`);
+    opts.notify?.("Creator Hub", `Added ${files.length} local file${files.length === 1 ? "" : "s"} as Publish source${files.length === 1 ? "" : "s"}.`);
     rerender();
   });
 }

@@ -1453,7 +1453,7 @@ function nextStepsHtml(esc) {
           ${svgIc("check")}<b>Save to Media Pool</b><span>${unsavedCount ? `${unsavedCount} unsaved` : "All saved"}</span>
         </button>
         <button class="ml-next-card is-cyan" data-ml-next="hub">
-          ${svgIc("hub")}<b>Open in Creator Hub</b><span>Auto-captured already</span>
+          ${svgIc("hub")}<b>Create post</b><span>Saves to the pool if needed</span>
         </button>
         <button class="ml-next-card is-gold" data-ml-next="ref">
           ${svgIc("image")}<b>Use as reference</b><span>Continuity for the next take</span>
@@ -1506,7 +1506,7 @@ function railHtml(cfg, esc) {
           ${svgIc("bolt")}<b>${cfg.credits}</b><span>credits</span>
           <span class="ml-rail-credit-meter"><i style="width:${meterPct}%"></i></span>
         </div>
-        <span class="ml-chip is-ready" title="Every finished render is captured to your Creator Hub automatically.">${svgIc("hub")} Auto-capture on</span>
+        <span class="ml-chip is-ready" title="Publish selects saved Media Pool sources; renders are not copied into a separate content library automatically.">${svgIc("hub")} Media Pool source</span>
         <details class="ml-queue-drop">
           <summary>${svgIc("play")} Queue <b>${queue.length}</b></summary>
           <div class="ml-queue-pop">
@@ -1529,11 +1529,11 @@ function queueRow(a, esc) {
 }
 
 const estCredits = () => genState.modality === "video" ? genState.duration * 4 : genState.count * (genState.quality === "high" ? 6 : 3);
-function captureForContentHub(asset, extra = {}) {
+function saveMediaPoolSource(asset, extra = {}) {
   const title = extra.title || (asset.type === "video" ? "Generated video" : "Generated image");
-  /* also push generated media into the permanent Asset Cloud when a business
-     session is active — one save, reusable everywhere (best-effort, never
-     blocks the local capture) */
+  /* Save the media as a reusable Media Pool source. Content Hub/Publish can
+     select it later, but generated work no longer auto-fills a separate
+     Content Hub library just because a render finished. */
   if (asset?.url && /^data:(image|video)\//.test(asset.url) && assetsAvailable()) {
     const ext = asset.type === "video" ? "mp4" : (asset.url.slice(5, asset.url.indexOf(";")).split("/")[1] || "png");
     saveToAssetCloud(asset.url, `${title.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}.${ext}`, {
@@ -1546,12 +1546,12 @@ function captureForContentHub(asset, extra = {}) {
       ...asset,
       title,
       prompt: extra.prompt || (asset.meta && asset.meta.prompt) || genState.prompt,
-      source: "Media Lab",
-      provider: extra.provider || genState.provider,
-      model: extra.model || genState.model,
-      style: extra.style || genState.style,
-      aspect: extra.aspect || genState.aspect,
-      duration: extra.duration || genState.duration,
+      source: "Media Pool",
+      provider: extra.provider || asset.meta?.provider || genState.provider,
+      model: extra.model || asset.meta?.model || genState.model,
+      style: extra.style || asset.meta?.style || genState.style,
+      aspect: extra.aspect || asset.meta?.aspect || genState.aspect,
+      duration: extra.duration || asset.meta?.duration || genState.duration,
       live: !!extra.live,
       createdAt: asset.at || Date.now(),
     });
@@ -1594,7 +1594,7 @@ function resultsHtml(esc) {
     <div class="ml-idle">
       <div class="ml-idle-orb" aria-hidden="true"><span></span><span></span><span></span></div>
       <b>Create with context</b>
-      <i>Phantom preps the brief, creates the media, reviews the output, and turns it into campaigns, sites, and follow-ups. Finished media lands in Media Pool and is also captured for Creator Hub.</i>
+      <i>Phantom preps the brief, creates the media, reviews the output, and keeps finished work in Media Pool so Publish can turn it into posts when you choose.</i>
       <div class="ml-board" aria-hidden="true">
         ${["1:1", "4:5", "16:9", "9:16", "3:2"].map((r, i) => `<span class="ml-board-cell" style="--d:${(i * 0.4).toFixed(1)}s" data-ratio="${r}"></span>`).join("")}
       </div>
@@ -1708,7 +1708,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
         setDoctor("warn", "Media Lab — Sign-in expired", ["Sign out, sign back in, then re-check"],
           "Your admin session needs a refresh. Sign out, sign back in, and hit Re-check.");
       } else if (ready) {
-        setDoctor("ok", "Media Lab — Ready", ["Owner-approved", "Auto-saved to Creator Hub"], adminTail);
+        setDoctor("ok", "Media Lab — Ready", ["Owner-approved", "Publish pulls from Media Pool"], adminTail);
       } else if (e.status === "not_configured") {
         setDoctor("warn", "Media Lab — Offline", ["Generation needs attention"], adminTail);
       } else {
@@ -1719,7 +1719,7 @@ function wireGenerate(body, cfg, opts, root, esc) {
     } else if (h.bridge && !h.bridgeAuth) {
       setDoctor("warn", "Media Lab — Sign-in expired", ["Sign out, sign back in, then re-check"]);
     } else if (h.bridge) {
-      setDoctor("ok", "Media Lab — Ready", ["Auto-saved to Creator Hub"]);
+      setDoctor("ok", "Media Lab — Ready", ["Publish pulls from Media Pool"]);
     } else if (h.proxy) {
       setDoctor("warn", "Media Lab — Needs setup", ["Offline sketches only until connected"]);
     } else if (h.studio && prov === PRIMARY_MEDIA_LANE) {
@@ -1754,11 +1754,16 @@ function wireGenerate(body, cfg, opts, root, esc) {
   /* Next steps: act on the freshest batch of generations */
   body.querySelector("[data-ml-next='save']")?.addEventListener("click", () => {
     const recent = session.assets.filter((a) => a.fromGen && !a.saved);
-    recent.forEach((a) => { a.saved = true; captureForContentHub(a); });
+    recent.forEach((a) => { a.saved = true; saveMediaPoolSource(a); });
     if (opts.notify) opts.notify("Media Factory", `saved ${recent.length} generation${recent.length === 1 ? "" : "s"} to Media Pool.`);
     renderGenerate(body, cfg, opts, root);
   });
-  body.querySelector("[data-ml-next='hub']")?.addEventListener("click", () => opts.openWorkspace && opts.openWorkspace("content"));
+  body.querySelector("[data-ml-next='hub']")?.addEventListener("click", () => {
+    const recent = session.assets.filter((a) => a.fromGen && !a.saved);
+    recent.forEach((a) => { a.saved = true; saveMediaPoolSource(a); });
+    if (recent.length && opts.notify) opts.notify("Media Factory", "saved the latest cut to Media Pool for Publish.");
+    opts.openWorkspace && opts.openWorkspace("content");
+  });
   body.querySelector("[data-ml-next='ref']")?.addEventListener("click", () => {
     const latest = session.assets.find((a) => a.fromGen);
     if (!latest) return;
@@ -1841,10 +1846,13 @@ async function runGenerate(body, cfg, opts, root, esc) {
       return;
     }
     const stamp = Date.now();
-    const created = out.assets.map((a, i) => ({ id: `gen-${stamp}-${i}`, ...a, fromGen: true, at: stamp }));
-    created.forEach((asset) => {
-      session.assets.unshift(asset);
-      captureForContentHub(asset, {
+    const created = out.assets.map((a, i) => ({
+      id: `gen-${stamp}-${i}`,
+      ...a,
+      fromGen: true,
+      at: stamp,
+      meta: {
+        ...(a.meta || {}),
         title: `${genState.modality === "video" ? "Generated video" : "Generated image"} · ${genState.style}`,
         prompt: out.spec?.original_prompt || genState.prompt,
         provider: genState.provider,
@@ -1854,7 +1862,10 @@ async function runGenerate(body, cfg, opts, root, esc) {
         duration: genState.duration,
         preset: activePreset()?.label || "Custom",
         live: out.live,
-      });
+      },
+    }));
+    created.forEach((asset) => {
+      session.assets.unshift(asset);
     });
     session.assets = session.assets.slice(0, 60);
     lastRenderIssue = out.live || out.queued
@@ -1892,7 +1903,7 @@ function tileAction(act, id, cfg, opts, root, esc, body) {
   if (act === "download") return downloadAsset(a);
   if (act === "regen") { runGenerate(body, cfg, opts, root, esc); return; }
   if (act === "ref") { genState.ref = a.url; session.tab = "generate"; renderMediaStudio(root, opts); return; }
-  if (act === "save") { a.saved = true; captureForContentHub(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to Media Pool."); renderMediaStudio(root, opts); return; }
+  if (act === "save") { a.saved = true; saveMediaPoolSource(a); if (opts.notify) opts.notify("Media Factory", "saved a generation to Media Pool."); renderMediaStudio(root, opts); return; }
   if (act === "edit") { session.edit = { url: a.url, type: a.type, id: a.id }; session.tab = "edit"; renderMediaStudio(root, opts); return; }
   if (act === "remove") {
     session.assets = session.assets.filter((x) => x.id !== id);
@@ -2743,7 +2754,7 @@ function renderEdit(body, cfg, opts, root) {
     const at = Date.now();
     const asset = { id: `dup-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Duplicated image" } };
     session.assets.unshift(asset);
-    captureForContentHub(asset, { title: "Duplicated image", prompt: editState.text || "Duplicated image" });
+    saveMediaPoolSource(asset, { title: "Duplicated image", prompt: editState.text || "Duplicated image" });
     opts.notify?.("Media Factory", "duplicated the current image into Media Pool.");
     renderMediaStudio(root, opts);
   };
@@ -2754,7 +2765,7 @@ function renderEdit(body, cfg, opts, root) {
     const at = Date.now();
     const asset = { id: `edit-${at}`, type: "image", url: exported.url, saved: true, at, meta: { edited: true, prompt: editState.text || "Edited image" } };
     session.assets.unshift(asset);
-    captureForContentHub(asset, { title: "Edited image", prompt: editState.text || "Edited image" });
+    saveMediaPoolSource(asset, { title: "Edited image", prompt: editState.text || "Edited image" });
     // switch tab (and its rerender) before notify(): notify() triggers a global store-change
     // listener that can fully remount this page, invalidating this closure's stale DOM/root —
     // landing the tab switch on live DOM first avoids it getting silently overwritten.

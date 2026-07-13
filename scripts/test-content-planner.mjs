@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const source = readFileSync(new URL("../app/js/contenthub.js", import.meta.url), "utf8");
+const mediaLabSource = readFileSync(new URL("../app/js/medialab.js", import.meta.url), "utf8");
 const css = readFileSync(new URL("../app/phantom.css", import.meta.url), "utf8");
 
 const tabBlock = source.match(/const tabs = \[([\s\S]*?)\];/u)?.[1] || "";
@@ -22,6 +23,13 @@ assert.match(source, /data-ch-pub-post-now/u, "Publish must include a post-now a
 assert.match(source, /status === "posted"[\s\S]*?addPublishPosts\(data, draft, "published"\)/u, "Post now must write published local content records for analytics visibility.");
 assert.match(source, /publishUnifiedPreview\(selectedPlatforms,/u, "Publish must render one unified destination preview.");
 assert.doesNotMatch(source, /selectedPlatforms\.map\(\(id\)\s*=>\s*publishPlatformPreview/u, "Publish must not render duplicate platform previews.");
+assert.doesNotMatch(source, /Created media|auto-saved from Media Lab|land here automatically|Local file imported into Creator Hub|into the library/u, "Content Hub must not describe itself as a generated-media library.");
+assert.doesNotMatch(mediaLabSource, /captureForContentHub|Auto-captured already|Auto-capture on|captured for Creator Hub|Auto-saved to Creator Hub/u, "Media Lab must not auto-capture generated assets into Content Hub.");
+assert.match(mediaLabSource, /function saveMediaPoolSource/u, "Media Lab must save explicit Media Pool sources for Publish.");
+const generationBlock = mediaLabSource.match(/const created = out\.assets[\s\S]*?session\.assets = session\.assets\.slice\(0, 60\);/u)?.[0] || "";
+assert.ok(generationBlock, "Media Lab generation completion block must be testable.");
+assert.doesNotMatch(generationBlock, /saveMediaPoolSource|registerContentAsset/u, "Completed renders must not automatically register as Publish sources.");
+assert.match(mediaLabSource, /data-ml-next='hub'[\s\S]*?saveMediaPoolSource/u, "Create post should explicitly save the latest cut to Media Pool for Publish.");
 assert.match(source, /BUSINESS PLANNER/u, "Planner page must be implemented.");
 assert.match(source, /Gmail/u);
 assert.match(source, /Proton Mail/u);
