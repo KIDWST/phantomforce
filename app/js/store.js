@@ -637,11 +637,15 @@ export const session = {
 };
 
 export const ADMIN_PUBLIC_HOST = "admin.phantomforce.online";
+export const CLIENT_PUBLIC_HOST = "app.phantomforce.online";
 export const PUBLIC_PAGES_HOSTS = new Set(["phantomforce.online", "www.phantomforce.online"]);
+const LOCAL_DEV_HOSTS = new Set(["127.0.0.1", "localhost"]);
 export const OWNER_SESSION_ID = "owner-admin";
 
 export const isLiveAdminHost = () => location.hostname === ADMIN_PUBLIC_HOST;
+export const isClientPublicHost = () => location.hostname === CLIENT_PUBLIC_HOST;
 export const isStaticPublicHost = () => PUBLIC_PAGES_HOSTS.has(location.hostname);
+export const isLocalDevHost = () => LOCAL_DEV_HOSTS.has(location.hostname);
 
 export function liveAdminUrl() {
   const url = new URL(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
@@ -663,9 +667,14 @@ export function resolveSession() {
 
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
+  const allowLocalSessionShortcut = isLocalDevHost();
   if (key === OWNER_SESSION_ID) {
     if (isStaticPublicHost()) {
       redirectToLiveAdmin();
+      return null;
+    }
+    if (!allowLocalSessionShortcut) {
+      session.clear();
       return null;
     }
     const s = {
@@ -683,6 +692,10 @@ export function resolveSession() {
       redirectToLiveAdmin();
       return null;
     }
+    if (!allowLocalSessionShortcut) {
+      session.clear();
+      return null;
+    }
     const s = {
       role: "admin",
       name: "Jordan",
@@ -694,10 +707,23 @@ export function resolveSession() {
     session.set(s); return s;
   }
   if (key === "employee" || key === "team" || key === "client") {
+    if (!allowLocalSessionShortcut) {
+      session.clear();
+      return null;
+    }
     const s = { role: "employee", name: "Team Member", ws: "phantomforce" };
     session.set(s); return s;
   }
   const saved = session.get();
+  const token = session.token();
+  if (saved?.database && !token) {
+    session.clear();
+    return null;
+  }
+  if (saved && isClientPublicHost() && (!saved.database || saved.canManageAccess || saved.isSuperAdmin)) {
+    session.clear();
+    return null;
+  }
   if (saved) {
     if (saved.role === "client") {
       saved.role = "employee";

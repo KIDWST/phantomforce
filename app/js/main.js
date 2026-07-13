@@ -2,42 +2,42 @@
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, currentTenantId, setWorkspace, wsName,
-  visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
+  visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isClientPublicHost, isLocalDevHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260713-234";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260713-234";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260713-234";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-234";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-234";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-234";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-234";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-234";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-234";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260713-234";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260713-234";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260713-234";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260713-234";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260713-234";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260713-234";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260713-234";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260713-234";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-234";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-234";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-234";
+} from "./store.js?v=phantom-live-20260713-235";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260713-235";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260713-235";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-235";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-235";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-235";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-235";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-235";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-235";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260713-235";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260713-235";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260713-235";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260713-235";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260713-235";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260713-235";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260713-235";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260713-235";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-235";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-235";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-235";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260713-234";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-234";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-234";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-234";
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260713-234";
+} from "./orgs.js?v=phantom-live-20260713-235";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-235";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-235";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-235";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260713-235";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260713-234";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260713-234";
+} from "./customization.js?v=phantom-live-20260713-235";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260713-235";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -148,12 +148,12 @@ function showGate() {
       <h1>Sign in to Phantom.</h1>
       <form class="owner-login" data-owner-login>
         <label>
-          <span>Email</span>
-          <input type="email" data-owner-email autocomplete="username" placeholder="jordan@phantomforce.online" autofocus required />
+          <span>Owner email</span>
+          <input type="email" data-owner-email name="phantomforce-owner-email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="phantomforcesupport@gmail.com" autofocus required />
         </label>
         <label>
-          <span>Password</span>
-          <input type="password" data-owner-password autocomplete="current-password" placeholder="Password" required />
+          <span>Owner password</span>
+          <input type="password" data-owner-password name="phantomforce-owner-password" autocomplete="off" placeholder="Owner password" required />
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
@@ -173,6 +173,11 @@ function showGate() {
       const email = emailInput.value.trim();
       const password = passwordInput.value;
       if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
+      if (/(^|[._+-])(customer|client|test-client|sports)([._+-]|@)|@(customer|client|test-client|sports)\./i.test(email)) {
+        error.textContent = "This is the owner-only admin login. Use the PhantomForce owner account here. Client/test accounts belong on the client app, not admin.phantomforce.online.";
+        error.hidden = false;
+        return;
+      }
       form.classList.add("is-loading");
       try {
         ctx.session = await ownerLogin(email, password);
@@ -189,12 +194,17 @@ function showGate() {
     return;
   }
 
+  if (isClientPublicHost()) {
+    renderCustomerAuthLoading(card);
+    maybeUpgradeGateToDatabaseLogin(card, { customerApp: true, required: true });
+    return;
+  }
+
   gate.querySelectorAll("[data-enter]").forEach((btn) => {
     btn.onclick = async () => {
       const kind = btn.dataset.enter;
       if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
-      const localDevHost = location.hostname === "127.0.0.1" || location.hostname === "localhost";
-      if (localDevHost) {
+      if (isLocalDevHost()) {
         try {
           const response = await fetch("/auth/demo-login", {
             method: "POST",
@@ -234,12 +244,45 @@ function showGate() {
 /* When the backend runs real multi-user auth (database provider), the
    gate becomes an email/password sign-in — accounts, orgs, and roles
    live in Postgres, not in this shell. Checked live, never assumed. */
-function maybeUpgradeGateToDatabaseLogin(card) {
+function renderCustomerAuthLoading(card) {
+  card.innerHTML = `
+    <p class="gate-kicker">PHANTOMFORCE · CUSTOMER WORKSPACE</p>
+    <h1>Sign in to your workspace.</h1>
+    <div class="owner-login">
+      <p class="gate-note">Checking the account system...</p>
+    </div>
+    <p class="gate-note">Business owners open Business Manager here. Invited team members open Team Workspace under the same business workspace.</p>`;
+}
+
+function renderCustomerAuthBlocked(card, message = "Customer account login is not enabled on this backend.") {
+  card.innerHTML = `
+    <p class="gate-kicker">PHANTOMFORCE · CUSTOMER WORKSPACE</p>
+    <h1>Workspace sign-in is required.</h1>
+    <div class="owner-login">
+      <p class="gate-error">${message}</p>
+    </div>
+    <p class="gate-note">app.phantomforce.online only accepts real customer accounts. Jordan/admin operations stay on admin.phantomforce.online.</p>`;
+}
+
+function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
+  const { customerApp = false, required = false } = options;
   fetchAuthConfig().then((auth) => {
-    if (!auth?.databaseAuthEnabled || gate.hidden) return;
+    if (gate.hidden) return;
+    if (!auth?.databaseAuthEnabled) {
+      if (required) renderCustomerAuthBlocked(card);
+      return;
+    }
+    const heading = customerApp ? "Sign in to your workspace." : "Sign in to your business.";
+    const buttonLabel = customerApp ? "Open Workspace" : "Open Business Manager";
+    const helper = customerApp
+      ? "Owners and workspace admins land in Business Manager. Employees land in Team Workspace. Permissions come from the business workspace."
+      : "Your account, businesses, and roles are managed on the PhantomForce server.";
+    const note = customerApp
+      ? "Use the email tied to your business workspace. Platform admin accounts belong on admin.phantomforce.online."
+      : "Invited to a business? Accept your invitation first, then sign in here.";
     card.innerHTML = `
       <p class="gate-kicker">PHANTOMFORCE · SIGN IN</p>
-      <h1>Sign in to your business.</h1>
+      <h1>${heading}</h1>
       <form class="owner-login" data-db-login>
         <label>
           <span>Email</span>
@@ -251,12 +294,12 @@ function maybeUpgradeGateToDatabaseLogin(card) {
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
-          <b>Open Business Manager</b>
-          <i>Your account, businesses, and roles are managed on the PhantomForce server.</i>
+          <b>${buttonLabel}</b>
+          <i>${helper}</i>
         </button>
         <p class="gate-error" data-db-error hidden></p>
       </form>
-      <p class="gate-note">Invited to a business? Accept your invitation first, then sign in here.</p>`;
+      <p class="gate-note">${note}</p>`;
     const form = card.querySelector("[data-db-login]");
     const error = card.querySelector("[data-db-error]");
     form.onsubmit = async (event) => {
@@ -264,20 +307,30 @@ function maybeUpgradeGateToDatabaseLogin(card) {
       error.hidden = true;
       form.classList.add("is-loading");
       try {
-        ctx.session = await databaseLogin(
+        const nextSession = await databaseLogin(
           card.querySelector("[data-db-email]").value.trim(),
           card.querySelector("[data-db-password]").value,
         );
+        if (customerApp && (nextSession?.canManageAccess || nextSession?.isSuperAdmin)) {
+          await databaseLogout();
+          session.clear();
+          ctx.session = null;
+          throw new Error("Platform admin accounts must use admin.phantomforce.online.");
+        }
+        ctx.session = nextSession;
         enterPhantom();
       } catch (err) {
         session.clear();
+        ctx.session = null;
         error.textContent = err?.message || "Sign-in failed.";
         error.hidden = false;
       } finally {
         form.classList.remove("is-loading");
       }
     };
-  }).catch(() => {});
+  }).catch(() => {
+    if (required && !gate.hidden) renderCustomerAuthBlocked(card, "The account system is not reachable. Start the backend, then sign in again.");
+  });
 }
 
 /* ============================ sidebar nav ============================ */
@@ -709,11 +762,20 @@ function renderUser() {
   renderAccountMenu();
 }
 
-function signOut() {
-  if (confirm("Sign out of PhantomForce?")) {
-    if (ctx.session?.database) databaseLogout(); /* revoke the server session for real */
-    session.clear(); ctx.session = null; accountMenuOpen = false; closeOverlay(true); showGate();
-  }
+async function signOut() {
+  if (!confirm("Sign out of PhantomForce?")) return;
+  const databaseSession = !!ctx.session?.database;
+  accountMenuOpen = false;
+  closeOverlay(true);
+  if (databaseSession) await databaseLogout();
+  session.clear();
+  ctx.session = null;
+  try {
+    const url = new URL(location.href);
+    url.searchParams.delete("session");
+    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+  } catch {}
+  showGate();
 }
 
 /* ============================ account + plan ============================ */
@@ -984,7 +1046,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260713-234";
+const POSE_VERSION = "phantom-live-20260713-235";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

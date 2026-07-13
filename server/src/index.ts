@@ -981,6 +981,15 @@ app.post("/auth/login", async (request, reply) => {
     /* uniform delay-free refusal; no user-exists oracle */
     return reply.code(401).send({ ok: false, error: "Invalid email or password." });
   }
+  const publicHost = requestPublicHost(request);
+  if (!canUseSessionOnPublicHost(publicHost, session)) {
+    await revokeDatabaseSession(session.authSessionId);
+    return reply.code(403).send({
+      ok: false,
+      error: "This account is not available on this public host.",
+      host: publicHost || "local",
+    });
+  }
   const token = mintDatabaseSessionToken(session.id);
   if (!token) {
     return reply.code(500).send({ ok: false, error: "Token minting unavailable." });

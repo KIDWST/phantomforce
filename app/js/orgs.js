@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260713-234";
+import { ctx, session } from "./store.js?v=phantom-live-20260713-235";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -47,7 +47,7 @@ export async function fetchAuthConfig() {
    is enforced server-side per request. */
 function localSessionFromServer(payload) {
   const s = payload.session || {};
-  const managesOrg = s.isSuperAdmin || ["owner", "admin", "member"].includes(s.orgRole || "");
+  const managesOrg = s.isSuperAdmin || ["owner", "admin"].includes(s.orgRole || "");
   return {
     role: managesOrg ? "admin" : "employee",
     name: s.label || s.email || "Operator",
