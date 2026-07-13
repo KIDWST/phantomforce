@@ -3,7 +3,7 @@
    questionnaire: one messy user ask becomes inferred intent, assumptions,
    draftable actions, and one blocking question max. Nothing external runs. */
 
-import { store, visible, currentWs, wsName, pushActivity } from "./store.js?v=phantom-live-20260712-227";
+import { store, visible, currentWs, wsName, pushActivity } from "./store.js?v=phantom-live-20260712-230";
 import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260712-230";
 
 const esc = (value = "") => String(value)
