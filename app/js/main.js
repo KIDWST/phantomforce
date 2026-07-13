@@ -147,28 +147,34 @@ function showGate() {
       <h1>Sign in to Phantom.</h1>
       <form class="owner-login" data-owner-login>
         <label>
-          <span>Owner key</span>
-          <input type="password" data-owner-key autocomplete="current-password" placeholder="Enter owner key" autofocus />
+          <span>Email</span>
+          <input type="email" data-owner-email autocomplete="username" placeholder="jordan@phantomforce.online" autofocus required />
+        </label>
+        <label>
+          <span>Password</span>
+          <input type="password" data-owner-password autocomplete="current-password" placeholder="Password" required />
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
           <b>Launch Business Manager</b>
-          <i>Owner brain session required. This host opens the full operating layer.</i>
+          <i>Owner account required. This host opens the full operating layer.</i>
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
       <p class="gate-note">The private gateway protects this route. PhantomForce owns the visible login and session.</p>`;
     const form = card.querySelector("[data-owner-login]");
-    const input = card.querySelector("[data-owner-key]");
+    const emailInput = card.querySelector("[data-owner-email]");
+    const passwordInput = card.querySelector("[data-owner-password]");
     const error = card.querySelector("[data-owner-error]");
     form.onsubmit = async (event) => {
       event.preventDefault();
       error.hidden = true;
-      const ownerKey = input.value.trim();
-      if (!ownerKey) { error.textContent = "Enter the owner key."; error.hidden = false; return; }
+      const email = emailInput.value.trim();
+      const password = passwordInput.value;
+      if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
       form.classList.add("is-loading");
       try {
-        ctx.session = await ownerLogin(ownerKey);
+        ctx.session = await ownerLogin(email, password);
         enterPhantom();
       } catch (err) {
         session.clear();

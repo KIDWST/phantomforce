@@ -3823,6 +3823,15 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-settings-gear .ic { width: 15px; height: 15px; }
 .ml-settings-gear:hover,
 .ml-settings-gear.is-active { border-color: var(--line-strong); background: rgba(65,255,161,0.08); box-shadow: 0 0 16px rgba(65,255,161,0.16); }
+.ml-asset-open {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-height: 34px;
+  padding: 0 12px; border: 1px solid var(--line); border-radius: 11px;
+  background: rgba(65,255,161,0.055); color: #cfeedd; cursor: pointer;
+  font: 700 12px "Space Grotesk", sans-serif; white-space: nowrap;
+}
+.ml-asset-open .ic { width: 14px; height: 14px; color: var(--neon); }
+.ml-asset-open:hover,
+.ml-asset-open.is-active { border-color: var(--line-strong); color: var(--ink); background: rgba(65,255,161,0.1); }
 .ml-engine-mini {
   margin-left: auto; display: inline-flex; align-items: center; gap: 8px; padding: 7px 12px;
   border: 1px solid var(--line); border-radius: 999px; background: rgba(0,0,0,0.22);
@@ -3867,6 +3876,44 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-engine-drawer-rows span { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; padding: 8px 10px; border-radius: 9px; background: rgba(0,0,0,0.22); }
 .ml-engine-drawer-rows b { color: var(--dim); font-weight: 500; }
 .ml-engine-drawer-rows i { font-style: normal; color: #d9ffe9; text-align: right; }
+.ml-asset-controls { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; margin-bottom: 10px; }
+.ml-local-kinds { margin-bottom: 10px; }
+.ml-local-summary {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 10px;
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 11px; background: rgba(0,0,0,0.22);
+}
+.ml-local-summary b { color: var(--neon); font-size: 12px; }
+.ml-local-summary span { color: var(--dim); font: 700 9px "DM Mono", monospace; letter-spacing: 0.07em; text-transform: uppercase; }
+.ml-local-message { color: var(--warn); }
+.ml-local-assets { display: grid; gap: 9px; }
+.ml-local-empty { padding: 18px; border: 1px dashed var(--line); border-radius: 13px; color: var(--dim); text-align: center; font-size: 12px; }
+.ml-local-asset {
+  display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; gap: 10px; align-items: center;
+  padding: 8px; border: 1px solid var(--line); border-radius: 13px;
+  background: linear-gradient(145deg, rgba(65,255,161,0.055), rgba(0,0,0,0.18));
+}
+.ml-local-thumb {
+  width: 56px; height: 56px; display: grid; place-items: center; overflow: hidden; border-radius: 11px;
+  background: rgba(0,0,0,0.3); border: 1px solid rgba(65,255,161,0.12); color: var(--neon);
+}
+.ml-local-thumb img,
+.ml-local-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ml-local-thumb span { display: grid; place-items: center; width: 100%; height: 100%; }
+.ml-local-thumb .ic { width: 20px; height: 20px; }
+.ml-local-copy { min-width: 0; display: grid; gap: 2px; }
+.ml-local-copy b { color: var(--ink); font-size: 12.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-local-copy span,
+.ml-local-copy i { color: var(--dim); font-size: 10.5px; line-height: 1.25; font-style: normal; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ml-local-actions { display: flex; flex-direction: column; gap: 5px; }
+.ml-local-actions button,
+.ml-local-actions em {
+  min-width: 48px; min-height: 25px; display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--line); border-radius: 8px; background: rgba(65,255,161,0.07);
+  color: #dfffee; font: 700 10px "Space Grotesk"; font-style: normal;
+}
+.ml-local-actions button { cursor: pointer; }
+.ml-local-actions button:hover { border-color: var(--neon); background: rgba(65,255,161,0.13); }
+.ml-local-actions em { color: var(--dim); background: rgba(0,0,0,0.18); }
 .ml-drawer-settings { display: grid; gap: 14px; }
 .ml-drawer-section {
   display: grid; gap: 10px; padding: 12px; border: 1px solid var(--line);
