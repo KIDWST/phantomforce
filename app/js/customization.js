@@ -5,6 +5,25 @@ let activeEntitlements = null;
 let activeVersions = [];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const PLATFORM_MODULES = [
+  ["dashboard", "Dashboard", true, ["owner", "admin", "manager", "member", "client"]],
+  ["crm", "Clients", true, ["owner", "admin", "manager", "member"]],
+  ["media", "Media Lab", true, ["owner", "admin", "manager", "member"]],
+  ["sites", "Websites", true, ["owner", "admin", "manager", "member"]],
+  ["money", "Accounting", true, ["owner", "admin", "manager"]],
+  ["phantomplay", "PhantomPlay", true, ["owner", "admin", "manager", "member", "client"]],
+  ["intelligence", "Competitor Intelligence", true, ["owner", "admin", "manager"]],
+  ["analytics", "Analytics", true, ["owner", "admin", "manager"]],
+  ["memory", "Memory", true, ["owner", "admin", "manager"]],
+  ["automation", "Automations", true, ["owner", "admin", "manager"]],
+  ["approvals", "Approvals", false, ["owner", "admin", "manager", "member"]],
+  ["workers", "Workforce", true, ["owner", "admin", "manager"]],
+  ["vacation", "Away Mode", true, ["owner", "admin"]],
+  ["customize", "Workspace Studio", false, ["owner", "admin"]],
+  ["settings", "Settings", false, ["owner", "admin", "manager", "member", "client"]],
+  ["developer", "Developer", false, ["owner"]],
+];
+const DEFAULT_ENTITLEMENTS = { coBranded: false, whiteLabel: false, internalPhantomForce: true, localFallback: true };
 const authHeaders = (json = false) => {
   const token = session.token();
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
@@ -24,6 +43,51 @@ async function api(path, options = {}) {
 
 function tenantQuery() {
   return `tenant_id=${encodeURIComponent(currentTenantId())}`;
+}
+
+function defaultConfiguration(tenantId = currentTenantId()) {
+  const internal = tenantId === "phantomforce" || tenantId === "phantomforce-owner";
+  return {
+    schemaVersion: 1,
+    tenantId,
+    version: 1,
+    brand: {
+      mode: internal ? "internal_phantomforce" : "standard",
+      organizationName: internal ? "PhantomForce" : "My Business",
+      workspaceName: "Business HQ",
+      poweredByPhantomForce: true,
+    },
+    theme: {
+      primary: "#2eff9f",
+      secondary: "#42e9ff",
+      accent: "#ffd166",
+      radius: 14,
+      font: "Space Grotesk",
+      colorMode: "dark",
+      density: "comfortable",
+      surfaceStyle: "terminal",
+    },
+    terminology: {},
+    modules: PLATFORM_MODULES.map(([id, label, customerConfigurable, roles], order) => ({
+      id,
+      label,
+      enabled: id !== "developer" || internal,
+      order,
+      roles,
+      customerConfigurable,
+    })),
+    navigation: { homeModuleId: "dashboard" },
+    assistant: { tone: "direct" },
+    dashboards: [],
+    customObjects: [],
+    forms: [],
+    workflows: [],
+    extensions: [],
+    policies: { requireApprovalForOutbound: true, requireApprovalForDestructive: true },
+    updatedAt: new Date().toISOString(),
+    updatedBy: "local-fallback",
+    localFallback: true,
+  };
 }
 
 export function currentCustomization() {
@@ -77,7 +141,11 @@ export async function loadOrganizationCustomization({ onApplied } = {}) {
     return activeConfiguration;
   } catch (error) {
     console.warn("Workspace customization is unavailable; using PhantomForce defaults.", error);
-    return null;
+    activeConfiguration = defaultConfiguration();
+    activeEntitlements = DEFAULT_ENTITLEMENTS;
+    applyOrganizationCustomization(activeConfiguration);
+    if (typeof onApplied === "function") onApplied(activeConfiguration);
+    return activeConfiguration;
   }
 }
 
@@ -137,6 +205,7 @@ function renderStudio(el, state, opts) {
       <div><p class="cust-kicker">WORKSPACE STUDIO</p><h2>Make PhantomForce fit this business.</h2><p>Change the workspace above the security boundary. Preview first, publish when it looks right, and restore any earlier version.</p></div>
       <div class="cust-scope"><span>Editing</span><b>${esc(draft.brand.organizationName)}</b><i>Version ${draft.version} · Powered by PhantomForce</i></div>
     </section>
+    ${draft.localFallback ? `<div class="cust-message">Workspace Studio is using local defaults while the backend reconnects. Modules are available now; publishing waits for the server.</div>` : ""}
     ${message ? `<div class="cust-message">${esc(message)}</div>` : ""}
     <section class="cust-ai">
       <div><p class="cust-kicker">ASK PHANTOM</p><h3>Describe the workspace you want.</h3><p>Try “Change Clients to Athletes,” “Use #22ee88,” or “Make the assistant more professional.”</p></div>
@@ -247,7 +316,7 @@ function bindStudio(el, state, opts) {
 export async function renderCustomizationStudio(el, opts = {}) {
   el.innerHTML = `<div class="cust-loading">Loading this organization’s workspace settings…</div>`;
   if (!activeConfiguration || activeConfiguration.tenantId !== currentTenantId()) await loadOrganizationCustomization();
-  if (!activeConfiguration) { el.innerHTML = `<div class="cust-empty"><b>Workspace Studio could not load.</b><span>Check the private backend connection and try again.</span></div>`; return; }
+  if (!activeConfiguration) activeConfiguration = defaultConfiguration();
   try { await fetchVersions(); } catch { activeVersions = []; }
   renderStudio(el, { draft: clone(activeConfiguration), preview: null, pendingPatch: null, busy: false, message: "" }, opts);
 }
