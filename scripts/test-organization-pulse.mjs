@@ -11,6 +11,8 @@ const pulse = read("server/src/phantom-ai/organization-pulse.ts");
 const index = read("server/src/index.ts");
 const proxy = read("ops/admin-live/admin-static-server.mjs");
 const orgGraph = read("app/js/orggraph.js");
+const orgPulseClient = read("app/js/organizationpulse.js");
+const main = read("app/js/main.js");
 
 // 1. Honesty contract: unavailable sections must carry a reason, never fake data.
 assert.match(pulse, /available: false; reason: string/, "Pulse sections must model unavailability with a reason");
@@ -84,5 +86,19 @@ assert.match(orgGraph, /"managed-growth"/u, "Client graph must style Managed Gro
 assert.match(orgGraph, /"client-setup"/u, "Client graph must style client setup nodes explicitly.");
 assert.match(orgGraph, /"crm-lead"/u, "Client graph must style CRM lead nodes explicitly.");
 assert.match(orgGraph, /proposal/u, "Client graph must style proposal nodes explicitly.");
+
+// 11. Browser shell: signed-in dashboard attention must prefer the server
+//     pulse over local fallback arrays, so badges/notifications do not drift
+//     from the real CRM/proposal/approval stores.
+assert.match(orgPulseClient, /\/api\/organization\/pulse/u, "Browser pulse client must fetch the Organization Pulse endpoint.");
+assert.match(orgPulseClient, /managedGrowth/u, "Browser pulse client must read Managed Growth Ops.");
+assert.match(orgPulseClient, /pulsePendingApprovalCount/u, "Browser pulse client must expose server-backed approval counts.");
+assert.match(orgPulseClient, /pulseAttentionItems/u, "Browser pulse client must expose server-backed attention items.");
+assert.match(main, /organizationpulse\.js/u, "Dashboard shell must import the Organization Pulse client.");
+assert.match(main, /function approvalBadgeCount\(\)/u, "Dashboard shell must centralize approval badge counts.");
+assert.match(main, /organizationPulseAvailable\(\)\) return pulse \? pulsePendingApprovalCount/u, "Approval badge count must prefer cached server pulse when signed in and never fall back to local counts while loading.");
+assert.match(main, /organizationPulseAvailable\(\) \? pulseAttentionItems/u, "Attention items must prefer server pulse when signed in.");
+assert.match(main, /ensureOrganizationPulseFresh\(\);/u, "Dashboard shell must refresh Organization Pulse in the background.");
+assert.match(main, /crm: "leads"/u, "CRM surface actions must route to the real Clients workspace.");
 
 console.log("Organization Pulse and Brain Graph safety checks passed.");

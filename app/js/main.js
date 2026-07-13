@@ -13,6 +13,14 @@ import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-2
 import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-247";
 import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-247";
 import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260713-247";
+import {
+  cachedOrganizationPulse,
+  loadOrganizationPulse,
+  organizationPulseAvailable,
+  pulseAttentionItems,
+  pulsePendingApprovalCount,
+  shouldRefreshOrganizationPulse,
+} from "./organizationpulse.js?v=phantom-live-20260713-247";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-247";
 import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-247";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-247";
@@ -510,6 +518,7 @@ let mobileNavOpen = false;
 
 const WORKSPACE_ALIASES = {
   brain: "workforce",
+  crm: "leads",
   memory: "memory",
   content: "content",
   analytics: "analytics",
@@ -553,9 +562,36 @@ function navStatusPill(n) {
   }
   return "";
 }
+
+let organizationPulseRefreshInFlight = false;
+
+function localPendingApprovals() {
+  return visible(store.state.approvals).filter((a) => a.status === "pending").length;
+}
+
+function approvalBadgeCount() {
+  const pulse = cachedOrganizationPulse();
+  if (organizationPulseAvailable()) return pulse ? pulsePendingApprovalCount(pulse) : 0;
+  return localPendingApprovals();
+}
+
+function ensureOrganizationPulseFresh() {
+  if (!shouldRefreshOrganizationPulse() || organizationPulseRefreshInFlight) return;
+  organizationPulseRefreshInFlight = true;
+  loadOrganizationPulse()
+    .catch(() => null)
+    .finally(() => {
+      organizationPulseRefreshInFlight = false;
+      renderNav();
+      renderMobileBottomNav();
+      renderNotifs();
+      if (!activePageId && !openId) renderPlan();
+    });
+}
+
 function renderNav() {
   const nav = $("[data-nav]");
-  const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
+  const pending = approvalBadgeCount();
   const items = orderedNavItems();
   MOBILE_NAV = mobileItemsFromNav(items);
   nav.innerHTML = items.map((n) => `
@@ -577,7 +613,7 @@ function mobileNavActive(item) {
 function renderMobileBottomNav() {
   const nav = $("[data-mobile-bottom-nav]");
   if (!nav) return;
-  const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
+  const pending = approvalBadgeCount();
   MOBILE_NAV = mobileItemsFromNav();
   nav.innerHTML = MOBILE_NAV.map((item) => `
     <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""} ${item.navDisabled ? "is-disabled" : ""}" data-mobile-nav="${esc(item.id)}" type="button" ${mobileNavActive(item) ? 'aria-current="page"' : ""} ${item.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
@@ -1371,7 +1407,11 @@ function renderHero() {
 
 /* ============================ today's plan (donut) ============================ */
 function renderPlan() {
-  const plan = todaysPlan();
+  const serverPulseAvailable = organizationPulseAvailable();
+  const serverPlan = serverPulseAvailable
+    ? pulseAttentionItems(cachedOrganizationPulse()).map((item) => ({ text: item.title, open: item.open }))
+    : [];
+  const plan = serverPulseAvailable ? serverPlan : todaysPlan();
   if (!plan.length) {
     $("[data-plan]").innerHTML = `
       <div class="section-head"><h2>Today's plan</h2></div>
@@ -1456,15 +1496,17 @@ function greeting() {
   return h < 12 ? "Good morning" : h < 18 ? "Good afternoon" : "Good evening";
 }
 function attentionItems() {
-  const items = [];
-  visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
-    .forEach((a) => items.push({ icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
+  const items = organizationPulseAvailable() ? pulseAttentionItems(cachedOrganizationPulse()) : [];
+  if (!items.length && !organizationPulseAvailable()) {
+    visible(store.state.approvals).filter((a) => a.status === "pending").slice(0, 3)
+      .forEach((a) => items.push({ icon: "check", tone: "warn", title: a.title, sub: "Waiting on your approval", open: "approvals" }));
+    visible(store.state.leads).filter((l) => l.due && new Date(l.due).getTime() < Date.now() + 864e5 && l.status !== "won" && l.status !== "lost").slice(0, 2)
+      .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
+    visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
+      .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
+  }
   visible(store.state.security).filter((s) => s.posture && s.posture !== "clean")
     .forEach(() => items.push({ icon: "shield", tone: "warn", title: "Security posture needs a look", sub: "Protect flagged attention", open: "protect" }));
-  visible(store.state.leads).filter((l) => l.due && new Date(l.due).getTime() < Date.now() + 864e5 && l.status !== "won" && l.status !== "lost").slice(0, 2)
-    .forEach((l) => items.push({ icon: "users", tone: "warn", title: `Follow up: ${l.name}`, sub: l.next || "Due today", open: "leads" }));
-  visible(store.state.proposals).filter((p) => p.status === "sent-ready").slice(0, 2)
-    .forEach((p) => items.push({ icon: "dollar", tone: "ok", title: `Quote ready to send: ${p.client}`, sub: fmtMoney(p.price), open: "proposals" }));
   return items;
 }
 /* ============================ notifications ============================ */
@@ -1577,7 +1619,7 @@ const signedMoney = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmt
 
 function briefingText() {
   const m = moneyView();
-  const pend = visible(store.state.approvals).filter((a) => a.status === "pending").length;
+  const pend = approvalBadgeCount();
   const name = (ctx.session?.name || "there").split(/\s+/)[0];
   const bits = [`${greeting()}, ${name}`];
   if (m.transactions.length) bits.push(`${signedMoney(m.netCash)} net cashflow`);
@@ -1636,6 +1678,7 @@ function renderConsole() {
   renderPlanMeta();
   renderUser();
   renderNotifs();
+  ensureOrganizationPulseFresh();
   renderHero();
   renderChips();
   renderModePose(activeMode);
@@ -2850,6 +2893,7 @@ function renderWorkspacePage(id, pushHash = true) {
   renderPlanMeta();
   renderUser();
   renderNotifs();
+  ensureOrganizationPulseFresh();
   const body = $("[data-workspace-page-body]", root);
   const rerender = () => {
     if (def.custom) def.render(body);
