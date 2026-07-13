@@ -32,6 +32,11 @@ import {
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-226";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-226";
 import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-226";
+// PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
+// while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
+// a "Classic view" button to switch back). Classic stays the default experience.
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260713-227";
+const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
 import {
   customizeNavigation,
   loadOrganizationCustomization,
@@ -2569,7 +2574,7 @@ const CUSTOM = {
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
   content: { title: "Content Hub", kicker: "Library, ideas, drafts, publishing, and performance", custom: true, wide: true, render: (body) => renderContentHub(body, mediaOpts()) },
   assets: { title: "Asset Cloud", kicker: "Your business's creative memory", custom: true, wide: true, render: (body) => renderAssetCloud(body) },
-  phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => renderPhantomPlay(body, mediaOpts()) },
+  phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
   analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
