@@ -409,6 +409,13 @@ import {
   publicProposalDocument,
   updateProposalDraft,
 } from "./proposals/proposal-store.js";
+import {
+  createWorkspaceApproval,
+  decideWorkspaceApproval,
+  deleteWorkspaceApproval,
+  getWorkspaceApprovalDocument,
+  publicWorkspaceApprovalDocument,
+} from "./workspace-approvals/workspace-approval-store.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -461,6 +468,9 @@ const CrmProspectLanesBodySchema = z.object({ tenant_id: z.string().trim().max(8
 const ProposalTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
 const ProposalBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), proposal: z.unknown() });
 const ProposalPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
+const WorkspaceApprovalTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
+const WorkspaceApprovalBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), approval: z.unknown() });
+const WorkspaceApprovalPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
 });
@@ -506,6 +516,14 @@ function canWriteCrm(session: AccessSession) {
 
 function proposalTenantForSession(session: AccessSession, requestedTenantId?: string) {
   return crmTenantForSession(session, requestedTenantId);
+}
+
+function workspaceApprovalTenantForSession(session: AccessSession, requestedTenantId?: string) {
+  return crmTenantForSession(session, requestedTenantId);
+}
+
+function canDecideWorkspaceApprovals(session: AccessSession) {
+  return session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin";
 }
 
 await app.register(cors, {
@@ -1108,6 +1126,92 @@ app.delete("/api/proposals/:proposalId", async (request, reply) => {
     provider_called: false,
     outbound_action_executed: false,
     public_exposure_changed: false,
+  };
+});
+
+app.get("/api/workspace-approvals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = WorkspaceApprovalTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = workspaceApprovalTenantForSession(session, parsed.data.tenant_id);
+  const document = await getWorkspaceApprovalDocument(tenantId, session.id);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    can_write: canWriteCrm(session),
+    can_decide: canDecideWorkspaceApprovals(session),
+    document: publicWorkspaceApprovalDocument(document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+    approval_execution_implemented: false,
+  };
+});
+
+app.post("/api/workspace-approvals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Creating approval requests requires workspace member access." });
+  const parsed = WorkspaceApprovalBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = workspaceApprovalTenantForSession(session, parsed.data.tenant_id);
+  const result = await createWorkspaceApproval({ tenantId, approval: parsed.data.approval, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    approval: result.result,
+    document: publicWorkspaceApprovalDocument(result.document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+    approval_execution_implemented: false,
+  };
+});
+
+app.post("/api/workspace-approvals/:approvalId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canDecideWorkspaceApprovals(session)) return reply.status(403).send({ ok: false, error: "Deciding approval requests requires owner or admin access." });
+  const { approvalId } = request.params as { approvalId: string };
+  const parsed = WorkspaceApprovalPatchBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = workspaceApprovalTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await decideWorkspaceApproval({ tenantId, approvalId, patch: parsed.data.patch, actor: session.id });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      approval: result.result,
+      document: publicWorkspaceApprovalDocument(result.document),
+      provider_called: false,
+      outbound_action_executed: false,
+      public_exposure_changed: false,
+      approval_execution_implemented: false,
+    };
+  } catch (error) {
+    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Workspace approval not found." });
+  }
+});
+
+app.delete("/api/workspace-approvals/:approvalId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canDecideWorkspaceApprovals(session)) return reply.status(403).send({ ok: false, error: "Deleting approval requests requires owner or admin access." });
+  const { approvalId } = request.params as { approvalId: string };
+  const parsed = WorkspaceApprovalTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = workspaceApprovalTenantForSession(session, parsed.data.tenant_id);
+  const result = await deleteWorkspaceApproval({ tenantId, approvalId, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    deleted: result.result,
+    document: publicWorkspaceApprovalDocument(result.document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+    approval_execution_implemented: false,
   };
 });
 

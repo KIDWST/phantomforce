@@ -27,6 +27,13 @@ import {
   proposalServerAvailable,
   updateProposal as updateServerProposal,
 } from "./proposalpipeline.js?v=phantom-live-20260713-247";
+import {
+  approvalServerAvailable,
+  createWorkspaceApproval as createServerWorkspaceApproval,
+  decideWorkspaceApproval as decideServerWorkspaceApproval,
+  deleteWorkspaceApproval as deleteServerWorkspaceApproval,
+  loadWorkspaceApprovals,
+} from "./approvalpipeline.js?v=phantom-live-20260713-247";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -53,6 +60,7 @@ const LOCAL_CORE_WORKERS = [
 const MEMORY_DAY = 86400000;
 const crmRuntime = { state: "idle", tenant: "", leads: [], canWrite: false, error: "" };
 const proposalRuntime = { state: "idle", tenant: "", proposals: [], canWrite: false, error: "" };
+const approvalRuntime = { state: "idle", tenant: "", approvals: [], canWrite: false, canDecide: false, error: "" };
 
 async function loadWorkerRuntime() {
   if (workerRuntime.state === "loading") return;
@@ -185,6 +193,81 @@ function proposalRecord(input) {
     setupSlotId: input.setupSlotId || "",
     updated: input.updated || new Date().toISOString(),
   };
+}
+
+function applyApprovalPayload(payload) {
+  const document = payload?.document;
+  if (!document?.tenantId || !Array.isArray(document.approvals)) return false;
+  approvalRuntime.state = "ready";
+  approvalRuntime.tenant = document.tenantId;
+  approvalRuntime.approvals = document.approvals;
+  approvalRuntime.canWrite = payload.can_write !== false;
+  approvalRuntime.canDecide = payload.can_decide !== false;
+  approvalRuntime.error = "";
+  return true;
+}
+
+function ensureApprovalRuntime(rerender) {
+  const tenant = currentTenantId();
+  if (!approvalServerAvailable()) {
+    approvalRuntime.state = "local";
+    approvalRuntime.tenant = tenant;
+    approvalRuntime.approvals = [];
+    approvalRuntime.canWrite = false;
+    approvalRuntime.canDecide = false;
+    return;
+  }
+  if ((approvalRuntime.state === "ready" || approvalRuntime.state === "loading") && approvalRuntime.tenant === tenant) return;
+  approvalRuntime.state = "loading";
+  approvalRuntime.tenant = tenant;
+  approvalRuntime.error = "";
+  loadWorkspaceApprovals()
+    .then((payload) => { applyApprovalPayload(payload); rerender?.(); })
+    .catch((error) => {
+      approvalRuntime.state = "error";
+      approvalRuntime.error = error?.message || "Server approvals are unavailable.";
+      rerender?.();
+    });
+}
+
+function usingServerApprovals() {
+  return approvalRuntime.state === "ready" && approvalRuntime.tenant === currentTenantId();
+}
+
+function approvalRecord(input) {
+  return {
+    id: input.id || uid("app"),
+    ws: input.ws || (currentWs() === "phantomforce" ? "phantomforce" : currentWs()),
+    type: input.type || "workspace-approval",
+    title: input.title || "Approval request",
+    detail: input.detail || "",
+    ref: input.ref || "",
+    status: input.status || "pending",
+    requestedBy: input.requestedBy || "Workspace",
+    at: input.at || new Date().toISOString(),
+    ownerNotes: input.ownerNotes || "",
+    decision: input.decision || "",
+  };
+}
+
+async function queueWorkspaceApproval(approval, rerender, activity) {
+  const record = approvalRecord(approval);
+  if (approvalServerAvailable()) {
+    try {
+      const payload = await createServerWorkspaceApproval(record);
+      applyApprovalPayload(payload);
+      pushActivity(activity?.agent || "Approval Desk", activity?.message || `queued server approval: ${record.title}.`, record.ws);
+      store.save(); rerender?.();
+      return { ok: true, serverBacked: true, approval: payload.approval || record };
+    } catch (error) {
+      approvalRuntime.state = "error";
+      approvalRuntime.error = error?.message || "Server approval create failed.";
+    }
+  }
+  store.state.approvals.unshift(record);
+  pushActivity(activity?.agent || "Approval Desk", activity?.message || `queued local approval: ${record.title}.`, record.ws);
+  store.save(); rerender?.();
+  return { ok: true, serverBacked: false, approval: record };
 }
 
 function bindActions(root, handlers) {
@@ -563,11 +646,13 @@ function renderReviews(el, rerender) {
       pushActivity("Review Desk", `logged a received review from ${r.client}.`, r.ws);
       store.save(); rerender();
     },
-    "queue-publish": (id) => {
+    "queue-publish": async (id) => {
       const r = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: r.ws, type: "publish-review", title: `Publish ${r.client} testimonial to site`, detail: "Publishing adds this quote to the site's reviews wall.", ref: r.id, status: "pending", requestedBy: "Review Desk", at: new Date().toISOString() });
-      pushActivity("Review Desk", `queued publish approval for ${r.client}'s testimonial.`, r.ws);
-      store.save(); rerender();
+      await queueWorkspaceApproval(
+        { ws: r.ws, type: "publish-review", title: `Publish ${r.client} testimonial to site`, detail: "Publishing adds this quote to the site's reviews wall.", ref: r.id, requestedBy: "Review Desk" },
+        rerender,
+        { agent: "Review Desk", message: `queued publish approval for ${r.client}'s testimonial.` },
+      );
     },
   });
 }
@@ -611,11 +696,13 @@ function renderBookings(el, rerender) {
       if (b) pushActivity("Booking Coordinator", `removed booking draft: ${b.client}.`, b.ws);
       store.save(); rerender();
     },
-    queue: (id) => {
+    queue: async (id) => {
       const b = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: b.ws, type: "booking", title: `Approve booking: ${b.type} with ${b.client}`, detail: `${fmtDateTime(b.when)} · ${b.duration} min · ${b.location}`, ref: b.id, status: "pending", requestedBy: "Booking Coordinator", at: new Date().toISOString() });
-      pushActivity("Booking Coordinator", `queued booking approval for ${b.client}.`, b.ws);
-      store.save(); rerender();
+      await queueWorkspaceApproval(
+        { ws: b.ws, type: "booking", title: `Approve booking: ${b.type} with ${b.client}`, detail: `${fmtDateTime(b.when)} · ${b.duration} min · ${b.location}`, ref: b.id, requestedBy: "Booking Coordinator" },
+        rerender,
+        { agent: "Booking Coordinator", message: `queued booking approval for ${b.client}.` },
+      );
     },
     confirm: (id) => { const b = find(id); b.status = "confirmed"; pushActivity("Booking Coordinator", `confirmed ${b.type.toLowerCase()} with ${b.client}.`, b.ws); store.save(); rerender(); },
   });
@@ -675,11 +762,13 @@ function renderMedia(el, rerender) {
       if (m) pushActivity("Media Factory", `removed media item: ${m.title}.`, m.ws);
       store.save(); rerender();
     },
-    "request-gen": (id) => {
+    "request-gen": async (id) => {
       const m = find(id);
-      store.state.approvals.unshift({ id: uid("app"), ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One paid generation pass. Uses paid credits — approval required.", ref: m.id, status: "pending", requestedBy: "Media Factory", at: new Date().toISOString() });
-      pushActivity("Media Factory", `queued generation approval for ${m.title}.`, m.ws);
-      store.save(); rerender();
+      await queueWorkspaceApproval(
+        { ws: m.ws, type: "media-generation", title: `Run paid generation: ${m.title}`, detail: "One paid generation pass. Uses paid credits — approval required.", ref: m.id, requestedBy: "Media Factory" },
+        rerender,
+        { agent: "Media Factory", message: `queued generation approval for ${m.title}.` },
+      );
     },
     delivered: (id) => { const m = find(id); m.status = "generated"; m.updated = new Date().toISOString(); pushActivity("Delivery Manager", `marked generated: ${m.title}.`, m.ws); store.save(); rerender(); },
   });
@@ -3028,16 +3117,48 @@ async function hydrateServerApprovals(el, rerender) {
   });
 }
 
+function applyApprovalSideEffects(a, approved, opts = {}) {
+  if (!a) return;
+  const { changesRequested = false, notes = "" } = opts;
+  if (approved && !changesRequested) {
+    if (a.type === "publish-review") { const r = store.state.reviews.find((x) => x.id === a.ref); if (r) r.status = "published-ready"; }
+    if (a.type === "send-message") { const l = store.state.leads.find((x) => x.id === a.ref); if (l) { l.status = "follow-up"; l.next = "Message approved — send-ready in your outbox"; } }
+    if (a.type === "publish-page") { const s = store.state.sites.find((x) => x.id === a.ref); if (s) s.status = "approved-to-publish"; }
+    if (a.type === "media-generation") { const m = store.state.media.find((x) => x.id === a.ref); if (m) m.status = "generation-approved"; }
+    if (a.type === "booking") { const b = store.state.bookings.find((x) => x.id === a.ref); if (b) b.status = "approved"; }
+    if (a.type === "automation") {
+      const agent = store.state.agents.find((x) => x.id === a.ref);
+      if (agent) { agent.status = "active"; agent.updatedAt = new Date().toISOString(); }
+    }
+  } else if (!approved && !changesRequested && a.type === "automation") {
+    const agent = store.state.agents.find((x) => x.id === a.ref);
+    if (agent) { agent.status = "blocked"; agent.updatedAt = new Date().toISOString(); }
+  }
+  const verb = changesRequested ? `requested changes on (${approved ? "approve" : "disapprove"} path)` : (approved ? "approved" : "declined");
+  pushActivity("Command Router", `${verb}: ${a.title}${notes ? ` — "${notes.slice(0, 80)}"` : ""}`, a.ws);
+  store.save();
+}
+
 function renderApprovals(el, rerender) {
-  const pending = visible(store.state.approvals).filter((a) => a.status === "pending");
-  const done = visible(store.state.approvals).filter((a) => a.status !== "pending").slice(0, 6);
+  ensureApprovalRuntime(rerender);
+  const serverBacked = usingServerApprovals();
+  const approvals = serverBacked ? approvalRuntime.approvals : visible(store.state.approvals);
+  const pending = approvals.filter((a) => a.status === "pending");
+  const done = approvals.filter((a) => a.status !== "pending").slice(0, 6);
+  const approvalStatus = serverBacked
+    ? "Server approvals saved"
+    : approvalRuntime.state === "loading"
+      ? "Syncing server approvals..."
+      : approvalRuntime.state === "error"
+        ? `Local fallback: ${approvalRuntime.error}`
+        : "Local approval queue";
   el.innerHTML = `
-    <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, deploys. Drafting never waits on you. Workers prepare — you release, send back for changes, or say no.</p></div>
+    <div class="ws-toolbar"><p class="ws-note">Only outward-facing moves land here: sends, bookings, publishing, paid generation, invoices, deploys. Drafting never waits on you. Workers prepare — you release, send back for changes, or say no. <b>${esc(approvalStatus)}</b></p></div>
     ${isDatabaseSession() ? `<div data-server-approvals></div>` : ""}
     ${pending.length ? `<div class="stack">
       ${pending.map((a) => `
         <article class="record record-wide approval-card">
-          <button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval request">×</button>
+          <button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval request" ${serverBacked && !approvalRuntime.canDecide ? "disabled" : ""}>×</button>
           <div class="record-top">${wsTag(a.ws)}<h4>${esc(a.title)}</h4><i class="record-time">${ago(a.at)}</i></div>
           <p class="record-notes">${esc(a.detail)}</p>
           <p class="record-sub">Prepared by ${esc(a.requestedBy)} · goes to: ${esc(a.ws)} · action: ${esc(a.type)}</p>
@@ -3052,24 +3173,77 @@ function renderApprovals(el, rerender) {
             </div>
           </form>` : `
           <div class="record-actions">
-            <button class="btn btn-good" data-act="approve" data-id="${a.id}">Approve</button>
-            <button class="btn btn-quiet" data-act="approve-changes" data-id="${a.id}">Approve with changes</button>
-            <button class="btn btn-quiet" data-act="decline" data-id="${a.id}">Disapprove</button>
-            <button class="btn btn-quiet" data-act="decline-changes" data-id="${a.id}">Disapprove with changes</button>
+            <button class="btn btn-good" data-act="approve" data-id="${a.id}" ${serverBacked && !approvalRuntime.canDecide ? "disabled" : ""}>Approve</button>
+            <button class="btn btn-quiet" data-act="approve-changes" data-id="${a.id}" ${serverBacked && !approvalRuntime.canDecide ? "disabled" : ""}>Approve with changes</button>
+            <button class="btn btn-quiet" data-act="decline" data-id="${a.id}" ${serverBacked && !approvalRuntime.canDecide ? "disabled" : ""}>Disapprove</button>
+            <button class="btn btn-quiet" data-act="decline-changes" data-id="${a.id}" ${serverBacked && !approvalRuntime.canDecide ? "disabled" : ""}>Disapprove with changes</button>
           </div>`}
         </article>`).join("")}
     </div>` : empty("Queue is clear. Nothing is waiting for approval.")}
     ${done.length ? `<h3 class="ws-subhead">Recent decisions</h3><div class="stack">
-      ${done.map((a) => `<article class="record record-row"><button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval record">×</button>${wsTag(a.ws)}<h4>${esc(a.title)}</h4>${chip(a.status)}${a.ownerNotes ? `<p class="record-sub">Owner notes: ${esc(a.ownerNotes)}</p>` : ""}</article>`).join("")}
+      ${done.map((a) => `<article class="record record-row"><button class="record-x" data-act="remove" data-id="${a.id}" aria-label="Remove approval record" ${serverBacked && !approvalRuntime.canDecide ? "disabled" : ""}>×</button>${wsTag(a.ws)}<h4>${esc(a.title)}</h4>${chip(a.status)}${a.ownerNotes ? `<p class="record-sub">Owner notes: ${esc(a.ownerNotes)}</p>` : ""}</article>`).join("")}
     </div>` : ""}`;
+  const find = (id) => (serverBacked ? approvalRuntime.approvals : store.state.approvals).find((a) => a.id === id);
+  const decideApproval = async (id, approved, opts = {}) => {
+    const a = find(id);
+    if (!a || a.status !== "pending") return;
+    const { changesRequested = false, notes = "" } = opts;
+    const patch = {
+      status: changesRequested ? "changes-requested" : (approved ? "approved" : "declined"),
+      resolvedAt: new Date().toISOString(),
+      ownerNotes: notes || "",
+      decision: changesRequested ? (approved ? "approve-with-changes" : "disapprove-with-changes") : (approved ? "approve" : "disapprove"),
+    };
+    if (serverBacked && !approvalRuntime.canDecide) {
+      approvalRuntime.error = "Owner or admin access is required to decide server approvals.";
+      rerender();
+      return;
+    }
+    if (serverBacked && approvalRuntime.canDecide) {
+      try {
+        const payload = await decideServerWorkspaceApproval(id, patch);
+        applyApprovalPayload(payload);
+        applyApprovalSideEffects(a, approved, opts);
+        rerender();
+        return;
+      } catch (error) {
+        approvalRuntime.state = "error";
+        approvalRuntime.error = error?.message || "Server approval decision failed.";
+        rerender();
+        return;
+      }
+    }
+    resolveApproval(id, approved, opts);
+    rerender();
+  };
   bindActions(el, {
-    approve: (id) => { resolveApproval(id, true); rerender(); },
-    decline: (id) => { resolveApproval(id, false); rerender(); },
+    approve: (id) => { decideApproval(id, true); },
+    decline: (id) => { decideApproval(id, false); },
     "approve-changes": (id) => { approvalChangesFormOpen.add(id); rerender(); },
     "decline-changes": (id) => { approvalChangesFormOpen.add(id); rerender(); },
     "cancel-changes": (id) => { approvalChangesFormOpen.delete(id); rerender(); },
-    remove: (id) => {
-      const a = store.state.approvals.find((item) => item.id === id);
+    remove: async (id) => {
+      const a = find(id);
+      if (serverBacked && !approvalRuntime.canDecide) {
+        approvalRuntime.error = "Owner or admin access is required to remove server approvals.";
+        rerender();
+        return;
+      }
+      if (serverBacked && approvalRuntime.canDecide) {
+        try {
+          const payload = await deleteServerWorkspaceApproval(id);
+          applyApprovalPayload(payload);
+          approvalChangesFormOpen.delete(id);
+          if (a) pushActivity("Approval Desk", `removed server approval request: ${a.title}.`, a.ws);
+          store.save(); rerender();
+          return;
+        } catch (error) {
+          approvalRuntime.state = "error";
+          approvalRuntime.error = error?.message || "Server approval delete failed.";
+          rerender();
+          return;
+        }
+      }
       store.state.approvals = store.state.approvals.filter((item) => item.id !== id);
       approvalChangesFormOpen.delete(id);
       if (a) pushActivity("Approval Desk", `removed approval request: ${a.title}.`, a.ws);
@@ -3077,13 +3251,13 @@ function renderApprovals(el, rerender) {
     },
   });
   el.querySelectorAll("[data-act-changes-form]").forEach((form) => {
-    form.onsubmit = (event) => {
+    form.onsubmit = async (event) => {
       event.preventDefault();
       const id = form.dataset.actChangesForm;
       const notes = form.querySelector("[data-changes-notes]")?.value.trim();
       const approved = event.submitter?.dataset.changesDecision === "approve";
       if (!notes) return;
-      resolveApproval(id, approved, { changesRequested: true, notes });
+      await decideApproval(id, approved, { changesRequested: true, notes });
       approvalChangesFormOpen.delete(id);
       rerender();
     };

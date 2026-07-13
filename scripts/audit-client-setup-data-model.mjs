@@ -26,9 +26,12 @@ const files = {
   crmClient: "app/js/crmpipeline.js",
   proposalStore: "server/src/proposals/proposal-store.ts",
   proposalClient: "app/js/proposalpipeline.js",
+  workspaceApprovalStore: "server/src/workspace-approvals/workspace-approval-store.ts",
+  workspaceApprovalClient: "app/js/approvalpipeline.js",
   staticServer: "ops/admin-live/admin-static-server.mjs",
   crmPipelineTest: "scripts/test-crm-pipeline.mjs",
   proposalPipelineTest: "scripts/test-proposal-pipeline.mjs",
+  workspaceApprovalTest: "scripts/test-workspace-approvals.mjs",
   authBoundaryTest: "scripts/test-auth-boundaries.mjs",
   pageWorkerTest: "scripts/test-page-worker.mjs",
 };
@@ -75,6 +78,9 @@ const hasServerLeadsPipelineModel =
 const hasServerProposalPipelineModel =
   /model\s+(Proposal|Estimate|Quote)\s+\{/u.test(src.schema)
   || (/ProposalDocument/u.test(src.proposalStore) && /\/api\/proposals/u.test(src.index) && /createProposal/u.test(src.proposalClient));
+const hasServerWorkspaceApprovalModel =
+  /model\s+Approval\s+\{/u.test(src.schema)
+  || (/WorkspaceApprovalDocument/u.test(src.workspaceApprovalStore) && /\/api\/workspace-approvals/u.test(src.index) && /createWorkspaceApproval/u.test(src.workspaceApprovalClient));
 const hasServicePackageModel =
   /model\s+(Service|Package|Offer)\s+\{/u.test(src.schema)
   || /\bservicesPackages\b/u.test(src.clientSetupStore);
@@ -187,6 +193,13 @@ const evidence = {
       [files.proposalStore, files.index, files.proposalClient, files.workspaces, files.proposalPipelineTest],
     ),
     finding(
+      "PERSIST-WORKSPACE-APPROVALS",
+      "real_server_backed",
+      "Review, booking, media-generation, and workspace approval cards now have tenant-scoped server persistence with status-only decisions.",
+      "workspace-approval-store persists approval type, ref, status, owner notes, decision, and audit entries; Approval-producing widgets and the Approvals page call /api/workspace-approvals when signed in.",
+      [files.workspaceApprovalStore, files.index, files.workspaceApprovalClient, files.workspaces, files.workspaceApprovalTest],
+    ),
+    finding(
       "PERSIST-CUSTOMIZATION",
       "mixed_real_and_fallback",
       "Module customization exists server-side and complements, but does not replace, the dedicated client setup records.",
@@ -271,12 +284,14 @@ const evidence = {
     blockersVisible: "ready_in_setup_console_and_audit_output",
     remainingServerCrmPipeline: hasServerLeadsPipelineModel ? "server_json_backed_foundation" : "blocked_next_product_step",
     remainingProposalPersistence: hasServerProposalPipelineModel ? "server_json_backed_foundation" : "blocked_next_product_step",
+    remainingWorkspaceApprovalPersistence: hasServerWorkspaceApprovalModel ? "server_json_backed_foundation_status_only" : "blocked_next_product_step",
   },
   blockers,
 };
 
 assert.ok(hasServerLeadsPipelineModel, "Audit should prove server-backed CRM lead/follow-up persistence exists.");
 assert.ok(hasServerProposalPipelineModel, "Audit should prove server-backed proposal persistence exists.");
+assert.ok(hasServerWorkspaceApprovalModel, "Audit should prove server-backed workspace approval persistence exists.");
 assert.equal(evidence.product02Readiness.moduleEnableDisable, "partially_ready_via_customization_modules");
 
 console.log(JSON.stringify({ ok: true, ...evidence }, null, 2));
