@@ -24,8 +24,11 @@ const files = {
   clientSetupUi: "app/js/clientsetup.js",
   crmStore: "server/src/crm/crm-pipeline-store.ts",
   crmClient: "app/js/crmpipeline.js",
+  proposalStore: "server/src/proposals/proposal-store.ts",
+  proposalClient: "app/js/proposalpipeline.js",
   staticServer: "ops/admin-live/admin-static-server.mjs",
   crmPipelineTest: "scripts/test-crm-pipeline.mjs",
+  proposalPipelineTest: "scripts/test-proposal-pipeline.mjs",
   authBoundaryTest: "scripts/test-auth-boundaries.mjs",
   pageWorkerTest: "scripts/test-page-worker.mjs",
 };
@@ -69,6 +72,9 @@ const hasBusinessTemplateFields =
 const hasServerLeadsPipelineModel =
   /model\s+(Lead|Prospect|Deal|Pipeline|FollowUp)\s+\{/u.test(src.schema)
   || (/CrmPipelineDocument/u.test(src.crmStore) && /\/api\/crm\/leads/u.test(src.index) && /persistCrmProspectLanes/u.test(src.crmClient));
+const hasServerProposalPipelineModel =
+  /model\s+(Proposal|Estimate|Quote)\s+\{/u.test(src.schema)
+  || (/ProposalDocument/u.test(src.proposalStore) && /\/api\/proposals/u.test(src.index) && /createProposal/u.test(src.proposalClient));
 const hasServicePackageModel =
   /model\s+(Service|Package|Offer)\s+\{/u.test(src.schema)
   || /\bservicesPackages\b/u.test(src.clientSetupStore);
@@ -174,6 +180,13 @@ const evidence = {
       [files.crmStore, files.index, files.crmClient, files.workspaces, files.pageworker, files.crmPipelineTest],
     ),
     finding(
+      "PERSIST-PROPOSALS",
+      "real_server_backed",
+      "Proposal Forge drafts now have tenant-scoped server persistence and stay linked to CRM proposal conversion.",
+      "proposal-store persists proposal draft status, package, price, retainer, scope, lead reference, setup slot reference, and audit entries; Proposal Forge calls /api/proposals routes when signed in.",
+      [files.proposalStore, files.index, files.proposalClient, files.workspaces, files.proposalPipelineTest],
+    ),
+    finding(
       "PERSIST-CUSTOMIZATION",
       "mixed_real_and_fallback",
       "Module customization exists server-side and complements, but does not replace, the dedicated client setup records.",
@@ -239,7 +252,7 @@ const evidence = {
   realVsSampleStatic: [
     {
       real: ["User/Org/Membership auth", "invitations", "org switching", "plans/entitlements", "approvals", "tasks", "sites/publishing", "Asset Cloud", "Organization Pulse graph"],
-      localOnly: ["fallback workspaces", "local proposals", "local PACKAGES/RETAINERS", "local media/content scratch state"],
+      localOnly: ["fallback workspaces", "local PACKAGES/RETAINERS", "local media/content scratch state"],
       explicitlyNotLive: ["social analytics without OAuth/imported reports", "external outreach", "public publishing", "paid media generation"],
     },
   ],
@@ -257,11 +270,13 @@ const evidence = {
     nextSetupAction: hasServerClientSetupProfile && hasClientSetupUi ? "ready_setup_console" : "blocked",
     blockersVisible: "ready_in_setup_console_and_audit_output",
     remainingServerCrmPipeline: hasServerLeadsPipelineModel ? "server_json_backed_foundation" : "blocked_next_product_step",
+    remainingProposalPersistence: hasServerProposalPipelineModel ? "server_json_backed_foundation" : "blocked_next_product_step",
   },
   blockers,
 };
 
 assert.ok(hasServerLeadsPipelineModel, "Audit should prove server-backed CRM lead/follow-up persistence exists.");
+assert.ok(hasServerProposalPipelineModel, "Audit should prove server-backed proposal persistence exists.");
 assert.equal(evidence.product02Readiness.moduleEnableDisable, "partially_ready_via_customization_modules");
 
 console.log(JSON.stringify({ ok: true, ...evidence }, null, 2));

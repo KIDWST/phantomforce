@@ -20,6 +20,13 @@ import {
   loadCrmLeads,
   updateCrmLead as updateServerCrmLead,
 } from "./crmpipeline.js?v=phantom-live-20260713-247";
+import {
+  createProposal as createServerProposal,
+  deleteProposal as deleteServerProposal,
+  loadProposals,
+  proposalServerAvailable,
+  updateProposal as updateServerProposal,
+} from "./proposalpipeline.js?v=phantom-live-20260713-247";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -45,6 +52,7 @@ const LOCAL_CORE_WORKERS = [
 ];
 const MEMORY_DAY = 86400000;
 const crmRuntime = { state: "idle", tenant: "", leads: [], canWrite: false, error: "" };
+const proposalRuntime = { state: "idle", tenant: "", proposals: [], canWrite: false, error: "" };
 
 async function loadWorkerRuntime() {
   if (workerRuntime.state === "loading") return;
@@ -120,6 +128,62 @@ function leadRecord(input) {
     notes: input.notes || "",
     proposalId: input.proposalId || null,
     segment: input.segment || "",
+  };
+}
+
+function applyProposalPayload(payload) {
+  const document = payload?.document;
+  if (!document?.tenantId || !Array.isArray(document.proposals)) return false;
+  proposalRuntime.state = "ready";
+  proposalRuntime.tenant = document.tenantId;
+  proposalRuntime.proposals = document.proposals;
+  proposalRuntime.canWrite = payload.can_write !== false;
+  proposalRuntime.error = "";
+  return true;
+}
+
+function ensureProposalRuntime(rerender) {
+  const tenant = currentTenantId();
+  if (!proposalServerAvailable()) {
+    proposalRuntime.state = "local";
+    proposalRuntime.tenant = tenant;
+    proposalRuntime.proposals = [];
+    proposalRuntime.canWrite = false;
+    return;
+  }
+  if ((proposalRuntime.state === "ready" || proposalRuntime.state === "loading") && proposalRuntime.tenant === tenant) return;
+  proposalRuntime.state = "loading";
+  proposalRuntime.tenant = tenant;
+  proposalRuntime.error = "";
+  loadProposals()
+    .then((payload) => { applyProposalPayload(payload); rerender?.(); })
+    .catch((error) => {
+      proposalRuntime.state = "error";
+      proposalRuntime.error = error?.message || "Server proposals are unavailable.";
+      rerender?.();
+    });
+}
+
+function usingServerProposals() {
+  return proposalRuntime.state === "ready" && proposalRuntime.tenant === currentTenantId();
+}
+
+function proposalRecord(input) {
+  return {
+    id: input.id || uid("prop"),
+    ws: input.ws || (currentWs() === "phantomforce" ? "phantomforce" : currentWs()),
+    client: input.client || "New client",
+    contact: input.contact || input.client || "New client",
+    pkg: input.pkg || "core",
+    price: Number(input.price || 1500),
+    retainer: input.retainer || "keeper",
+    status: input.status || "draft",
+    pain: input.pain || "Capture the pain in one sentence.",
+    scope: Array.isArray(input.scope) && input.scope.length ? input.scope : ["Build scoped to the outcome", "Lead capture + follow-up wiring", "Review engine", "30-day watch"],
+    timeline: input.timeline || "2 weeks build, launch week 3",
+    leadId: input.leadId || null,
+    setupSlotId: input.setupSlotId || "",
+    updated: input.updated || new Date().toISOString(),
   };
 }
 
@@ -202,6 +266,27 @@ function renderLeads(el, rerender) {
     store.save();
     rerender();
   };
+  const updateLinkedProposal = async (lead, status) => {
+    if (!lead?.proposalId) return true;
+    if (proposalServerAvailable()) {
+      try {
+        const payload = await updateServerProposal(lead.proposalId, { status });
+        applyProposalPayload(payload);
+        return true;
+      } catch (error) {
+        proposalRuntime.state = "error";
+        proposalRuntime.error = error?.message || "Server proposal update failed.";
+        rerender();
+        return false;
+      }
+    }
+    const p = store.state.proposals.find((x) => x.id === lead.proposalId);
+    if (p) {
+      p.status = status;
+      p.updated = new Date().toISOString();
+    }
+    return true;
+  };
   bindActions(el, {
     add: async () => {
       const name = prompt("Lead name (person or business):");
@@ -249,14 +334,30 @@ function renderLeads(el, rerender) {
       const l = find(id);
       if (!l) return;
       const pkg = PACKAGES.find((p) => p.price >= l.value) || PACKAGES[2];
-      const p = { id: uid("prop"), ws: l.ws, client: l.company, contact: l.name, pkg: pkg.id, price: pkg.price, retainer: "keeper", status: "draft", pain: l.notes || "Capture the pain in one sentence.", scope: ["Build scoped to the outcome", "Lead capture + follow-up wiring", "Review engine", "30-day watch"], timeline: "2 weeks build, launch week 3", updated: new Date().toISOString() };
-      store.state.proposals.unshift(p);
-      pushActivity("Proposal Forge", `opened a ${pkg.name} draft for ${l.company}.`, l.ws);
+      const proposal = proposalRecord({ ws: l.ws, client: l.company, contact: l.name, pkg: pkg.id, price: pkg.price, retainer: "keeper", status: "draft", pain: l.notes || "Capture the pain in one sentence.", leadId: l.id });
+      let savedProposal = proposal;
+      let savedOnServer = false;
+      if (proposalServerAvailable()) {
+        try {
+          const payload = await createServerProposal(proposal);
+          applyProposalPayload(payload);
+          savedProposal = payload.proposal || proposal;
+          savedOnServer = true;
+        } catch (error) {
+          proposalRuntime.state = "error";
+          proposalRuntime.error = error?.message || "Server proposal create failed.";
+          rerender();
+          return;
+        }
+      } else {
+        store.state.proposals.unshift(proposal);
+      }
+      pushActivity("Proposal Forge", `opened a ${savedOnServer ? "server-backed " : "local "}${pkg.name} draft for ${l.company}.`, l.ws);
       store.save();
-      await updateLead(l, { status: "proposal", proposalId: p.id, next: "Proposal drafted — review it in Proposal Forge" });
+      await updateLead(l, { status: "proposal", proposalId: savedProposal.id, next: "Proposal drafted — review it in Proposal Forge" });
     },
-    won: async (id) => { const l = find(id); if (!l) return; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Client Pipeline", `marked ${l.company} as won.`, l.ws); store.save(); await updateLead(l, { status: "won", next: "Kick off delivery" }); },
-    lost: async (id) => { const l = find(id); if (!l) return; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "lost"; store.save(); await updateLead(l, { status: "lost", next: "Re-engage in 90 days" }); },
+    won: async (id) => { const l = find(id); if (!l) return; if (!await updateLinkedProposal(l, "won")) return; pushActivity("Client Pipeline", `marked ${l.company} as won.`, l.ws); store.save(); await updateLead(l, { status: "won", next: "Kick off delivery" }); },
+    lost: async (id) => { const l = find(id); if (!l) return; if (!await updateLinkedProposal(l, "lost")) return; store.save(); await updateLead(l, { status: "lost", next: "Re-engage in 90 days" }); },
     revive: (id) => { const l = find(id); updateLead(l, { status: "follow-up", next: "Warm re-engage with a proof point" }); },
     review: (id) => {
       const l = find(id);
@@ -269,8 +370,18 @@ function renderLeads(el, rerender) {
 
 /* ============================ PROPOSAL FORGE ============================ */
 function renderProposals(el, rerender) {
-  const props = visible(store.state.proposals);
+  ensureProposalRuntime(rerender);
+  const serverBacked = usingServerProposals();
+  const props = serverBacked ? proposalRuntime.proposals : visible(store.state.proposals);
+  const proposalStatus = serverBacked
+    ? "Server proposals saved"
+    : proposalRuntime.state === "loading"
+      ? "Syncing server proposals..."
+      : proposalRuntime.state === "error"
+        ? `Local fallback: ${proposalRuntime.error}`
+        : "Local draft proposals";
   const proposalText = (p) => {
+    if (!p) return "";
     const pkg = PACKAGES.find((x) => x.id === p.pkg);
     const ret = RETAINERS.find((x) => x.id === p.retainer);
     return [
@@ -285,8 +396,8 @@ function renderProposals(el, rerender) {
   };
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Offer ladder: ${PACKAGES.map((p) => `${p.name} ${fmtMoney(p.price)}`).join(" · ")} — retainers ${RETAINERS.map((r) => r.range || fmtMoney(r.price) + "/mo").join(" · ")}.</p>
-      <button class="btn btn-primary" data-act="add">+ New proposal</button>
+      <p class="ws-note">Offer ladder: ${PACKAGES.map((p) => `${p.name} ${fmtMoney(p.price)}`).join(" · ")} — retainers ${RETAINERS.map((r) => r.range || fmtMoney(r.price) + "/mo").join(" · ")}. <b>${esc(proposalStatus)}</b></p>
+      <button class="btn btn-primary" data-act="add" ${proposalRuntime.state === "loading" || (serverBacked && !proposalRuntime.canWrite) ? "disabled" : ""}>+ New proposal</button>
     </div>
     <div class="stack">
       ${props.map((p) => {
@@ -294,7 +405,7 @@ function renderProposals(el, rerender) {
         const ret = RETAINERS.find((x) => x.id === p.retainer);
         return `
         <article class="record record-wide">
-          <button class="record-x" data-act="remove" data-id="${p.id}" aria-label="Remove proposal">×</button>
+          <button class="record-x" data-act="remove" data-id="${p.id}" aria-label="Remove proposal" ${serverBacked && !proposalRuntime.canWrite ? "disabled" : ""}>×</button>
           <div class="record-top">
             ${wsTag(p.ws)}
             <h4>${esc(p.client)} ${chip(p.status)}</h4>
@@ -305,36 +416,99 @@ function renderProposals(el, rerender) {
           <ul class="record-list">${p.scope.map((x) => `<li>${esc(x)}</li>`).join("")}</ul>
           <div class="record-actions">
             <button class="btn" data-act="copy" data-id="${p.id}">Copy proposal</button>
-            ${p.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${p.id}">Mark send-ready</button>` : ""}
-            ${p.status === "sent-ready" ? `<button class="btn btn-good" data-act="won" data-id="${p.id}">Mark won</button><button class="btn btn-quiet" data-act="lost" data-id="${p.id}">Mark lost</button>` : ""}
-            ${p.status === "won" ? `<button class="btn" data-act="invoice" data-id="${p.id}">Mark invoice-ready</button>` : ""}
+            ${p.status === "draft" ? `<button class="btn btn-good" data-act="ready" data-id="${p.id}" ${serverBacked && !proposalRuntime.canWrite ? "disabled" : ""}>Mark send-ready</button>` : ""}
+            ${p.status === "sent-ready" ? `<button class="btn btn-good" data-act="won" data-id="${p.id}" ${serverBacked && !proposalRuntime.canWrite ? "disabled" : ""}>Mark won</button><button class="btn btn-quiet" data-act="lost" data-id="${p.id}" ${serverBacked && !proposalRuntime.canWrite ? "disabled" : ""}>Mark lost</button>` : ""}
+            ${p.status === "won" ? `<button class="btn" data-act="invoice" data-id="${p.id}" ${serverBacked && !proposalRuntime.canWrite ? "disabled" : ""}>Mark invoice-ready</button>` : ""}
             ${p.status === "invoice-ready" ? `<span class="hint-inline">Invoice-ready — payment connector not wired, tracked in Accounting.</span>` : ""}
           </div>
         </article>`;
       }).join("") || empty("No proposals yet. Convert a lead or ask Phantom AI to draft one.")}
     </div>`;
-  const find = (id) => store.state.proposals.find((p) => p.id === id);
+  const find = (id) => (serverBacked ? proposalRuntime.proposals : store.state.proposals).find((p) => p.id === id);
+  const clearLinkedLeadReferences = async (proposalId) => {
+    const leads = usingServerCrm() ? crmRuntime.leads : store.state.leads;
+    const linked = leads.filter((lead) => lead.proposalId === proposalId);
+    if (usingServerCrm() && crmRuntime.canWrite) {
+      for (const lead of linked) {
+        const payload = await updateServerCrmLead(lead.id, { proposalId: null, next: lead.status === "proposal" ? "Proposal draft removed — choose the next step" : lead.next });
+        applyCrmPayload(payload);
+      }
+      return;
+    }
+    linked.forEach((lead) => {
+      lead.proposalId = null;
+      if (lead.status === "proposal") lead.next = "Proposal draft removed — choose the next step";
+    });
+  };
+  const saveProposalPatch = async (proposal, patch, activity) => {
+    if (!proposal) return;
+    if (serverBacked && proposalRuntime.canWrite) {
+      try {
+        const payload = await updateServerProposal(proposal.id, patch);
+        applyProposalPayload(payload);
+        if (activity) pushActivity(activity.agent, activity.message, proposal.ws);
+        store.save(); rerender();
+        return;
+      } catch (error) {
+        proposalRuntime.state = "error";
+        proposalRuntime.error = error?.message || "Server proposal update failed.";
+        rerender();
+        return;
+      }
+    }
+    Object.assign(proposal, patch, { updated: new Date().toISOString() });
+    if (activity) pushActivity(activity.agent, activity.message, proposal.ws);
+    store.save(); rerender();
+  };
   bindActions(el, {
-    add: () => {
+    add: async () => {
       const client = prompt("Client / business name:");
       if (!client) return;
-      const p = { id: uid("prop"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), client: client.trim(), contact: client.trim(), pkg: "core", price: 1500, retainer: "keeper", status: "draft", pain: "Capture the pain in one sentence.", scope: ["Build scoped to the outcome", "Lead capture + follow-up wiring", "Review engine", "30-day watch"], timeline: "2 weeks build, launch week 3", updated: new Date().toISOString() };
-      store.state.proposals.unshift(p);
-      pushActivity("Proposal Forge", `opened a Core draft for ${client.trim()}.`);
+      const proposal = proposalRecord({ client: client.trim(), contact: client.trim(), pkg: "core", price: 1500, retainer: "keeper" });
+      if (serverBacked && proposalRuntime.canWrite) {
+        try {
+          const payload = await createServerProposal(proposal);
+          applyProposalPayload(payload);
+          pushActivity("Proposal Forge", `opened a server-backed Core draft for ${client.trim()}.`, proposal.ws);
+          store.save(); rerender();
+          return;
+        } catch (error) {
+          proposalRuntime.state = "error";
+          proposalRuntime.error = error?.message || "Server proposal create failed.";
+        }
+      }
+      store.state.proposals.unshift(proposal);
+      pushActivity("Proposal Forge", `opened a local Core draft for ${client.trim()}.`, proposal.ws);
       store.save(); rerender();
     },
     copy: (id, btn) => copyText(btn, proposalText(find(id))),
-    remove: (id) => {
+    remove: async (id) => {
       const p = find(id);
+      if (!p) return;
+      if (serverBacked && proposalRuntime.canWrite) {
+        try {
+          const payload = await deleteServerProposal(id);
+          applyProposalPayload(payload);
+          await clearLinkedLeadReferences(id);
+          pushActivity("Proposal Forge", `removed server proposal: ${p.client}.`, p.ws);
+          store.save(); rerender();
+          return;
+        } catch (error) {
+          proposalRuntime.state = "error";
+          proposalRuntime.error = error?.message || "Server proposal delete failed.";
+          rerender();
+          return;
+        }
+      }
       store.state.proposals = store.state.proposals.filter((item) => item.id !== id);
-      store.state.leads.forEach((lead) => { if (lead.proposalId === id) lead.proposalId = null; });
+      await clearLinkedLeadReferences(id);
       if (p) pushActivity("Proposal Forge", `removed proposal: ${p.client}.`, p.ws);
       store.save(); rerender();
     },
-    ready: (id) => { const p = find(id); p.status = "sent-ready"; p.updated = new Date().toISOString(); pushActivity("Proposal Forge", `moved ${p.client} to send-ready.`, p.ws); store.save(); rerender(); },
-    won: (id) => { const p = find(id); p.status = "won"; pushActivity("Offer Desk", `${p.client} proposal won — ${fmtMoney(p.price)}.`, p.ws); store.save(); rerender(); },
-    lost: (id) => { const p = find(id); p.status = "lost"; store.save(); rerender(); },
-    invoice: (id) => { const p = find(id); p.status = "invoice-ready"; pushActivity("Accounting Ledger", `${p.client} marked invoice-ready.`, p.ws); store.save(); rerender(); },
+    ready: (id) => { const p = find(id); saveProposalPatch(p, { status: "sent-ready" }, p ? { agent: "Proposal Forge", message: `moved ${p.client} to send-ready.` } : null); },
+    won: (id) => { const p = find(id); saveProposalPatch(p, { status: "won" }, p ? { agent: "Offer Desk", message: `${p.client} proposal won — ${fmtMoney(p.price)}.` } : null); },
+    lost: (id) => { const p = find(id); saveProposalPatch(p, { status: "lost" }); },
+    invoice: (id) => { const p = find(id); saveProposalPatch(p, { status: "invoice-ready" }, p ? { agent: "Accounting Ledger", message: `${p.client} marked invoice-ready.` } : null); },
   });
 }
 

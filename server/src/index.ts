@@ -402,6 +402,13 @@ import {
   updateCrmLead,
   upsertCrmProspectLanes,
 } from "./crm/crm-pipeline-store.js";
+import {
+  createProposalDraft,
+  deleteProposalDraft,
+  getProposalDocument,
+  publicProposalDocument,
+  updateProposalDraft,
+} from "./proposals/proposal-store.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -451,6 +458,9 @@ const CrmTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).opt
 const CrmLeadBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), lead: z.unknown() });
 const CrmLeadPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
 const CrmProspectLanesBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), prompt: z.string().trim().max(1200).optional(), leads: z.array(z.unknown()).max(12) });
+const ProposalTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
+const ProposalBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), proposal: z.unknown() });
+const ProposalPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
 });
@@ -492,6 +502,10 @@ function crmTenantForSession(session: AccessSession, requestedTenantId?: string)
 
 function canWriteCrm(session: AccessSession) {
   return session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin" || session.orgRole === "member";
+}
+
+function proposalTenantForSession(session: AccessSession, requestedTenantId?: string) {
+  return crmTenantForSession(session, requestedTenantId);
 }
 
 await app.register(cors, {
@@ -1010,6 +1024,87 @@ app.delete("/api/crm/leads/:leadId", async (request, reply) => {
     tenant_id: tenantId,
     deleted: result.result,
     document: publicCrmPipelineDocument(result.document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  };
+});
+
+app.get("/api/proposals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = ProposalTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = proposalTenantForSession(session, parsed.data.tenant_id);
+  const document = await getProposalDocument(tenantId, session.id);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    can_write: canWriteCrm(session),
+    document: publicProposalDocument(document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  };
+});
+
+app.post("/api/proposals", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Saving proposal drafts requires workspace member access." });
+  const parsed = ProposalBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = proposalTenantForSession(session, parsed.data.tenant_id);
+  const result = await createProposalDraft({ tenantId, proposal: parsed.data.proposal, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    proposal: result.result,
+    document: publicProposalDocument(result.document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  };
+});
+
+app.post("/api/proposals/:proposalId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Updating proposal drafts requires workspace member access." });
+  const { proposalId } = request.params as { proposalId: string };
+  const parsed = ProposalPatchBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = proposalTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await updateProposalDraft({ tenantId, proposalId, patch: parsed.data.patch, actor: session.id });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      proposal: result.result,
+      document: publicProposalDocument(result.document),
+      provider_called: false,
+      outbound_action_executed: false,
+      public_exposure_changed: false,
+    };
+  } catch (error) {
+    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "Proposal draft not found." });
+  }
+});
+
+app.delete("/api/proposals/:proposalId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Deleting proposal drafts requires workspace member access." });
+  const { proposalId } = request.params as { proposalId: string };
+  const parsed = ProposalTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = proposalTenantForSession(session, parsed.data.tenant_id);
+  const result = await deleteProposalDraft({ tenantId, proposalId, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    deleted: result.result,
+    document: publicProposalDocument(result.document),
     provider_called: false,
     outbound_action_executed: false,
     public_exposure_changed: false,
