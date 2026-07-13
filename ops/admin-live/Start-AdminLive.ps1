@@ -1,6 +1,7 @@
 param(
   [string]$RepoRoot = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path,
   [int]$Port = 5177,
+  [string]$ApiOrigin = "",
   [switch]$StopExisting
 )
 
@@ -41,6 +42,9 @@ if ($existing.Count -gt 0) {
 $stdout = Join-Path $stateDir "admin-static.out.log"
 $stderr = Join-Path $stateDir "admin-static.err.log"
 $args = @($server, "--root", $repo, "--port", [string]$Port, "--host", "127.0.0.1")
+if (![string]::IsNullOrWhiteSpace($ApiOrigin)) {
+  $args += @("--api", $ApiOrigin)
+}
 
 # Admin live is the owner workstation surface. Keep Hermes as the primary
 # broker, but allow the owner-approved Higgsfield CLI fallback so Media Lab can

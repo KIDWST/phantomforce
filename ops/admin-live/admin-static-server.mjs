@@ -821,6 +821,7 @@ createServer(async (req, res) => {
       service: "phantomforce-admin-static",
       root: repoRoot,
       source_hash: sourceHash,
+      api_origin: apiOrigin,
       jobs_running: jobsRunning,
       creative_transport: creativeEngine.transport,
       cli_fallback_enabled: creativeEngine.cliFallbackEnabled,
