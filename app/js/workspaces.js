@@ -8,11 +8,18 @@ import {
   moneyView, fmtMoney, fmtDate, fmtDateTime, ago, daysUntil, statusLabel,
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
-  session,
+  session, currentTenantId,
 } from "./store.js?v=phantom-live-20260713-247";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
 } from "./orgs.js?v=phantom-live-20260713-247";
+import {
+  createCrmLead as createServerCrmLead,
+  crmServerAvailable,
+  deleteCrmLead as deleteServerCrmLead,
+  loadCrmLeads,
+  updateCrmLead as updateServerCrmLead,
+} from "./crmpipeline.js?v=phantom-live-20260713-247";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -37,6 +44,7 @@ const LOCAL_CORE_WORKERS = [
   { name: "Safety Guard", note: "Approval and security rules loaded" },
 ];
 const MEMORY_DAY = 86400000;
+const crmRuntime = { state: "idle", tenant: "", leads: [], canWrite: false, error: "" };
 
 async function loadWorkerRuntime() {
   if (workerRuntime.state === "loading") return;
@@ -60,6 +68,61 @@ async function loadWorkerRuntime() {
   }
 }
 
+function applyCrmPayload(payload) {
+  const document = payload?.document;
+  if (!document?.tenantId || !Array.isArray(document.leads)) return false;
+  crmRuntime.state = "ready";
+  crmRuntime.tenant = document.tenantId;
+  crmRuntime.leads = document.leads;
+  crmRuntime.canWrite = payload.can_write !== false;
+  crmRuntime.error = "";
+  return true;
+}
+
+function ensureCrmRuntime(rerender) {
+  const tenant = currentTenantId();
+  if (!crmServerAvailable()) {
+    crmRuntime.state = "local";
+    crmRuntime.tenant = tenant;
+    crmRuntime.leads = [];
+    crmRuntime.canWrite = false;
+    return;
+  }
+  if ((crmRuntime.state === "ready" || crmRuntime.state === "loading") && crmRuntime.tenant === tenant) return;
+  crmRuntime.state = "loading";
+  crmRuntime.tenant = tenant;
+  crmRuntime.error = "";
+  loadCrmLeads()
+    .then((payload) => { applyCrmPayload(payload); rerender?.(); })
+    .catch((error) => {
+      crmRuntime.state = "error";
+      crmRuntime.error = error?.message || "Server CRM is unavailable.";
+      rerender?.();
+    });
+}
+
+function usingServerCrm() {
+  return crmRuntime.state === "ready" && crmRuntime.tenant === currentTenantId();
+}
+
+function leadRecord(input) {
+  return {
+    id: input.id || uid("lead"),
+    ws: input.ws || (currentWs() === "phantomforce" ? "phantomforce" : currentWs()),
+    name: input.name || input.company || "New lead",
+    company: input.company || input.name || "New lead",
+    source: input.source || "Manual capture",
+    status: input.status || "new",
+    value: Number(input.value || 750),
+    next: input.next || "Qualify the need and the budget",
+    due: input.due || new Date(Date.now() + 86400000).toISOString(),
+    owner: input.owner || "Lead Hunter",
+    notes: input.notes || "",
+    proposalId: input.proposalId || null,
+    segment: input.segment || "",
+  };
+}
+
 function bindActions(root, handlers) {
   root.querySelectorAll("[data-act]").forEach((el) => {
     el.addEventListener("click", () => {
@@ -78,14 +141,23 @@ async function copyText(el, text) {
 
 /* =============================== LEADS =============================== */
 function renderLeads(el, rerender) {
-  const leads = visible(store.state.leads);
+  ensureCrmRuntime(rerender);
+  const serverBacked = usingServerCrm();
+  const leads = serverBacked ? crmRuntime.leads : visible(store.state.leads);
+  const crmStatus = serverBacked
+    ? "Server CRM saved"
+    : crmRuntime.state === "loading"
+      ? "Syncing server CRM..."
+      : crmRuntime.state === "error"
+        ? `Local fallback: ${crmRuntime.error}`
+        : "Local draft CRM";
   const lanes = [
     ["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["won", "Won"], ["lost", "Lost"],
   ];
   el.innerHTML = `
     <div class="ws-toolbar">
-      <p class="ws-note">Every lead moves draft → approval → send-ready. Nothing goes out without you.</p>
-      <button class="btn btn-primary" data-act="add">+ Capture lead</button>
+      <p class="ws-note">Every lead moves draft → approval → send-ready. Nothing goes out without you. <b>${esc(crmStatus)}</b></p>
+      <button class="btn btn-primary" data-act="add" ${serverBacked && !crmRuntime.canWrite ? "disabled" : ""}>+ Capture lead</button>
     </div>
     <div class="lane-row">
       ${lanes.map(([k, label]) => {
@@ -110,34 +182,82 @@ function renderLeads(el, rerender) {
         </div>`;
       }).join("")}
     </div>`;
-  const find = (id) => store.state.leads.find((l) => l.id === id);
+  const find = (id) => (serverBacked ? crmRuntime.leads : store.state.leads).find((l) => l.id === id);
+  const updateLead = async (lead, patch) => {
+    if (!lead) return;
+    if (serverBacked && crmRuntime.canWrite) {
+      try {
+        const payload = await updateServerCrmLead(lead.id, patch);
+        applyCrmPayload(payload);
+        rerender();
+        return;
+      } catch (error) {
+        crmRuntime.state = "error";
+        crmRuntime.error = error?.message || "Server CRM update failed.";
+        rerender();
+        return;
+      }
+    }
+    Object.assign(lead, patch);
+    store.save();
+    rerender();
+  };
   bindActions(el, {
-    add: () => {
+    add: async () => {
       const name = prompt("Lead name (person or business):");
       if (!name) return;
-      store.state.leads.unshift({ id: uid("lead"), ws: currentWs() === "phantomforce" ? "phantomforce" : currentWs(), name: name.trim(), company: name.trim(), source: "Manual capture", status: "new", value: 750, next: "Qualify the need and the budget", due: new Date(Date.now() + 86400000).toISOString(), owner: "Lead Hunter", notes: "", proposalId: null });
-      pushActivity("Lead Hunter", `captured a new lead: ${name.trim()}.`);
+      const lead = leadRecord({ name: name.trim(), company: name.trim() });
+      if (serverBacked && crmRuntime.canWrite) {
+        try {
+          const payload = await createServerCrmLead(lead);
+          applyCrmPayload(payload);
+          pushActivity("Lead Hunter", `captured a server-backed lead: ${name.trim()}.`, lead.ws);
+          store.save(); rerender();
+          return;
+        } catch (error) {
+          crmRuntime.state = "error";
+          crmRuntime.error = error?.message || "Server CRM create failed.";
+        }
+      }
+      store.state.leads.unshift(lead);
+      pushActivity("Lead Hunter", `captured a new local lead: ${name.trim()}.`, lead.ws);
       store.save(); rerender();
     },
-    remove: (id) => {
+    remove: async (id) => {
       const l = find(id);
+      if (!l) return;
+      if (serverBacked && crmRuntime.canWrite) {
+        try {
+          const payload = await deleteServerCrmLead(id);
+          applyCrmPayload(payload);
+          pushActivity("Lead Hunter", `removed server CRM lead: ${l.name}.`, l.ws);
+          store.save(); rerender();
+          return;
+        } catch (error) {
+          crmRuntime.state = "error";
+          crmRuntime.error = error?.message || "Server CRM delete failed.";
+          rerender();
+          return;
+        }
+      }
       store.state.leads = store.state.leads.filter((item) => item.id !== id);
-      if (l) pushActivity("Lead Hunter", `removed lead: ${l.name}.`, l.ws);
+      pushActivity("Lead Hunter", `removed local lead: ${l.name}.`, l.ws);
       store.save(); rerender();
     },
-    advance: (id) => { const l = find(id); l.status = "follow-up"; store.save(); rerender(); },
-    propose: (id) => {
+    advance: (id) => { const l = find(id); updateLead(l, { status: "follow-up" }); },
+    propose: async (id) => {
       const l = find(id);
+      if (!l) return;
       const pkg = PACKAGES.find((p) => p.price >= l.value) || PACKAGES[2];
       const p = { id: uid("prop"), ws: l.ws, client: l.company, contact: l.name, pkg: pkg.id, price: pkg.price, retainer: "keeper", status: "draft", pain: l.notes || "Capture the pain in one sentence.", scope: ["Build scoped to the outcome", "Lead capture + follow-up wiring", "Review engine", "30-day watch"], timeline: "2 weeks build, launch week 3", updated: new Date().toISOString() };
       store.state.proposals.unshift(p);
-      l.status = "proposal"; l.proposalId = p.id; l.next = "Proposal drafted — review it in Proposal Forge";
       pushActivity("Proposal Forge", `opened a ${pkg.name} draft for ${l.company}.`, l.ws);
-      store.save(); rerender();
+      store.save();
+      await updateLead(l, { status: "proposal", proposalId: p.id, next: "Proposal drafted — review it in Proposal Forge" });
     },
-    won: (id) => { const l = find(id); l.status = "won"; l.next = "Kick off delivery"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Client Pipeline", `marked ${l.company} as won.`, l.ws); store.save(); rerender(); },
-    lost: (id) => { const l = find(id); l.status = "lost"; l.next = "Re-engage in 90 days"; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "lost"; store.save(); rerender(); },
-    revive: (id) => { const l = find(id); l.status = "follow-up"; l.next = "Warm re-engage with a proof point"; store.save(); rerender(); },
+    won: async (id) => { const l = find(id); if (!l) return; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "won"; pushActivity("Client Pipeline", `marked ${l.company} as won.`, l.ws); store.save(); await updateLead(l, { status: "won", next: "Kick off delivery" }); },
+    lost: async (id) => { const l = find(id); if (!l) return; const p = store.state.proposals.find((x) => x.id === l.proposalId); if (p) p.status = "lost"; store.save(); await updateLead(l, { status: "lost", next: "Re-engage in 90 days" }); },
+    revive: (id) => { const l = find(id); updateLead(l, { status: "follow-up", next: "Warm re-engage with a proof point" }); },
     review: (id) => {
       const l = find(id);
       store.state.reviews.unshift({ id: uid("rev"), ws: l.ws, client: `${l.name} — ${l.company}`, status: "draft", channel: "Google", draft: `${l.name.split(" ")[0]} — glad this one landed. A short review helps the next owner find us; two sentences is plenty. Link below.`, link: "review-link-ready", received: null, quote: null });

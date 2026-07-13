@@ -22,7 +22,10 @@ const files = {
   customizationClient: "app/js/customization.js",
   clientSetupStore: "server/src/client-setup/client-setup-store.ts",
   clientSetupUi: "app/js/clientsetup.js",
+  crmStore: "server/src/crm/crm-pipeline-store.ts",
+  crmClient: "app/js/crmpipeline.js",
   staticServer: "ops/admin-live/admin-static-server.mjs",
+  crmPipelineTest: "scripts/test-crm-pipeline.mjs",
   authBoundaryTest: "scripts/test-auth-boundaries.mjs",
   pageWorkerTest: "scripts/test-page-worker.mjs",
 };
@@ -64,7 +67,8 @@ const hasBusinessTemplateFields =
   /\b(businessType|businessTemplate|templateKey|setupCompleteness|leadSources|approvalRules|reportingPreferences|socialWorkflow|mediaWorkflow)\b/u.test(src.schema)
   || /\b(businessTemplate|leadSources|approvalRules|reportingPreferences|socialMediaWorkflow)\b/u.test(src.clientSetupStore);
 const hasServerLeadsPipelineModel =
-  /model\s+(Lead|Prospect|Deal|Pipeline|FollowUp)\s+\{/u.test(src.schema);
+  /model\s+(Lead|Prospect|Deal|Pipeline|FollowUp)\s+\{/u.test(src.schema)
+  || (/CrmPipelineDocument/u.test(src.crmStore) && /\/api\/crm\/leads/u.test(src.index) && /persistCrmProspectLanes/u.test(src.crmClient));
 const hasServicePackageModel =
   /model\s+(Service|Package|Offer)\s+\{/u.test(src.schema)
   || /\bservicesPackages\b/u.test(src.clientSetupStore);
@@ -157,10 +161,17 @@ const evidence = {
     ),
     finding(
       "PERSIST-BROWSER-CRM",
-      "local_browser_only",
-      "Client Pipeline leads/proposals are currently local browser state, not server CRM records.",
-      "store.seed() initializes `leads` and `proposals`; renderLeads writes `store.state.leads`; command/pageworker CRM buildout tests create local prospect lanes.",
+      "local_fallback_legacy",
+      "Client Pipeline still has browser fallback state for offline/static QA.",
+      "store.seed() initializes `leads` and `proposals`; local fallback remains available when the backend session is absent.",
       [files.store, files.workspaces, files.command, files.pageworker, files.pageWorkerTest],
+    ),
+    finding(
+      "PERSIST-CRM-PIPELINE",
+      "real_server_backed",
+      "Client Pipeline leads and page-worker prospect lanes now have tenant-scoped server persistence.",
+      "crm-pipeline-store persists draft leads/prospect lanes, stage, value, next action, due date, source, notes, setup slot reference, and audit entries; Clients page and page prompter call /api/crm routes when signed in.",
+      [files.crmStore, files.index, files.crmClient, files.workspaces, files.pageworker, files.crmPipelineTest],
     ),
     finding(
       "PERSIST-CUSTOMIZATION",
@@ -221,14 +232,14 @@ const evidence = {
       "WORKFLOW-ACTIONS",
       "real_server_backed",
       "Action/Approval/Task/FalconJob persistence exists for approval-gated workflows.",
-      "Prisma models and routes exist for actions, approvals, tasks, and agent runs; CRM execution-specific lead/follow-up records still need a server pipeline.",
+      "Prisma models and routes exist for actions, approvals, tasks, and agent runs; CRM lead/follow-up stage data now has a tenant-scoped server document foundation.",
       [files.schema, files.index],
     ),
   ],
   realVsSampleStatic: [
     {
       real: ["User/Org/Membership auth", "invitations", "org switching", "plans/entitlements", "approvals", "tasks", "sites/publishing", "Asset Cloud", "Organization Pulse graph"],
-      localOnly: ["fallback workspaces", "Clients pipeline leads/proposals", "local CRM prospect lane generation", "local PACKAGES/RETAINERS", "local media/content scratch state"],
+      localOnly: ["fallback workspaces", "local proposals", "local PACKAGES/RETAINERS", "local media/content scratch state"],
       explicitlyNotLive: ["social analytics without OAuth/imported reports", "external outreach", "public publishing", "paid media generation"],
     },
   ],
@@ -245,12 +256,12 @@ const evidence = {
     setupCompletenessScore: hasServerClientSetupProfile && hasClientSetupUi ? "ready_setup_console" : "blocked",
     nextSetupAction: hasServerClientSetupProfile && hasClientSetupUi ? "ready_setup_console" : "blocked",
     blockersVisible: "ready_in_setup_console_and_audit_output",
-    remainingServerCrmPipeline: hasServerLeadsPipelineModel ? "partially_ready" : "blocked_next_product_step",
+    remainingServerCrmPipeline: hasServerLeadsPipelineModel ? "server_json_backed_foundation" : "blocked_next_product_step",
   },
   blockers,
 };
 
-assert.ok(blockers.some((item) => item.id === "BLOCK-SERVER-CRM-PIPELINE"), "Audit should still surface the remaining server CRM pipeline blocker.");
+assert.ok(hasServerLeadsPipelineModel, "Audit should prove server-backed CRM lead/follow-up persistence exists.");
 assert.equal(evidence.product02Readiness.moduleEnableDisable, "partially_ready_via_customization_modules");
 
 console.log(JSON.stringify({ ok: true, ...evidence }, null, 2));

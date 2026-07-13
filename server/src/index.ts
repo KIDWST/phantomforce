@@ -394,6 +394,14 @@ import {
   publicClientSetupDocument,
   saveClientSetupSlot,
 } from "./client-setup/client-setup-store.js";
+import {
+  createCrmLead,
+  deleteCrmLead,
+  getCrmPipelineDocument,
+  publicCrmPipelineDocument,
+  updateCrmLead,
+  upsertCrmProspectLanes,
+} from "./crm/crm-pipeline-store.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -439,6 +447,10 @@ const CustomizationRollbackBodySchema = z.object({ tenant_id: z.string().trim().
 const CustomizationAssistantBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), message: z.string().trim().min(1).max(1200) });
 const ClientSetupTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
 const ClientSetupSlotBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), slot: z.unknown() });
+const CrmTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
+const CrmLeadBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), lead: z.unknown() });
+const CrmLeadPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
+const CrmProspectLanesBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), prompt: z.string().trim().max(1200).optional(), leads: z.array(z.unknown()).max(12) });
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
 });
@@ -471,6 +483,15 @@ function clientSetupTenantForSession(session: AccessSession, requestedTenantId?:
 
 function canManageClientSetup(session: AccessSession) {
   return session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin";
+}
+
+function crmTenantForSession(session: AccessSession, requestedTenantId?: string) {
+  if (session.canManageAccess) return safeCustomizationTenantId(requestedTenantId, "phantomforce-owner");
+  return safeCustomizationTenantId(session.orgId || session.clientId, `client-${session.id}`);
+}
+
+function canWriteCrm(session: AccessSession) {
+  return session.canManageAccess || session.orgRole === "owner" || session.orgRole === "admin" || session.orgRole === "member";
 }
 
 await app.register(cors, {
@@ -888,6 +909,107 @@ app.post("/api/client-setup/slots/:slotId", async (request, reply) => {
     tenant_id: tenantId,
     slot: result.slot,
     document: publicClientSetupDocument(result.document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  };
+});
+
+app.get("/api/crm/leads", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = CrmTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
+  const document = await getCrmPipelineDocument(tenantId, session.id);
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    can_write: canWriteCrm(session),
+    document: publicCrmPipelineDocument(document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  };
+});
+
+app.post("/api/crm/leads", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Saving CRM leads requires workspace member access." });
+  const parsed = CrmLeadBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
+  const result = await createCrmLead({ tenantId, lead: parsed.data.lead, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    lead: result.result,
+    document: publicCrmPipelineDocument(result.document),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  };
+});
+
+app.post("/api/crm/prospect-lanes", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Saving CRM prospect lanes requires workspace member access." });
+  const parsed = CrmProspectLanesBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
+  const result = await upsertCrmProspectLanes({ tenantId, leads: parsed.data.leads, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    leads: result.result,
+    document: publicCrmPipelineDocument(result.document),
+    prompt_recorded: Boolean(parsed.data.prompt),
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
+  };
+});
+
+app.post("/api/crm/leads/:leadId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Updating CRM leads requires workspace member access." });
+  const { leadId } = request.params as { leadId: string };
+  const parsed = CrmLeadPatchBodySchema.safeParse(request.body ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
+  try {
+    const result = await updateCrmLead({ tenantId, leadId, patch: parsed.data.patch, actor: session.id });
+    return {
+      ok: true,
+      tenant_id: tenantId,
+      lead: result.result,
+      document: publicCrmPipelineDocument(result.document),
+      provider_called: false,
+      outbound_action_executed: false,
+      public_exposure_changed: false,
+    };
+  } catch (error) {
+    return reply.status(404).send({ ok: false, error: error instanceof Error ? error.message : "CRM lead not found." });
+  }
+});
+
+app.delete("/api/crm/leads/:leadId", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  if (!canWriteCrm(session)) return reply.status(403).send({ ok: false, error: "Deleting CRM leads requires workspace member access." });
+  const { leadId } = request.params as { leadId: string };
+  const parsed = CrmTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
+  const result = await deleteCrmLead({ tenantId, leadId, actor: session.id });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    deleted: result.result,
+    document: publicCrmPipelineDocument(result.document),
     provider_called: false,
     outbound_action_executed: false,
     public_exposure_changed: false,

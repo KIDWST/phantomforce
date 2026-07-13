@@ -6,6 +6,7 @@
 
 import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-247";
 import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-247";
+import { persistCrmProspectLanes } from "./crmpipeline.js?v=phantom-live-20260713-247";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -393,6 +394,7 @@ export function runPageAction(pageId, prompt) {
     type: "prospect-buildout",
     title: buildout.created.length ? "Prospect lanes created" : "Prospect lanes already mapped",
     summary: `${createdNames.length || laneNames.length} draft lane${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Clients: ${names}.`,
+    leads: buildout.created,
     notes: [
       "No outreach, upload, deploy, or public action happened.",
       "No fake contact details were generated.",
@@ -400,6 +402,26 @@ export function runPageAction(pageId, prompt) {
     ],
     refreshWorkspace: true,
   };
+}
+
+async function persistPageAction(pageAction, prompt) {
+  if (pageAction?.type !== "prospect-buildout" || !Array.isArray(pageAction.leads) || !pageAction.leads.length) return pageAction;
+  if (!session?.token?.()) {
+    pageAction.notes.push("Server CRM needs a signed-in backend session; the draft lanes stayed local for now.");
+    return pageAction;
+  }
+  try {
+    const payload = await persistCrmProspectLanes(pageAction.leads, prompt);
+    const saved = Array.isArray(payload.leads) ? payload.leads.length : pageAction.leads.length;
+    pageAction.serverPersisted = true;
+    pageAction.title = "Prospect lanes saved";
+    pageAction.summary = `${saved} draft prospect lane${saved === 1 ? "" : "s"} saved to server CRM.`;
+    pageAction.notes.unshift("Server CRM saved the draft lanes for this workspace.");
+  } catch (error) {
+    pageAction.serverPersisted = false;
+    pageAction.notes.push(`Server CRM save failed, so the local draft lanes stayed visible: ${error?.message || "unknown error"}`);
+  }
+  return pageAction;
 }
 
 function pageActionHtml(action) {
@@ -758,6 +780,7 @@ async function renderPlan(card, pageId, prompt) {
   out = currentWorkerOutput(card, pageId);
   if (!out) return { analysis, pageAction, backend: null };
   renderThinking(out, pageId, prompt, pageAction);
+  if (pageAction) await persistPageAction(pageAction, prompt);
   const backend = await askBackendForPageOutcome(pageId, prompt, analysis);
   out = currentWorkerOutput(card, pageId);
   if (!out) return { analysis, pageAction, backend };
