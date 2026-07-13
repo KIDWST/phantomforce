@@ -11,7 +11,7 @@ import { handleCommand, handleSmartCommand, commandSuggestions } from "./command
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-231";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-231";
 import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-231";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260712-231";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-232";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260712-231";
 import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260712-231";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260712-231";

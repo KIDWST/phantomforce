@@ -3109,10 +3109,9 @@ function openPost(p, esc) {
 }
 
 /* =========================================================================
-   ANALYTICS - real metrics only. A saved profile identifies what to measure;
-   it is not API authorization. KPIs render only from explicit
-   account analytics payloads. No Creator Hub inventory, seeded posts, or
-   modeled estimates leak into this page.
+   ANALYTICS - first-party workspace signals immediately; official social
+   reach/follower metrics only after API/report data exists. A saved profile
+   identifies a channel, but it is not API authorization.
    ========================================================================= */
 const LIVE_ANALYTICS_PLATFORMS = new Set(PLATFORMS.map((platform) => platform.id));
 const ANALYTICS_REFRESH_MS = 15 * 60 * 1000;
@@ -3184,8 +3183,9 @@ async function refreshLiveAnalytics(el, accounts, opts, { force = false, platfor
     }
     if (force) analyticsNotice = ready.length ? "Live platform data synced." : "No live social connector is configured yet.";
   } catch (error) {
-    analyticsConnectorState.error = error?.message || "Live analytics could not be reached.";
-    if (force) analyticsNotice = analyticsConnectorState.error;
+    const message = error?.message || "Live analytics could not be reached.";
+    analyticsConnectorState.error = force ? message : "";
+    if (force) analyticsNotice = message;
   } finally {
     analyticsConnectorState.loading = false;
     if (el?.isConnected) renderAnalytics(el, opts, { skipAutoRefresh: true });
@@ -3229,6 +3229,16 @@ function localWorkspaceSignals(data = loadContent()) {
   const drafts = accountPublishDrafts();
   const sites = activeWorkspaceSites();
   const activity = recentWorkspaceActivity();
+  const events = [];
+  const addEvent = (kind, value, at) => {
+    const stamp = typeof at === "number" ? at : Date.parse(at || 0);
+    if (Number.isFinite(stamp) && stamp > 0) events.push({ kind, value: Number(value || 1), at: stamp });
+  };
+  posts.forEach((post) => addEvent("Published", 4, post.publishedAt || post.updatedAt));
+  media.forEach((asset) => addEvent("Media", 2, Number(asset.updatedAt || asset.createdAt || 0)));
+  drafts.forEach((draft) => addEvent("Drafts", 2, Number(draft.updatedAt || draft.createdAt || 0)));
+  sites.forEach((site) => addEvent("Sites", 3, site.updated || site.updatedAt || site.createdAt));
+  activity.forEach((row) => addEvent("Updates", 1, row.at));
   const timestamps = [
     ...posts.map((post) => Date.parse(post.publishedAt || post.updatedAt || 0) || 0),
     ...media.map((asset) => Number(asset.updatedAt || asset.createdAt || 0)),
@@ -3243,13 +3253,54 @@ function localWorkspaceSignals(data = loadContent()) {
     sites: sites.length,
     activity: activity.length,
   };
+  const breakdown = [
+    { label: "Published", value: summary.posts, color: "#41ffa1" },
+    { label: "Media", value: summary.media, color: "#22d3ee" },
+    { label: "Draft queue", value: summary.drafts, color: "#ffd166" },
+    { label: "Websites", value: summary.sites, color: "#9dffcd" },
+    { label: "Updates", value: summary.activity, color: "#8b5cf6" },
+  ];
+  const series = [];
+  for (let day = 13; day >= 0; day--) {
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - day);
+    const startMs = start.getTime();
+    const endMs = startMs + DAY;
+    const rows = events.filter((event) => event.at >= startMs && event.at < endMs);
+    const value = rows.reduce((sum, event) => sum + event.value, 0);
+    series.push({
+      label: start.toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      reach: value,
+      impressions: rows.length,
+      engagement: value,
+      followers: 0,
+    });
+  }
   return {
     ...summary,
     total: Object.values(summary).reduce((sum, value) => sum + value, 0),
     latestAt: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : "",
     source: "PhantomForce local site/content signals",
     signalLabel: localSignalLabel(summary),
+    breakdown,
+    series,
   };
+}
+function workspaceChartRows(localSignals = {}) {
+  if (!localSignals.total) return [];
+  return [{
+    account: { id: "workspace", name: "Workspace", color: "#41ffa1" },
+    feed: {
+      reach: localSignals.total,
+      impressions: localSignals.total,
+      engagement: localSignals.total,
+      followers: 0,
+      source: localSignals.source,
+      syncedAt: localSignals.latestAt,
+      series: localSignals.series || [],
+    },
+  }];
 }
 function analyticsFeedForAccount(account = {}) {
   const raw = account.analytics || account.insights || account.metrics || null;
@@ -3293,7 +3344,7 @@ function analyticsLinePath(values = [], maxValue = 1, width = 680, height = 190)
     return `${index ? "L" : "M"}${x.toFixed(1)} ${y.toFixed(1)}`;
   }).join(" ");
 }
-function analyticsChart(feedRows = []) {
+function analyticsChart(feedRows = [], emptyCopy = {}) {
   const width = 680;
   const height = 190;
   const rows = feedRows.map((row) => ({
@@ -3309,22 +3360,43 @@ function analyticsChart(feedRows = []) {
         ${[.2, .4, .6, .8].map((fraction) => `<line class="an-grid-line" x1="0" x2="${width}" y1="${(height * fraction).toFixed(1)}" y2="${(height * fraction).toFixed(1)}"/>`).join("")}
         ${rows.map((row) => `<path class="an-channel-line ${row.feed ? "" : "is-waiting"}" style="--channel:${row.account.color}" d="${analyticsLinePath(row.values, maxValue, width, height)}"/>`).join("")}
       </svg>
-      ${rows.some((row) => row.feed) ? "" : `<div class="an-chart-empty"><b>Waiting for live performance</b><span>Connect one social account and this chart updates automatically.</span></div>`}
+      ${rows.some((row) => row.feed) ? "" : `<div class="an-chart-empty"><b>${emptyCopy.title || "Waiting for live performance"}</b><span>${emptyCopy.body || "Connect one social account and this chart updates automatically."}</span></div>`}
       <div class="an-chart-legend">${rows.map((row) => `<span><i style="background:${row.account.color}"></i>${row.account.name}${row.feed ? "" : " · waiting"}</span>`).join("")}</div>
     </div>`;
 }
-function analyticsCoverage(feedRows = []) {
+function analyticsCoverage(feedRows = [], localSignals = {}) {
   const count = feedRows.length || 1;
+  const live = feedRows.filter((row) => row.feed).length;
+  if (!live && localSignals.total) {
+    const breakdown = (localSignals.breakdown || []).filter((row) => row.value > 0);
+    const total = breakdown.reduce((sum, row) => sum + row.value, 0) || localSignals.total;
+    let cursor = 0;
+    const stops = breakdown.map((row) => {
+      const start = cursor / total * 100;
+      cursor += row.value;
+      const end = cursor / total * 100;
+      return `${row.color} ${start.toFixed(2)}% ${end.toFixed(2)}%`;
+    }).join(",");
+    return `<div class="an-coverage">
+      <div class="an-coverage-ring" style="background:conic-gradient(${stops || "#41ffa1 0 100%"})"><span><b>${localSignals.total}</b><i>local</i></span></div>
+      <div class="an-coverage-copy"><b>Workspace data active</b><p>Creator Hub, Websites, drafts, media, and activity are reporting now. Social APIs add official platform metrics later.</p></div>
+    </div>`;
+  }
   const stops = feedRows.map((row, index) => {
     const start = (index / count * 100).toFixed(2);
     const end = ((index + 1) / count * 100).toFixed(2);
     return `${row.feed ? row.account.color : "rgba(135,165,151,.13)"} ${start}% ${end}%`;
   }).join(",");
-  const live = feedRows.filter((row) => row.feed).length;
   return `<div class="an-coverage">
     <div class="an-coverage-ring" style="background:conic-gradient(${stops || "rgba(135,165,151,.13) 0 100%"})"><span><b>${live}/${feedRows.length}</b><i>reporting</i></span></div>
     <div class="an-coverage-copy"><b>Channel coverage</b><p>${live ? `${live} verified data source${live === 1 ? "" : "s"} active.` : "Connect your channels to activate reporting."}</p></div>
   </div>`;
+}
+function workspaceBreakdownBars(localSignals = {}, esc = (s) => String(s)) {
+  const rows = (localSignals.breakdown || []).filter((row) => row.value > 0);
+  const sourceRows = rows.length ? rows : [{ label: "Workspace", value: 0, color: "#41ffa1" }];
+  const max = Math.max(1, ...sourceRows.map((row) => row.value));
+  return sourceRows.map((row) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${row.color}"></i>${esc(row.label)}</span><span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round(row.value / max * 100)}%;background:${row.color}"></span></span><b class="ch-bar-val">${K(row.value)}</b></div>`).join("");
 }
 let analyticsNotice = "";
 function accountAnalyticsRow(row, esc) {
@@ -3335,12 +3407,12 @@ function accountAnalyticsRow(row, esc) {
   const live = account.connectMode === "live-api" && !!feed;
   const canSync = !!connector?.configured;
   const oauthReady = !!connector?.oauthConfigured;
-  const sourceState = canSync ? "Ready to sync" : oauthReady ? "Needs account token" : saved ? "OAuth not configured" : account.handle ? "Handle saved" : "Not connected";
+  const sourceState = canSync ? "Ready to sync" : oauthReady ? "Authorize account" : saved ? "Optional API not connected" : account.handle ? "Profile handle saved" : "Optional API not connected";
   const sourceCopy = canSync
     ? "Official read-only analytics are ready."
     : oauthReady
       ? "OAuth app credentials exist; finish account authorization before stats appear."
-      : "Add OAuth app credentials and authorize this account before live data appears.";
+      : "Workspace analytics above already work. Connect this API only for official platform reach, engagement, and follower numbers.";
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
@@ -3348,7 +3420,7 @@ function accountAnalyticsRow(row, esc) {
     </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? esc(ago(feed.syncedAt)) : "current"}</i></div>`
     : `<div class="an-channel-empty"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span></div>`}
     <div class="an-channel-actions">
-      ${canSync ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up live connection</button>`}
+      ${canSync ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>` : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Configure API</button>`}
       <details class="an-import-backup"><summary aria-label="More data options">More</summary><small>Backup only · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import official report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
       ${feed ? `<button class="btn btn-ghost" type="button" data-an-clear="${account.id}">Clear data</button>` : ""}
     </div>
@@ -3400,18 +3472,20 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   const liveApiRows = liveRows.filter((row) => row.account.connectMode === "live-api");
   const configuredCount = analyticsConnectorState.connectors.filter((connector) => connector.configured).length;
   const totals = analyticsTotals(liveRows);
+  const hasLiveMetrics = liveRows.length > 0;
+  const chartRows = hasLiveMetrics ? feedRows : workspaceChartRows(localSignals);
   const maxEngagement = Math.max(1, ...feedRows.map((row) => row.feed?.engagement || 0));
   el.innerHTML = `
     <div class="an">
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Business intelligence</p>
-          <h3>${liveApiRows.length === displayAccounts.length ? "Every social channel is live." : liveApiRows.length ? "Some channels are live. Finish the rest." : "OAuth is required before real stats appear."}</h3>
-          <p>${liveApiRows.length ? "Official platform connections refresh automatically. Report files are available only as a backup." : "The handles are ready as officialchicagoshots and editable in Settings. Live reach, engagement, followers, and cross-posting stay locked until each platform is authorized through OAuth/API credentials."}</p>
+          <h3>${hasLiveMetrics ? (liveApiRows.length === displayAccounts.length ? "Every social channel is live." : "Workspace plus connected channels.") : "Workspace analytics are live. Platform APIs are optional."}</h3>
+          <p>${hasLiveMetrics ? "Official platform connections refresh when available. The workspace layer still reads Creator Hub, Websites, drafts, media, and activity without extra setup." : "PhantomForce reads Creator Hub, Websites, publish drafts, media, and activity immediately. Connect social APIs later when you want official reach, engagement, and follower counts."}</p>
         </div>
         <div class="an-hero-actions">
-          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect accounts</button>`}
-          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live · ${configuredCount}/${displayAccounts.length} OAuth/API ready</span>
+          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-ghost" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect social APIs</button>`}
+          <span class="an-src">${svgIc("up")} ${K(localSignals.total)} local signals · ${liveApiRows.length}/${displayAccounts.length} live social · ${configuredCount}/${displayAccounts.length} API ready</span>
         </div>
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}
@@ -3428,26 +3502,25 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
         <small>${esc(localSignals.signalLabel)}</small>
       </section>
       <div class="ch-kpis an-kpis">
-        ${kpi("Reach", K(totals.reach), liveRows.length ? "reported reach" : "waiting for data")}
-        ${kpi("Views", K(totals.impressions), liveRows.length ? "views + impressions" : "waiting for data")}
-        ${kpi("Engagement", K(totals.engagement), liveRows.length ? "likes + comments + shares" : "waiting for data")}
-        ${kpi("Followers", K(totals.followers), liveRows.length ? "latest reported total" : "waiting for data")}
+        ${hasLiveMetrics
+          ? `${kpi("Reach", K(totals.reach), "reported reach")}${kpi("Views", K(totals.impressions), "views + impressions")}${kpi("Engagement", K(totals.engagement), "likes + comments + shares")}${kpi("Followers", K(totals.followers), "latest reported total")}`
+          : `${kpi("Published", K(localSignals.posts), "local content records")}${kpi("Media assets", K(localSignals.media), "Creator Hub inventory")}${kpi("Draft queue", K(localSignals.drafts), "ready to review")}${kpi("Websites", K(localSignals.sites), "local site records")}`}
       </div>
       <div class="an-visual-grid">
         <section class="ch-card an-trend-card">
-          <div class="ch-card-h"><div><p class="ch-eyebrow">Performance trend</p><h3>Reach and views</h3></div><span class="an-live-label">${liveRows.length ? "Live + verified" : "Waiting for connection"}</span></div>
-          ${analyticsChart(feedRows)}
+          <div class="ch-card-h"><div><p class="ch-eyebrow">${hasLiveMetrics ? "Performance trend" : "Workspace trend"}</p><h3>${hasLiveMetrics ? "Reach and views" : "Local activity"}</h3></div><span class="an-live-label">${hasLiveMetrics ? "Live + verified" : localSignals.total ? "Local data" : "Waiting for activity"}</span></div>
+          ${analyticsChart(chartRows, { title: "No local activity yet", body: "Create media, draft posts, build websites, or publish content and this chart fills in automatically." })}
         </section>
         <section class="ch-card an-coverage-card">
           <p class="ch-eyebrow">Data coverage</p>
-          ${analyticsCoverage(feedRows)}
+          ${analyticsCoverage(feedRows, localSignals)}
         </section>
       </div>
       <section class="ch-card an-engagement-card">
-        <div class="ch-card-h"><div><p class="ch-eyebrow">Channel comparison</p><h3>Engagement by platform</h3></div></div>
-        <div class="ch-bars">${feedRows.map((row) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${row.account.color}"></i>${esc(row.account.name)}</span><span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round((row.feed?.engagement || 0) / maxEngagement * 100)}%;background:${row.account.color}"></span></span><b class="ch-bar-val">${K(row.feed?.engagement || 0)}</b></div>`).join("")}</div>
+        <div class="ch-card-h"><div><p class="ch-eyebrow">${hasLiveMetrics ? "Channel comparison" : "First-party breakdown"}</p><h3>${hasLiveMetrics ? "Engagement by platform" : "Workspace signal breakdown"}</h3></div></div>
+        <div class="ch-bars">${hasLiveMetrics ? feedRows.map((row) => `<div class="ch-bar-row"><span class="ch-bar-lab"><i class="ch-dot" style="background:${row.account.color}"></i>${esc(row.account.name)}</span><span class="ch-bar-track"><span class="ch-bar-fill" style="width:${Math.round((row.feed?.engagement || 0) / maxEngagement * 100)}%;background:${row.account.color}"></span></span><b class="ch-bar-val">${K(row.feed?.engagement || 0)}</b></div>`).join("") : workspaceBreakdownBars(localSignals, esc)}</div>
       </section>
-      <div class="an-section-head"><div><p class="ch-eyebrow">Sources</p><h3>Live channel connections</h3></div><span>Official read-only APIs</span></div>
+      <div class="an-section-head"><div><p class="ch-eyebrow">Sources</p><h3>Optional live social APIs</h3></div><span>Official read-only reach/follower sync</span></div>
       <section class="an-channel-list" aria-label="Social analytics channels">
         ${feedRows.map((row) => accountAnalyticsRow(row, esc)).join("")}
       </section>
