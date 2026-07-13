@@ -4,8 +4,8 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-235";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-235";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-237";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-237";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -145,6 +145,8 @@ const RISKY = /\b(send|publish|post|deploy|delete|charge|spend|email|dm|message|
 const URGENT = /\b(now|today|asap|tonight|this week|urgent|quick|fast|same day|immediately)\b/i;
 const MONEY = /\$[\d,]+|\b\d+\s?(?:dollars|bucks|usd)\b/i;
 const URL = /\bhttps?:\/\/[^\s]+|\b[a-z0-9-]+\.(?:com|online|net|org|co)\b/i;
+const CRM_PAGE_ACTION_VERB = /\b(add|find|search|discover|source|scout|research|identify|update|fill|populate|build|load|start|create|generate|make|map|draft|list)\b/i;
+const CRM_PAGE_AUDIENCE = /\b(clients?|leads?|prospects?|contacts?|customers?|small business(?:es)?|business(?:es)?|creators?|schools?|education|gyms?|coaches?|trainers?|service compan(?:y|ies)|contractors?|home services?|restaurants?|bars?|venues?|clubs?|teams?|professional services?|warm prospects?|everyone)\b/i;
 
 function tokenize(value = "") {
   return String(value).toLowerCase().match(/[a-z0-9]{3,}/g)?.filter((word) => !STOP_WORDS.has(word)) || [];
@@ -312,8 +314,8 @@ function isLeadsProspectPrompt(pageId, prompt = "") {
   if (pageId !== "leads") return false;
   const text = String(prompt || "");
   return isCrmProspectBuildout(text)
-    || (/\b(start|create|generate|make|build|map|list|draft)\b/i.test(text)
-      && /\b(client|lead|prospect|contact|small business|businesses|phantomforce)\b/i.test(text));
+    || (CRM_PAGE_ACTION_VERB.test(text) && CRM_PAGE_AUDIENCE.test(text))
+    || (/\b(who|companies|businesses|people|organizations)\b[\s\S]{0,80}\b(interested|could\s+use|would\s+need|could\s+buy|could\s+hire|need\s+phantomforce)\b/i.test(text));
 }
 
 function runPageAction(pageId, prompt) {
@@ -389,14 +391,17 @@ function thinkingLine(pageId, prompt) {
   return THINKING_LINES[Math.abs(hash) % THINKING_LINES.length];
 }
 
-function renderThinking(out, pageId, prompt) {
+function renderThinking(out, pageId, prompt, pageAction = null) {
   out.hidden = false;
   out.classList.add("is-thinking");
+  const detail = pageAction
+    ? `${pageAction.summary} The local CRM update is done; Phantom is checking the backend for the cleaner report now.`
+    : "Pulling page context, scoped memory, and safety gates before reporting the result.";
   out.innerHTML = `
     <div class="page-worker-thinking">
       <span>AI backend thinking</span>
       <b>${esc(thinkingLine(pageId, prompt))}</b>
-      <p>Pulling page context, scoped memory, and safety gates before reporting the result.</p>
+      <p>${esc(detail)}</p>
       <i aria-hidden="true"></i>
     </div>`;
 }
@@ -484,6 +489,13 @@ function pageContextModules(pageId, prompt, analysis) {
 
 function backendPrompt(pageId, prompt, analysis) {
   const worker = workerFor(pageId);
+  const pageContract = pageId === "leads"
+    ? [
+      "Clients page contract: this prompter's job is to find and add CRM-safe prospect lanes, then explain how to qualify them.",
+      "If the prompt asks for clients, leads, prospects, audiences, schools, creators, gyms, service companies, or warm prospects, treat it as a CRM/prospect buildout.",
+      "Do not invent real names, emails, phone numbers, private contacts, or claim outreach. The local action creates draft lanes and a qualification task only.",
+    ]
+    : [];
   return [
     "You are PhantomForce's page outcome worker inside Jordan's private business command center.",
     "Use the provided page context, saved memory hints, and safety gates to answer the user's outcome prompt.",
@@ -499,6 +511,8 @@ function backendPrompt(pageId, prompt, analysis) {
     `Local confidence: ${analysis.confidence}%`,
     `User outcome prompt: ${prompt}`,
     "",
+    ...pageContract,
+    ...(pageContract.length ? [""] : []),
     "Local draft path:",
     analysis.actions.slice(0, 6).map((step, index) => `${index + 1}. ${step}`).join("\n"),
   ].join("\n");
@@ -605,13 +619,24 @@ function renderPageWorkerResult(out, analysis, pageAction, backend) {
     </div>`;
 }
 
+function currentWorkerOutput(card, pageId) {
+  const liveCard = card?.isConnected
+    ? card
+    : document.querySelector(`[data-page-worker="${String(pageId || "page").replace(/"/g, '\\"')}"]`);
+  return liveCard?.querySelector("[data-page-worker-output]") || card?.querySelector("[data-page-worker-output]") || null;
+}
+
 async function renderPlan(card, pageId, prompt) {
-  const out = card.querySelector("[data-page-worker-output]");
+  let out = currentWorkerOutput(card, pageId);
   if (!out) return;
   const analysis = analyzePrompt(pageId, prompt);
-  renderThinking(out, pageId, prompt);
-  const backend = await askBackendForPageOutcome(pageId, prompt, analysis);
   const pageAction = runPageAction(pageId, prompt);
+  out = currentWorkerOutput(card, pageId);
+  if (!out) return { analysis, pageAction, backend: null };
+  renderThinking(out, pageId, prompt, pageAction);
+  const backend = await askBackendForPageOutcome(pageId, prompt, analysis);
+  out = currentWorkerOutput(card, pageId);
+  if (!out) return { analysis, pageAction, backend };
   if (prompt.trim()) rememberPrompt(pageId, prompt, analysis);
   renderPageWorkerResult(out, analysis, pageAction, backend);
   pushActivity("Page Intelligence", pageAction ? pageAction.summary : (analysis.question ? `needs one detail for ${analysis.intent.toLowerCase()}.` : `${backend?.content ? "AI backend answered" : "Local fallback prepared"} ${analysis.intent.toLowerCase()} from one prompt.`));

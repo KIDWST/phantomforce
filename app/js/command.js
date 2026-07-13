@@ -347,7 +347,7 @@ const PHANTOMFORCE_PROSPECT_SEGMENTS = Object.freeze([
   {
     id: "local-service",
     title: "Local service businesses",
-    triggers: /\b(business(?:es)?|local|contractor|home service|salon|gym|clinic|restaurant|bar|venue|shop)\b/i,
+    triggers: /\b(business(?:es)?|small business(?:es)?|local|contractor|home service|service compan(?:y|ies)|salon|gym|clinic|restaurant|bar|venue|shop)\b/i,
     value: 2400,
     why: "They need lead capture, follow-up discipline, review flow, offers, and simple reporting.",
     next: "Identify their offer, lead source, missed follow-up risk, and busiest season.",
@@ -374,7 +374,7 @@ const PHANTOMFORCE_PROSPECT_SEGMENTS = Object.freeze([
   {
     id: "sports-clubs",
     title: "Sports teams, clubs, and trainers",
-    triggers: /\b(sports?|team|club|coach|trainer|league|athlete)\b/i,
+    triggers: /\b(sports?|team|club|coach|trainer|league|athlete|fitness|training)\b/i,
     value: 1600,
     why: "They need schedules, media assets, parent/player updates, sponsors, and community engagement.",
     next: "Find whether they sell memberships, camps, training, sponsors, or events.",
@@ -389,14 +389,26 @@ const PHANTOMFORCE_PROSPECT_SEGMENTS = Object.freeze([
     next: "Qualify the handoff points, approval gates, and reports they currently track manually.",
     safeStep: "Frame this as an internal ops audit before suggesting software changes.",
   },
+  {
+    id: "warm-network",
+    title: "Warm referral prospects",
+    triggers: /\b(warm|referrals?|network|past clients?|existing contacts?|friends?|people\s+we\s+know)\b/i,
+    value: 1400,
+    why: "They already have some trust path, so PhantomForce can package a low-friction audit, setup sprint, or managed follow-up offer.",
+    next: "Sort known relationships by trust level, business need, and the cleanest permission-based first ask.",
+    safeStep: "Use owner-approved relationship notes only; do not scrape private contacts or imply a relationship that is not recorded.",
+  },
 ]);
 
 export function isCrmProspectBuildout(text = "") {
   const s = String(text || "");
-  const targetsCrm = /\b(crm|clients?\s+tab|client\s+tab|pipeline|clients?|client\s+base|lead\s+base|lead\s+list|contact\s+list)\b/i.test(s);
-  const asksToPopulate = /\b(update|fill|populate|build|load|start|create|generate|make|map|draft|list)\b/i.test(s)
+  const prospectAudience = /\b(clients?|leads?|prospects?|contacts?|customers?|small business(?:es)?|business(?:es)?|creators?|schools?|education|gyms?|coaches?|trainers?|service compan(?:y|ies)|contractors?|home services?|restaurants?|bars?|venues?|clubs?|teams?|professional services?|warm prospects?)\b/i;
+  const targetsCrm = /\b(crm|clients?\s+tab|client\s+tab|pipeline|clients?|client\s+base|lead\s+base|lead\s+list|contact\s+list)\b/i.test(s)
+    || (prospectAudience.test(s) && /\b(phantomforce|could\s+use|would\s+use|interested|buy|hire|sell\s+to|customer|client|lead|prospect)\b/i.test(s));
+  const asksToPopulate = /\b(update|fill|populate|build|load|start|create|generate|make|map|draft|list|find|add|search|discover|research|scout|source|identify)\b/i.test(s)
     || /\badd\b[\s\S]{0,90}\b(clients?|prospects?|contacts?|everyone|creators?|schools?|business(?:es)?)\b/i.test(s);
-  const wantsProspects = /\b(who\s+you\s+think|interested|consider|could\s+use|could\s+buy|could\s+hire|everyone|prospects?|contacts?|creators?|business(?:es)?|schools?|phantomforce|workforce)\b/i.test(s);
+  const wantsProspects = /\b(who\s+you\s+think|interested|consider|could\s+use|could\s+buy|could\s+hire|would\s+need|sell\s+to|everyone|prospects?|contacts?|creators?|business(?:es)?|schools?|gyms?|coaches?|service compan(?:y|ies)|phantomforce|workforce)\b/i.test(s)
+    || prospectAudience.test(s);
   return targetsCrm && asksToPopulate && wantsProspects;
 }
 
