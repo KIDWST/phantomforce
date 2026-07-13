@@ -39,4 +39,18 @@ assert.match(proxy, /\/api\/organization/, "Static server must proxy /api/organi
 assert.ok(!/createCompetitor|createSignal|saveBusinessProfile|createBrainMemory|ingestAsset/.test(pulse),
   "organization-pulse must stay read-only");
 
+// 7. Defect PF-1 regression: memory reads must not seed bootstrap notes, and
+//    seeded platform guidance must never count as organization knowledge.
+assert.match(pulse, /readOnly: true/, "Pulse memory reads must be side-effect free");
+assert.match(pulse, /phase_iii_bootstrap/, "Bootstrap notes must be excluded from org memory counts");
+const spine = read("server/src/phantom-ai/neural-spine.ts");
+assert.match(spine, /if \(!options\.readOnly\) await ensureBrainBootstrapMemories/,
+  "listBrainMemories must support side-effect-free reads");
+
+// 8. Defect PF-2 regression: agent runs are strictly workspace-scoped — an
+//    admin viewing org X must never see other workspaces' runs in X's pulse.
+assert.ok(!/run\.workspace === tenantId \|\| access\.canManage/.test(pulse),
+  "Run scoping must not widen for admins");
+assert.match(pulse, /run\.workspace === tenantId/, "Runs must match the tenant exactly");
+
 console.log("Organization Pulse and Brain Graph safety checks passed.");

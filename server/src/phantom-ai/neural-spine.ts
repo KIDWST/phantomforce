@@ -390,9 +390,12 @@ function isLegacyDisposableMemory(record: BrainMemoryRecord) {
 
 export async function listBrainMemories(
   session: AccessSession,
-  options: BrainStoreOptions & { includeInactive?: boolean; limit?: number; type?: unknown } = {},
+  options: BrainStoreOptions & { includeInactive?: boolean; limit?: number; type?: unknown; readOnly?: boolean } = {},
 ) {
-  await ensureBrainBootstrapMemories(session, options);
+  /* readOnly callers (dashboards, pulse, graphs) must observe without
+     side effects — seeding bootstrap notes from a *read* invents memories
+     for organizations that never created any. */
+  if (!options.readOnly) await ensureBrainBootstrapMemories(session, options);
   const { memoryPath } = storePaths(options);
   const scope = scopeForSession(session, options);
   const read = await readJsonl(memoryPath, isMemoryRecord, 5000);

@@ -1,5 +1,6 @@
-import { currentTenantId, currentWs, session, wsName } from "./store.js?v=phantom-live-20260712-225";
-import { esc } from "./workspaces.js?v=phantom-live-20260712-225";
+import { currentTenantId, currentWs, session, wsName } from "./store.js?v=phantom-live-20260712-226";
+import { esc } from "./workspaces.js?v=phantom-live-20260712-226";
+import { renderOrganizationGraph } from "./orggraph.js?v=phantom-live-20260712-226";
 
 const state = {
   loading: true,
@@ -153,6 +154,11 @@ function renderShell(root) {
         <button class="btn btn-primary" data-brain-refresh>Refresh</button>
       </section>
 
+      <section class="brain-card brain-orggraph">
+        <p class="overlay-kicker">Organization graph — what the brain can see</p>
+        <div data-orggraph-mount></div>
+      </section>
+
       <div class="brain-stat-grid">
         ${stat("Status", status.active ? "Active" : "Offline", status.mode || "application layer")}
         ${stat("Memories", status.memoryCount ?? memories.length, "active vault records")}
@@ -279,6 +285,8 @@ async function forgetMemory(root, id) {
 }
 
 function bind(root) {
+  const graphMount = root.querySelector("[data-orggraph-mount]");
+  if (graphMount) renderOrganizationGraph(graphMount);
   root.querySelector("[data-brain-refresh]")?.addEventListener("click", () => rerender(root));
   root.querySelector("[data-brain-filter]")?.addEventListener("change", (event) => {
     state.memoryType = event.target.value || "all";

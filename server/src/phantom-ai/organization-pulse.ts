@@ -98,7 +98,9 @@ export async function getOrganizationPulse(session: AccessSession, access: Pulse
     }),
     safe("Agent runs", async () => {
       const runs = listAgentRuns({ limit: 40 });
-      const scoped = runs.filter((run) => !run.workspace || run.workspace === tenantId || access.canManage);
+      // Strict workspace scoping: an admin viewing org X must see org X's
+      // runs, not the whole platform's — anything else misrepresents the org.
+      const scoped = runs.filter((run) => run.workspace === tenantId);
       return {
         available: true as const,
         running: scoped.filter((run) => run.state === "queued" || run.state === "executing" || run.state === "verifying").length,
@@ -138,8 +140,10 @@ export async function getOrganizationPulse(session: AccessSession, access: Pulse
       };
     }),
     safe("Brain memories", async () => {
-      const result = await listBrainMemories(session, { limit: 100 });
-      const active = result.memories.filter((memory) => memory.active !== false);
+      const result = await listBrainMemories(session, { limit: 100, readOnly: true });
+      // Platform bootstrap notes are seeded guidance, not organization
+      // knowledge — counting them would fake a brain for empty workspaces.
+      const active = result.memories.filter((memory) => memory.active !== false && memory.source !== "phase_iii_bootstrap");
       return {
         available: true as const,
         total: active.length,
@@ -148,11 +152,11 @@ export async function getOrganizationPulse(session: AccessSession, access: Pulse
       };
     }),
     safe("Asset Cloud", async () => {
-      if (!orgId) return unavailable("Asset Cloud is database-backed and this session has no database organization.");
+      if (!orgId) return unavailable("Asset Cloud isn't connected for this workspace yet.");
       return { available: true as const, ...(await readAssets(orgId)) };
     }),
     safe("Websites", async () => {
-      if (!orgId) return unavailable("Websites are database-backed and this session has no database organization.");
+      if (!orgId) return unavailable("No websites are connected for this workspace yet.");
       return { available: true as const, ...(await readSites(orgId)) };
     }),
   ]);
@@ -277,8 +281,8 @@ export async function getOrganizationGraph(session: AccessSession, access: Pulse
 
   /* Brain memories + events → agent runs */
   try {
-    const memories = await listBrainMemories(session, { limit: 40 });
-    for (const memory of memories.memories.filter((entry) => entry.active !== false).slice(0, 10)) {
+    const memories = await listBrainMemories(session, { limit: 40, readOnly: true });
+    for (const memory of memories.memories.filter((entry) => entry.active !== false && entry.source !== "phase_iii_bootstrap").slice(0, 10)) {
       const id = `memory:${memory.id}`;
       const node: GraphNode = { id, type: "memory", label: memory.text.slice(0, 48), source: "brain-memory.jsonl" };
       if (!memory.useCount) mark(node, "Never recalled in a conversation — stored but not yet informing decisions.");
@@ -296,7 +300,7 @@ export async function getOrganizationGraph(session: AccessSession, access: Pulse
 
   /* Agent runs */
   try {
-    const runs = listAgentRuns({ limit: 20 }).filter((run) => !run.workspace || run.workspace === tenantId || access.canManage);
+    const runs = listAgentRuns({ limit: 20 }).filter((run) => run.workspace === tenantId);
     for (const run of runs.slice(0, 10)) {
       const id = `run:${run.id}`;
       const node: GraphNode = { id, type: "agent-run", label: run.title.slice(0, 48), source: "agent-runs.jsonl", state: run.state };
@@ -341,7 +345,7 @@ export async function getOrganizationGraph(session: AccessSession, access: Pulse
   } else {
     const id = "system:asset-cloud";
     nodes.push({ id, type: "system", label: "Asset Cloud", source: "database" });
-    mark(nodes[nodes.length - 1], "Database-backed Asset Cloud is not connected for this session — creative memory is offline.");
+    mark(nodes[nodes.length - 1], "Asset Cloud isn't connected for this workspace — creative memory is offline.");
     edges.push({ from: orgNode, to: id, kind: "missing_integration" });
   }
 
