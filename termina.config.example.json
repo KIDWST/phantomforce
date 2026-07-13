@@ -1,5 +1,5 @@
 {
-  "_comment": "Copy this to termina.config.json (next to server.js) to define your own terminal types. Each becomes an option in every window's dropdown. Commands run on your machine as you; cwd supports ~ for your home directory.",
+  "_comment": "Copy this to termina.config.json (next to server.js) to define your own terminal types. Each becomes an option in every window's dropdown. Commands run on your machine as you; cwd supports ~ for your home directory. Every profile auto-trusts 'do you trust this folder?' style CLI prompts by default — add \"autoTrust\": false to a profile to opt it out.",
   "profiles": [
     {
       "id": "pwsh",

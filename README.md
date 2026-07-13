@@ -20,15 +20,24 @@ side in one clean window. Every tile is a real, fully-interactive terminal.
 ```powershell
 cd C:\Users\jorda\Termina
 npm install     # first time only
-npm start       # open the printed http://127.0.0.1:7420/?token=... URL
+npm run app     # opens Termina as a real desktop app window
 ```
 
-Or launch it like an app (adds a **Termina** entry to your Start Menu that opens
-a chromeless app window):
+Or install a **Termina** Desktop/Start Menu shortcut (double-click to launch,
+no console, no browser chrome — a real app window):
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File scripts\Install-Termina-StartMenu.ps1
 ```
+
+The shortcut runs Electron straight from this source folder (no build step),
+so edits to `server.js`, `profiles.js`, or `public/` take effect the next time
+you launch it. `npm run dist` builds a standalone installer via
+electron-builder if you ever want a distributable package instead.
+
+`npm start` still runs the old plain HTTP server (`server.js` alone, open
+`http://127.0.0.1:7420/` in a browser) if you just want the engine without the
+app shell.
 
 ## Using the wall
 
@@ -57,5 +66,6 @@ as you.
 
 ## Requirements
 
-- Windows, Node.js 20+. Microsoft Edge or Google Chrome for the app-window
-  launcher (otherwise it opens in your default browser).
+- Windows, Node.js 20+ on PATH (the Electron shell spawns `server.js` under
+  system Node so `node-pty` keeps working without an Electron-specific native
+  rebuild).
