@@ -10,20 +10,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260712-231";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260712-231";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260712-231";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260712-231";
+} from "./imagefilters.js?v=phantom-live-20260713-233";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260713-233";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260713-233";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260713-233";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260712-231";
+} from "./content-editor.js?v=phantom-live-20260713-233";
 import {
   currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-231";
+} from "./store.js?v=phantom-live-20260713-233";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -683,6 +683,7 @@ function svgIc(k) {
    ========================================================================= */
 const chState = { tab: "library", platform: "all", ctype: "all", eng: "likes" };
 const CONTENT_TYPE_FILTERS = [["all", "All"], ["reel", "Reels"], ["video", "Video"], ["carousel", "Carousels"], ["text", "Posts"], ["image", "Images"]];
+const MEDIA_POOL_FILTERS = [["all", "All"], ["image", "Images"], ["video", "Videos"]];
 const chSelection = new Set();
 let chLightbox = null;
 let chLbKeyHandler = null;
@@ -707,28 +708,29 @@ export function renderContentHub(el, opts = {}) {
   if (requestedAssetId) {
     const requestedAsset = mediaAssets.find((asset) => asset.id === requestedAssetId && asset.type === "image" && asset.url);
     if (requestedAsset) {
-      chState.tab = "library";
+      savePublishState({ ...loadPublishState(), sourceKey: `asset:${requestedAsset.id}` });
+      chState.tab = "publish";
       chState.ctype = "all";
-      chLightbox = freshLightbox(requestedAsset);
     }
   }
   const mediaStats = contentAssetStats(mediaAssets);
   const ideas = activeIdeas();
   const scheduled = data.posts.filter((p) => p.status === "scheduled" && !isRemoved(`schedule:${p.id}`)).length;
   const publishDrafts = loadPublishDrafts();
-  const tabs = [["library", `Library${mediaAssets.length ? ` · ${mediaAssets.length}` : ""}`], ["ideas", "Ideas"], ["drafts", "Drafts"], ["publish", "Publish"], ["calendar", "Planner"]];
+  if (chState.tab === "library" && !MEDIA_POOL_FILTERS.some(([id]) => id === chState.ctype)) chState.ctype = "all";
+  const tabs = [["library", "Creation"], ["ideas", "Ideas"], ["drafts", "Drafts"], ["publish", "Publish"], ["calendar", "Planner"]];
   el.innerHTML = `
     <div class="ch">
       <section class="ch-workbar">
-        <div><h3>Creator Hub</h3><span>${esc(wsName(currentWs()))} · ${esc(tabs.find(([id]) => id === chState.tab)?.[1] || "Library")}</span></div>
-        <div class="ch-tenant-actions"><span class="ch-tenant-pill">Isolated workspace</span><button class="btn btn-primary" data-open-ws="media">Create media</button></div>
+        <div><h3>Creator Hub</h3><span>${esc(wsName(currentWs()))} · ${esc(tabs.find(([id]) => id === chState.tab)?.[1] || "Creation")}</span></div>
+        <div class="ch-tenant-actions"><span class="ch-tenant-pill">Isolated workspace</span><button class="btn btn-primary" data-open-ws="media">Open Media Pool</button></div>
       </section>
       <div class="ch-tabs">
         ${tabs.map(([id, l]) => `<button class="ch-tab ${chState.tab === id ? "is-active" : ""}" data-ch-tab="${id}">${l}</button>`).join("")}
-        <span class="ch-src">${ideas.length} ideas · ${publishDrafts.length} publish drafts · ${scheduled} queued · ${mediaAssets.length} media · ${formatBytes(mediaStats.bytes)}/${formatBytes(mediaStats.budgetBytes)}</span>
+        <span class="ch-src">${ideas.length} ideas · ${publishDrafts.length} publish drafts · ${scheduled} queued · ${mediaAssets.length} pool media · ${formatBytes(mediaStats.bytes)}/${formatBytes(mediaStats.budgetBytes)}</span>
       </div>
       ${chState.tab === "library" ? `<div class="ch-subtabs" data-ch-type>
-        ${CONTENT_TYPE_FILTERS.map(([id, l]) => `<button class="ch-subtab ${chState.ctype === id ? "is-active" : ""}" data-v="${id}">${esc(l)}</button>`).join("")}
+        ${MEDIA_POOL_FILTERS.map(([id, l]) => `<button class="ch-subtab ${chState.ctype === id ? "is-active" : ""}" data-v="${id}">${esc(l)}</button>`).join("")}
       </div>` : ""}
       <div class="ch-body" data-ch-body></div>
     </div>
@@ -742,7 +744,7 @@ export function renderContentHub(el, opts = {}) {
   else if (t === "publish") renderPostPublish(body, data, esc, el, opts);
   else if (t === "drafts") renderDraftQueue(body, data, esc, el, opts);
   else if (t === "calendar") renderContentPlanner(body, data, esc, el, opts);
-  else if (t === "library") renderContentLibrary(body, data, esc, el, opts);
+  else if (t === "library") renderContentCreation(body, data, esc, el, opts);
   if (chLightbox) wireLightbox(el, opts);
 }
 
@@ -1021,7 +1023,7 @@ function captionForPlatform(caption, platformId) {
   return clean;
 }
 function publishSourceRail(sources, state, esc) {
-  if (!sources.length) return `<p class="empty-line">No media yet. Upload local or create media first, then come back to Publish.</p>`;
+  if (!sources.length) return `<p class="empty-line">No Media Pool source yet. Open Media Lab, create or upload media there, then organize the post here.</p>`;
   const activeKey = state.sourceKey || sources[0].key;
   return sources.map((source) => `<button type="button" class="ch-pub-source ${activeKey === source.key ? "is-on" : ""}" data-ch-pub-source="${esc(source.key)}">
     <span class="ch-pub-source-thumb">${sourceMediaMarkup(source, esc, "tiny")}</span>
@@ -1268,6 +1270,109 @@ function wirePostPublish(body, data, assets, esc, root, opts) {
   body.querySelector("[data-ch-pub-save]")?.addEventListener("click", () => saveDraft("draft"));
   body.querySelector("[data-ch-pub-queue]")?.addEventListener("click", () => saveDraft("approval"));
   body.querySelector("[data-ch-pub-posted]")?.addEventListener("click", () => saveDraft("manual-posted"));
+}
+function renderContentCreation(body, data, esc, root, opts) {
+  const assets = loadContentAssets();
+  const stats = contentAssetStats(assets);
+  const assetFilter = (asset) => chState.ctype === "all" || asset.type === chState.ctype || (asset.type === "video" && ["reel", "short"].includes(chState.ctype));
+  const matchingAssets = assets.filter(assetFilter);
+  const shownAssets = matchingAssets.slice(0, 12);
+  const sourceKeys = new Set(shownAssets.map((asset) => `asset:${asset.id}`));
+  const publishState = loadPublishState();
+  const activeSourceKey = sourceKeys.has(publishState.sourceKey) ? publishState.sourceKey : (shownAssets[0] ? `asset:${shownAssets[0].id}` : "");
+  const filterLabel = MEDIA_POOL_FILTERS.find(([id]) => id === chState.ctype)?.[1] || "All";
+  const drafts = loadPublishDrafts().slice(0, 4);
+  const poolNoun = assets.length === 1 ? "item" : "items";
+  body.innerHTML = `
+    <section class="ch-card ch-post-creator">
+      <div class="ch-card-h ch-library-head">
+        <div>
+          <h3>Post Creator</h3>
+          <span class="ch-src">Use Media Lab Media Pool assets to build organized posts. Media stays in Media Lab.</span>
+        </div>
+        <div class="ch-storage">
+          <span>${assets.length} pool ${poolNoun} · ${formatBytes(stats.bytes)} / ${formatBytes(stats.budgetBytes)}</span>
+          <i><b style="width:${stats.percent}%"></b></i>
+        </div>
+      </div>
+      <div class="ch-creation-flow">
+        <span><b>1</b>Choose from Media Pool</span>
+        <span><b>2</b>Turn it into a post</span>
+        <span><b>3</b>Save or queue for approval</span>
+      </div>
+      <div class="ch-creation-layout">
+        <div class="ch-creation-panel">
+          <div class="ch-creation-panel-head">
+            <div>
+              <b>Media Pool source</b>
+              <span>${esc(filterLabel)} filter · ${matchingAssets.length} matching pool ${matchingAssets.length === 1 ? "item" : "items"}</span>
+            </div>
+            <button class="ch-tool" data-open-ws="media" type="button">Manage in Media Lab</button>
+          </div>
+          ${shownAssets.length ? `<div class="ch-creation-source-grid">${shownAssets.map((asset) => postCreatorAssetButton(asset, esc, activeSourceKey)).join("")}</div>`
+      : `<div class="ch-empty-hint">
+            <b>No Media Pool media yet</b>
+            <p>Create or upload media in Media Lab first. Content Hub will use those pool assets as post sources without becoming another media library.</p>
+            <button class="ch-tool is-on" data-open-ws="media" type="button">Open Media Pool</button>
+          </div>`}
+          ${matchingAssets.length > shownAssets.length ? `<p class="ch-src">Showing the first ${shownAssets.length} of ${matchingAssets.length} matching pool items. Use Media Lab to manage the full pool.</p>` : ""}
+          ${stats.trimmed ? `<p class="ch-src">Space saver active: ${stats.trimmed} older/heavier preview${stats.trimmed === 1 ? "" : "s"} kept as metadata only.</p>` : ""}
+        </div>
+        <aside class="ch-creation-panel ch-creation-next">
+          <b>Next setup action</b>
+          <p>${shownAssets.length ? "Pick a Media Pool item or use the highlighted one, then build the caption, destinations, schedule, and approval status in Publish." : "Create a Media Pool asset, then come back here to organize it into a post."}</p>
+          <button class="ch-tool is-on" data-ch-build-post type="button" ${activeSourceKey ? "" : "disabled"}>Build post from source</button>
+          <button class="ch-tool" data-open-ws="media" type="button">Open Media Pool</button>
+        </aside>
+      </div>
+    </section>
+    ${drafts.length ? `<section class="ch-card ch-post-creator-recent">
+      <div class="ch-card-h"><h3>Recent post work</h3><span class="ch-src">local drafts · nothing sent externally</span></div>
+      <div class="ch-pub-queue-grid">${publishQueueMarkup(drafts, esc)}</div>
+    </section>` : ""}
+    <section class="ch-card ch-post-creator-note">
+      <div class="ch-card-h"><h3>Content Hub boundary</h3><span class="ch-src">organize posts here · manage media in Media Lab</span></div>
+      <p class="empty-line">Created images and videos stay in Media Lab's Media Pool. Content Hub only selects a source, writes the post, previews destinations, and saves or queues approval locally.</p>
+    </section>`;
+  wirePostCreatorActions(body, activeSourceKey, root, opts);
+}
+function postCreatorAssetButton(asset, esc, activeSourceKey) {
+  const key = `asset:${asset.id}`;
+  const source = {
+    key,
+    kind: "asset",
+    asset,
+    title: asset.title || (asset.type === "video" ? "Generated video" : "Generated image"),
+    sub: `${asset.source || "Media Lab"} · ${asset.type}`,
+    type: asset.type,
+    hue: asset.hue || 155,
+  };
+  const prompt = asset.prompt || "Ready for post copy.";
+  return `<button type="button" class="ch-creation-source ${activeSourceKey === key ? "is-on" : ""}" data-ch-creator-source="${esc(key)}">
+    <span class="ch-creation-thumb">${sourceMediaMarkup(source, esc, "tiny")}</span>
+    <span class="ch-creation-source-body">
+      <b>${esc(source.title.slice(0, 58))}${source.title.length > 58 ? "..." : ""}</b>
+      <i>${esc(source.sub)} · ${expiresText(asset)}</i>
+      <em>${esc(prompt.slice(0, 120))}${prompt.length > 120 ? "..." : ""}</em>
+    </span>
+    <strong>Use for post</strong>
+  </button>`;
+}
+function wirePostCreatorActions(body, activeSourceKey, root, opts) {
+  const openSourceInPublish = (sourceKey) => {
+    if (!sourceKey) {
+      opts.notify?.("Creator Hub", "Open Media Lab and add a Media Pool asset first.");
+      return;
+    }
+    savePublishState({ ...loadPublishState(), sourceKey });
+    chState.tab = "publish";
+    opts.notify?.("Creator Hub", "Loaded the Media Pool source into Post Creator. Nothing was posted.");
+    renderContentHub(root, opts);
+  };
+  body.querySelectorAll("[data-ch-creator-source]").forEach((button) => {
+    button.addEventListener("click", () => openSourceInPublish(button.dataset.chCreatorSource || activeSourceKey));
+  });
+  body.querySelector("[data-ch-build-post]")?.addEventListener("click", () => openSourceInPublish(activeSourceKey));
 }
 function renderContentLibrary(body, data, esc, root, opts) {
   const assets = loadContentAssets();

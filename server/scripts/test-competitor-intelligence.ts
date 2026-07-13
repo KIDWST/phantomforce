@@ -21,7 +21,7 @@ try {
   const intel = await import("../src/phantom-ai/competitor-intelligence.js");
   const scout = await intel.updateMarketScoutContext(owner, { businessName: "Owner Studio", location: "Chicago", offer: "premium photo and media services", audience: "local brands and creators", goals: "Find competitors gaining traction, weak reviews, product sales, and pricing changes." });
   assert(scout.status === "ready_to_discover" && scout.lanes.length >= 4, "Scout context should arm proactive public-source discovery lanes.");
-  assert(scout.lanes.every((lane) => lane.status === "ready_to_run"), "Scout lanes should be ready to run without confusing queue language.");
+  assert(scout.lanes.every((lane) => lane.status === "active"), "Scout lanes should be active without confusing queue language.");
 
   const created = await intel.createCompetitor(owner, { name: "Example Rival", website: "https://rival.example.test", category: "Service" }, 10);
   assert(created.name === "Example Rival", "Competitor profile should persist.");

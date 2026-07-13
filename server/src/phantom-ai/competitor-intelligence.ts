@@ -68,7 +68,10 @@ export type MysteryEvidence = {
 };
 export type AuditRecord = { id: string; tenantId: string; actorId: string; action: string; result: "allowed" | "blocked"; reason: string; alternative: string; createdAt: string };
 export type ScoutContext = { businessName: string; location: string; offer: string; audience: string; goals: string; createdAt: string; updatedAt: string };
-type ScoutLane = { id: string; label: string; status: "needs_context" | "ready_to_run" | "watching" | "source_ready"; query: string; why: string };
+type ScoutLane = {
+  id: string; label: string; status: "needs_context" | "active" | "watching" | "source_ready"; query: string; why: string;
+  sourceTargets: string[]; candidateCompetitors: string[]; nextAction: string;
+};
 type MarketBoardItem = {
   competitorId: string; name: string; symbol: string; category: string; domain: string; score: number;
   momentum: "gaining" | "vulnerable" | "mixed" | "quiet" | "unwatched"; confidence: "none" | Confidence;
@@ -76,6 +79,16 @@ type MarketBoardItem = {
   sourceState?: "tracked" | "starter";
 };
 type StarterCompetitor = { id: string; name: string; website: string; category: string; notes: string; score: number; watch: string[] };
+type AutoScoutReport = {
+  generatedAt: string; mode: "starter_public_map" | "tracked_public_signals" | "mixed_public_map"; headline: string; sourceNote: string;
+  competitorSet: { tracked: number; starter: number; totalCompared: number; liveSignals: number; confidence: "starter" | "low" | "medium" | "high" };
+  charts: Array<{ label: string; value: number; tone: "good" | "warn" | "hot" | "neutral"; detail: string }>;
+  comparisons: Array<{
+    competitorId: string; name: string; category: string; domain: string; score: number; sourceState: "tracked" | "starter";
+    threatLevel: "high" | "medium" | "watch"; phantomAngle: string; watch: string[]; sourceTargets: Array<{ label: string; url: string; reason: string }>;
+  }>;
+  opportunities: Array<{ title: string; detail: string; action: string; impact: number; tone: "good" | "warn" | "hot" | "neutral" }>;
+};
 
 type TenantState = {
   settings: { aggressiveMode: boolean; modeChangedAt: string | null; publicSourcesOnly: true; individualTargeting: false; externalActions: false; scoutContext: ScoutContext | null; scoutEnabled: boolean; scoutCadence: "manual" | "daily"; lastScoutRunAt: string | null };
@@ -212,6 +225,114 @@ function symbolFor(name: string) {
 function domainFor(website: string) {
   try { return new URL(website).hostname.replace(/^www\./u, ""); } catch { return "unknown"; }
 }
+function starterById(idValue: string) { return STARTER_COMPETITORS.find((item) => item.id === idValue); }
+function trackedById(state: TenantState, idValue: string) { return state.competitors.find((item) => item.id === idValue); }
+function websiteForBoardItem(state: TenantState, item: MarketBoardItem) {
+  return trackedById(state, item.competitorId)?.website || starterById(item.competitorId)?.website || `https://${item.domain}/`;
+}
+function sourceTargetsForBoardItem(state: TenantState, item: MarketBoardItem) {
+  const website = websiteForBoardItem(state, item);
+  const domain = domainFor(website);
+  const targets = [
+    { label: "Official site", url: website, reason: "positioning, offer, proof, and product language" },
+    { label: "Public search", url: `https://www.google.com/search?q=${encodeURIComponent(`${item.name} pricing reviews alternatives`)}`, reason: "public pricing, reviews, comparisons, and customer objections" },
+  ];
+  if (/hubspot|salesforce|highlevel|monday|clickup|notion|airtable|zapier|make/i.test(`${item.name} ${domain}`)) targets.push({ label: "Product updates", url: website, reason: "release notes, feature direction, integration changes" });
+  if (/hootsuite|buffer|canva|chatgpt|claude|gemini|perplexity/i.test(`${item.name} ${domain}`)) targets.push({ label: "Content signals", url: website, reason: "launch messaging, format shifts, creator or AI workflow claims" });
+  return targets.slice(0, 3);
+}
+function laneCandidates(laneId: string) {
+  const ids: Record<string, string[]> = {
+    local: ["starter-highlevel", "starter-hubspot", "starter-salesforce", "starter-monday"],
+    reviews: ["starter-highlevel", "starter-hootsuite", "starter-buffer", "starter-canva"],
+    offers: ["starter-hubspot", "starter-highlevel", "starter-salesforce", "starter-clickup"],
+    ads: ["starter-hootsuite", "starter-buffer", "starter-canva", "starter-chatgpt"],
+    products: ["starter-chatgpt", "starter-claude", "starter-gemini", "starter-notion", "starter-airtable"],
+    hiring: ["starter-salesforce", "starter-hubspot", "starter-monday", "starter-zapier"],
+  };
+  return (ids[laneId] || []).map((entry) => starterById(entry)?.name).filter(Boolean) as string[];
+}
+function laneSourceTargets(laneId: string) {
+  const targets: Record<string, string[]> = {
+    local: ["Google/Bing public results", "service-area directories", "category comparison pages"],
+    reviews: ["public reviews", "support forums", "community complaints"],
+    offers: ["official pricing pages", "landing pages", "package comparison pages"],
+    ads: ["public ad libraries", "social feeds", "content cadence"],
+    products: ["release notes", "docs", "app-store/update pages"],
+    hiring: ["job boards", "partnership pages", "event pages"],
+  };
+  return targets[laneId] || ["official public pages", "public search results"];
+}
+function laneNextAction(laneId: string) {
+  const actions: Record<string, string> = {
+    local: "Rank local/service competitors by proof, offer clarity, and follow-up workflow.",
+    reviews: "Convert repeated objections into service, onboarding, and FAQ improvements.",
+    offers: "Compare packages and build a clearer PhantomForce setup/managed-growth wedge.",
+    ads: "Find format heat and create original counter-programming instead of copycat posts.",
+    products: "Track capability launches and decide what PhantomForce should beat, ignore, or explain.",
+    hiring: "Use roles and partnerships as investment clues for what competitors are prioritizing.",
+  };
+  return actions[laneId] || "Turn the public source pattern into a sourced comparison and response move.";
+}
+function phantomAngleFor(item: MarketBoardItem) {
+  const haystack = `${item.name} ${item.category} ${item.watch.join(" ")}`.toLowerCase();
+  if (/crm|agency|customer|salesforce|hubspot|highlevel/.test(haystack)) return "Beat them with faster client onboarding, clearer owner setup, lead/follow-up operations, and done-with-you growth execution.";
+  if (/social|content|creative|canva|hootsuite|buffer/.test(haystack)) return "Beat them by connecting content to approvals, assets, reporting, and client operations instead of treating posts as the whole business.";
+  if (/workflow|automation|zapier|make|airtable/.test(haystack)) return "Beat them by turning automations into business outcomes with memory, approvals, and visible client setup state.";
+  if (/ai|assistant|chatgpt|claude|gemini|perplexity/.test(haystack)) return "Beat them with private business memory, client setup templates, managed growth ops, and action surfaces built for Jordan's workflow.";
+  return "Beat them with a tighter setup machine, proof-backed offers, and safer managed execution.";
+}
+function threatLevel(score: number): "high" | "medium" | "watch" { return score >= 72 ? "high" : score >= 62 ? "medium" : "watch"; }
+function clusterValue(board: MarketBoardItem[], pattern: RegExp) {
+  const matches = board.filter((item) => pattern.test(`${item.name} ${item.category} ${item.watch.join(" ")}`));
+  if (!matches.length) return 0;
+  return Math.round(matches.reduce((sum, item) => sum + item.score, 0) / matches.length);
+}
+function buildAutoScoutReport(state: TenantState, marketBoard: MarketBoardItem[], marketBoardMode: "live" | "mixed" | "starter"): AutoScoutReport {
+  const tracked = marketBoard.filter((item) => item.sourceState === "tracked").length;
+  const starter = marketBoard.filter((item) => item.sourceState === "starter").length;
+  const liveSignals = state.signals.length;
+  const confidence: AutoScoutReport["competitorSet"]["confidence"] = liveSignals >= 6 ? "high" : liveSignals >= 3 ? "medium" : liveSignals ? "low" : "starter";
+  const comparisons = marketBoard.slice(0, 8).map((item) => ({
+    competitorId: item.competitorId,
+    name: item.name,
+    category: item.category,
+    domain: item.domain,
+    score: item.score,
+    sourceState: item.sourceState === "tracked" ? "tracked" as const : "starter" as const,
+    threatLevel: threatLevel(item.score),
+    phantomAngle: phantomAngleFor(item),
+    watch: item.watch,
+    sourceTargets: sourceTargetsForBoardItem(state, item),
+  }));
+  const charts: AutoScoutReport["charts"] = [
+    { label: "AI assistants", value: clusterValue(marketBoard, /ai|assistant|chatgpt|claude|gemini|perplexity/i), tone: "hot" as const, detail: "Compete on private business memory plus action workflows, not generic chat." },
+    { label: "CRM / agency ops", value: clusterValue(marketBoard, /crm|agency|customer|salesforce|hubspot|highlevel/i), tone: "good" as const, detail: "Client setup, lead flow, follow-up, approvals, and reporting are the wedge." },
+    { label: "Automation tools", value: clusterValue(marketBoard, /workflow|automation|zapier|make|airtable/i), tone: "warn" as const, detail: "Turn triggers into outcome-based playbooks with owner approval gates." },
+    { label: "Content ops", value: clusterValue(marketBoard, /social|content|creative|canva|hootsuite|buffer/i), tone: "neutral" as const, detail: "Tie content to managed growth ops, not just scheduling." },
+  ].filter((item) => item.value > 0);
+  const opportunities: AutoScoutReport["opportunities"] = [
+    { title: "Lead with the Client Setup Machine", detail: "Most starter competitors own one slice: chat, CRM, automation, or social. PhantomForce can win by packaging the whole setup path.", action: "Turn onboarding, module selection, offers, lead sources, approvals, and reporting into the first sales demo.", impact: 94, tone: "good" },
+    { title: "Make comparisons visual and sourced", detail: "Use official public pages and dated sources to show where PhantomForce is different without claiming private knowledge.", action: "Generate comparison cards for AI assistants, CRM platforms, automation tools, and social suites.", impact: 86, tone: "warn" },
+    { title: "Turn weaknesses into managed services", detail: "When public reviews show confusion, setup burden, or follow-up gaps, translate that into service packaging.", action: "Create a Business Cleanup Checklist and Managed Growth Ops package for each customer type.", impact: 82, tone: "hot" },
+    { title: "Keep the system private and school/work safe", detail: "Do not chase public scraping or invasive targeting. Win with lawful public sources, client-owned data, and approval-safe execution.", action: "Separate public market radar from private client memory and keep every external action gated.", impact: 78, tone: "neutral" },
+  ];
+  const mode = marketBoardMode === "live" ? "tracked_public_signals" : marketBoardMode === "mixed" ? "mixed_public_map" : "starter_public_map";
+  return {
+    generatedAt: now(),
+    mode,
+    headline: liveSignals
+      ? "Phantom is comparing tracked competitors with live public signals."
+      : "Phantom is auto-comparing the starter market map and showing exactly where to compete first.",
+    sourceNote: liveSignals
+      ? "Scores use tracked competitors plus dated public signals saved in this workspace."
+      : "Starter scores use PhantomForce's public category map and official source targets. Add dated public sources before treating movement as live evidence.",
+    competitorSet: { tracked, starter, totalCompared: marketBoard.length, liveSignals, confidence },
+    charts,
+    comparisons,
+    opportunities,
+  };
+}
 function contextMissing(context: ScoutContext | null) {
   const missing: string[] = [];
   if (!context?.businessName) missing.push("business name");
@@ -241,13 +362,16 @@ function buildScout(state: TenantState) {
   const ready = contextReady(context);
   const signals = state.signals.length;
   const competitors = state.competitors.length;
-  const status = !ready ? "needs_context" : competitors ? "watching" : "ready_to_discover";
+  const status = !ready ? "needs_context" : competitors || signals ? "watching" : "ready_to_discover";
   const lanes: ScoutLane[] = SOURCE_LANES.map((lane) => ({
     id: lane[0],
     label: lane[1],
-    status: !ready ? "needs_context" : signals ? "watching" : "ready_to_run",
+    status: !ready ? "needs_context" : signals ? "watching" : "active",
     query: scoutQuery(context, lane),
     why: lane[2],
+    sourceTargets: laneSourceTargets(lane[0]),
+    candidateCompetitors: laneCandidates(lane[0]),
+    nextAction: laneNextAction(lane[0]),
   }));
   return {
     enabled: state.settings.scoutEnabled,
@@ -259,7 +383,7 @@ function buildScout(state: TenantState) {
       ? "Phantom needs the business, offer, audience, and service area before it can build a useful competitor map."
       : competitors
         ? "Phantom is ranking known competitors by public-signal momentum and turning gaps into safe response ideas."
-        : "Phantom has enough context to show a starter competitor map now. Add public sources to turn starter cards into live, source-backed rankings.",
+        : "Phantom is already comparing the starter market map, source targets, and response opportunities. Add dated public sources when you want live movement labels.",
     lanes,
   };
 }
@@ -354,12 +478,14 @@ export async function getCompetitorIntelligenceSnapshot(session: AccessSession, 
   const marketBoard = [...trackedMarketBoard, ...starterMarketBoard.slice(0, Math.max(0, 18 - trackedMarketBoard.length))];
   const marketBoardMode = trackedMarketBoard.length ? starterMarketBoard.length ? "mixed" : "live" : "starter";
   const scout = buildScout(state);
+  const autoScout = buildAutoScoutReport(state, marketBoard, marketBoardMode);
   return {
     tenantId,
     access: { enabled: options.entitled, aggressiveAvailable: options.aggressiveEntitled, canManage: session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin", competitorLimit: options.competitorLimit, signalLimit: options.signalLimit },
     signalTypes: SIGNAL_TYPES,
     settings: state.settings,
     scout,
+    autoScout,
     marketBoardMode,
     marketBoard,
     tips: buildTips(state, marketBoard, marketBoardMode),

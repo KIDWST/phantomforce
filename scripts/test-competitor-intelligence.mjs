@@ -15,7 +15,10 @@ assert.match(index, /competitor-intelligence\.css\?v=phantom-live-/u, "The dedic
 assert.match(module, /Aggressive Intelligence/u, "Optional aggressive mode must be visible.");
 assert.match(module, /ON-DEMAND MARKET SCOUT|data-ci-scout-form/u, "The first-run experience must arm an on-demand market scout instead of waiting for manual competitor entry.");
 assert.match(module, /ci-market-board|momentumLabel/u, "The overview must render a stock-market-style competitor board.");
-assert.match(module, /STARTER COMPETITOR MAP|Track competitor/u, "The overview must show a useful starter competitor map with a track action.");
+assert.match(module, /ci-market-map|data-ci-focus-competitor|trendProfile|sparkline/u, "The overview must render an interactive market map with trend visuals.");
+assert.match(module, /MARKET INDEX|Track \+ compare/u, "The overview must show a useful starter competitor index with a track action.");
+assert.match(module, /AUTO SCOUT REPORT|ci-auto-scout|ci-auto-bars|ci-auto-compare/u, "Customer Intelligence must render automatic comparison graphics, not static readiness cards.");
+assert.match(module, /candidateCompetitors|sourceTargets|nextAction/u, "Scout lanes must show what Phantom is already checking and what to do next.");
 assert.match(module, /data-ci-fuse/u, "Signal fusion must be interactive.");
 assert.match(module, /aggregated theme/u, "Audience gaps must require aggregation.");
 assert.match(module, /originality risk/u, "Creative analysis must expose similarity risk.");
@@ -25,11 +28,14 @@ assert.match(staticServer, /urlPath\.startsWith\("\/api\/competitor-intelligence
 assert.match(service, /PROHIBITED_PATTERNS/u, "A server-side hard boundary policy must exist.");
 assert.match(service, /status:\s*"estimate"/u, "Inferences must be labeled estimates.");
 assert.match(service, /buildMarketBoard|updateMarketScoutContext/u, "The service must compute market board and scout readiness server-side.");
+assert.match(service, /AutoScoutReport|buildAutoScoutReport|phantomAngleFor|sourceTargetsForBoardItem/u, "The service must generate automatic scout comparisons, source targets, and response angles.");
 assert.match(service, /STARTER_COMPETITORS[\s\S]*ChatGPT[\s\S]*Claude[\s\S]*HubSpot[\s\S]*HighLevel[\s\S]*Zapier[\s\S]*Hootsuite/u, "The service must seed PhantomForce-relevant starter competitors.");
 assert.match(service, /marketBoardMode|starterCompetitors/u, "The snapshot must distinguish starter competitors from live tracked competitors.");
+assert.match(css, /ci-auto-scout|ci-auto-bars|ciBarLoad/u, "Automatic market intelligence graphics must be styled and animated.");
+assert.match(css, /ci-market-map|ci-map-node|ciMapSpin|ci-sparkline/u, "The competitor map must be graphic, animated, and trend-oriented.");
 assert.doesNotMatch(service, /from\s+["'](?:puppeteer|playwright)|child_process|execFile|spawn\(/iu, "The service must not implement scraping or bypass tooling.");
 assert.doesNotMatch(module, /fetch\([^)]*https?:\/\//u, "The UI must not call competitor sites directly.");
-assert.doesNotMatch(module, /\bqueued\b|No market board yet|Discovery queue ready/iu, "Customer Intelligence must not present confusing queue language or dead empty states.");
-assert.doesNotMatch(service, /\bqueued\b|Discovery queue ready|scout queue/iu, "Server copy must avoid confusing queue language for on-demand intelligence.");
+assert.doesNotMatch(module, /\bqueued\b|Ready to run|ready_to_run|No market board yet|Discovery queue ready/iu, "Customer Intelligence must not present confusing queue/readiness language or dead empty states.");
+assert.doesNotMatch(service, /\bqueued\b|Ready to run|ready_to_run|Discovery queue ready|scout queue/iu, "Server copy must avoid confusing queue/readiness language for on-demand intelligence.");
 
 console.log("Competitor Intelligence frontend and policy safety checks passed.");
