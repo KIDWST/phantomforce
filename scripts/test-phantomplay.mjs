@@ -9,6 +9,7 @@ const css = read("../app/phantomplay.css");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
 const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick"];
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
+const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
 const appFiles = [index, main, module, ...games];
 
 assert.match(main, /id:\s*"phantomplay"[\s\S]*label:\s*"PhantomPlay"/u, "PhantomPlay must be in the native navigation.");
@@ -70,5 +71,9 @@ for (const game of games) {
 
 assert.match(games[0], /\.start\[hidden\][^{]*\{display:none\}/u, "Neon Drift's start overlay must actually leave the play field.");
 assert.doesNotMatch(games[2], /function size\(\)\{[^}]*reset\(\)/u, "Focus Stack must not erase a run when the mobile viewport resizes.");
+assert.match(penaltyKick, /\.field\{[^}]*height:100%;[^}]*min-height:280px/u, "Penalty Kick must reserve a real playable field instead of collapsing around absolute children.");
+assert.match(penaltyKick, /function meterPower\(\)\{[^}]*getBoundingClientRect/u, "Penalty Kick must calculate shot timing from live meter geometry.");
+assert.doesNotMatch(penaltyKick, /getComputedStyle\(meter\)\.transform\.split/u, "Penalty Kick must not use raw CSS transform pixels for shot timing.");
+assert.match(penaltyKick, /else start\(\)/u, "Penalty Kick must let keyboard users start from the opening overlay.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");

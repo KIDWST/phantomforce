@@ -59,12 +59,18 @@ function Write-SyncLog {
 try {
   $branch = (Invoke-Git rev-parse --abbrev-ref HEAD).Trim()
   if ($branch -ne "main") {
-    throw "Checkout is on '$branch', not main."
+    $summary = "skipped: checkout is on '$branch', not main"
+    Write-SyncLog $summary
+    Write-Output "PhantomForce admin main $summary."
+    return
   }
 
   $dirty = (Invoke-Git status --porcelain --untracked-files=no).Trim()
   if ($dirty) {
-    throw "Tracked files are dirty. Commit or stash before auto-sync."
+    $summary = "skipped: tracked files are dirty; commit or stash before auto-sync"
+    Write-SyncLog $summary
+    Write-Output "PhantomForce admin main $summary."
+    return
   }
 
   Invoke-Git fetch --quiet origin main | Out-Null
