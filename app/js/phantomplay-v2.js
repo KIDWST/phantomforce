@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260712-226";
+} from "./store.js?v=phantom-live-20260713-227";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -43,13 +43,62 @@ async function api(path, options = {}) {
 const tenantQuery = () => `tenant_id=${encodeURIComponent(currentTenantId())}`;
 
 /* ---- offline fallback (built-ins only, local saves) ---- */
+function gameCover(title, subtitle, colors = ["#4ade80", "#42e9ff"]) {
+  const [a, b] = colors;
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 540">
+    <defs>
+      <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1"><stop stop-color="#05070a"/><stop offset=".55" stop-color="#071a18"/><stop offset="1" stop-color="#140814"/></linearGradient>
+      <radialGradient id="burst" cx=".65" cy=".32" r=".72"><stop stop-color="${a}" stop-opacity=".45"/><stop offset=".46" stop-color="${b}" stop-opacity=".18"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient>
+      <filter id="glow"><feGaussianBlur stdDeviation="8" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+    </defs>
+    <rect width="960" height="540" fill="url(#bg)"/>
+    <rect width="960" height="540" fill="url(#burst)"/>
+    <g opacity=".24" stroke="${b}" stroke-width="2">${Array.from({ length: 13 }, (_, i) => `<path d="M0 ${70 + i * 34}H960"/>`).join("")}${Array.from({ length: 18 }, (_, i) => `<path d="M${40 + i * 52} 0V540"/>`).join("")}</g>
+    <g filter="url(#glow)" stroke="${a}" stroke-width="8" fill="none"><path d="M120 388c126-178 244-252 354-224s203 16 279-37"/><path d="M708 102l88 44-91 41 24-42z" fill="${b}" stroke="none"/></g>
+    <text x="68" y="92" fill="${b}" font-family="ui-monospace, Menlo, monospace" font-size="24" font-weight="800" letter-spacing="10">PHANTOMPLAY</text>
+    <text x="66" y="398" fill="#f4fff8" font-family="Arial Black, Impact, sans-serif" font-size="68" font-weight="900">${esc(title)}</text>
+    <text x="70" y="452" fill="#b8ffda" font-family="ui-monospace, Menlo, monospace" font-size="24" font-weight="800">${esc(subtitle)}</text>
+  </svg>`;
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
+}
+
 const OFFLINE_GAMES = [
-  ["neon-drift", "Neon Drift", "Arcade", "/app/games/neon-drift.html"],
-  ["signal-match", "Signal Match", "Puzzle", "/app/games/signal-match.html"],
-  ["focus-stack", "Focus Stack", "Focus", "/app/games/focus-stack.html"],
-  ["phantom-rumble", "Phantom Rumble", "Arcade", "/app/games/phantom-rumble.html"],
-  ["sudoku-signal", "Sudoku Signal", "Focus", "/app/games/sudoku-signal.html"],
-].map(([id, title, category, launchUrl]) => ({ id, title, summary: "Offline built-in game.", description: "", category, tags: [], contentRating: "everyone", developer: "Tak", kind: "built_in", launchUrl, thumbnail: "", featured: id === "phantom-rumble", version: "1.0.0", controls: "", progressSupport: true, scoreSupport: true }));
+  {
+    id: "neon-drift", title: "Neon Drift", category: "Arcade", launchUrl: "/app/games/neon-drift.html?v=1.2.2",
+    summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.",
+    description: "Fly a neon ship, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then survive harder waves.",
+    tags: ["shooter", "powerups", "arcade", "touch"], thumbnail: gameCover("NEON DRIFT", "AUTO-FIRE SPACE SHOOTER", ["#42e9ff", "#ff6d83"]), featured: true, version: "1.2.2",
+    controls: "WASD/arrow keys to fly. Auto-fire is always on. Touch and drag on mobile.",
+  },
+  {
+    id: "signal-match", title: "Signal Match", category: "Puzzle", launchUrl: "/app/games/signal-match.html?v=1.2.0",
+    summary: "Watch the flash, memorize positions, then match every pair.",
+    description: "A real memory round: the full grid flashes first, then hides so players match symbols from memory.",
+    tags: ["memory", "flash", "puzzle"], thumbnail: gameCover("SIGNAL MATCH", "MEMORY PUZZLE", ["#facc15", "#4ade80"]), featured: true, version: "1.2.0",
+    controls: "Click, tap, or use Tab + Enter.",
+  },
+  {
+    id: "focus-stack", title: "Focus Stack", category: "Focus", launchUrl: "/app/games/focus-stack.html?v=1.1.0",
+    summary: "Drop each layer cleanly and build the tallest signal tower.",
+    description: "A focused timing run with a proper start, pause, restart, and resize-safe play field.",
+    tags: ["timing", "focus", "quick"], thumbnail: gameCover("FOCUS STACK", "TIMING TOWER", ["#4ade80", "#a78bfa"]), featured: false, version: "1.1.0",
+    controls: "Space, Enter, click, or tap.",
+  },
+  {
+    id: "phantom-rumble", title: "Phantom Rumble", category: "Arcade", launchUrl: "/app/games/phantom-rumble.html",
+    summary: "Two-player arena chaos for quick breaks with friends.",
+    description: "Jump into a compact arena, knock rivals around, and keep the break loud without leaving work mode.",
+    tags: ["arena", "party", "local"], thumbnail: gameCover("PHANTOM RUMBLE", "LOCAL ARENA", ["#fb7185", "#facc15"]), featured: true, version: "1.0.0",
+    controls: "Keyboard controls for local play.",
+  },
+  {
+    id: "sudoku-signal", title: "Sudoku Signal", category: "Focus", launchUrl: "/app/games/sudoku-signal.html",
+    summary: "A clean logic board that restores your exact puzzle state.",
+    description: "A calm Sudoku run with persistent progress for longer focus breaks.",
+    tags: ["logic", "calm", "save"], thumbnail: gameCover("SUDOKU SIGNAL", "LOGIC BOARD", ["#38bdf8", "#4ade80"]), featured: false, version: "1.0.0",
+    controls: "Click or tap cells and numbers.",
+  },
+].map((game) => ({ contentRating: "everyone", developer: "Tak", kind: "built_in", progressSupport: true, scoreSupport: true, ...game }));
 
 function offlineState() {
   let saved = {};
@@ -114,7 +163,7 @@ function playTimeLabel(value) {
 }
 function art(game) {
   if (game.thumbnail) return `<img src="${esc(game.thumbnail)}" alt="" loading="lazy"/>`;
-  return `<span class="pp2-art-fallback">${esc((game.title || "?").slice(0, 1))}</span>`;
+  return `<img src="${esc(gameCover(String(game.title || "GAME").toUpperCase(), game.category || "PHANTOMPLAY"))}" alt="" loading="lazy"/>`;
 }
 
 /* ---- cards & rows ---- */
@@ -176,7 +225,7 @@ function renderHome() {
 function renderSolo() {
   const games = ui.snapshot.catalog.filter((game) => game.kind === "built_in" && (ui.category === "All" || game.category === ui.category));
   return `<div class="pp2-solo">
-    <section class="pp2-lead"><h2>Solo</h2><p>Offline-capable games with cloud progress. Close anything mid-run — Terminal 2048 and Sudoku Signal restore the exact board on any device.</p></section>
+    <section class="pp2-lead"><h2>Solo</h2><p>Arcade-ready breaks with cloud progress where the game supports it. Neon Drift is the shooter build, and local saves still keep the built-ins playable when the server is away.</p></section>
     <div class="pp2-cats">${CATEGORIES.map((cat) => `<button type="button" class="${ui.category === cat ? "is-active" : ""}" data-pp2-cat="${esc(cat)}">${esc(cat)}</button>`).join("")}</div>
     ${games.length ? `<div class="pp2-grid pp2-grid-wide">${games.map((game) => card(game)).join("")}</div>` : empty("Nothing in this category", "Try another category.")}
   </div>`;
