@@ -67,6 +67,28 @@ export type MysteryEvidence = {
   observations: string; sourceReference: string; legitimatelyObtained: true; noDeceptionConfirmed: true; createdAt: string;
 };
 export type AuditRecord = { id: string; tenantId: string; actorId: string; action: string; result: "allowed" | "blocked"; reason: string; alternative: string; createdAt: string };
+export type ScoutContext = { businessName: string; location: string; offer: string; audience: string; goals: string; createdAt: string; updatedAt: string };
+type ScoutLane = {
+  id: string; label: string; status: "needs_context" | "active" | "watching" | "source_ready"; query: string; why: string;
+  sourceTargets: string[]; candidateCompetitors: string[]; nextAction: string;
+};
+type MarketBoardItem = {
+  competitorId: string; name: string; symbol: string; category: string; domain: string; score: number;
+  momentum: "gaining" | "vulnerable" | "mixed" | "quiet" | "unwatched"; confidence: "none" | Confidence;
+  signalCount: number; recentSignals: number; lastSignalAt: string | null; tip: string; watch: string[];
+  sourceState?: "tracked" | "starter";
+};
+type StarterCompetitor = { id: string; name: string; website: string; category: string; notes: string; score: number; watch: string[] };
+type AutoScoutReport = {
+  generatedAt: string; mode: "starter_public_map" | "tracked_public_signals" | "mixed_public_map"; headline: string; sourceNote: string;
+  competitorSet: { tracked: number; starter: number; totalCompared: number; liveSignals: number; confidence: "starter" | "low" | "medium" | "high" };
+  charts: Array<{ label: string; value: number; tone: "good" | "warn" | "hot" | "neutral"; detail: string }>;
+  comparisons: Array<{
+    competitorId: string; name: string; category: string; domain: string; score: number; sourceState: "tracked" | "starter";
+    threatLevel: "high" | "medium" | "watch"; phantomAngle: string; watch: string[]; sourceTargets: Array<{ label: string; url: string; reason: string }>;
+  }>;
+  opportunities: Array<{ title: string; detail: string; action: string; impact: number; tone: "good" | "warn" | "hot" | "neutral" }>;
+};
 
 export type BusinessProfile = {
   tenantId: string; businessName: string; category: string; offering: string; audience: string; geography: string;
@@ -84,15 +106,33 @@ export type CompetitorDossier = {
 };
 
 type TenantState = {
-  settings: { aggressiveMode: boolean; modeChangedAt: string | null; publicSourcesOnly: true; individualTargeting: false; externalActions: false };
+  settings: { aggressiveMode: boolean; modeChangedAt: string | null; publicSourcesOnly: true; individualTargeting: false; externalActions: false; scoutContext: ScoutContext | null; scoutEnabled: boolean; scoutCadence: "manual" | "daily"; lastScoutRunAt: string | null };
   businessProfile: BusinessProfile | null; discoveryRuns: DiscoveryRun[]; dossiers: CompetitorDossier[];
   competitors: CompetitorRecord[]; signals: SignalRecord[]; inferences: InferenceRecord[]; audienceThemes: AudienceTheme[];
   creativeAnalyses: CreativeAnalysis[]; interceptions: InterceptionPackage[]; opportunities: ResearchOpportunity[];
   mysteryEvidence: MysteryEvidence[]; audit: AuditRecord[];
 };
 type Store = { version: 1; tenants: Record<string, TenantState> };
-const freshTenant = (): TenantState => ({ settings: { aggressiveMode: false, modeChangedAt: null, publicSourcesOnly: true, individualTargeting: false, externalActions: false }, businessProfile: null, discoveryRuns: [], dossiers: [], competitors: [], signals: [], inferences: [], audienceThemes: [], creativeAnalyses: [], interceptions: [], opportunities: [], mysteryEvidence: [], audit: [] });
+const freshTenant = (): TenantState => ({ settings: { aggressiveMode: false, modeChangedAt: null, publicSourcesOnly: true, individualTargeting: false, externalActions: false, scoutContext: null, scoutEnabled: false, scoutCadence: "manual", lastScoutRunAt: null }, businessProfile: null, discoveryRuns: [], dossiers: [], competitors: [], signals: [], inferences: [], audienceThemes: [], creativeAnalyses: [], interceptions: [], opportunities: [], mysteryEvidence: [], audit: [] });
 let writeChain = Promise.resolve();
+
+function normalizeTenantState(state: TenantState): TenantState {
+  const fresh = freshTenant();
+  state.settings = { ...fresh.settings, ...(state.settings || {}) };
+  state.competitors = Array.isArray(state.competitors) ? state.competitors : [];
+  state.signals = Array.isArray(state.signals) ? state.signals : [];
+  state.inferences = Array.isArray(state.inferences) ? state.inferences : [];
+  state.audienceThemes = Array.isArray(state.audienceThemes) ? state.audienceThemes : [];
+  state.creativeAnalyses = Array.isArray(state.creativeAnalyses) ? state.creativeAnalyses : [];
+  state.interceptions = Array.isArray(state.interceptions) ? state.interceptions : [];
+  state.opportunities = Array.isArray(state.opportunities) ? state.opportunities : [];
+  state.mysteryEvidence = Array.isArray(state.mysteryEvidence) ? state.mysteryEvidence : [];
+  state.audit = Array.isArray(state.audit) ? state.audit : [];
+  state.businessProfile = state.businessProfile ?? null;
+  state.discoveryRuns = Array.isArray(state.discoveryRuns) ? state.discoveryRuns : [];
+  state.dossiers = Array.isArray(state.dossiers) ? state.dossiers : [];
+  return state;
+}
 
 function clean(value: unknown, max = 1000) { return redactSensitiveText(String(value ?? "").replace(/\s+/g, " ").trim()).slice(0, max); }
 function url(value: unknown, required = true) {
@@ -122,7 +162,7 @@ async function save(store: Store) {
   await writeChain;
 }
 async function mutate<T>(tenantId: string, fn: (state: TenantState, store: Store) => T | Promise<T>) {
-  const store = await load(); const state = store.tenants[tenantId] ?? freshTenant(); store.tenants[tenantId] = state;
+  const store = await load(); const state = normalizeTenantState(store.tenants[tenantId] ?? freshTenant()); store.tenants[tenantId] = state;
   try { const result = await fn(state, store); await save(store); return result; }
   catch (error) { await save(store); throw error; }
 }
@@ -162,11 +202,363 @@ function buildInferences(tenantId: string, state: TenantState, competitorId: str
   }).filter(Boolean) as InferenceRecord[];
 }
 
+const GROWTH_SIGNALS: SignalType[] = ["pricing_page", "landing_page", "public_ad", "ad_volume", "social_cadence", "content_format", "release_note", "documentation", "app_store_note", "job_listing", "employee_role", "partnership", "event_appearance", "newsletter", "search_pattern"];
+const WEAKNESS_SIGNALS: SignalType[] = ["public_review", "customer_complaint", "community_discussion"];
+const SOURCE_LANES = [
+  ["local", "Local competitors", "map pack, local rankings, service area directories"],
+  ["reviews", "Review pressure", "public reviews, complaints, objections, support gaps"],
+  ["offers", "Offer and pricing", "pricing pages, landing pages, package changes"],
+  ["ads", "Ad and content heat", "public ad volume, social cadence, content format shifts"],
+  ["products", "Product sales and launches", "release notes, app updates, marketplace or product-page changes"],
+  ["hiring", "Investment clues", "job listings, roles, partnerships, events"],
+] as const;
+const STARTER_MAP_UPDATED_AT = "2026-07-13T00:00:00.000Z";
+const STARTER_COMPETITORS: StarterCompetitor[] = [
+  { id: "starter-chatgpt", name: "ChatGPT", website: "https://chatgpt.com/", category: "AI assistant", score: 72, watch: ["agent workflows", "search answers", "work apps"], notes: "Starter AI assistant competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-claude", name: "Claude", website: "https://www.anthropic.com/claude", category: "AI assistant", score: 70, watch: ["projects", "coding", "enterprise safety"], notes: "Starter AI assistant competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-perplexity", name: "Perplexity", website: "https://www.perplexity.ai/", category: "AI answer engine", score: 65, watch: ["answer search", "source citations", "research workflows"], notes: "Starter AI search competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-gemini", name: "Gemini", website: "https://gemini.google.com/", category: "AI assistant", score: 67, watch: ["Google workspace", "mobile assistant", "research"], notes: "Starter AI assistant competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-hubspot", name: "HubSpot", website: "https://www.hubspot.com/products/customer-platform", category: "CRM and customer platform", score: 78, watch: ["CRM", "marketing hubs", "AI customer platform"], notes: "Starter CRM and growth-ops competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-highlevel", name: "HighLevel", website: "https://www.gohighlevel.com/", category: "Agency operating system", score: 76, watch: ["lead capture", "follow-up automation", "agency dashboard"], notes: "Starter agency operating-system competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-salesforce", name: "Salesforce", website: "https://www.salesforce.com/products/what-is-customer-360/", category: "Enterprise CRM", score: 74, watch: ["Customer 360", "AI agents", "sales/service clouds"], notes: "Starter enterprise CRM competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-monday", name: "monday.com", website: "https://monday.com/", category: "Work management", score: 66, watch: ["work platform", "team operations", "AI agents"], notes: "Starter work-management competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-clickup", name: "ClickUp", website: "https://clickup.com/", category: "Work management", score: 65, watch: ["tasks", "docs", "AI work context"], notes: "Starter productivity and operations competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-notion", name: "Notion", website: "https://www.notion.com/", category: "Workspace and knowledge base", score: 63, watch: ["workspace memory", "docs", "custom agents"], notes: "Starter workspace and memory competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-airtable", name: "Airtable", website: "https://www.airtable.com/platform", category: "Business app platform", score: 62, watch: ["apps", "data workflows", "AI builders"], notes: "Starter app-platform competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-zapier", name: "Zapier", website: "https://zapier.com/", category: "Workflow automation", score: 64, watch: ["app automations", "AI workflows", "agents"], notes: "Starter automation competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-make", name: "Make", website: "https://www.make.com/en", category: "Workflow automation", score: 61, watch: ["visual automation", "AI agents", "app integrations"], notes: "Starter automation competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-hootsuite", name: "Hootsuite", website: "https://www.hootsuite.com/", category: "Social media management", score: 58, watch: ["scheduling", "analytics", "social listening"], notes: "Starter social operations competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-buffer", name: "Buffer", website: "https://buffer.com/", category: "Social media management", score: 55, watch: ["content planning", "posting", "analytics"], notes: "Starter social publishing competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+  { id: "starter-canva", name: "Canva", website: "https://www.canva.com/", category: "Creative production", score: 60, watch: ["AI design", "brand kits", "social creatives"], notes: "Starter creative-production competitor for PhantomForce. Add public sources before treating this as live market evidence." },
+];
+
+function daysAgo(value: string) {
+  const time = new Date(value).getTime();
+  return Number.isFinite(time) ? (Date.now() - time) / 86400000 : 9999;
+}
+function recentSignal(signal: SignalRecord, days = 45) { return daysAgo(signal.observedAt) <= days; }
+function symbolFor(name: string) {
+  const letters = clean(name, 80).split(/\s+/).filter(Boolean).map((part) => part[0]?.toUpperCase()).join("");
+  return (letters || "CI").slice(0, 3);
+}
+function domainFor(website: string) {
+  try { return new URL(website).hostname.replace(/^www\./u, ""); } catch { return "unknown"; }
+}
+function starterById(idValue: string) { return STARTER_COMPETITORS.find((item) => item.id === idValue); }
+function trackedById(state: TenantState, idValue: string) { return state.competitors.find((item) => item.id === idValue); }
+function websiteForBoardItem(state: TenantState, item: MarketBoardItem) {
+  return trackedById(state, item.competitorId)?.website || starterById(item.competitorId)?.website || `https://${item.domain}/`;
+}
+function sourceTargetsForBoardItem(state: TenantState, item: MarketBoardItem) {
+  const website = websiteForBoardItem(state, item);
+  const domain = domainFor(website);
+  const targets = [
+    { label: "Official site", url: website, reason: "positioning, offer, proof, and product language" },
+    { label: "Public search", url: `https://www.google.com/search?q=${encodeURIComponent(`${item.name} pricing reviews alternatives`)}`, reason: "public pricing, reviews, comparisons, and customer objections" },
+  ];
+  if (/hubspot|salesforce|highlevel|monday|clickup|notion|airtable|zapier|make/i.test(`${item.name} ${domain}`)) targets.push({ label: "Product updates", url: website, reason: "release notes, feature direction, integration changes" });
+  if (/hootsuite|buffer|canva|chatgpt|claude|gemini|perplexity/i.test(`${item.name} ${domain}`)) targets.push({ label: "Content signals", url: website, reason: "launch messaging, format shifts, creator or AI workflow claims" });
+  return targets.slice(0, 3);
+}
+function laneCandidates(laneId: string) {
+  const ids: Record<string, string[]> = {
+    local: ["starter-highlevel", "starter-hubspot", "starter-salesforce", "starter-monday"],
+    reviews: ["starter-highlevel", "starter-hootsuite", "starter-buffer", "starter-canva"],
+    offers: ["starter-hubspot", "starter-highlevel", "starter-salesforce", "starter-clickup"],
+    ads: ["starter-hootsuite", "starter-buffer", "starter-canva", "starter-chatgpt"],
+    products: ["starter-chatgpt", "starter-claude", "starter-gemini", "starter-notion", "starter-airtable"],
+    hiring: ["starter-salesforce", "starter-hubspot", "starter-monday", "starter-zapier"],
+  };
+  return (ids[laneId] || []).map((entry) => starterById(entry)?.name).filter(Boolean) as string[];
+}
+function laneSourceTargets(laneId: string) {
+  const targets: Record<string, string[]> = {
+    local: ["Google/Bing public results", "service-area directories", "category comparison pages"],
+    reviews: ["public reviews", "support forums", "community complaints"],
+    offers: ["official pricing pages", "landing pages", "package comparison pages"],
+    ads: ["public ad libraries", "social feeds", "content cadence"],
+    products: ["release notes", "docs", "app-store/update pages"],
+    hiring: ["job boards", "partnership pages", "event pages"],
+  };
+  return targets[laneId] || ["official public pages", "public search results"];
+}
+function laneNextAction(laneId: string) {
+  const actions: Record<string, string> = {
+    local: "Rank local/service competitors by proof, offer clarity, and follow-up workflow.",
+    reviews: "Convert repeated objections into service, onboarding, and FAQ improvements.",
+    offers: "Compare packages and build a clearer PhantomForce setup/managed-growth wedge.",
+    ads: "Find format heat and create original counter-programming instead of copycat posts.",
+    products: "Track capability launches and decide what PhantomForce should beat, ignore, or explain.",
+    hiring: "Use roles and partnerships as investment clues for what competitors are prioritizing.",
+  };
+  return actions[laneId] || "Turn the public source pattern into a sourced comparison and response move.";
+}
+function phantomAngleFor(item: MarketBoardItem) {
+  const haystack = `${item.name} ${item.category} ${item.watch.join(" ")}`.toLowerCase();
+  if (/crm|agency|customer|salesforce|hubspot|highlevel/.test(haystack)) return "Beat them with faster client onboarding, clearer owner setup, lead/follow-up operations, and done-with-you growth execution.";
+  if (/social|content|creative|canva|hootsuite|buffer/.test(haystack)) return "Beat them by connecting content to approvals, assets, reporting, and client operations instead of treating posts as the whole business.";
+  if (/workflow|automation|zapier|make|airtable/.test(haystack)) return "Beat them by turning automations into business outcomes with memory, approvals, and visible client setup state.";
+  if (/ai|assistant|chatgpt|claude|gemini|perplexity/.test(haystack)) return "Beat them with private business memory, client setup templates, managed growth ops, and action surfaces built for Jordan's workflow.";
+  return "Beat them with a tighter setup machine, proof-backed offers, and safer managed execution.";
+}
+function threatLevel(score: number): "high" | "medium" | "watch" { return score >= 72 ? "high" : score >= 62 ? "medium" : "watch"; }
+function clusterValue(board: MarketBoardItem[], pattern: RegExp) {
+  const matches = board.filter((item) => pattern.test(`${item.name} ${item.category} ${item.watch.join(" ")}`));
+  if (!matches.length) return 0;
+  return Math.round(matches.reduce((sum, item) => sum + item.score, 0) / matches.length);
+}
+function buildAutoScoutReport(state: TenantState, marketBoard: MarketBoardItem[], marketBoardMode: "live" | "mixed" | "starter"): AutoScoutReport {
+  const tracked = marketBoard.filter((item) => item.sourceState === "tracked").length;
+  const starter = marketBoard.filter((item) => item.sourceState === "starter").length;
+  const liveSignals = state.signals.length;
+  const confidence: AutoScoutReport["competitorSet"]["confidence"] = liveSignals >= 6 ? "high" : liveSignals >= 3 ? "medium" : liveSignals ? "low" : "starter";
+  const comparisons = marketBoard.slice(0, 8).map((item) => ({
+    competitorId: item.competitorId,
+    name: item.name,
+    category: item.category,
+    domain: item.domain,
+    score: item.score,
+    sourceState: item.sourceState === "tracked" ? "tracked" as const : "starter" as const,
+    threatLevel: threatLevel(item.score),
+    phantomAngle: phantomAngleFor(item),
+    watch: item.watch,
+    sourceTargets: sourceTargetsForBoardItem(state, item),
+  }));
+  const charts: AutoScoutReport["charts"] = [
+    { label: "AI assistants", value: clusterValue(marketBoard, /ai|assistant|chatgpt|claude|gemini|perplexity/i), tone: "hot" as const, detail: "Compete on private business memory plus action workflows, not generic chat." },
+    { label: "CRM / agency ops", value: clusterValue(marketBoard, /crm|agency|customer|salesforce|hubspot|highlevel/i), tone: "good" as const, detail: "Client setup, lead flow, follow-up, approvals, and reporting are the wedge." },
+    { label: "Automation tools", value: clusterValue(marketBoard, /workflow|automation|zapier|make|airtable/i), tone: "warn" as const, detail: "Turn triggers into outcome-based playbooks with owner approval gates." },
+    { label: "Content ops", value: clusterValue(marketBoard, /social|content|creative|canva|hootsuite|buffer/i), tone: "neutral" as const, detail: "Tie content to managed growth ops, not just scheduling." },
+  ].filter((item) => item.value > 0);
+  const opportunities: AutoScoutReport["opportunities"] = [
+    { title: "Lead with the Client Setup Machine", detail: "Most starter competitors own one slice: chat, CRM, automation, or social. PhantomForce can win by packaging the whole setup path.", action: "Turn onboarding, module selection, offers, lead sources, approvals, and reporting into the first sales demo.", impact: 94, tone: "good" },
+    { title: "Make comparisons visual and sourced", detail: "Use official public pages and dated sources to show where PhantomForce is different without claiming private knowledge.", action: "Generate comparison cards for AI assistants, CRM platforms, automation tools, and social suites.", impact: 86, tone: "warn" },
+    { title: "Turn weaknesses into managed services", detail: "When public reviews show confusion, setup burden, or follow-up gaps, translate that into service packaging.", action: "Create a Business Cleanup Checklist and Managed Growth Ops package for each customer type.", impact: 82, tone: "hot" },
+    { title: "Keep the system private and school/work safe", detail: "Do not chase public scraping or invasive targeting. Win with lawful public sources, client-owned data, and approval-safe execution.", action: "Separate public market radar from private client memory and keep every external action gated.", impact: 78, tone: "neutral" },
+  ];
+  const mode = marketBoardMode === "live" ? "tracked_public_signals" : marketBoardMode === "mixed" ? "mixed_public_map" : "starter_public_map";
+  return {
+    generatedAt: now(),
+    mode,
+    headline: liveSignals
+      ? "Phantom is comparing tracked competitors with live public signals."
+      : "Phantom is auto-comparing the starter market map and showing exactly where to compete first.",
+    sourceNote: liveSignals
+      ? "Scores use tracked competitors plus dated public signals saved in this workspace."
+      : "Starter scores use PhantomForce's public category map and official source targets. Add dated public sources before treating movement as live evidence.",
+    competitorSet: { tracked, starter, totalCompared: marketBoard.length, liveSignals, confidence },
+    charts,
+    comparisons,
+    opportunities,
+  };
+}
+function contextMissing(context: ScoutContext | null) {
+  const missing: string[] = [];
+  if (!context?.businessName) missing.push("business name");
+  if (!context?.offer) missing.push("offer");
+  if (!context?.location) missing.push("location or service area");
+  if (!context?.audience) missing.push("audience");
+  return missing;
+}
+function contextReady(context: ScoutContext | null) {
+  return Boolean(context?.offer && (context.location || context.audience || context.businessName));
+}
+function scoutQuery(context: ScoutContext | null, lane: typeof SOURCE_LANES[number]) {
+  const offer = context?.offer || "[offer]";
+  const location = context?.location || "[location]";
+  const audience = context?.audience || "[audience]";
+  const base = lane[0] === "local" ? `${offer} ${location} competitors`
+    : lane[0] === "reviews" ? `${offer} ${location} reviews complaints`
+      : lane[0] === "offers" ? `${offer} pricing packages ${location}`
+        : lane[0] === "ads" ? `${offer} ${audience} ads content examples`
+          : lane[0] === "products" ? `${offer} product launch sales trends ${location}`
+            : `${offer} hiring partnerships ${location}`;
+  return base.replace(/\s+/g, " ").trim();
+}
+function buildScout(state: TenantState) {
+  const context = state.settings.scoutContext;
+  const missing = contextMissing(context);
+  const ready = contextReady(context);
+  const signals = state.signals.length;
+  const competitors = state.competitors.length;
+  const status = !ready ? "needs_context" : competitors || signals ? "watching" : "ready_to_discover";
+  const lanes: ScoutLane[] = SOURCE_LANES.map((lane) => ({
+    id: lane[0],
+    label: lane[1],
+    status: !ready ? "needs_context" : signals ? "watching" : "active",
+    query: scoutQuery(context, lane),
+    why: lane[2],
+    sourceTargets: laneSourceTargets(lane[0]),
+    candidateCompetitors: laneCandidates(lane[0]),
+    nextAction: laneNextAction(lane[0]),
+  }));
+  return {
+    enabled: state.settings.scoutEnabled,
+    status,
+    context,
+    missing,
+    lastRunAt: state.settings.lastScoutRunAt,
+    briefing: !ready
+      ? "Phantom needs the business, offer, audience, and service area before it can build a useful competitor map."
+      : competitors
+        ? "Phantom is ranking known competitors by public-signal momentum and turning gaps into safe response ideas."
+        : "Phantom is already comparing the starter market map, source targets, and response opportunities. Add dated public sources when you want live movement labels.",
+    lanes,
+  };
+}
+function boardTip(momentum: MarketBoardItem["momentum"], positives: number, weaknesses: number, opportunities: number) {
+  if (momentum === "unwatched") return "Scout their homepage, reviews, pricing, ads, and jobs before making a move.";
+  if (momentum === "vulnerable") return "They look exposed. Build proof around the customer pain and verify recency before publishing.";
+  if (momentum === "gaining") return "They have heat. Watch the offer and prepare a differentiated comparison or category guide.";
+  if (momentum === "mixed") return "Mixed signals. Separate what they are pushing from what customers are resisting.";
+  if (opportunities > 0) return "There are response options ready. Turn the best one into a tracked campaign.";
+  return positives || weaknesses ? "Keep collecting public sources until the pattern is strong enough to act on." : "No recent signal yet. Add a public source to start live ranking.";
+}
+function buildMarketBoard(state: TenantState): MarketBoardItem[] {
+  return state.competitors.map((item) => {
+    const signals = state.signals.filter((entry) => entry.competitorId === item.id);
+    const recent = signals.filter((entry) => recentSignal(entry));
+    const inferences = state.inferences.filter((entry) => entry.competitorId === item.id);
+    const themes = state.audienceThemes.filter((entry) => entry.competitorId === item.id);
+    const opportunities = state.opportunities.filter((entry) => entry.competitorId === item.id).length;
+    const growth = recent.filter((entry) => GROWTH_SIGNALS.includes(entry.type)).length + inferences.filter((entry) => ["upcoming_offer", "investment", "market_direction", "content_priority", "positioning"].includes(entry.area)).length;
+    const weakness = recent.filter((entry) => WEAKNESS_SIGNALS.includes(entry.type)).length + inferences.filter((entry) => ["customer_pain", "operational_weakness"].includes(entry.area)).length + themes.length;
+    const score = Math.max(5, Math.min(95, Math.round(48 + growth * 7 + opportunities * 5 - weakness * 6 + Math.min(recent.length, 8) * 2)));
+    const momentum: MarketBoardItem["momentum"] = !signals.length ? "unwatched" : growth >= weakness + 2 ? "gaining" : weakness >= growth + 1 ? "vulnerable" : growth && weakness ? "mixed" : recent.length ? "quiet" : "quiet";
+    const confidence: MarketBoardItem["confidence"] = signals.length >= 6 ? "high" : signals.length >= 3 ? "medium" : signals.length ? "low" : "none";
+    const newest = signals.map((entry) => entry.observedAt).sort().at(-1) || null;
+    return {
+      competitorId: item.id,
+      name: item.name,
+      symbol: symbolFor(item.name),
+      category: item.category || "Competitor",
+      domain: domainFor(item.website),
+      score,
+      momentum,
+      confidence,
+      signalCount: signals.length,
+      recentSignals: recent.length,
+      lastSignalAt: newest,
+      tip: boardTip(momentum, growth, weakness, opportunities),
+      sourceState: "tracked" as const,
+      watch: [
+        growth ? "offer heat" : "offer baseline",
+        weakness ? "customer pain" : "review scan",
+        opportunities ? "response ready" : "opportunity scan",
+      ],
+    };
+  }).sort((a, b) => b.score - a.score || b.recentSignals - a.recentSignals || a.name.localeCompare(b.name));
+}
+function starterCompetitors(tenantId: string): CompetitorRecord[] {
+  return STARTER_COMPETITORS.map((item) => ({ id: item.id, tenantId, name: item.name, website: item.website, category: item.category, notes: item.notes, active: true, createdAt: STARTER_MAP_UPDATED_AT, updatedAt: STARTER_MAP_UPDATED_AT }));
+}
+function buildStarterMarketBoard(tenantId: string, state: TenantState): MarketBoardItem[] {
+  const trackedDomains = new Set(state.competitors.map((item) => domainFor(item.website).toLowerCase()));
+  const trackedNames = new Set(state.competitors.map((item) => item.name.toLowerCase()));
+  return STARTER_COMPETITORS
+    .filter((item) => !trackedDomains.has(domainFor(item.website).toLowerCase()) && !trackedNames.has(item.name.toLowerCase()))
+    .map((item) => ({
+      competitorId: item.id,
+      name: item.name,
+      symbol: symbolFor(item.name),
+      category: item.category,
+      domain: domainFor(item.website),
+      score: item.score,
+      momentum: "unwatched" as const,
+      confidence: "none" as const,
+      signalCount: 0,
+      recentSignals: 0,
+      lastSignalAt: null,
+      tip: "Starter competitor from PhantomForce's category map. Track it and add public sources before treating it as live evidence.",
+      watch: item.watch,
+      sourceState: "starter" as const,
+    }));
+}
+function buildTips(state: TenantState, board: MarketBoardItem[], marketBoardMode: "live" | "mixed" | "starter") {
+  const tips: Array<{ title: string; detail: string; tone: "good" | "warn" | "hot" | "neutral" }> = [];
+  const scout = buildScout(state);
+  if (scout.status === "needs_context") tips.push({ title: "Scout needs context", detail: "Add your offer, location, audience, and business name so Phantom can build the first watch lanes.", tone: "warn" });
+  if (marketBoardMode === "starter") tips.push({ title: "Starter map ready", detail: "Phantom is showing known AI, CRM, workflow, and social-ops competitors. Track the ones that matter and add public sources for live ranking.", tone: "good" });
+  const vulnerable = board.find((item) => item.momentum === "vulnerable");
+  if (vulnerable) tips.push({ title: `${vulnerable.name} looks exposed`, detail: vulnerable.tip, tone: "hot" });
+  const gaining = board.find((item) => item.momentum === "gaining");
+  if (gaining) tips.push({ title: `${gaining.name} has heat`, detail: gaining.tip, tone: "good" });
+  if (!board.length && scout.status !== "needs_context") tips.push({ title: "Run the scout now", detail: "Use a public source to turn the category map into source-backed competitor rankings.", tone: "neutral" });
+  if (!tips.length) tips.push({ title: "Keep the board sourced", detail: "Add recent public signals and Phantom will update momentum, confidence, and response options.", tone: "neutral" });
+  return tips.slice(0, 4);
+}
+
 export function competitorIntelligencePolicyCheck(text: string) { return policy(clean(text, 3000)); }
 
 export async function getCompetitorIntelligenceSnapshot(session: AccessSession, options: { tenantId?: unknown; entitled: boolean; aggressiveEntitled: boolean; competitorLimit: number; signalLimit: number }) {
-  const tenantId = tenantFor(session, options.tenantId); const store = await load(); const state = store.tenants[tenantId] ?? freshTenant();
-  return { tenantId, access: { enabled: options.entitled, aggressiveAvailable: options.aggressiveEntitled, canManage: session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin", competitorLimit: options.competitorLimit, signalLimit: options.signalLimit }, signalTypes: SIGNAL_TYPES, settings: state.settings, businessProfile: state.businessProfile, discoveryRuns: state.discoveryRuns.slice(0, 5), dossiers: state.dossiers, webDiscovery: getWebDiscoveryStatus(), competitors: state.competitors, signals: state.signals, inferences: state.inferences, audienceThemes: state.audienceThemes, creativeAnalyses: state.creativeAnalyses, interceptions: state.interceptions, opportunities: state.opportunities, mysteryEvidence: state.mysteryEvidence, audit: state.audit.slice(0, 100), metrics: { competitors: state.competitors.length, signals: state.signals.length, inferences: state.inferences.length, highConfidence: state.inferences.filter((entry) => entry.confidence === "high").length, audienceThemes: state.audienceThemes.length, blockedRequests: state.audit.filter((entry) => entry.result === "blocked").length } };
+  const tenantId = tenantFor(session, options.tenantId); const store = await load(); const state = normalizeTenantState(store.tenants[tenantId] ?? freshTenant());
+  const trackedMarketBoard = buildMarketBoard(state);
+  const starterMarketBoard = buildStarterMarketBoard(tenantId, state);
+  const marketBoard = [...trackedMarketBoard, ...starterMarketBoard.slice(0, Math.max(0, 18 - trackedMarketBoard.length))];
+  const marketBoardMode = trackedMarketBoard.length ? starterMarketBoard.length ? "mixed" : "live" : "starter";
+  const scout = buildScout(state);
+  const autoScout = buildAutoScoutReport(state, marketBoard, marketBoardMode);
+  return {
+    tenantId,
+    access: { enabled: options.entitled, aggressiveAvailable: options.aggressiveEntitled, canManage: session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin", competitorLimit: options.competitorLimit, signalLimit: options.signalLimit },
+    signalTypes: SIGNAL_TYPES,
+    settings: state.settings,
+    businessProfile: state.businessProfile,
+    discoveryRuns: state.discoveryRuns.slice(0, 5),
+    dossiers: state.dossiers,
+    webDiscovery: getWebDiscoveryStatus(),
+    scout,
+    autoScout,
+    marketBoardMode,
+    marketBoard,
+    tips: buildTips(state, marketBoard, marketBoardMode),
+    competitors: state.competitors,
+    starterCompetitors: starterCompetitors(tenantId).filter((item) => starterMarketBoard.some((boardItem) => boardItem.competitorId === item.id)),
+    signals: state.signals,
+    inferences: state.inferences,
+    audienceThemes: state.audienceThemes,
+    creativeAnalyses: state.creativeAnalyses,
+    interceptions: state.interceptions,
+    opportunities: state.opportunities,
+    mysteryEvidence: state.mysteryEvidence,
+    audit: state.audit.slice(0, 100),
+    metrics: {
+      competitors: state.competitors.length,
+      starterCompetitors: starterMarketBoard.length,
+      marketMap: marketBoard.length,
+      signals: state.signals.length,
+      inferences: state.inferences.length,
+      highConfidence: state.inferences.filter((entry) => entry.confidence === "high").length,
+      audienceThemes: state.audienceThemes.length,
+      blockedRequests: state.audit.filter((entry) => entry.result === "blocked").length,
+      marketMovers: marketBoard.filter((entry) => entry.momentum === "gaining" || entry.momentum === "vulnerable").length,
+      activeScoutLanes: scout.lanes.filter((entry) => entry.status !== "needs_context").length,
+    },
+  };
+}
+
+export async function updateMarketScoutContext(session: AccessSession, body: Record<string, unknown>) {
+  const tenantId = tenantFor(session, body.tenantId);
+  return mutate(tenantId, (state) => {
+    const existing = state.settings.scoutContext;
+    const at = now();
+    const context: ScoutContext = {
+      businessName: clean(body.businessName ?? existing?.businessName, 120),
+      location: clean(body.location ?? existing?.location, 180),
+      offer: clean(body.offer ?? existing?.offer, 240),
+      audience: clean(body.audience ?? existing?.audience, 240),
+      goals: clean(body.goals ?? existing?.goals, 400),
+      createdAt: existing?.createdAt || at,
+      updatedAt: at,
+    };
+    if (!context.businessName && !context.location && !context.offer && !context.audience) throw new Error("Add your business, offer, location, or audience so Phantom can start the scout.");
+    requireAllowed(state, tenantId, session, "market_scout_context", `${context.businessName} ${context.location} ${context.offer} ${context.audience} ${context.goals}`);
+    state.settings.scoutContext = context;
+    state.settings.scoutEnabled = true;
+    state.settings.lastScoutRunAt = at;
+    publicAudit(state, tenantId, session.id, "market_scout_context", "allowed", "AI market scout context saved; generated public-source watch lanes.");
+    return buildScout(state);
+  });
 }
 
 export async function updateAggressiveMode(session: AccessSession, body: Record<string, unknown>, access: { aggressiveEntitled: boolean }) {

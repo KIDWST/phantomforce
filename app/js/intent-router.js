@@ -72,14 +72,23 @@ function confidenceFor(kind, text) {
 }
 
 function taskDraft(text) {
-  const title = clean(text)
-    .replace(/^.*?\b(task|todo|to-do|work item)\s*(to|:)?\s*/i, "")
-    .replace(/^assign\s+codex\s+a\s+task\s+(to|for)?\s*/i, "")
-    .replace(/^track this as\s+/i, "")
-    .trim();
+  const source = clean(text);
+  /* An explicitly quoted title always wins: `create a task called "Ship the deck"`. */
+  const quoted = source.match(/["“']([^"”']{2,90})["”']/);
+  let title = quoted
+    ? quoted[1]
+    : source
+      .replace(/^.*?\b(task|todo|to-do|work item)\s*(to|:)?\s*/i, "")
+      .replace(/^assign\s+codex\s+a\s+task\s+(to|for)?\s*/i, "")
+      .replace(/^track this as\s+/i, "")
+      /* "…a task called X" / "named X" / "titled X" previously left the
+         connective word glued to the front: title became "called X". */
+      .replace(/^(called|named|titled|for)\s+/i, "");
+  title = title.trim().replace(/^[:\-–—,\s]+/, "").trim();
+  if (title) title = title.charAt(0).toUpperCase() + title.slice(1);
   return {
     title: (title || "New task").slice(0, 90),
-    detail: clean(text).slice(0, 260),
+    detail: source.slice(0, 260),
     source: "phantom-intent-router",
   };
 }

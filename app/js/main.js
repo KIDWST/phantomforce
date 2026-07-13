@@ -2,46 +2,47 @@
 
 import {
   store, ctx, session, resolveSession, isAdmin, currentWs, currentTenantId, setWorkspace, wsName,
-  visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isStaticPublicHost,
+  visible, todaysPlan, moneyView, fmtMoney, ago, pushActivity, isLiveAdminHost, isClientPublicHost, isLocalDevHost, isStaticPublicHost,
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260713-005";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260713-005";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260713-005";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-005";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-005";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-005";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-005";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-005";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-005";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260713-005";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260713-005";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260713-005";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260713-005";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260713-005";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260713-005";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260713-005";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260713-005";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-005";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-005";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-005";
+} from "./store.js?v=phantom-live-20260713-006";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260713-006";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260713-006";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-006";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-006";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-006";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-006";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-006";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-006";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260713-006";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260713-006";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260713-006";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260713-006";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260713-006";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260713-006";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260713-006";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260713-006";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-006";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-006";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-006";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260713-005";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-005";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-005";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-005";
+} from "./orgs.js?v=phantom-live-20260713-006";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-006";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-006";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-006";
 // PhantomPlay V2 platform shell (Home/Solo/Friends/Workspace/Dev Hub) - opt-in
 // while it hardens: set localStorage "pf.phantomplay.v2" = "1" (the V2 shell has
 // a "Classic view" button to switch back). Classic stays the default experience.
-import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260713-231";
+import { renderPhantomPlay as renderPhantomPlayV2 } from "./phantomplay-v2.js?v=phantom-live-20260713-006";
 const phantomPlayV2Opted = () => { try { return localStorage.getItem("pf.phantomplay.v2") === "1"; } catch { return false; } };
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260713-006";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260713-005";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260713-005";
+} from "./customization.js?v=phantom-live-20260713-006";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260713-006";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -152,12 +153,12 @@ function showGate() {
       <h1>Sign in to Phantom.</h1>
       <form class="owner-login" data-owner-login>
         <label>
-          <span>Email</span>
-          <input type="email" data-owner-email autocomplete="username" placeholder="jordan@phantomforce.online" autofocus required />
+          <span>Owner email</span>
+          <input type="email" data-owner-email name="phantomforce-owner-email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="phantomforcesupport@gmail.com" autofocus required />
         </label>
         <label>
-          <span>Password</span>
-          <input type="password" data-owner-password autocomplete="current-password" placeholder="Password" required />
+          <span>Owner password</span>
+          <input type="password" data-owner-password name="phantomforce-owner-password" autocomplete="off" placeholder="Owner password" required />
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
@@ -177,6 +178,11 @@ function showGate() {
       const email = emailInput.value.trim();
       const password = passwordInput.value;
       if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
+      if (/(^|[._+-])(customer|client|test-client|sports)([._+-]|@)|@(customer|client|test-client|sports)\./i.test(email)) {
+        error.textContent = "This is the owner-only admin login. Use the PhantomForce owner account here. Client/test accounts belong on the client app, not admin.phantomforce.online.";
+        error.hidden = false;
+        return;
+      }
       form.classList.add("is-loading");
       try {
         ctx.session = await ownerLogin(email, password);
@@ -193,12 +199,17 @@ function showGate() {
     return;
   }
 
+  if (isClientPublicHost()) {
+    renderCustomerAuthLoading(card);
+    maybeUpgradeGateToDatabaseLogin(card, { customerApp: true, required: true });
+    return;
+  }
+
   gate.querySelectorAll("[data-enter]").forEach((btn) => {
     btn.onclick = async () => {
       const kind = btn.dataset.enter;
       if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
-      const localDevHost = location.hostname === "127.0.0.1" || location.hostname === "localhost";
-      if (localDevHost) {
+      if (isLocalDevHost()) {
         try {
           const response = await fetch("/auth/demo-login", {
             method: "POST",
@@ -238,12 +249,45 @@ function showGate() {
 /* When the backend runs real multi-user auth (database provider), the
    gate becomes an email/password sign-in — accounts, orgs, and roles
    live in Postgres, not in this shell. Checked live, never assumed. */
-function maybeUpgradeGateToDatabaseLogin(card) {
+function renderCustomerAuthLoading(card) {
+  card.innerHTML = `
+    <p class="gate-kicker">PHANTOMFORCE · CUSTOMER WORKSPACE</p>
+    <h1>Sign in to your workspace.</h1>
+    <div class="owner-login">
+      <p class="gate-note">Checking the account system...</p>
+    </div>
+    <p class="gate-note">Business owners open Business Manager here. Invited team members open Team Workspace under the same business workspace.</p>`;
+}
+
+function renderCustomerAuthBlocked(card, message = "Customer account login is not enabled on this backend.") {
+  card.innerHTML = `
+    <p class="gate-kicker">PHANTOMFORCE · CUSTOMER WORKSPACE</p>
+    <h1>Workspace sign-in is required.</h1>
+    <div class="owner-login">
+      <p class="gate-error">${message}</p>
+    </div>
+    <p class="gate-note">app.phantomforce.online only accepts real customer accounts. Jordan/admin operations stay on admin.phantomforce.online.</p>`;
+}
+
+function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
+  const { customerApp = false, required = false } = options;
   fetchAuthConfig().then((auth) => {
-    if (!auth?.databaseAuthEnabled || gate.hidden) return;
+    if (gate.hidden) return;
+    if (!auth?.databaseAuthEnabled) {
+      if (required) renderCustomerAuthBlocked(card);
+      return;
+    }
+    const heading = customerApp ? "Sign in to your workspace." : "Sign in to your business.";
+    const buttonLabel = customerApp ? "Open Workspace" : "Open Business Manager";
+    const helper = customerApp
+      ? "Owners and workspace admins land in Business Manager. Employees land in Team Workspace. Permissions come from the business workspace."
+      : "Your account, businesses, and roles are managed on the PhantomForce server.";
+    const note = customerApp
+      ? "Use the email tied to your business workspace. Platform admin accounts belong on admin.phantomforce.online."
+      : "Invited to a business? Accept your invitation first, then sign in here.";
     card.innerHTML = `
       <p class="gate-kicker">PHANTOMFORCE · SIGN IN</p>
-      <h1>Sign in to your business.</h1>
+      <h1>${heading}</h1>
       <form class="owner-login" data-db-login>
         <label>
           <span>Email</span>
@@ -255,12 +299,12 @@ function maybeUpgradeGateToDatabaseLogin(card) {
         </label>
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
-          <b>Open Business Manager</b>
-          <i>Your account, businesses, and roles are managed on the PhantomForce server.</i>
+          <b>${buttonLabel}</b>
+          <i>${helper}</i>
         </button>
         <p class="gate-error" data-db-error hidden></p>
       </form>
-      <p class="gate-note">Invited to a business? Accept your invitation first, then sign in here.</p>`;
+      <p class="gate-note">${note}</p>`;
     const form = card.querySelector("[data-db-login]");
     const error = card.querySelector("[data-db-error]");
     form.onsubmit = async (event) => {
@@ -268,20 +312,30 @@ function maybeUpgradeGateToDatabaseLogin(card) {
       error.hidden = true;
       form.classList.add("is-loading");
       try {
-        ctx.session = await databaseLogin(
+        const nextSession = await databaseLogin(
           card.querySelector("[data-db-email]").value.trim(),
           card.querySelector("[data-db-password]").value,
         );
+        if (customerApp && (nextSession?.canManageAccess || nextSession?.isSuperAdmin)) {
+          await databaseLogout();
+          session.clear();
+          ctx.session = null;
+          throw new Error("Platform admin accounts must use admin.phantomforce.online.");
+        }
+        ctx.session = nextSession;
         enterPhantom();
       } catch (err) {
         session.clear();
+        ctx.session = null;
         error.textContent = err?.message || "Sign-in failed.";
         error.hidden = false;
       } finally {
         form.classList.remove("is-loading");
       }
     };
-  }).catch(() => {});
+  }).catch(() => {
+    if (required && !gate.hidden) renderCustomerAuthBlocked(card, "The account system is not reachable. Start the backend, then sign in again.");
+  });
 }
 
 /* ============================ sidebar nav ============================ */
@@ -304,6 +358,7 @@ const BASE_NAV = [
   { id: "phantomplay", label: "PhantomPlay", icon: "film",  ws: "phantomplay", navZone: "bottom", quiet: true, optionalModule: true },
 ];
 let NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
+let navEntitlements = { loaded: false, features: null, limits: null };
 /* Mirrors NAV (desktop sidebar) 1:1 so mobile never falls behind desktop —
    same items, same ownerOnly/adminOnly gates, just a compact label and a
    horizontally scrollable strip instead of a vertical list. */
@@ -332,11 +387,26 @@ let MOBILE_NAV = NAV.map((n) => ({
   badge: n.badge,
   navZone: n.navZone,
   quiet: n.quiet,
+  navDisabled: n.navDisabled,
 }));
 
-function refreshCustomizedNavigation() {
-  NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
-  MOBILE_NAV = NAV.map((n) => ({
+function navFeatureDisabled(item) {
+  if (item?.id !== "phantomplay") return false;
+  if (!ctx.session?.database || !navEntitlements.loaded) return false;
+  const featureOff = navEntitlements.features?.phantomPlay === false;
+  const minutes = Number(navEntitlements.limits?.phantomPlayMinutesPerDay ?? 1);
+  return featureOff || minutes <= 0;
+}
+
+function orderedNavItems() {
+  return NAV
+    .filter(canAccessSurface)
+    .map((item) => ({ ...item, navDisabled: navFeatureDisabled(item) }))
+    .sort((left, right) => Number(left.navDisabled) - Number(right.navDisabled));
+}
+
+function mobileItemsFromNav(items = orderedNavItems()) {
+  return items.map((n) => ({
     id: n.id,
     label: MOBILE_LABEL_OVERRIDES[n.id] || n.label,
     icon: n.icon,
@@ -347,7 +417,32 @@ function refreshCustomizedNavigation() {
     badge: n.badge,
     navZone: n.navZone,
     quiet: n.quiet,
+    navDisabled: n.navDisabled,
   }));
+}
+
+function refreshCustomizedNavigation() {
+  NAV = customizeNavigation(BASE_NAV, isAdmin() ? "owner" : "client");
+  MOBILE_NAV = mobileItemsFromNav();
+}
+
+async function refreshNavEntitlements({ rerender = true } = {}) {
+  if (!ctx.session?.database) {
+    navEntitlements = { loaded: true, features: null, limits: null };
+  } else {
+    try {
+      const me = await fetchAuthMe();
+      navEntitlements = {
+        loaded: true,
+        features: me?.entitlements?.features || null,
+        limits: me?.entitlements?.limits || null,
+      };
+    } catch {
+      navEntitlements = { loaded: true, features: null, limits: null };
+    }
+  }
+  MOBILE_NAV = mobileItemsFromNav();
+  if (rerender) renderNav();
 }
 let activeNav = "dashboard";
 let activePageId = null;
@@ -406,12 +501,14 @@ function navStatusPill(n) {
 function renderNav() {
   const nav = $("[data-nav]");
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  nav.innerHTML = NAV.filter(canAccessSurface).map((n) => `
-    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navZone === "bottom" ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""}>
+  const items = orderedNavItems();
+  MOBILE_NAV = mobileItemsFromNav(items);
+  nav.innerHTML = items.map((n) => `
+    <button class="nav-item ${activeNav === n.id ? "is-active" : ""} ${n.navZone === "bottom" ? "nav-item-bottom" : ""} ${n.quiet ? "nav-item-quiet" : ""} ${n.navDisabled ? "nav-item-disabled" : ""}" data-nav-id="${n.id}" ${activeNav === n.id ? 'aria-current="page"' : ""} ${n.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
       ${svg(n.icon)}
       <span>${n.label}</span>
       ${n.badge && pending ? `<em class="nav-badge">${pending}</em>` : ""}
-      ${navStatusPill(n)}
+      ${n.navDisabled ? `<em class="nav-pill is-locked">OFF</em>` : navStatusPill(n)}
     </button>`).join("");
   renderMobileBottomNav();
 }
@@ -426,8 +523,9 @@ function renderMobileBottomNav() {
   const nav = $("[data-mobile-bottom-nav]");
   if (!nav) return;
   const pending = visible(store.state.approvals).filter((a) => a.status === "pending").length;
-  nav.innerHTML = MOBILE_NAV.filter(canAccessSurface).map((item) => `
-    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""}" data-mobile-nav="${esc(item.id)}" type="button" ${mobileNavActive(item) ? 'aria-current="page"' : ""}>
+  MOBILE_NAV = mobileItemsFromNav();
+  nav.innerHTML = MOBILE_NAV.map((item) => `
+    <button class="mobile-bottom-item ${mobileNavActive(item) ? "is-active" : ""} ${item.navDisabled ? "is-disabled" : ""}" data-mobile-nav="${esc(item.id)}" type="button" ${mobileNavActive(item) ? 'aria-current="page"' : ""} ${item.navDisabled ? 'aria-disabled="true" title="Disabled for this plan; the owner can enable it later."' : ""}>
       ${svg(item.icon)}
       <span>${esc(item.label)}</span>
       ${item.badge && pending ? `<em class="mobile-bottom-badge">${pending}</em>` : ""}
@@ -468,6 +566,15 @@ function goNav(id) {
   else if (item.ws) renderWorkspacePage(item.ws, true);
 }
 
+function missionMapPrompts() {
+  return [
+    "Create a task to qualify school prospects for PhantomPlay classroom games",
+    "Create a task to build the PhantomForce CRM prospect map for creators, businesses, and schools",
+    "Create a task to set up the next client onboarding workflow",
+    "Create a task to prepare Managed Growth Ops follow-up for active leads",
+  ];
+}
+
 function openOperationsMap() {
   if (activePageId) renderDashboardPage(true);
   if (openId === "operations-map") {
@@ -475,6 +582,7 @@ function openOperationsMap() {
     return;
   }
   const summary = flowSummary();
+  const prompts = missionMapPrompts();
   clearOverlayOnly();
   openId = "operations-map";
   document.body.classList.add("overlay-open");
@@ -484,13 +592,33 @@ function openOperationsMap() {
       <section class="overlay-panel">
         <header class="overlay-head">
           <div>
-            <p class="overlay-kicker">Operations map</p>
-            <h2>Live systems map</h2>
+            <p class="overlay-kicker">Mission business map</p>
+            <h2>Task creation keeper</h2>
             <p class="overlay-sub">${esc(summary.text)}</p>
           </div>
           <button class="overlay-x" data-map-close aria-label="Close operations map">✕</button>
         </header>
-        <div class="overlay-body">
+        <div class="overlay-body mission-map-body">
+          <section class="mission-map-keeper" aria-label="Mission task creation keeper">
+            <div class="mission-map-copy">
+              <p class="mission-map-kicker">Tell Phantom to create a task</p>
+              <h3>I'll map the road to success.</h3>
+              <p>Describe the outcome in plain English. Phantom turns it into a mission path with leads, follow-up, approvals, owner work, and proof - without sending, publishing, charging, or exposing anything.</p>
+            </div>
+            <div class="mission-map-road" aria-label="Road to success">
+              ${["Capture outcome", "Find client lane", "Set follow-up", "Draft offer/content", "Queue approvals", "Report progress"].map((step, i) => `
+                <span><b>${i + 1}</b>${esc(step)}</span>
+              `).join("")}
+            </div>
+            <div class="mission-map-prompts" aria-label="Task prompt starters">
+              ${prompts.map((prompt) => `
+                <button class="mission-map-prompt" type="button" data-map-prompt="${esc(prompt)}">
+                  <span>${esc(prompt)}</span>
+                  <small>Load into chat</small>
+                </button>
+              `).join("")}
+            </div>
+          </section>
           <section class="flowmap flowmap-modal is-map-open" aria-label="Live operations map">
             <div class="flow-stage" data-flowmap tabindex="-1"></div>
           </section>
@@ -597,6 +725,7 @@ async function switchWorkspace(id) {
   }
   if (!setWorkspace(id)) { renderStatusPills(); return; }
   await loadOrganizationCustomization({ onApplied: refreshCustomizedNavigation });
+  await refreshNavEntitlements({ rerender: false });
   accountMenuOpen = false;
   notifOpen = false;
   clearOverlayOnly();
@@ -642,10 +771,22 @@ function renderUser() {
   renderAccountMenu();
 }
 
-function signOut() {
-  if (confirm("Sign out of PhantomForce?")) {
-    if (ctx.session?.database) databaseLogout(); /* revoke the server session for real */
-    session.clear(); ctx.session = null; accountMenuOpen = false; closeOverlay(true); showGate();
+async function signOut() {
+  if (!confirm("Sign out of PhantomForce?")) return;
+  const databaseSession = !!ctx.session?.database;
+  accountMenuOpen = false;
+  closeOverlay(true);
+  try {
+    if (databaseSession) await databaseLogout();
+  } finally {
+    session.clear();
+    ctx.session = null;
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete("session");
+      history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch {}
+    showGate();
   }
 }
 
@@ -764,6 +905,7 @@ function renderAccountMenu() {
       accountMenuOpen = false;
       renderAccountMenu();
       if (result.ok) {
+        await refreshNavEntitlements({ rerender: false });
         pushActivity("Account", `switched active business to ${ctx.session.memberships.find((m) => m.orgId === orgId)?.orgName || orgId}.`);
         store.save();
         routeWorkspace("dashboard");
@@ -916,7 +1058,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260713-005";
+const POSE_VERSION = "phantom-live-20260713-006";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -1193,16 +1335,23 @@ function renderPlan() {
     return;
   }
   const msg = plan.length === 1 ? "One real thing needs you." : "A few real things need you.";
+  /* Each plan item knows the surface it lives on. Hardcoding "approvals" here
+     sent a task or lead straight to an empty approval queue — the count said
+     one thing was waiting and the destination said nothing was. */
+  const target = plan[0]?.open || "approvals";
+  const detail = plan.length === 1
+    ? plan[0].text
+    : `${plan.length} things need you.`;
   $("[data-plan]").innerHTML = `
     <div class="section-head"><h2>Today's plan</h2></div>
-    <button class="plan-inner" data-open-ws="approvals">
+    <button class="plan-inner" data-open-ws="${target}">
       <svg class="plan-donut" viewBox="0 0 72 72" aria-hidden="true">
         <circle cx="36" cy="36" r="30" class="plan-track"/>
         <text x="36" y="40" class="plan-pct">${plan.length}</text>
       </svg>
       <span class="plan-copy">
         <b>${msg}</b>
-        <i>${plan.length ? `${plan.length} thing${plan.length > 1 ? "s" : ""} need you.` : "Nothing waiting. Keep going."}</i>
+        <i>${esc(detail)}</i>
       </span>
       <span class="plan-arrow">${svg("arrow")}</span>
     </button>`;
@@ -1926,6 +2075,20 @@ function wireDeck() {
     if (e.target.closest("[data-notif-btn]")) { notifOpen = !notifOpen; renderNotifs(); return; }
     if (e.target.closest("[data-map-open]")) { openOperationsMap(); return; }
     if (e.target.closest("[data-map-close]")) { closeOperationsMap(); return; }
+    const mapPrompt = e.target.closest("[data-map-prompt]");
+    if (mapPrompt) {
+      const prompt = mapPrompt.dataset.mapPrompt || "";
+      closeOperationsMap();
+      renderDashboardPage(true);
+      setTimeout(() => {
+        const input = $("[data-command-input]");
+        if (!input) return;
+        input.value = prompt;
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        focusCommandInput();
+      }, reduceMotion ? 0 : 80);
+      return;
+    }
     const opener = e.target.closest("[data-open-ws]");
     if (opener) { if (notifOpen) { notifOpen = false; renderNotifs(); } routeWorkspace(opener.dataset.openWs); return; }
     if (mobileNavOpen && window.matchMedia("(max-width: 900px)").matches && !e.target.closest(".sidebar")) { setMobileNav(false); return; }
@@ -1965,7 +2128,6 @@ const mediaOpts = () => ({
   openSettings: () => routeWorkspace("settings"),
   openWorkspace: (id) => routeWorkspace(id),
   focusCommand: () => { renderDashboardPage(true); focusCommandInput(80); },
-  renderPending: (bodyEl) => { const rr = () => WORKSPACE_DEFS.media.render(bodyEl, rr); rr(); },
 });
 
 /* Owner-only runtime lanes. Keep the product vocabulary clean here too:
@@ -2722,6 +2884,13 @@ function renderWorkspacePage(id, pushHash = true) {
   lastEnteredPageKey = key;
   root.innerHTML = `
     <section class="workspace-page ${def.wide ? "workspace-page-wide" : ""} ${workspaceFirst ? "workspace-page-first" : ""} ${entering ? "page-enter" : ""}" data-workspace-page="${esc(key)}">
+      ${workspaceFirst ? "" : `<header class="workspace-page-head">
+        <div>
+          <p class="workspace-page-kicker">${esc(def.kicker)}${!def.custom && isAdmin() && currentWs() !== "phantomforce" ? ` · ${esc(wsName(currentWs()))}` : ""}</p>
+          <h1>${esc(def.title)}</h1>
+        </div>
+      </header>`}
+      ${pageWorkerHtml(key, def)}
       <div class="workspace-page-body" data-workspace-page-body></div>
     </section>`;
   renderNav();
@@ -2733,6 +2902,7 @@ function renderWorkspacePage(id, pushHash = true) {
   const rerender = () => {
     if (def.custom) def.render(body);
     else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
+    mountPageWorkers(root, mediaOpts());
   };
   rerender();
   if (pushHash && location.hash !== `#page/${key}`) {
@@ -2769,6 +2939,7 @@ function openWorkspace(id, pushHash = true) {
           </div>
           <button class="overlay-x" data-overlay-close aria-label="Close workspace">✕</button>
         </header>
+        ${pageWorkerHtml(key, def)}
         <div class="overlay-body" data-overlay-body></div>
       </section>
     </div>`;
@@ -2776,6 +2947,7 @@ function openWorkspace(id, pushHash = true) {
   const rerender = () => {
     if (def.custom) def.render(body);
     else { def.render(body, rerender); if (key === "phantom") wirePhantomConsole(body); }
+    mountPageWorkers(overlayRoot, mediaOpts());
   };
   rerender();
   overlayRoot.querySelectorAll("[data-overlay-close]").forEach((b) => b.addEventListener("click", () => closeOverlay(true)));
@@ -2956,6 +3128,7 @@ function enterPhantom() {
       renderUser();
     },
   });
+  void refreshNavEntitlements();
   requestAnimationFrame(() => phantom.classList.add("booted"));
   const q = new URLSearchParams(location.search);
   const view = (q.get("view") || "").toLowerCase();

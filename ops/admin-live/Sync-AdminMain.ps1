@@ -63,7 +63,10 @@ function Write-SyncLog {
 try {
   $branch = (Invoke-Git rev-parse --abbrev-ref HEAD).Trim()
   if ($branch -ne "main") {
-    throw "Checkout is on '$branch', not main."
+    $summary = "skipped: checkout is on '$branch', not main"
+    Write-SyncLog $summary
+    Write-Output "PhantomForce admin main $summary."
+    return
   }
 
   # A dirty tree used to abort the sync outright, which silently froze this

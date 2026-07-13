@@ -2,7 +2,7 @@
    One sidebar-docked Phantom system: preference-aware, drag-safe, always
    returns home, and tied to real chat/notification states. */
 
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-005";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-006";
 import {
   COMPANION_EVENT,
   clearCompanionSessionHide,
@@ -10,7 +10,7 @@ import {
   isCompanionHiddenForSession,
   loadCompanionPrefs,
   updateCompanionPrefs,
-} from "./companion-preferences.js?v=phantom-live-20260713-005";
+} from "./companion-preferences.js?v=phantom-live-20260713-006";
 
 const reduceMotionQuery = window.matchMedia("(prefers-reduced-motion: reduce)");
 const LEGACY_DOCK_KEY = "pf.buddy.docked.v1";
@@ -105,11 +105,14 @@ function createBuddyController() {
   let stateUntil = 0;
   let pulse = 0;
   let lastPointer = { x: -9999, y: -9999 };
+  let lastHitTestAt = 0;
   let sayTimer = 0;
   let nextIdleAt = 0;
   let nextWanderAt = 0;
   let lastPaintAt = 0;
   let geometryRaf = 0;
+  let revealAt = 0;
+  let revealed = false;
 
   function mobile() { return window.matchMedia("(max-width: 720px)").matches; }
   function reduceMotion() { return reduceMotionQuery.matches || prefs.motionLevel === "reduced" || prefs.motionLevel === "none"; }
@@ -127,26 +130,24 @@ function createBuddyController() {
     const side = sidebarRect();
     const sidebar = document.querySelector(".sidebar");
     const nav = sidebar?.querySelector(".side-nav");
-    const bottomItems = nav ? [...nav.querySelectorAll(".nav-item-bottom")].filter((item) => {
-      const rect = item.getBoundingClientRect();
-      return rect.width > 0 && rect.height > 0;
-    }) : [];
-    const firstBottomItem = bottomItems.length ? bottomItems[0].getBoundingClientRect() : null;
-    const sideTop = 0;
-    const sideBottom = window.innerHeight;
-    const utilityAtBottom = firstBottomItem && firstBottomItem.top > window.innerHeight * 0.55;
-    const bottomLimit = utilityAtBottom
-      ? Math.max(sideTop + 130, firstBottomItem.top - 16)
-      : sideBottom - 28;
-    const zoneHeight = Math.min(172, Math.max(112, side.height * 0.22));
-    const top = Math.max(sideTop + 92, bottomLimit - zoneHeight);
-    const bottom = Math.max(top + 108, bottomLimit);
+    const navItems = nav ? [...nav.querySelectorAll(".nav-item")].map((item) => item.getBoundingClientRect()).filter((rect) => (
+      rect.width > 0 &&
+      rect.height > 0 &&
+      rect.bottom > 0 &&
+      rect.top < window.innerHeight
+    )) : [];
+    const sideTop = Math.max(0, side.top || 0);
+    const sideBottom = Math.min(window.innerHeight, side.bottom || window.innerHeight);
+    const lastNavBottom = navItems.length ? Math.max(...navItems.map((rect) => rect.bottom)) : (sideTop + 420);
+    const bottom = Math.max(sideTop + 120, sideBottom - 12);
+    const top = Math.min(Math.max(lastNavBottom + 14, sideTop + 250), Math.max(sideTop + 120, bottom - 76));
     return {
       left: side.left,
       top,
       bottom,
       width: side.width,
-      height: Math.max(108, bottom - top),
+      height: Math.max(76, bottom - top),
+      cramped: false,
     };
   }
 
@@ -174,11 +175,19 @@ function createBuddyController() {
     const base = sizeForPrefs();
     if (!sidebarPortraitMode()) return { width: base, height: base };
     const zone = sidebarDockZone();
-    const width = Math.round(Math.min(Math.max(base, 54), Math.max(54, Math.min(76, zone.width - 42))));
-    const height = Math.round(Math.min(Math.max(base + 4, 60), Math.max(60, Math.min(82, zone.height - 18))));
+    const width = Math.round(Math.min(Math.max(base, 68), Math.max(68, Math.min(100, zone.width - 30))));
+    const height = Math.round(Math.min(Math.max(base + 46, 118), Math.max(76, Math.min(168, zone.height - 8))));
     return {
       width,
       height,
+    };
+  }
+
+  function bottomRightPoint() {
+    const inset = safeInsets();
+    return {
+      x: window.innerWidth - inset.right - buddyWidth / 2,
+      y: window.innerHeight - inset.bottom - buddyHeight / 2,
     };
   }
 
@@ -262,7 +271,7 @@ function createBuddyController() {
   function createLayer() {
     if (layer) return;
     layer = document.createElement("div");
-    layer.className = "buddy is-docked";
+    layer.className = "buddy is-docked is-booting";
     layer.setAttribute("data-buddy", "");
     layer.innerHTML = `
       <div class="buddy-say" data-buddy-say hidden></div>
@@ -275,7 +284,7 @@ function createBuddyController() {
         <hr />
         <button type="button" data-buddy-action="dock" role="menuitem">Return to sidebar</button>
         <button type="button" data-buddy-action="quiet" role="menuitem">Quiet mode</button>
-        <button type="button" data-buddy-action="hide" role="menuitem">Hide for this session</button>
+        <button type="button" data-buddy-action="hide" role="menuitem">Hide for 30 minutes</button>
         <button type="button" data-buddy-action="disable" role="menuitem">Disable companion</button>
         <hr />
         <label>Size <select data-buddy-pref="size">
@@ -311,6 +320,8 @@ function createBuddyController() {
     document.body.appendChild(menu);
     ctx2 = canvas.getContext("2d");
     character = createPhantomCharacter({ small: true });
+    revealed = false;
+    revealAt = performance.now() + 720;
     bindEvents();
     configureCanvas({ snap: true });
   }
@@ -326,6 +337,8 @@ function createBuddyController() {
     if (layer) layer.remove();
     if (menu) menu.remove(); // re-parented to <body>, so the layer no longer owns it
     layer = canvas = sayEl = menu = ctx2 = character = null;
+    revealed = false;
+    revealAt = 0;
   }
 
   function syncMenuControls() {
@@ -546,6 +559,33 @@ function createBuddyController() {
     if (menu) menu.hidden = true;
   }
 
+  function buddyRectHit(clientX, clientY) {
+    if (!canvas || !layer) return false;
+    if (document.body.classList.contains("overlay-open")) return false;
+    if (getComputedStyle(layer).opacity === "0") return false;
+    const rect = canvas.getBoundingClientRect();
+    return !(
+      rect.width <= 0 ||
+      rect.height <= 0 ||
+      clientX < rect.left ||
+      clientX > rect.right ||
+      clientY < rect.top ||
+      clientY > rect.bottom
+    );
+  }
+
+  function buddyHitTest(clientX, clientY, alphaThreshold = 8) {
+    if (!canvas || !ctx2 || !buddyRectHit(clientX, clientY)) return false;
+    const rect = canvas.getBoundingClientRect();
+    try {
+      const sx = Math.max(0, Math.min(canvas.width - 1, Math.floor((clientX - rect.left) * (canvas.width / rect.width))));
+      const sy = Math.max(0, Math.min(canvas.height - 1, Math.floor((clientY - rect.top) * (canvas.height / rect.height))));
+      return ctx2.getImageData(sx, sy, 1, 1).data[3] > alphaThreshold;
+    } catch {
+      return true;
+    }
+  }
+
   function handleMenuAction(action) {
     if (action === "ask") focusChat();
     else if (action === "notifications") document.querySelector("[data-notif-btn]")?.click();
@@ -555,6 +595,32 @@ function createBuddyController() {
     else if (action === "hide") hideCompanionForSession();
     else if (action === "disable") updateCompanionPrefs({ enabled: false });
     closeMenu();
+  }
+
+  function openMenuFromPointerEvent(event, { requireRightButton = true } = {}) {
+    if (!canvas || !menu || menu.contains(event.target)) return false;
+    if (requireRightButton && event.button !== 2) return false;
+    if (event.target !== canvas && !buddyRectHit(event.clientX, event.clientY)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    canvas.style.pointerEvents = "auto";
+    setState("curious", 1200);
+    openMenu(event.clientX, event.clientY);
+    return true;
+  }
+
+  /* The canvas is a big rectangle but the ghost only fills part of it. Keep the
+     canvas click-through by default and only accept the pointer while it is over
+     an actually painted pixel — otherwise the companion silently eats clicks on
+     whatever nav buttons it happens to float across. */
+  function updatePointerHitState(force = false) {
+    if (!canvas || !ctx2) return;
+    if (dragging || (menu && !menu.hidden)) { canvas.style.pointerEvents = "auto"; return; }
+    const now = performance.now();
+    if (!force && now - lastHitTestAt < 30) return;
+    lastHitTestAt = now;
+    const over = buddyHitTest(lastPointer.x, lastPointer.y);
+    canvas.style.pointerEvents = over ? "auto" : "none";
   }
 
   function bindEvents() {
@@ -569,12 +635,21 @@ function createBuddyController() {
         if (docked || mobile()) setTargetToDock();
       });
     };
-    window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; }, { passive: true, signal });
+    window.addEventListener("pointermove", (event) => { lastPointer = { x: event.clientX, y: event.clientY }; updatePointerHitState(); }, { passive: true, signal });
     window.addEventListener("resize", () => { configureCanvas({ snap: true }); if (docked || mobile()) dock(); }, { passive: true, signal });
     document.addEventListener("scroll", scheduleGeometryRefresh, { passive: true, capture: true, signal });
+    document.addEventListener("pointerdown", (event) => {
+      openMenuFromPointerEvent(event);
+    }, { capture: true, signal });
+    document.addEventListener("mousedown", (event) => {
+      openMenuFromPointerEvent(event);
+    }, { capture: true, signal });
     document.addEventListener("click", (event) => {
       if (menu && !menu.hidden && !menu.contains(event.target) && event.target !== canvas) closeMenu();
     }, { signal });
+    document.addEventListener("contextmenu", (event) => {
+      openMenuFromPointerEvent(event, { requireRightButton: false });
+    }, { capture: true, signal });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeMenu();
     }, { signal });
@@ -628,10 +703,6 @@ function createBuddyController() {
       updateCompanionPrefs({ roamingEnabled: false, startDocked: true, dockLocation: "sidebar" });
       dock();
       say("Back home.", 1500);
-    }, { signal });
-    canvas.addEventListener("contextmenu", (event) => {
-      event.preventDefault();
-      openMenu(event.clientX, event.clientY);
     }, { signal });
     canvas.addEventListener("keydown", (event) => {
       if (event.key === "Enter" || event.key === " ") { event.preventDefault(); focusChat(); }
@@ -738,6 +809,13 @@ function createBuddyController() {
         moodAge: stateUntil ? Math.max(0, (stateUntil - now) * 0.001) : 2,
       });
       if (portrait) ctx2.restore();
+      updatePointerHitState(true);
+      if (!revealed && now >= revealAt) {
+        revealed = true;
+        layer.classList.remove("is-booting");
+        layer.classList.add("is-ready");
+        updatePointerHitState(true);
+      }
     };
     requestAnimationFrame(frame);
   }

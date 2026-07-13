@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,9 +8,14 @@ import type { AccessSession } from "../access/session.js";
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
 const storePath = process.env.PHANTOMFORCE_PHANTOMPLAY_PATH || resolve(repoRoot, ".phantom", "phantomplay.json");
+const retryableWriteCodes = new Set(["EPERM", "EACCES", "EBUSY"]);
 
 export type PhantomPlayRating = "everyone" | "teen" | "mature";
 export type PhantomPlaySubmissionStatus = "draft" | "submitted" | "changes_requested" | "approved" | "rejected" | "disabled";
+export type PhantomPlayEngineProfile = {
+  tier: string;
+  minVersion: string;
+};
 
 export type PhantomPlayGame = {
   id: string;
@@ -21,6 +26,7 @@ export type PhantomPlayGame = {
   tags: string[];
   contentRating: PhantomPlayRating;
   developer: string;
+  developerAvatar?: string;
   kind: "built_in" | "community";
   launchUrl: string;
   thumbnail: string;
@@ -29,6 +35,35 @@ export type PhantomPlayGame = {
   controls: string;
   progressSupport: boolean;
   scoreSupport: boolean;
+  engine?: PhantomPlayEngineProfile;
+};
+
+const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
+export const PHANTOMPLAY_ENGINE = {
+  version: "2.0-large-map",
+  saveStateBytes: 262_144,
+  largeMap: { chunkSize: 1024, maxLoadedChunks: 64, streaming: true },
+  protocols: ["ready", "score", "progress", "complete", "paused", "exit", "settings", "save-state", "load-state"],
+} as const;
+const artUrl = (file: string) => `/app/assets/phantomplay/${file}?v=${PHANTOMPLAY_ART_VERSION}`;
+const TAK_AVATAR = artUrl("tak-avatar.webp");
+const GAME_ART_BY_SLUG: Record<string, string> = {
+  "neon-drift": artUrl("neon-drift-cover.webp"),
+  "signal-match": artUrl("signal-match-cover.webp"),
+  "focus-stack": artUrl("focus-stack-cover.webp"),
+  "word-weld": artUrl("word-weld-cover.webp"),
+  "reflex-grid": artUrl("reflex-grid-cover.webp"),
+  "penalty-kick": artUrl("penalty-kick-cover.webp"),
+  "rift-frenzy": artUrl("neon-drift-cover.webp"),
+  "serpent-surge": artUrl("reflex-grid-cover.webp"),
+};
+const CATEGORY_ART: Record<string, string> = {
+  Arcade: GAME_ART_BY_SLUG["neon-drift"],
+  Puzzle: GAME_ART_BY_SLUG["signal-match"],
+  Focus: GAME_ART_BY_SLUG["focus-stack"],
+  Strategy: GAME_ART_BY_SLUG["reflex-grid"],
+  Sports: GAME_ART_BY_SLUG["penalty-kick"],
+  Creative: GAME_ART_BY_SLUG["word-weld"],
 };
 
 type PlaySession = {
@@ -55,6 +90,46 @@ type PlayerProfile = {
     allowCommunityGames: boolean;
   };
   updatedAt: string;
+};
+
+type PhantomPlayRoomMode = "friends" | "classroom";
+type PhantomPlayRoomStatus = "open" | "locked" | "ended" | "expired";
+type PhantomPlayRoomParticipant = {
+  actorId: string;
+  label: string;
+  role: "host" | "player";
+  status: "online" | "left";
+  joinedAt: string;
+  lastSeenAt: string;
+};
+
+export type PhantomPlayRoom = {
+  id: string;
+  code: string;
+  tenantId: string;
+  hostActorId: string;
+  hostLabel: string;
+  gameId: string;
+  gameTitle: string;
+  mode: PhantomPlayRoomMode;
+  status: PhantomPlayRoomStatus;
+  maxPlayers: number;
+  createdAt: string;
+  updatedAt: string;
+  expiresAt: string;
+  participants: PhantomPlayRoomParticipant[];
+  safety: {
+    transport: "workspace_relay";
+    joinPolicy: "signed_in_same_tenant_code";
+    publicDiscovery: false;
+    directPeerConnection: false;
+    inboundDevicePorts: false;
+    chat: false;
+    voice: false;
+    externalGameNetworking: false;
+    inviteTtlMinutes: number;
+    contentPolicy: "everyone_rating_required" | "profile_content_setting";
+  };
 };
 
 export type PhantomPlaySubmission = {
@@ -84,6 +159,7 @@ export type PhantomPlaySubmission = {
 type PhantomPlayStore = {
   version: 1;
   profiles: Record<string, PlayerProfile>;
+  rooms: PhantomPlayRoom[];
   submissions: PhantomPlaySubmission[];
 };
 
@@ -93,35 +169,38 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
   {
     id: "neon-drift",
     title: "Neon Drift",
-    summary: "Hard-mode signal drifting with levels, music, and animated hazards.",
-    description: "A harder arcade run with ten escalating levels, original synth tones, animated mines, slicers, sweepers, splitters, shields, pause, restart, touch, and keyboard controls.",
+    summary: "Auto-fire spaceship shooter with waves, powerups, and shield saves.",
+    description: "A real arcade shooter: move with WASD/arrow keys or touch-drag, fire nonstop, collect rapid fire, spread shot, shield, magnet, and repair powerups, then push deeper into harder waves.",
     category: "Arcade",
-    tags: ["quick", "reaction", "keyboard", "touch"],
+    tags: ["shooter", "powerups", "arcade", "touch"],
     contentRating: "everyone",
-    developer: TAK_CREATOR,
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/neon-drift.html?v=1.2.0",
-    thumbnail: "/app/assets/poses/mode-dark-video.webp",
+    launchUrl: "/app/games/neon-drift.html?v=1.2.3",
+    thumbnail: GAME_ART_BY_SLUG["neon-drift"],
     featured: true,
-    version: "1.2.0",
-    controls: "Arrow keys, A/D, or hold left/right",
+    version: "1.2.3",
+    controls: "WASD/arrow keys to fly. Auto-fire is always on. Touch and drag on mobile.",
     progressSupport: true,
     scoreSupport: true,
+    engine: { tier: "arcade-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
   },
   {
     id: "signal-match",
     title: "Signal Match",
-    summary: "Watch the flash, memorize positions, then match every pair.",
-    description: "A real memory round: the full grid flashes first, then hides so players match symbols from memory with moves, pause, restart, touch, and keyboard support.",
+    summary: "Find the matching signals before the grid resets.",
+    description: "A calm memory game with short rounds, a visible score, keyboard support, and saved best scores.",
     category: "Puzzle",
     tags: ["memory", "flash", "puzzle", "touch"],
     contentRating: "everyone",
-    developer: TAK_CREATOR,
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/signal-match.html?v=1.2.0",
-    thumbnail: "/app/assets/poses/mode-dark-image.webp",
+    launchUrl: "/app/games/signal-match.html?v=1.1.1",
+    thumbnail: GAME_ART_BY_SLUG["signal-match"],
     featured: true,
-    version: "1.2.0",
+    version: "1.1.1",
     controls: "Click, tap, or use Tab + Enter",
     progressSupport: true,
     scoreSupport: true,
@@ -130,124 +209,345 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     id: "focus-stack",
     title: "Focus Stack",
     summary: "Drop each layer cleanly and build the tallest signal tower.",
-    description: "A timing game designed for quick intentional breaks, with resumable progress and a local best score.",
+    description: "A timing game designed for quick intentional breaks, with visible score, resumable progress, and a local best score.",
     category: "Focus",
     tags: ["timing", "focus", "quick", "touch"],
     contentRating: "everyone",
-    developer: TAK_CREATOR,
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/focus-stack.html?v=1.1.0",
-    thumbnail: "/app/assets/poses/mode-dark-website.webp",
+    launchUrl: "/app/games/focus-stack.html?v=1.1.1",
+    thumbnail: GAME_ART_BY_SLUG["focus-stack"],
     featured: false,
-    version: "1.1.0",
+    version: "1.1.1",
     controls: "Space, Enter, click, or tap",
     progressSupport: true,
     scoreSupport: true,
   },
   {
-    id: "reflex-grid", title: "Reflex Grid", summary: "Hit the lit cell before the fuse burns out.",
-    description: "A nine-cell reaction test that speeds up as you score. Three misses ends the run.",
-    category: "Arcade", tags: ["reaction", "quick", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/reflex-grid.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: true, version: "1.0.0",
-    controls: "Tap/click a cell or press 1-9", progressSupport: true, scoreSupport: true,
+    id: "word-weld",
+    title: "Word Weld",
+    summary: "Build as many words as you can from one shifting signal rack.",
+    description: "A quick word-building game with tap, keyboard, score, timer, and clean reset controls.",
+    category: "Creative",
+    tags: ["word", "creative", "quick", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/word-weld.html?v=1.0.0",
+    thumbnail: GAME_ART_BY_SLUG["word-weld"],
+    featured: true,
+    version: "1.0.0",
+    controls: "Keyboard, tap letters, Enter to submit",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "penalty-kick", title: "Penalty Kick", summary: "Beat the keeper — time your shot past the moving save zone.",
-    description: "Read the sweeping reticle and the keeper's reach, then strike. The keeper gets faster every round.",
-    category: "Sports", tags: ["sports", "timing", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/penalty-kick.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.0",
-    controls: "Space or tap to shoot", progressSupport: true, scoreSupport: true,
+    id: "reflex-grid",
+    title: "Reflex Grid",
+    summary: "Hit the live cells before the grid burns out.",
+    description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.",
+    category: "Strategy",
+    tags: ["reaction", "strategy", "touch", "aim"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/reflex-grid.html?v=1.0.0",
+    thumbnail: GAME_ART_BY_SLUG["reflex-grid"],
+    featured: true,
+    version: "1.0.0",
+    controls: "Click, tap, or use number keys",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "color-rush", title: "Color Rush", summary: "Catch only the target color as the tiles fall faster.",
+    id: "penalty-kick",
+    title: "Penalty Kick",
+    summary: "Pick your lane, time the strike, and beat the keeper.",
+    description: "A touch-friendly sports timing game with five shots, visible score, keeper reads, and saved score.",
+    category: "Sports",
+    tags: ["sports", "timing", "soccer", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/penalty-kick.html?v=1.0.1",
+    thumbnail: GAME_ART_BY_SLUG["penalty-kick"],
+    featured: false,
+    version: "1.0.1",
+    controls: "Choose a lane, then tap shoot at the sweet spot",
+    progressSupport: true,
+    scoreSupport: true,
+  },
+  {
+    id: "rift-frenzy",
+    title: "Rift Frenzy",
+    summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.",
+    description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.",
+    category: "Arcade",
+    tags: ["fish", "arena", "growth", "io", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/rift-frenzy.html?v=1.0.4",
+    thumbnail: GAME_ART_BY_SLUG["rift-frenzy"],
+    featured: true,
+    version: "1.0.4",
+    controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.",
+    progressSupport: true,
+    scoreSupport: true,
+    engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
+  },
+  {
+    id: "serpent-surge",
+    title: "Serpent Surge",
+    summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure.",
+    description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring without any external networking.",
+    category: "Strategy",
+    tags: ["snake", "arena", "io", "survival", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/serpent-surge.html?v=1.0.4",
+    thumbnail: GAME_ART_BY_SLUG["serpent-surge"],
+    featured: true,
+    version: "1.0.4",
+    controls: "Steer with mouse, touch, WASD, or arrows. Hold Space or touch pressure to boost.",
+    progressSupport: true,
+    scoreSupport: true,
+    engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version },
+  },
+  {
+    id: "color-rush",
+    title: "Color Rush",
+    summary: "Catch only the target color as the tiles fall faster.",
     description: "Four falling columns and a rotating target color. Catch the right hue, ignore the rest, keep three lives.",
-    category: "Arcade", tags: ["reaction", "color", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/color-rush.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
-    controls: "A/S/D/F or tap a column", progressSupport: true, scoreSupport: true,
+    category: "Arcade",
+    tags: ["reaction", "color", "keyboard", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/color-rush.html",
+    thumbnail: CATEGORY_ART["Arcade"],
+    featured: false,
+    version: "1.0.0",
+    controls: "A/S/D/F or tap a column",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "word-weld", title: "Word Weld", summary: "Weld the letters into as many words as you can before time runs out.",
-    description: "A 90-second word builder with a real dictionary. Longer words score exponentially higher.",
-    category: "Puzzle", tags: ["word", "vocabulary", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/word-weld.html", thumbnail: "/app/assets/poses/mode-dark-write.webp", featured: true, version: "1.0.0",
-    controls: "Type letters, Enter to submit, Space to shuffle", progressSupport: true, scoreSupport: true,
-  },
-  {
-    id: "tile-flow", title: "Tile Flow", summary: "Rotate the pipes to connect the signal end to end.",
+    id: "tile-flow",
+    title: "Tile Flow",
+    summary: "Rotate the pipes to connect the signal end to end.",
     description: "Eight hand-verified solvable levels. Turn each tile until the flow reaches the exit.",
-    category: "Puzzle", tags: ["logic", "calm", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/tile-flow.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0",
-    controls: "Click/tap to rotate, arrows to move", progressSupport: true, scoreSupport: true,
+    category: "Puzzle",
+    tags: ["logic", "calm", "keyboard", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/tile-flow.html",
+    thumbnail: CATEGORY_ART["Puzzle"],
+    featured: false,
+    version: "1.0.0",
+    controls: "Click/tap to rotate, arrows to move",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "tower-tactics", title: "Tower Tactics", summary: "Slide and merge matching tiles to build the highest number.",
+    id: "tower-tactics",
+    title: "Tower Tactics",
+    summary: "Slide and merge matching tiles to build the highest number.",
     description: "A tight 4x4 merge puzzle. Plan your slides — the board fills fast when you stop thinking ahead.",
-    category: "Strategy", tags: ["merge", "strategy", "keyboard", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/tower-tactics.html", thumbnail: "/app/assets/poses/mode-dark-admin.webp", featured: false, version: "1.0.0",
-    controls: "Arrow keys or swipe", progressSupport: true, scoreSupport: true,
+    category: "Strategy",
+    tags: ["merge", "strategy", "keyboard", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/tower-tactics.html",
+    thumbnail: CATEGORY_ART["Strategy"],
+    featured: false,
+    version: "1.0.0",
+    controls: "Arrow keys or swipe",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "breath-pacer", title: "Breath Pacer", summary: "Match your breath to the pacer and reset in two minutes.",
+    id: "breath-pacer",
+    title: "Breath Pacer",
+    summary: "Match your breath to the pacer and reset in two minutes.",
     description: "A box-breathing companion. Follow the expanding ring through inhale, hold, exhale, hold and score your timing.",
-    category: "Focus", tags: ["calm", "breathing", "wellness", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/breath-pacer.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: false, version: "1.0.0",
-    controls: "Tap or press Space on each phase", progressSupport: true, scoreSupport: true,
+    category: "Focus",
+    tags: ["calm", "breathing", "wellness", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/breath-pacer.html",
+    thumbnail: CATEGORY_ART["Focus"],
+    featured: false,
+    version: "1.0.0",
+    controls: "Tap or press Space on each phase",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "court-vision", title: "Court Vision", summary: "Read the arc and power to sink the free throw.",
+    id: "court-vision",
+    title: "Court Vision",
+    summary: "Read the arc and power to sink the free throw.",
     description: "A physics free-throw shooter. The distance and rim grow with every make; three misses ends the game.",
-    category: "Sports", tags: ["sports", "physics", "timing", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/court-vision.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: false, version: "1.0.0",
-    controls: "Tap or press Space to shoot", progressSupport: true, scoreSupport: true,
+    category: "Sports",
+    tags: ["sports", "physics", "timing", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/court-vision.html",
+    thumbnail: CATEGORY_ART["Sports"],
+    featured: false,
+    version: "1.0.0",
+    controls: "Tap or press Space to shoot",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "pixel-bloom", title: "Pixel Bloom", summary: "Bloom a symmetric neon mandala — no timer, no pressure.",
+    id: "pixel-bloom",
+    title: "Pixel Bloom",
+    summary: "Bloom a symmetric neon mandala — no timer, no pressure.",
     description: "A calm creative toy. Place petals that mirror four ways; build combos as the pattern fills.",
-    category: "Creative", tags: ["calm", "creative", "relax", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/pixel-bloom.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
-    controls: "Tap cells or arrows + Space", progressSupport: true, scoreSupport: true,
+    category: "Creative",
+    tags: ["calm", "creative", "relax", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/pixel-bloom.html",
+    thumbnail: CATEGORY_ART["Creative"],
+    featured: false,
+    version: "1.0.0",
+    controls: "Tap cells or arrows + Space",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "circuit-serpent", title: "Circuit Serpent", summary: "Grow the serpent — eat packets, dodge walls and your own tail.",
+    id: "circuit-serpent",
+    title: "Circuit Serpent",
+    summary: "Grow the serpent — eat packets, dodge walls and your own tail.",
     description: "Classic snake on a 17x17 circuit board. Speed climbs every five packets; one crash ends the run.",
-    category: "Arcade", tags: ["snake", "classic", "reaction", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/circuit-serpent.html", thumbnail: "/app/assets/poses/mode-dark-admin.webp", featured: false, version: "1.0.0",
-    controls: "Arrows/WASD, swipe, or tap screen edges", progressSupport: true, scoreSupport: true,
+    category: "Arcade",
+    tags: ["snake", "classic", "reaction", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/circuit-serpent.html",
+    thumbnail: CATEGORY_ART["Arcade"],
+    featured: false,
+    version: "1.0.0",
+    controls: "Arrows/WASD, swipe, or tap screen edges",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "echo-sequence", title: "Echo Sequence", summary: "Watch the pads light up, then echo the pattern back.",
+    id: "echo-sequence",
+    title: "Echo Sequence",
+    summary: "Watch the pads light up, then echo the pattern back.",
     description: "A memory-sequence classic with four glowing pads and original tones. One wrong echo ends the run.",
-    category: "Focus", tags: ["memory", "sequence", "sound", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/echo-sequence.html", thumbnail: "/app/assets/poses/mode-dark-ask.webp", featured: true, version: "1.0.0",
-    controls: "Tap pads or press 1-4", progressSupport: true, scoreSupport: true,
+    category: "Focus",
+    tags: ["memory", "sequence", "sound", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/echo-sequence.html",
+    thumbnail: CATEGORY_ART["Focus"],
+    featured: true,
+    version: "1.0.0",
+    controls: "Tap pads or press 1-4",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "signal-sweeper", title: "Signal Sweeper", summary: "Clear the grid without touching a mine — the numbers tell the truth.",
+    id: "signal-sweeper",
+    title: "Signal Sweeper",
+    summary: "Clear the grid without touching a mine — the numbers tell the truth.",
     description: "Minesweeper with a guaranteed-safe first reveal, flag mode, long-press flagging, and a race-the-clock score.",
-    category: "Strategy", tags: ["logic", "classic", "mines", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/signal-sweeper.html", thumbnail: "/app/assets/poses/mode-dark-website.webp", featured: false, version: "1.0.0",
-    controls: "Tap to reveal, long-press or F to flag", progressSupport: true, scoreSupport: true,
+    category: "Strategy",
+    tags: ["logic", "classic", "mines", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/signal-sweeper.html",
+    thumbnail: CATEGORY_ART["Strategy"],
+    featured: false,
+    version: "1.0.0",
+    controls: "Tap to reveal, long-press or F to flag",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "neon-breaker", title: "Neon Breaker", summary: "Break every brick — the angle is yours to control.",
-    description: "Breakout with real deflection physics, six brick tiers, and levels that speed up as you clear them.",
-    category: "Arcade", tags: ["classic", "paddle", "levels", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/neon-breaker.html", thumbnail: "/app/assets/poses/mode-dark-video.webp", featured: true, version: "1.0.0",
-    controls: "Drag or Arrow keys, Space to launch", progressSupport: true, scoreSupport: true,
+    id: "neon-breaker",
+    title: "Neon Breaker",
+    summary: "Break every brick — the angle is yours to control.",
+    description: "Breakout with real deflection physics, six brick tiers, and levels that speed up as they clear.",
+    category: "Arcade",
+    tags: ["classic", "paddle", "levels", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/neon-breaker.html",
+    thumbnail: CATEGORY_ART["Arcade"],
+    featured: true,
+    version: "1.0.0",
+    controls: "Drag or Arrow keys, Space to launch",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "type-storm", title: "Type Storm", summary: "Type the falling words before they breach your shields.",
+    id: "type-storm",
+    title: "Type Storm",
+    summary: "Type the falling words before they breach your shields.",
     description: "A typing sprint with 200 words, combo streaks, and a pace that keeps climbing. Three shields, no mercy.",
-    category: "Focus", tags: ["typing", "speed", "keyboard", "words"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/type-storm.html", thumbnail: "/app/assets/poses/mode-dark-write.webp", featured: false, version: "1.0.0",
-    controls: "Just type — tap first on mobile", progressSupport: true, scoreSupport: true,
+    category: "Focus",
+    tags: ["typing", "speed", "keyboard", "words"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/type-storm.html",
+    thumbnail: CATEGORY_ART["Focus"],
+    featured: false,
+    version: "1.0.0",
+    controls: "Just type — tap first on mobile",
+    progressSupport: true,
+    scoreSupport: true,
   },
   {
-    id: "logic-lights", title: "Logic Lights", summary: "Turn every light off — each tap flips its neighbors too.",
+    id: "logic-lights",
+    title: "Logic Lights",
+    summary: "Turn every light off — each tap flips its neighbors too.",
     description: "Ten hand-guaranteed solvable Lights Out levels with par scores. Beat par, bank the points.",
-    category: "Puzzle", tags: ["logic", "lights-out", "calm", "touch"], contentRating: "everyone", developer: TAK_CREATOR, kind: "built_in",
-    launchUrl: "/app/games/logic-lights.html", thumbnail: "/app/assets/poses/mode-dark-image.webp", featured: false, version: "1.0.0",
-    controls: "Tap cells or arrows + Enter", progressSupport: true, scoreSupport: true,
+    category: "Puzzle",
+    tags: ["logic", "lights-out", "calm", "touch"],
+    contentRating: "everyone",
+    developer: "Tak",
+    developerAvatar: TAK_AVATAR,
+    kind: "built_in",
+    launchUrl: "/app/games/logic-lights.html",
+    thumbnail: CATEGORY_ART["Puzzle"],
+    featured: false,
+    version: "1.0.0",
+    controls: "Tap cells or arrows + Enter",
+    progressSupport: true,
+    scoreSupport: true,
   },
 ];
 
@@ -257,6 +557,7 @@ const now = () => new Date().toISOString();
 const clamp = (value: unknown, min: number, max: number) => Math.max(min, Math.min(max, Number(value) || 0));
 const safeRating = (value: unknown): PhantomPlayRating => value === "mature" || value === "teen" ? value : "everyone";
 const safeVersion = (value: unknown) => /^\d+\.\d+\.\d+(?:-[a-z0-9.-]+)?$/i.test(clean(value, 40)) ? clean(value, 40) : "1.0.0";
+const ROOM_TTL_MINUTES = 90;
 const privateHost = (hostname: string) => {
   const host = hostname.toLowerCase().replace(/^\[|\]$/g, "");
   if (host === "localhost" || [".localhost", ".local", ".internal", ".lan", ".home"].some((suffix) => host.endsWith(suffix)) || host === "0.0.0.0" || host === "::1") return true;
@@ -287,6 +588,47 @@ const safeScreenshot = (value: unknown) => {
   return publicHttpsUrl(url);
 };
 
+function slugifyGame(value: unknown) {
+  return clean(value, 180).toLowerCase()
+    .replace(/^community:/u, "")
+    .replace(/['']/gu, "")
+    .replace(/[^a-z0-9]+/gu, "-")
+    .replace(/^-+|-+$/gu, "");
+}
+
+function artSlugFor(game: Pick<PhantomPlayGame, "id" | "title">) {
+  const idSlug = slugifyGame(game.id);
+  if (GAME_ART_BY_SLUG[idSlug]) return idSlug;
+  const titleSlug = slugifyGame(game.title);
+  return GAME_ART_BY_SLUG[titleSlug] ? titleSlug : "";
+}
+
+function isPlaceholderThumbnail(value: unknown) {
+  const thumbnail = clean(value, 700);
+  return !thumbnail || thumbnail.includes("/app/assets/poses/") || thumbnail.includes("brand-phantom") || thumbnail.includes("mode-dark");
+}
+
+function thumbnailFor(game: PhantomPlayGame) {
+  const slug = artSlugFor(game);
+  if (slug) return GAME_ART_BY_SLUG[slug];
+  if (isPlaceholderThumbnail(game.thumbnail)) return CATEGORY_ART[game.category] || GAME_ART_BY_SLUG["neon-drift"];
+  return game.thumbnail;
+}
+
+function developerNameFor(game: PhantomPlayGame) {
+  return game.kind === "built_in" || artSlugFor(game) || game.developer === "Phantom Labs" ? "Tak" : (game.developer || "Tak");
+}
+
+function normalizeGameArt(game: PhantomPlayGame): PhantomPlayGame {
+  const developer = developerNameFor(game);
+  return {
+    ...game,
+    developer,
+    developerAvatar: developer === "Tak" ? (game.developerAvatar || TAK_AVATAR) : game.developerAvatar,
+    thumbnail: thumbnailFor(game),
+  };
+}
+
 function tenantIdFor(session: AccessSession, requested?: unknown) {
   const own = session.orgId || session.clientId || session.id || "phantomforce";
   if (!session.canManageAccess) return clean(own, 100) || "phantomforce";
@@ -295,6 +637,10 @@ function tenantIdFor(session: AccessSession, requested?: unknown) {
 
 function actorIdFor(session: AccessSession) {
   return clean(session.userId || session.id, 120) || "anonymous";
+}
+
+function actorLabelFor(session: AccessSession) {
+  return clean(session.label || session.userId || session.id, 90) || "Player";
 }
 
 function profileKey(tenantId: string, actorId: string) {
@@ -318,23 +664,52 @@ async function readStore(): Promise<PhantomPlayStore> {
     return {
       version: 1,
       profiles: parsed.profiles && typeof parsed.profiles === "object" ? parsed.profiles : {},
+      rooms: Array.isArray(parsed.rooms) ? parsed.rooms : [],
       submissions: Array.isArray(parsed.submissions) ? parsed.submissions : [],
     };
   } catch (error) {
-    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, profiles: {}, submissions: [] };
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return { version: 1, profiles: {}, rooms: [], submissions: [] };
     throw error;
   }
 }
 
 let writes = Promise.resolve();
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function replaceStoreFile(temp: string, target: string) {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      await rename(temp, target);
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = String((error as NodeJS.ErrnoException).code || "");
+      if (!retryableWriteCodes.has(code)) {
+        throw error;
+      }
+      await sleep(40 * (attempt + 1));
+    }
+  }
+
+  try {
+    await copyFile(temp, target);
+    await unlink(temp).catch(() => undefined);
+  } catch (fallbackError) {
+    throw lastError instanceof Error ? lastError : fallbackError;
+  }
+}
+
 async function writeStore(store: PhantomPlayStore) {
-  writes = writes.then(async () => {
+  const nextWrite = writes.catch(() => undefined).then(async () => {
     await mkdir(dirname(storePath), { recursive: true });
-    const temp = `${storePath}.${process.pid}.tmp`;
+    const temp = `${storePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
     await writeFile(temp, JSON.stringify(store, null, 2), "utf8");
-    await rename(temp, storePath);
+    await replaceStoreFile(temp, storePath);
   });
-  await writes;
+  writes = nextWrite.catch(() => undefined);
+  await nextWrite;
 }
 
 function ensureProfile(store: PhantomPlayStore, tenantId: string, actorId: string) {
@@ -347,7 +722,7 @@ function ensureProfile(store: PhantomPlayStore, tenantId: string, actorId: strin
 }
 
 function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
-  return store.submissions.filter((item) => item.status === "approved" && item.launchUrl).map((item) => ({
+  return store.submissions.filter((item) => item.status === "approved" && item.launchUrl).map((item) => normalizeGameArt({
     id: `community:${item.id}`,
     title: item.title,
     summary: item.summary,
@@ -368,7 +743,7 @@ function communityGames(store: PhantomPlayStore): PhantomPlayGame[] {
 }
 
 function catalogFor(store: PhantomPlayStore, profile: PlayerProfile) {
-  const all = [...PHANTOMPLAY_BUILT_IN_GAMES, ...(profile.preferences.allowCommunityGames ? communityGames(store) : [])];
+  const all = [...PHANTOMPLAY_BUILT_IN_GAMES, ...(profile.preferences.allowCommunityGames ? communityGames(store) : [])].map(normalizeGameArt);
   return all.filter((game) => ratingRank[game.contentRating] <= ratingRank[profile.preferences.contentRating]);
 }
 
@@ -421,9 +796,90 @@ function phantomLeaderboards(store: PhantomPlayStore, catalog: PhantomPlayGame[]
   return { overall: sortScores(scores.slice()).slice(0, 10), byGame };
 }
 
+function roomStatus(room: PhantomPlayRoom): PhantomPlayRoomStatus {
+  if (room.status === "ended") return "ended";
+  if (Date.parse(room.expiresAt) <= Date.now()) return "expired";
+  return room.status;
+}
+
+function activeParticipantCount(room: PhantomPlayRoom) {
+  return room.participants.filter((participant) => participant.status === "online").length;
+}
+
+function roomView(room: PhantomPlayRoom) {
+  const status = roomStatus(room);
+  return {
+    ...room,
+    status,
+    participantCount: activeParticipantCount(room),
+    safety: {
+      transport: "workspace_relay" as const,
+      joinPolicy: "signed_in_same_tenant_code" as const,
+      publicDiscovery: false as const,
+      directPeerConnection: false as const,
+      inboundDevicePorts: false as const,
+      chat: false as const,
+      voice: false as const,
+      externalGameNetworking: false as const,
+      inviteTtlMinutes: ROOM_TTL_MINUTES,
+      contentPolicy: room.safety?.contentPolicy || (room.mode === "classroom" ? "everyone_rating_required" : "profile_content_setting"),
+    },
+  };
+}
+
+function roomsForSnapshot(store: PhantomPlayStore, tenantId: string, actorId: string, session: AccessSession) {
+  return store.rooms
+    .filter((room) => room.tenantId === tenantId)
+    .filter((room) => ["open", "locked"].includes(roomStatus(room)))
+    .filter((room) => session.canManageAccess || room.participants.some((participant) => participant.actorId === actorId))
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 20)
+    .map(roomView);
+}
+
+function pruneRooms(store: PhantomPlayStore) {
+  store.rooms = (store.rooms || [])
+    .filter((room) => room.status !== "ended")
+    .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
+    .slice(0, 120);
+}
+
+function roomCode(value: unknown) {
+  return clean(value, 24).toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 8);
+}
+
+function freshRoomCode(store: PhantomPlayStore, tenantId: string) {
+  for (let attempt = 0; attempt < 25; attempt += 1) {
+    const code = randomUUID().replace(/-/g, "").slice(0, 6).toUpperCase();
+    if (!store.rooms.some((room) => room.tenantId === tenantId && room.code === code && ["open", "locked"].includes(roomStatus(room)))) return code;
+  }
+  throw new Error("Could not create a unique private room code.");
+}
+
+function findRoom(store: PhantomPlayStore, tenantId: string, code: unknown) {
+  const normalized = roomCode(code);
+  return normalized ? store.rooms.find((room) => room.tenantId === tenantId && room.code === normalized) : undefined;
+}
+
 function todaySeconds(profile: PlayerProfile) {
   const day = new Date().toISOString().slice(0, 10);
   return profile.sessions.filter((item) => item.startedAt.startsWith(day)).reduce((sum, item) => sum + item.seconds, 0);
+}
+
+function safePlayState(value: unknown): PlaySession["state"] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return {};
+  const state: PlaySession["state"] = {};
+  const entries = Object.entries(value as Record<string, unknown>).slice(0, 200);
+  for (const [key, raw] of entries) {
+    const cleanKey = clean(key, 80);
+    if (!cleanKey) continue;
+    state[cleanKey] = typeof raw === "string" ? clean(raw, 4000) : typeof raw === "number" || typeof raw === "boolean" || raw === null ? raw : null;
+    while (Buffer.byteLength(JSON.stringify(state), "utf8") > PHANTOMPLAY_ENGINE.saveStateBytes) {
+      delete state[cleanKey];
+      return state;
+    }
+  }
+  return state;
 }
 
 export async function getPhantomPlaySnapshot(session: AccessSession, options: { tenantId?: unknown; entitled?: boolean; dailyMinuteLimit?: number; canSubmitGames?: boolean } = {}) {
@@ -451,8 +907,10 @@ export async function getPhantomPlaySnapshot(session: AccessSession, options: { 
     favorites: profile.favorites,
     history: historySummary(profile),
     preferences: profile.preferences,
+    engine: PHANTOMPLAY_ENGINE,
+    rooms: roomsForSnapshot(store, tenantId, actorId, session),
     submissions: store.submissions.filter((item) => item.developerId === actorId || session.canManageAccess).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-    developerSpotlight: catalog.find((game) => game.featured)?.developer || TAK_CREATOR,
+    developerSpotlight: catalog.find((game) => game.featured)?.developer || "Tak",
     approvedCommunityCount: communityGames(store).length,
   };
 }
@@ -508,13 +966,119 @@ export async function updatePhantomPlaySession(session: AccessSession, playId: s
   if (input.score !== undefined) play.score = Math.max(play.score ?? 0, Math.floor(clamp(input.score, 0, 1_000_000_000)));
   if (input.progress !== undefined) play.progress = Math.floor(clamp(input.progress, 0, 100));
   if (input.state && typeof input.state === "object" && !Array.isArray(input.state)) {
-    play.state = Object.fromEntries(Object.entries(input.state as Record<string, unknown>).slice(0, 30).map(([key, value]) => [clean(key, 50), typeof value === "string" ? clean(value, 300) : typeof value === "number" || typeof value === "boolean" || value === null ? value : null]));
+    play.state = safePlayState(input.state);
   }
   if (input.ended === true) play.endedAt = now();
   play.updatedAt = now();
   profile.updatedAt = play.updatedAt;
   await writeStore(store);
   return play;
+}
+
+export async function createPhantomPlayRoom(session: AccessSession, input: Record<string, unknown>, limits: { entitled?: boolean } = {}) {
+  if (limits.entitled === false) throw new Error("PhantomPlay private rooms are not included in this plan.");
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const profile = ensureProfile(store, tenantId, actorId);
+  const gameId = clean(input.gameId, 180);
+  const game = catalogFor(store, profile).find((item) => item.id === gameId);
+  if (!game) throw new Error("Choose an available PhantomPlay game for this room.");
+  const mode: PhantomPlayRoomMode = input.mode === "friends" ? "friends" : "classroom";
+  if (mode === "classroom" && game.contentRating !== "everyone") throw new Error("Classroom rooms can only use Everyone-rated games.");
+  const maxLimit = mode === "classroom" ? 30 : 8;
+  const requestedMax = Number(input.maxPlayers);
+  const maxPlayers = Number.isFinite(requestedMax) ? Math.floor(clamp(requestedMax, 2, maxLimit)) : (mode === "classroom" ? 12 : 6);
+  const timestamp = now();
+  pruneRooms(store);
+  const room: PhantomPlayRoom = {
+    id: `pp-room-${randomUUID()}`,
+    code: freshRoomCode(store, tenantId),
+    tenantId,
+    hostActorId: actorId,
+    hostLabel: actorLabelFor(session),
+    gameId: game.id,
+    gameTitle: game.title,
+    mode,
+    status: "open",
+    maxPlayers,
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    expiresAt: new Date(Date.now() + ROOM_TTL_MINUTES * 60_000).toISOString(),
+    participants: [{ actorId, label: actorLabelFor(session), role: "host", status: "online", joinedAt: timestamp, lastSeenAt: timestamp }],
+    safety: {
+      transport: "workspace_relay",
+      joinPolicy: "signed_in_same_tenant_code",
+      publicDiscovery: false,
+      directPeerConnection: false,
+      inboundDevicePorts: false,
+      chat: false,
+      voice: false,
+      externalGameNetworking: false,
+      inviteTtlMinutes: ROOM_TTL_MINUTES,
+      contentPolicy: mode === "classroom" ? "everyone_rating_required" : "profile_content_setting",
+    },
+  };
+  store.rooms.unshift(room);
+  await writeStore(store);
+  return { room: roomView(room) };
+}
+
+export async function getPhantomPlayRoom(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const room = findRoom(await readStore(), tenantId, input.code);
+  if (!room) return null;
+  const actorId = actorIdFor(session);
+  if (!session.canManageAccess && !room.participants.some((participant) => participant.actorId === actorId)) return null;
+  return roomView(room);
+}
+
+export async function joinPhantomPlayRoom(session: AccessSession, input: Record<string, unknown>, limits: { entitled?: boolean } = {}) {
+  if (limits.entitled === false) throw new Error("PhantomPlay private rooms are not included in this plan.");
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const room = findRoom(store, tenantId, input.code);
+  if (!room) return null;
+  const status = roomStatus(room);
+  if (status === "expired") {
+    room.status = "expired";
+    await writeStore(store);
+    throw new Error("This room code has expired.");
+  }
+  if (status !== "open") throw new Error("This private room is not open for joining.");
+  const existing = room.participants.find((participant) => participant.actorId === actorId);
+  if (!existing && activeParticipantCount(room) >= room.maxPlayers) throw new Error("This private room is full.");
+  const timestamp = now();
+  if (existing) {
+    existing.status = "online";
+    existing.lastSeenAt = timestamp;
+    existing.label = actorLabelFor(session);
+  } else {
+    room.participants.push({ actorId, label: actorLabelFor(session), role: "player", status: "online", joinedAt: timestamp, lastSeenAt: timestamp });
+  }
+  room.updatedAt = timestamp;
+  await writeStore(store);
+  return { room: roomView(room) };
+}
+
+export async function leavePhantomPlayRoom(session: AccessSession, input: Record<string, unknown>) {
+  const tenantId = tenantIdFor(session, input.tenantId);
+  const actorId = actorIdFor(session);
+  const store = await readStore();
+  const room = findRoom(store, tenantId, input.code);
+  if (!room) return null;
+  const participant = room.participants.find((item) => item.actorId === actorId);
+  if (!participant && !session.canManageAccess) return null;
+  const timestamp = now();
+  if (participant) {
+    participant.status = "left";
+    participant.lastSeenAt = timestamp;
+  }
+  if (room.hostActorId === actorId || (session.canManageAccess && input.end === true)) room.status = "locked";
+  room.updatedAt = timestamp;
+  await writeStore(store);
+  return { room: roomView(room) };
 }
 
 function submissionInput(input: Record<string, unknown>) {
@@ -609,5 +1173,5 @@ export async function moderatePhantomPlaySubmission(session: AccessSession, subm
 
 export async function getPhantomPlayStoreStatus() {
   const store = await readStore();
-  return { provider: "local_json", pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMPLAY_PATH), profiles: Object.keys(store.profiles).length, submissions: store.submissions.length, approvedCommunityGames: communityGames(store).length };
+  return { provider: "local_json", pathConfigured: Boolean(process.env.PHANTOMFORCE_PHANTOMPLAY_PATH), profiles: Object.keys(store.profiles).length, rooms: store.rooms.filter((room) => ["open", "locked"].includes(roomStatus(room))).length, submissions: store.submissions.length, approvedCommunityGames: communityGames(store).length };
 }
