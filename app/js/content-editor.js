@@ -1,4 +1,4 @@
-import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260713-005";
+import { freshEditState, freshTextStyle, paintEdit } from "./imagefilters.js?v=phantom-live-20260713-006";
 
 let layerSequence = 0;
 
@@ -20,11 +20,25 @@ export function cloneImageEditState(source = {}, opts = {}) {
     spots: (state.bokeh.spots || []).map((spot) => ({ ...spot })),
     maskImg: includeMask ? (opts.maskImg ?? state.bokeh.maskImg ?? null) : null,
   } : null;
+  const paint = state.paint ? {
+    size: Number(state.paint.size || 26),
+    opacity: Number(state.paint.opacity || 84),
+    strokes: Array.isArray(state.paint.strokes)
+      ? state.paint.strokes.map((stroke) => ({
+          mode: stroke.mode === "erase" ? "erase" : "paint",
+          color: stroke.color || "#41ffa1",
+          size: Number(stroke.size || state.paint.size || 26),
+          opacity: Number(stroke.opacity || state.paint.opacity || 84),
+          points: Array.isArray(stroke.points) ? stroke.points.map((point) => ({ x: Number(point.x) || 0, y: Number(point.y) || 0 })) : [],
+        }))
+      : [],
+  } : null;
   return {
     ...state,
     crop: { ...base.crop, ...(state.crop || {}) },
     textStyle: { ...freshTextStyle(), ...(state.textStyle || {}) },
     bokeh,
+    paint,
   };
 }
 

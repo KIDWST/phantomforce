@@ -34,6 +34,13 @@ function requirePrisma(): PrismaClient {
 const esc = (value: unknown) =>
   String(value ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c] as string);
 
+const scriptJson = (value: unknown) => JSON.stringify(value).replace(/</g, "\\u003c");
+const money = (value: number, currency = "USD") => new Intl.NumberFormat("en-US", {
+  style: "currency",
+  currency,
+  maximumFractionDigits: Number.isInteger(value) ? 0 : 2,
+}).format(value);
+
 export type SiteSnapshot = {
   siteId?: string;
   title: string;
@@ -46,6 +53,20 @@ export type SiteSnapshot = {
     cta?: string;
     theme?: string;
     style?: string;
+  };
+  products?: Array<{
+    id: string;
+    name: string;
+    price: number;
+    cadence: "one_time" | "monthly";
+    desc: string;
+    visible: boolean;
+  }>;
+  store?: {
+    enabled: boolean;
+    currency: string;
+    checkoutMode: "test";
+    paymentsConnected: false;
   };
 };
 
@@ -60,17 +81,97 @@ const THEME_COLORS: Record<string, { bg: string; accent: string; ink: string }> 
    external requests, everything escaped. */
 export function renderSiteHtml(snapshot: SiteSnapshot): string {
   const theme = THEME_COLORS[snapshot.design.theme ?? "dark"] ?? THEME_COLORS.dark;
+  const products = (snapshot.products ?? []).filter((product) => product.visible !== false);
+  const storeEnabled = Boolean(snapshot.store?.enabled || products.length);
+  const currency = snapshot.store?.currency || "USD";
+  const productCards = products.length
+    ? products.map((product) => `<article class="product">
+        <div class="product-art" aria-hidden="true">${esc(product.name.slice(0, 1).toUpperCase())}</div>
+        <div><h3>${esc(product.name)}</h3><p>${esc(product.desc)}</p></div>
+        <footer><b>${esc(money(product.price, currency))}${product.cadence === "monthly" ? " / month" : ""}</b><button type="button" data-add="${esc(product.id)}">Add to cart</button></footer>
+      </article>`).join("")
+    : `<div class="empty-store"><b>Store inventory is being prepared.</b><p>Check back after the next approved catalog update.</p></div>`;
   const sections = snapshot.sections
     .map((section) => {
+      const key = section.toLowerCase();
+      if (key === "store" || key === "products") {
+        return `<section id="${esc(key)}" class="store-section"><div class="section-heading"><div><small>STORE</small><h2>${esc(section)}</h2></div>${storeEnabled ? `<button type="button" class="open-cart">Cart <span data-cart-count>0</span></button>` : ""}</div><div class="products">${productCards}</div></section>`;
+      }
+      if (key === "checkout") {
+        return `<section id="checkout"><h2>Checkout</h2><p>${storeEnabled ? "Choose an offer above, then review your cart. This preview checkout records no payment." : "Checkout becomes available when the store has an approved offer."}</p>${storeEnabled ? `<button type="button" class="open-cart secondary">Review cart</button>` : ""}</section>`;
+      }
       const body =
-        section.toLowerCase() === "contact"
+        key === "contact"
           ? `<p>Reach ${esc(snapshot.design.brand || snapshot.title)} — contact details go live once connected.</p>`
-          : section.toLowerCase() === "offer" && snapshot.design.offer
+          : key === "offer" && snapshot.design.offer
             ? `<p>${esc(snapshot.design.offer)}</p>`
             : `<p>${esc(snapshot.design.subhead || "")}</p>`;
-      return `<section id="${esc(section.toLowerCase().replace(/\s+/g, "-"))}"><h2>${esc(section)}</h2>${body}</section>`;
+      return `<section id="${esc(key.replace(/\s+/g, "-"))}"><h2>${esc(section)}</h2>${body}</section>`;
     })
     .join("\n");
+  const storeUi = storeEnabled ? `
+<button type="button" class="floating-cart open-cart" aria-label="Open cart">Cart <span data-cart-count>0</span></button>
+<div class="cart-backdrop" hidden>
+  <aside class="cart" role="dialog" aria-modal="true" aria-labelledby="cart-title">
+    <header><div><small>YOUR ORDER</small><h2 id="cart-title">Cart</h2></div><button type="button" class="close-cart" aria-label="Close cart">×</button></header>
+    <div class="cart-items"></div>
+    <div class="cart-total"><span>Total</span><b>$0</b></div>
+    <form class="test-checkout" hidden>
+      <label>Name<input name="name" autocomplete="name" required></label>
+      <label>Email<input name="email" type="email" autocomplete="email" required></label>
+      <button type="submit">Place test order</button>
+      <small>Test checkout only. No payment is collected and nothing is sent externally.</small>
+    </form>
+    <button type="button" class="start-checkout">Continue to test checkout</button>
+    <p class="receipt" role="status"></p>
+  </aside>
+</div>` : "";
+  const storeScript = storeEnabled ? `
+<script>
+(() => {
+  const products = ${scriptJson(products.map(({ id, name, price, cadence }) => ({ id, name, price, cadence })))};
+  const currency = ${scriptJson(currency)};
+  const cart = new Map();
+  const backdrop = document.querySelector('.cart-backdrop');
+  const items = document.querySelector('.cart-items');
+  const checkout = document.querySelector('.test-checkout');
+  const start = document.querySelector('.start-checkout');
+  const receipt = document.querySelector('.receipt');
+  const fmt = (value) => new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 2 }).format(value);
+  const html = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+  function render() {
+    const rows = [...cart].map(([id, qty]) => ({ product: products.find((item) => item.id === id), qty })).filter((row) => row.product);
+    items.innerHTML = rows.length ? rows.map(({ product, qty }) => {
+      const id = html(product.id);
+      return '<article><div><b>' + html(product.name) + '</b><span>' + fmt(product.price * qty) + '</span></div><div class="qty"><button type="button" data-qty="' + id + '" data-delta="-1">−</button><span>' + qty + '</span><button type="button" data-qty="' + id + '" data-delta="1">+</button><button type="button" data-remove="' + id + '">Remove</button></div></article>';
+    }).join('') : '<p class="cart-empty">Your cart is empty.</p>';
+    const count = rows.reduce((sum, row) => sum + row.qty, 0);
+    const total = rows.reduce((sum, row) => sum + row.product.price * row.qty, 0);
+    document.querySelectorAll('[data-cart-count]').forEach((node) => { node.textContent = String(count); });
+    document.querySelector('.cart-total b').textContent = fmt(total);
+    start.disabled = !rows.length;
+    if (!rows.length) { checkout.hidden = true; start.hidden = false; }
+  }
+  document.addEventListener('click', (event) => {
+    const add = event.target.closest('[data-add]');
+    if (add) { const id = add.dataset.add; cart.set(id, (cart.get(id) || 0) + 1); render(); backdrop.hidden = false; return; }
+    if (event.target.closest('.open-cart')) { backdrop.hidden = false; return; }
+    if (event.target.closest('.close-cart') || event.target === backdrop) { backdrop.hidden = true; return; }
+    const qty = event.target.closest('[data-qty]');
+    if (qty) { const next = (cart.get(qty.dataset.qty) || 0) + Number(qty.dataset.delta); next > 0 ? cart.set(qty.dataset.qty, next) : cart.delete(qty.dataset.qty); render(); return; }
+    const remove = event.target.closest('[data-remove]');
+    if (remove) { cart.delete(remove.dataset.remove); render(); }
+  });
+  start.addEventListener('click', () => { start.hidden = true; checkout.hidden = false; checkout.querySelector('input').focus(); });
+  checkout.addEventListener('submit', (event) => {
+    event.preventDefault();
+    const data = new FormData(checkout);
+    receipt.textContent = 'Test order confirmed for ' + data.get('name') + '. No payment was collected.';
+    cart.clear(); checkout.reset(); checkout.hidden = true; start.hidden = false; render();
+  });
+  render();
+})();
+</script>` : "";
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -81,13 +182,38 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
   :root { color-scheme: dark light; }
   * { box-sizing: border-box; margin: 0; }
   body { font: 16px/1.6 system-ui, sans-serif; background: ${theme.bg}; color: ${theme.ink}; }
+  button, input { font: inherit; }
   header { padding: 72px 24px; text-align: center; }
   header h1 { font-size: clamp(28px, 6vw, 52px); }
   header p { margin-top: 12px; opacity: .8; }
   .cta { display: inline-block; margin-top: 24px; padding: 12px 28px; border-radius: 999px; background: ${theme.accent}; color: ${theme.bg}; font-weight: 700; text-decoration: none; }
   section { max-width: 860px; margin: 0 auto; padding: 40px 24px; border-top: 1px solid ${theme.accent}33; }
   section h2 { color: ${theme.accent}; margin-bottom: 10px; }
+  .section-heading, .product footer, .cart header, .cart-total, .qty { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .section-heading small, .cart small { color: ${theme.accent}; font-weight: 800; letter-spacing: .16em; }
+  .products { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-top: 18px; }
+  .product, .empty-store { display: grid; gap: 16px; padding: 18px; border: 1px solid ${theme.accent}35; border-radius: 16px; background: ${theme.accent}08; }
+  .product-art { display: grid; place-items: center; width: 48px; height: 48px; border-radius: 12px; background: ${theme.accent}; color: ${theme.bg}; font-size: 22px; font-weight: 900; }
+  .product p, .empty-store p { opacity: .72; }
+  .product button, .open-cart, .start-checkout, .test-checkout button { border: 0; border-radius: 999px; padding: 10px 15px; background: ${theme.accent}; color: ${theme.bg}; font-weight: 800; cursor: pointer; }
+  .secondary { margin-top: 16px; }
+  .floating-cart { position: fixed; z-index: 5; right: 18px; bottom: 18px; box-shadow: 0 12px 40px #0008; }
+  .cart-backdrop { position: fixed; z-index: 10; inset: 0; padding: 18px; background: #000b; backdrop-filter: blur(9px); }
+  .cart-backdrop[hidden], .test-checkout[hidden], .start-checkout[hidden] { display: none; }
+  .cart { width: min(440px, 100%); max-height: calc(100dvh - 36px); overflow: auto; margin-left: auto; padding: 22px; border: 1px solid ${theme.accent}55; border-radius: 20px; background: ${theme.bg}; box-shadow: 0 24px 90px #000b; }
+  .close-cart { width: 38px; height: 38px; border: 1px solid ${theme.accent}44; border-radius: 50%; background: transparent; color: ${theme.ink}; font-size: 24px; cursor: pointer; }
+  .cart-items { display: grid; gap: 10px; margin: 18px 0; }
+  .cart-items article { display: grid; gap: 10px; padding: 12px; border: 1px solid ${theme.accent}30; border-radius: 12px; }
+  .qty { justify-content: flex-start; }
+  .qty button { min-width: 34px; min-height: 34px; border: 1px solid ${theme.accent}35; border-radius: 8px; background: transparent; color: ${theme.ink}; cursor: pointer; }
+  .qty button:last-child { margin-left: auto; }
+  .cart-total { padding: 15px 0; border-top: 1px solid ${theme.accent}35; font-size: 20px; }
+  .test-checkout { display: grid; gap: 12px; }
+  .test-checkout label { display: grid; gap: 5px; }
+  .test-checkout input { width: 100%; padding: 11px; border: 1px solid ${theme.accent}45; border-radius: 10px; background: transparent; color: ${theme.ink}; }
+  .receipt { margin-top: 14px; color: ${theme.accent}; font-weight: 700; }
   footer { padding: 40px 24px; text-align: center; opacity: .6; font-size: 13px; }
+  @media (max-width: 600px) { header { padding: 54px 20px; } section { padding: 32px 20px; } .cart-backdrop { padding: 8px; } .cart { max-height: calc(100dvh - 16px); } }
 </style>
 </head>
 <body>
@@ -97,7 +223,9 @@ export function renderSiteHtml(snapshot: SiteSnapshot): string {
   ${snapshot.design.cta ? `<a class="cta" href="#contact">${esc(snapshot.design.cta)}</a>` : ""}
 </header>
 ${sections}
+${storeUi}
 <footer>${esc(snapshot.design.brand || snapshot.title)} · Published with PhantomForce</footer>
+${storeScript}
 </body>
 </html>`;
 }
@@ -116,6 +244,15 @@ function validateBuild(html: string, snapshot: SiteSnapshot): { ok: boolean; log
   }
   if (/<script[^>]+src=/i.test(html)) { ok = false; log.push("FAIL: external scripts are not allowed in published builds"); }
   else log.push("ok: no external scripts");
+  if ((snapshot.products ?? []).some((product) => product.visible !== false)) {
+    for (const product of snapshot.products ?? []) {
+      if (product.visible === false) continue;
+      if (html.includes(esc(product.name))) log.push(`ok: product "${product.name}" rendered`);
+      else { ok = false; log.push(`FAIL: product "${product.name}" missing from output`); }
+    }
+    if (html.includes("Test checkout only. No payment is collected")) log.push("ok: safe test checkout rendered");
+    else { ok = false; log.push("FAIL: safe test checkout missing"); }
+  }
   log.push(ok ? "RESULT: validated" : "RESULT: failed");
   return { ok, log };
 }

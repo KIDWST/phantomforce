@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260713-005";
+import { ctx, session } from "./store.js?v=phantom-live-20260713-006";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -47,7 +47,7 @@ export async function fetchAuthConfig() {
    is enforced server-side per request. */
 function localSessionFromServer(payload) {
   const s = payload.session || {};
-  const managesOrg = s.isSuperAdmin || ["owner", "admin", "member"].includes(s.orgRole || "");
+  const managesOrg = s.isSuperAdmin || ["owner", "admin"].includes(s.orgRole || "");
   return {
     role: managesOrg ? "admin" : "employee",
     name: s.label || s.email || "Operator",
@@ -156,6 +156,20 @@ export async function requestServerPublish(site) {
       cta: site.design?.cta || undefined,
       theme: site.design?.theme || undefined,
       style: site.design?.style || undefined,
+    },
+    products: (site.catalog || []).map((product) => ({
+      id: product.id,
+      name: product.name,
+      price: Number(product.price || 0),
+      cadence: product.cadence === "monthly" ? "monthly" : "one_time",
+      desc: product.desc || "",
+      visible: product.visible !== false,
+    })),
+    store: {
+      enabled: Boolean(site.store?.enabled || site.design?.storeEnabled),
+      currency: site.store?.currency || "USD",
+      checkoutMode: "test",
+      paymentsConnected: false,
     },
   };
   const build = await api(`/orgs/${encodeURIComponent(orgId)}/sites/builds`, { method: "POST", body: snapshot });

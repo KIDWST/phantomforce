@@ -152,6 +152,64 @@ try {
         Stop-Process -Id $serverProcess.Id -Force
       }
     }
+
+    $databaseAuthEnv = @{
+      NODE_ENV = "test"
+      PORT = "$serverPort"
+      HOST = "127.0.0.1"
+      DATABASE_URL = $databaseUrl
+      PHANTOMFORCE_AUTH_PROVIDER = "database"
+      PHANTOMFORCE_ENABLE_DEMO_AUTH = "false"
+      PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER = "false"
+      PHANTOMFORCE_ACCESS_REPOSITORY = ""
+      PHANTOMFORCE_SESSION_SECRET = "phantomforce-postgres-test-secret-with-enough-length"
+      PHANTOMFORCE_SERVER_LOGGER = "false"
+      PHANTOMFORCE_DEV_SEED_PASSWORD = "phantom-dev-password"
+    }
+    $databaseAuthStartInfo = New-Object System.Diagnostics.ProcessStartInfo
+    $databaseAuthStartInfo.FileName = $nodeCommand.Source
+    $databaseAuthStartInfo.Arguments = "server/dist/index.js"
+    $databaseAuthStartInfo.WorkingDirectory = $repoRoot
+    $databaseAuthStartInfo.UseShellExecute = $false
+    foreach ($key in $databaseAuthEnv.Keys) {
+      $databaseAuthStartInfo.Environment[$key] = $databaseAuthEnv[$key]
+    }
+
+    $databaseAuthServerProcess = [System.Diagnostics.Process]::Start($databaseAuthStartInfo)
+
+    try {
+      $databaseAuthReady = $false
+      for ($i = 1; $i -le 45; $i++) {
+        try {
+          $health = Invoke-RestMethod -Uri "$serverUrl/health" -TimeoutSec 1
+          if ($health.ok -eq $true) {
+            $databaseAuthReady = $true
+            break
+          }
+        } catch {}
+
+        Start-Sleep -Seconds 1
+      }
+
+      if (-not $databaseAuthReady) {
+        throw "Database-auth Postgres server did not become ready."
+      }
+
+      $previousBase = $env:BASE
+      try {
+        $env:BASE = $serverUrl
+        node server/scripts/test-database-auth.mjs
+        if ($LASTEXITCODE -ne 0) {
+          throw "Database auth API test failed."
+        }
+      } finally {
+        $env:BASE = $previousBase
+      }
+    } finally {
+      if ($databaseAuthServerProcess -and -not $databaseAuthServerProcess.HasExited) {
+        Stop-Process -Id $databaseAuthServerProcess.Id -Force
+      }
+    }
   } finally {
     Pop-Location
   }

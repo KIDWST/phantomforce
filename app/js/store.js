@@ -480,6 +480,23 @@ function normalizeFinance(finance) {
   return { accounts, transactions, connectors };
 }
 
+// Normalizes in place and always returns the same object identity for a given
+// store.state. Render code captures store.state.finance in event-handler
+// closures; handing back a fresh object on every call orphaned those closures
+// and silently dropped writes (added transactions disappeared on save).
+function ensureFinance() {
+  const normalized = normalizeFinance(store.state.finance);
+  const current = store.state.finance;
+  if (!current || typeof current !== "object") {
+    store.state.finance = normalized;
+    return normalized;
+  }
+  current.accounts = normalized.accounts;
+  current.transactions = normalized.transactions;
+  current.connectors = normalized.connectors;
+  return current;
+}
+
 /* ---------------- seed ---------------- */
 const REQUIRED_WORKSPACES = [
   {
@@ -583,7 +600,13 @@ export const store = {
       this.state.memory = pruneMemory(Array.isArray(this.state.memory) ? this.state.memory : []);
       this.state.chatHistory = pruneChatHistory(Array.isArray(this.state.chatHistory) ? this.state.chatHistory : []);
       localStorage.setItem(DB_KEY, JSON.stringify(this.state));
-    } catch {}
+    } catch (error) {
+      // A swallowed failure here means the user's work is gone with no warning.
+      console.error("[phantomforce] save failed — changes were not persisted", error);
+      try {
+        window.dispatchEvent(new CustomEvent("pf:save-failed", { detail: { error: String(error?.message || error) } }));
+      } catch {}
+    }
     listeners.forEach((fn) => fn());
   },
   onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
@@ -614,11 +637,15 @@ export const session = {
 };
 
 export const ADMIN_PUBLIC_HOST = "admin.phantomforce.online";
+export const CLIENT_PUBLIC_HOST = "app.phantomforce.online";
 export const PUBLIC_PAGES_HOSTS = new Set(["phantomforce.online", "www.phantomforce.online"]);
+const LOCAL_DEV_HOSTS = new Set(["127.0.0.1", "localhost"]);
 export const OWNER_SESSION_ID = "owner-admin";
 
 export const isLiveAdminHost = () => location.hostname === ADMIN_PUBLIC_HOST;
+export const isClientPublicHost = () => location.hostname === CLIENT_PUBLIC_HOST;
 export const isStaticPublicHost = () => PUBLIC_PAGES_HOSTS.has(location.hostname);
+export const isLocalDevHost = () => LOCAL_DEV_HOSTS.has(location.hostname);
 
 export function liveAdminUrl() {
   const url = new URL(`https://${ADMIN_PUBLIC_HOST}/app/index.html`);
@@ -640,9 +667,14 @@ export function resolveSession() {
 
   const q = new URLSearchParams(location.search);
   const key = (q.get("session") || "").toLowerCase();
+  const allowLocalSessionShortcut = isLocalDevHost();
   if (key === OWNER_SESSION_ID) {
     if (isStaticPublicHost()) {
       redirectToLiveAdmin();
+      return null;
+    }
+    if (!allowLocalSessionShortcut) {
+      session.clear();
       return null;
     }
     const s = {
@@ -660,6 +692,10 @@ export function resolveSession() {
       redirectToLiveAdmin();
       return null;
     }
+    if (!allowLocalSessionShortcut) {
+      session.clear();
+      return null;
+    }
     const s = {
       role: "admin",
       name: "Jordan",
@@ -671,10 +707,23 @@ export function resolveSession() {
     session.set(s); return s;
   }
   if (key === "employee" || key === "team" || key === "client") {
+    if (!allowLocalSessionShortcut) {
+      session.clear();
+      return null;
+    }
     const s = { role: "employee", name: "Team Member", ws: "phantomforce" };
     session.set(s); return s;
   }
   const saved = session.get();
+  const token = session.token();
+  if (saved?.database && !token) {
+    session.clear();
+    return null;
+  }
+  if (saved && isClientPublicHost() && (!saved.database || saved.canManageAccess || saved.isSuperAdmin)) {
+    session.clear();
+    return null;
+  }
   if (saved) {
     if (saved.role === "client") {
       saved.role = "employee";
@@ -702,7 +751,7 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error("Your password is probably fine — the backend on the admin PC isn't answering at all. Start it, wait ~20 seconds, then sign in again.");
+    throw new Error("Your password is probably fine — the backend on the admin PC isn't answering at all. Start Hermes/backend, wait ~20 seconds, then sign in again.");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.token || !payload?.session) {
@@ -713,15 +762,22 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
     }
     if (response.status === 401 || response.status === 403) {
       // auto-diagnose: is the backend even holding an owner key right now?
-      let keyLoaded = null;
+      let auth = payload?.auth && typeof payload.auth === "object" ? payload.auth : null;
+      let keyLoaded = typeof auth?.ownerLoginKeyConfigured === "boolean" ? auth.ownerLoginKeyConfigured : null;
       try {
-        const probe = await fetch("/sessions").then((r) => r.json());
-        if (typeof probe?.auth?.ownerLoginKeyConfigured === "boolean") keyLoaded = probe.auth.ownerLoginKeyConfigured;
+        if (!auth) {
+          const probe = await fetch("/sessions").then((r) => r.json());
+          auth = probe?.auth && typeof probe.auth === "object" ? probe.auth : null;
+        }
+        if (typeof auth?.ownerLoginKeyConfigured === "boolean") keyLoaded = auth.ownerLoginKeyConfigured;
       } catch {}
       if (keyLoaded === false) {
-        throw new Error("Your password is fine — the backend started without its local .env file, so owner login is not loaded. Restart Hermes/backend from the admin checkout and sign in again.");
+        throw new Error("Owner login is not fully loaded on this backend. Restart Hermes/backend so server\\.env is loaded, then sign in again.");
       }
-      throw new Error("That email or password was rejected by the backend. If you're sure it's right, restart Hermes/backend so it loads the owner login settings.");
+      if (auth?.ownerProductionAuthEnabled && auth?.productionReady) {
+        throw new Error("That email or password was rejected. The backend is running and owner auth is configured.");
+      }
+      throw new Error("Owner login was rejected because this backend is not in ready owner-auth mode. Restart the PhantomForce server and check /sessions before trying again.");
     }
     throw new Error(raw || "Owner login failed.");
   }
@@ -1001,8 +1057,7 @@ export function moneyView() {
   const wonValue = won.reduce((s, p) => s + p.price, 0);
   const retainerMonthly = props.filter((p) => p.retainer && p.status !== "lost")
     .reduce((s, p) => s + (RETAINERS.find((r) => r.id === p.retainer)?.price || 0), 0);
-  const finance = normalizeFinance(store.state.finance);
-  store.state.finance = finance;
+  const finance = ensureFinance();
   const transactions = visible(finance.transactions)
     .slice()
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime() || String(b.createdAt).localeCompare(String(a.createdAt)));

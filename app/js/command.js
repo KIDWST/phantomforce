@@ -11,9 +11,9 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260713-005";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260713-005";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260713-005";
+} from "./store.js?v=phantom-live-20260713-006";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260713-006";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260713-006";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -27,13 +27,16 @@ function setSiteFocus(id) {
 const DAY = 86400000;
 const days = (n) => new Date(Date.now() + n * DAY).toISOString();
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
-/* Intents the live backend brain may answer. Conversational + analytical
-   lanes only — anything that creates records or touches approvals stays on
-   the deterministic local path. feedback/status_check are included so the
-   real model (with business context) can respond like a person instead of
-   a canned line. Greetings/gratitude deliberately stay local: "hi" must
-   answer instantly, never wait on a provider chain. */
-const SAFE_BACKEND_INTENTS = new Set(["identity", "capability", "question", "brainstorm", "plan", "chat", "feedback", "status_check", "vent"]);
+/* Model backbone policy: let the live brain understand broad language, but
+   keep record creation, risky actions, and hard workflows deterministic. */
+const LOCAL_FIRST_INTENTS = new Set([
+  "greeting", "gratitude",
+  "create_task", "memory_update", "phantom_loop_on", "phantom_loop_off",
+  "create_website", "website_update", "run_agent",
+  "create_automation", "reminder", "termina_parallel", "vacation_mode",
+  "looper_build", "approval_request",
+]);
+const PROVIDER_FAILURE_MESSAGE = "I couldn't complete that just now. Your request is still here";
 
 /* Pull a subject out of phrases like "draft a proposal for Sarah's gym". */
 function subjectOf(text) {
@@ -82,12 +85,47 @@ const PROVIDER_TO_BACKEND = {
   local: "local_ollama",
 };
 
-function providerIdForRequest(settings, intent) {
+const CODEX_BACKEND_MODEL_BY_ALIAS = Object.freeze({
+  "codex-fast": "gpt-5.5-instant",
+  "codex-default": "gpt-5.5",
+  "codex-high": "gpt-5.6-sol",
+});
+const INSTANT_CHAT_MODEL = "gpt-5.5-instant";
+const INSTANT_CHAT_MAX_PROVIDER_MS = 5000;
+const INSTANT_CHAT_ALLOWED_INTENTS = new Set(["identity", "capability", "question", "chat"]);
+const INSTANT_CHAT_BLOCKLIST = /\b(?:build|create|draft|write|make|fix|debug|code|implement|analy[sz]e|research|compare|summari[sz]e|plan|strategy|proposal|website|site|content|video|image|media|schedule|client|lead|transaction|accounting|bank|security|deploy|send|post|upload|delete|weather|forecast|current|latest|today|tomorrow|yesterday|price|stock|law|legal|medical|diagnosis|contract|tenant|isolation|phantomforce)\b/i;
+const INSTANT_CHAT_SIGNAL = /\b(?:favorite|do you like|would you rather|tell me a joke|joke|how are you|what'?s your|what is your|who are you|are you|can you|what is \d|what'?s \d)\b/i;
+const DEEP_THINKING_SIGNAL = /\b(strategy|strategic|think through|reason through|break down|roadmap|plan|growth|business model|moat|positioning|prioriti[sz]e|compare|critique|diagnose|why is|why does|what should|how should)\b/i;
+
+function selectedProviderIds(settings) {
   const selected = Array.isArray(settings.selectedProviders) && settings.selectedProviders.length
     ? settings.selectedProviders
     : [settings.provider || "codex"];
+  const valid = selected.filter((id) => PROVIDER_TO_BACKEND[id]);
+  return valid.length ? valid : ["codex"];
+}
+
+function countWords(value) {
+  return String(value || "").trim().split(/\s+/).filter(Boolean).length;
+}
+
+function isInstantChatRequest(raw, intent) {
+  const text = String(raw || "").trim();
+  if (!text || !INSTANT_CHAT_ALLOWED_INTENTS.has(intent.primaryIntent)) return false;
+  if (intent.needsLiveData || intent.requiresAdminApproval || intent.shouldCreateTask || intent.shouldCreateAutomation) return false;
+  if (text.length > 140 || countWords(text) > 18) return false;
+  if (INSTANT_CHAT_BLOCKLIST.test(text)) return false;
+  return INSTANT_CHAT_SIGNAL.test(text) || (intent.primaryIntent === "chat" && countWords(text) <= 10);
+}
+
+function shouldUseDeepReasoning(raw, intent) {
+  return ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent) || DEEP_THINKING_SIGNAL.test(String(raw || ""));
+}
+
+function providerIdForRequest(settings, intent, deepReasoning = false) {
+  const selected = selectedProviderIds(settings);
   if (settings.providerMode !== "smart") return selected.includes(settings.provider) ? settings.provider : selected[0];
-  if (["brainstorm", "plan", "feedback"].includes(intent.primaryIntent) && selected.includes("claude")) return "claude";
+  if ((deepReasoning || ["brainstorm", "plan", "feedback"].includes(intent.primaryIntent)) && selected.includes("claude")) return "claude";
   if (selected.includes("codex")) return "codex";
   return selected[0];
 }
@@ -103,15 +141,18 @@ function providerForRequest(providerId) {
   return providerId === "openrouter" ? "openrouter_glm" : "phantom";
 }
 
-function selectedModelForProvider(settings, providerId) {
+function selectedModelForProvider(settings, providerId, routeProfile = null) {
+  if (providerId === "codex" && routeProfile?.tier === "instant") return INSTANT_CHAT_MODEL;
   const configured = settings.models?.[providerId];
-  if (configured) return configured;
+  if (configured) return providerId === "codex" ? (CODEX_BACKEND_MODEL_BY_ALIAS[configured] || configured) : configured;
   const cfg = loadPhantomLaneConfig();
   const lane = cfg.lanes?.[providerId];
-  return lane?.model || getPhantomLaneTarget(providerId).models?.[0] || "";
+  const model = lane?.model || getPhantomLaneTarget(providerId).models?.[0] || "";
+  return providerId === "codex" ? (CODEX_BACKEND_MODEL_BY_ALIAS[model] || model || "gpt-5.5") : model;
 }
 
-function allowedProvidersForSettings(settings) {
+function allowedProvidersForSettings(settings, routeProfile = null) {
+  if (Array.isArray(routeProfile?.allowedProviders)) return routeProfile.allowedProviders;
   const selected = settings.providerMode === "smart"
     ? ["claude", "codex", "openrouter", "local"]
     : Array.isArray(settings.selectedProviders) && settings.selectedProviders.length
@@ -120,10 +161,38 @@ function allowedProvidersForSettings(settings) {
   return [...new Set(selected.map((id) => PROVIDER_TO_BACKEND[id]).filter(Boolean))];
 }
 
+function chatRouteProfileForRequest(raw, intent, settings) {
+  const deepReasoning = shouldUseDeepReasoning(raw, intent);
+  const normalProviderId = providerIdForRequest(settings, intent, deepReasoning);
+  if (isInstantChatRequest(raw, intent)) {
+    const selected = selectedProviderIds(settings);
+    const providerId = settings.providerMode === "smart" && selected.includes("codex")
+      ? "codex"
+      : normalProviderId;
+    return {
+      tier: "instant",
+      providerId,
+      requestedModel: selectedModelForProvider(settings, providerId, { tier: "instant" }),
+      allowedProviders: [PROVIDER_TO_BACKEND[providerId]].filter(Boolean),
+      allowFallback: false,
+      maxProviderMs: INSTANT_CHAT_MAX_PROVIDER_MS,
+    };
+  }
+  return {
+    tier: deepReasoning ? "deep" : "standard",
+    providerId: normalProviderId,
+    requestedModel: selectedModelForProvider(settings, normalProviderId),
+    allowedProviders: allowedProvidersForSettings(settings),
+    allowFallback: true,
+    maxProviderMs: null,
+  };
+}
+
 function canAskHermes(intent, settings) {
   return isAdmin()
     && settings.brainMode !== "local"
-    && SAFE_BACKEND_INTENTS.has(intent.primaryIntent)
+    && !LOCAL_FIRST_INTENTS.has(intent.primaryIntent)
+    && !intent.requiresAdminApproval
     && !intent.shouldCreateTask
     && !intent.shouldCreateAutomation;
 }
@@ -174,20 +243,19 @@ function buildContextModules(settings) {
   return modules;
 }
 
-/* The backend chat route can walk up to 4 providers (Codex, Claude CLI,
-   OpenRouter, local Ollama) before giving up, each capped at 20-30s server
-   side — worst case lands around 110s. This timeout must stay above that or
-   the UI aborts before the backend's own fallback chain finishes and silently
-   drops to the local canned responder in handleCommand() below. */
+/* Standard/deep backend chat can walk multiple providers before giving up.
+   Instant chat is intentionally narrow: one fast model, short timeout, then
+   fall back to the local responder instead of making the user wait. */
 async function askHermesBrain(raw, intent, settings) {
   if (typeof fetch !== "function" || typeof AbortController === "undefined") return null;
+  const routeProfile = chatRouteProfileForRequest(raw, intent, settings);
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 140000);
+  const timeout = setTimeout(() => controller.abort(), routeProfile.tier === "instant" ? 6500 : 140000);
   const token = typeof session?.token === "function" ? session.token() : "";
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
   const loop = loadPhantomLoop();
-  const requestedProviderId = providerIdForRequest(settings, intent);
+  const requestedProviderId = routeProfile.providerId;
   try {
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",
@@ -199,8 +267,11 @@ async function askHermesBrain(raw, intent, settings) {
         provider: providerForRequest(requestedProviderId),
         admin_model: modelLaneForProvider(requestedProviderId),
         model_lane: modelLaneForProvider(requestedProviderId),
-        requested_model: selectedModelForProvider(settings, requestedProviderId),
-        allowed_providers: allowedProvidersForSettings(settings),
+        requested_model: routeProfile.requestedModel,
+        route_tier: routeProfile.tier,
+        max_provider_ms: routeProfile.maxProviderMs,
+        allow_provider_fallback: routeProfile.allowFallback,
+        allowed_providers: allowedProvidersForSettings(settings, routeProfile),
         execution_mode: settings.externalActionMode === "owner_rules" ? "auto" : "approval",
         task_type: intent.primaryIntent,
         tenant_id: currentTenantId(),
@@ -230,9 +301,11 @@ async function askHermesBrain(raw, intent, settings) {
       }),
     });
     const payload = await response.json().catch(() => ({}));
+    if (payload?.fallback?.all_failed) return null;
     if (!response.ok || !payload?.message?.content) return null;
     const say = String(payload.message.content || "").replace(/\s+\n/g, "\n").trim();
     if (!say) return null;
+    if (say.includes(PROVIDER_FAILURE_MESSAGE)) return null;
     return {
       say,
       cards: [],
@@ -260,6 +333,145 @@ function createLead(subject) {
   pushActivity("Lead Hunter", `captured a new lead: ${name}.`, lead.ws);
   store.save();
   return lead;
+}
+
+const PHANTOMFORCE_PROSPECT_SEGMENTS = Object.freeze([
+  {
+    id: "creators-media",
+    title: "Creators and media businesses",
+    triggers: /\b(creators?|content|media|video|photo|podcast|influencer|studio|agency)\b/i,
+    value: 1800,
+    why: "They need repeatable content operations, asset organization, approvals, and campaign follow-up.",
+    next: "Qualify their current content bottleneck, monthly output target, and approval process.",
+    safeStep: "Research public channels first, then ask what slows production down.",
+  },
+  {
+    id: "local-service",
+    title: "Local service businesses",
+    triggers: /\b(business(?:es)?|small business(?:es)?|local|contractor|home service|service compan(?:y|ies)|salon|gym|clinic|restaurant|bar|venue|shop)\b/i,
+    value: 2400,
+    why: "They need lead capture, follow-up discipline, review flow, offers, and simple reporting.",
+    next: "Identify their offer, lead source, missed follow-up risk, and busiest season.",
+    safeStep: "Build a shortlist from public categories before any outreach.",
+  },
+  {
+    id: "schools-education",
+    title: "Schools and educational programs",
+    triggers: /\b(schools?|education|teacher|student|classroom|club|camp|after.?school)\b/i,
+    value: 2200,
+    why: "They need safe student-friendly games, staff visibility, classroom controls, and approval-safe workflows.",
+    next: "Map the decision maker, privacy requirements, device environment, and pilot class.",
+    safeStep: "Keep it private/local until a school approves a pilot conversation.",
+  },
+  {
+    id: "professional-services",
+    title: "Professional service firms",
+    triggers: /\b(professional|law|legal|accounting|bookkeeping|coach|consultant|real estate|insurance|finance)\b/i,
+    value: 2000,
+    why: "They need intake, trust-building content, appointment follow-up, and proof reporting.",
+    next: "Qualify their intake path, referral flow, and client response time.",
+    safeStep: "Collect public positioning only; do not claim a relationship.",
+  },
+  {
+    id: "sports-clubs",
+    title: "Sports teams, clubs, and trainers",
+    triggers: /\b(sports?|team|club|coach|trainer|league|athlete|fitness|training)\b/i,
+    value: 1600,
+    why: "They need schedules, media assets, parent/player updates, sponsors, and community engagement.",
+    next: "Find whether they sell memberships, camps, training, sponsors, or events.",
+    safeStep: "Start with public team pages and package the workflow as a pilot.",
+  },
+  {
+    id: "ops-heavy-teams",
+    title: "Ops-heavy small teams",
+    triggers: /\b(workforce|ops|operations|startup|crypto|saas|internal|team|employees?)\b/i,
+    value: 2600,
+    why: "They need a command center for tasks, approvals, client setup, employee work, and reporting.",
+    next: "Qualify the handoff points, approval gates, and reports they currently track manually.",
+    safeStep: "Frame this as an internal ops audit before suggesting software changes.",
+  },
+  {
+    id: "warm-network",
+    title: "Warm referral prospects",
+    triggers: /\b(warm|referrals?|network|past clients?|existing contacts?|friends?|people\s+we\s+know)\b/i,
+    value: 1400,
+    why: "They already have some trust path, so PhantomForce can package a low-friction audit, setup sprint, or managed follow-up offer.",
+    next: "Sort known relationships by trust level, business need, and the cleanest permission-based first ask.",
+    safeStep: "Use owner-approved relationship notes only; do not scrape private contacts or imply a relationship that is not recorded.",
+  },
+]);
+
+export function isCrmProspectBuildout(text = "") {
+  const s = String(text || "");
+  const prospectAudience = /\b(clients?|leads?|prospects?|contacts?|customers?|small business(?:es)?|business(?:es)?|creators?|schools?|education|gyms?|coaches?|trainers?|service compan(?:y|ies)|contractors?|home services?|restaurants?|bars?|venues?|clubs?|teams?|professional services?|warm prospects?)\b/i;
+  const targetsCrm = /\b(crm|clients?\s+tab|client\s+tab|pipeline|clients?|client\s+base|lead\s+base|lead\s+list|contact\s+list)\b/i.test(s)
+    || (prospectAudience.test(s) && /\b(phantomforce|could\s+use|would\s+use|interested|buy|hire|sell\s+to|customer|client|lead|prospect)\b/i.test(s));
+  const asksToPopulate = /\b(update|fill|populate|build|load|start|create|generate|make|map|draft|list|find|add|search|discover|research|scout|source|identify)\b/i.test(s)
+    || /\badd\b[\s\S]{0,90}\b(clients?|prospects?|contacts?|everyone|creators?|schools?|business(?:es)?)\b/i.test(s);
+  const wantsProspects = /\b(who\s+you\s+think|interested|consider|could\s+use|could\s+buy|could\s+hire|would\s+need|sell\s+to|everyone|prospects?|contacts?|creators?|business(?:es)?|schools?|gyms?|coaches?|service compan(?:y|ies)|phantomforce|workforce)\b/i.test(s)
+    || prospectAudience.test(s);
+  return targetsCrm && asksToPopulate && wantsProspects;
+}
+
+function requestedProspectSegments(text = "") {
+  const s = String(text || "");
+  const wantsEveryone = /\b(everyone|all|anyone|full|complete)\b/i.test(s);
+  const chosen = PHANTOMFORCE_PROSPECT_SEGMENTS.filter((segment) => wantsEveryone || segment.triggers.test(s));
+  return chosen.length ? chosen : PHANTOMFORCE_PROSPECT_SEGMENTS.slice(0, 4);
+}
+
+export function createCrmProspectBuildout(text) {
+  const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
+  const segments = requestedProspectSegments(text);
+  store.state.leads = Array.isArray(store.state.leads) ? store.state.leads : [];
+  store.state.tasks = Array.isArray(store.state.tasks) ? store.state.tasks : [];
+
+  const existing = new Set(visible(store.state.leads).map((lead) => String(lead.company || lead.name || "").trim().toLowerCase()));
+  const created = [];
+  segments.forEach((segment, index) => {
+    const key = segment.title.toLowerCase();
+    if (existing.has(key)) return;
+    const lead = {
+      id: uid("lead"),
+      ws,
+      name: segment.title,
+      company: segment.title,
+      source: "Phantom AI prospect map",
+      status: "new",
+      value: segment.value,
+      next: segment.next,
+      due: days(index + 1),
+      owner: "Lead Hunter",
+      notes: `${segment.why} Safe next step: ${segment.safeStep} No external outreach, contact details, or live relationship claims were added.`,
+      proposalId: null,
+      segment: segment.id,
+    };
+    store.state.leads.unshift(lead);
+    existing.add(key);
+    created.push(lead);
+  });
+
+  const taskTitle = "Qualify PhantomForce CRM prospect map";
+  const hasTask = visible(store.state.tasks).some((task) => String(task.title || "").toLowerCase() === taskTitle.toLowerCase() && task.status !== "done");
+  let task = null;
+  if (!hasTask) {
+    task = {
+      id: uid("task"),
+      ws,
+      title: taskTitle,
+      detail: `Review ${segments.length} prospect lane${segments.length === 1 ? "" : "s"}, choose the first qualification target, and turn it into a researched lead list before any outreach.`,
+      status: "new",
+      priority: "high",
+      source: "Phantom AI CRM buildout",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    store.state.tasks.unshift(task);
+  }
+
+  pushActivity("Lead Hunter", `built ${created.length || segments.length} PhantomForce CRM prospect lane${segments.length === 1 ? "" : "s"}.`, ws);
+  store.save();
+  return { created, segments, task };
 }
 
 function createProposal(subject) {
@@ -397,7 +609,7 @@ function createAutomation(subject, raw) {
   const name = clean ? title(clean).slice(0, 72) : "New automation";
   const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
   const a = {
-    id: uid("agt"), ws, kind: "automation", source: "Business HQ",
+    id: uid("agt"), ws, kind: "automation", source: "Dashboard",
     name, mission: raw, status: "idle",
     allowedDuringVacation: true, requiresApprovalDuringVacation: true,
     createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
@@ -546,6 +758,30 @@ function localQuestionAnswer(text, settings = null) {
   const s = text.toLowerCase();
   const live = currentInfoAnswer(text, settings);
   if (live) return live;
+
+  if (/\b(favorite|favourite)\b.*\b(food|meal|snack|drink)\b|\bwhat'?s your (?:favorite|favourite) (?:food|meal|snack|drink)\b/i.test(text)) {
+    return {
+      say: "If I had taste buds, I'd pick tacos: fast, flexible, and somehow always the correct answer.",
+      cards: [],
+      open: null,
+    };
+  }
+
+  if (/\btell me a joke\b|\bjoke\b/i.test(text)) {
+    return {
+      say: "I told my dashboard to lighten up. It opened three modals and called it a personality.",
+      cards: [],
+      open: null,
+    };
+  }
+
+  if (/\bhow are you\b|\bdo you like\b|\bwould you rather\b/i.test(text)) {
+    return {
+      say: "I'm good — awake, caffeinated in spirit, and ready to keep the work moving without making every answer a whole production.",
+      cards: [],
+      open: null,
+    };
+  }
 
   if (/\b(proposals?|quotes?|pricing|estimates?|deals?)\b/.test(s)) {
     const m = moneyView();
@@ -870,6 +1106,34 @@ function routeCommand(raw, settings) {
   const subject = subjectOf(text);
   const admin = isAdmin();
   const intent = classifyPhantomIntent(text);
+  if (isCrmProspectBuildout(text)) {
+    const buildout = createCrmProspectBuildout(text);
+    const createdNames = buildout.created.map((lead) => lead.name);
+    const laneNames = buildout.segments.map((segment) => segment.title);
+    const names = (createdNames.length ? createdNames : laneNames).join(", ");
+    const cards = buildout.segments.slice(0, 3).map((segment) => card(
+      "Prospect lane",
+      segment.title,
+      segment.next,
+      [openAction("Open Clients", "leads")],
+      "Source: Phantom AI prospect map",
+    ));
+    if (buildout.task) {
+      cards.push(card(
+        "Next task",
+        buildout.task.title,
+        buildout.task.detail,
+        [openAction("Open Mission queue", "workforce")],
+        "No external action taken",
+      ));
+    }
+    return {
+      say: `${buildout.created.length ? "Done" : "Already mapped"} - ${createdNames.length || laneNames.length} CRM prospect lane${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready for review: ${names}. I did not invent contact details, claim live relationships, or message anyone. Next: tell Phantom to create a task for the first lane you want qualified.`,
+      cards,
+      open: "leads",
+      intent,
+    };
+  }
   const guarded = intentResponse(intent, text, settings);
   if (guarded) return { ...guarded, intent };
 
@@ -1214,6 +1478,10 @@ export async function handleSmartCommand(raw) {
 
   if (intent.primaryIntent === "run_agent") {
     return runAgentFromChat(text, intent);
+  }
+
+  if (isCrmProspectBuildout(text)) {
+    return handleCommand(text);
   }
 
   if (canAskHermes(intent, settings)) {

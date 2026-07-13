@@ -7,7 +7,7 @@
       if (location.protocol === "http:" && location.hostname.indexOf("phantomforce.online") !== -1) {
         location.replace("https://" + location.host + location.pathname + location.search + location.hash);
       }
-      window.PHANTOM_BUILD = "phantom-live-20260713-231";
+      window.PHANTOM_BUILD = "phantom-live-20260713-006";
       if ("serviceWorker" in navigator) {
         navigator.serviceWorker
           .getRegistrations()
@@ -23,7 +23,7 @@
     </script>
     <title>PhantomForce — AI Operations Console</title>
     <meta name="description" content="PhantomForce — your AI business operating system." />
-    <meta name="phantom-build" content="phantom-live-20260713-231" />
+    <meta name="phantom-build" content="phantom-live-20260713-006" />
     <meta name="robots" content="noindex" />
     <meta name="theme-color" content="#02060a" />
     <style>
@@ -102,15 +102,15 @@
 
 
     </style>
-    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260713-005" />
+    <link rel="icon" type="image/png" href="/app/assets/brand-phantom-favicon.png?v=phantom-live-20260713-006" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet" />
-    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260713-005" />
-    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260713-005" />
-    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260713-231" />
-    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260713-005" />
-    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260713-005" />
+    <link rel="stylesheet" href="/app/phantom.css?v=phantom-live-20260713-006" />
+    <link rel="stylesheet" href="/app/phantomplay.css?v=phantom-live-20260713-006" />
+    <link rel="stylesheet" href="/app/phantomplay-v2.css?v=phantom-live-20260713-006" />
+    <link rel="stylesheet" href="/app/competitor-intelligence.css?v=phantom-live-20260713-006" />
+    <link rel="stylesheet" href="/app/orggraph.css?v=phantom-live-20260713-006" />
   </head>
   <body>
     <div class="bg-grid" aria-hidden="true"></div>
@@ -125,17 +125,17 @@
           <button class="gate-opt" data-enter="admin">
             <span class="gate-opt-icon">⌘</span>
             <b>Business Manager</b>
-            <i>Jordan — full command across clients, accounting, creator systems, approvals, and PhantomOps.</i>
-            <em>admin.phantomforce.online</em>
+            <i>Business owner or workspace admin - permissions, modules, approvals, and team control.</i>
+            <em>app.phantomforce.online</em>
           </button>
           <button class="gate-opt" data-enter="employee">
             <span class="gate-opt-icon">◈</span>
             <b>Team Workspace</b>
-            <i>Role-based access for operators, creators, and client-facing team members.</i>
+            <i>Employee or operator access inside the business workspace your owner/admin invited you to.</i>
             <em>app.phantomforce.online</em>
           </button>
         </div>
-        <p class="gate-note">Private access is enforced before any workspace can be used.</p>
+        <p class="gate-note">Jordan and PhantomForce platform admins use admin.phantomforce.online.</p>
       </div>
     </div>
 
@@ -143,7 +143,7 @@
     <div class="phantom" data-phantom hidden>
       <header class="mobile-admin-homebar" aria-label="Mobile admin home">
         <button class="mobile-admin-brand" data-mobile-home type="button" aria-label="Open Dashboard">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260713-005" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260713-006" alt="" aria-hidden="true" />
           <span>
             <b>PhantomForce</b>
             <i>Business</i>
@@ -166,7 +166,7 @@
       <!-- ---------- sidebar ---------- -->
       <aside class="sidebar" aria-label="Primary">
         <div class="side-brand">
-          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260713-005" alt="" aria-hidden="true" />
+          <img class="brand-ghost" src="/app/assets/brand-phantom.png?v=phantom-live-20260713-006" alt="" aria-hidden="true" />
           <span class="side-brand-text">
             <b>PHANTOMFORCE</b>
             <i>BUSINESS MANAGER</i>
@@ -253,7 +253,7 @@
                   <img
                     class="phantom-mode-pose"
                     data-mode-pose
-                    src="/app/assets/poses/chin.webp?v=phantom-live-20260713-005"
+                    src="/app/assets/poses/chin.webp?v=phantom-live-20260713-006"
                     alt="Phantom listening"
                     decoding="async"
                     fetchpriority="high"
@@ -276,7 +276,7 @@
                 <span class="queue-count" data-queue-count>0</span>
               </div>
               <div class="queue-list" data-queue></div>
-              <button class="rail-foot-btn" data-open-ws="dashboard">View business map <span aria-hidden="true">→</span></button>
+              <button class="rail-foot-btn" data-map-open type="button">View mission business map <span aria-hidden="true">→</span></button>
             </div>
 
             <div class="quick-card">
@@ -411,7 +411,10 @@
             const src = document.querySelector('script[src*="js/main.js"]')?.getAttribute("src") || "";
             const q = window.PHANTOM_BUILD ? `?v=${window.PHANTOM_BUILD}`
               : src.includes("?") ? src.slice(src.indexOf("?")) : "";
-            const mod = await import(`./js/character.js${q}`).catch(() => import("./js/character.js"));
+            // derive the engine path from wherever main.js is actually mounted —
+            // the admin box serves this page at "/" while the files live under /app/
+            const base = src.includes("js/main.js") ? src.slice(0, src.indexOf("main.js")) + "character.js" : "./js/character.js";
+            const mod = await import(`${base}${q}`).catch(() => import(base));
             const chr = mod.createPhantomCharacter({ small: true });
             // dry-run off-screen: a broken engine must never blank a visible frame
             const probe = document.createElement("canvas");
@@ -449,6 +452,6 @@
     <!-- workspace overlays mount here, above the blurred console -->
     <div class="overlay-root" data-overlay-root></div>
 
-    <script type="module" src="/app/js/main.js?v=phantom-live-20260713-231"></script>
+    <script type="module" src="/app/js/main.js?v=phantom-live-20260713-006"></script>
   </body>
 </html>

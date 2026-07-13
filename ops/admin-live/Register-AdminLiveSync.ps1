@@ -61,7 +61,7 @@ try {
 } catch {
   $watchScript = Join-Path $PSScriptRoot "Watch-AdminMain.ps1"
   $vbs = Join-Path $stateDir "start-admin-live-watch.vbs"
-  $watchArgs = "-NoProfile -ExecutionPolicy Bypass -File `"$watchScript`" -RepoRoot `"$repo`" -Port $Port -EveryMinutes $EveryMinutes"
+  $watchArgs = "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$watchScript`" -RepoRoot `"$repo`" -Port $Port -EveryMinutes $EveryMinutes"
   $vbsCommand = ("$ps $watchArgs").Replace('"', '""')
   $vbsBody = @"
 Set WshShell = CreateObject("WScript.Shell")

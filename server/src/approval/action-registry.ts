@@ -17,6 +17,13 @@ const notImplemented = async (action: PhantomForceAction): Promise<ActionExecuti
   message: `${action.type} is registered as a contract but does not have an execution handler yet.`,
 });
 
+/* Presence in the registry is NOT proof an action can run — every type below is
+   still wired to `notImplemented`. Callers deciding "can I do this?" must ask
+   this, or they get a green light for an action that always fails. */
+export function isActionImplemented(handler: ActionHandler | undefined): boolean {
+  return Boolean(handler) && handler!.execute !== notImplemented;
+}
+
 export const actionRegistry: Partial<Record<ActionType, ActionHandler>> = {
   "task.create": {
     type: "task.create",

@@ -13,6 +13,14 @@ assert.match(main, /id:\s*"intelligence"[\s\S]*label:\s*"Competitor Intel"/u, "C
 assert.match(main, /renderCompetitorIntelligence/u, "The workspace must use the intelligence renderer.");
 assert.match(index, /competitor-intelligence\.css\?v=phantom-live-/u, "The dedicated stylesheet must load.");
 assert.match(module, /Aggressive Intelligence/u, "Optional aggressive mode must be visible.");
+assert.match(module, /ON-DEMAND MARKET SCOUT|data-ci-scout-form/u, "The first-run experience must arm an on-demand market scout instead of waiting for manual competitor entry.");
+assert.match(module, /ci-market-board|momentumLabel/u, "The overview must render a stock-market-style competitor board.");
+assert.match(module, /ci-market-map|data-ci-focus-competitor|trendProfile|sparkline/u, "The overview must render an interactive market map with trend visuals.");
+assert.match(module, /directThreat|is-threat-|Red = direct competitor/u, "The market map must highlight direct competitors in red.");
+assert.match(module, /ci-map-heat|heatSpots/u, "The market map must render a heat-map layer, not just dots.");
+assert.match(module, /MARKET INDEX|Track \+ compare/u, "The overview must show a useful starter competitor index with a track action.");
+assert.match(module, /AUTO SCOUT REPORT|ci-auto-scout|ci-auto-bars|ci-auto-compare/u, "Customer Intelligence must render automatic comparison graphics, not static readiness cards.");
+assert.match(module, /candidateCompetitors|sourceTargets|nextAction/u, "Scout lanes must show what Phantom is already checking and what to do next.");
 assert.match(module, /data-ci-fuse/u, "Signal fusion must be interactive.");
 assert.match(module, /aggregated theme/u, "Audience gaps must require aggregation.");
 assert.match(module, /originality risk/u, "Creative analysis must expose similarity risk.");
@@ -21,7 +29,17 @@ assert.match(css, /@media\(max-width:767px\)/u, "Phone-specific responsive layou
 assert.match(staticServer, /urlPath\.startsWith\("\/api\/competitor-intelligence"\)/u, "Live admin must proxy intelligence APIs.");
 assert.match(service, /PROHIBITED_PATTERNS/u, "A server-side hard boundary policy must exist.");
 assert.match(service, /status:\s*"estimate"/u, "Inferences must be labeled estimates.");
+assert.match(service, /buildMarketBoard|updateMarketScoutContext/u, "The service must compute market board and scout readiness server-side.");
+assert.match(service, /AutoScoutReport|buildAutoScoutReport|phantomAngleFor|sourceTargetsForBoardItem/u, "The service must generate automatic scout comparisons, source targets, and response angles.");
+assert.match(service, /STARTER_COMPETITORS[\s\S]*ChatGPT[\s\S]*Claude[\s\S]*HubSpot[\s\S]*HighLevel[\s\S]*Zapier[\s\S]*Hootsuite/u, "The service must seed PhantomForce-relevant starter competitors.");
+assert.match(service, /marketBoardMode|starterCompetitors/u, "The snapshot must distinguish starter competitors from live tracked competitors.");
+assert.match(css, /ci-auto-scout|ci-auto-bars|ciBarLoad/u, "Automatic market intelligence graphics must be styled and animated.");
+assert.match(css, /ci-market-map|ci-map-node|ciMapSpin|ci-sparkline/u, "The competitor map must be graphic, animated, and trend-oriented.");
+assert.match(css, /ci-map-stage\{[^}]*overflow:hidden/u, "The competitor map stage must clip internally instead of hanging off the page.");
+assert.match(css, /ci-map-heat|is-threat-direct|rgba\(255,84,95/u, "The competitor map must use red heat styling for direct competitors.");
 assert.doesNotMatch(service, /from\s+["'](?:puppeteer|playwright)|child_process|execFile|spawn\(/iu, "The service must not implement scraping or bypass tooling.");
 assert.doesNotMatch(module, /fetch\([^)]*https?:\/\//u, "The UI must not call competitor sites directly.");
+assert.doesNotMatch(module, /\bqueued\b|Ready to run|ready_to_run|No market board yet|Discovery queue ready/iu, "Customer Intelligence must not present confusing queue/readiness language or dead empty states.");
+assert.doesNotMatch(service, /\bqueued\b|Ready to run|ready_to_run|Discovery queue ready|scout queue/iu, "Server copy must avoid confusing queue/readiness language for on-demand intelligence.");
 
 console.log("Competitor Intelligence frontend and policy safety checks passed.");

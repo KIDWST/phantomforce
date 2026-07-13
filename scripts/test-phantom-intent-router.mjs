@@ -1,10 +1,25 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
+function installMemoryStorage(name) {
+  if (globalThis[name]) return;
+  const storage = new Map();
+  globalThis[name] = {
+    getItem: (key) => storage.has(String(key)) ? storage.get(String(key)) : null,
+    setItem: (key, value) => { storage.set(String(key), String(value)); },
+    removeItem: (key) => { storage.delete(String(key)); },
+    clear: () => { storage.clear(); },
+  };
+}
+installMemoryStorage("localStorage");
+installMemoryStorage("sessionStorage");
+
 /* Import command.js/store.js with the SAME build query command.js uses
    internally — a hardcoded ?v here drifts on every build bump and silently
    splits the store into two module instances, making assertions test nothing. */
 const commandSrc = readFileSync(new URL("../app/js/command.js", import.meta.url), "utf8");
+const mainSrc = readFileSync(new URL("../app/js/main.js", import.meta.url), "utf8");
+const indexSrc = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
 const buildId = commandSrc.match(/store\.js\?v=([^"']+)/)?.[1] || "";
 const q = buildId ? `?v=${buildId}` : "";
 const { classifyPhantomIntent } = await import(`../app/js/intent-router.js${q}`);
@@ -179,6 +194,7 @@ assert.equal(classifyPhantomIntent("remind me to send it tomorrow").primaryInten
 store.state.tasks = [];
 store.state.sites = [];
 store.state.media = [];
+store.state.leads = [];
 store.state.agents = [];
 store.state.approvals = [];
 store.state.looperPlans = [];
@@ -200,6 +216,105 @@ const smartGreeting = await handleSmartCommand("hello");
 assert.equal(smartGreeting.intent.primaryIntent, "greeting");
 assert.equal(smartGreeting.hermes || null, null, "greetings should stay local");
 assert.equal(store.state.tasks.length, 0, "smart greetings should not create tasks");
+
+const originalFetch = globalThis.fetch;
+let capturedChatBody = null;
+globalThis.fetch = async (url, init) => {
+  assert.match(String(url), /\/phantom-ai\/chat$/, "instant questions should use the chat backend");
+  capturedChatBody = JSON.parse(init.body);
+  return {
+    ok: true,
+    json: async () => ({
+      ok: true,
+      message: { role: "assistant", content: "I'd pick tacos." },
+      fallback: { all_failed: false },
+      hermes: { route_tier: "instant" },
+    }),
+  };
+};
+const instantQuestion = await handleSmartCommand("what's your favorite food?");
+assert.equal(instantQuestion.say, "I'd pick tacos.");
+assert.equal(capturedChatBody.route_tier, "instant");
+assert.equal(capturedChatBody.requested_model, "gpt-5.5-instant");
+assert.deepEqual(capturedChatBody.allowed_providers, ["codex_cli"]);
+assert.equal(capturedChatBody.allow_provider_fallback, false);
+assert.ok(capturedChatBody.max_provider_ms <= 5000, "instant questions should cap provider time tightly");
+globalThis.fetch = originalFetch;
+
+let broadChatBody = null;
+globalThis.fetch = async (url, init) => {
+  assert.match(String(url), /\/phantom-ai\/chat$/, "broad thinking requests should use the chat backend");
+  broadChatBody = JSON.parse(init.body);
+  return {
+    ok: true,
+    json: async () => ({
+      ok: true,
+      message: { role: "assistant", content: "Model-backed answer with a useful plan." },
+      fallback: { all_failed: false },
+      hermes: { route_tier: "deep" },
+    }),
+  };
+};
+const broadThought = await handleSmartCommand("help me think through a school growth strategy for PhantomPlay");
+globalThis.fetch = originalFetch;
+assert.equal(broadThought.say, "Model-backed answer with a useful plan.");
+assert.equal(broadChatBody.route_tier, "deep", "broad strategy should get the deeper model lane");
+assert.equal(broadChatBody.allow_provider_fallback, true, "broad strategy should allow provider fallback");
+assert.ok(broadChatBody.allowed_providers.includes("claude_cli"), "broad strategy should include Claude in the provider chain");
+
+globalThis.fetch = async (url, init) => {
+  assert.match(String(url), /\/phantom-ai\/chat$/, "provider failures should still prove the backend was attempted");
+  broadChatBody = JSON.parse(init.body);
+  return {
+    ok: true,
+    json: async () => ({
+      ok: true,
+      message: { role: "assistant", content: "I couldn't complete that just now. Your request is still here — try again in a moment." },
+      fallback: { all_failed: true },
+      hermes: { route_tier: "standard" },
+    }),
+  };
+};
+const degradedThought = await handleSmartCommand("why is Phantom not thinking properly?");
+globalThis.fetch = originalFetch;
+assert.doesNotMatch(degradedThought.say, /couldn't complete that just now/i, "provider all-failed must not surface as the final chat answer");
+assert.match(degradedThought.say, /take|ask|build|track|anything/i, "provider all-failed should degrade to the local operator path");
+
+store.state.leads = [];
+store.state.tasks = [];
+let crmFetchCalled = false;
+globalThis.fetch = async () => {
+  crmFetchCalled = true;
+  throw new Error("CRM prospect buildout should not call the backend");
+};
+const crmBuildout = await handleSmartCommand("update our clients crm with clients who you think would be interested in phantomforce. your phantom workforce.. creators, businesses, schools, everyone. Just add to our CRM/clients tab");
+globalThis.fetch = originalFetch;
+assert.equal(crmFetchCalled, false, "CRM prospect buildout should stay on the deterministic local path");
+assert.equal(crmBuildout.open, "leads", "CRM prospect buildout should open the Clients pipeline");
+assert.ok(store.state.leads.length >= 4, "CRM prospect buildout should create multiple prospect lanes");
+assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "creator prospects should be represented");
+assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "school prospects should be represented");
+assert.ok(store.state.tasks.some((task) => /Qualify PhantomForce CRM prospect map/i.test(task.title)), "CRM prospect buildout should create a qualification task");
+assert.match(crmBuildout.say, /did not invent contact details|message anyone/i, "CRM proof should state no fake contacts or outreach");
+store.state.leads = [];
+store.state.tasks = [];
+
+crmFetchCalled = false;
+globalThis.fetch = async () => {
+  crmFetchCalled = true;
+  throw new Error("Find-and-add CRM requests should not call the backend");
+};
+const crmFindAndAdd = await handleSmartCommand("find and add clients who could use PhantomForce: gyms, schools, creators, service companies, and warm prospects");
+globalThis.fetch = originalFetch;
+assert.equal(crmFetchCalled, false, "Find-and-add CRM requests should stay on the deterministic local path");
+assert.equal(crmFindAndAdd.open, "leads", "Find-and-add CRM requests should open the Clients pipeline");
+assert.ok(store.state.leads.length >= 4, "Find-and-add CRM request should create multiple prospect lanes");
+assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent creator prospects");
+assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent school prospects");
+assert.ok(store.state.leads.some((lead) => /local service|gym|service/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent service/gym prospects");
+assert.ok(store.state.leads.some((lead) => /warm|referral/i.test(`${lead.name} ${lead.notes}`)), "find/add request should represent warm prospects");
+store.state.leads = [];
+store.state.tasks = [];
 
 const complaint = handleCommand("i hate this dashboard, it feels annoying");
 assert.equal(store.state.tasks.length, 0, "complaints should not create tasks");
@@ -272,5 +387,10 @@ assert.equal(VACATION_POLICY.requireApprovalForExternalActions, true, "external 
 assert.ok(VACATION_POLICY.allowDrafting && VACATION_POLICY.allowTaskCreation && VACATION_POLICY.allowMediaBriefs, "safe drafting work is allowed");
 assert.ok(VACATION_POLICY.maxRunMinutes <= 480, "runs are time-bounded");
 assert.ok(Array.isArray(store.state.vacationRuns), "vacationRuns state exists");
+
+assert.match(mainSrc, /Tell Phantom to create a task/i, "mission map should include the task creation keeper copy");
+assert.match(mainSrc, /data-map-prompt/i, "mission map should load task prompts into chat");
+assert.match(indexSrc, /data-map-open type="button">View mission business map/i, "right rail mission map button should open the map overlay");
+assert.doesNotMatch(indexSrc, /data-open-ws="dashboard">View business map/i, "right rail mission map button should not navigate to an empty dashboard route");
 
 console.log("phantom intent router tests passed");
