@@ -7,7 +7,7 @@ import {
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
 } from "./store.js?v=phantom-live-20260712-227";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-227";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260712-230";
 import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260712-227";
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260712-227";
 import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260712-227";
@@ -32,7 +32,7 @@ import {
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-227";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-227";
 import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-227";
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260712-229";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260712-230";
 import {
   customizeNavigation,
   loadOrganizationCustomization,

@@ -391,12 +391,12 @@ const PHANTOMFORCE_PROSPECT_SEGMENTS = Object.freeze([
   },
 ]);
 
-function isCrmProspectBuildout(text = "") {
+export function isCrmProspectBuildout(text = "") {
   const s = String(text || "");
-  const targetsCrm = /\b(crm|clients?\s+tab|client\s+tab|pipeline|clients?)\b/i.test(s);
-  const asksToPopulate = /\b(update|fill|populate|build|load)\b/i.test(s)
-    || /\badd\b[\s\S]{0,90}\b(clients?|prospects?|everyone|creators?|schools?|business(?:es)?)\b/i.test(s);
-  const wantsProspects = /\b(who\s+you\s+think|interested|everyone|prospects?|creators?|business(?:es)?|schools?|phantomforce|workforce)\b/i.test(s);
+  const targetsCrm = /\b(crm|clients?\s+tab|client\s+tab|pipeline|clients?|client\s+base|lead\s+base|lead\s+list|contact\s+list)\b/i.test(s);
+  const asksToPopulate = /\b(update|fill|populate|build|load|start|create|generate|make|map|draft|list)\b/i.test(s)
+    || /\badd\b[\s\S]{0,90}\b(clients?|prospects?|contacts?|everyone|creators?|schools?|business(?:es)?)\b/i.test(s);
+  const wantsProspects = /\b(who\s+you\s+think|interested|consider|could\s+use|could\s+buy|could\s+hire|everyone|prospects?|contacts?|creators?|business(?:es)?|schools?|phantomforce|workforce)\b/i.test(s);
   return targetsCrm && asksToPopulate && wantsProspects;
 }
 
@@ -407,7 +407,7 @@ function requestedProspectSegments(text = "") {
   return chosen.length ? chosen : PHANTOMFORCE_PROSPECT_SEGMENTS.slice(0, 4);
 }
 
-function createCrmProspectBuildout(text) {
+export function createCrmProspectBuildout(text) {
   const ws = currentWs() === "phantomforce" ? "phantomforce" : currentWs();
   const segments = requestedProspectSegments(text);
   store.state.leads = Array.isArray(store.state.leads) ? store.state.leads : [];

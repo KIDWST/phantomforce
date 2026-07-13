@@ -4,6 +4,7 @@
    draftable actions, and one blocking question max. Nothing external runs. */
 
 import { store, visible, currentWs, wsName, pushActivity } from "./store.js?v=phantom-live-20260712-227";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260712-230";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -54,6 +55,13 @@ const PAGE_WORKERS = {
     placeholder: "Ask why a post worked, what changed, or what to do next...",
     helper: "Phantom answers from connected data and local activity first, then says exactly what is missing.",
     action: "Analyze performance question",
+  },
+  leads: {
+    eyebrow: "Client intelligence",
+    title: "Build the client base.",
+    placeholder: "Ask for small businesses, coaches, gyms, creators, service companies, or warm prospects...",
+    helper: "Phantom turns one prompt into draft prospect lanes, qualification tasks, and approval-safe next moves.",
+    action: "Build local prospect map",
   },
   vacation: {
     eyebrow: "Away intelligence",
@@ -266,6 +274,11 @@ function actionDrafts(pageId, prompt, intent) {
       "Separate real metrics from missing connectors and give one next move.",
       "Flag the exact connector/report only if it is truly missing.",
     ],
+    leads: [
+      "Create local draft prospect lanes in Clients when the prompt asks for a client base.",
+      "Do not invent names, phone numbers, emails, or live relationships.",
+      "Queue qualification and public/CRM enrichment as the next step before outreach.",
+    ],
     intelligence: [
       "Use public-safe research framing and separate facts from guesses.",
       "Extract competitor, offer, customer pain, and response opportunity.",
@@ -287,6 +300,48 @@ function actionDrafts(pageId, prompt, intent) {
     "Use the current page tools automatically before asking the user to hunt for controls.",
     "Return a visible draft/action packet with approval status.",
   ])];
+}
+
+function isLeadsProspectPrompt(pageId, prompt = "") {
+  if (pageId !== "leads") return false;
+  const text = String(prompt || "");
+  return isCrmProspectBuildout(text)
+    || (/\b(start|create|generate|make|build|map|list|draft)\b/i.test(text)
+      && /\b(client|lead|prospect|contact|small business|businesses|phantomforce)\b/i.test(text));
+}
+
+function runPageAction(pageId, prompt) {
+  if (!isLeadsProspectPrompt(pageId, prompt)) return null;
+  const buildout = createCrmProspectBuildout(
+    /\b(client|lead|crm|pipeline|prospect|contact)\b/i.test(prompt)
+      ? prompt
+      : `start a client base prospect list for ${prompt}`,
+  );
+  const createdNames = buildout.created.map((lead) => lead.name);
+  const laneNames = buildout.segments.map((segment) => segment.title);
+  const names = (createdNames.length ? createdNames : laneNames).join(", ");
+  return {
+    type: "prospect-buildout",
+    title: buildout.created.length ? "Prospect lanes created" : "Prospect lanes already mapped",
+    summary: `${createdNames.length || laneNames.length} draft lane${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Clients: ${names}.`,
+    notes: [
+      "No outreach, upload, deploy, or public action happened.",
+      "No fake contact details were generated.",
+      "Next: qualify one lane with public/CRM research before adding real business names.",
+    ],
+    refreshWorkspace: true,
+  };
+}
+
+function pageActionHtml(action) {
+  if (!action) return "";
+  return `
+    <div class="page-worker-action-result">
+      <span>Local action completed</span>
+      <b>${esc(action.title)}</b>
+      <p>${esc(action.summary)}</p>
+      <ul>${action.notes.map((note) => `<li>${esc(note)}</li>`).join("")}</ul>
+    </div>`;
 }
 
 function blockingQuestion(prompt, pageId) {
@@ -325,6 +380,7 @@ function renderPlan(card, pageId, prompt) {
   const out = card.querySelector("[data-page-worker-output]");
   if (!out) return;
   const analysis = analyzePrompt(pageId, prompt);
+  const pageAction = runPageAction(pageId, prompt);
   if (prompt.trim()) rememberPrompt(pageId, prompt, analysis);
   out.hidden = false;
   out.innerHTML = `
@@ -350,13 +406,15 @@ function renderPlan(card, pageId, prompt) {
         <ul>${analysis.actions.map((step) => `<li>${esc(step)}</li>`).join("")}</ul>
       </article>
     </div>
+    ${pageActionHtml(pageAction)}
     ${analysis.memoryHits.length ? `<div class="page-worker-memory"><span>Context used</span>${analysis.memoryHits.map((hit) => `<p><b>${esc(hit.source)}:</b> ${esc(hit.title)} — ${esc(String(hit.body || "").slice(0, 120))}</p>`).join("")}</div>` : ""}
     <div class="page-worker-gate ${analysis.question ? "needs-input" : "ready"}">
       <b>${analysis.question ? "One blocking question" : "No more fields needed"}</b>
       <span>${esc(analysis.question || "Phantom has enough to draft locally. External moves still require approval.")}</span>
     </div>`;
-  pushActivity("Page Intelligence", analysis.question ? `needs one detail for ${analysis.intent.toLowerCase()}.` : `prepared ${analysis.intent.toLowerCase()} from one prompt.`);
+  pushActivity("Page Intelligence", pageAction ? pageAction.summary : (analysis.question ? `needs one detail for ${analysis.intent.toLowerCase()}.` : `prepared ${analysis.intent.toLowerCase()} from one prompt.`));
   store.save();
+  return { analysis, pageAction };
 }
 
 export function mountPageWorkers(root = document, opts = {}) {
@@ -369,8 +427,11 @@ export function mountPageWorkers(root = document, opts = {}) {
       const pageId = card?.dataset.pageWorker || "page";
       const input = form.querySelector("[data-page-worker-input]");
       const prompt = input?.value || "";
-      renderPlan(card, pageId, prompt);
-      opts.notify?.("Phantom", "I inferred the missing pieces from one prompt. No field-by-field setup.");
+      const result = renderPlan(card, pageId, prompt);
+      opts.notify?.("Phantom", result?.pageAction?.summary || "I inferred the missing pieces from one prompt. No field-by-field setup.");
+      if (result?.pageAction?.refreshWorkspace) {
+        setTimeout(() => opts.openWorkspace?.(pageId), 320);
+      }
     });
   });
   root.querySelectorAll("[data-page-worker-input]").forEach((input) => {
