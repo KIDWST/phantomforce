@@ -21,6 +21,12 @@ import {
   pulsePendingApprovalCount,
   shouldRefreshOrganizationPulse,
 } from "./organizationpulse.js?v=phantom-live-20260713-247";
+import {
+  cachedServerRecords,
+  loadServerRecords,
+  serverRecordsAvailable,
+  shouldRefreshServerRecords,
+} from "./serverrecords.js?v=phantom-live-20260713-247";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-247";
 import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-247";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-247";
@@ -564,6 +570,7 @@ function navStatusPill(n) {
 }
 
 let organizationPulseRefreshInFlight = false;
+let serverRecordsRefreshInFlight = false;
 
 function localPendingApprovals() {
   return visible(store.state.approvals).filter((a) => a.status === "pending").length;
@@ -586,6 +593,17 @@ function ensureOrganizationPulseFresh() {
       renderMobileBottomNav();
       renderNotifs();
       if (!activePageId && !openId) renderPlan();
+    });
+}
+
+function ensureServerRecordsFresh() {
+  if (!shouldRefreshServerRecords() || serverRecordsRefreshInFlight) return;
+  serverRecordsRefreshInFlight = true;
+  loadServerRecords()
+    .catch(() => null)
+    .finally(() => {
+      serverRecordsRefreshInFlight = false;
+      if (cmdkOpen) renderPalette($("[data-cmdk-input]")?.value || "");
     });
 }
 
@@ -1539,6 +1557,7 @@ function fuzzy(q, text) {
 function paletteSources(query) {
   const q = query.trim().toLowerCase();
   const items = [];
+  ensureServerRecordsFresh();
   NAV.filter(canAccessSurface).forEach((n) =>
     items.push({ group: "Go to", label: n.label, icon: n.icon, sub: n.ws ? `Open ${n.label}` : "Console home", run: () => goNav(n.id) }));
   for (const id in WORKSPACE_DEFS) {
@@ -1551,9 +1570,12 @@ function paletteSources(query) {
   commandSuggestions().forEach((s) => items.push({ group: "Ask", label: s, icon: "chat", sub: "Run", run: () => runCommand(s) }));
   if (q.length >= 2) {
     const add = (label, sub, open, icon) => items.push({ group: "Records", label, icon, sub, run: () => routeWorkspace(open) });
-    visible(store.state.leads).filter((l) => (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q)).slice(0, 4)
+    const serverRecords = serverRecordsAvailable() ? cachedServerRecords() : null;
+    const leads = serverRecordsAvailable() ? (serverRecords?.leads || []) : visible(store.state.leads);
+    const proposals = serverRecordsAvailable() ? (serverRecords?.proposals || []) : visible(store.state.proposals);
+    leads.filter((l) => (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((l) => add(l.name, `Lead · ${l.company || l.status}`, "leads", "users"));
-    visible(store.state.proposals).filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
+    proposals.filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((p) => add(p.client, `Proposal · ${fmtMoney(p.price)}`, "proposals", "dollar"));
     visible(store.state.media).filter((m) => (m.title || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((m) => add(m.title, "Media item", "media", "film"));

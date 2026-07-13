@@ -12,6 +12,7 @@ const index = read("server/src/index.ts");
 const proxy = read("ops/admin-live/admin-static-server.mjs");
 const orgGraph = read("app/js/orggraph.js");
 const orgPulseClient = read("app/js/organizationpulse.js");
+const serverRecords = read("app/js/serverrecords.js");
 const main = read("app/js/main.js");
 
 // 1. Honesty contract: unavailable sections must carry a reason, never fake data.
@@ -100,5 +101,16 @@ assert.match(main, /organizationPulseAvailable\(\)\) return pulse \? pulsePendin
 assert.match(main, /organizationPulseAvailable\(\) \? pulseAttentionItems/u, "Attention items must prefer server pulse when signed in.");
 assert.match(main, /ensureOrganizationPulseFresh\(\);/u, "Dashboard shell must refresh Organization Pulse in the background.");
 assert.match(main, /crm: "leads"/u, "CRM surface actions must route to the real Clients workspace.");
+
+// 12. Command palette records: signed-in lookup must read server CRM and
+//     proposal documents instead of drifting against local fallback arrays.
+assert.match(serverRecords, /loadCrmLeads/u, "Server record cache must read CRM leads.");
+assert.match(serverRecords, /loadProposals/u, "Server record cache must read proposals.");
+assert.match(serverRecords, /Promise\.allSettled/u, "Server record cache must tolerate one record source being unavailable.");
+assert.match(serverRecords, /serverRecordsAvailable/u, "Server record cache must be gated by an authenticated session.");
+assert.match(main, /serverrecords\.js/u, "Command palette must import server record cache.");
+assert.match(main, /ensureServerRecordsFresh\(\)/u, "Command palette must refresh server records in the background.");
+assert.match(main, /serverRecordsAvailable\(\) \? \(serverRecords\?\.leads \|\| \[\]\) : visible\(store\.state\.leads\)/u, "Signed-in lead search must prefer server records.");
+assert.match(main, /serverRecordsAvailable\(\) \? \(serverRecords\?\.proposals \|\| \[\]\) : visible\(store\.state\.proposals\)/u, "Signed-in proposal search must prefer server records.");
 
 console.log("Organization Pulse and Brain Graph safety checks passed.");
