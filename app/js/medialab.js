@@ -6,14 +6,14 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-231";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260713-232";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260712-231";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-231";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-231";
-import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-231";
-import { assetsAvailable, assetBlobUrl, listAssets, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260712-231";
+} from "./contenthub.js?v=phantom-live-20260713-232";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260713-232";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260713-232";
+import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260713-232";
+import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260713-232";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";
@@ -1930,6 +1930,7 @@ let mlEditFuture = [];
 let mlPaintMode = "select";
 let mlPaintColor = "#41ffa1";
 let mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
+let mlAssetPicker = { search: "", source: "all" };
 
 function cloneEditState(source = editState) {
   return cloneImageEditState(source);
@@ -2058,71 +2059,96 @@ function buildEditPrompt(query = "") {
   ].filter(Boolean);
   return parts.join("\n\n");
 }
+function rowMatchesAssetSearch(row) {
+  const query = String(mlAssetPicker.search || "").trim().toLowerCase();
+  if (!query) return true;
+  return `${row.title || ""} ${row.source || ""} ${row.prompt || ""}`.toLowerCase().includes(query);
+}
 function editorAssetRows() {
   const local = session.assets
     .filter((asset) => asset.type === "image" && asset.url)
-    .slice(0, 6)
     .map((asset) => ({
       id: asset.id,
       title: asset.meta?.title || asset.meta?.prompt || "Media Lab image",
       url: asset.url,
-      source: "Media Lab cache",
+      source: "Media Pool",
+      sourceType: "local",
       prompt: asset.meta?.prompt || "",
     }));
   const cloud = (mlAssetCache.assets || [])
     .filter((asset) => asset.kind === "image" && asset.previewUrl)
-    .slice(0, 8)
     .map((asset) => ({
       id: `cloud:${asset.id}`,
       assetId: asset.id,
       title: asset.title || "Asset Cloud image",
       url: asset.previewUrl,
       source: asset.brand ? "Brand asset" : "Asset Cloud",
+      sourceType: "cloud",
       prompt: (asset.tags || []).join(", "),
     }));
+  const source = mlAssetPicker.source || "all";
   const seen = new Set();
   return [...local, ...cloud].filter((row) => {
+    if (source !== "all" && row.sourceType !== source) return false;
+    if (!rowMatchesAssetSearch(row)) return false;
     const key = row.url || row.id;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
-  });
+  }).slice(0, 60);
 }
 function assetCachePanelHtml(esc) {
   const rows = editorAssetRows();
+  const cloudCount = (mlAssetCache.assets || []).length;
+  const localCount = session.assets.filter((asset) => asset.type === "image" && asset.url).length;
   const cloudState = !assetsAvailable()
     ? "Sign in to a business workspace for Asset Cloud."
     : mlAssetCache.loading
       ? "Loading Asset Cloud..."
       : mlAssetCache.error
         ? mlAssetCache.error
-        : `${(mlAssetCache.assets || []).length} cloud asset${(mlAssetCache.assets || []).length === 1 ? "" : "s"} ready`;
+        : `${cloudCount} cloud image${cloudCount === 1 ? "" : "s"} ready`;
   return `
     <details class="ml-edit-section" open>
-      <summary><span>Asset cache</span><b>${rows.length || "Cloud"}</b></summary>
+      <summary><span>Asset Cloud</span><b>${rows.length || "Manager"}</b></summary>
       <div class="ml-edit-section-body">
-        <p class="ml-hint">${esc(cloudState)}</p>
+        <div class="ml-asset-manager-tools">
+          <input data-ml-asset-search type="search" placeholder="Search assets..." value="${esc(mlAssetPicker.search || "")}" />
+          <select data-ml-asset-source aria-label="Asset source">
+            <option value="all" ${mlAssetPicker.source === "all" ? "selected" : ""}>All</option>
+            <option value="cloud" ${mlAssetPicker.source === "cloud" ? "selected" : ""}>Cloud</option>
+            <option value="local" ${mlAssetPicker.source === "local" ? "selected" : ""}>Media Pool</option>
+          </select>
+          <button type="button" data-ml-asset-refresh title="Refresh Asset Cloud">${svgIc("refresh")}</button>
+        </div>
+        <p class="ml-hint">${esc(cloudState)}${localCount ? ` · ${localCount} Media Pool image${localCount === 1 ? "" : "s"}` : ""}</p>
         ${rows.length ? `<div class="ml-asset-cache-grid">
           ${rows.map((row) => `<button type="button" class="ml-asset-cache-card" data-ml-use-asset="${esc(row.id)}" title="Edit ${esc(row.title)}">
             <img src="${esc(row.url)}" alt="${esc(row.title)}"/>
             <span><b>${esc(row.title)}</b><i>${esc(row.source)}</i></span>
           </button>`).join("")}
-        </div>` : `<div class="ml-hint">Generate, upload, or save media and it will appear here.</div>`}
+        </div>` : `<div class="ml-hint">Upload assets to Asset Cloud, generate media, or save edits and they will appear here.</div>`}
       </div>
     </details>`;
 }
-async function loadEditorAssetCache(root, opts) {
+async function loadEditorAssetCache(root, opts, force = false) {
   const tenant = currentTenantId();
   if (!assetsAvailable()) {
     mlAssetCache = { tenant, loading: false, loaded: true, assets: [], error: "" };
     return;
   }
-  if (mlAssetCache.tenant === tenant && (mlAssetCache.loaded || mlAssetCache.loading)) return;
+  if (!force && mlAssetCache.tenant === tenant && (mlAssetCache.loaded || mlAssetCache.loading)) return;
   mlAssetCache = { tenant, loading: true, loaded: false, assets: [], error: "" };
   let result;
   try {
-    result = await listAssets({ kind: "image", view: "library", sort: "newest", limit: 12 });
-    const assets = await Promise.all((result.assets || []).slice(0, 12).map(async (asset) => ({
+    result = await listAssets({
+      kind: "image",
+      view: "library",
+      sort: "newest",
+      search: mlAssetPicker.search || undefined,
+      limit: 48,
+    });
+    const assets = await Promise.all((result.assets || []).slice(0, 48).map(async (asset) => ({
       ...asset,
       previewUrl: await assetBlobUrl(asset.id, "thumbnail") || await assetBlobUrl(asset.id, "file"),
     })));
@@ -2405,12 +2431,34 @@ function renderEdit(body, cfg, opts, root) {
     const o = body.querySelector(`[data-bout="${key}"]`);
     if (o) o.textContent = s.value;
   });
-  body.querySelectorAll("[data-ml-use-asset]").forEach((button) => button.onclick = () => {
+  const assetSearch = body.querySelector("[data-ml-asset-search]");
+  if (assetSearch) {
+    assetSearch.onchange = () => {
+      mlAssetPicker.search = assetSearch.value.trim();
+      mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
+      renderMediaStudio(root, opts);
+    };
+  }
+  const assetSource = body.querySelector("[data-ml-asset-source]");
+  if (assetSource) {
+    assetSource.onchange = () => {
+      mlAssetPicker.source = assetSource.value || "all";
+      renderMediaStudio(root, opts);
+    };
+  }
+  body.querySelector("[data-ml-asset-refresh]")?.addEventListener("click", () => {
+    mlAssetCache = { tenant: "", loading: false, loaded: false, assets: [], error: "" };
+    renderMediaStudio(root, opts);
+  });
+  body.querySelectorAll("[data-ml-use-asset]").forEach((button) => button.onclick = async () => {
     const row = editorAssetRows().find((item) => item.id === button.dataset.mlUseAsset);
     if (!row?.url) return;
     session.edit = { url: row.url, type: "image", id: row.assetId || row.id };
+    if (row.assetId) {
+      recordAssetUsage(row.assetId, "media-lab-editor", session.edit.id, row.title || "Media Lab edit").catch(() => {});
+    }
     resetEdit();
-    opts.notify?.("Media Lab", `loaded ${row.title || "asset"} from ${row.source || "asset cache"}.`);
+    opts.notify?.("Media Lab", `loaded ${row.title || "asset"} from ${row.source || "Asset Cloud"}.`);
     renderMediaStudio(root, opts);
   });
   body.querySelectorAll("[data-ml-paint-mode] button").forEach((button) => button.onclick = () => {
@@ -2736,6 +2784,7 @@ function svgIc(k) {
     lock: `<rect x="3.5" y="7" width="9" height="6" rx="1.4"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>`,
     undo: `<path d="M6 4L3 7l3 3M3 7h6a4 4 0 0 1 0 8H6"/>`,
     redo: `<path d="M10 4l3 3-3 3M13 7H7a4 4 0 0 0 0 8h3"/>`,
+    refresh: `<path d="M13 5.2A5.3 5.3 0 0 0 4 4.3L3 5.4M3 3.2v2.2h2.2M3 10.8a5.3 5.3 0 0 0 9 1l1-1.2M13 12.8v-2.2h-2.2"/>`,
     expand: `<path d="M3 6V3h3M13 6V3h-3M3 10v3h3M13 10v3h-3"/>`,
     collapse: `<path d="M6 3v3H3M10 3v3h3M6 13v-3H3M10 13v-3h3"/>`,
     hub: `<circle cx="8" cy="3.6" r="1.5"/><circle cx="3.6" cy="11.4" r="1.5"/><circle cx="12.4" cy="11.4" r="1.5"/><path d="M8 5.1v3.4M8 8.5l-3.7 2M8 8.5l3.7 2"/>`,

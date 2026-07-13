@@ -4432,6 +4432,36 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
 .ml-edit-section summary .ic { width: 13px; height: 13px; color: var(--neon); }
 .ml-edit-section-body { display: grid; gap: 11px; padding: 0 12px 13px; border-top: 1px solid rgba(65,255,161,.07); }
 .ml-edit-section-body > :first-child { margin-top: 12px; }
+.ml-asset-manager-tools {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 92px 34px;
+  gap: 7px;
+  align-items: center;
+}
+.ml-asset-manager-tools input,
+.ml-asset-manager-tools select {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(0,0,0,.2);
+  color: var(--ink);
+  padding: 0 10px;
+  font: 700 11px "DM Sans", sans-serif;
+}
+.ml-asset-manager-tools button {
+  width: 34px;
+  height: 34px;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: rgba(65,255,161,.08);
+  color: var(--neon);
+  cursor: pointer;
+}
+.ml-asset-manager-tools button:hover { border-color: rgba(65,255,161,.5); background: rgba(65,255,161,.14); }
+.ml-asset-manager-tools .ic { width: 14px; height: 14px; }
 .ml-asset-cache-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -4455,6 +4485,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   text-align: left;
   cursor: pointer;
 }
+.ml-asset-cache-card:focus-visible { outline: 2px solid rgba(65,255,161,.7); outline-offset: 2px; }
 .ml-asset-cache-card:hover { border-color: rgba(65,255,161,.5); background: rgba(65,255,161,.08); }
 .ml-asset-cache-card img {
   width: 52px;
@@ -5461,6 +5492,7 @@ kbd { font: 600 10px "DM Mono", monospace; padding: 2px 6px; border-radius: 6px;
   .ml-rail { width: 100%; }
   .ml-queue-drop { margin-left: auto; }
   .ml-grid { grid-template-columns: 1fr; }
+  .ml-asset-manager-tools { grid-template-columns: 1fr 84px 34px; }
   .ml-stage-grid { grid-template-columns: repeat(2, 1fr); }
   .ml-row { flex-wrap: wrap; }
   .ml-board-cell { width: 36px; }
