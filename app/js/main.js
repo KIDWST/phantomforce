@@ -767,15 +767,18 @@ async function signOut() {
   const databaseSession = !!ctx.session?.database;
   accountMenuOpen = false;
   closeOverlay(true);
-  if (databaseSession) await databaseLogout();
-  session.clear();
-  ctx.session = null;
   try {
-    const url = new URL(location.href);
-    url.searchParams.delete("session");
-    history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
-  } catch {}
-  showGate();
+    if (databaseSession) await databaseLogout();
+  } finally {
+    session.clear();
+    ctx.session = null;
+    try {
+      const url = new URL(location.href);
+      url.searchParams.delete("session");
+      history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
+    } catch {}
+    showGate();
+  }
 }
 
 /* ============================ account + plan ============================ */
