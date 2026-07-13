@@ -95,6 +95,9 @@ const SKIP_PAGES = new Set([
   "promptlibrary",
   "account",
   "customize",
+  "sites",
+  "media",
+  "content",
 ]);
 
 const BACKEND_TIMEOUT_MS = 45000;

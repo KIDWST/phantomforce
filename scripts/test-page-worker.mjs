@@ -26,8 +26,9 @@ assert.match(worker, /currentWorkerOutput/u, "Page worker output must survive th
 assert.match(worker, /No fake contact details were generated/u, "Clients worker must not hallucinate contact details.");
 assert.match(command, /client\\s\+base[\s\S]*consider[\s\S]*could\\s\+use/u, "Client-base prospect phrasing must route into CRM prospect buildout.");
 assert.match(command, /find\|add\|search\|discover\|research\|scout\|source\|identify/u, "Global CRM prospect routing must understand find/add/discover client language.");
-assert.match(skipPages, /"settings"[\s\S]*"developer"[\s\S]*"activity"/u, "Only system/admin pages should skip page worker prompts.");
-assert.doesNotMatch(skipPages, /"media"|"sites"|"content"|"assets"|"intelligence"|"vacation"|"phantomplay"/u, "Normal product pages must keep the AI page outcome prompt available.");
+assert.match(skipPages, /"settings"[\s\S]*"developer"[\s\S]*"activity"/u, "System/admin pages should skip page worker prompts.");
+assert.match(skipPages, /"sites"[\s\S]*"media"[\s\S]*"content"/u, "Native prompt-first surfaces must not duplicate the top page worker prompt.");
+assert.doesNotMatch(skipPages, /"assets"|"intelligence"|"vacation"|"phantomplay"/u, "Pages without a main AI prompter should keep the page outcome prompt available.");
 assert.match(worker, /fetch\("\/phantom-ai\/chat"/u, "Page outcome prompts must call the Phantom AI backend.");
 assert.match(worker, /module_data: pageContextModules/u, "Backend page prompts must send page context modules.");
 assert.match(worker, /currentTenantId/u, "Backend page prompts must carry tenant context.");
