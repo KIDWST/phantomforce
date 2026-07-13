@@ -157,6 +157,20 @@ export async function requestServerPublish(site) {
       theme: site.design?.theme || undefined,
       style: site.design?.style || undefined,
     },
+    products: (site.catalog || []).map((product) => ({
+      id: product.id,
+      name: product.name,
+      price: Number(product.price || 0),
+      cadence: product.cadence === "monthly" ? "monthly" : "one_time",
+      desc: product.desc || "",
+      visible: product.visible !== false,
+    })),
+    store: {
+      enabled: Boolean(site.store?.enabled || site.design?.storeEnabled),
+      currency: site.store?.currency || "USD",
+      checkoutMode: "test",
+      paymentsConnected: false,
+    },
   };
   const build = await api(`/orgs/${encodeURIComponent(orgId)}/sites/builds`, { method: "POST", body: snapshot });
   if (!build.ok) return { ok: false, error: build.json?.error || `build_failed_${build.status}`, detail: build.json };

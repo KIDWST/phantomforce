@@ -492,7 +492,7 @@ export function extractStoreProducts(promptText) {
   const prompt = String(promptText || "");
   if (!/\b(?:store|shop|product|package|sprint|checkout|price|pricing)\b/i.test(prompt)) return [];
   const products = [];
-  const pattern = /(?:\b(?:add|include)\b|[,;]|\band\b)\s*(?:and\s+)?(?:an?\s+)?([a-z0-9][a-z0-9&'+/ -]{1,70}?)\s+(?:for|at)?\s*\$(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?![\d,])(\s*(?:\/\s*mo(?:nth)?|per\s+month|monthly))?/gi;
+  const pattern = /(?:\b(?:add|include)\b|[,;]|\band\b)\s*(?:and\s+)?(?:an?\s+)?([a-z0-9][a-z0-9&'+/ -]{1,70}?)\s+(?:for|at)?\s*\$(\d+(?:,\d{3})*(?:\.\d{1,2})?)(?!\d|,\d)(\s*(?:\/\s*mo(?:nth)?|per\s+month|monthly))?/gi;
   for (const match of prompt.matchAll(pattern)) {
     const name = match[1]
       .replace(/^(?:the|a|an|add|include)\s+/i, "")
@@ -557,7 +557,7 @@ export function applyWebsitePrompt(site, promptText) {
     siteStore.enabled = true;
     if (!site.sections.some((section) => /^(store|products)$/i.test(section))) site.sections.push("Products");
     if (!site.sections.some((section) => /^checkout$/i.test(section))) site.sections.push("Checkout");
-    changed = "Added store sections and checkout planning.";
+    changed = `${changed ? `${changed} ` : ""}Enabled the store and checkout.`;
   }
   if (/landing|website|site|page/.test(lower) && !/store|shop/.test(lower)) {
     site.kind = /landing/.test(lower) ? "Landing page" : "Website";

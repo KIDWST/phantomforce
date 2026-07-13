@@ -17,6 +17,7 @@
     "test:phantomplay": "node scripts/test-phantomplay.mjs && npm run test:phantomplay --workspace @phantomforce/server",
     "test:competitor-intelligence": "node scripts/test-competitor-intelligence.mjs && npm run test:competitor-intelligence --workspace @phantomforce/server",
     "test:workspace-site-builder": "node scripts/test-workspace-site-builder.mjs",
+    "test:sites": "npm run test:workspace-site-builder && npm run test:site-store-render --workspace @phantomforce/server",
     "typecheck": "npm run build --workspace @phantomforce/contracts && npm run typecheck --workspace @phantomforce/server",
     "prisma:generate": "npm run prisma:generate --workspace @phantomforce/server"
   },

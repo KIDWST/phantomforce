@@ -4850,6 +4850,20 @@ const SiteSnapshotSchema = z.object({
     theme: z.string().max(40).optional(),
     style: z.string().max(40).optional(),
   }).default({}),
+  products: z.array(z.object({
+    id: z.string().min(1).max(120).regex(/^[a-z0-9_-]+$/i),
+    name: z.string().min(1).max(100),
+    price: z.number().min(0).max(10_000_000),
+    cadence: z.enum(["one_time", "monthly"]).default("one_time"),
+    desc: z.string().max(500).default(""),
+    visible: z.boolean().default(true),
+  })).max(50).default([]),
+  store: z.object({
+    enabled: z.boolean().default(false),
+    currency: z.string().min(3).max(3).default("USD"),
+    checkoutMode: z.literal("test").default("test"),
+    paymentsConnected: z.literal(false).default(false),
+  }).default({ enabled: false, currency: "USD", checkoutMode: "test", paymentsConnected: false }),
 });
 
 app.get("/orgs/:orgId/sites", async (request, reply) => {
