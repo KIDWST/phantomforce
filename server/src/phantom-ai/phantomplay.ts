@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, rename, unlink, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,6 +8,7 @@ import type { AccessSession } from "../access/session.js";
 const moduleDir = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(moduleDir, "../../..");
 const storePath = process.env.PHANTOMFORCE_PHANTOMPLAY_PATH || resolve(repoRoot, ".phantom", "phantomplay.json");
+const retryableWriteCodes = new Set(["EPERM", "EACCES", "EBUSY"]);
 
 export type PhantomPlayRating = "everyone" | "teen" | "mature";
 export type PhantomPlaySubmissionStatus = "draft" | "submitted" | "changes_requested" | "approved" | "rejected" | "disabled";
@@ -161,10 +162,10 @@ export const PHANTOMPLAY_BUILT_IN_GAMES: PhantomPlayGame[] = [
     developer: "Tak",
     developerAvatar: TAK_AVATAR,
     kind: "built_in",
-    launchUrl: "/app/games/neon-drift.html?v=1.2.0",
+    launchUrl: "/app/games/neon-drift.html?v=1.2.1",
     thumbnail: GAME_ART_BY_SLUG["neon-drift"],
     featured: true,
-    version: "1.2.0",
+    version: "1.2.1",
     controls: "WASD/arrow keys to fly. Auto-fire is always on. Touch and drag on mobile.",
     progressSupport: true,
     scoreSupport: true,
@@ -389,14 +390,42 @@ async function readStore(): Promise<PhantomPlayStore> {
 }
 
 let writes = Promise.resolve();
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+async function replaceStoreFile(temp: string, target: string) {
+  let lastError: unknown = null;
+  for (let attempt = 0; attempt < 6; attempt++) {
+    try {
+      await rename(temp, target);
+      return;
+    } catch (error) {
+      lastError = error;
+      const code = String((error as NodeJS.ErrnoException).code || "");
+      if (!retryableWriteCodes.has(code)) {
+        throw error;
+      }
+      await sleep(40 * (attempt + 1));
+    }
+  }
+
+  try {
+    await copyFile(temp, target);
+    await unlink(temp).catch(() => undefined);
+  } catch (fallbackError) {
+    throw lastError instanceof Error ? lastError : fallbackError;
+  }
+}
+
 async function writeStore(store: PhantomPlayStore) {
-  writes = writes.then(async () => {
+  const nextWrite = writes.catch(() => undefined).then(async () => {
     await mkdir(dirname(storePath), { recursive: true });
-    const temp = `${storePath}.${process.pid}.tmp`;
+    const temp = `${storePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
     await writeFile(temp, JSON.stringify(store, null, 2), "utf8");
-    await rename(temp, storePath);
+    await replaceStoreFile(temp, storePath);
   });
-  await writes;
+  writes = nextWrite.catch(() => undefined);
+  await nextWrite;
 }
 
 function ensureProfile(store: PhantomPlayStore, tenantId: string, actorId: string) {

@@ -9,6 +9,7 @@ const css = read("../app/phantomplay.css");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
 const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick"];
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
+const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
 const appFiles = [index, main, module, ...games];
 
@@ -71,6 +72,10 @@ for (const game of games) {
 }
 
 assert.match(games[0], /\.start\[hidden\][^{]*\{display:none\}/u, "Neon Drift's start overlay must actually leave the play field.");
+assert.match(neonDrift, /invuln/u, "Neon Drift must give the ship a short grace window after damage.");
+assert.match(neonDrift, /maxSpeed=\.00105/u, "Neon Drift ship speed must stay tuned for arcade responsiveness.");
+assert.match(neonDrift, /e\.y>1\.12\)\{e\.dead=true\}/u, "Escaped enemies should leave the field without damaging the player.");
+assert.doesNotMatch(neonDrift, /e\.y>1\.08\)\{e\.dead=true;damage\(\)\}/u, "Escaped enemies must not cause invisible hull damage.");
 assert.doesNotMatch(games[2], /function size\(\)\{[^}]*reset\(\)/u, "Focus Stack must not erase a run when the mobile viewport resizes.");
 assert.match(penaltyKick, /\.field\{[^}]*height:100%;[^}]*min-height:280px/u, "Penalty Kick must reserve a real playable field instead of collapsing around absolute children.");
 assert.match(penaltyKick, /function meterPower\(\)\{[^}]*getBoundingClientRect/u, "Penalty Kick must calculate shot timing from live meter geometry.");
