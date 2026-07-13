@@ -6,7 +6,7 @@
    when the backend doesn't advertise database auth, none of these
    surfaces render and the app behaves exactly as before. */
 
-import { ctx, session } from "./store.js?v=phantom-live-20260712-221";
+import { ctx, session } from "./store.js?v=phantom-live-20260712-222";
 
 export const isDatabaseSession = () => !!ctx.session?.database;
 export const activeOrgId = () => (isDatabaseSession() ? ctx.session.orgId || null : null);
@@ -314,4 +314,63 @@ export function clearAssetBlobCache() {
 export async function saveToAssetCloud(dataUrl, name, opts = {}) {
   if (!assetsAvailable()) return { ok: false, error: "assets_unavailable" };
   return uploadAsset(dataUrl, name, { source: opts.source || "media-lab", tags: opts.tags, folderId: opts.folderId });
+}
+
+/* ---------------- local asset library ----------------
+   Read-only desktop asset lane for editor-time assets such as the local
+   Motionarray folder. This is intentionally separate from permanent org Asset
+   Cloud storage: listing and previewing local assets must not upload or meter
+   the whole folder. */
+
+export async function localAssetStatus() {
+  try {
+    const { ok, json } = await api("/phantom-ai/local-assets/status");
+    return ok ? json : { ok: false, count: 0 };
+  } catch {
+    return { ok: false, count: 0 };
+  }
+}
+
+export async function listLocalAssets(query = {}) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(query)) {
+    if (value !== undefined && value !== null && value !== "") params.set(key, String(value));
+  }
+  try {
+    const { ok, json } = await api(`/phantom-ai/local-assets?${params.toString()}`);
+    return ok ? json : { ok: false, assets: [], count: 0 };
+  } catch {
+    return { ok: false, assets: [], count: 0 };
+  }
+}
+
+export async function refreshLocalAssets() {
+  try {
+    const { ok, json } = await api("/phantom-ai/local-assets/refresh", { method: "POST", body: {} });
+    return ok ? json : { ok: false };
+  } catch {
+    return { ok: false };
+  }
+}
+
+const localAssetBlobCache = new Map();
+export async function localAssetBlobUrl(assetId) {
+  const key = String(assetId || "");
+  if (!key) return null;
+  if (localAssetBlobCache.has(key)) return localAssetBlobCache.get(key);
+  try {
+    const res = await fetch(`/phantom-ai/local-assets/${encodeURIComponent(key)}/file`, { headers: authHeaders() });
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    localAssetBlobCache.set(key, url);
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+export function clearLocalAssetBlobCache() {
+  for (const url of localAssetBlobCache.values()) URL.revokeObjectURL(url);
+  localAssetBlobCache.clear();
 }
