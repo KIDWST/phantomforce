@@ -388,10 +388,261 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
 .pp-settings,.pp-player{
   border-radius:5px;
 }
+.pp-dev-guide{
+  grid-template-columns:minmax(0,1fr) minmax(260px,.46fr);
+  gap:18px;
+  padding:18px;
+  border-color:var(--pp-console-line);
+}
+.pp-dev-guide h2{
+  font:900 24px "DM Mono",ui-monospace,monospace;
+  line-height:1.12;
+  text-transform:uppercase;
+}
+.pp-dev-guide p:not(.pp-kicker),
+.pp-dev-guide li{
+  color:#9fbeaf;
+  font-size:11px;
+}
+.pp-dev-directory{
+  display:grid;
+  gap:12px;
+  padding:12px;
+  border:1px solid rgba(65,255,161,.14);
+  border-radius:5px;
+  background:#010604;
+}
+.pp-dev-list{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(280px,1fr));
+  gap:10px;
+}
+.pp-dev-card{
+  display:grid;
+  gap:12px;
+  min-width:0;
+  padding:14px;
+  border:1px solid var(--pp-console-line);
+  border-radius:4px;
+  background:linear-gradient(180deg,#04100d,#020807);
+}
+.pp-dev-card header,
+.pp-dev-profile header{
+  display:grid;
+  grid-template-columns:56px minmax(0,1fr) auto;
+  align-items:center;
+  gap:12px;
+}
+.pp-dev-card header img,
+.pp-dev-profile header img{
+  width:56px;
+  height:56px;
+  border:1px solid rgba(65,255,161,.38);
+  border-radius:4px;
+  object-fit:cover;
+  background:#020907;
+  box-shadow:0 0 22px rgba(65,255,161,.14);
+}
+.pp-dev-card h3,
+.pp-dev-profile h2,
+.pp-dev-notes h3{
+  margin:0;
+  font:900 18px "Space Grotesk",system-ui,sans-serif;
+}
+.pp-dev-card header span,
+.pp-dev-profile header span{
+  display:block;
+  margin-top:3px;
+  overflow:hidden;
+  color:var(--pp-console-muted);
+  font-size:10px;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.pp-dev-card strong,
+.pp-dev-profile header strong{
+  display:grid;
+  justify-items:end;
+  min-width:82px;
+  padding:8px 10px;
+  border:1px solid rgba(65,255,161,.28);
+  border-radius:4px;
+  background:rgba(65,255,161,.08);
+}
+.pp-dev-card strong b,
+.pp-dev-profile header strong b{
+  color:var(--neon);
+  font:900 22px "DM Mono",monospace;
+}
+.pp-dev-card strong span,
+.pp-dev-profile header strong span{
+  margin:0;
+  color:#9fc5b4;
+  font:800 8px "DM Mono",monospace;
+  text-transform:uppercase;
+}
+.pp-dev-thumbs{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:6px;
+}
+.pp-dev-thumbs img{
+  width:100%;
+  aspect-ratio:16/10;
+  border:1px solid rgba(65,255,161,.16);
+  border-radius:3px;
+  object-fit:cover;
+  background:#010504;
+}
+.pp-dev-card>p{
+  min-height:42px;
+  margin:0;
+  color:#abc9ba;
+  font-size:11px;
+  line-height:1.45;
+}
+.pp-dev-tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:5px;
+}
+.pp-dev-tags span{
+  padding:4px 7px;
+  border-radius:3px;
+  background:rgba(65,255,161,.1);
+  color:var(--pp-console-muted);
+  font:800 8px "DM Mono",monospace;
+  text-transform:uppercase;
+}
+.pp-dev-card>button{
+  justify-self:start;
+}
+.pp-dev-profile{
+  display:grid;
+  gap:12px;
+  padding:16px;
+  border:1px solid var(--pp-console-line);
+  border-radius:5px;
+  background:linear-gradient(180deg,#04100d,#020807);
+}
+.pp-dev-back{
+  justify-self:start;
+}
+.pp-dev-profile h2{
+  font-size:24px;
+}
+.pp-dev-stats{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  border:1px solid rgba(65,255,161,.14);
+  border-radius:4px;
+  overflow:hidden;
+  background:#010604;
+}
+.pp-dev-stats span{
+  display:grid;
+  gap:3px;
+  padding:11px 12px;
+  border-right:1px solid rgba(65,255,161,.14);
+}
+.pp-dev-stats span:last-child{
+  border-right:0;
+}
+.pp-dev-stats b{
+  color:#effff7;
+  font:900 20px "DM Mono",monospace;
+}
+.pp-dev-stats i{
+  color:var(--pp-console-muted);
+  font:800 8px "DM Mono",monospace;
+  font-style:normal;
+  text-transform:uppercase;
+}
+.pp-dev-actions{
+  display:grid;
+  grid-template-columns:auto auto minmax(0,1fr);
+  align-items:center;
+  gap:8px;
+}
+.pp-dev-actions p{
+  margin:0;
+  color:#9fbeaf;
+  font-size:10px;
+  line-height:1.45;
+}
+.pp-dev-profile-grid{
+  display:grid;
+  grid-template-columns:minmax(260px,.42fr) minmax(0,1fr);
+  gap:12px;
+  align-items:start;
+}
+.pp-dev-notes,
+.pp-dev-games{
+  min-width:0;
+  padding:14px;
+  border:1px solid rgba(65,255,161,.14);
+  border-radius:5px;
+  background:#010604;
+}
+.pp-dev-notes{
+  display:grid;
+  gap:10px;
+}
+.pp-dev-notes header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.pp-dev-notes textarea{
+  width:100%;
+  min-height:112px;
+  resize:vertical;
+  padding:10px 11px;
+  border:1px solid var(--pp-console-line);
+  border-radius:4px;
+  background:#020907;
+  color:var(--pp-console-ink);
+  font:600 12px "Space Grotesk",system-ui,sans-serif;
+}
+.pp-dev-notes ul{
+  display:grid;
+  gap:7px;
+  margin:0;
+  padding:0;
+  list-style:none;
+}
+.pp-dev-notes li{
+  display:grid;
+  gap:4px;
+  padding:9px;
+  border:1px solid rgba(65,255,161,.12);
+  border-radius:4px;
+  background:#020907;
+}
+.pp-dev-notes li.is-empty{
+  border-style:dashed;
+}
+.pp-dev-notes li span{
+  color:var(--neon);
+  font:800 8px "DM Mono",monospace;
+  text-transform:uppercase;
+}
+.pp-dev-notes li p{
+  margin:0;
+  color:#b7d4c7;
+  font-size:11px;
+  line-height:1.45;
+}
+.pp-dev-games{
+  display:grid;
+  gap:10px;
+}
 @media(max-width:1100px){
   .pp-hero{grid-template-columns:minmax(0,1fr) 210px}
   .pp-console-panel{display:none}
   .pp-game-grid,.pp-game-grid-full{grid-template-columns:1fr}
+  .pp-dev-profile-grid{grid-template-columns:1fr}
 }
 @media(max-width:767px){
   .console-workspace[data-page-ws="phantomplay"],
@@ -574,6 +825,54 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
     display:block;
     width:100%;
     height:180px;
+  }
+  .pp-dev-guide,
+  .pp-dev-card header,
+  .pp-dev-profile header{
+    grid-template-columns:1fr;
+  }
+  .pp-dev-guide{
+    padding:15px;
+  }
+  .pp-dev-guide h2,
+  .pp-dev-profile h2{
+    font-size:20px;
+    overflow-wrap:anywhere;
+  }
+  .pp-dev-list,
+  .pp-dev-profile-grid{
+    grid-template-columns:1fr;
+  }
+  .pp-dev-card header img,
+  .pp-dev-profile header img{
+    width:48px;
+    height:48px;
+  }
+  .pp-dev-card strong,
+  .pp-dev-profile header strong{
+    justify-items:start;
+    width:100%;
+  }
+  .pp-dev-thumbs{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .pp-dev-stats{
+    grid-template-columns:repeat(2,minmax(0,1fr));
+  }
+  .pp-dev-stats span:nth-child(2){
+    border-right:0;
+  }
+  .pp-dev-stats span:nth-child(-n+2){
+    border-bottom:1px solid rgba(65,255,161,.14);
+  }
+  .pp-dev-actions{
+    grid-template-columns:1fr;
+  }
+  .pp-dev-directory,
+  .pp-dev-profile,
+  .pp-dev-notes,
+  .pp-dev-games{
+    padding:12px;
   }
 }
 @media(max-width:520px){

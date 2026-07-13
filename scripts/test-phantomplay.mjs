@@ -28,6 +28,15 @@ assert.match(module, /No direct inbound device ports/u, "Wireless play must not 
 assert.match(module, /Classroom mode only allows Everyone-rated games/u, "School rooms must have an Everyone-rated content boundary.");
 assert.match(module, /\/api\/phantomplay\/rooms/u, "The play-together UI must use the authenticated PhantomPlay room API.");
 assert.match(module, /Edit release/u, "Developers must be able to revise releases.");
+assert.match(module, /function developerDirectory/u, "The Developers tab must be backed by a developer directory derived from catalog data.");
+assert.match(module, /Dev score/u, "Developer profiles must expose a visible Dev score.");
+assert.match(module, /data-pp-open-dev/u, "Developer cards must open profile views.");
+assert.match(module, /data-pp-support-dev/u, "Developer profiles must allow local support marks.");
+assert.match(module, /data-pp-donate-dev/u, "Developer profiles must allow local donation intent without starting payments.");
+assert.match(module, /data-pp-save-dev-note/u, "Developer profiles must support private dev notes.");
+const renderDeveloperSource = module.match(/function renderDeveloper\(\) \{([\s\S]*?)\nfunction renderAdmin/u)?.[1] || "";
+assert.ok(renderDeveloperSource, "renderDeveloper must exist.");
+assert.doesNotMatch(renderDeveloperSource, /data-pp-submit-form|New submission|DEVELOPER DISTRIBUTION/u, "The Developers tab must render the directory/profile flow, not the old submission form.");
 assert.match(module, /Request changes/u, "Admin moderation controls must exist.");
 assert.match(module, /data-pp-favorite/u, "Favorites must be interactive.");
 assert.match(module, /data-pp-player-pause/u, "The player must expose pause and resume controls.");
@@ -38,6 +47,9 @@ for (const slug of gameSlugs) {
   assert.match(module, new RegExp(`/app/games/${slug}\\.html`, "u"), `${slug} must have a playable launch URL.`);
 }
 assert.match(css, /@media\s*\(max-width:\s*767px\)/u, "Phone-specific responsive layout must exist.");
+assert.match(css, /\.pp-dev-list/u, "Developer directory cards must be styled.");
+assert.match(css, /\.pp-dev-profile/u, "Developer profile views must be styled.");
+assert.match(css, /\.pp-dev-notes/u, "Developer notes must be styled.");
 assert.match(css, /workspace-page:has\(\.pp-player\)[^{]*\.workspace-page-body\{[^}]*transform:none!important/u, "The game player must escape the animated page containing block.");
 assert.match(staticServer, /urlPath\.startsWith\("\/api\/phantomplay"\)/u, "The live admin server must proxy PhantomPlay API routes.");
 
