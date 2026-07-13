@@ -287,13 +287,16 @@ globalThis.fetch = async () => {
   crmFetchCalled = true;
   throw new Error("CRM prospect buildout should not call the backend");
 };
-const crmBuildout = await handleSmartCommand("update our clients crm with clients who you think would be interested in phantomforce. your phantom workforce.. creators, businesses, schools, everyone. Just add to our CRM/clients tab");
+const exactClientsCrmPrompt = "update our clients crm with clients who you think would be interested in phantomforce. your phantom workforce.. creators, businesses, schools, everyone. Just add to our CRM/clients tab";
+const crmBuildout = await handleSmartCommand(exactClientsCrmPrompt);
 globalThis.fetch = originalFetch;
 assert.equal(crmFetchCalled, false, "CRM prospect buildout should stay on the deterministic local path");
 assert.equal(crmBuildout.open, "leads", "CRM prospect buildout should open the Clients pipeline");
-assert.ok(store.state.leads.length >= 4, "CRM prospect buildout should create multiple prospect lanes");
+assert.ok(store.state.leads.length >= 7, "CRM prospect buildout with 'everyone' should create the full safe prospect set");
 assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "creator prospects should be represented");
 assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "school prospects should be represented");
+assert.ok(store.state.leads.some((lead) => /warm|referral/i.test(`${lead.name} ${lead.notes}`)), "warm prospects should be represented");
+assert.ok(store.state.leads.every((lead) => /No external outreach|contact details|live relationship claims/i.test(lead.notes)), "CRM buildout must not invent contacts or outreach claims");
 assert.ok(store.state.tasks.some((task) => /Qualify PhantomForce CRM prospect map/i.test(task.title)), "CRM prospect buildout should create a qualification task");
 assert.match(crmBuildout.say, /did not invent contact details|message anyone/i, "CRM proof should state no fake contacts or outreach");
 store.state.leads = [];

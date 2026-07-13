@@ -94,16 +94,17 @@ globalThis.fetch = async () => {
 
 const pageAction = runPageAction(
   "leads",
-  "find and add clients who could use PhantomForce: gyms, schools, creators, service companies, and warm prospects",
+  "update our clients crm with clients who you think would be interested in phantomforce. your phantom workforce.. creators, businesses, schools, everyone. Just add to our CRM/clients tab",
 );
 
 assert.equal(fetchCalled, false, "Clients page CRM local action should not call the backend.");
 assert.equal(pageAction?.type, "prospect-buildout", "Clients page should execute the CRM prospect buildout action.");
 assert.equal(pageAction?.refreshWorkspace, true, "Clients page should request a workspace refresh after CRM cards are created.");
-assert.ok(store.state.leads.length >= 4, "Clients page prompt should create multiple CRM prospect lanes.");
+assert.ok(store.state.leads.length >= 7, "Clients page prompt with 'everyone' should create the full safe prospect set.");
 assert.ok(store.state.leads.some((lead) => /creator/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include creator prospects.");
 assert.ok(store.state.leads.some((lead) => /school|education/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include school prospects.");
 assert.ok(store.state.leads.some((lead) => /local service|gym|service/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include local service or gym prospects.");
+assert.ok(store.state.leads.some((lead) => /warm|referral/i.test(`${lead.name} ${lead.notes}`)), "Clients page prompt should include warm prospects.");
 assert.ok(store.state.leads.every((lead) => /No external outreach|contact details|live relationship claims/i.test(lead.notes)), "CRM cards must not invent live contacts or outreach claims.");
 assert.ok(store.state.tasks.some((task) => /Qualify PhantomForce CRM prospect map/i.test(task.title)), "Clients page prompt should create a qualification task.");
 assert.match(pageAction.summary, /ready in Clients/i, "Clients page action should report visible CRM results.");
