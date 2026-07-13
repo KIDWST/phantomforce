@@ -1344,7 +1344,7 @@ type LocalAssetIndex = {
   generatedAt: string;
   count: number;
   truncated: boolean;
-  source: "manifest" | "scan";
+  source: "manifest" | "scan" | "cache";
   assets: LocalAssetRecord[];
 };
 
@@ -1382,6 +1382,12 @@ let localAssetIndexCache: { key: string; at: number; index: LocalAssetIndex } | 
 function localAssetRoot() {
   const configured = String(process.env.PHANTOMFORCE_LOCAL_ASSET_ROOT || "").trim();
   return resolve(configured || LOCAL_ASSET_DEFAULT_ROOT);
+}
+
+/* The label shown in the product. Never the folder basename: that leaks
+   third-party service names and the owner's disk layout into customer UI. */
+function localAssetLabel() {
+  return String(process.env.PHANTOMFORCE_LOCAL_ASSET_LABEL || "").trim() || "Local library";
 }
 
 function isPathInside(parent: string, child: string) {
@@ -1492,7 +1498,7 @@ async function readLocalAssetManifest(root: string): Promise<LocalAssetIndex | n
     return {
       ok: true,
       root,
-      rootLabel: basename(root),
+      rootLabel: localAssetLabel(),
       generatedAt: String(parsed?.generated_at || new Date().toISOString()),
       count: assets.length,
       truncated: false,
@@ -1516,7 +1522,7 @@ async function scanLocalAssets(root: string): Promise<LocalAssetIndex> {
     }
     for (const entry of entries) {
       if (assets.length >= LOCAL_ASSET_SCAN_LIMIT) return;
-      if (["$RECYCLE.BIN", "System Volume Information", "__MACOSX"].includes(entry.name)) continue;
+      if (["$RECYCLE.BIN", "System Volume Information", "__MACOSX", LOCAL_ASSET_MANAGER_DIR].includes(entry.name)) continue;
       const full = resolve(dir, entry.name);
       if (!isPathInside(root, full)) continue;
       if (entry.isDirectory()) {
@@ -1542,7 +1548,7 @@ async function scanLocalAssets(root: string): Promise<LocalAssetIndex> {
         mime: cls.mime,
         status: "ready",
         safety: "Read-only local asset",
-        tags: ["local", "motionarray", cls.kind],
+        tags: ["local", "library", cls.kind],
         previewable: cls.previewable,
         updatedAt: st?.mtime?.toISOString?.(),
       });
@@ -1552,7 +1558,7 @@ async function scanLocalAssets(root: string): Promise<LocalAssetIndex> {
   return {
     ok: true,
     root,
-    rootLabel: basename(root),
+    rootLabel: localAssetLabel(),
     generatedAt: new Date().toISOString(),
     count: assets.length,
     truncated: assets.length >= LOCAL_ASSET_SCAN_LIMIT,
@@ -1561,16 +1567,36 @@ async function scanLocalAssets(root: string): Promise<LocalAssetIndex> {
   };
 }
 
-async function loadLocalAssetIndex(refresh = false): Promise<LocalAssetIndex> {
-  const root = localAssetRoot();
-  const rootStatus = await safeStat(root);
-  if (!rootStatus?.isDirectory()) {
-    return { ok: false, root, rootLabel: basename(root), generatedAt: new Date().toISOString(), count: 0, truncated: false, source: "scan", assets: [] };
-  }
-  const key = root;
-  if (!refresh && localAssetIndexCache?.key === key && Date.now() - localAssetIndexCache.at < LOCAL_ASSET_CACHE_TTL_MS) return localAssetIndexCache.index;
+/* Cold starts must be instant: the previous version WROTE a disk cache but
+   never read it, so every server restart forced a full rescan on first open.
+   Now the disk cache is served immediately (localPath rebuilt from
+   relativePath) while a fresh scan replaces it in the background. */
+let localAssetRefreshInFlight: Promise<LocalAssetIndex> | null = null;
+
+async function readLocalAssetDiskCache(root: string): Promise<LocalAssetIndex | null> {
+  try {
+    const cachePath = resolve(root, LOCAL_ASSET_CACHE);
+    if (!isPathInside(root, cachePath)) return null;
+    const parsed = JSON.parse(await readFile(cachePath, "utf8"));
+    if (!Array.isArray(parsed?.assets)) return null;
+    const assets = (parsed.assets as Array<Record<string, unknown>>).flatMap((asset) => {
+      const relativePath = String(asset.relativePath ?? "");
+      if (!relativePath) return [];
+      const localPath = resolve(root, relativePath);
+      if (!isPathInside(root, localPath)) return [];
+      return [{ ...(asset as unknown as LocalAssetRecord), localPath }];
+    });
+    return {
+      ok: true, root, rootLabel: localAssetLabel(),
+      generatedAt: String(parsed.generatedAt || new Date().toISOString()),
+      count: assets.length, truncated: Boolean(parsed.truncated), source: "cache", assets,
+    };
+  } catch { return null; }
+}
+
+async function rebuildLocalAssetIndex(root: string): Promise<LocalAssetIndex> {
   const index = await readLocalAssetManifest(root) || await scanLocalAssets(root);
-  localAssetIndexCache = { key, at: Date.now(), index };
+  localAssetIndexCache = { key: root, at: Date.now(), index };
   try {
     const cachePath = resolve(root, LOCAL_ASSET_CACHE);
     if (isPathInside(root, cachePath)) {
@@ -1579,6 +1605,29 @@ async function loadLocalAssetIndex(refresh = false): Promise<LocalAssetIndex> {
     }
   } catch { /* cache writes are best-effort */ }
   return index;
+}
+
+async function loadLocalAssetIndex(refresh = false): Promise<LocalAssetIndex> {
+  const root = localAssetRoot();
+  const rootStatus = await safeStat(root);
+  if (!rootStatus?.isDirectory()) {
+    return { ok: false, root, rootLabel: localAssetLabel(), generatedAt: new Date().toISOString(), count: 0, truncated: false, source: "scan", assets: [] };
+  }
+  const key = root;
+  if (!refresh && localAssetIndexCache?.key === key && Date.now() - localAssetIndexCache.at < LOCAL_ASSET_CACHE_TTL_MS) return localAssetIndexCache.index;
+  if (refresh) {
+    localAssetRefreshInFlight ??= rebuildLocalAssetIndex(root).finally(() => { localAssetRefreshInFlight = null; });
+    return localAssetRefreshInFlight;
+  }
+  // Cold start: serve the persisted index instantly and rescan behind it.
+  const disk = await readLocalAssetDiskCache(root);
+  if (disk && disk.assets.length) {
+    localAssetIndexCache = { key, at: Date.now() - LOCAL_ASSET_CACHE_TTL_MS + 60_000, index: disk };
+    localAssetRefreshInFlight ??= rebuildLocalAssetIndex(root).finally(() => { localAssetRefreshInFlight = null; });
+    return disk;
+  }
+  localAssetRefreshInFlight ??= rebuildLocalAssetIndex(root).finally(() => { localAssetRefreshInFlight = null; });
+  return localAssetRefreshInFlight;
 }
 
 function publicLocalAsset(asset: LocalAssetRecord) {
@@ -1619,6 +1668,9 @@ app.get("/phantom-ai/local-assets", async (request, reply) => {
   if (!session) return reply;
   const q = request.query as Record<string, string | undefined>;
   const index = await loadLocalAssetIndex(q.refresh === "1" || q.refresh === "true");
+  if (!index.ok && (session.canManageAccess || session.isSuperAdmin)) {
+    (index as { detail?: string }).detail = `Local folder not found at ${index.root}. Set PHANTOMFORCE_LOCAL_ASSET_ROOT in server/.env to your asset folder and restart Hermes.`;
+  }
   const search = String(q.search || "").trim().toLowerCase();
   const kind = String(q.kind || "all").trim().toLowerCase();
   const limit = Math.max(1, Math.min(120, Number(q.limit || 36) || 36));
@@ -1626,7 +1678,7 @@ app.get("/phantom-ai/local-assets", async (request, reply) => {
     .filter((asset) => kind === "all" || asset.kind === kind || asset.category.toLowerCase().includes(kind))
     .filter((asset) => !search || [asset.title, asset.name, asset.category, asset.app, asset.relativePath, asset.tags.join(" ")].join(" ").toLowerCase().includes(search))
     .slice(0, limit);
-  return { ok: index.ok, root_label: index.rootLabel, source: index.source, count: index.count, returned: assets.length, truncated: index.truncated, assets: assets.map(publicLocalAsset) };
+  return { ok: index.ok, detail: (index as { detail?: string }).detail, root_label: index.rootLabel, source: index.source, count: index.count, returned: assets.length, truncated: index.truncated, assets: assets.map(publicLocalAsset) };
 });
 
 app.get("/phantom-ai/local-assets/:assetId/file", async (request, reply) => {
