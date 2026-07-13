@@ -1573,10 +1573,16 @@ function paletteSources(query) {
     const serverRecords = serverRecordsAvailable() ? cachedServerRecords() : null;
     const leads = serverRecordsAvailable() ? (serverRecords?.leads || []) : visible(store.state.leads);
     const proposals = serverRecordsAvailable() ? (serverRecords?.proposals || []) : visible(store.state.proposals);
+    const approvals = serverRecordsAvailable() ? (serverRecords?.approvals || []) : visible(store.state.approvals);
+    const setupSlots = serverRecordsAvailable() ? (serverRecords?.setupSlots || []) : [];
     leads.filter((l) => (l.name || "").toLowerCase().includes(q) || (l.company || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((l) => add(l.name, `Lead · ${l.company || l.status}`, "leads", "users"));
     proposals.filter((p) => (p.client || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((p) => add(p.client, `Proposal · ${fmtMoney(p.price)}`, "proposals", "dollar"));
+    approvals.filter((a) => `${a.title || ""} ${a.detail || ""} ${a.ref || ""}`.toLowerCase().includes(q)).slice(0, 4)
+      .forEach((a) => add(a.title, `Approval · ${a.status || "pending"}`, "approvals", "check"));
+    setupSlots.filter((slot) => `${slot.organizationName || ""} ${slot.businessTemplate || ""}`.toLowerCase().includes(q)).slice(0, 4)
+      .forEach((slot) => add(slot.organizationName || slot.slotId, `Client setup · ${slot.completeness?.score || 0}%`, "clientsetup", "users"));
     visible(store.state.media).filter((m) => (m.title || "").toLowerCase().includes(q)).slice(0, 4)
       .forEach((m) => add(m.title, "Media item", "media", "film"));
     visible(store.state.sites).filter((s) => (s.title || "").toLowerCase().includes(q)).slice(0, 4)

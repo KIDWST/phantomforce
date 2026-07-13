@@ -522,7 +522,7 @@ async function load(state) {
   render(state);
   const tenant = currentTenantId();
   try {
-    const payload = await api(`/api/client-setup?tenant_id=${encodeURIComponent(tenant)}`);
+    const payload = await loadClientSetupDocument(tenant);
     state.document = normalizeDoc(payload.document);
     state.templates = payload.templates || TEMPLATES;
     state.modules = payload.modules || MODULES;
@@ -540,6 +540,11 @@ async function load(state) {
     state.loading = false;
     render(state);
   }
+}
+
+export async function loadClientSetupDocument(tenant = currentTenantId()) {
+  const payload = await api(`/api/client-setup?tenant_id=${encodeURIComponent(tenant)}`);
+  return { ...payload, document: normalizeDoc(payload.document) };
 }
 
 async function save(state) {
