@@ -89,6 +89,7 @@ const DEFAULT_WORKER = {
 };
 
 const SKIP_PAGES = new Set([
+  "sites",
   "settings",
   "developer",
   "activity",
