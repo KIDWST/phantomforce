@@ -27,11 +27,11 @@ try {
   const play = await import("../src/phantom-ai/phantomplay.js");
 
   const initial = await play.getPhantomPlaySnapshot(playerA, { entitled: true, dailyMinuteLimit: 30, canSubmitGames: false });
-  assert(initial.catalog.length === 6, "Six real built-in games should ship.");
+  assert(initial.catalog.length === 8, "Eight real built-in games should ship.");
   assert(play.PHANTOMPLAY_ENGINE.version === "2.0-large-map" && play.PHANTOMPLAY_ENGINE.saveStateBytes >= 262_144, "PhantomPlay should expose a large-map-capable engine profile.");
   assert(initial.engine?.largeMap?.streaming === true, "Snapshots should publish large-map engine capabilities to the player shell.");
   const builtInIds = new Set(initial.catalog.map((game) => game.id));
-  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick"]) {
+  for (const gameId of ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge"]) {
     assert(builtInIds.has(gameId), `${gameId} should ship as an owned built-in game.`);
   }
   assert(initial.catalog.every((game) => game.kind === "built_in"), "No fake community releases should be seeded.");
@@ -170,7 +170,7 @@ try {
   assert(clientModeration.statusCode === 403, "The moderation route must reject client sessions.");
   await app.close();
 
-  console.log(JSON.stringify({ ok: true, builtInGames: initial.catalog.length, savedScore: saved?.score, tenantIsolation: true, privateRooms: true, privateUrlRejected, versionCount: updated?.submission.versions.length, moderationBlocked: playerModerationBlocked, routeAuth: true, communityApproval: true, disabledRemoved: true, timeLimitBlocked: limitBlocked }));
+  console.log(JSON.stringify({ ok: true, builtInGames: initial.catalog.length, arenaBuiltIns: ["rift-frenzy", "serpent-surge"], savedScore: saved?.score, tenantIsolation: true, privateRooms: true, privateUrlRejected, versionCount: updated?.submission.versions.length, moderationBlocked: playerModerationBlocked, routeAuth: true, communityApproval: true, disabledRemoved: true, timeLimitBlocked: limitBlocked }));
 } finally {
   await rm(root, { recursive: true, force: true });
 }

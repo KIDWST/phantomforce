@@ -7,7 +7,7 @@ const module = read("../app/js/phantomplay.js");
 const index = read("../app/index.html");
 const css = read("../app/phantomplay.css");
 const staticServer = read("../ops/admin-live/admin-static-server.mjs");
-const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick"];
+const gameSlugs = ["neon-drift", "signal-match", "focus-stack", "word-weld", "reflex-grid", "penalty-kick", "rift-frenzy", "serpent-surge"];
 const games = gameSlugs.map((name) => read(`../app/games/${name}.html`));
 const neonDrift = games[gameSlugs.indexOf("neon-drift")];
 const penaltyKick = games[gameSlugs.indexOf("penalty-kick")];
@@ -95,5 +95,7 @@ assert.match(penaltyKick, /\.field\{[^}]*height:100%;[^}]*min-height:280px/u, "P
 assert.match(penaltyKick, /function meterPower\(\)\{[^}]*getBoundingClientRect/u, "Penalty Kick must calculate shot timing from live meter geometry.");
 assert.doesNotMatch(penaltyKick, /getComputedStyle\(meter\)\.transform\.split/u, "Penalty Kick must not use raw CSS transform pixels for shot timing.");
 assert.match(penaltyKick, /else start\(\)/u, "Penalty Kick must let keyboard users start from the opening overlay.");
+assert.match(games[gameSlugs.indexOf("rift-frenzy")], /rival|school|boost|eat|bigger/u, "Rift Frenzy must play as a modern fish arena, not a static old mini-game.");
+assert.match(games[gameSlugs.indexOf("serpent-surge")], /storm|boost|rival|serpent|trail/u, "Serpent Surge must play as a modern snake arena, not a static old mini-game.");
 
 console.log("PhantomPlay frontend and game safety checks passed.");

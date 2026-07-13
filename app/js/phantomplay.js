@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260713-235";
+} from "./store.js?v=phantom-live-20260713-236";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -23,6 +23,8 @@ const GAME_ART_BY_SLUG = {
   "word-weld": artUrl("word-weld-cover.webp"),
   "reflex-grid": artUrl("reflex-grid-cover.webp"),
   "penalty-kick": artUrl("penalty-kick-cover.webp"),
+  "rift-frenzy": artUrl("neon-drift-cover.webp"),
+  "serpent-surge": artUrl("reflex-grid-cover.webp"),
 };
 const CATEGORY_ART = {
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
@@ -39,6 +41,8 @@ const BUILT_INS = [
   { id: "word-weld", title: "Word Weld", summary: "Build as many words as you can from one shifting signal rack.", description: "A quick word-building game with tap, keyboard, score, timer, and clean reset controls.", category: "Creative", tags: ["word", "creative", "quick", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/word-weld.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["word-weld"], featured: true, version: "1.0.0", controls: "Keyboard, tap letters, Enter to submit", progressSupport: true, scoreSupport: true },
   { id: "reflex-grid", title: "Reflex Grid", summary: "Hit the live cells before the grid burns out.", description: "A fast aim-and-reaction grid for short focus breaks, with mistakes, streaks, and a real finish.", category: "Strategy", tags: ["reaction", "strategy", "touch", "aim"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/reflex-grid.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["reflex-grid"], featured: true, version: "1.0.0", controls: "Click, tap, or use number keys", progressSupport: true, scoreSupport: true },
   { id: "penalty-kick", title: "Penalty Kick", summary: "Pick your lane, time the strike, and beat the keeper.", description: "A touch-friendly sports timing game with five shots, visible score, keeper reads, and saved score.", category: "Sports", tags: ["sports", "timing", "soccer", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/penalty-kick.html?v=1.0.1", thumbnail: GAME_ART_BY_SLUG["penalty-kick"], featured: false, version: "1.0.1", controls: "Choose a lane, then tap shoot at the sweet spot", progressSupport: true, scoreSupport: true },
+  { id: "rift-frenzy", title: "Rift Frenzy", summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.", description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.", category: "Arcade", tags: ["fish", "arena", "growth", "io", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: true, version: "1.0.0", controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "serpent-surge", title: "Serpent Surge", summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure.", description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring without any external networking.", category: "Strategy", tags: ["snake", "arena", "io", "survival", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/serpent-surge.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["serpent-surge"], featured: true, version: "1.0.0", controls: "Steer with mouse, touch, WASD, or arrows. Hold Space or touch pressure to boost.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
 ];
 
 const ui = {
