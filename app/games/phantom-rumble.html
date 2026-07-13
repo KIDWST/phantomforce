@@ -322,22 +322,66 @@ function drawStage(){
 }
 function drawFighter(f,t){
   if(f.dead)return;
-  if(!reduced)for(let i=f.trail.length-1;i>0;i--){const tr=f.trail[i];ctx.globalAlpha=(1-i/f.trail.length)*.25;ctx.fillStyle=f.glow;ctx.beginPath();ctx.arc(px(tr.x),py(tr.y)-14*DPR,10*DPR,0,Math.PI*2);ctx.fill()}
+  if(!reduced)for(let i=f.trail.length-1;i>0;i--){const tr=f.trail[i];ctx.globalAlpha=(1-i/f.trail.length)*.22;ctx.fillStyle=f.glow;ctx.beginPath();ctx.arc(px(tr.x),py(tr.y)-13*DPR,9*DPR,0,Math.PI*2);ctx.fill()}
   ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
-  ctx.shadowBlur=22*DPR;ctx.shadowColor=f.glow;
-  const bx=px(f.x),by=py(f.y);
+  const bx=px(f.x),by=py(f.y),d=f.face;
+  const bob=reduced?0:Math.sin(t*.012+f.slot*2)*1.2*DPR;
+  const cy=by-13*DPR+bob;
+  /* legs + feet (tucked while airborne) */
+  ctx.strokeStyle='#fb923c';ctx.lineWidth=2*DPR;ctx.lineCap='round';
+  if(f.grounded){
+    for(const s of [-4,4]){ctx.beginPath();ctx.moveTo(bx+s*DPR,cy+10*DPR);ctx.lineTo(bx+s*DPR,by-1*DPR);ctx.lineTo(bx+s*DPR+d*3*DPR,by-1*DPR);ctx.stroke()}
+  }else{
+    for(const s of [-4,4]){ctx.beginPath();ctx.moveTo(bx+s*DPR,cy+9*DPR);ctx.lineTo(bx+s*DPR-d*2*DPR,cy+13*DPR);ctx.stroke()}
+  }
+  /* tail feathers */
+  ctx.fillStyle=f.glow;
+  for(const a of [-.5,0,.5]){ctx.save();ctx.translate(bx-d*10*DPR,cy+2*DPR);ctx.rotate(a-d*.4);ctx.beginPath();ctx.ellipse(-d*4*DPR,0,5*DPR,2*DPR,0,0,Math.PI*2);ctx.fill();ctx.restore()}
+  /* katana sheathed on the back (drawn behind the body) */
+  ctx.strokeStyle='#94a3b8';ctx.lineWidth=2.2*DPR;
+  ctx.beginPath();ctx.moveTo(bx-d*3*DPR,cy-13*DPR);ctx.lineTo(bx-d*14*DPR,cy-1*DPR);ctx.stroke();
+  ctx.strokeStyle='#7c2d12';ctx.lineWidth=3*DPR;
+  ctx.beginPath();ctx.moveTo(bx-d*2*DPR,cy-15*DPR);ctx.lineTo(bx-d*5*DPR,cy-11*DPR);ctx.stroke();
+  /* fluffy body */
+  ctx.shadowBlur=20*DPR;ctx.shadowColor=f.glow;
   ctx.fillStyle=f.color;
-  ctx.beginPath();
-  ctx.arc(bx,by-16*DPR,11*DPR,Math.PI,0);
-  const sway=reduced?0:Math.sin(t*.008+f.slot)*3*DPR;
-  ctx.bezierCurveTo(bx+11*DPR,by+2*DPR,bx+6*DPR+sway,by+6*DPR,bx,by+2*DPR);
-  ctx.bezierCurveTo(bx-6*DPR-sway,by+6*DPR,bx-11*DPR,by+2*DPR,bx-11*DPR,by-16*DPR);
-  ctx.fill();
-  ctx.shadowBlur=0;ctx.fillStyle='#02110a';
-  ctx.fillRect(bx+f.face*3*DPR-4*DPR,by-20*DPR,4*DPR,5*DPR);ctx.fillRect(bx+f.face*3*DPR+2*DPR,by-20*DPR,4*DPR,5*DPR);
-  if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+f.face*16*DPR,by-12*DPR,10*DPR,-.7,.7);ctx.stroke()}
-  if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,by-14*DPR,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
-  if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,by-34*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
+  ctx.beginPath();ctx.ellipse(bx,cy,11*DPR,12*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.shadowBlur=0;
+  /* belly fluff */
+  ctx.globalAlpha*= .9;ctx.fillStyle='#fffbe9';
+  ctx.beginPath();ctx.ellipse(bx+d*2*DPR,cy+5*DPR,6*DPR,5*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.globalAlpha=f.invuln>0?.45+.3*Math.sin(t*.02):1;
+  /* wing (flaps hard while airborne) */
+  const flap=f.grounded?.15:Math.sin(t*.03)*(reduced?.2:.8);
+  ctx.save();ctx.translate(bx-d*6*DPR,cy+1*DPR);ctx.rotate(-d*flap);ctx.fillStyle=f.glow;ctx.beginPath();ctx.ellipse(0,0,6*DPR,3.4*DPR,d*.5,0,Math.PI*2);ctx.fill();ctx.restore();
+  /* ninja headband: charcoal band, glow stripe, fluttering tails */
+  const flut=reduced?0:Math.sin(t*.02+f.slot)*3*DPR;
+  ctx.strokeStyle=f.glow;ctx.lineWidth=2*DPR;
+  ctx.beginPath();ctx.moveTo(bx-d*10*DPR,cy-7*DPR);ctx.quadraticCurveTo(bx-d*18*DPR,cy-9*DPR+flut,bx-d*24*DPR,cy-4*DPR+flut);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(bx-d*10*DPR,cy-7*DPR);ctx.quadraticCurveTo(bx-d*16*DPR,cy-2*DPR-flut,bx-d*22*DPR,cy+2*DPR-flut);ctx.stroke();
+  ctx.fillStyle='#1f2937';
+  ctx.beginPath();ctx.ellipse(bx,cy-7*DPR,11.2*DPR,3.2*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle=f.glow;
+  ctx.beginPath();ctx.ellipse(bx,cy-7*DPR,11.2*DPR,1.1*DPR,0,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#1f2937';ctx.beginPath();ctx.arc(bx-d*10*DPR,cy-7*DPR,2.4*DPR,0,Math.PI*2);ctx.fill();
+  /* comb — badass mohawk poking over the headband */
+  ctx.fillStyle='#ef4444';
+  for(const [ox,h] of [[-3,4],[0,6],[3,4]]){ctx.beginPath();ctx.moveTo(bx+(ox-2)*DPR,cy-10*DPR);ctx.lineTo(bx+ox*DPR,cy-(11+h)*DPR);ctx.lineTo(bx+(ox+2)*DPR,cy-10*DPR);ctx.closePath();ctx.fill()}
+  /* eyes + angry brows */
+  const ex=bx+d*4*DPR;
+  ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(ex,cy-4*DPR,3*DPR,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#04110b';ctx.beginPath();ctx.arc(ex+d*1*DPR,cy-4*DPR,1.6*DPR,0,Math.PI*2);ctx.fill();
+  ctx.strokeStyle='#04110b';ctx.lineWidth=2*DPR;
+  ctx.beginPath();ctx.moveTo(ex-d*4*DPR,cy-9*DPR);ctx.lineTo(ex+d*3*DPR,cy-6.5*DPR);ctx.stroke();
+  /* beak — opens on attack */
+  ctx.fillStyle='#f59e0b';
+  const open=f.anim>0?2.5:0;
+  ctx.beginPath();ctx.moveTo(bx+d*10*DPR,cy-3*DPR);ctx.lineTo(bx+d*16*DPR,cy-(1+open)*DPR);ctx.lineTo(bx+d*10*DPR,cy+1*DPR);ctx.closePath();ctx.fill();
+  if(open){ctx.beginPath();ctx.moveTo(bx+d*10*DPR,cy+1*DPR);ctx.lineTo(bx+d*15*DPR,cy+(2+open)*DPR);ctx.lineTo(bx+d*10*DPR,cy+3*DPR);ctx.closePath();ctx.fill()}
+  /* attack arc / charge / power — unchanged mechanics cues */
+  if(f.anim>0){ctx.strokeStyle=f.power?'#ffffff':f.glow;ctx.lineWidth=3*DPR;ctx.globalAlpha=f.anim*4;ctx.beginPath();ctx.arc(bx+d*16*DPR,cy,10*DPR,-.7,.7);ctx.stroke()}
+  if(f.charge>0){ctx.globalAlpha=.7;ctx.strokeStyle='#fff';ctx.lineWidth=2*DPR;ctx.beginPath();ctx.arc(bx,cy,(16+f.charge*10)*DPR,0,Math.PI*2*f.charge);ctx.stroke()}
+  if(f.power){ctx.globalAlpha=.8;ctx.fillStyle='#ffffff';ctx.beginPath();ctx.arc(bx,cy-22*DPR,3*DPR,0,Math.PI*2);ctx.fill()}
   ctx.globalAlpha=1;
 }
 function drawPickup(p,t){
@@ -359,7 +403,7 @@ function draw(t){
   drawStage();
   for(const p of pickups)drawPickup(p,t);
   for(const f of fighters)drawFighter(f,t);
-  for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.fillRect(px(p.x),py(p.y),3*DPR,3*DPR)}
+  for(const p of particles){ctx.globalAlpha=Math.max(0,p.life);ctx.fillStyle=p.color;ctx.save();ctx.translate(px(p.x),py(p.y));ctx.rotate(p.life*5+p.vx*400);ctx.beginPath();ctx.ellipse(0,0,3.6*DPR,1.4*DPR,0,0,Math.PI*2);ctx.fill();ctx.restore()}
   ctx.globalAlpha=1;ctx.restore();
 }
 
