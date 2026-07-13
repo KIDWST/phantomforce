@@ -30,6 +30,8 @@ assert.match(source, /Calendly/u);
 assert.match(source, /workspaceStorageSetItem\(CH_PLANNER_ITEMS_KEY/u, "Planner items must use workspace-isolated persistence.");
 assert.match(css, /grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/u, "Mobile workflow tabs must remain in one ordered four-tab row.");
 assert.match(css, /\.ch-pub-drop/u, "Publish drop zone must be styled.");
-assert.match(css, /\.workspace-page-first\[data-workspace-page="content"\][\s\S]*?\.media-suite-body\s*\{[\s\S]*?overflow:\s*visible/u, "Content Hub must scroll inside the full-page Media Lab shell instead of being clipped.");
+assert.match(css, /\.workspace-page-first\[data-workspace-page="content"\][\s\S]*?\.media-suite-body\s*\{[\s\S]*?overflow:\s*auto/u, "Content Hub must scroll inside the full-page Media Lab shell instead of being clipped.");
+assert.match(css, /\.workspace-page-first\[data-workspace-page="content"\][\s\S]*?\.media-suite-body\s*\{[\s\S]*?padding-bottom:\s*calc\(112px/u, "Content Hub needs bottom scroll padding so the taskbar/browser chrome cannot hide the last controls.");
+assert.match(css, /\.media-suite-body > \.ch\s*\{[\s\S]*?min-height:\s*max-content/u, "Content Hub must be allowed to grow beyond the visible viewport inside the scroll area.");
 
 console.log("Content Hub planner checks passed.");
