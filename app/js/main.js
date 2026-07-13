@@ -6,38 +6,38 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260713-243";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260713-243";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260713-243";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-243";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-243";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-243";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-243";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-243";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-243";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260713-243";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260713-243";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260713-243";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260713-243";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260713-243";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260713-243";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260713-243";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260713-243";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-243";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-243";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-243";
+} from "./store.js?v=phantom-live-20260713-245";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260713-245";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260713-245";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-245";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-245";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-245";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-245";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-245";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-245";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260713-245";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260713-245";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260713-245";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260713-245";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260713-245";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260713-245";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260713-245";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260713-245";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-245";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-245";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-245";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260713-243";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-243";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-243";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-243";
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260713-243";
+} from "./orgs.js?v=phantom-live-20260713-245";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-245";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-245";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-245";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260713-245";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260713-243";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260713-243";
+} from "./customization.js?v=phantom-live-20260713-245";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260713-245";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -138,14 +138,15 @@ const I = {
 const svg = (key, cls = "") => `<svg class="ic ${cls}" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${I[key] || ""}</svg>`;
 
 /* ============================ access gate ============================ */
-function showGate() {
-  gate.hidden = false;
-  phantom.hidden = true;
-  const card = gate.querySelector(".gate-card");
-  if (isLiveAdminHost()) {
-    card.innerHTML = `
-      <p class="gate-kicker">PHANTOMFORCE · LIVE OWNER ACCESS</p>
-      <h1>Sign in to Phantom.</h1>
+function renderOwnerLoginGate(card, {
+  kicker = "PHANTOMFORCE · LIVE OWNER ACCESS",
+  heading = "Sign in to Phantom.",
+  helper = "Owner account required. This host opens the full operating layer.",
+  note = "The private gateway protects this route. PhantomForce owns the visible login and session.",
+} = {}) {
+  card.innerHTML = `
+      <p class="gate-kicker">${kicker}</p>
+      <h1>${heading}</h1>
       <form class="owner-login" data-owner-login>
         <label>
           <span>Owner email</span>
@@ -158,38 +159,115 @@ function showGate() {
         <button class="gate-opt gate-submit" type="submit">
           <span class="gate-opt-icon">⌘</span>
           <b>Launch Business Manager</b>
-          <i>Owner account required. This host opens the full operating layer.</i>
+          <i>${helper}</i>
         </button>
         <p class="gate-error" data-owner-error hidden></p>
       </form>
-      <p class="gate-note">The private gateway protects this route. PhantomForce owns the visible login and session.</p>`;
-    const form = card.querySelector("[data-owner-login]");
-    const emailInput = card.querySelector("[data-owner-email]");
-    const passwordInput = card.querySelector("[data-owner-password]");
-    const error = card.querySelector("[data-owner-error]");
-    form.onsubmit = async (event) => {
-      event.preventDefault();
-      error.hidden = true;
-      const email = emailInput.value.trim();
-      const password = passwordInput.value;
-      if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
-      if (/(^|[._+-])(customer|client|test-client|sports)([._+-]|@)|@(customer|client|test-client|sports)\./i.test(email)) {
-        error.textContent = "This is the owner-only admin login. Use the PhantomForce owner account here. Client/test accounts belong on the client app, not admin.phantomforce.online.";
-        error.hidden = false;
-        return;
-      }
-      form.classList.add("is-loading");
+      <p class="gate-note">${note}</p>`;
+  const form = card.querySelector("[data-owner-login]");
+  const emailInput = card.querySelector("[data-owner-email]");
+  const passwordInput = card.querySelector("[data-owner-password]");
+  const error = card.querySelector("[data-owner-error]");
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    error.hidden = true;
+    const email = emailInput.value.trim();
+    const password = passwordInput.value;
+    if (!email || !password) { error.textContent = "Enter your email and password."; error.hidden = false; return; }
+    if (/(^|[._+-])(customer|client|test-client|sports)([._+-]|@)|@(customer|client|test-client|sports)\./i.test(email)) {
+      error.textContent = "This is the owner-only admin login. Use the PhantomForce owner account here. Client/test accounts belong on the client app, not admin.phantomforce.online.";
+      error.hidden = false;
+      return;
+    }
+    form.classList.add("is-loading");
+    try {
+      ctx.session = await ownerLogin(email, password);
+      enterPhantom();
+    } catch (err) {
+      session.clear();
+      error.textContent = err?.message || "Owner login failed.";
+      error.hidden = false;
+    } finally {
+      form.classList.remove("is-loading");
+    }
+  };
+}
+
+function renderRoleChoiceGate(card, { localFallback = false } = {}) {
+  card.innerHTML = `
+      <p class="gate-kicker">PHANTOMFORCE · PRIVATE ACCESS</p>
+      <h1>Who is entering Phantom?</h1>
+      <div class="gate-options">
+        <button class="gate-opt" data-enter="admin">
+          <span class="gate-opt-icon">⌘</span>
+          <b>Business Manager</b>
+          <i>Business owner or workspace admin - permissions, modules, approvals, and team control.</i>
+          <em>app.phantomforce.online</em>
+        </button>
+        <button class="gate-opt" data-enter="employee">
+          <span class="gate-opt-icon">◈</span>
+          <b>Team Workspace</b>
+          <i>Employee or operator access inside the business workspace your owner/admin invited you to.</i>
+          <em>app.phantomforce.online</em>
+        </button>
+      </div>
+      <p class="gate-note">${localFallback
+        ? "Local QA shortcut only. Customer accounts require database auth; Jordan and platform admins use admin.phantomforce.online."
+        : "Jordan and PhantomForce platform admins use admin.phantomforce.online."}</p>`;
+  card.querySelectorAll("[data-enter]").forEach((btn) => {
+    btn.onclick = async () => {
+      const kind = btn.dataset.enter;
+      if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
+      if (!isLocalDevHost()) return;
       try {
-        ctx.session = await ownerLogin(email, password);
-        enterPhantom();
-      } catch (err) {
-        session.clear();
-        error.textContent = err?.message || "Owner login failed.";
-        error.hidden = false;
-      } finally {
-        form.classList.remove("is-loading");
+        const response = await fetch("/auth/demo-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: kind === "admin" ? "admin-jordan" : "client-sports-demo" }),
+        });
+        const payload = await response.json().catch(() => ({}));
+        if (response.ok && payload?.token && payload?.session) {
+          ctx.session = {
+            role: kind === "admin" ? "admin" : "employee",
+            name: kind === "admin" ? "Jordan" : "Team Member",
+            label: payload.session.label || "",
+            ws: "phantomforce",
+            sessionId: payload.session.id,
+            canManageAccess: !!payload.session.canManageAccess,
+            token: payload.token,
+          };
+          session.set(ctx.session);
+          enterPhantom();
+          return;
+        }
+      } catch {
+        // The existing local-only visual session remains available offline.
       }
+      ctx.session = kind === "admin"
+        ? { role: "admin", name: "Jordan", label: "PhantomForce Owner", ws: "phantomforce", sessionId: "local-admin", canManageAccess: true }
+        : { role: "employee", name: "Team Member", ws: "phantomforce" };
+      session.set(ctx.session);
+      enterPhantom();
     };
+  });
+}
+
+function renderLocalAuthLoading(card) {
+  card.innerHTML = `
+    <p class="gate-kicker">PHANTOMFORCE · LOCAL QA ACCESS</p>
+    <h1>Checking account boundary.</h1>
+    <div class="owner-login">
+      <p class="gate-note">Phantom is checking whether this local app is backed by owner auth or customer account auth before showing an entry path.</p>
+    </div>
+    <p class="gate-note">When a real auth backend is ready, local QA uses it. One-click access is only an offline local fallback.</p>`;
+}
+
+function showGate() {
+  gate.hidden = false;
+  phantom.hidden = true;
+  const card = gate.querySelector(".gate-card");
+  if (isLiveAdminHost()) {
+    renderOwnerLoginGate(card);
     maybeUpgradeGateToDatabaseLogin(card);
     return;
   }
@@ -200,44 +278,13 @@ function showGate() {
     return;
   }
 
-  gate.querySelectorAll("[data-enter]").forEach((btn) => {
-    btn.onclick = async () => {
-      const kind = btn.dataset.enter;
-      if (kind === "admin" && isStaticPublicHost()) { redirectToLiveAdmin(); return; }
-      if (isLocalDevHost()) {
-        try {
-          const response = await fetch("/auth/demo-login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ sessionId: kind === "admin" ? "admin-jordan" : "client-sports-demo" }),
-          });
-          const payload = await response.json().catch(() => ({}));
-          if (response.ok && payload?.token && payload?.session) {
-            ctx.session = {
-              role: kind === "admin" ? "admin" : "employee",
-              name: kind === "admin" ? "Jordan" : "Team Member",
-              label: payload.session.label || "",
-              ws: "phantomforce",
-              sessionId: payload.session.id,
-              canManageAccess: !!payload.session.canManageAccess,
-              token: payload.token,
-            };
-            session.set(ctx.session);
-            enterPhantom();
-            return;
-          }
-        } catch {
-          // The existing local-only visual session remains available offline.
-        }
-      }
-      ctx.session = kind === "admin"
-        ? { role: "admin", name: "Jordan", label: "PhantomForce Owner", ws: "phantomforce", sessionId: "local-admin", canManageAccess: true }
-        : { role: "employee", name: "Team Member", ws: "phantomforce" };
-      session.set(ctx.session);
-      enterPhantom();
-    };
-  });
+  if (isLocalDevHost()) {
+    renderLocalAuthLoading(card);
+    maybeUpgradeGateToDatabaseLogin(card, { localDev: true, allowLocalFallback: true });
+    return;
+  }
 
+  renderRoleChoiceGate(card);
   maybeUpgradeGateToDatabaseLogin(card);
 }
 
@@ -265,11 +312,21 @@ function renderCustomerAuthBlocked(card, message = "Customer account login is no
 }
 
 function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
-  const { customerApp = false, required = false } = options;
+  const { customerApp = false, required = false, localDev = false, allowLocalFallback = false } = options;
   fetchAuthConfig().then((auth) => {
     if (gate.hidden) return;
     if (!auth?.databaseAuthEnabled) {
+      if (localDev && auth?.ownerProductionAuthEnabled && auth?.productionReady) {
+        renderOwnerLoginGate(card, {
+          kicker: "PHANTOMFORCE · LOCAL OWNER ACCESS",
+          heading: "Sign in to test Business Manager.",
+          helper: "Owner account required. Local QA is using the same owner-auth boundary as the private admin route.",
+          note: "Team/customer workspace accounts require database auth. Local shortcuts stay hidden while owner auth is ready.",
+        });
+        return;
+      }
       if (required) renderCustomerAuthBlocked(card);
+      else if (allowLocalFallback) renderRoleChoiceGate(card, { localFallback: true });
       return;
     }
     const heading = customerApp ? "Sign in to your workspace." : "Sign in to your business.";
@@ -330,6 +387,7 @@ function maybeUpgradeGateToDatabaseLogin(card, options = {}) {
     };
   }).catch(() => {
     if (required && !gate.hidden) renderCustomerAuthBlocked(card, "The account system is not reachable. Start the backend, then sign in again.");
+    else if (allowLocalFallback && !gate.hidden) renderRoleChoiceGate(card, { localFallback: true });
   });
 }
 
@@ -763,7 +821,6 @@ function renderUser() {
 }
 
 async function signOut() {
-  if (!confirm("Sign out of PhantomForce?")) return;
   const databaseSession = !!ctx.session?.database;
   accountMenuOpen = false;
   closeOverlay(true);
@@ -1049,7 +1106,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260713-243";
+const POSE_VERSION = "phantom-live-20260713-245";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;

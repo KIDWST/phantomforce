@@ -18,11 +18,14 @@ assert.match(store, /if \(saved\?\.database && !token\) \{\s*session\.clear\(\);
 assert.match(store, /isClientPublicHost\(\) && \(!saved\.database \|\| saved\.canManageAccess \|\| saved\.isSuperAdmin\)/u, "The customer app must reject local/admin/super-admin session mirrors.");
 
 assert.match(main, /if \(isClientPublicHost\(\)\) \{\s*renderCustomerAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ customerApp: true, required: true \}\);\s*return;\s*\}/u, "app.phantomforce.online must render required real-account auth instead of role buttons.");
-assert.match(main, /if \(isLocalDevHost\(\)\) \{\s*try \{/u, "Demo login must remain local-development only.");
+assert.match(main, /if \(isLocalDevHost\(\)\) \{\s*renderLocalAuthLoading\(card\);\s*maybeUpgradeGateToDatabaseLogin\(card, \{ localDev: true, allowLocalFallback: true \}\);\s*return;\s*\}/u, "Local QA must check the configured auth backend before showing shortcut entry.");
+assert.match(main, /if \(!isLocalDevHost\(\)\) return;\s*try \{\s*const response = await fetch\("\/auth\/demo-login"/u, "Demo login must remain local-development only.");
+assert.match(main, /localDev && auth\?\.ownerProductionAuthEnabled && auth\?\.productionReady[\s\S]*renderOwnerLoginGate\(card,[\s\S]*LOCAL OWNER ACCESS[\s\S]*Local shortcuts stay hidden while owner auth is ready/u, "Local QA must use real owner sign-in when owner-production auth is configured.");
 assert.match(main, /function renderCustomerAuthBlocked\(card, message = "Customer account login is not enabled on this backend\."\)/u, "Customer app must block when database auth is disabled.");
 assert.match(main, /Platform admin accounts must use admin\.phantomforce\.online/u, "Customer app must direct platform admin accounts away from app.phantomforce.online.");
 assert.match(main, /try \{\s*if \(databaseSession\) await databaseLogout\(\);\s*\} finally \{\s*session\.clear\(\);/u, "Logout must always clear local access even if database revocation fails.");
 assert.match(main, /url\.searchParams\.delete\("session"\)/u, "Logout must remove local session shortcuts from the URL.");
+assert.doesNotMatch(main, /confirm\("Sign out of PhantomForce\?"\)/u, "Sign out should not be blocked by a native confirmation before clearing access.");
 
 assert.match(orgs, /const managesOrg = s\.isSuperAdmin \|\| \["owner", "admin"\]\.includes\(s\.orgRole \|\| ""\)/u, "Only org owners/admins may map to Business Manager.");
 assert.doesNotMatch(orgs, /\["owner", "admin", "member"\]\.includes\(s\.orgRole/u, "Plain org members must not map to Business Manager.");
