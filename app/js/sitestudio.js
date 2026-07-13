@@ -1,16 +1,19 @@
 /* PhantomForce Websites -- one website preview, one prompt, unlimited domains. */
 
 import {
-  store, uid, visible, currentWs, wsName, pushActivity, ago,
+  store, uid, visible, currentWs, wsName, pushActivity, ago, fmtMoney,
 } from "./store.js?v=phantom-live-20260713-238";
 import {
-  esc, baseSiteDraft, ensureSiteDesign, applyWebsitePrompt, renderWebsitePreview,
+  esc, baseSiteDraft, ensureSiteDesign, ensureSiteStore, applyWebsitePrompt, renderWebsitePreview,
 } from "./workspaces.js?v=phantom-live-20260713-238";
 import {
   isDatabaseSession, requestServerPublish, fetchServerRun,
 } from "./orgs.js?v=phantom-live-20260713-238";
 
-const siteUi = { activeSiteId: null, device: "desktop", selectedSection: -1 };
+const siteUi = {
+  activeSiteId: null, device: "desktop", selectedSection: -1,
+  panel: "website", cartOpen: false, checkoutOpen: false, confirmation: null,
+};
 
 /* ---- version history: a real, persisted undo trail per site ----
    Every mutation (prompt apply, section op, domain change, publish request)
@@ -26,6 +29,8 @@ function snapshotSite(site, label) {
       kind: site.kind,
       sections: [...(site.sections || [])],
       design: { ...(site.design || {}) },
+      catalog: JSON.parse(JSON.stringify(site.catalog || [])),
+      store: JSON.parse(JSON.stringify(site.store || {})),
       domain: site.domain || "",
       url: site.url || "",
     },
@@ -41,6 +46,8 @@ function restoreSnapshot(site, index) {
   Object.assign(site, snap.data, { history: kept });
   site.design = { ...snap.data.design };
   site.sections = [...snap.data.sections];
+  site.catalog = JSON.parse(JSON.stringify(snap.data.catalog || []));
+  site.store = JSON.parse(JSON.stringify(snap.data.store || {}));
   site.updated = new Date().toISOString();
   /* drop the consumed snapshot (it now sits at index+1 after the unshift) */
   site.history.splice(index + 1, 1);
@@ -125,6 +132,7 @@ function setSiteDomain(site, value) {
 
 function normalizeSite(site) {
   ensureSiteDesign(site);
+  ensureSiteStore(site);
   site.domains = Array.isArray(site.domains) ? site.domains : [];
   const domain = siteDomain(site);
   if (domain && !site.domains.includes(domain)) site.domains.unshift(domain);
@@ -132,7 +140,92 @@ function normalizeSite(site) {
 }
 
 function productsFor(site) {
-  return visible(store.state.products || []).filter((product) => !site || product.ws === site.ws || currentWs() === "phantomforce");
+  if (!site) return [];
+  return (site.catalog || []).filter((product) => product.visible !== false);
+}
+
+function cartItems(site) {
+  const cart = ensureSiteStore(site).cart;
+  return productsFor(site)
+    .map((product) => ({ product, qty: Math.max(0, Number(cart[product.id] || 0)) }))
+    .filter((item) => item.qty > 0);
+}
+
+function cartCount(site) {
+  return cartItems(site).reduce((sum, item) => sum + item.qty, 0);
+}
+
+function cartTotal(site) {
+  return cartItems(site).reduce((sum, item) => sum + (Number(item.product.price || 0) * item.qty), 0);
+}
+
+function productEditorMarkup(site) {
+  const products = productsFor(site);
+  const orders = ensureSiteStore(site).orders.slice(0, 5);
+  return `
+    <aside class="ss-store-console" aria-label="Store editor">
+      <header>
+        <div><p>Store editor</p><h3>${products.length} product${products.length === 1 ? "" : "s"}</h3></div>
+        <span>Test checkout · no payment</span>
+      </header>
+      <form class="ss-product-add" data-ss-product-add>
+        <input name="name" placeholder="Product or service" aria-label="Product name" required />
+        <div><input name="price" type="number" min="0" step="0.01" placeholder="Price" aria-label="Price" required />
+          <select name="cadence" aria-label="Billing"><option value="one_time">One time</option><option value="monthly">Monthly</option></select></div>
+        <input name="desc" placeholder="Short description" aria-label="Product description" />
+        <button class="btn btn-primary" type="submit">Add product</button>
+      </form>
+      <div class="ss-product-list">
+        ${products.map((product) => `
+          <article data-ss-product-row="${esc(product.id)}">
+            <button type="button" class="ss-product-delete" data-ss-product-delete="${esc(product.id)}" aria-label="Remove ${esc(product.name)}">×</button>
+            <input name="name" value="${esc(product.name)}" aria-label="Product name" />
+            <div><input name="price" type="number" min="0" step="0.01" value="${esc(product.price)}" aria-label="Price" />
+              <select name="cadence" aria-label="Billing"><option value="one_time" ${product.cadence !== "monthly" ? "selected" : ""}>One time</option><option value="monthly" ${product.cadence === "monthly" ? "selected" : ""}>Monthly</option></select></div>
+            <input name="desc" value="${esc(product.desc || "")}" aria-label="Description" />
+            <button class="btn btn-quiet" type="button" data-ss-product-save="${esc(product.id)}">Save</button>
+          </article>`).join("") || `<p class="ss-store-empty">No placeholder products. Add the first real offer above.</p>`}
+      </div>
+      <section class="ss-test-orders">
+        <div><b>Test orders</b><span>${orders.length}</span></div>
+        ${orders.map((order) => `<p><b>${esc(order.receipt)}</b><span>${fmtMoney(order.total)} · ${ago(order.at)}</span></p>`).join("") || `<small>Place a test order to prove the cart and checkout.</small>`}
+      </section>
+    </aside>`;
+}
+
+function cartMarkup(site) {
+  const items = cartItems(site);
+  return `
+    <aside class="ss-cart" data-ss-cart>
+      <header><div><p>Store test</p><h3>Your cart</h3></div><button type="button" data-ss-cart-close aria-label="Close cart">×</button></header>
+      <div class="ss-cart-items">
+        ${items.map(({ product, qty }) => `<article>
+          <div><b>${esc(product.name)}</b><span>${fmtMoney(product.price)}${product.cadence === "monthly" ? " / month" : ""}</span></div>
+          <div class="ss-cart-qty"><button type="button" data-ss-cart-dec="${esc(product.id)}">−</button><b>${qty}</b><button type="button" data-ss-cart-inc="${esc(product.id)}">+</button><button type="button" data-ss-cart-remove="${esc(product.id)}">Remove</button></div>
+        </article>`).join("") || `<p class="ss-store-empty">Your cart is empty. Add a product from the preview.</p>`}
+      </div>
+      <footer><span>Total</span><b>${fmtMoney(cartTotal(site))}</b></footer>
+      <button class="btn btn-primary" type="button" data-ss-checkout-open ${items.length ? "" : "disabled"}>Start test checkout</button>
+      <small>No card details. No payment will be charged.</small>
+    </aside>`;
+}
+
+function checkoutMarkup(site) {
+  const items = cartItems(site);
+  return `
+    <div class="ss-checkout-backdrop" data-ss-checkout-backdrop>
+      <section class="ss-checkout" role="dialog" aria-modal="true" aria-labelledby="ss-checkout-title">
+        <header><div><p>Safe store proof</p><h3 id="ss-checkout-title">Test checkout</h3></div><button type="button" data-ss-checkout-close aria-label="Close checkout">×</button></header>
+        <div class="ss-checkout-summary">${items.map(({ product, qty }) => `<p><span>${qty} × ${esc(product.name)}</span><b>${fmtMoney(product.price * qty)}</b></p>`).join("")}</div>
+        <form data-ss-checkout-form>
+          <label>Name<input name="name" autocomplete="name" required placeholder="Jordan West" /></label>
+          <label>Email<input name="email" type="email" autocomplete="email" required placeholder="you@example.com" /></label>
+          <div class="ss-checkout-total"><span>Total</span><b>${fmtMoney(cartTotal(site))}</b></div>
+          <button class="btn btn-primary" type="submit">Place test order</button>
+          <small>This verifies the storefront flow only. No payment is collected or sent anywhere.</small>
+        </form>
+      </section>
+    </div>`;
 }
 
 function createWebsite(seed = "") {
