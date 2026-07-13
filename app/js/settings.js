@@ -1,10 +1,10 @@
 /* PhantomForce admin settings.
    Local UI preferences only: no provider calls, sends, uploads, or billing. */
 
-import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260712-228";
-import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260712-228";
-import { currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-228";
-import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260712-228";
+import { renderMediaSettings } from "./medialab.js?v=phantom-live-20260713-001";
+import { renderCustomizationStudio } from "./customization.js?v=phantom-live-20260713-001";
+import { currentTenantId, loadPhantomLoop, savePhantomLoop, LOOP_PROVIDERS, modelDisplayLabel, session, workspaceStorageGetItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260713-001";
+import { DEFAULT_COMPANION_PREFS, clearCompanionSessionHide, loadCompanionPrefs, resetCompanionPrefs, saveCompanionPrefs } from "./companion-preferences.js?v=phantom-live-20260713-001";
 
 const AI_SETTINGS_KEY = "pf.operator.settings.v1";
 const SETTINGS_TAB_KEY = "pf.settings.tab.v1";
@@ -58,18 +58,33 @@ const PROVIDERS = [
   },
   {
     id: "local",
-    name: "Local",
+    name: "Local / Ollama",
     short: "PC",
-    role: "Private models running on this computer",
-    models: ["local-auto", "local-glm"],
+    role: "Ollama models installed on this computer",
+    models: ["local-auto"],
+    allowCustomModel: true,
   },
 ];
+
+let localModelStatus = {
+  loaded: false,
+  loading: false,
+  error: null,
+  baseUrl: "http://127.0.0.1:11434",
+  models: [],
+};
 
 const PROVIDER_MODES = [
   { id: "smart", name: "Smart Mix", note: "Phantom picks the best provider and falls back automatically." },
   { id: "single", name: "One provider", note: "Use only the provider you choose." },
   { id: "multiple", name: "Multiple", note: "Choose the providers Phantom is allowed to use." },
 ];
+
+function providerModels(provider) {
+  if (provider.id !== "local") return provider.models;
+  const installed = localModelStatus.models.map((model) => model.model).filter(Boolean);
+  return [...new Set(["local-auto", ...installed])];
+}
 
 const DEFAULT_SETTINGS = {
   provider: "claude",
@@ -135,7 +150,9 @@ function normalizeSettings(value) {
   const brainMode = ["local", "api", "subscription"].includes(input.brainMode) ? input.brainMode : DEFAULT_SETTINGS.brainMode;
   const models = { ...DEFAULT_SETTINGS.models, ...(input.models || {}) };
   for (const option of PROVIDERS) {
-    if (!option.models.includes(models[option.id])) models[option.id] = option.models[0];
+    if (!providerModels(option).includes(models[option.id]) && !(option.allowCustomModel && typeof models[option.id] === "string" && models[option.id].trim())) {
+      models[option.id] = option.models[0];
+    }
   }
   const requestedProviders = Array.isArray(input.selectedProviders) ? input.selectedProviders : DEFAULT_SETTINGS.selectedProviders;
   let selectedProviders = [...new Set(requestedProviders.filter((id) => PROVIDERS.some((providerOption) => providerOption.id === id)))];
@@ -193,9 +210,17 @@ function renderProviderCards(settings) {
   return PROVIDERS.map((provider) => `
     <button class="set-model-card ${settings.selectedProviders.includes(provider.id) ? "is-active" : ""} ${settings.provider === provider.id ? "is-preferred" : ""}" type="button" data-ai-provider="${esc(provider.id)}" aria-pressed="${settings.selectedProviders.includes(provider.id) ? "true" : "false"}">
       <span class="set-provider-mark">${esc(provider.short)}</span>
-      <span class="set-provider-copy"><b>${esc(provider.name)}</b><i>${esc(provider.role)}</i></span>
+      <span class="set-provider-copy"><b>${esc(provider.name)}</b><i>${esc(provider.id === "local" ? localProviderStatusText() : provider.role)}</i></span>
       <span class="set-provider-check">${settings.selectedProviders.includes(provider.id) ? "✓" : "+"}</span>
     </button>`).join("");
+}
+
+function localProviderStatusText() {
+  if (localModelStatus.loading) return "Checking Ollama on this PC...";
+  if (localModelStatus.loaded && localModelStatus.models.length) return `${localModelStatus.models.length} Ollama model${localModelStatus.models.length === 1 ? "" : "s"} installed`;
+  if (localModelStatus.loaded) return "Ollama reachable, no local models found";
+  if (localModelStatus.error) return localModelStatus.error;
+  return "Reads installed Ollama models from this computer";
 }
 
 function renderProviderModeCards(settings) {
@@ -209,10 +234,46 @@ function renderSelectedModelControls(settings) {
   return settings.selectedProviders.map((providerId) => {
     const provider = providerFor(providerId);
     const selectedModel = settings.models[provider.id] || provider.models[0];
+    const models = providerModels(provider);
     return `<label class="set-control set-provider-model"><span>${esc(provider.name)} model</span>
-      <select data-ai-provider-model="${provider.id}">${provider.models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(modelDisplayLabel(model))}</option>`).join("")}</select>
+      <select data-ai-provider-model="${provider.id}">
+        ${models.map((model) => `<option value="${esc(model)}" ${model === selectedModel ? "selected" : ""}>${esc(provider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}
+      </select>
+      ${provider.id === "local" ? `<i>${esc(localProviderStatusText())}</i>` : ""}
     </label>`;
   }).join("");
+}
+
+function localModelLabel(modelId) {
+  if (modelId === "local-auto") return localModelStatus.models.length ? "Auto - best installed Ollama model" : "Auto - read Ollama";
+  const model = localModelStatus.models.find((item) => item.model === modelId || item.name === modelId);
+  const suffix = [model?.parameter_size, model?.quantization_level].filter(Boolean).join(" ");
+  return `${model?.display_name || modelId}${suffix ? ` (${suffix})` : ""}`;
+}
+
+async function refreshLocalModels(el, opts, rerender = true) {
+  if (localModelStatus.loading) return;
+  localModelStatus = { ...localModelStatus, loading: true, error: null };
+  try {
+    const payload = await moduleApi("/phantom-ai/local-models/status");
+    const ollama = payload.ollama || {};
+    localModelStatus = {
+      loaded: true,
+      loading: false,
+      error: ollama.error || null,
+      baseUrl: ollama.base_url || "http://127.0.0.1:11434",
+      models: Array.isArray(ollama.installed_models) ? ollama.installed_models : [],
+    };
+  } catch (error) {
+    localModelStatus = {
+      ...localModelStatus,
+      loaded: true,
+      loading: false,
+      error: error instanceof Error ? error.message : "Could not read Ollama on this PC.",
+      models: [],
+    };
+  }
+  if (rerender && el?.isConnected) renderOperatorSettings(el, opts);
 }
 
 function loopProviderName(id) {
@@ -256,7 +317,8 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   if (!el) return;
   const settings = loadOperatorSettings();
   const activeProvider = providerFor(settings.provider);
-  const activeModel = settings.models[activeProvider.id] || activeProvider.models[0];
+  const activeProviderModels = providerModels(activeProvider);
+  const activeModel = settings.models[activeProvider.id] || activeProviderModels[0] || activeProvider.models[0];
   const loop = loadPhantomLoop();
   const brainLabel = settings.providerMode === "smart"
     ? "Smart Mix"
@@ -273,7 +335,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
         <em class="chat-mini-saved" data-mini-saved hidden>Saved — applies to the next message</em>
       </div>
       <div class="chat-mini-summary">
-        <span><b>${esc(brainLabel)}</b><i>${settings.providerMode === "smart" ? "Automatic routing and fallback" : `${esc(activeProvider.name)} · ${esc(modelDisplayLabel(activeModel))}`}</i></span>
+        <span><b>${esc(brainLabel)}</b><i>${settings.providerMode === "smart" ? "Automatic routing and fallback" : `${esc(activeProvider.name)} · ${esc(activeProvider.id === "local" ? localModelLabel(activeModel) : modelDisplayLabel(activeModel))}`}</i></span>
         <span><b>${loop.enabled ? "Loop on" : "Loop off"}</b><i>${loop.enabled ? esc(loopProviderName(loop.targetProvider)) : "Replies stay with Phantom"}</i></span>
       </div>
       <div class="chat-mini-fields">
@@ -285,7 +347,7 @@ export function renderOperatorMiniSettings(el, opts = {}) {
           </select>
         </label>
         <label class="chat-mini-field chat-mini-wide"><span>Preferred model</span>
-          <select data-mini-model ${settings.providerMode === "smart" ? "disabled" : ""}>${activeProvider.models.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(modelDisplayLabel(model))}</option>`).join("")}</select>
+          <select data-mini-model ${settings.providerMode === "smart" ? "disabled" : ""}>${activeProviderModels.map((model) => `<option value="${esc(model)}" ${model === activeModel ? "selected" : ""}>${esc(activeProvider.id === "local" ? localModelLabel(model) : modelDisplayLabel(model))}</option>`).join("")}</select>
         </label>
       </div>
       <div class="chat-mini-loop">
@@ -373,6 +435,12 @@ export function renderOperatorMiniSettings(el, opts = {}) {
   if (full) full.onclick = () => {
     if (typeof opts.openSettings === "function") opts.openSettings();
   };
+
+  if (settings.provider === "local" && settings.providerMode !== "smart" && !localModelStatus.loaded && !localModelStatus.loading) {
+    refreshLocalModels(el, opts, false).then(() => {
+      if (el?.isConnected) renderOperatorMiniSettings(el, opts);
+    });
+  }
 }
 
 const ROUTING_MODES = [
@@ -461,6 +529,12 @@ function renderModelTab(settings, activeProvider, activeModel) {
           </label>` : ""}
         <p class="set-label">Models</p>
         <div class="set-control-grid set-provider-models">${renderSelectedModelControls(settings)}</div>
+        ${settings.selectedProviders.includes("local") ? `
+          <div class="set-rule-list">
+            <span>Local means Ollama on this PC: ${esc(localModelStatus.baseUrl)}</span>
+            <span>${esc(localProviderStatusText())}</span>
+            <button class="btn btn-quiet" type="button" data-local-model-refresh>Re-read Ollama models</button>
+          </div>` : ""}
         <div class="set-control-grid set-response-controls">
           <label class="set-control"><span>Response style</span>
             <select data-ai-field="responseStyle">${optionList([
@@ -821,6 +895,9 @@ export function renderOperatorSettings(el, opts = {}) {
     saveAndRender();
   };
 
+  const localRefresh = el.querySelector("[data-local-model-refresh]");
+  if (localRefresh) localRefresh.onclick = () => refreshLocalModels(el, opts);
+
   el.querySelectorAll("[data-ai-field]").forEach((field) => {
     field.onchange = () => {
       settings[field.dataset.aiField] = field.value;
@@ -933,4 +1010,8 @@ export function renderOperatorSettings(el, opts = {}) {
 
   const modulesMount = el.querySelector(`#${modulesMountId}`);
   if (modulesMount) renderWorkspaceModulesTab(modulesMount, opts);
+
+  if (activeTab === "model" && settings.selectedProviders.includes("local") && !localModelStatus.loaded && !localModelStatus.loading) {
+    refreshLocalModels(el, opts);
+  }
 }

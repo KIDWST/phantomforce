@@ -321,7 +321,7 @@ import {
 } from "./phantom-ai/windows-media-session.js";
 import { callClaudeCliChat } from "./phantom-ai/providers/claude-cli-transport.js";
 import { callCodexCliChat } from "./phantom-ai/providers/codex-cli-transport.js";
-import { callLocalOllamaChat } from "./phantom-ai/providers/local-ollama-transport.js";
+import { callLocalOllamaChat, getLocalOllamaStatus } from "./phantom-ai/providers/local-ollama-transport.js";
 import { callOpenRouterGlm52 } from "./phantom-ai/providers/openrouter-live-transport.js";
 import {
   adminProviderAttemptOrder,
@@ -2516,16 +2516,18 @@ function parsePhantomAiChatProvider(value: unknown) {
   return value === "openrouter_glm" ? "openrouter_glm" : "phantom";
 }
 
-type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli";
+type AdminPhantomAiModelLane = "codex" | "glm_5_2" | "claude_cli" | "local_ollama";
 
 function parseAdminPhantomAiModelLane(value: unknown): AdminPhantomAiModelLane {
   if (value === "glm_5_2" || value === "openrouter_glm" || value === "glm") return "glm_5_2";
+  if (value === "local_ollama" || value === "ollama" || value === "local") return "local_ollama";
   if (value === "claude_cli" || value === "claude") return "claude_cli";
   return "codex";
 }
 
 function adminPhantomAiModelLabel(lane: AdminPhantomAiModelLane) {
   if (lane === "glm_5_2") return "Local GLM";
+  if (lane === "local_ollama") return "Local Ollama";
   if (lane === "claude_cli") return "Claude CLI";
   return "Private Brain";
 }
@@ -2535,6 +2537,7 @@ function publicAdminPhantomAiModelLane(lane: AdminPhantomAiModelLane) {
 }
 
 function adminPhantomAiProviderRoute(lane: AdminPhantomAiModelLane) {
+  if (lane === "local_ollama") return "local" as const;
   if (lane === "glm_5_2") return "local" as const;
   if (lane === "claude_cli") return "claude" as const;
   return "local" as const;
@@ -2549,6 +2552,7 @@ type AdminPhantomAiProviderId = AdminProviderId;
 
 function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPhantomAiProviderId {
   if (lane === "claude_cli") return "claude_cli";
+  if (lane === "local_ollama") return "local_ollama";
   if (lane === "glm_5_2") return process.env.PHANTOM_FORCE_OPENROUTER_GLM === "true" ? "openrouter_glm" : "local_ollama";
   return "codex_cli";
 }
@@ -2556,6 +2560,7 @@ function adminPhantomAiProviderIdForLane(lane: AdminPhantomAiModelLane): AdminPh
 function adminPhantomAiLaneForProviderId(providerId: AdminPhantomAiProviderId): AdminPhantomAiModelLane {
   if (providerId === "claude_cli") return "claude_cli";
   if (providerId === "codex_cli") return "codex";
+  if (providerId === "local_ollama") return "local_ollama";
   return "glm_5_2";
 }
 
@@ -2575,6 +2580,7 @@ type AdminPhantomAiChatContext = {
   sensitivityLevel: SensitivityLevel;
   approvalRequired: boolean;
   executionMode: "approval" | "auto";
+  requestedModel?: string;
 };
 
 /* Fallback attempts get shorter per-provider timeouts than a direct single-lane
@@ -2662,6 +2668,7 @@ async function callAdminPhantomAiProvider(providerId: AdminPhantomAiProviderId, 
       env: {
         ...process.env,
         OLLAMA_BASE_URL: process.env.OLLAMA_BASE_URL?.trim() || "http://127.0.0.1:11434",
+        ...(ctx.requestedModel && ctx.requestedModel !== "local-auto" ? { PHANTOM_OLLAMA_MODEL: ctx.requestedModel } : {}),
         PHANTOM_LOCAL_MODEL_AVAILABLE: "true",
         PHANTOM_OLLAMA_TIMEOUT_MS: String(ADMIN_CHAT_FALLBACK_TIMEOUT_MS.local_ollama),
       },
@@ -3196,6 +3203,24 @@ app.get("/phantom-ai/provider-status", async (request, reply) => {
         ledger_bytes: ledgerStatus.bytes,
       },
     },
+  };
+});
+
+app.get("/phantom-ai/local-models/status", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+
+  if (!session) {
+    return reply;
+  }
+
+  return {
+    ok: true,
+    session,
+    ollama: await getLocalOllamaStatus(),
+    provider_manager: getAdminProviderManagerStatus(),
+    provider_called: false,
+    model_called: false,
+    prompts_sent: false,
   };
 });
 
@@ -6823,6 +6848,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     allowed_providers?: unknown;
     admin_model?: unknown;
     model_lane?: unknown;
+    requested_model?: unknown;
     message?: unknown;
     tenant_id?: unknown;
     business_name?: unknown;
@@ -6939,6 +6965,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
     const adminProviderRoute = adminPhantomAiProviderRoute(adminModelLane);
     const adminModelLabel = adminPhantomAiModelLabel(adminModelLane);
     const adminExecutionMode = body.execution_mode === "auto" ? "auto" : "approval";
+    const requestedAdminModel = typeof body.requested_model === "string" ? body.requested_model.trim().slice(0, 160) : "";
     if (/^(hey|hi|hello|yo|sup|gm|gn|good morning|good afternoon|good evening|what'?s up|wassup|you there|u there)[\s.!?]*$/i.test(normalized.user_request.trim())) {
       return {
         ok: true,
@@ -7011,6 +7038,7 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       sensitivityLevel: preview.decision.sensitivity_level,
       approvalRequired,
       executionMode: adminExecutionMode,
+      requestedModel: requestedAdminModel || undefined,
     }, allowedAdminProviders);
     const respondingProviderId = fallbackChat.providerId;
     const respondingLane = adminPhantomAiLaneForProviderId(respondingProviderId);

@@ -11,9 +11,9 @@ import {
   PACKAGES, RETAINERS, VACATION_POLICY, fmtMoney, statusLabel, daysUntil, memoryStats, chatHistoryStats,
   ctx, session, loadPhantomLoop, savePhantomLoop, loopProviderName, modelDisplayLabel,
   getPhantomLaneTarget, loadPhantomLaneConfig, workspaceStorageGetItem, wsName,
-} from "./store.js?v=phantom-live-20260712-228";
-import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260712-228";
-import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260712-228";
+} from "./store.js?v=phantom-live-20260713-001";
+import { classifyPhantomIntent as classifyRaw, deriveActionContract } from "./intent-router.js?v=phantom-live-20260713-001";
+import { baseSiteDraft, ensureSiteDesign, applyWebsitePrompt } from "./workspaces.js?v=phantom-live-20260713-001";
 const classifyPhantomIntent = (text) => deriveActionContract(classifyRaw(text));
 
 /* Cross-surface handoff: chat tells the Websites page which project to focus
@@ -94,7 +94,8 @@ function providerIdForRequest(settings, intent) {
 
 function modelLaneForProvider(providerId) {
   if (providerId === "claude") return "claude_cli";
-  if (providerId === "openrouter" || providerId === "local") return "glm_5_2";
+  if (providerId === "openrouter") return "glm_5_2";
+  if (providerId === "local") return "local_ollama";
   return "codex";
 }
 
