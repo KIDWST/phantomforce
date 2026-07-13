@@ -9,20 +9,20 @@ import {
   freshEditState, applyFilterPreset, renderBaseFrame,
   addBokehSpot, removeBokehSpotNear, removeBokehSpotAt, nearestBokehSpot, moveBokehSpot, resizeBokehSpot,
   setBokehMask, freshTextStyle, TEXT_FONTS, TEXT_PRESETS, applyTextPreset,
-} from "./imagefilters.js?v=phantom-live-20260713-245";
-import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260713-245";
-import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260713-245";
-import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260713-245";
+} from "./imagefilters.js?v=phantom-live-20260713-246";
+import { getRembgStatus, requestRemoveBackground, probeAiEditBackend, requestAiEdit, loadImageForEditing, loadImage, exportCanvas, syncAssetUpload, listSyncedAssets, fetchSyncedAssetFile } from "./mediabackend.js?v=phantom-live-20260713-246";
+import { addCustomDailyIdea, dailyIdeaState, refreshDailyIdeas, saveIdeaForLater } from "./content-ideas.js?v=phantom-live-20260713-246";
+import { parseAnalyticsReport } from "./social-analytics.js?v=phantom-live-20260713-246";
 import {
   freshComposition, compositionSnapshot, restoreComposition, addImageLayer, replaceImageLayerSource, addTextLayer, addColorLayer,
   duplicateLayer, removeSelectedLayers, moveLayerOrder, selectedLayers, selectLayer, selectAllLayers,
   loadCompositionImages, renderComposition, drawCompositionOverlay, drawDetectedSubjectOverlay, canvasPoint, hitTestLayer, hitTestResizeHandle,
   setCanvasPreset, zoomComposition, canvasPointToLayer, layerPointToCanvas,
   imageEditSnapshot, restoreImageEditSnapshot, pushEditorSnapshot,
-} from "./content-editor.js?v=phantom-live-20260713-245";
+} from "./content-editor.js?v=phantom-live-20260713-246";
 import {
   currentTenantId, currentWs, session, store, visible, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem, wsName,
-} from "./store.js?v=phantom-live-20260713-245";
+} from "./store.js?v=phantom-live-20260713-246";
 
 const CH_KEY = "pf.contenthub.v2";
 const CH_REMOVED_KEY = "pf.contenthub.removed.v1";
@@ -1125,7 +1125,7 @@ function addPublishPosts(data, draft, status) {
       metrics: blankMetrics(),
       comments: [],
       localOnly: true,
-      analyticsVisible: status === "published",
+      analyticsVisible: false,
       sourceDraftId: draft.id,
     });
   });
@@ -1137,7 +1137,7 @@ function publishQueueMarkup(drafts, esc) {
     <span class="ch-pub-status ch-pub-status-${esc(draft.status)}">${esc(draftStatusLabel(draft.status))}</span>
     <b>${esc(draft.sourceTitle || "Manual post")}</b>
     <p>${esc((draft.caption || "").slice(0, 150))}${(draft.caption || "").length > 150 ? "..." : ""}</p>
-    <i>${draft.platforms.map((id) => esc(plat(id).name)).join(" · ")} · ${draft.status === "scheduled" ? "scheduled" : draft.status === "posted" || draft.status === "manual-posted" ? "visible in local analytics" : "draft"}</i>
+    <i>${draft.platforms.map((id) => esc(plat(id).name)).join(" · ")} · ${draft.status === "scheduled" ? "scheduled" : draft.status === "posted" || draft.status === "manual-posted" ? "saved to post history" : "draft"}</i>
   </article>`).join("");
 }
 function renderPostPublish(body, data, esc, root, opts) {
@@ -1222,7 +1222,7 @@ function renderPostPublish(body, data, esc, root, opts) {
             <button type="button" class="ch-tool" data-ch-pub-post-now>Post now</button>
             <button type="button" class="ch-tool" data-ch-pub-live disabled title="OAuth publishing adapters are not authorized in this local build.">OAuth live post</button>
           </div>
-          <p class="ch-pub-note">Post now records the post across every selected channel in the local analytics ledger. Live external posting stays locked until OAuth scopes and account approvals are connected.</p>
+          <p class="ch-pub-note">Post now saves a local post-history record for every selected channel. Live external posting and platform analytics stay locked until OAuth scopes and account approvals are connected.</p>
         </div>
       </div>
       <aside class="ch-card ch-pub-preview">
@@ -1233,7 +1233,7 @@ function renderPostPublish(body, data, esc, root, opts) {
       </aside>
     </section>
     <section class="ch-card ch-pub-queue">
-      <div class="ch-card-h"><h3>Post status</h3><span class="ch-src">drafts · scheduled · posted locally</span></div>
+      <div class="ch-card-h"><h3>Post status</h3><span class="ch-src">drafts · scheduled · post history</span></div>
       <div class="ch-pub-queue-grid">${publishQueueMarkup(drafts, esc)}</div>
     </section>`;
   wirePostPublish(body, data, assets, esc, root, opts);
@@ -1389,7 +1389,7 @@ function wirePostPublish(body, data, assets, esc, root, opts) {
     notify(status === "scheduled"
       ? "Post scheduled locally and added to Planner. No external post was sent."
       : status === "posted"
-        ? "Post recorded across selected channels and added to local analytics. OAuth live posting still requires connected accounts."
+        ? "Post saved to local post history. OAuth live posting and platform analytics still require connected accounts."
         : "Post draft saved locally.");
     renderContentHub(root, opts);
   };

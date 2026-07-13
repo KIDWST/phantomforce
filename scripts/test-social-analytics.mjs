@@ -39,6 +39,9 @@ assert.match(contentHubSource, /data-an-oauth/, "Analytics rows should start off
 assert.doesNotMatch(contentHubSource, /Workspace analytics are live\. Platform APIs are optional/, "Analytics must not present local workspace activity as social analytics.");
 assert.doesNotMatch(contentHubSource, /Optional live social APIs/, "Social APIs must be the core analytics source, not optional enrichment.");
 assert.doesNotMatch(contentHubSource, /<h3>PhantomForce workspace<\/h3>/, "Analytics must not show a local workspace analytics card.");
+assert.doesNotMatch(contentHubSource, /local analytics|added to local analytics|visible in local analytics/i, "Local post history must not be described as analytics.");
+assert.match(contentHubSource, /Post now saves a local post-history record/, "Publishing without OAuth must be framed as local post history only.");
+assert.match(contentHubSource, /analyticsVisible: false/, "Local post-history rows must not be treated as analytics rows.");
 assert.match(contentHubSource, /analyticsConnectorState\.error = force \? message : ""/, "Silent social API checks must not interrupt the social analytics page.");
 assert.doesNotMatch(contentHubSource, /OAuth is required before real stats appear/, "Analytics should not make the page look empty before OAuth is configured.");
 assert.match(mediaLabSource, /Editable handle or profile URL/, "Media settings must let Jordan change handles per channel.");
