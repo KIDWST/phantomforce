@@ -4,8 +4,8 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-242";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-242";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-243";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-243";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -592,8 +592,12 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeout = controller ? setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS) : null;
   const token = typeof session?.token === "function" ? session.token() : "";
+  if (!token) {
+    if (timeout) clearTimeout(timeout);
+    return { content: "", error: "Private brain needs a fresh approved session before it can add a live report." };
+  }
   const headers = { "Content-Type": "application/json" };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  headers.Authorization = `Bearer ${token}`;
   try {
     const response = await fetch("/phantom-ai/chat", {
       method: "POST",

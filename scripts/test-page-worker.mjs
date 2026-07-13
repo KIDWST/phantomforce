@@ -48,6 +48,7 @@ assert.match(worker, /Phantom is asking the backend brain/u, "Thinking state sho
 assert.match(worker, /AI backend result/u, "Backend answer must render as the primary result.");
 assert.match(worker, /backendSafeError[\s\S]*Private brain needs a fresh approved session/u, "Backend auth failures must use client-safe private-brain wording.");
 assert.doesNotMatch(worker, /AI backend returned HTTP/u, "Page worker must not expose raw HTTP backend errors to users.");
+assert.match(worker, /const token = typeof session\?\.token[\s\S]*if \(!token\)[\s\S]*fresh approved session[\s\S]*headers\.Authorization = `Bearer \$\{token\}`/u, "Page worker should not call the backend without an approved bearer session.");
 assert.match(worker, /Never say the work is queued/u, "Backend prompt must avoid confusing queued language.");
 assert.match(worker, /Before we proceed, answer this:/u, "Blocking questions must use the requested phrasing.");
 assert.match(worker, /button\.disabled = true/u, "Submitting a page prompt must disable the button while the backend runs.");
