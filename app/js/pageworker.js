@@ -4,8 +4,8 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-239";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-239";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-242";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-242";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -116,6 +116,8 @@ const DEFAULT_WORKER = {
   action: "Infer next action",
 };
 
+const WORKER_OUTPUT_CACHE = new Map();
+
 const SKIP_PAGES = new Set([
   "settings",
   "developer",
@@ -155,8 +157,14 @@ export function pageWorkerHtml(pageId, def = {}) {
         <textarea data-page-worker-input rows="1" placeholder="${esc(worker.placeholder)}" aria-label="${esc(worker.title)}"></textarea>
         <button type="submit" aria-label="Run page intelligence">Run</button>
       </form>
-      <div class="page-worker-output" data-page-worker-output hidden></div>
+      ${pageWorkerOutputHtml(pageId)}
     </section>`;
+}
+
+function pageWorkerOutputHtml(pageId) {
+  const cached = WORKER_OUTPUT_CACHE.get(pageId);
+  if (!cached?.html) return `<div class="page-worker-output" data-page-worker-output hidden></div>`;
+  return `<div class="${esc(cached.className || "page-worker-output")}" data-page-worker-output>${cached.html}</div>`;
 }
 
 const HISTORY_KEY = "pf.pageworker.intelligence.v1";
@@ -477,6 +485,13 @@ function backendStatusLabel(backend) {
     || (payload.live_provider_called ? "live provider" : "backend answered");
 }
 
+function backendSafeError(status) {
+  if (status === 401 || status === 403) return "Private brain needs a fresh approved session before it can add a live report.";
+  if (status === 408 || status === 429) return "Private brain is busy right now, so Phantom kept the local result visible.";
+  if (status >= 500) return "Private brain did not answer cleanly, so Phantom kept the local result visible.";
+  return "Private brain could not return a live report, so Phantom kept the local result visible.";
+}
+
 function backendContentHtml(content) {
   return String(content || "")
     .trim()
@@ -573,7 +588,7 @@ function backendPrompt(pageId, prompt, analysis) {
 
 async function askBackendForPageOutcome(pageId, prompt, analysis) {
   if (!String(prompt || "").trim()) return { content: "", error: "" };
-  if (typeof fetch !== "function") return { content: "", error: "AI backend fetch is unavailable in this browser." };
+  if (typeof fetch !== "function") return { content: "", error: "Private brain is not available in this browser, so Phantom kept the local result visible." };
   const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
   const timeout = controller ? setTimeout(() => controller.abort(), BACKEND_TIMEOUT_MS) : null;
   const token = typeof session?.token === "function" ? session.token() : "";
@@ -607,11 +622,9 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
     let payload = {};
     try { payload = raw ? JSON.parse(raw) : {}; }
     catch { payload = { message: { content: raw } }; }
-    if (!response.ok) {
-      return { content: "", error: `AI backend returned HTTP ${response.status}.`, payload };
-    }
+    if (!response.ok) return { content: "", error: backendSafeError(response.status), status: response.status, payload };
     const content = backendTextFrom(payload);
-    if (!content) return { content: "", error: "AI backend returned no message content.", payload };
+    if (!content) return { content: "", error: "Private brain answered without a usable report, so Phantom kept the local result visible.", payload };
     return {
       content,
       provider: payload.admin_model_label || payload.model_id || payload.provider_choice || "",
@@ -621,8 +634,8 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
     return {
       content: "",
       error: error?.name === "AbortError"
-        ? "AI backend took too long to answer."
-        : `AI backend could not be reached: ${error?.message || "unknown error"}.`,
+        ? "Private brain took too long to answer, so Phantom kept the local result visible."
+        : "Private brain could not be reached, so Phantom kept the local result visible.",
     };
   } finally {
     if (timeout) clearTimeout(timeout);
@@ -670,6 +683,11 @@ function renderPageWorkerResult(out, analysis, pageAction, backend) {
       <b>${analysis.question ? "Before we proceed, answer this:" : "Done. Ready to draft."}</b>
       <span>${esc(analysis.question || "Phantom has enough to draft locally. External moves still require approval.")}</span>
     </div>`;
+  const pageId = out.closest("[data-page-worker]")?.dataset.pageWorker || "page";
+  WORKER_OUTPUT_CACHE.set(pageId, {
+    html: out.innerHTML,
+    className: out.className,
+  });
 }
 
 function currentWorkerOutput(card, pageId) {
@@ -677,6 +695,25 @@ function currentWorkerOutput(card, pageId) {
     ? card
     : document.querySelector(`[data-page-worker="${String(pageId || "page").replace(/"/g, '\\"')}"]`);
   return liveCard?.querySelector("[data-page-worker-output]") || card?.querySelector("[data-page-worker-output]") || null;
+}
+
+function snapshotWorkerOutput(card, pageId) {
+  const out = currentWorkerOutput(card, pageId);
+  if (!out || out.hidden || !out.innerHTML.trim()) return null;
+  return {
+    html: out.innerHTML,
+    className: out.className,
+  };
+}
+
+function restorePageWorkerOutput(pageId, snapshot) {
+  const source = snapshot?.html ? snapshot : WORKER_OUTPUT_CACHE.get(pageId);
+  if (!source?.html) return;
+  const out = currentWorkerOutput(null, pageId);
+  if (!out) return;
+  out.hidden = false;
+  out.className = source.className || "page-worker-output";
+  out.innerHTML = source.html;
 }
 
 async function renderPlan(card, pageId, prompt) {
@@ -719,7 +756,13 @@ export function mountPageWorkers(root = document, opts = {}) {
           ? "AI backend analyzed the prompt and reported the result."
           : "I could not get a backend answer, so I kept the local fallback result visible."));
         if (result?.pageAction?.refreshWorkspace) {
-          setTimeout(() => opts.openWorkspace?.(pageId), 320);
+          const outputSnapshot = snapshotWorkerOutput(card, pageId);
+          setTimeout(() => {
+            opts.openWorkspace?.(pageId);
+            const restore = () => restorePageWorkerOutput(pageId, outputSnapshot);
+            if (typeof requestAnimationFrame === "function") requestAnimationFrame(restore);
+            else setTimeout(restore, 0);
+          }, 320);
         }
       } finally {
         delete form.dataset.pageWorkerBusy;

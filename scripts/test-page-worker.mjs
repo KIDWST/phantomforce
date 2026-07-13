@@ -32,6 +32,8 @@ assert.match(worker, /CRM_PAGE_ACTION_VERB[\s\S]*find[\s\S]*discover[\s\S]*sourc
 assert.match(worker, /CRM_PAGE_AUDIENCE[\s\S]*gyms\?[\s\S]*coaches\?[\s\S]*service compan/u, "Clients page prompt must understand real prospect categories, not only the word CRM.");
 assert.match(worker, /runPageAction\(pageId, prompt\)[\s\S]*renderThinking\(out, pageId, prompt, pageAction\)[\s\S]*askBackendForPageOutcome/u, "Clients CRM creation must happen before the slower backend report.");
 assert.match(worker, /currentWorkerOutput/u, "Page worker output must survive the Clients page repaint after CRM cards are saved.");
+assert.match(worker, /snapshotWorkerOutput[\s\S]*restorePageWorkerOutput[\s\S]*opts\.openWorkspace\?\.\(pageId\)[\s\S]*restorePageWorkerOutput\(pageId, outputSnapshot\)/u, "Clients page refresh must restore the rendered page-worker result after CRM cards are saved.");
+assert.match(worker, /WORKER_OUTPUT_CACHE[\s\S]*pageWorkerOutputHtml[\s\S]*WORKER_OUTPUT_CACHE\.set/u, "Page worker renders must cache the latest result so a page remount can show it.");
 assert.match(worker, /No fake contact details were generated/u, "Clients worker must not hallucinate contact details.");
 assert.match(command, /client\\s\+base[\s\S]*consider[\s\S]*could\\s\+use/u, "Client-base prospect phrasing must route into CRM prospect buildout.");
 assert.match(command, /find\|add\|search\|discover\|research\|scout\|source\|identify/u, "Global CRM prospect routing must understand find/add/discover client language.");
@@ -44,6 +46,8 @@ assert.match(worker, /currentTenantId/u, "Backend page prompts must carry tenant
 assert.match(worker, /AI backend thinking/u, "Page prompts must show a backend thinking state.");
 assert.match(worker, /Phantom is asking the backend brain/u, "Thinking state should give visible, human feedback.");
 assert.match(worker, /AI backend result/u, "Backend answer must render as the primary result.");
+assert.match(worker, /backendSafeError[\s\S]*Private brain needs a fresh approved session/u, "Backend auth failures must use client-safe private-brain wording.");
+assert.doesNotMatch(worker, /AI backend returned HTTP/u, "Page worker must not expose raw HTTP backend errors to users.");
 assert.match(worker, /Never say the work is queued/u, "Backend prompt must avoid confusing queued language.");
 assert.match(worker, /Before we proceed, answer this:/u, "Blocking questions must use the requested phrasing.");
 assert.match(worker, /button\.disabled = true/u, "Submitting a page prompt must disable the button while the backend runs.");
