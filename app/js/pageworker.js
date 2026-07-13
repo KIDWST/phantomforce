@@ -79,7 +79,21 @@ const DEFAULT_WORKER = {
   action: "Infer next action",
 };
 
-const SKIP_PAGES = new Set(["media", "settings", "developer", "activity", "promptlibrary", "account"]);
+const SKIP_PAGES = new Set([
+  "media",
+  "sites",
+  "content",
+  "assets",
+  "intelligence",
+  "vacation",
+  "phantomplay",
+  "settings",
+  "developer",
+  "activity",
+  "promptlibrary",
+  "account",
+  "customize",
+]);
 
 function workerFor(pageId) {
   return PAGE_WORKERS[pageId] || DEFAULT_WORKER;

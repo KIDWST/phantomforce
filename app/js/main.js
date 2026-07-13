@@ -32,7 +32,7 @@ import {
 import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260712-227";
 import { assetsAvailable } from "./orgs.js?v=phantom-live-20260712-227";
 import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260712-227";
-import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260712-227";
+import { pageWorkerHtml, mountPageWorkers } from "./pageworker.js?v=phantom-live-20260712-229";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
