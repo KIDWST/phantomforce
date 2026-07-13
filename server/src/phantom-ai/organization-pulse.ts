@@ -31,7 +31,7 @@ export type OrganizationPulse = {
   approvals: Section<{ pending: number; latest: Array<{ id: string; action: string; queuedAt: string }> }>;
   agentRuns: Section<{ running: number; failed: number; recent: Array<{ id: string; title: string; state: string; operation: string }> }>;
   automations: Section<{ total: number; enabled: number; failing: Array<{ id: string; name: string; lastSummary: string }> }>;
-  competitors: Section<{ businessName: string; category: string; competitorCount: number; signalCount: number; inferenceCount: number; competitorsWithoutSignals: number }>;
+  competitors: Section<{ businessName: string; category: string; competitorCount: number; signalCount: number; inferenceCount: number; competitorsWithoutSignals: number; discoveryRuns: number }>;
   memories: Section<{ total: number; neverRecalled: number; recent: string[] }>;
   assets: Section<{ total: number; recent: Array<{ id: string; title: string; kind: string }>; unusedRecent: number }>;
   sites: Section<{ total: number; names: string[] }>;
@@ -137,6 +137,7 @@ export async function getOrganizationPulse(session: AccessSession, access: Pulse
         signalCount: snapshot.signals.length,
         inferenceCount: snapshot.inferences.length,
         competitorsWithoutSignals: withoutSignals,
+        discoveryRuns: snapshot.discoveryRuns.length,
       };
     }),
     safe("Brain memories", async () => {
@@ -273,6 +274,18 @@ export async function getOrganizationGraph(session: AccessSession, access: Pulse
           edges.push({ from: id, to: dosId, kind: "analyzed_by" });
         }
       }
+      for (const theme of snapshot.audienceThemes.slice(0, 6)) {
+        const themeId = `audience-gap:${theme.id}`;
+        nodes.push({ id: themeId, type: "audience-gap", label: theme.theme.slice(0, 48), source: "competitor-intelligence.audienceThemes" });
+        const owner = `competitor:${theme.competitorId}`;
+        edges.push(nodes.some((node) => node.id === owner) ? { from: owner, to: themeId, kind: "reveals" } : { from: orgNode, to: themeId, kind: "reveals" });
+      }
+      for (const opportunity of snapshot.opportunities.slice(0, 6)) {
+        const oppId = `market-opportunity:${opportunity.id}`;
+        nodes.push({ id: oppId, type: "market-opportunity", label: opportunity.title.slice(0, 48), source: "competitor-intelligence.opportunities" });
+        const owner = `competitor:${opportunity.competitorId}`;
+        edges.push(nodes.some((node) => node.id === owner) ? { from: owner, to: oppId, kind: "suggests" } : { from: orgNode, to: oppId, kind: "suggests" });
+      }
     } catch { /* section absent from graph on read failure; pulse reports it */ }
   } else {
     const id = `system:competitor-intelligence`;
@@ -326,6 +339,25 @@ export async function getOrganizationGraph(session: AccessSession, access: Pulse
     }
   } catch { /* non-fatal */ }
 
+  /* Automations — platform jobs visible to workspace owners/admins */
+  if (access.canManage) {
+    try {
+      const jobs = await listAutomationJobs();
+      for (const job of jobs.slice(0, 16)) {
+        const id = `automation:${job.id}`;
+        const node: GraphNode = {
+          id, type: "automation", label: job.name.slice(0, 44), source: "automation-engine",
+          state: !job.enabled ? "paused" : job.last_status === "error" ? "failing" : job.last_status === "ok" ? "healthy" : "never_run",
+        };
+        if (job.enabled && job.last_status === "error") {
+          mark(node, `Last run failed: ${String(job.last_summary ?? "no summary").slice(0, 90)}`);
+        }
+        nodes.push(node);
+        edges.push({ from: orgNode, to: id, kind: "operates" });
+      }
+    } catch { /* non-fatal */ }
+  }
+
   /* Asset Cloud + Sites (database-backed) */
   if (access.orgId) {
     try {
@@ -360,4 +392,129 @@ export async function getOrganizationGraph(session: AccessSession, access: Pulse
   const finalEdges = edges.filter((edge) => ids.has(edge.from) && ids.has(edge.to));
 
   return { tenantId, generatedAt: new Date().toISOString(), nodes: finalNodes, edges: finalEdges, gaps };
+}
+
+/* ── Opportunity Engine ───────────────────────────────────────────────────
+   Continuous graph analysis turned into actionable next moves. Every
+   opportunity is DERIVED from the same real reads as the pulse — each one
+   carries provenance (the store + node it came from) and a route the user
+   can act on. Nothing here is fabricated: no rule fires without a matching
+   record, and an empty workspace produces setup opportunities, not fiction. */
+
+export type Opportunity = {
+  id: string;
+  impact: "high" | "medium" | "low";
+  title: string;
+  why: string;
+  provenance: { source: string; nodeId?: string };
+  action: { label: string; route: string };
+};
+
+export async function getOrganizationOpportunities(
+  session: AccessSession,
+  access: PulseAccess,
+  precomputedPulse?: OrganizationPulse,
+): Promise<{ tenantId: string; generatedAt: string; opportunities: Opportunity[] }> {
+  const pulse = precomputedPulse ?? await getOrganizationPulse(session, access);
+  const opportunities: Opportunity[] = [];
+  const push = (opportunity: Opportunity) => opportunities.push(opportunity);
+
+  if (pulse.approvals.available && pulse.approvals.pending > 0) {
+    push({
+      id: "approvals-pending", impact: "high",
+      title: `${pulse.approvals.pending} approval(s) are blocking work`,
+      why: `Waiting in the queue: ${pulse.approvals.latest.map((item) => item.action).join(", ")}. Nothing downstream moves until these are decided.`,
+      provenance: { source: "hermes-approvals.jsonl", nodeId: pulse.approvals.latest[0] ? `approval:${pulse.approvals.latest[0].id}` : undefined },
+      action: { label: "Review approvals", route: "approvals" },
+    });
+  }
+  if (pulse.automations.available && pulse.automations.failing.length > 0) {
+    for (const job of pulse.automations.failing.slice(0, 3)) {
+      push({
+        id: `automation-failing:${job.id}`, impact: "high",
+        title: `Platform automation failing: ${job.name}`,
+        why: `${job.lastSummary || "The last run reported an error."} This is a platform-level job — it affects the whole PhantomForce install, not just this workspace.`,
+        provenance: { source: "automation-engine", nodeId: `automation:${job.id}` },
+        action: { label: "Open automations", route: "automation" },
+      });
+    }
+  }
+  if (pulse.agentRuns.available && pulse.agentRuns.failed > 0) {
+    push({
+      id: "runs-failed", impact: "medium",
+      title: `${pulse.agentRuns.failed} agent run(s) failed`,
+      why: "Work stopped mid-flight. Review what broke; most runs can be retried once the cause is fixed.",
+      provenance: { source: "agent-runs.jsonl" },
+      action: { label: "Review runs", route: "automation" },
+    });
+  }
+  if (pulse.competitors.available) {
+    const c = pulse.competitors;
+    if (!c.businessName) {
+      push({
+        id: "profile-missing", impact: "high",
+        title: "Phantom doesn't know what your business is yet",
+        why: "Competitor discovery, deep dives, and tailored recommendations all start from the business profile.",
+        provenance: { source: "competitor-intelligence.businessProfile" },
+        action: { label: "Set up the profile", route: "competitor-intelligence" },
+      });
+    } else if (c.competitorCount === 0 && c.discoveryRuns === 0) {
+      push({
+        id: "discovery-never-run", impact: "high",
+        title: "You aren't tracking any competitors",
+        why: `The profile for ${c.businessName} is set, but discovery has never run — you're operating without competitive awareness.`,
+        provenance: { source: "competitor-intelligence.discoveryRuns" },
+        action: { label: "Find competitors", route: "competitor-intelligence" },
+      });
+    }
+    if (c.competitorsWithoutSignals > 0) {
+      push({
+        id: "competitors-unevidenced", impact: "medium",
+        title: `${c.competitorsWithoutSignals} competitor(s) have no evidence`,
+        why: "Tracked but empty — no public signals recorded, so they contribute nothing to estimates. Run their deep-dive dossiers and log what you find.",
+        provenance: { source: "competitor-intelligence.signals" },
+        action: { label: "Open deep dives", route: "competitor-intelligence" },
+      });
+    }
+    if (c.signalCount >= 3 && c.inferenceCount === 0) {
+      push({
+        id: "signals-unfused", impact: "medium",
+        title: `${c.signalCount} signals collected but never fused`,
+        why: "Evidence is piling up without being turned into labeled estimates. Fusing is one click per competitor.",
+        provenance: { source: "competitor-intelligence.inferences" },
+        action: { label: "Fuse signals", route: "competitor-intelligence" },
+      });
+    }
+  }
+  if (pulse.assets.available && pulse.assets.unusedRecent > 0) {
+    push({
+      id: "assets-unused", impact: "medium",
+      title: `${pulse.assets.unusedRecent} recent asset(s) never reused`,
+      why: "Generating replacements for media you already own burns credits. Check the library before the next generation.",
+      provenance: { source: "asset-cloud (db)" },
+      action: { label: "Open Asset Cloud", route: "assetcloud" },
+    });
+  }
+  if (!pulse.assets.available) {
+    push({
+      id: "assetcloud-disconnected", impact: "low",
+      title: "Asset Cloud isn't connected here",
+      why: "Without the library, Phantom can't recommend reuse and every generation starts from zero.",
+      provenance: { source: "database" },
+      action: { label: "See what's connected", route: "brain" },
+    });
+  }
+  if (pulse.memories.available && pulse.memories.neverRecalled >= 3) {
+    push({
+      id: "memories-idle", impact: "low",
+      title: `${pulse.memories.neverRecalled} saved memories have never been used`,
+      why: "Stored knowledge that never informs an answer is dead weight — review, sharpen, or prune it.",
+      provenance: { source: "brain-memory.jsonl" },
+      action: { label: "Open the memory vault", route: "brain" },
+    });
+  }
+
+  const rank = { high: 0, medium: 1, low: 2 } as const;
+  opportunities.sort((left, right) => rank[left.impact] - rank[right.impact]);
+  return { tenantId: pulse.tenantId, generatedAt: new Date().toISOString(), opportunities };
 }

@@ -5,7 +5,7 @@
    prefers-reduced-motion and body.freeze by drawing the settled layout
    instantly. No fabricated data: gaps and disconnection reasons come straight
    from the server payload. */
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-226";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-227";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => (
   { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]
@@ -62,6 +62,21 @@ async function fetchGraph(tenant) {
     throw new Error(data?.error?.message || data?.error || `Graph request failed (${response.status})`);
   }
   return data.graph;
+}
+
+/* Opportunities the graph analysis recommends acting on. Same auth + per-tenant
+   cache pattern as the graph itself; Refresh bypasses both caches. */
+const oppCache = new Map(); // tenantId -> { opportunities, at }
+
+async function fetchOpportunities(tenant) {
+  const response = await fetch(`/api/organization/opportunities?tenant_id=${encodeURIComponent(tenant)}`, {
+    headers: authHeaders(),
+  });
+  const data = await response.json().catch(() => null);
+  if (!response.ok || !data?.ok || !Array.isArray(data.opportunities)) {
+    throw new Error(data?.error?.message || data?.error || `Opportunities request failed (${response.status})`);
+  }
+  return data.opportunities;
 }
 
 /* ---------------- force simulation (~settled in TOTAL_TICKS) ---------------- */
@@ -157,6 +172,26 @@ function gapsHtml(graph) {
   }).join("")}</div>`;
 }
 
+/* Action buttons carry data-open-ws: main.js's document-level click delegate
+   (the same pathway the notification bell items use) routes them through
+   routeWorkspace(). No import needed — the delegate listens on document. */
+function opportunitiesHtml(opps) {
+  if (!opps.length) return `<p class="og-gaps-clear">No opportunities detected — the graph has nothing urgent.</p>`;
+  return `<div class="og-opp-list">${opps.map((opp, index) => `
+    <div class="og-opp-row" data-og-opp-row data-opp-node="${esc(opp.provenance?.nodeId || "")}">
+      <button class="og-opp-main" type="button" data-og-opp-toggle aria-expanded="false" aria-controls="og-opp-why-${index}">
+        <span class="og-opp-impact is-${esc(opp.impact)}">${esc(opp.impact)}</span>
+        <span class="og-opp-title">${esc(opp.title)}</span>
+        <span class="og-opp-caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="og-opp-why" id="og-opp-why-${index}" hidden>
+        <p>${esc(opp.why)}</p>
+        <p class="og-opp-src">Backed by: ${esc(opp.provenance?.source || "unknown")}</p>
+      </div>
+      <button class="og-opp-action" type="button" data-open-ws="${esc(opp.action?.route || "")}">${esc(opp.action?.label || "Open")}</button>
+    </div>`).join("")}</div>`;
+}
+
 function shellHtml(tenant) {
   return `
     <div class="og-shell">
@@ -172,6 +207,10 @@ function shellHtml(tenant) {
         <p class="og-kicker">Gaps — what's disconnected and why</p>
         <div data-og-gaps-body></div>
       </section>
+      <section class="og-opps" data-og-opps>
+        <p class="og-kicker">Opportunities — what the graph recommends</p>
+        <div data-og-opps-body></div>
+      </section>
     </div>`;
 }
 
@@ -182,6 +221,10 @@ function instantSettle() {
 
 function mountCanvas(stage, graph, cached) {
   stage.innerHTML = `
+    <div class="og-controls">
+      <input class="og-search" type="search" placeholder="Search nodes…" aria-label="Search graph nodes by label" data-og-search />
+      <div class="og-chips" role="group" aria-label="Filter nodes by type" data-og-chips></div>
+    </div>
     <div class="og-body">
       <div class="og-canvas-wrap">
         <canvas aria-label="Organization graph: ${graph.nodes.length} entities, ${graph.edges.length} connections"></canvas>
@@ -193,6 +236,18 @@ function mountCanvas(stage, graph, cached) {
   const detailsEl = stage.querySelector("[data-og-details]");
   stage.querySelector(".og-legend").innerHTML = legendHtml(graph.nodes);
   detailsEl.innerHTML = detailsHtml(null);
+
+  /* Search + type filters affect rendering only — never the fetched data.
+     Empty type set means "all types". A node passes when it matches the label
+     (or type-name) substring AND its type is enabled. */
+  const filter = { q: "", types: new Set() };
+  const filterActive = () => !!filter.q || filter.types.size > 0;
+  const passesFilter = (node) => {
+    if (filter.types.size && !filter.types.has(node.type)) return false;
+    if (!filter.q) return true;
+    return String(node.label || "").toLowerCase().includes(filter.q)
+      || String(node.type || "").toLowerCase().includes(filter.q);
+  };
 
   const sim = buildSim(graph);
   if (cached?.positions) {
@@ -238,10 +293,13 @@ function mountCanvas(stage, graph, cached) {
     const rect = canvas.getBoundingClientRect();
     ctx.clearRect(0, 0, rect.width, rect.height);
     const active = hovered || selected;
+    const filtering = filterActive();
     for (const edge of sim.edges) {
       const a = toScreen(edge.a); const b = toScreen(edge.b);
       const lit = active && (edge.a === active || edge.b === active);
-      ctx.strokeStyle = lit ? "rgba(65,255,161,.85)" : active ? "rgba(65,255,161,.10)" : "rgba(65,255,161,.26)";
+      const faded = filtering && (!passesFilter(edge.a) || !passesFilter(edge.b));
+      ctx.strokeStyle = faded ? "rgba(65,255,161,.05)"
+        : lit ? "rgba(65,255,161,.85)" : active ? "rgba(65,255,161,.10)" : "rgba(65,255,161,.26)";
       ctx.lineWidth = lit ? 1.8 : 1;
       ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
     }
@@ -250,9 +308,10 @@ function mountCanvas(stage, graph, cached) {
     for (const node of sim.nodes) {
       const p = toScreen(node);
       const r = Math.max(4, node.r * view.scale);
+      const passes = passesFilter(node);
       const isActive = node === hovered || node === selected;
       const dimmed = active && !isActive;
-      ctx.globalAlpha = dimmed ? 0.35 : 1;
+      ctx.globalAlpha = filtering && !passes ? 0.15 : dimmed ? 0.35 : 1;
       if (isActive) { ctx.shadowColor = nodeColor(node.type); ctx.shadowBlur = 14; }
       ctx.fillStyle = nodeColor(node.type);
       ctx.beginPath(); ctx.arc(p.x, p.y, r, 0, Math.PI * 2); ctx.fill();
@@ -268,7 +327,9 @@ function mountCanvas(stage, graph, cached) {
         ctx.setLineDash([]);
       }
       ctx.font = node.type === "organization" ? '700 11px "DM Mono", monospace' : '10px "DM Mono", monospace';
-      ctx.fillStyle = dimmed ? "rgba(143,181,162,.5)" : isActive ? "#effff6" : "#8fb5a2";
+      /* While filtering, matching nodes keep their labels at full brightness. */
+      ctx.fillStyle = filtering && !passes ? "rgba(143,181,162,.4)"
+        : isActive || filtering ? "#effff6" : dimmed ? "rgba(143,181,162,.5)" : "#8fb5a2";
       ctx.fillText(truncate(node.label), p.x, p.y + r + (node.disconnected ? 8 : 5));
       ctx.globalAlpha = 1;
     }
@@ -298,6 +359,7 @@ function mountCanvas(stage, graph, cached) {
   const hitTest = (sx, sy) => {
     for (let i = sim.nodes.length - 1; i >= 0; i -= 1) {
       const node = sim.nodes[i];
+      if (filterActive() && !passesFilter(node)) continue; // faded nodes aren't clickable
       const p = toScreen(node);
       const r = Math.max(10, node.r * view.scale) + 4;
       if ((sx - p.x) ** 2 + (sy - p.y) ** 2 <= r * r) return node;
@@ -366,6 +428,31 @@ function mountCanvas(stage, graph, cached) {
   };
   window.addEventListener("resize", onResize);
 
+  /* Search input + type chips (real <input> / <button aria-pressed> so both
+     are keyboard accessible). "All" clears the multi-select. */
+  const searchEl = stage.querySelector("[data-og-search]");
+  const chipsEl = stage.querySelector("[data-og-chips]");
+  const typesPresent = [...new Set(sim.nodes.map((node) => node.type))];
+  chipsEl.innerHTML = [`<button class="og-chip" type="button" data-og-type="" aria-pressed="true">All</button>`]
+    .concat(typesPresent.map((type) => `<button class="og-chip" type="button" data-og-type="${esc(type)}" aria-pressed="false"><i style="background:${nodeColor(type)}"></i>${esc(type.replace(/-/g, " "))}</button>`))
+    .join("");
+  searchEl.addEventListener("input", () => {
+    filter.q = searchEl.value.trim().toLowerCase();
+    draw();
+  });
+  chipsEl.addEventListener("click", (event) => {
+    const chip = event.target.closest("[data-og-type]");
+    if (!chip) return;
+    const type = chip.dataset.ogType;
+    if (!type) filter.types.clear();
+    else if (filter.types.has(type)) filter.types.delete(type);
+    else filter.types.add(type);
+    for (const el of chipsEl.querySelectorAll("[data-og-type]")) {
+      el.setAttribute("aria-pressed", String(el.dataset.ogType ? filter.types.has(el.dataset.ogType) : filter.types.size === 0));
+    }
+    draw();
+  });
+
   return {
     sim,
     selectNode: (id) => {
@@ -374,6 +461,7 @@ function mountCanvas(stage, graph, cached) {
       return !!node;
     },
     positions: () => new Map(sim.nodes.map((node) => [node.id, { x: node.x, y: node.y }])),
+    visibleNodeIds: () => sim.nodes.filter((node) => passesFilter(node)).map((node) => node.id),
   };
 }
 
@@ -384,7 +472,9 @@ export function renderOrganizationGraph(target, opts = {}) {
   const stage = target.querySelector("[data-og-stage]");
   const gapsSection = target.querySelector("[data-og-gaps]");
   const gapsBody = target.querySelector("[data-og-gaps-body]");
+  const oppsBody = target.querySelector("[data-og-opps-body]");
   const refreshBtn = target.querySelector("[data-og-refresh]");
+  let graphInstance = null; // set once the canvas mounts; used for node highlight
 
   async function load(force = false) {
     const hit = cache.get(tenant);
@@ -427,6 +517,7 @@ export function renderOrganizationGraph(target, opts = {}) {
     }
 
     const instance = mountCanvas(stage, graph, entry);
+    graphInstance = instance;
     gapsSection.hidden = false;
     gapsBody.innerHTML = gapsHtml(graph);
     publishStats(graph);
@@ -434,14 +525,53 @@ export function renderOrganizationGraph(target, opts = {}) {
     entry.persistTimer && clearTimeout(entry.persistTimer);
     entry.persistTimer = setTimeout(() => { entry.positions = instance.positions(); }, 3200);
     /* Test hook: lets the harness select a node without synthesizing pointer
-       math, and inspect the layout. Not used by product code. */
+       math, and inspect the layout + active filter. Not used by product code. */
     window.__orgGraphTest = {
       selectNode: instance.selectNode,
       nodeIds: graph.nodes.map((node) => node.id),
       positions: instance.positions,
+      visibleNodeIds: instance.visibleNodeIds,
     };
     opts.onReady?.(graph);
   }
+
+  async function loadOpportunities(force = false) {
+    const hit = oppCache.get(tenant);
+    const fresh = hit && Date.now() - hit.at < CACHE_TTL_MS;
+    if (!fresh || force) {
+      oppsBody.innerHTML = `<p class="og-opp-loading">Reading graph recommendations…</p>`;
+      try {
+        const opportunities = await fetchOpportunities(tenant);
+        oppCache.set(tenant, { opportunities, at: Date.now() });
+      } catch (error) {
+        if (!oppsBody.isConnected) return;
+        oppsBody.innerHTML = `
+          <div class="og-opp-error">
+            <p>Couldn't load opportunities — ${esc(error?.message || "the endpoint did not respond.")}</p>
+            <button class="og-refresh" type="button" data-og-opp-retry>Retry</button>
+          </div>`;
+        oppsBody.querySelector("[data-og-opp-retry]")?.addEventListener("click", () => loadOpportunities(true));
+        return;
+      }
+    }
+    if (!oppsBody.isConnected) return;
+    const opps = oppCache.get(tenant).opportunities;
+    oppsBody.innerHTML = opportunitiesHtml(opps);
+    window.__oppStats = { count: opps.length };
+  }
+
+  oppsBody.addEventListener("click", (event) => {
+    /* Action buttons are left alone: their data-open-ws bubbles to main.js's
+       document-level delegate, which routes exactly like the bell items. */
+    const toggle = event.target.closest("[data-og-opp-toggle]");
+    if (!toggle) return;
+    const row = toggle.closest("[data-og-opp-row]");
+    const why = row?.querySelector(".og-opp-why");
+    if (!why) return;
+    why.hidden = !why.hidden;
+    toggle.setAttribute("aria-expanded", String(!why.hidden));
+    if (row.dataset.oppNode) graphInstance?.selectNode(row.dataset.oppNode);
+  });
 
   function publishStats(graph) {
     window.__graphStats = {
@@ -451,6 +581,7 @@ export function renderOrganizationGraph(target, opts = {}) {
     };
   }
 
-  refreshBtn.addEventListener("click", () => load(true));
+  refreshBtn.addEventListener("click", () => { load(true); loadOpportunities(true); });
   load(false);
+  loadOpportunities(false);
 }

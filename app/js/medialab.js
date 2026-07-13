@@ -6,14 +6,14 @@
  * instead of sending people out to another product.
  */
 
-import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-226";
+import { currentTenantId, session as accessSession, workspaceStorageGetItem, workspaceStorageRemoveItem, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260712-227";
 import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
-} from "./contenthub.js?v=phantom-live-20260712-226";
-import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-226";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-226";
-import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-226";
-import { assetsAvailable, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260712-226";
+} from "./contenthub.js?v=phantom-live-20260712-227";
+import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260712-227";
+import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260712-227";
+import { loadImageForEditing, exportCanvas, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260712-227";
+import { assetsAvailable, saveToAssetCloud, listLocalAssets, refreshLocalAssets, localAssetBlobUrl } from "./orgs.js?v=phantom-live-20260712-227";
 
 const CFG_KEY = "pf.medialab.v1";
 const EDIT_INTENT_KEY = "pf.medialab.editIntent.v1";

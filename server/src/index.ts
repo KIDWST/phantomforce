@@ -258,6 +258,7 @@ import {
 import {
   buildWorkspaceAwarenessText,
   getOrganizationGraph,
+  getOrganizationOpportunities,
   getOrganizationPulse,
 } from "./phantom-ai/organization-pulse.js";
 import {
@@ -4222,6 +4223,17 @@ app.get("/api/organization/graph", async (request, reply) => {
   }
 });
 
+app.get("/api/organization/opportunities", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const query = (request.query ?? {}) as { tenant_id?: unknown };
+  try {
+    return { ok: true, ...(await getOrganizationOpportunities(session, await pulseAccessFor(session, query.tenant_id))) };
+  } catch (error) {
+    return reply.code(500).send({ ok: false, error: error instanceof Error ? error.message : "Opportunities could not be assembled." });
+  }
+});
+
 app.patch("/api/competitor-intelligence/mode", async (request, reply) => {
   const session = requireAccessSession(request, reply);
   if (!session) return reply;
@@ -6835,10 +6847,20 @@ app.post("/phantom-ai/chat", async (request, reply) => {
       competitorEntitled: ciAccess.entitled,
       canManage: Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin"),
     });
+    const opportunityReport = await getOrganizationOpportunities(session, {
+      tenantId: normalized.tenant_id,
+      orgId: dbSession?.orgId && process.env.DATABASE_URL ? dbSession.orgId : null,
+      competitorEntitled: ciAccess.entitled,
+      canManage: Boolean(session.canManageAccess || session.isSuperAdmin || session.orgRole === "owner" || session.orgRole === "admin"),
+    }, pulse);
     normalized.module_data.push({
       module: "workspace_pulse",
       summary: buildWorkspaceAwarenessText(pulse).slice(0, 900),
-      items: [],
+      items: opportunityReport.opportunities.slice(0, 3).map((opportunity) => ({
+        title: `Opportunity (${opportunity.impact}): ${opportunity.title}`.slice(0, 120),
+        status: opportunity.action.label.slice(0, 60),
+        detail: opportunity.why.slice(0, 200),
+      })),
     });
   } catch { /* awareness is additive only */ }
 

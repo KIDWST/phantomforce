@@ -53,4 +53,14 @@ assert.ok(!/run\.workspace === tenantId \|\| access\.canManage/.test(pulse),
   "Run scoping must not widen for admins");
 assert.match(pulse, /run\.workspace === tenantId/, "Runs must match the tenant exactly");
 
+// 9. Opportunity engine: every opportunity carries provenance and a real
+//    action route; nothing fires without a matching record; platform jobs
+//    are labeled as platform-level so workspaces don't mistake them.
+assert.match(pulse, /provenance: \{ source: string; nodeId\?: string \}/, "Opportunities must carry provenance");
+assert.match(pulse, /Platform automation failing/, "Platform jobs must be labeled platform-level");
+assert.ok(!/Math\.random\(\)|fakeOpportunit|sampleOpportunit/i.test(pulse), "No fabricated opportunities");
+assert.match(index, /app\.get\("\/api\/organization\/opportunities"/, "Opportunities endpoint must exist");
+assert.match(index, /getOrganizationOpportunities\(session, \{/, "Chat must receive graph-derived opportunities");
+assert.match(index, /\}, pulse\)/, "Chat must reuse the computed pulse (no double reads)");
+
 console.log("Organization Pulse and Brain Graph safety checks passed.");
