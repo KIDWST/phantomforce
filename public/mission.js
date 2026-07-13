@@ -385,6 +385,27 @@ function renderMissionCreateStepObjective(body) {
     btn.textContent = "Analyzing your objective…";
 
     try {
+      const classifyRes = await api("/api/prompter/classify", {
+        method: "POST",
+        body: JSON.stringify({ objective, workspaceRoot }),
+      }).then((r) => r.json());
+      if (!classifyRes.ok) throw new Error(classifyRes.error || "classification failed");
+
+      if (classifyRes.kind === "direct") {
+        closeMissionModal();
+        for (const tile of classifyRes.tiles) {
+          const card = addCard({ name: tile.name, profileId: tile.profileId }, { start: true });
+          if (tile.startupCommand) {
+            setTimeout(() => {
+              if (card.ws && card.ws.readyState === WebSocket.OPEN) {
+                card.ws.send(JSON.stringify({ type: "input", data: tile.startupCommand + "\r" }));
+              }
+            }, 700);
+          }
+        }
+        return;
+      }
+
       const res = await api("/api/missions/decompose", {
         method: "POST",
         body: JSON.stringify({ objective, workerCount, workspaceRoot }),

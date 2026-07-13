@@ -25,6 +25,7 @@ import { parseEvents } from "./mission/protocol.js";
 import { bracketedPaste, ENTER, SUBMIT_DELAY_MS } from "./mission/paste.js";
 import { buildWorkerPrompt } from "./mission/prompt.js";
 import { decomposeObjective } from "./mission/decompose.js";
+import { classifyPrompt } from "./mission/classify.js";
 import { enhanceObjective } from "./mission/enhance.js";
 import { synthesizeMission, renderReportMarkdown } from "./mission/synthesize.js";
 import { isGitRepo, slugify, createWorktree, createWorktreeFromRef, removeWorktree } from "./mission/worktree.js";
@@ -614,6 +615,21 @@ const server = http.createServer((req, res) => {
     const provider = connectionMatch[1];
     removeConnection(appDir, provider)
       .then(() => sendJson(res, 200, { ok: true, connections: readConnections(appDir) }))
+      .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
+    return;
+  }
+
+  if (pathName === "/api/prompter/classify" && req.method === "POST") {
+    readJsonBody(req)
+      .then(async (body) => {
+        const objective = String(body.objective ?? "").trim();
+        const workspaceRoot = String(body.workspaceRoot ?? "").trim();
+        if (!objective) return sendJson(res, 400, { ok: false, error: "objective_required" });
+        if (!workspaceRoot || !existsSync(workspaceRoot)) return sendJson(res, 400, { ok: false, error: "workspace_root_invalid" });
+        const availableProfileIds = profiles.map((p) => p.id);
+        const { kind, tiles, costUsd } = await classifyPrompt({ objective, workspaceRoot, availableProfileIds, scratchDir: missionScratchDir });
+        return sendJson(res, 200, { ok: true, kind, tiles, costUsd });
+      })
       .catch((error) => sendJson(res, 500, { ok: false, error: error.message }));
     return;
   }
