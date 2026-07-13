@@ -127,17 +127,20 @@ function createBuddyController() {
     const side = sidebarRect();
     const sidebar = document.querySelector(".sidebar");
     const nav = sidebar?.querySelector(".side-nav");
-    const navRect = nav?.getBoundingClientRect();
-    const items = nav ? [...nav.querySelectorAll(".nav-item")].filter((item) => {
+    const bottomItems = nav ? [...nav.querySelectorAll(".nav-item-bottom")].filter((item) => {
       const rect = item.getBoundingClientRect();
       return rect.width > 0 && rect.height > 0;
     }) : [];
-    const lastItem = items.length ? items[items.length - 1].getBoundingClientRect() : null;
-    const sideTop = Math.max(0, side.top || 0);
-    const sideBottom = Math.min(window.innerHeight, side.bottom || window.innerHeight);
-    const navBottom = lastItem?.bottom || navRect?.bottom || (sideTop + 420);
-    const top = Math.min(sideBottom - 118, Math.max(navBottom + 12, sideTop + 250));
-    const bottom = Math.max(top + 108, sideBottom - 14);
+    const firstBottomItem = bottomItems.length ? bottomItems[0].getBoundingClientRect() : null;
+    const sideTop = 0;
+    const sideBottom = window.innerHeight;
+    const utilityAtBottom = firstBottomItem && firstBottomItem.top > window.innerHeight * 0.55;
+    const bottomLimit = utilityAtBottom
+      ? Math.max(sideTop + 130, firstBottomItem.top - 16)
+      : sideBottom - 28;
+    const zoneHeight = Math.min(172, Math.max(112, side.height * 0.22));
+    const top = Math.max(sideTop + 92, bottomLimit - zoneHeight);
+    const bottom = Math.max(top + 108, bottomLimit);
     return {
       left: side.left,
       top,
@@ -183,8 +186,8 @@ function createBuddyController() {
     const halfX = buddyWidth / 2;
     const halfY = buddyHeight / 2;
     const zone = sidebarDockZone();
-    const minX = zone.left + 6 + halfX;
-    const maxX = zone.left + zone.width - 6 - halfX;
+    const minX = zone.left + 20 + halfX;
+    const maxX = Math.min(zone.left + zone.width - 12 - halfX, minX + 18);
     const minY = zone.top + halfY;
     const maxY = zone.bottom - halfY;
     return {
@@ -204,7 +207,7 @@ function createBuddyController() {
     if (dock === "sidebar") {
       const bounds = sidebarPatrolBounds();
       return {
-        x: (bounds.minX + bounds.maxX) / 2,
+        x: bounds.minX,
         y: bounds.maxY,
       };
     }
@@ -452,10 +455,9 @@ function createBuddyController() {
     if (!force && now < nextWanderAt) return;
     if (docked && prefs.dockLocation === "sidebar" && !mobile() && motionAllowed() && !userBusy()) {
       const bounds = sidebarPatrolBounds();
-      const height = Math.max(1, bounds.maxY - bounds.minY);
-      tx = (bounds.minX + bounds.maxX) / 2;
-      ty = bounds.minY + height * (0.25 + Math.random() * 0.5);
-      nextWanderAt = now + 2600 + Math.random() * 3000;
+      tx = bounds.minX + Math.random() * Math.max(1, bounds.maxX - bounds.minX);
+      ty = bounds.maxY - Math.random() * Math.min(18, Math.max(1, bounds.maxY - bounds.minY));
+      nextWanderAt = now + 4200 + Math.random() * 5200;
       return;
     }
     if (!roamingAllowed() || docked || userBusy()) {
