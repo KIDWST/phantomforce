@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'; script-src 'unsafe-inline'; connect-src 'none'; img-src data:">
+  <title>Logic Lights</title>
+  <style>
+    *{box-sizing:border-box}
+    html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#020806;color:#effff6;font-family:system-ui,sans-serif;touch-action:manipulation;user-select:none}
+    body{display:grid;place-items:center;padding:max(12px,env(safe-area-inset-top)) 14px max(12px,env(safe-area-inset-bottom));background:radial-gradient(circle at 50% 0,#113829,#020806 58%)}
+    main{width:min(560px,100%);height:100%;display:grid;grid-template-rows:auto minmax(0,1fr) auto auto;align-items:center;justify-items:center}
+    header{width:100%;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:4px 0 8px}
+    h1{margin:0;color:#58ffa8;font-size:34px;line-height:1}
+    .sub{margin:4px 0 0;color:#94ad9f;font-size:12px}
+    .stats{display:grid;grid-auto-flow:column;gap:14px;font:800 11px ui-monospace,monospace;color:#77ffb8;text-align:right}
+    .stats b{display:block;color:#effff6;font-size:18px;font-variant-numeric:tabular-nums}
+    .grid{width:min(100%,calc(100dvh - 240px));max-width:440px;aspect-ratio:1;display:grid;grid-template-columns:repeat(5,1fr);gap:8px}
+    .cell{min-width:0;aspect-ratio:1;border:1px solid #42ff9a3a;border-radius:13px;background:#051710;cursor:pointer;transition:background .15s,box-shadow .15s,border-color .15s;padding:0}
+    .cell.on{background:#41ffa1;border-color:#8affd0;box-shadow:0 0 22px #41ffa15e,inset 0 0 12px #ffffff42}
+    .cell.cursor{outline:3px solid #effff6;outline-offset:2px}
+    body.reduced .cell{transition:none}
+    body.reduced .cell.on{box-shadow:none}
+    .bar{display:flex;gap:10px;margin-top:12px}
+    .bar button{min-height:44px;padding:10px 18px;border:1px solid #42ff9a44;border-radius:999px;background:#07150f;color:#caffdf;font-weight:800;font-size:13px;cursor:pointer}
+    .bar button:disabled{opacity:.4;cursor:not-allowed}
+    .status{min-height:24px;margin-top:8px;color:#a9c5b7;font-size:13px;text-align:center}
+    .overlay{position:fixed;z-index:6;inset:0;display:grid;place-items:center;background:#010504dc;backdrop-filter:blur(4px)}
+    .overlay[hidden]{display:none}
+    .overlay>div{text-align:center;padding:26px;max-width:460px}
+    .overlay h2{font-size:44px;line-height:1;margin:0;color:#5affa9;text-shadow:0 0 26px #41ffa155}
+    .overlay p{color:#9db8aa;line-height:1.55}
+    .overlay .big{color:#effff6;font-size:20px;font-weight:800}
+    .overlay button{min-width:150px;min-height:48px;border:0;border-radius:999px;background:#55ffa8;padding:14px 24px;font-weight:900;font-size:15px;cursor:pointer;color:#02150c}
+    body.reduced .overlay h2{text-shadow:none}
+    @media(max-width:460px){h1{font-size:24px}.sub{display:none}.stats{gap:9px;font-size:9px}.stats b{font-size:15px}.grid{gap:6px;width:min(100%,calc(100dvh - 210px))}.cell{border-radius:9px}}
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <div><h1>Logic Lights</h1><p class="sub">A tap flips the cell and its neighbors. Turn every light off.</p></div>
+      <div class="stats">
+        <span>LEVEL<b><span data-level>1</span>/10</b></span>
+        <span>CLICKS<b data-clicks>0</b></span>
+        <span>PAR<b data-par>4</b></span>
+        <span>SCORE<b data-score>0</b></span>
+      </div>
+    </header>
+    <div class="grid" role="grid" aria-label="Logic Lights 5 by 5 board"></div>
+    <div class="bar">
+      <button type="button" data-reset>Reset level</button>
+      <button type="button" data-end disabled>End session</button>
+    </div>
+    <div class="status" aria-live="polite">Arrows move the cursor, Enter or Space flips.</div>
+  </main>
+  <div class="overlay start"><div><h2>Logic Lights</h2><p>Every tap toggles a cell and its orthogonal neighbors. Switch all 25 lights off across 10 levels — beat the par for a bigger score.</p><button type="button">Start</button></div></div>
+  <div class="overlay pause" hidden><div><h2>Paused</h2><p>The board is holding its state.</p><button type="button">Resume</button></div></div>
+  <div class="overlay clear" hidden><div><h2>Lights out</h2><p class="big" data-gain></p><p data-clearinfo></p><button type="button">Next level</button></div></div>
+  <div class="overlay result" hidden><div><h2>Session over</h2><p class="big" data-final></p><p data-detail></p><button type="button">Play again</button></div></div>
+  <script>
+    'use strict';
+    const host=(type,data={})=>parent.postMessage({source:'phantomplay-game',type,...data},'*');
+    const gridEl=document.querySelector('.grid'),statusEl=document.querySelector('.status');
+    const startEl=document.querySelector('.start'),pauseEl=document.querySelector('.pause'),clearEl=document.querySelector('.clear'),resultEl=document.querySelector('.result');
+    const resetBtn=document.querySelector('[data-reset]'),endBtn=document.querySelector('[data-end]');
+    const SIZE=5,CELLS=SIZE*SIZE;
+    let board=new Array(CELLS).fill(0),initial=board.slice(),par=4;
+    let level=1,clicks=0,totalClicks=0,levelsDone=0,totalScore=0,cursor=12;
+    let phase='start',paused=false,completed=false;
+    let soundOn=true,reduced=false,audio=null;
+
+    function beep(freq,dur=0.05,gain=0.03){
+      if(!soundOn)return;
+      try{
+        audio=audio||new (window.AudioContext||window.webkitAudioContext)();
+        if(audio.state==='suspended')audio.resume();
+        const o=audio.createOscillator(),g=audio.createGain();
+        o.type='sine';o.frequency.value=freq;
+        g.gain.setValueAtTime(gain,audio.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.0001,audio.currentTime+dur);
+        o.connect(g).connect(audio.destination);o.start();o.stop(audio.currentTime+dur);
+      }catch(err){}
+    }
+    function applyClick(cells,i){
+      const r=Math.floor(i/SIZE),c=i%SIZE;
+      [[0,0],[1,0],[-1,0],[0,1],[0,-1]].forEach(([dr,dc])=>{
+        const nr=r+dr,nc=c+dc;
+        if(nr>=0&&nr<SIZE&&nc>=0&&nc<SIZE)cells[nr*SIZE+nc]^=1;
+      });
+    }
+    function genLevel(lv){
+      const n=3+lv;
+      let cells;
+      do{
+        cells=new Array(CELLS).fill(0);
+        const order=[...Array(CELLS).keys()];
+        for(let i=order.length-1;i>0;i--){
+          const j=Math.floor(Math.random()*(i+1));
+          [order[i],order[j]]=[order[j],order[i]];
+        }
+        order.slice(0,n).forEach(i=>applyClick(cells,i));
+      }while(!cells.some(v=>v));
+      return {board:cells,par:n};
+    }
+    function updateHud(){
+      document.querySelector('[data-level]').textContent=level;
+      document.querySelector('[data-clicks]').textContent=clicks;
+      document.querySelector('[data-par]').textContent=par;
+      document.querySelector('[data-score]').textContent=totalScore;
+      endBtn.disabled=levelsDone<1||phase!=='playing';
+    }
+    function render(){
+      gridEl.innerHTML=board.map((v,i)=>
+        `<button type="button" class="cell ${v?'on':''} ${i===cursor?'cursor':''}" data-i="${i}" tabindex="-1" aria-label="Light ${Math.floor(i/SIZE)+1},${i%SIZE+1} ${v?'on':'off'}"></button>`
+      ).join('');
+      gridEl.querySelectorAll('button').forEach(b=>b.onclick=()=>{cursor=Number(b.dataset.i);play(cursor)});
+      updateHud();
+    }
+    function loadLevel(){
+      const gen=genLevel(level);
+      board=gen.board;par=gen.par;initial=board.slice();
+      clicks=0;cursor=12;
+      statusEl.textContent=`Level ${level} — par ${par}.`;
+      render();
+    }
+    function startRun(){
+      level=1;totalClicks=0;levelsDone=0;totalScore=0;completed=false;
+      phase='playing';paused=false;
+      startEl.hidden=true;pauseEl.hidden=true;clearEl.hidden=true;resultEl.hidden=true;
+      loadLevel();
+      host('progress',{score:0,progress:0,state:{level:1,totalClicks:0}});
+    }
+    function finish(kind){
+      if(completed||phase==='over')return;
+      phase='over';completed=true;
+      clearEl.hidden=true;pauseEl.hidden=true;
+      resultEl.querySelector('h2').textContent=kind==='win'?'All 10 cleared':'Session over';
+      resultEl.querySelector('[data-final]').textContent=`Final score ${totalScore}`;
+      resultEl.querySelector('[data-detail]').textContent=`${levelsDone} level${levelsDone===1?'':'s'} solved · ${totalClicks} total clicks.`;
+      resultEl.hidden=false;
+      updateHud();
+      host('complete',{score:totalScore,progress:100,state:{totalClicks}});
+    }
+    function onSolved(){
+      const levelScore=Math.max(20,150-(clicks-par)*10);
+      totalScore+=levelScore;levelsDone++;
+      beep(720,0.16,0.045);
+      updateHud();
+      if(level>=10){finish('win');return}
+      host('score',{score:totalScore,progress:Math.min(99,levelsDone*10),state:{level,totalClicks}});
+      phase='between';
+      clearEl.querySelector('[data-gain]').textContent=`+${levelScore} points`;
+      clearEl.querySelector('[data-clearinfo]').textContent=`Level ${level} solved in ${clicks} click${clicks===1?'':'s'} (par ${par}).`;
+      clearEl.hidden=false;
+      clearEl.querySelector('button').focus();
+    }
+    function nextLevel(){
+      if(phase!=='between')return;
+      level++;phase='playing';
+      clearEl.hidden=true;
+      loadLevel();
+      host('progress',{score:totalScore,progress:Math.min(99,levelsDone*10),state:{level,totalClicks}});
+    }
+    function play(i){
+      if(phase!=='playing'||paused)return;
+      applyClick(board,i);
+      clicks++;totalClicks++;
+      beep(300+(board[i]?90:0),0.04);
+      render();
+      if(!board.some(v=>v))onSolved();
+    }
+    function moveCursor(dr,dc){
+      const r=Math.min(SIZE-1,Math.max(0,Math.floor(cursor/SIZE)+dr));
+      const c=Math.min(SIZE-1,Math.max(0,cursor%SIZE+dc));
+      cursor=r*SIZE+c;
+      render();
+    }
+    function setPaused(next){
+      if(phase!=='playing'&&phase!=='between')return;
+      paused=next;pauseEl.hidden=!paused;
+      host('paused',{paused});
+    }
+    resetBtn.onclick=()=>{
+      if(phase!=='playing'||paused)return;
+      board=initial.slice();clicks=0;
+      statusEl.textContent=`Level ${level} reset — par ${par}.`;
+      render();beep(220,0.06);
+    };
+    endBtn.onclick=()=>{if(phase==='playing'&&!paused&&levelsDone>=1)finish('end')};
+    addEventListener('keydown',e=>{
+      if(e.ctrlKey||e.metaKey||e.altKey)return;
+      const k=e.key;
+      if(k==='p'||k==='P'){e.preventDefault();setPaused(!paused);return}
+      if(paused)return;
+      if(phase==='between'&&(k==='Enter'||k===' ')){e.preventDefault();nextLevel();return}
+      if(phase!=='playing')return;
+      if(k==='ArrowUp'){e.preventDefault();moveCursor(-1,0)}
+      else if(k==='ArrowDown'){e.preventDefault();moveCursor(1,0)}
+      else if(k==='ArrowLeft'){e.preventDefault();moveCursor(0,-1)}
+      else if(k==='ArrowRight'){e.preventDefault();moveCursor(0,1)}
+      else if(k==='Enter'||k===' '){
+        if(e.target instanceof HTMLButtonElement&&!e.target.classList.contains('cell'))return;
+        e.preventDefault();play(cursor);
+      }
+    });
+    document.addEventListener('visibilitychange',()=>{if(document.hidden&&!paused&&(phase==='playing'||phase==='between'))setPaused(true)});
+    addEventListener('message',e=>{
+      if(e.data?.source!=='phantomplay-host')return;
+      if(e.data.type==='settings'){
+        if('sound' in e.data)soundOn=!!e.data.sound;
+        if('reducedMotion' in e.data){reduced=!!e.data.reducedMotion;document.body.classList.toggle('reduced',reduced)}
+      }
+      if(e.data.type==='pause')setPaused(true);
+      if(e.data.type==='resume')setPaused(false);
+      if(e.data.type==='restart')startRun();
+    });
+    startEl.querySelector('button').onclick=startRun;
+    pauseEl.querySelector('button').onclick=()=>setPaused(false);
+    clearEl.querySelector('button').onclick=nextLevel;
+    resultEl.querySelector('button').onclick=startRun;
+    render();
+    host('ready');
+  </script>
+</body>
+</html>
