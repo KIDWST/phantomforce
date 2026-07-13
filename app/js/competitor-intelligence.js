@@ -86,6 +86,17 @@ function trendProfile(item) {
   const vector = item.momentum === "vulnerable" ? "pressure" : item.momentum === "mixed" ? "mixed" : score >= 72 ? "leader" : score >= 66 ? "rising" : "watch";
   return { oneYear, fiveYear, points, vector };
 }
+function directThreat(item) {
+  const text = `${item.name || ""} ${item.domain || ""} ${item.category || ""}`.toLowerCase();
+  return /\b(chatgpt|openai|claude|anthropic|perplexity|gemini|google|highlevel|gohighlevel|hubspot|salesforce)\b/.test(text);
+}
+function threatClass(item) {
+  if (item.name === "PhantomForce") return "phantom";
+  if (directThreat(item)) return "direct";
+  if (Number(item.score || 0) >= 72) return "hot";
+  if (Number(item.score || 0) >= 66) return "warm";
+  return "cool";
+}
 function sparkline(points) {
   const coords = points.map((value, index) => `${(index / Math.max(1, points.length - 1)) * 100},${32 - (value / 100) * 30}`).join(" ");
   return `<svg class="ci-sparkline" viewBox="0 0 100 34" preserveAspectRatio="none" aria-hidden="true"><polyline points="${coords}"></polyline></svg>`;
@@ -97,14 +108,29 @@ function marketMap() {
   const board = (ui.snapshot.marketBoard || []).slice(0, 12);
   if (!board.length) return "";
   const phantomScore = Math.max(72, Math.round(board.reduce((sum, item) => sum + Number(item.score || 0), 0) / board.length) + 4);
+  const heatSpots = [
+    { x: 50, y: 50, size: 34, tone: "phantom" },
+    ...board.map((item, index) => {
+      const seed = hashValue(`${item.name}:heat`);
+      const angle = (index / Math.max(1, board.length)) * Math.PI * 2 - Math.PI / 2;
+      const ring = 28 + (index % 3) * 13 + (seed % 7);
+      return {
+        x: Math.max(9, Math.min(91, Math.round((50 + Math.cos(angle) * ring * 0.84) * 10) / 10)),
+        y: Math.max(11, Math.min(89, Math.round((50 + Math.sin(angle) * ring * 0.55) * 10) / 10)),
+        size: Math.max(20, Math.min(42, Number(item.score || 50) * 0.46)),
+        tone: threatClass(item),
+      };
+    }),
+  ];
   return `<section class="ci-market-map" aria-label="Interactive competitor map">
     <div class="ci-map-copy">
       <p class="ci-kicker">LIVE MARKET MAP</p>
       <h2>Where PhantomForce lines up</h2>
       <p>Starter scores are modeled from category position. Add public sources to turn the radar into live evidence.</p>
-      <div class="ci-map-legend"><span>1Y trend</span><span>5Y strength</span><span>Source status</span></div>
+      <div class="ci-map-legend"><span>Red = direct competitor</span><span>Amber = heat rising</span><span>Green = adjacent</span></div>
     </div>
     <div class="ci-map-stage">
+      <div class="ci-map-heat" aria-hidden="true">${heatSpots.map((spot) => `<i class="is-${esc(spot.tone)}" style="--hx:${spot.x}%;--hy:${spot.y}%;--hs:${spot.size}vmin"></i>`).join("")}</div>
       <div class="ci-map-rings" aria-hidden="true"></div>
       <button class="ci-map-node is-phantom" type="button" style="--x:50%;--y:50%;--size:84px">
         <strong>PF</strong><span>PhantomForce</span><b>${phantomScore}</b>
@@ -112,11 +138,11 @@ function marketMap() {
       ${board.map((item, index) => {
         const seed = hashValue(item.name);
         const angle = (index / Math.max(1, board.length)) * Math.PI * 2 - Math.PI / 2;
-        const ring = 30 + (index % 3) * 14 + (seed % 8);
-        const x = Math.round((50 + Math.cos(angle) * ring * 0.92) * 10) / 10;
-        const y = Math.round((50 + Math.sin(angle) * ring * 0.62) * 10) / 10;
+        const ring = 28 + (index % 3) * 13 + (seed % 7);
+        const x = Math.max(9, Math.min(91, Math.round((50 + Math.cos(angle) * ring * 0.84) * 10) / 10));
+        const y = Math.max(11, Math.min(89, Math.round((50 + Math.sin(angle) * ring * 0.55) * 10) / 10));
         const trend = trendProfile(item);
-        return `<button class="ci-map-node is-${esc(trend.vector)} ${item.sourceState === "starter" ? "is-starter" : ""}" type="button" data-ci-focus-competitor="${esc(item.competitorId)}" style="--x:${x}%;--y:${y}%;--size:${Math.max(44, Math.min(72, Number(item.score || 50)))}px">
+        return `<button class="ci-map-node is-${esc(trend.vector)} is-threat-${esc(threatClass(item))} ${directThreat(item) ? "is-direct" : ""} ${item.sourceState === "starter" ? "is-starter" : ""}" type="button" data-ci-focus-competitor="${esc(item.competitorId)}" style="--x:${x}%;--y:${y}%;--size:${Math.max(44, Math.min(72, Number(item.score || 50)))}px">
           <strong>${esc(item.symbol)}</strong><span>${esc(item.name)}</span><b>${Number(item.score || 0)}</b>
         </button>`;
       }).join("")}

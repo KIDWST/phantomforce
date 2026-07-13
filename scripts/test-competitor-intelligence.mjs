@@ -16,6 +16,8 @@ assert.match(module, /Aggressive Intelligence/u, "Optional aggressive mode must 
 assert.match(module, /ON-DEMAND MARKET SCOUT|data-ci-scout-form/u, "The first-run experience must arm an on-demand market scout instead of waiting for manual competitor entry.");
 assert.match(module, /ci-market-board|momentumLabel/u, "The overview must render a stock-market-style competitor board.");
 assert.match(module, /ci-market-map|data-ci-focus-competitor|trendProfile|sparkline/u, "The overview must render an interactive market map with trend visuals.");
+assert.match(module, /directThreat|is-threat-|Red = direct competitor/u, "The market map must highlight direct competitors in red.");
+assert.match(module, /ci-map-heat|heatSpots/u, "The market map must render a heat-map layer, not just dots.");
 assert.match(module, /MARKET INDEX|Track \+ compare/u, "The overview must show a useful starter competitor index with a track action.");
 assert.match(module, /AUTO SCOUT REPORT|ci-auto-scout|ci-auto-bars|ci-auto-compare/u, "Customer Intelligence must render automatic comparison graphics, not static readiness cards.");
 assert.match(module, /candidateCompetitors|sourceTargets|nextAction/u, "Scout lanes must show what Phantom is already checking and what to do next.");
@@ -33,6 +35,8 @@ assert.match(service, /STARTER_COMPETITORS[\s\S]*ChatGPT[\s\S]*Claude[\s\S]*HubS
 assert.match(service, /marketBoardMode|starterCompetitors/u, "The snapshot must distinguish starter competitors from live tracked competitors.");
 assert.match(css, /ci-auto-scout|ci-auto-bars|ciBarLoad/u, "Automatic market intelligence graphics must be styled and animated.");
 assert.match(css, /ci-market-map|ci-map-node|ciMapSpin|ci-sparkline/u, "The competitor map must be graphic, animated, and trend-oriented.");
+assert.match(css, /ci-map-stage\{[^}]*overflow:hidden/u, "The competitor map stage must clip internally instead of hanging off the page.");
+assert.match(css, /ci-map-heat|is-threat-direct|rgba\(255,84,95/u, "The competitor map must use red heat styling for direct competitors.");
 assert.doesNotMatch(service, /from\s+["'](?:puppeteer|playwright)|child_process|execFile|spawn\(/iu, "The service must not implement scraping or bypass tooling.");
 assert.doesNotMatch(module, /fetch\([^)]*https?:\/\//u, "The UI must not call competitor sites directly.");
 assert.doesNotMatch(module, /\bqueued\b|Ready to run|ready_to_run|No market board yet|Discovery queue ready/iu, "Customer Intelligence must not present confusing queue/readiness language or dead empty states.");
