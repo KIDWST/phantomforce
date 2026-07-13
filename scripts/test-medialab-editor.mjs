@@ -33,7 +33,13 @@ assert.match(mediaSrc, /ctx\.globalCompositeOperation\s*=\s*erase\s*\?\s*"destin
 assert.match(mediaSrc, /ctx\.globalAlpha\s*=\s*erase\s*\?\s*1\s*:/, "eraser must cut fully transparent pixels");
 assert.match(mediaSrc, /opacity:\s*mlPaintMode === "erase"\s*\?\s*100\s*:/, "new eraser strokes must record full opacity");
 assert.match(mediaSrc, /updateEditHistoryControls\(body\)/, "undo/redo controls must refresh without a full remount");
+assert.match(mediaSrc, /freshComposition\(\)/, "Media Lab edit must keep a real layer composition, not a flattened Canva-style editor");
+assert.match(mediaSrc, /data-ml-layer-order/, "Media Lab edit must expose layer up/down controls");
+assert.match(mediaSrc, /addImageLayer\(mlComposition,\s*row\.url/u, "Asset Cloud selections must add image layers instead of replacing the current image");
+assert.match(mediaSrc, /renderComposition\(canvas,\s*canvas\._img,\s*editState,\s*mlComposition,\s*mlLayerEffects\)/u, "Save/download canvas must render the composed layer stack");
+assert.doesNotMatch(mediaSrc, /data-ml-duplicate-edit>Duplicate image/, "Media Lab should not show a flattened duplicate-image action in the editor footer");
 assert.match(cssSrc, /\.ml-canvas\s*\{[\s\S]*background-image:/, "transparent erased pixels need a visible checkerboard backdrop");
+assert.match(cssSrc, /\.ml-layer-row\.is-selected/u, "Layer rows need a visible selected state");
 assert.match(cssSrc, /\.ml-grid-lib\s*\{[\s\S]*grid-template-columns:\s*repeat\(auto-fill,\s*minmax\(170px,\s*220px\)\)/u, "Media Pool must use capped thumbnail columns instead of stretching a few assets across the screen");
 assert.match(cssSrc, /\.ml-grid-lib\s+\.ml-tile\s*\{[\s\S]*max-width:\s*220px[\s\S]*aspect-ratio:\s*4\s*\/\s*5/u, "Media Pool tiles must stay library-sized");
 assert.match(cssSrc, /\.ml-grid-lib\s+\.ml-tile\s+img\s*\{[\s\S]*object-fit:\s*contain/u, "Media Pool images must fit inside thumbnails without cropping huge previews");

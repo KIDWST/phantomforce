@@ -11,7 +11,11 @@ import {
   PLATFORMS, registerContentAsset, loadSocialAccounts, saveSocialAccounts, socialStatus,
 } from "./contenthub.js?v=phantom-live-20260713-232";
 import { freshEditState, applyFilterPreset, paintEdit, heuristicAiEdit, addBokehSpot, removeBokehSpotNear, estimateSubjectPoint } from "./imagefilters.js?v=phantom-live-20260713-232";
-import { cloneImageEditState, pushEditorSnapshot } from "./content-editor.js?v=phantom-live-20260713-232";
+import {
+  addImageLayer, addTextLayer, cloneImageEditState, compositionSnapshot, duplicateLayer,
+  freshComposition, hitTestLayer, loadCompositionImages, moveLayerOrder, pushEditorSnapshot,
+  removeSelectedLayers, renderComposition, restoreComposition, selectLayer, selectedLayers,
+} from "./content-editor.js?v=phantom-live-20260713-232";
 import { loadImageForEditing, exportCanvas, requestAiEdit, requestRemoveBackground } from "./mediabackend.js?v=phantom-live-20260713-232";
 import { assetsAvailable, assetBlobUrl, listAssets, recordAssetUsage, saveToAssetCloud } from "./orgs.js?v=phantom-live-20260713-232";
 
@@ -1921,6 +1925,8 @@ function renderLibrary(body, opts, root) {
 
 /* ---- Edit (real client-side canvas editor) ---- */
 let editState = { ...freshEditState(), loadedUrl: null };
+let mlComposition = freshComposition();
+let mlLayerEffects = { base: editState };
 let mlEditResizeHandler = null;
 let mlBokehPicking = false;
 let mlShowTutorial = false;
@@ -1936,15 +1942,37 @@ function cloneEditState(source = editState) {
   return cloneImageEditState(source);
 }
 
+function layerEffectsSnapshot() {
+  return Object.fromEntries(Object.entries(mlLayerEffects || {}).map(([id, state]) => [id, cloneImageEditState(state, { includeMask: false })]));
+}
+
+function fullEditorSnapshot() {
+  return {
+    edit: cloneEditState(),
+    composition: compositionSnapshot(mlComposition),
+    layerEffects: layerEffectsSnapshot(),
+  };
+}
+
 function rememberEdit() {
-  pushEditorSnapshot(mlEditHistory, cloneEditState(), 30);
+  pushEditorSnapshot(mlEditHistory, fullEditorSnapshot(), 30);
   mlEditFuture = [];
 }
 
 function restoreEdit(next) {
+  if (next?.composition) {
+    const loadedUrl = editState.loadedUrl;
+    editState = cloneImageEditState(next.edit || {}, { includeMask: true });
+    editState.loadedUrl = loadedUrl;
+    mlComposition = restoreComposition(mlComposition, next.composition);
+    mlLayerEffects = Object.fromEntries(Object.entries(next.layerEffects || { base: editState }).map(([id, state]) => [id, cloneImageEditState(state)]));
+    mlLayerEffects.base = editState;
+    return;
+  }
   const loadedUrl = editState.loadedUrl;
   editState = cloneImageEditState(next);
   editState.loadedUrl = loadedUrl;
+  mlLayerEffects.base = editState;
 }
 function editorPaintState() {
   editState.paint ||= { strokes: [], size: 26, opacity: 84 };
@@ -2058,6 +2086,70 @@ function buildEditPrompt(query = "") {
     query.trim(),
   ].filter(Boolean);
   return parts.join("\n\n");
+}
+function resetCompositionForCurrentEdit() {
+  mlComposition = freshComposition();
+  mlLayerEffects = { base: editState };
+}
+function ensureEditorComposition() {
+  if (!mlComposition || !Array.isArray(mlComposition.layers)) mlComposition = freshComposition();
+  if (!mlComposition.layers.some((layer) => layer.id === "base")) mlComposition.layers.unshift(freshComposition().layers[0]);
+  mlLayerEffects ||= {};
+  mlLayerEffects.base = editState;
+  mlComposition.selectedIds = Array.isArray(mlComposition.selectedIds) && mlComposition.selectedIds.length ? mlComposition.selectedIds : ["base"];
+  return mlComposition;
+}
+function selectedEditLayer() {
+  ensureEditorComposition();
+  return selectedLayers(mlComposition)[0] || mlComposition.layers.find((layer) => layer.id === "base");
+}
+function layerKindLabel(layer) {
+  if (!layer) return "Layer";
+  if (layer.type === "base") return "Main image";
+  if (layer.type === "image") return "Image";
+  if (layer.type === "text") return "Text";
+  return layer.type || "Layer";
+}
+function selectedLayerPanelHtml(esc) {
+  ensureEditorComposition();
+  const active = selectedEditLayer();
+  const canDelete = active && active.id !== "base" && !active.locked;
+  return `
+    <details class="ml-edit-section" open>
+      <summary><span>Layers</span><b>${mlComposition.layers.length}</b></summary>
+      <div class="ml-edit-section-body">
+        <div class="ml-layer-actions">
+          <button type="button" data-ml-layer-add-text>${svgIc("edit")} Text</button>
+          <button type="button" data-ml-layer-duplicate ${canDelete ? "" : "disabled"}>${svgIc("copy")} Duplicate</button>
+          <button type="button" data-ml-layer-delete ${canDelete ? "" : "disabled"}>${svgIc("close")} Delete</button>
+        </div>
+        <div class="ml-layer-list">
+          ${[...mlComposition.layers].reverse().map((layer) => {
+            const realIndex = mlComposition.layers.findIndex((item) => item.id === layer.id);
+            const selected = mlComposition.selectedIds.includes(layer.id);
+            return `<div class="ml-layer-row ${selected ? "is-selected" : ""} ${layer.visible === false ? "is-off" : ""}" data-ml-layer-row="${esc(layer.id)}">
+              <button type="button" data-ml-layer-visible="${esc(layer.id)}" title="${layer.visible === false ? "Show layer" : "Hide layer"}">${layer.visible === false ? "○" : "●"}</button>
+              <button type="button" class="ml-layer-name" data-ml-layer-select="${esc(layer.id)}"><b>${esc(layer.name || layerKindLabel(layer))}</b><i>${esc(layerKindLabel(layer))}</i></button>
+              <span class="ml-layer-row-actions">
+                <button type="button" data-ml-layer-order="-1" data-layer-id="${esc(layer.id)}" ${realIndex <= 0 ? "disabled" : ""} title="Move down">↓</button>
+                <button type="button" data-ml-layer-order="1" data-layer-id="${esc(layer.id)}" ${realIndex >= mlComposition.layers.length - 1 ? "disabled" : ""} title="Move up">↑</button>
+              </span>
+            </div>`;
+          }).join("")}
+        </div>
+        ${active ? `<div class="ml-layer-inspector">
+          <div class="ml-layer-inspector-head"><b>${esc(active.name || layerKindLabel(active))}</b><span>${esc(layerKindLabel(active))}</span></div>
+          <label class="ml-layer-field"><span>Name</span><input data-ml-layer-field="name" value="${esc(active.name || "")}" ${active.id === "base" ? "" : ""}/></label>
+          <label class="ml-slider"><span>X <b data-layer-out="x">${Math.round(active.x * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.x * 100)}" data-ml-layer-prop="x"/></label>
+          <label class="ml-slider"><span>Y <b data-layer-out="y">${Math.round(active.y * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round(active.y * 100)}" data-ml-layer-prop="y"/></label>
+          <label class="ml-slider"><span>Width <b data-layer-out="w">${Math.round(active.w * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.w * 100)}" data-ml-layer-prop="w"/></label>
+          <label class="ml-slider"><span>Height <b data-layer-out="h">${Math.round(active.h * 100)}</b></span><input type="range" min="5" max="200" value="${Math.round(active.h * 100)}" data-ml-layer-prop="h"/></label>
+          <label class="ml-slider"><span>Opacity <b data-layer-out="opacity">${Math.round((active.opacity ?? 1) * 100)}</b></span><input type="range" min="0" max="100" value="${Math.round((active.opacity ?? 1) * 100)}" data-ml-layer-prop="opacity"/></label>
+          <label class="ml-slider"><span>Rotate <b data-layer-out="rotation">${Math.round(active.rotation || 0)}</b></span><input type="range" min="-180" max="180" value="${Math.round(active.rotation || 0)}" data-ml-layer-prop="rotation"/></label>
+          ${active.type === "text" ? `<label class="ml-layer-field"><span>Text</span><textarea rows="3" data-ml-layer-field="text">${esc(active.text || "")}</textarea></label>` : ""}
+        </div>` : ""}
+      </div>
+    </details>`;
 }
 function rowMatchesAssetSearch(row) {
   const query = String(mlAssetPicker.search || "").trim().toLowerCase();
@@ -2173,6 +2265,7 @@ function renderEdit(body, cfg, opts, root) {
   }
   const bSpots = editState.bokeh?.spots || [];
   const paintState = editorPaintState();
+  ensureEditorComposition();
   body.innerHTML = `
     <div class="ml-editor">
       <div class="ml-canvas-wrap">
@@ -2181,7 +2274,6 @@ function renderEdit(body, cfg, opts, root) {
           <button type="button" data-ml-undo ${mlEditHistory.length ? "" : "disabled"} title="Undo">${svgIc("undo")}</button>
           <button type="button" data-ml-redo ${mlEditFuture.length ? "" : "disabled"} title="Redo">${svgIc("redo")}</button>
           <button type="button" data-ml-before title="Hold to see original">Before</button>
-          <button type="button" data-ml-duplicate-edit title="Duplicate image">Copy</button>
         </div>
         <canvas class="ml-canvas ${mlPaintMode !== "select" ? "is-painting" : ""}" data-ml-canvas></canvas>
         <div class="ch-lb-bokeh-markers" data-ml-bokeh-markers></div>
@@ -2195,6 +2287,7 @@ function renderEdit(body, cfg, opts, root) {
           <button type="button" data-ml-rembg>Remove background</button>
         </div>
         ${assetCachePanelHtml(esc)}
+        ${selectedLayerPanelHtml(esc)}
         <details class="ml-edit-section" open>
           <summary><span>Crop & frame</span><b>${esc(editState.crop?.aspect || "original")}</b></summary>
           <div class="ml-edit-section-body">
@@ -2268,7 +2361,6 @@ function renderEdit(body, cfg, opts, root) {
         </details>
         <div class="ml-editor-actions">
           <button class="ml-generate" data-ml-savedit>${svgIc("check")} Save to Media Pool</button>
-          <button class="ml-generate ml-ghost" data-ml-duplicate-edit>Duplicate image</button>
           <button class="ml-generate ml-ghost" data-ml-dledit>${svgIc("upload")} Download</button>
           <button class="ml-link" data-ml-resetedit>Reset</button>
           <button class="ml-link" data-ml-changeedit>Change image</button>
@@ -2278,7 +2370,16 @@ function renderEdit(body, cfg, opts, root) {
   const canvas = body.querySelector("[data-ml-canvas]");
   const markerLayer = body.querySelector("[data-ml-bokeh-markers]");
   loadEditorAssetCache(root, opts);
-  const repaint = () => { if (canvas._img) { paintActiveCanvas(canvas, canvas._img, editState); positionMarkers(); } };
+  const repaint = () => {
+    if (!canvas._img) return;
+    ensureEditorComposition();
+    loadCompositionImages(mlComposition, loadImageForEditing).finally(() => {
+      if (!canvas.isConnected || !canvas._img) return;
+      renderComposition(canvas, canvas._img, editState, mlComposition, mlLayerEffects);
+      fitEditorCanvas(canvas);
+      positionMarkers();
+    });
+  };
   const refreshEditor = () => { syncSliders(body); repaint(); updateEditHistoryControls(body); };
   const positionMarkers = () => {
     if (!markerLayer) return;
@@ -2315,8 +2416,8 @@ function renderEdit(body, cfg, opts, root) {
         if (session.edit?.url !== targetUrl) return; // user picked a different image while this was loading
         mlEditLoadError = null;
         editState.loadedUrl = targetUrl;
-        paintActiveCanvas(canvas, img, editState);
-        positionMarkers();
+        mlLayerEffects.base = editState;
+        repaint();
       })
       .catch((error) => {
         if (session.edit?.url !== targetUrl) return;
@@ -2332,18 +2433,18 @@ function renderEdit(body, cfg, opts, root) {
   updateEditHistoryControls(body);
   body.querySelector("[data-ml-undo]")?.addEventListener("click", () => {
     if (!mlEditHistory.length) return;
-    mlEditFuture.push(cloneEditState());
+    mlEditFuture.push(fullEditorSnapshot());
     restoreEdit(mlEditHistory.pop());
     refreshEditor();
   });
   body.querySelector("[data-ml-redo]")?.addEventListener("click", () => {
     if (!mlEditFuture.length) return;
-    mlEditHistory.push(cloneEditState());
+    mlEditHistory.push(fullEditorSnapshot());
     restoreEdit(mlEditFuture.pop());
     refreshEditor();
   });
   const before = body.querySelector("[data-ml-before]");
-  const showBefore = () => { if (canvas._img) paintEdit(canvas, canvas._img, { ...freshEditState(), loadedUrl: editState.loadedUrl }); };
+  const showBefore = () => { if (canvas._img) paintEdit(canvas, canvas._img, { ...freshEditState(), loadedUrl: editState.loadedUrl }); fitEditorCanvas(canvas); };
   if (before) {
     before.onpointerdown = (event) => { event.preventDefault(); showBefore(); before.classList.add("is-on"); };
     before.onpointerup = before.onpointercancel = before.onpointerleave = () => { before.classList.remove("is-on"); repaint(); };
@@ -2391,6 +2492,7 @@ function renderEdit(body, cfg, opts, root) {
       rememberEdit();
       session.edit = { ...session.edit, url: result.image };
       editState = { ...freshEditState(), loadedUrl: null };
+      resetCompositionForCurrentEdit();
       if (opts.notify) opts.notify("Media Lab", "Background removed.");
       renderMediaStudio(root, opts);
       return;
@@ -2453,12 +2555,13 @@ function renderEdit(body, cfg, opts, root) {
   body.querySelectorAll("[data-ml-use-asset]").forEach((button) => button.onclick = async () => {
     const row = editorAssetRows().find((item) => item.id === button.dataset.mlUseAsset);
     if (!row?.url) return;
-    session.edit = { url: row.url, type: "image", id: row.assetId || row.id };
+    rememberEdit();
+    const layer = addImageLayer(mlComposition, row.url, row.title || "Asset layer");
+    mlLayerEffects[layer.id] = freshEditState();
     if (row.assetId) {
-      recordAssetUsage(row.assetId, "media-lab-editor", session.edit.id, row.title || "Media Lab edit").catch(() => {});
+      recordAssetUsage(row.assetId, "media-lab-editor", layer.id, row.title || "Media Lab edit").catch(() => {});
     }
-    resetEdit();
-    opts.notify?.("Media Lab", `loaded ${row.title || "asset"} from ${row.source || "Asset Cloud"}.`);
+    opts.notify?.("Media Lab", `added ${row.title || "asset"} as a layer from ${row.source || "Asset Cloud"}.`);
     renderMediaStudio(root, opts);
   });
   body.querySelectorAll("[data-ml-paint-mode] button").forEach((button) => button.onclick = () => {
@@ -2487,7 +2590,88 @@ function renderEdit(body, cfg, opts, root) {
     editorPaintState().strokes = [];
     refreshEditor();
   });
+  body.querySelectorAll("[data-ml-layer-select]").forEach((button) => button.onclick = (event) => {
+    selectLayer(mlComposition, button.dataset.mlLayerSelect, event.shiftKey || event.ctrlKey || event.metaKey);
+    renderMediaStudio(root, opts);
+  });
+  body.querySelectorAll("[data-ml-layer-visible]").forEach((button) => button.onclick = () => {
+    rememberEdit();
+    const layer = mlComposition.layers.find((item) => item.id === button.dataset.mlLayerVisible);
+    if (layer) layer.visible = layer.visible === false;
+    renderMediaStudio(root, opts);
+  });
+  body.querySelectorAll("[data-ml-layer-order]").forEach((button) => button.onclick = () => {
+    rememberEdit();
+    moveLayerOrder(mlComposition, button.dataset.layerId, Number(button.dataset.mlLayerOrder));
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-add-text]")?.addEventListener("click", () => {
+    rememberEdit();
+    addTextLayer(mlComposition, "Your headline");
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-duplicate]")?.addEventListener("click", () => {
+    const active = selectedEditLayer();
+    if (!active || active.id === "base") return;
+    rememberEdit();
+    const copy = duplicateLayer(mlComposition, active.id);
+    if (copy && mlLayerEffects[active.id]) mlLayerEffects[copy.id] = cloneImageEditState(mlLayerEffects[active.id]);
+    renderMediaStudio(root, opts);
+  });
+  body.querySelector("[data-ml-layer-delete]")?.addEventListener("click", () => {
+    rememberEdit();
+    removeSelectedLayers(mlComposition);
+    renderMediaStudio(root, opts);
+  });
+  body.querySelectorAll("[data-ml-layer-prop]").forEach((input) => {
+    input.onpointerdown = () => rememberEdit();
+    input.oninput = () => {
+      const layer = selectedEditLayer();
+      if (!layer) return;
+      const key = input.dataset.mlLayerProp;
+      const raw = Number(input.value);
+      layer[key] = ["x", "y", "w", "h", "opacity"].includes(key) ? raw / 100 : raw;
+      const out = body.querySelector(`[data-layer-out="${key}"]`);
+      if (out) out.textContent = input.value;
+      repaint();
+    };
+  });
+  body.querySelectorAll("[data-ml-layer-field]").forEach((field) => {
+    field.onchange = field.oninput = () => {
+      const layer = selectedEditLayer();
+      if (!layer) return;
+      layer[field.dataset.mlLayerField] = field.value;
+      repaint();
+    };
+  });
   canvas.onpointerdown = (event) => {
+    if (mlPaintMode === "select" && !mlBokehPicking) {
+      const point = { ...canvasEditPoint(event, canvas), px: canvasEditPoint(event, canvas).x * canvas.width, py: canvasEditPoint(event, canvas).y * canvas.height };
+      const hit = hitTestLayer(mlComposition, point, canvas);
+      if (hit) {
+        event.preventDefault();
+        rememberEdit();
+        selectLayer(mlComposition, hit.id, event.shiftKey || event.ctrlKey || event.metaKey);
+        const targets = selectedLayers(mlComposition).filter((layer) => !layer.locked);
+        const starts = targets.map((layer) => ({ layer, x: layer.x, y: layer.y }));
+        const start = point;
+        canvas.setPointerCapture?.(event.pointerId);
+        canvas.onpointermove = (moveEvent) => {
+          const p = { ...canvasEditPoint(moveEvent, canvas), px: canvasEditPoint(moveEvent, canvas).x * canvas.width, py: canvasEditPoint(moveEvent, canvas).y * canvas.height };
+          const dx = (p.px - start.px) / Math.max(1, canvas.width);
+          const dy = (p.py - start.py) / Math.max(1, canvas.height);
+          starts.forEach((item) => { item.layer.x = Math.max(0, Math.min(1, item.x + dx)); item.layer.y = Math.max(0, Math.min(1, item.y + dy)); });
+          repaint();
+        };
+        canvas.onpointerup = canvas.onpointercancel = () => {
+          canvas.onpointermove = null;
+          canvas.onpointerup = null;
+          canvas.onpointercancel = null;
+          renderMediaStudio(root, opts);
+        };
+      }
+      return;
+    }
     if (mlPaintMode === "select" || mlBokehPicking) return;
     event.preventDefault();
     rememberEdit();
@@ -2552,7 +2736,7 @@ function renderEdit(body, cfg, opts, root) {
   if (language) language.onchange = () => { editState.promptLanguage = language.value; };
   body.querySelector("[data-ml-resetedit]").onclick = () => { resetEdit(); renderMediaStudio(root, opts); };
   body.querySelector("[data-ml-changeedit]").onclick = () => { session.edit = null; mlBokehPicking = false; renderMediaStudio(root, opts); };
-  const repaintWithImg = (img) => { canvas._img = img; paintActiveCanvas(canvas, img, editState); positionMarkers(); };
+  const repaintWithImg = (img) => { canvas._img = img; repaint(); };
   const duplicateCurrentEdit = async () => {
     const exported = await exportCanvas(canvas, repaintWithImg, "image/webp", 0.9);
     if (!exported.ok) { opts.notify?.("Media Factory", `Couldn't duplicate this image: ${exported.error}`); return; }
@@ -2605,7 +2789,14 @@ function tutorialMarkup() {
     </div>`;
 }
 function syncSliders(body) { ["brightness", "contrast", "saturate", "hue", "blur"].forEach((k) => { const s = body.querySelector(`[data-ml-slider="${k}"]`); if (s) s.value = editState[k]; const o = body.querySelector(`[data-out="${k}"]`); if (o) o.textContent = editState[k]; }); }
-function resetEdit() { editState = { ...freshEditState(), loadedUrl: editState.loadedUrl }; mlBokehPicking = false; mlEditLoadError = null; mlEditHistory = []; mlEditFuture = []; }
+function resetEdit() {
+  editState = { ...freshEditState(), loadedUrl: editState.loadedUrl };
+  resetCompositionForCurrentEdit();
+  mlBokehPicking = false;
+  mlEditLoadError = null;
+  mlEditHistory = [];
+  mlEditFuture = [];
+}
 
 /* ---- helpers ---- */
 function readImage(fileObj, cb) { if (!fileObj) return; const r = new FileReader(); r.onload = () => cb(r.result); r.readAsDataURL(fileObj); }
@@ -2780,6 +2971,7 @@ function svgIc(k) {
     upload: `<path d="M8 10.5V4M5.5 6L8 3.5 10.5 6M3.5 11.5h9"/>`,
     check: `<circle cx="8" cy="8" r="5.2"/><path d="M6 8l1.5 1.5L10.5 6.5"/>`,
     edit: `<path d="M11 2.5l2.5 2.5L6 12.5l-3 .5.5-3z"/>`,
+    copy: `<rect x="5" y="5" width="7.5" height="7.5" rx="1.2"/><path d="M3.5 10.5H3a1.2 1.2 0 0 1-1.2-1.2V3A1.2 1.2 0 0 1 3 1.8h6.3A1.2 1.2 0 0 1 10.5 3v.5"/>`,
     play: `<path d="M5 3.5l7 4.5-7 4.5z"/>`,
     lock: `<rect x="3.5" y="7" width="9" height="6" rx="1.4"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2"/>`,
     undo: `<path d="M6 4L3 7l3 3M3 7h6a4 4 0 0 1 0 8H6"/>`,
