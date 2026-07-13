@@ -1,7 +1,7 @@
 import {
   currentTenantId, isAdmin, isOwnerOperator, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260712-223";
+} from "./store.js?v=phantom-live-20260712-224";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -50,6 +50,29 @@ let playClock = null;
 let playTickAt = 0;
 let messageBound = false;
 let keyboardBound = false;
+let readyWatchdog = null;
+
+/* A game that never says 'ready' must become a visible, recoverable error —
+   an infinite spinner tells the player nothing and looks like a dead button. */
+function armReadyWatchdog() {
+  clearTimeout(readyWatchdog);
+  readyWatchdog = setTimeout(() => {
+    if (!ui.player || ui.playerReady) return;
+    showPlayerError(`${ui.player.game.title} did not respond. The game file may be missing or blocked on this server.`);
+  }, 7000);
+}
+
+function showPlayerError(text) {
+  clearTimeout(readyWatchdog);
+  const loading = mountedRoot?.querySelector(".pp-player-loading");
+  if (!loading || !ui.player) return;
+  const { game } = ui.player;
+  loading.removeAttribute("hidden");
+  loading.classList.add("is-error");
+  loading.innerHTML = `<b>Couldn't open ${esc(game.title)}</b><span>${esc(text)}</span><div class="pp-player-error-actions"><button type="button" data-pp-error-retry>Try again</button><a href="${esc(game.launchUrl)}" target="_blank" rel="noopener">Open the game directly</a><button type="button" data-pp-error-close>Back to library</button></div>`;
+  loading.querySelector("[data-pp-error-retry]")?.addEventListener("click", () => { const id = game.id; closePlayer().then(() => launch(id)); });
+  loading.querySelector("[data-pp-error-close]")?.addEventListener("click", () => closePlayer());
+}
 
 function authHeaders(json = false) {
   const token = session.token();
@@ -317,6 +340,7 @@ async function launch(gameId) {
     playTickAt = Date.now();
     render();
     startClock();
+    armReadyWatchdog();
   } catch (error) { ui.error = error.message; render(); }
 }
 
@@ -340,6 +364,7 @@ async function persistPlay(ended, detail = {}) {
 
 async function closePlayer() {
   clearInterval(playClock);
+  clearTimeout(readyWatchdog);
   await persistPlay(true);
   ui.player = null;
   ui.playerReady = false;
@@ -381,9 +406,15 @@ function onGameMessage(event) {
   if (!ui.player || !frame || event.source !== frame.contentWindow || !event.data || event.data.source !== "phantomplay-game") return;
   if (event.data.type === "ready") {
     ui.playerReady = true;
+    clearTimeout(readyWatchdog);
     mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
     frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion }, "*");
     frame.focus?.({ preventScroll: true });
+  }
+  if (event.data.type === "error") {
+    showPlayerError(event.data.reason === "missing_file"
+      ? `The game file (${String(event.data.file || "").split("/").pop()}) is missing on this server. It should return on the next sync.`
+      : "The game reported a startup problem.");
   }
   if (event.data.type === "paused") {
     ui.playerPaused = !!event.data.paused;

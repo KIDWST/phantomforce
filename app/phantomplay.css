@@ -69,3 +69,10 @@ body.phantomplay-playing{overflow:hidden}.workspace-page:has(.pp-player) .worksp
 .pp-starter-grid code{color:#7dffc0}
 .pp-protocol{margin:4px 0 0;padding:12px;border:1px solid var(--line);border-radius:9px;background:#010604;color:#a9d4bf;font:11.5px/1.55 ui-monospace,monospace;overflow-x:auto;white-space:pre;max-height:240px}
 @media(max-width:900px){.pp-starter-grid{grid-template-columns:1fr}}
+
+/* Player error panel (game failed to say ready) */
+.pp-player-loading.is-error i{display:none}
+.pp-player-loading.is-error b{color:#ff9ba3}
+.pp-player-error-actions{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin-top:14px}
+.pp-player-error-actions button,.pp-player-error-actions a{border:1px solid rgba(66,245,164,.35);border-radius:999px;padding:10px 18px;background:#03110c;color:#caffdf;font-weight:800;font-size:13px;cursor:pointer;text-decoration:none}
+.pp-player-error-actions [data-pp-error-retry]{background:#42f5a4;color:#02110b;border-color:#42f5a4}
