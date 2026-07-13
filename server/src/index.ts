@@ -174,6 +174,7 @@ import {
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
 import {
+  completeSocialOAuthCallback,
   createSocialOAuthStart,
   getSocialAnalyticsConnectorStatus,
   isSocialAnalyticsPlatform,
@@ -5132,6 +5133,43 @@ app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
       error: error instanceof Error ? error.message.slice(0, 400) : "OAuth start is not configured.",
       connector: getSocialAnalyticsConnectorStatus().connectors.find((item) => item.id === body.platform),
     });
+  }
+});
+
+app.get("/phantom-ai/ops/social-oauth/callback", async (request, reply) => {
+  try {
+    const result = await completeSocialOAuthCallback((request.query ?? {}) as Record<string, unknown>);
+    return reply.type("text/html; charset=utf-8").send(`<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>PhantomForce Social Connected</title>
+    <style>
+      body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: #020807; color: #e9fff4; font-family: Inter, Arial, sans-serif; }
+      main { max-width: 520px; border: 1px solid rgba(44, 255, 164, .35); border-radius: 28px; padding: 32px; background: rgba(3, 25, 17, .82); box-shadow: 0 24px 80px rgba(0, 255, 130, .12); }
+      p { color: #a7c7b9; line-height: 1.55; }
+      code { color: #45ffad; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <p style="letter-spacing:.24em;text-transform:uppercase;color:#45ffad;font-weight:800;">Connection saved</p>
+      <h1>${String(result.platform).replace(/</g, "&lt;")} is connected to PhantomForce.</h1>
+      <p>Return to the admin app and press <code>Sync analytics</code>. Tokens were stored locally and were not printed in this page.</p>
+      <script>setTimeout(() => { try { window.close(); } catch {} }, 1800);</script>
+    </main>
+  </body>
+</html>`);
+  } catch (error) {
+    return reply.code(400).type("text/html; charset=utf-8").send(`<!doctype html>
+<html lang="en"><body style="margin:0;min-height:100vh;display:grid;place-items:center;background:#090202;color:#ffe8e8;font-family:Arial,sans-serif;">
+  <main style="max-width:560px;border:1px solid rgba(255,80,110,.4);border-radius:24px;padding:28px;background:rgba(30,4,8,.85);">
+    <p style="letter-spacing:.22em;text-transform:uppercase;color:#ff8095;font-weight:800;">Connection blocked</p>
+    <h1>PhantomForce could not save this social connection.</h1>
+    <p>${(error instanceof Error ? error.message : "OAuth callback failed.").replace(/</g, "&lt;").slice(0, 500)}</p>
+  </main>
+</body></html>`);
   }
 });
 
