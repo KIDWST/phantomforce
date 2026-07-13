@@ -174,7 +174,9 @@ import {
 import { getSalesConnectorStatus } from "./connectors/sales-connector.js";
 import { getFinanceConnectorStatus } from "./connectors/finance-connector.js";
 import {
+  createSocialOAuthStart,
   getSocialAnalyticsConnectorStatus,
+  isSocialAnalyticsPlatform,
   syncSocialAnalytics,
 } from "./connectors/social-analytics-connector.js";
 import {
@@ -403,7 +405,7 @@ const CustomizationPublishBodySchema = CustomizationPreviewBodySchema.extend({ s
 const CustomizationRollbackBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), version: z.number().int().positive() });
 const CustomizationAssistantBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), message: z.string().trim().min(1).max(1200) });
 const SocialAnalyticsSyncSchema = z.object({
-  platform: z.enum(["youtube", "instagram", "facebook", "tiktok"]),
+  platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
 });
 
 function safeCustomizationTenantId(value: unknown, fallback: string) {
@@ -5107,6 +5109,30 @@ app.get("/phantom-ai/ops/social-analytics/status", async (request, reply) => {
     read_only: true,
     social_analytics: getSocialAnalyticsConnectorStatus(),
   };
+});
+
+app.post("/phantom-ai/ops/social-oauth/start", async (request, reply) => {
+  const session = requireAdminAccessSession(request, reply);
+  if (!session) return reply;
+  const body = (request.body ?? {}) as { platform?: unknown };
+  if (!isSocialAnalyticsPlatform(body.platform)) {
+    return reply.code(400).send({ ok: false, error: "Unsupported social platform." });
+  }
+  try {
+    return {
+      ok: true,
+      session,
+      external_send: false,
+      approval_executed: false,
+      oauth: createSocialOAuthStart(body.platform),
+    };
+  } catch (error) {
+    return reply.code(409).send({
+      ok: false,
+      error: error instanceof Error ? error.message.slice(0, 400) : "OAuth start is not configured.",
+      connector: getSocialAnalyticsConnectorStatus().connectors.find((item) => item.id === body.platform),
+    });
+  }
 });
 
 app.post("/phantom-ai/ops/social-analytics/sync", async (request, reply) => {

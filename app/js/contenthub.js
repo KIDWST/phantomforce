@@ -43,13 +43,13 @@ export const CONTENT_ASSET_LIMITS = Object.freeze({
 });
 
 export const PLATFORMS = [
-  { id: "instagram", name: "Instagram", color: "#e1306c", handle: "@phantomforce", types: ["image", "carousel", "reel", "story"] },
-  { id: "tiktok",    name: "TikTok",    color: "#ff2b55", handle: "@phantomforce", types: ["short", "video"] },
-  { id: "youtube",   name: "YouTube",   color: "#ff3b30", handle: "PhantomForce", types: ["video", "short"] },
-  { id: "facebook",  name: "Facebook",  color: "#1877f2", handle: "PhantomForce", types: ["image", "video", "text", "carousel"] },
-  { id: "x",         name: "X",         color: "#9fb0bd", handle: "@phantomforce", types: ["text", "image", "video"] },
-  { id: "linkedin",  name: "LinkedIn",  color: "#3b9dff", handle: "PhantomForce", types: ["text", "image", "article"] },
-  { id: "pinterest", name: "Pinterest", color: "#e60023", handle: "PhantomForce", types: ["image", "carousel"] },
+  { id: "instagram", name: "Instagram", color: "#e1306c", handle: "officialchicagoshots", types: ["image", "carousel", "reel", "story"] },
+  { id: "tiktok",    name: "TikTok",    color: "#ff2b55", handle: "officialchicagoshots", types: ["short", "video"] },
+  { id: "youtube",   name: "YouTube",   color: "#ff3b30", handle: "officialchicagoshots", types: ["video", "short"] },
+  { id: "facebook",  name: "Facebook",  color: "#1877f2", handle: "officialchicagoshots", types: ["image", "video", "text", "carousel"] },
+  { id: "x",         name: "X",         color: "#9fb0bd", handle: "officialchicagoshots", types: ["text", "image", "video"] },
+  { id: "linkedin",  name: "LinkedIn",  color: "#3b9dff", handle: "officialchicagoshots", types: ["text", "image", "article"] },
+  { id: "pinterest", name: "Pinterest", color: "#e60023", handle: "officialchicagoshots", types: ["image", "carousel"] },
 ];
 export const TYPES = { image: "Image", carousel: "Carousel", reel: "Reel", short: "Short", video: "Video", story: "Story", text: "Post", article: "Article" };
 const plat = (id) => PLATFORMS.find((p) => p.id === id) || PLATFORMS[0];
@@ -86,7 +86,7 @@ const PLANNER_CONNECTORS = [
 const plannerState = { weekOffset: 0, openConnector: "" };
 function defaultSocialAccounts() {
   return PLATFORMS.map((p) => ({
-    id: p.id, name: p.name, color: p.color, handle: "", url: "", loginIdentity: "",
+    id: p.id, name: p.name, color: p.color, handle: p.handle, url: "", loginIdentity: "",
     enabled: false, connectMode: "manual", officialConnectState: "not_configured", lastConnectAt: "",
   }));
 }
@@ -3114,7 +3114,7 @@ function openPost(p, esc) {
    account analytics payloads. No Creator Hub inventory, seeded posts, or
    modeled estimates leak into this page.
    ========================================================================= */
-const LIVE_ANALYTICS_PLATFORMS = new Set(["instagram", "tiktok", "youtube", "facebook"]);
+const LIVE_ANALYTICS_PLATFORMS = new Set(PLATFORMS.map((platform) => platform.id));
 const ANALYTICS_REFRESH_MS = 15 * 60 * 1000;
 const analyticsConnectorState = {
   loaded: false,
@@ -3334,12 +3334,19 @@ function accountAnalyticsRow(row, esc) {
   const connector = connectorStatus(account.id);
   const live = account.connectMode === "live-api" && !!feed;
   const canSync = !!connector?.configured;
+  const oauthReady = !!connector?.oauthConfigured;
+  const sourceState = canSync ? "Ready to sync" : oauthReady ? "Needs account token" : saved ? "OAuth not configured" : account.handle ? "Handle saved" : "Not connected";
+  const sourceCopy = canSync
+    ? "Official read-only analytics are ready."
+    : oauthReady
+      ? "OAuth app credentials exist; finish account authorization before stats appear."
+      : "Add OAuth app credentials and authorize this account before live data appears.";
   return `<article class="an-channel-row ${feed ? "is-live" : "is-missing"}">
     <div class="an-channel-id"><span class="ch-dot" style="background:${account.color}"></span><span><b>${esc(account.name)}</b><i>${esc(account.handle || account.loginIdentity || "profile saved")}</i></span></div>
     ${feed ? `<div class="an-channel-metrics">
       <span><b>${K(feed.reach)}</b>reach</span><span><b>${K(feed.impressions)}</b>views</span><span><b>${K(feed.engagement)}</b>engagement</span><span><b>${K(feed.followers)}</b>followers</span>
     </div><div class="an-channel-source"><b>${live ? "Live · " : "Report · "}${esc(feed.source)}</b><i>${feed.syncedAt ? esc(ago(feed.syncedAt)) : "current"}</i></div>`
-    : `<div class="an-channel-empty"><b>${canSync ? "Ready to sync" : saved ? "Profile saved" : "Not connected"}</b><span>${canSync ? "Official read-only analytics are ready." : "Connect this account in Settings to start live data."}</span></div>`}
+    : `<div class="an-channel-empty"><b>${esc(sourceState)}</b><span>${esc(sourceCopy)}</span></div>`}
     <div class="an-channel-actions">
       ${canSync ? `<button class="btn btn-primary" type="button" data-an-sync="${account.id}">${analyticsConnectorState.loading ? "Syncing…" : live ? "Sync now" : "Start live sync"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Set up live connection</button>`}
       <details class="an-import-backup"><summary aria-label="More data options">More</summary><small>Backup only · CSV · TSV · JSON</small><label class="btn btn-ghost">${feed && !live ? "Replace report" : "Import official report"}<input type="file" accept=".csv,.tsv,.json,text/csv,text/tab-separated-values,application/json" data-an-import="${account.id}" hidden></label></details>
@@ -3387,11 +3394,11 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
   const esc = opts.esc || ((s) => String(s));
   const accounts = loadSocialAccounts();
   const localSignals = localWorkspaceSignals(loadContent());
-  const linked = accounts.filter((acct) => socialStatus(acct) === "linked");
-  const displayAccounts = linked.length ? linked : accounts.filter((account) => ["instagram", "tiktok", "youtube", "facebook"].includes(account.id));
+  const displayAccounts = accounts.filter((account) => LIVE_ANALYTICS_PLATFORMS.has(account.id));
   const feedRows = displayAccounts.map((account) => ({ account, feed: analyticsFeedForAccount(account) }));
   const liveRows = feedRows.filter((row) => row.feed);
   const liveApiRows = liveRows.filter((row) => row.account.connectMode === "live-api");
+  const configuredCount = analyticsConnectorState.connectors.filter((connector) => connector.configured).length;
   const totals = analyticsTotals(liveRows);
   const maxEngagement = Math.max(1, ...feedRows.map((row) => row.feed?.engagement || 0));
   el.innerHTML = `
@@ -3399,12 +3406,12 @@ export function renderAnalytics(el, opts = {}, renderOptions = {}) {
       <section class="an-hero">
         <div>
           <p class="ch-eyebrow">Business intelligence</p>
-          <h3>${liveApiRows.length ? "Live performance at a glance." : localSignals.total ? "Your business activity is live." : "Connect your channels for live data."}</h3>
-          <p>${liveApiRows.length ? "Official platform connections refresh automatically. Report files are available only as a backup." : localSignals.total ? "PhantomForce is already tracking your publishing, media, sites, and drafts. Connect social accounts to add official reach and engagement." : "Connect YouTube, Instagram, Facebook, or TikTok once. PhantomForce will keep this page current for you."}</p>
+          <h3>${liveApiRows.length === displayAccounts.length ? "Every social channel is live." : liveApiRows.length ? "Some channels are live. Finish the rest." : "OAuth is required before real stats appear."}</h3>
+          <p>${liveApiRows.length ? "Official platform connections refresh automatically. Report files are available only as a backup." : "The handles are ready as officialchicagoshots and editable in Settings. Live reach, engagement, followers, and cross-posting stay locked until each platform is authorized through OAuth/API credentials."}</p>
         </div>
         <div class="an-hero-actions">
-          ${analyticsConnectorState.connectors.some((connector) => connector.configured) ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect accounts</button>`}
-          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live</span>
+          ${configuredCount ? `<button class="btn btn-primary" type="button" data-an-sync-all>${analyticsConnectorState.loading ? "Syncing…" : "Sync live data"}</button>` : `<button class="btn btn-primary" type="button" data-open-ws="settings" data-open-settings-tab="media">Connect accounts</button>`}
+          <span class="an-src">${svgIc("up")} ${liveApiRows.length}/${displayAccounts.length} live · ${configuredCount}/${displayAccounts.length} OAuth/API ready</span>
         </div>
       </section>
       ${analyticsNotice || analyticsConnectorState.error ? `<div class="an-flash">${esc(analyticsNotice || analyticsConnectorState.error)}</div>` : ""}

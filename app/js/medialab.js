@@ -205,7 +205,7 @@ function socialProfileFromHandle(platformId, handle = "") {
   if (platformId === "youtube") return `https://www.youtube.com/@${h}`;
   if (platformId === "facebook") return `https://www.facebook.com/${h}`;
   if (platformId === "x") return `https://x.com/${h}`;
-  if (platformId === "linkedin") return `https://www.linkedin.com/in/${h}/`;
+  if (platformId === "linkedin") return `https://www.linkedin.com/company/${h}/`;
   if (platformId === "pinterest") return `https://www.pinterest.com/${h}/`;
   return "";
 }
@@ -215,23 +215,41 @@ function socialProfileTarget(account) {
 function socialLoginTarget(account) {
   return SOCIAL_LOGIN_URLS[account.id] || socialProfileTarget(account) || "about:blank";
 }
+function socialAuthHeaders(extra = {}) {
+  const token = typeof accessSession?.token === "function" ? accessSession.token() : "";
+  return { ...extra, ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+async function requestSocialOAuthStart(platform) {
+  const response = await fetch("/phantom-ai/ops/social-oauth/start", {
+    method: "POST",
+    headers: socialAuthHeaders({ "Content-Type": "application/json" }),
+    body: JSON.stringify({ platform }),
+  });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(String(json?.error || `OAuth start failed (${response.status}).`));
+  if (!json?.oauth?.authorizationUrl) throw new Error("OAuth start did not return an authorization URL.");
+  return json.oauth;
+}
 function socialStatusLabel(account) {
   const st = socialStatus(account);
+  if (account.connectMode === "live-api" && account.analytics?.live) return "live OAuth";
   if (st === "linked") return "profile saved";
+  if (account.handle) return "handle ready";
   if (st === "pending") return "finish setup";
   return "not saved";
 }
 function socialPostingState(account) {
   const st = socialStatus(account);
-  if (st === "linked") return account.analytics ? "metrics loaded" : "profile only";
+  if (account.connectMode === "live-api" && account.analytics?.live) return "live data";
+  if (account.analytics) return "report imported";
+  if (st === "linked") return "OAuth needed";
+  if (account.handle) return "handle ready";
   if (st === "pending") return "waiting";
   return "not configured";
 }
 function socialActionLabel(account) {
-  const st = socialStatus(account);
-  if (st === "linked") return `Update ${account.name} profile`;
-  if (st === "pending") return `Finish ${account.name}`;
-  return `Add ${account.name} profile`;
+  if (account.connectMode === "live-api" && account.analytics?.live) return `Refresh ${account.name}`;
+  return `Connect ${account.name} OAuth`;
 }
 function clampHermesText(value = "", limit = 180) {
   const text = String(value || "").replace(/\s+/g, " ").trim();
@@ -2526,7 +2544,7 @@ export function renderMediaSettings(el, opts = {}) {
   const esc = opts.esc || ((s) => String(s));
   const cfg = loadCfg();
   const socialAccounts = loadSocialAccounts();
-  const linkedCount = socialAccounts.filter((account) => socialStatus(account) === "linked").length;
+  const linkedCount = socialAccounts.filter((account) => socialStatus(account) === "linked" || account.handle).length;
   const routeRow = (modality, label) => {
     const provs = providersFor(cfg, modality === "enhance" ? "enhance" : modality);
     return `<label class="set-route"><span>${label}</span>
@@ -2557,7 +2575,7 @@ export function renderMediaSettings(el, opts = {}) {
         <div class="set-sec-head">
           <div>
             <h3>Social profiles</h3>
-            <p class="set-note">Save the public profiles your business uses. A saved profile is not API authorization; real performance appears in Analytics after an authorized feed or platform report is added.</p>
+            <p class="set-note">Every channel defaults to officialchicagoshots and stays editable. Real analytics and cross-posting require OAuth/API authorization; profile handles alone never create fake stats or external posts.</p>
           </div>
           <span class="set-safe-pill">${linkedCount}/${socialAccounts.length} saved</span>
         </div>
@@ -2573,7 +2591,8 @@ export function renderMediaSettings(el, opts = {}) {
   el.querySelectorAll("[data-set-quality] button").forEach((b) => b.onclick = () => { genState.quality = b.dataset.v || "standard"; renderMediaSettings(el, opts); });
   const ap = el.querySelector("[data-set-approval]"); ap.onchange = () => { cfg.requireApproval = ap.checked; saveCfg(cfg); };
 
-  // social account linking stays local and never reads browser cookies/tokens
+  // social account linking stays local and never reads browser cookies/tokens.
+  // OAuth/API tokens must stay server-side; this UI only captures editable public identity.
   el.querySelectorAll("[data-social-card]").forEach((card) => {
     const id = card.dataset.socialCard;
     const account = socialAccounts.find((row) => row.id === id);
@@ -2582,18 +2601,30 @@ export function renderMediaSettings(el, opts = {}) {
     const clear = card.querySelector("[data-social-clear]");
     if (clear) clear.onclick = () => {
       account.handle = ""; account.url = ""; account.loginIdentity = ""; account.enabled = false; account.connectMode = "manual"; account.lastConnectAt = "";
+      delete account.analytics;
+      delete account.insights;
+      delete account.metrics;
       delete account.hermesProof;
       socialNotice = `${account.name} link cleared locally. No remote account was changed.`;
       saveAndRender();
     };
     const open = card.querySelector("[data-social-open]");
-    if (open) open.onclick = () => {
-      requestHermesExtensionProfileLink(account.id);
-      window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
-      account.connectMode = "browser-bridge";
-      account.lastConnectAt = new Date().toISOString();
-      socialNotice = `${account.name} opened. Come back and save the public handle or profile URL.`;
-      startSocialBridgePolling(account.id);
+    if (open) open.onclick = async () => {
+      open.disabled = true;
+      try {
+        const oauth = await requestSocialOAuthStart(account.id);
+        window.open(oauth.authorizationUrl, "_blank", "noopener,noreferrer");
+        account.connectMode = "oauth-started";
+        account.lastConnectAt = new Date().toISOString();
+        socialNotice = `${account.name} OAuth opened for @${oauth.handle || account.handle || "officialchicagoshots"}. Complete the provider login, then Analytics can sync after the server stores the token.`;
+      } catch (error) {
+        requestHermesExtensionProfileLink(account.id);
+        window.open(socialLoginTarget(account), "_blank", "noopener,noreferrer");
+        account.connectMode = "browser-bridge";
+        account.lastConnectAt = new Date().toISOString();
+        socialNotice = `${account.name} OAuth is not ready yet: ${error?.message || "missing credentials"}. Opened normal login only so the public handle can still be saved; no live stats or cross-posting were authorized.`;
+        startSocialBridgePolling(account.id);
+      }
       saveAndRender();
     };
     const confirmForm = card.querySelector("[data-social-confirm-form]");
@@ -2609,7 +2640,7 @@ export function renderMediaSettings(el, opts = {}) {
       account.lastConnectAt = new Date().toISOString();
       delete account.hermesProof;
       if (socialBridgePollTimer) { clearInterval(socialBridgePollTimer); socialBridgePollTimer = 0; }
-      socialNotice = `${account.name} profile saved. No API authorization or analytics feed was created.`;
+      socialNotice = `${account.name} handle saved. Live data and cross-posting remain locked until OAuth/API authorization is configured.`;
       saveAndRender();
     };
   });
@@ -2621,9 +2652,11 @@ function socialCard(account, esc) {
   const profile = socialProfileTarget(account);
   const lastConnect = status === "linked"
     ? (profile ? `Saved profile: ${profile}` : "Profile saved locally")
-    : status === "pending"
+  : status === "pending"
       ? "Confirm your handle below once you're signed in, or clear this to start over."
-      : "Save a public handle or profile URL";
+      : account.handle
+        ? `Default handle ready: ${account.handle}`
+        : "Save a public handle or profile URL";
   const hermesProof = account.hermesProof
     ? `<div class="set-social-hermes-proof">${svgIc("spark")} Saved profile · ${esc(account.hermesProof.displayName || account.hermesProof.handle || account.name)}</div>`
     : "";
@@ -2642,14 +2675,13 @@ function socialCard(account, esc) {
       <button class="set-social-open set-social-action set-social-signin" data-social-open type="button">${esc(socialActionLabel(account))}</button>
       <span>${esc(lastConnect)}</span>
     </div>
-    ${status === "pending" ? `
     <form class="set-social-confirm" data-social-confirm-form>
-      <label>Handle or profile URL</label>
+      <label>Editable handle or profile URL</label>
       <div class="set-social-confirm-row">
-        <input type="text" data-social-confirm-input placeholder="@yourhandle or https://..." value="${esc(account.handle || account.url || "")}"/>
-        <button class="btn btn-primary" type="submit">Save profile</button>
+        <input type="text" data-social-confirm-input placeholder="@officialchicagoshots or https://..." value="${esc(account.handle || account.url || "officialchicagoshots")}"/>
+        <button class="btn btn-primary" type="submit">Save handle</button>
       </div>
-    </form>` : ""}
+    </form>
   </article>`;
 }
 
