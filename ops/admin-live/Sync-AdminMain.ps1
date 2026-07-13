@@ -21,7 +21,7 @@ function Invoke-Git {
 }
 
 function Write-Manifest {
-  param([string]$Commit, [string]$Branch)
+  param([string]$Commit, [string]$Branch, [string]$Status = "ok", [string]$Reason = "")
   $manifestPath = Join-Path $RepoRoot "app\.phantomforce-sync.json"
   $payload = [ordered]@{
     source = (Join-Path $RepoRoot "app")
@@ -31,6 +31,10 @@ function Write-Manifest {
     synced_at = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     served_direct = $true
     port = $Port
+    # The UI reads these to warn owners when this machine stops updating —
+    # a blocked sync must be visible in the product, never silent.
+    sync_status = $Status
+    sync_reason = $Reason
   }
   $payload | ConvertTo-Json | Set-Content -LiteralPath $manifestPath -Encoding ascii
 }
@@ -62,21 +66,36 @@ try {
     throw "Checkout is on '$branch', not main."
   }
 
+  # A dirty tree used to abort the sync outright, which silently froze this
+  # machine on an old build for as long as anyone had local edits. Git's own
+  # fast-forward merge already refuses to clobber uncommitted work, so we
+  # attempt the pull regardless and only report "blocked" when the incoming
+  # changes genuinely overlap the local edits.
   $dirty = (Invoke-Git status --porcelain --untracked-files=no).Trim()
-  if ($dirty) {
-    throw "Tracked files are dirty. Commit or stash before auto-sync."
-  }
+  $syncStatus = "ok"
+  $syncReason = ""
 
   Invoke-Git fetch --quiet origin main | Out-Null
   $local = (Invoke-Git rev-parse HEAD).Trim()
   $remote = (Invoke-Git rev-parse origin/main).Trim()
 
   if ($local -ne $remote) {
-    Invoke-Git merge --ff-only origin/main | Out-Null
-    $local = (Invoke-Git rev-parse HEAD).Trim()
+    try {
+      Invoke-Git merge --ff-only origin/main | Out-Null
+      $local = (Invoke-Git rev-parse HEAD).Trim()
+      if ($dirty) { Write-SyncLog "Pulled to $($local.Substring(0,7)) with local edits present (no overlap)." }
+    } catch {
+      $syncStatus = "blocked"
+      $syncReason = if ($dirty) {
+        "New build available but local edits on this computer overlap it. Commit or stash the edits, then the next sync updates automatically."
+      } else {
+        "Update could not fast-forward: $($_.Exception.Message)".Substring(0, [Math]::Min(220, "Update could not fast-forward: $($_.Exception.Message)".Length))
+      }
+      Write-SyncLog "BLOCKED: $syncReason"
+    }
   }
 
-  Write-Manifest -Commit $local -Branch $branch
+  Write-Manifest -Commit $local -Branch $branch -Status $syncStatus -Reason $syncReason
 
   # Game files are served straight off this disk into sandboxed iframes; a
   # missing one shows players an endless spinner. Verify every tracked game
@@ -163,6 +182,10 @@ try {
   Write-Output "PhantomForce admin main $summary"
 } catch {
   Write-SyncLog "FAILED: $($_.Exception.Message)"
+  try {
+    $failCommit = (Invoke-Git rev-parse HEAD).Trim()
+    Write-Manifest -Commit $failCommit -Branch "main" -Status "blocked" -Reason ("Sync failed: " + $_.Exception.Message).Substring(0, [Math]::Min(220, ("Sync failed: " + $_.Exception.Message).Length))
+  } catch { }
   throw
 } finally {
   $lock.Dispose()
