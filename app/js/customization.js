@@ -1,4 +1,4 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260713-235";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260713-238";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
@@ -54,7 +54,7 @@ function defaultConfiguration(tenantId = currentTenantId()) {
     brand: {
       mode: internal ? "internal_phantomforce" : "standard",
       organizationName: internal ? "PhantomForce" : "My Business",
-      workspaceName: "Business HQ",
+      workspaceName: "Dashboard",
       poweredByPhantomForce: true,
     },
     theme: {

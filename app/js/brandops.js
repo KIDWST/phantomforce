@@ -8,11 +8,11 @@
    user-created automation records. No internal lanes or fabricated
    records are shown. */
 
-import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260713-235";
+import { store, uid, visible, pushActivity, ago, currentWs, session, workspaceStorageSetItem } from "./store.js?v=phantom-live-20260713-238";
 import {
   DAILY_IDEA_AUTOMATION_ID, dailyIdeaState, refreshDailyIdeas, saveDailyIdeaAutomation,
   DAILY_IDEA_CHANNELS, DAILY_IDEA_CONTENT_TYPES, DAILY_IDEA_FOCUS, DAILY_IDEA_STYLES,
-} from "./content-ideas.js?v=phantom-live-20260713-235";
+} from "./content-ideas.js?v=phantom-live-20260713-238";
 
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
@@ -112,7 +112,7 @@ function agentCard(a, opts) {
     <span class="au-item-main">
       <b>${esc(a.name)}</b>
       <i>${esc(a.mission || a.role || "")}</i>
-      <em>Created ${esc(ago(a.createdAt))} · Updated ${esc(ago(a.updatedAt))} · ${esc(a.source || "Business HQ")}</em>
+      <em>Created ${esc(ago(a.createdAt))} · Updated ${esc(ago(a.updatedAt))} · ${esc(a.source || "Dashboard")}</em>
       <em class="au-vacation-flag ${allowedDuringVacation ? "au-vacation-flag-on" : "au-vacation-flag-off"}">${allowedDuringVacation ? "Allowed during Vacation Mode" : "Blocked during Vacation Mode"} · requires approval to run</em>
     </span>
     <span class="aops-agent-mode aops-m-${st.cls === "on" ? "on" : st.cls === "idle" ? "idle" : st.cls === "hold" ? "hold" : "gate"}">${st.label}</span>
@@ -213,7 +213,7 @@ function customAutomationEditPanel(a, pendingApproval, allowedDuringVacation) {
       <label>Name<input data-au-edit-name="${esc(a.id)}" value="${esc(a.name)}" /></label>
       <label>Status<input value="${esc(st.label)}" disabled /></label>
       <label class="au-config-wide">Mission<textarea data-au-edit-mission="${esc(a.id)}">${esc(a.mission || a.role || "")}</textarea></label>
-      <label>Source<input value="${esc(a.source || "Business HQ")}" disabled /></label>
+      <label>Source<input value="${esc(a.source || "Dashboard")}" disabled /></label>
       <label>Updated<input value="${esc(ago(a.updatedAt))}" disabled /></label>
     </div>
     <div class="au-config-actions">

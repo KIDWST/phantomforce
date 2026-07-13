@@ -9,10 +9,10 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session,
-} from "./store.js?v=phantom-live-20260713-235";
+} from "./store.js?v=phantom-live-20260713-238";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260713-235";
+} from "./orgs.js?v=phantom-live-20260713-238";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -417,6 +417,15 @@ export function baseSiteDraft(title = "New website", kind = "Website") {
       existingUrl: "",
       storeEnabled: isStore,
     },
+    catalog: [],
+    store: {
+      enabled: isStore,
+      currency: "USD",
+      checkoutMode: "test",
+      paymentsConnected: false,
+      cart: {},
+      orders: [],
+    },
   };
 }
 
@@ -439,6 +448,71 @@ export function ensureSiteDesign(site) {
   return site.design;
 }
 
+export function ensureSiteStore(site) {
+  if (!site) return null;
+  site.catalog = Array.isArray(site.catalog) ? site.catalog : [];
+  site.store = {
+    enabled: site.kind === "Store" || !!site.design?.storeEnabled,
+    currency: "USD",
+    checkoutMode: "test",
+    paymentsConnected: false,
+    cart: {},
+    orders: [],
+    ...(site.store || {}),
+  };
+  site.store.cart = site.store.cart && typeof site.store.cart === "object" ? site.store.cart : {};
+  site.store.orders = Array.isArray(site.store.orders) ? site.store.orders : [];
+  return site.store;
+}
+
+const SECTION_LABELS = [
+  ["how it works", "How it works"], ["testimonials", "Testimonials"], ["pricing", "Pricing"],
+  ["services", "Services"], ["store", "Store"], ["products", "Products"], ["about", "About"],
+  ["frequently asked questions", "FAQ"], ["faq", "FAQ"], ["contact", "Contact"],
+  ["privacy", "Privacy"], ["refunds", "Refunds"], ["checkout", "Checkout"],
+  ["reviews", "Reviews"], ["proof", "Proof"], ["booking", "Booking"], ["home", "Home"],
+];
+
+function requestedSections(prompt) {
+  const groups = [];
+  for (const match of String(prompt || "").matchAll(/\binclude\s+(.+?)(?=\.\s|$)/gi)) {
+    const clause = match[1].toLowerCase();
+    const hits = SECTION_LABELS
+      .map(([needle, label]) => ({ label, index: clause.indexOf(needle) }))
+      .filter((hit) => hit.index >= 0)
+      .sort((a, b) => a.index - b.index)
+      .map((hit) => hit.label)
+      .filter((label, index, all) => all.indexOf(label) === index);
+    if (hits.length >= 3) groups.push(hits);
+  }
+  return groups[0] || [];
+}
+
+export function extractStoreProducts(promptText) {
+  const prompt = String(promptText || "");
+  if (!/\b(?:store|shop|product|package|sprint|checkout|price|pricing)\b/i.test(prompt)) return [];
+  const products = [];
+  const pattern = /(?:\b(?:add|include)\b|[,;]|\band\b)\s*(?:and\s+)?(?:an?\s+)?([a-z0-9][a-z0-9&'+/ -]{1,70}?)\s+(?:for|at)?\s*\$([\d,]+(?:\.\d{1,2})?)(\s*(?:\/\s*mo(?:nth)?|per\s+month|monthly))?/gi;
+  for (const match of prompt.matchAll(pattern)) {
+    const name = match[1]
+      .replace(/^(?:the|a|an)\s+/i, "")
+      .replace(/\s+/g, " ")
+      .trim();
+    const price = Number(match[2].replace(/,/g, ""));
+    if (!name || name.length > 64 || !Number.isFinite(price) || price < 0) continue;
+    const cadence = match[3] ? "monthly" : "one_time";
+    products.push({
+      id: uid("prod"),
+      name,
+      price,
+      cadence,
+      desc: cadence === "monthly" ? "Ongoing support billed monthly." : "One-time setup and delivery.",
+      visible: true,
+    });
+  }
+  return products.filter((product, index, all) => all.findIndex((item) => item.name.toLowerCase() === product.name.toLowerCase()) === index);
+}
+
 function firstSentence(value) {
   return String(value || "").split(/[.!?]/)[0].trim();
 }
@@ -447,6 +521,7 @@ export function applyWebsitePrompt(site, promptText) {
   const prompt = String(promptText || "").trim();
   if (!site || !prompt) return "Tell Phantom what to change first.";
   const design = ensureSiteDesign(site);
+  const siteStore = ensureSiteStore(site);
   const lower = prompt.toLowerCase();
   const quoted = prompt.match(/["“](.+?)["”]/)?.[1];
   /* "…headline to X and add a testimonials section" must not make the whole
@@ -459,9 +534,27 @@ export function applyWebsitePrompt(site, promptText) {
   const afterTo = trimToClause(prompt.match(/\b(?:to|as|called)\s+(.{3,120})$/i)?.[1]);
   let changed = "";
 
+  const sections = requestedSections(prompt);
+  if (sections.length) {
+    site.sections = sections;
+    changed = `Built ${sections.length} requested sections.`;
+  }
+
+  const parsedProducts = extractStoreProducts(prompt);
+  if (parsedProducts.length) {
+    const existing = new Map(site.catalog.map((product) => [String(product.name || "").toLowerCase(), product]));
+    parsedProducts.forEach((product) => existing.set(product.name.toLowerCase(), { ...existing.get(product.name.toLowerCase()), ...product }));
+    site.catalog = [...existing.values()];
+    site.kind = "Store";
+    design.storeEnabled = true;
+    siteStore.enabled = true;
+    changed = `${changed ? `${changed} ` : ""}Added ${parsedProducts.length} real product${parsedProducts.length === 1 ? "" : "s"}.`;
+  }
+
   if (/store|shop|checkout|cart|product/.test(lower)) {
     site.kind = "Store";
     design.storeEnabled = true;
+    siteStore.enabled = true;
     site.sections = Array.from(new Set([...site.sections, "Products", "Checkout"]));
     changed = "Added store sections and checkout planning.";
   }
@@ -501,10 +594,11 @@ export function applyWebsitePrompt(site, promptText) {
   if (/red/.test(lower)) { design.theme = "red"; changed = changed || "Changed the color to red."; }
   if (/purple/.test(lower)) { design.theme = "purple"; changed = changed || "Changed the color to purple."; }
   if (/cta|button|call to action/.test(lower)) {
-    design.cta = quoted || afterTo || (/book/.test(lower) ? "Book now" : /buy|shop/.test(lower) ? "Shop now" : "Get started");
+    const explicitButton = prompt.match(/\b(?:button|cta|call to action)\s+(?:text\s+|label\s+|says\s+)?(?:to\s+|as\s+|called\s+)?["“]?([^"”.,;]{2,50})/i)?.[1]?.trim();
+    design.cta = quoted || explicitButton || (/book|booking/.test(lower) ? "Book a call" : /buy|shop/.test(lower) ? "Shop now" : "Get started");
     changed = "Updated the button.";
   }
-  if (/offer|deal|package/.test(lower)) {
+  if (/offer|deal/.test(lower) && !parsedProducts.length) {
     design.offer = quoted || afterTo || firstSentence(prompt.replace(/offer|deal|package|make|set/gi, ""));
     changed = "Updated the offer.";
   }
@@ -522,8 +616,17 @@ export function applyWebsitePrompt(site, promptText) {
   }
   if (/remove checkout|no checkout|hide checkout/.test(lower)) {
     design.storeEnabled = false;
+    siteStore.enabled = false;
     site.sections = site.sections.filter((x) => !/checkout/i.test(x));
     changed = "Removed checkout from the preview.";
+  }
+  if (/phantomforce/i.test(prompt)) {
+    design.brand = "PhantomForce";
+    design.headline = /headline|title|main line/i.test(prompt) ? design.headline : "Run your business with a phantom workforce.";
+    design.subhead = /subhead|subtitle/i.test(prompt)
+      ? design.subhead
+      : "Leads, content, websites, media, approvals, and operations in one private command center.";
+    design.offer = parsedProducts.length ? "Choose the setup sprint that matches your business." : design.offer;
   }
   site.updated = new Date().toISOString();
   return changed || "I did not catch a site change yet. Try headline, store, color, premium, booking, product, or existing URL.";
@@ -531,10 +634,11 @@ export function applyWebsitePrompt(site, promptText) {
 
 export function renderWebsitePreview(site, products, opts = {}) {
   const design = ensureSiteDesign(site);
+  const siteStore = ensureSiteStore(site);
   const theme = design.theme || "neon";
   const showProducts = design.storeEnabled || site.kind === "Store";
   const sections = site.sections.slice(0, 8);
-  const listedProducts = products.slice(0, 3);
+  const listedProducts = products.filter((product) => product.visible !== false).slice(0, 12);
   const gallery = Array.isArray(site.gallery) ? site.gallery.slice(0, 6) : [];
   /* selectable: the editor passes selected (index) so a clicked section
      highlights and gets its own toolbar — plain preview callers omit it and
@@ -542,7 +646,7 @@ export function renderWebsitePreview(site, products, opts = {}) {
   const selectable = Number.isInteger(opts.selected);
   return `
     <div class="site-live-preview theme-${esc(theme)}">
-      <div class="site-browser-bar"><span></span><span></span><span></span><b>${esc(design.existingUrl || `${design.brand.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`)}</b><small>mockup preview</small></div>
+      <div class="site-browser-bar"><span></span><span></span><span></span><b>${esc(design.existingUrl || `${design.brand.toLowerCase().replace(/[^a-z0-9]+/g, "-")}.com`)}</b><small>Editable preview</small>${showProducts ? `<button type="button" class="site-cart-button" data-ss-cart-open>Cart <b>${Object.values(opts.cart || siteStore.cart || {}).reduce((sum, qty) => sum + Number(qty || 0), 0)}</b></button>` : ""}</div>
       <div class="site-preview-hero ${design.heroImage ? "has-media" : ""}">
         <div>
           <p>${esc(design.brand)}</p>
@@ -567,16 +671,14 @@ export function renderWebsitePreview(site, products, opts = {}) {
         </div>` : ""}
       ${showProducts ? `
         <div class="site-preview-products">
-          ${(listedProducts.length ? listedProducts : [
-            { name: "Featured offer", price: 99, desc: design.offer },
-            { name: "Starter package", price: 199, desc: "Simple entry point" },
-          ]).map((p) => `
+          ${listedProducts.length ? listedProducts.map((p) => `
             <article>
               ${p.imageUrl ? `<div class="site-preview-product-media"><img src="${esc(p.imageUrl)}" alt=""/></div>` : ""}
               <b>${esc(p.name)}</b>
-              <em>${fmtMoney(p.price)}</em>
+              <em>${fmtMoney(p.price)}${p.cadence === "monthly" ? " / month" : ""}</em>
               <small>${esc(p.desc || "Ready for your details.")}</small>
-            </article>`).join("")}
+              ${opts.interactive ? `<button type="button" data-ss-cart-add="${esc(p.id)}">Add to cart</button>` : ""}
+            </article>`).join("") : `<div class="site-preview-products-empty"><b>Your store is ready for products.</b><span>Add the first item in the Store editor.</span></div>`}
         </div>` : `
         <div class="site-preview-offer"><b>${esc(design.offer)}</b><span>${esc(design.cta)}</span></div>`}
     </div>`;
@@ -1052,7 +1154,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260713-235")
+      import("./brain.js?v=phantom-live-20260713-238")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
     });
