@@ -48,6 +48,10 @@ assert.match(worker, /Phantom is asking the backend brain/u, "Thinking state sho
 assert.match(worker, /AI backend result/u, "Backend answer must render as the primary result.");
 assert.match(worker, /backendSafeError[\s\S]*Private brain needs a fresh approved session/u, "Backend auth failures must use client-safe private-brain wording.");
 assert.doesNotMatch(worker, /AI backend returned HTTP/u, "Page worker must not expose raw HTTP backend errors to users.");
+assert.match(worker, /localResultSummary/u, "Page workers must provide page-specific local diagnoses when the backend is unavailable.");
+assert.match(worker, /analytics are empty because this page only trusts official social API syncs or imported platform reports/u, "Analytics worker must directly explain empty stats instead of asking a vague follow-up.");
+assert.match(worker, /Saved handles do not create metrics/u, "Analytics worker must not imply saved handles equal live metrics.");
+assert.doesNotMatch(worker, /Which account or channel should I treat as the source/u, "Empty analytics should not block on a channel question when the missing connector/report is already known.");
 assert.match(worker, /const token = typeof session\?\.token[\s\S]*if \(!token\)[\s\S]*fresh approved session[\s\S]*headers\.Authorization = `Bearer \$\{token\}`/u, "Page worker should not call the backend without an approved bearer session.");
 assert.match(worker, /Never say the work is queued/u, "Backend prompt must avoid confusing queued language.");
 assert.match(worker, /Before we proceed, answer this:/u, "Blocking questions must use the requested phrasing.");

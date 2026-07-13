@@ -4,8 +4,8 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-246";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-246";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260713-247";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260713-247";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -417,9 +417,6 @@ function blockingQuestion(prompt, pageId) {
   const words = tokenize(prompt);
   if (!prompt.trim()) return "What outcome do you want on this page?";
   if (words.length <= 2) return "Give me one sentence with the outcome, and I’ll infer the rest.";
-  if (pageId === "analytics" && /\b(why|what worked|performance)\b/i.test(prompt) && !visible(store.state.socialAccounts || []).length) {
-    return "Which account or channel should I treat as the source if no connector is live yet?";
-  }
   return "";
 }
 
@@ -499,6 +496,32 @@ function backendContentHtml(content) {
     .filter(Boolean)
     .map((block) => `<p>${esc(block).replace(/\n/g, "<br>")}</p>`)
     .join("");
+}
+
+function localResultSummary(pageId, prompt, analysis) {
+  const text = String(prompt || "");
+  if (pageId === "analytics" && /\b(empty|why|what\s+should|next|stats?|analytics|metric|performance|views?|reach|engagement)\b/i.test(text)) {
+    return [
+      "Done: analytics are empty because this page only trusts official social API syncs or imported platform reports. Saved handles do not create metrics.",
+      "Next: connect OAuth/API access for the first channel you care about, or import that platform's CSV/TSV/JSON export. Local uploads, drafts, and post-history records stay out of analytics.",
+    ];
+  }
+  if (pageId === "intelligence" && /\b(competitor|compare|market|better|beat|against|alternative)\b/i.test(text)) {
+    return [
+      "Done: Phantom can build the starter competitor map from the business category, then mark every item as starter context until a public source is attached.",
+      "Next: add a competitor URL, search source, review source, or public directory lane so the board can separate verified evidence from strategy guesses.",
+    ];
+  }
+  if (pageId === "phantomplay" && /\b(friend|friends|school|class|wireless|together|multiplayer|kids|student)\b/i.test(text)) {
+    return [
+      "Done: PhantomPlay should keep play together private by default: same workspace, short-lived room code, no public discovery, and no chat/voice until moderation exists.",
+      "Next: use classroom-safe Everyone-rated rooms first, then add stronger owner controls before any broader multiplayer surface.",
+    ];
+  }
+  if (!analysis.question && analysis.actions.length) {
+    return [`Done: Phantom has enough context to draft ${analysis.intent.toLowerCase()} locally without external execution.`];
+  }
+  return [];
 }
 
 function sessionActorId() {
@@ -648,6 +671,9 @@ async function askBackendForPageOutcome(pageId, prompt, analysis) {
 
 function renderPageWorkerResult(out, analysis, pageAction, backend) {
   const hasBackendAnswer = Boolean(backend?.content);
+  const pageId = out.closest("[data-page-worker]")?.dataset.pageWorker || "page";
+  const prompt = out.closest("[data-page-worker]")?.querySelector("[data-page-worker-input]")?.value || "";
+  const localSummary = localResultSummary(pageId, prompt, analysis);
   out.classList.remove("is-thinking");
   out.innerHTML = `
     <div class="page-worker-intel-head">
@@ -663,6 +689,11 @@ function renderPageWorkerResult(out, analysis, pageAction, backend) {
       <div class="page-worker-backend-result is-fallback">
         <span>Backend check</span>
         <p>${esc(backend.error)} Phantom kept the local result visible instead of going blank.</p>
+      </div>` : ""}
+    ${localSummary.length ? `
+      <div class="page-worker-backend-result page-worker-local-summary">
+        <span>What Phantom can tell right now</span>
+        ${localSummary.map((item) => `<p>${esc(item)}</p>`).join("")}
       </div>` : ""}
     <p class="page-worker-understood">${esc(analysis.understood)}</p>
     <div class="page-worker-intel-grid">
@@ -687,7 +718,6 @@ function renderPageWorkerResult(out, analysis, pageAction, backend) {
       <b>${analysis.question ? "Before we proceed, answer this:" : "Done. Ready to draft."}</b>
       <span>${esc(analysis.question || "Phantom has enough to draft locally. External moves still require approval.")}</span>
     </div>`;
-  const pageId = out.closest("[data-page-worker]")?.dataset.pageWorker || "page";
   WORKER_OUTPUT_CACHE.set(pageId, {
     html: out.innerHTML,
     className: out.className,
