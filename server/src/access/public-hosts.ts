@@ -28,21 +28,20 @@ function firstHeader(value: unknown) {
 }
 
 export function publicHostFromHeaders(headers: Record<string, unknown>) {
-  const origin = firstHeader(headers.origin);
-
-  if (origin) {
-    try {
-      return normalizePublicHost(new URL(origin).host);
-    } catch {
-      return normalizePublicHost(origin);
-    }
-  }
-
-  return normalizePublicHost(
+  const routedHost = normalizePublicHost(
     firstHeader(headers["x-forwarded-host"]) ??
       firstHeader(headers["x-original-host"]) ??
       firstHeader(headers.host),
   );
+  if (routedHost) return routedHost;
+
+  const origin = firstHeader(headers.origin);
+  if (!origin) return "";
+  try {
+    return normalizePublicHost(new URL(origin).host);
+  } catch {
+    return normalizePublicHost(origin);
+  }
 }
 
 export function publicHostScope(host: string | undefined): "admin" | "client" | "local" {

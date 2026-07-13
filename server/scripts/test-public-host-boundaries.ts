@@ -32,11 +32,25 @@ const sessions = [admin, client];
 
 assert(
   publicHostFromHeaders({ origin: `https://${ADMIN_PUBLIC_HOST}` }) === ADMIN_PUBLIC_HOST,
-  "admin host resolves from origin",
+  "admin host resolves from origin fallback",
 );
 assert(
   publicHostFromHeaders({ "x-forwarded-host": CLIENT_PUBLIC_HOST }) === CLIENT_PUBLIC_HOST,
   "client host resolves from forwarded host",
+);
+assert(
+  publicHostFromHeaders({
+    origin: `https://${CLIENT_PUBLIC_HOST}`,
+    "x-forwarded-host": ADMIN_PUBLIC_HOST,
+  }) === ADMIN_PUBLIC_HOST,
+  "routed host wins over spoofed origin",
+);
+assert(
+  publicHostFromHeaders({
+    origin: `https://${ADMIN_PUBLIC_HOST}`,
+    host: CLIENT_PUBLIC_HOST,
+  }) === CLIENT_PUBLIC_HOST,
+  "host wins over spoofed origin fallback",
 );
 assert(canUseSessionOnPublicHost(ADMIN_PUBLIC_HOST, admin), "admin can use admin host");
 assert(!canUseSessionOnPublicHost(ADMIN_PUBLIC_HOST, client), "client cannot use admin host");
