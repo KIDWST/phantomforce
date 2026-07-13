@@ -6,37 +6,37 @@ import {
   ownerLogin, redirectToLiveAdmin, verifyLiveSession, memoryStats, rememberConversation, isOwnerOperator,
   loadPhantomLoop, savePhantomLoop, loopProviderName, LOOP_PROVIDERS, TOOL_SPINE,
   loadPhantomLaneConfig, savePhantomLaneConfig, PHANTOM_LANES, PHANTOM_LANE_TARGETS, phantomLaneTargetName,
-} from "./store.js?v=phantom-live-20260713-004";
-import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260713-004";
-import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260713-004";
-import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-004";
-import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-004";
-import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-004";
-import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-004";
-import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-004";
-import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-004";
-import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260713-004";
-import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260713-004";
-import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260713-004";
-import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260713-004";
-import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260713-004";
-import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260713-004";
-import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260713-004";
-import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260713-004";
-import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-004";
-import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-004";
-import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-004";
+} from "./store.js?v=phantom-live-20260713-005";
+import { handleCommand, handleSmartCommand, commandSuggestions } from "./command.js?v=phantom-live-20260713-005";
+import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-live-20260713-005";
+import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-005";
+import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-005";
+import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-005";
+import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-005";
+import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-005";
+import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-005";
+import { renderAutomation, renderDeveloperAutopilotPanel, renderDeveloperAgentRunsPanel } from "./brandops.js?v=phantom-live-20260713-005";
+import { renderVacationMode, cachedVacationStatus } from "./vacation.js?v=phantom-live-20260713-005";
+import { renderSiteStudio } from "./sitestudio.js?v=phantom-live-20260713-005";
+import { renderPromptLibrary } from "./promptlibrary.js?v=phantom-live-20260713-005";
+import { mountCompanion, setCompanionState, setCompanionMode, companionMode } from "./companion.js?v=phantom-live-20260713-005";
+import { mountDesktopContextWidget } from "./desktop-context.js?v=phantom-live-20260713-005";
+import { renderOperatorMiniSettings, renderOperatorSettings } from "./settings.js?v=phantom-live-20260713-005";
+import { getRembgStatus, getMediaEngineHealth } from "./mediabackend.js?v=phantom-live-20260713-005";
+import { mountBuddy, buddyReact } from "./buddy.js?v=phantom-live-20260713-005";
+import { mountAmbient } from "./ambient.js?v=phantom-live-20260713-005";
+import { renderCompetitorIntelligence } from "./competitor-intelligence.js?v=phantom-live-20260713-005";
 import {
   fetchAuthConfig, databaseLogin, databaseLogout, switchOrg, fetchAuthMe, fetchEntitlementsSummary,
-} from "./orgs.js?v=phantom-live-20260713-004";
-import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-004";
-import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-004";
-import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-004";
+} from "./orgs.js?v=phantom-live-20260713-005";
+import { renderAssetCloud } from "./assetcloud.js?v=phantom-live-20260713-005";
+import { assetsAvailable } from "./orgs.js?v=phantom-live-20260713-005";
+import { renderPhantomPlay } from "./phantomplay.js?v=phantom-live-20260713-005";
 import {
   customizeNavigation,
   loadOrganizationCustomization,
-} from "./customization.js?v=phantom-live-20260713-004";
-import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260713-004";
+} from "./customization.js?v=phantom-live-20260713-005";
+import { mountMissionControl } from "./missioncontrol.js?v=phantom-live-20260713-005";
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
@@ -911,7 +911,7 @@ const MODES = {
   admin:   { label: "Ops",     icon: "cog",   placeholder: "", open: "adminos" },
 };
 let activeMode = "ask";
-const POSE_VERSION = "phantom-live-20260713-004";
+const POSE_VERSION = "phantom-live-20260713-005";
 let phantom3d = null;
 let phantomBootSettled = false;
 let stageReactionTimer = 0;
@@ -2650,6 +2650,38 @@ function clearOverlayOnly() {
   overlayRoot.innerHTML = "";
   document.body.classList.remove("overlay-open");
 }
+/* Build staleness watchdog: the sync script records its outcome in the
+   served manifest. If this machine stopped updating (blocked sync or no
+   sync in 24h), owners see WHY in the product instead of silently living
+   on an old build. Admin-only; missing manifest (fresh checkout, GitHub
+   Pages) shows nothing. */
+let syncBannerShown = false;
+async function checkBuildFreshness() {
+  if (syncBannerShown || !isAdmin()) return;
+  let manifest = null;
+  try {
+    const response = await fetch("/app/.phantomforce-sync.json", { cache: "no-store" });
+    if (!response.ok) return;
+    manifest = await response.json();
+  } catch { return; }
+  if (!manifest || typeof manifest !== "object") return;
+  const syncedAt = Date.parse(manifest.synced_at || "");
+  const staleMs = Number.isFinite(syncedAt) ? Date.now() - syncedAt : 0;
+  const blocked = manifest.sync_status === "blocked";
+  const stale = staleMs > 24 * 60 * 60 * 1000;
+  if (!blocked && !stale) return;
+  syncBannerShown = true;
+  const bar = document.createElement("div");
+  bar.className = "build-stale-banner";
+  bar.setAttribute("role", "alert");
+  const when = Number.isFinite(syncedAt) ? new Date(syncedAt).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "unknown";
+  bar.innerHTML = `<b>${blocked ? "Updates are blocked on this computer" : "This computer hasn't updated recently"}</b>
+    <span>${esc(String(manifest.sync_reason || `Last successful sync: ${when}. Check the sync log if this persists.`))}</span>
+    <button type="button" aria-label="Dismiss">&times;</button>`;
+  bar.querySelector("button").onclick = () => bar.remove();
+  document.body.prepend(bar);
+}
+
 function renderDashboardPage(pushHash = true) {
   activePageId = null;
   activeNav = "dashboard";
@@ -2658,6 +2690,7 @@ function renderDashboardPage(pushHash = true) {
   setGhostMood("idle", { emotion: "happy", ms: 1200 });
   stageReact("dashboard", 520);
   renderConsole();
+  checkBuildFreshness();
   if (pushHash && location.hash) {
     try { history.pushState(null, "", location.pathname + location.search); } catch {}
   }

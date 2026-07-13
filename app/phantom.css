@@ -11023,3 +11023,20 @@ body .phantom .workspace-page :where(
     padding-bottom: calc(var(--mobile-admin-taskbar) + 54px + env(safe-area-inset-bottom, 0px)) !important;
   }
 }
+
+/* Build staleness banner (admin-only, written by the sync watchdog) */
+.build-stale-banner {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 400;
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  padding: 10px 14px;
+  background: linear-gradient(90deg, rgba(85,58,8,0.96), rgba(40,26,4,0.96));
+  border-bottom: 1px solid rgba(255,197,80,0.5);
+  color: #ffe9bd; font-size: 13px;
+}
+.build-stale-banner b { color: #ffd375; font-size: 13px; }
+.build-stale-banner span { flex: 1; min-width: 200px; color: #e8d3a4; }
+.build-stale-banner button {
+  border: 1px solid rgba(255,211,117,0.4); border-radius: 8px;
+  width: 28px; height: 28px; background: transparent; color: #ffd375;
+  font-size: 16px; cursor: pointer;
+}
