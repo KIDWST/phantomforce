@@ -147,7 +147,7 @@ try {
   }
 
   $allOk = $booted -and $ownerLoginOk -and $wrongKeyRejected -and $demoLoginDisabled -and `
-    $readinessOk -and $authProductionReady -and $anonymousFalconRejected -and $ownerFalconValidationOk -and ($sessionCount -eq 1) -and `
+    $readinessOk -and $authProductionReady -and $anonymousFalconRejected -and $ownerFalconValidationOk -and ($sessionCount -eq 0) -and `
     $weakSecretFailedClosed -and $missingKeyFailedClosed
 
   $summary = [pscustomobject]@{

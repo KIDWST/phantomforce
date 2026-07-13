@@ -1042,7 +1042,9 @@ app.get("/sessions", async (request) => {
     auth: {
       ...authConfiguration,
     },
-    sessions: filterSessionsForPublicHost(publicHost, listAccessSessions()),
+    sessions: authConfiguration.ownerProductionAuthEnabled
+      ? []
+      : filterSessionsForPublicHost(publicHost, listAccessSessions()),
   };
 });
 
@@ -1086,7 +1088,7 @@ async function handleSessionLogin(request: FastifyRequest, reply: FastifyReply) 
     return reply.code(401).send({
       ok: false,
       error: "Invalid session credentials.",
-      sessions: listAccessSessions(),
+      sessions: authConfiguration.ownerProductionAuthEnabled ? [] : listAccessSessions(),
     });
   }
 

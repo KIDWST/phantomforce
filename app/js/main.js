@@ -306,7 +306,7 @@ const MOBILE_LABEL_OVERRIDES = {
   automation: "Auto",
   approvals: "Approvals",
   analytics: "Analytics",
-  intelligence: "Intel",
+  intelligence: "Competitor",
   vacation: "Away",
   developer: "Developer",
 };
