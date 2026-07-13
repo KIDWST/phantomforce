@@ -592,6 +592,18 @@ function createBuddyController() {
     closeMenu();
   }
 
+  function openMenuFromPointerEvent(event, { requireRightButton = true } = {}) {
+    if (!canvas || !menu || menu.contains(event.target)) return false;
+    if (requireRightButton && event.button !== 2) return false;
+    if (event.target !== canvas && !buddyRectHit(event.clientX, event.clientY)) return false;
+    event.preventDefault();
+    event.stopPropagation();
+    canvas.style.pointerEvents = "auto";
+    setState("curious", 1200);
+    openMenu(event.clientX, event.clientY);
+    return true;
+  }
+
   /* The canvas is a big rectangle but the ghost only fills part of it. Keep the
      canvas click-through by default and only accept the pointer while it is over
      an actually painted pixel — otherwise the companion silently eats clicks on
@@ -622,26 +634,16 @@ function createBuddyController() {
     window.addEventListener("resize", () => { configureCanvas({ snap: true }); if (docked || mobile()) dock(); }, { passive: true, signal });
     document.addEventListener("scroll", scheduleGeometryRefresh, { passive: true, capture: true, signal });
     document.addEventListener("pointerdown", (event) => {
-      if (!canvas || !menu || menu.contains(event.target)) return;
-      if (event.button !== 2) return;
-      if (event.target !== canvas && !buddyRectHit(event.clientX, event.clientY)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      canvas.style.pointerEvents = "auto";
-      setState("curious", 1200);
-      openMenu(event.clientX, event.clientY);
+      openMenuFromPointerEvent(event);
+    }, { capture: true, signal });
+    document.addEventListener("mousedown", (event) => {
+      openMenuFromPointerEvent(event);
     }, { capture: true, signal });
     document.addEventListener("click", (event) => {
       if (menu && !menu.hidden && !menu.contains(event.target) && event.target !== canvas) closeMenu();
     }, { signal });
     document.addEventListener("contextmenu", (event) => {
-      if (!canvas || !menu || menu.contains(event.target)) return;
-      if (event.target !== canvas && !buddyRectHit(event.clientX, event.clientY)) return;
-      event.preventDefault();
-      event.stopPropagation();
-      canvas.style.pointerEvents = "auto";
-      setState("curious", 1200);
-      openMenu(event.clientX, event.clientY);
+      openMenuFromPointerEvent(event, { requireRightButton: false });
     }, { capture: true, signal });
     document.addEventListener("keydown", (event) => {
       if (event.key === "Escape") closeMenu();
