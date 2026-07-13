@@ -28,10 +28,13 @@ const files = {
   proposalClient: "app/js/proposalpipeline.js",
   workspaceApprovalStore: "server/src/workspace-approvals/workspace-approval-store.ts",
   workspaceApprovalClient: "app/js/approvalpipeline.js",
+  managedGrowthReport: "server/src/managed-growth/managed-growth-report.ts",
+  managedGrowthClient: "app/js/managedgrowth.js",
   staticServer: "ops/admin-live/admin-static-server.mjs",
   crmPipelineTest: "scripts/test-crm-pipeline.mjs",
   proposalPipelineTest: "scripts/test-proposal-pipeline.mjs",
   workspaceApprovalTest: "scripts/test-workspace-approvals.mjs",
+  managedGrowthTest: "scripts/test-managed-growth-report.mjs",
   authBoundaryTest: "scripts/test-auth-boundaries.mjs",
   pageWorkerTest: "scripts/test-page-worker.mjs",
 };
@@ -81,6 +84,11 @@ const hasServerProposalPipelineModel =
 const hasServerWorkspaceApprovalModel =
   /model\s+Approval\s+\{/u.test(src.schema)
   || (/WorkspaceApprovalDocument/u.test(src.workspaceApprovalStore) && /\/api\/workspace-approvals/u.test(src.index) && /createWorkspaceApproval/u.test(src.workspaceApprovalClient));
+const hasManagedGrowthReport =
+  /buildManagedGrowthReport/u.test(src.managedGrowthReport)
+  && /\/api\/managed-growth\/report/u.test(src.index)
+  && /loadManagedGrowthReport/u.test(src.managedGrowthClient)
+  && /urlPath\.startsWith\("\/api\/managed-growth"\)/u.test(src.staticServer);
 const hasServicePackageModel =
   /model\s+(Service|Package|Offer)\s+\{/u.test(src.schema)
   || /\bservicesPackages\b/u.test(src.clientSetupStore);
@@ -200,6 +208,13 @@ const evidence = {
       [files.workspaceApprovalStore, files.index, files.workspaceApprovalClient, files.workspaces, files.workspaceApprovalTest],
     ),
     finding(
+      "PERSIST-MANAGED-GROWTH-REPORT",
+      hasManagedGrowthReport ? "real_server_backed" : "blocked",
+      "Managed Growth Ops reporting now reads server-backed Client Setup, CRM, Proposal Forge, and Workspace Approval documents without inventing social metrics.",
+      "managed-growth-report builds internal metrics, blockers, next actions, source document evidence, and explicit no-provider/no-outbound/no-public-exposure safety flags; Analytics mounts it separately from social analytics.",
+      [files.managedGrowthReport, files.index, files.managedGrowthClient, files.staticServer, files.managedGrowthTest],
+    ),
+    finding(
       "PERSIST-CUSTOMIZATION",
       "mixed_real_and_fallback",
       "Module customization exists server-side and complements, but does not replace, the dedicated client setup records.",
@@ -285,6 +300,7 @@ const evidence = {
     remainingServerCrmPipeline: hasServerLeadsPipelineModel ? "server_json_backed_foundation" : "blocked_next_product_step",
     remainingProposalPersistence: hasServerProposalPipelineModel ? "server_json_backed_foundation" : "blocked_next_product_step",
     remainingWorkspaceApprovalPersistence: hasServerWorkspaceApprovalModel ? "server_json_backed_foundation_status_only" : "blocked_next_product_step",
+    managedGrowthReports: hasManagedGrowthReport ? "server_report_ready" : "blocked",
   },
   blockers,
 };
@@ -292,6 +308,7 @@ const evidence = {
 assert.ok(hasServerLeadsPipelineModel, "Audit should prove server-backed CRM lead/follow-up persistence exists.");
 assert.ok(hasServerProposalPipelineModel, "Audit should prove server-backed proposal persistence exists.");
 assert.ok(hasServerWorkspaceApprovalModel, "Audit should prove server-backed workspace approval persistence exists.");
+assert.ok(hasManagedGrowthReport, "Audit should prove server-backed Managed Growth report exists.");
 assert.equal(evidence.product02Readiness.moduleEnableDisable, "partially_ready_via_customization_modules");
 
 console.log(JSON.stringify({ ok: true, ...evidence }, null, 2));

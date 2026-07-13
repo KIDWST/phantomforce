@@ -416,6 +416,7 @@ import {
   getWorkspaceApprovalDocument,
   publicWorkspaceApprovalDocument,
 } from "./workspace-approvals/workspace-approval-store.js";
+import { buildManagedGrowthReport } from "./managed-growth/managed-growth-report.js";
 
 const host = process.env.HOST ?? "127.0.0.1";
 const port = Number(process.env.PORT ?? 5190);
@@ -471,6 +472,7 @@ const ProposalPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).
 const WorkspaceApprovalTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
 const WorkspaceApprovalBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), approval: z.unknown() });
 const WorkspaceApprovalPatchBodySchema = z.object({ tenant_id: z.string().trim().max(80).optional(), patch: z.unknown() });
+const ManagedGrowthReportTenantQuerySchema = z.object({ tenant_id: z.string().trim().max(80).optional() });
 const SocialAnalyticsSyncSchema = z.object({
   platform: z.enum(["youtube", "instagram", "facebook", "tiktok", "x", "linkedin", "pinterest"]),
 });
@@ -1212,6 +1214,29 @@ app.delete("/api/workspace-approvals/:approvalId", async (request, reply) => {
     outbound_action_executed: false,
     public_exposure_changed: false,
     approval_execution_implemented: false,
+  };
+});
+
+app.get("/api/managed-growth/report", async (request, reply) => {
+  const session = requireAccessSession(request, reply);
+  if (!session) return reply;
+  const parsed = ManagedGrowthReportTenantQuerySchema.safeParse(request.query ?? {});
+  if (!parsed.success) return reply.status(400).send({ ok: false, error: parsed.error.flatten() });
+  const tenantId = crmTenantForSession(session, parsed.data.tenant_id);
+  const [clientSetup, crm, proposals, approvals] = await Promise.all([
+    getClientSetupDocument(tenantId, session.id),
+    getCrmPipelineDocument(tenantId, session.id),
+    getProposalDocument(tenantId, session.id),
+    getWorkspaceApprovalDocument(tenantId, session.id),
+  ]);
+  const report = buildManagedGrowthReport({ tenantId, clientSetup, crm, proposals, approvals });
+  return {
+    ok: true,
+    tenant_id: tenantId,
+    report,
+    provider_called: false,
+    outbound_action_executed: false,
+    public_exposure_changed: false,
   };
 });
 

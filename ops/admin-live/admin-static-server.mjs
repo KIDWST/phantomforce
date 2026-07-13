@@ -126,6 +126,7 @@ function shouldProxy(urlPath) {
     || urlPath.startsWith("/api/crm")
     || urlPath.startsWith("/api/proposals")
     || urlPath.startsWith("/api/workspace-approvals")
+    || urlPath.startsWith("/api/managed-growth")
     || urlPath.startsWith("/phantom-ai/")
     /* multi-tenant org APIs + published-site hosting live on Hermes */
     || urlPath.startsWith("/orgs/")

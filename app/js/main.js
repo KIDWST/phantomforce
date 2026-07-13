@@ -12,6 +12,7 @@ import { WORKSPACE_DEFS, missionWidgets, esc } from "./workspaces.js?v=phantom-l
 import { createPhantomCharacter } from "./character.js?v=phantom-live-20260713-247";
 import { renderMediaStudio, DEFAULT_PROVIDERS } from "./medialab.js?v=phantom-live-20260713-247";
 import { renderContentHub, renderAnalytics } from "./contenthub.js?v=phantom-live-20260713-247";
+import { mountManagedGrowthReport } from "./managedgrowth.js?v=phantom-live-20260713-247";
 import { createPhantomStage3D } from "./phantom-3d.js?v=phantom-live-20260713-247";
 import { renderFlowMap, flowSummary } from "./flowmap.js?v=phantom-live-20260713-247";
 import { mountPhantomWire, mountAgentConsole } from "./agentops.js?v=phantom-live-20260713-247";
@@ -2751,6 +2752,16 @@ function renderMediaLabSuite(body, initialTab = "create") {
   paint();
 }
 
+function renderAnalyticsSuite(body) {
+  body.innerHTML = `
+    <section class="analytics-stack">
+      <div data-managed-growth-report></div>
+      <div data-social-analytics-report></div>
+    </section>`;
+  mountManagedGrowthReport($("[data-managed-growth-report]", body));
+  renderAnalytics($("[data-social-analytics-report]", body), mediaOpts());
+}
+
 const CUSTOM = {
   media: { title: "Media Lab", kicker: "Create, organize, and publish", custom: true, wide: true, render: (body) => renderMediaLabSuite(body, "create") },
   sites: { title: "Websites", kicker: "Websites by domain", custom: true, wide: true, render: (body) => renderSiteStudio(body, mediaOpts()) },
@@ -2759,7 +2770,7 @@ const CUSTOM = {
   phantomplay: { title: "PhantomPlay", kicker: "Intentional downtime and approved games", custom: true, wide: true, render: (body) => (phantomPlayV2Opted() ? renderPhantomPlayV2 : renderPhantomPlay)(body, mediaOpts()) },
   intelligence: { title: "Competitor Intelligence", kicker: "Public signals, labeled estimates, and original responses", custom: true, wide: true, render: (body) => renderCompetitorIntelligence(body, mediaOpts()) },
   clientsetup: { title: "Client Setup", kicker: "Owner setup console", custom: true, wide: true, render: (body) => renderClientSetupConsole(body, mediaOpts()) },
-  analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: (body) => renderAnalytics(body, mediaOpts()) },
+  analytics: { title: "Analytics", kicker: "Signals, trends, and operating insight", custom: true, wide: true, render: renderAnalyticsSuite },
   account: { title: "Business Profile & Plan", kicker: "Profile, billing, and access", custom: true, render: (body) => renderAccountPlan(body) },
   developer: { title: "Developer", kicker: "Owner controls", custom: true, wide: true, ownerOnly: true, render: (body) => renderDeveloperPage(body) },
   settings: { title: "Business Manager Settings", kicker: "Brain, memory, routing, and safety configuration", custom: true, render: (body) => renderOperatorSettings(body, { ...mediaOpts(), onWorkspaceApplied: () => { refreshCustomizedNavigation(); renderNav(); renderMobileBottomNav(); } }) },
