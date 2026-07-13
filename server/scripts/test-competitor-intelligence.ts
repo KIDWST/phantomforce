@@ -21,6 +21,7 @@ try {
   const intel = await import("../src/phantom-ai/competitor-intelligence.js");
   const scout = await intel.updateMarketScoutContext(owner, { businessName: "Owner Studio", location: "Chicago", offer: "premium photo and media services", audience: "local brands and creators", goals: "Find competitors gaining traction, weak reviews, product sales, and pricing changes." });
   assert(scout.status === "ready_to_discover" && scout.lanes.length >= 4, "Scout context should arm proactive public-source discovery lanes.");
+  assert(scout.lanes.every((lane) => lane.status === "ready_to_run"), "Scout lanes should be ready to run without confusing queue language.");
 
   const created = await intel.createCompetitor(owner, { name: "Example Rival", website: "https://rival.example.test", category: "Service" }, 10);
   assert(created.name === "Example Rival", "Competitor profile should persist.");
@@ -67,7 +68,9 @@ try {
   assert(ownerSnapshot.metrics.blockedRequests >= 2, "Blocked requests must be visible in the admin audit metrics.");
   assert(ownerSnapshot.scout.status === "watching" && ownerSnapshot.metrics.activeScoutLanes >= 4, "Snapshot should expose AI scout readiness.");
   assert(ownerSnapshot.marketBoard[0]?.name === "Example Rival" && ownerSnapshot.marketBoard[0].signalCount === 2, "Snapshot should expose a stock-market-style competitor board from public signals.");
+  assert(ownerSnapshot.marketBoardMode === "mixed" && ownerSnapshot.starterCompetitors.some((item) => item.name === "ChatGPT"), "Snapshot should keep starter competitors available without treating them as live evidence.");
   assert(ownerSnapshot.tips.length > 0, "Snapshot should include next best action tips.");
+  assert(clientSnapshot.marketBoardMode === "starter" && clientSnapshot.marketBoard.some((item) => item.name === "HubSpot" && item.signalCount === 0), "Fresh workspaces should see a starter competitor map with no fake live signals.");
 
   const { app } = await import("../src/index.js");
   const unauth = await app.inject({ method: "GET", url: "/api/competitor-intelligence" });
