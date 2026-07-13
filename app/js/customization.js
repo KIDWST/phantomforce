@@ -1,10 +1,30 @@
-import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-221";
+import { currentTenantId, session } from "./store.js?v=phantom-live-20260712-223";
 
 let activeConfiguration = null;
 let activeEntitlements = null;
 let activeVersions = [];
 
 const clone = (value) => JSON.parse(JSON.stringify(value));
+const CANONICAL_MODULES = {
+  intelligence: {
+    label: "Competitor Intel",
+    roles: ["owner", "admin", "manager", "member", "client"],
+    forceEnabled: true,
+  },
+};
+
+function normalizedModuleState(module, moduleId) {
+  const canonical = CANONICAL_MODULES[moduleId];
+  if (!canonical) return module;
+  const roles = Array.from(new Set([...(module?.roles || []), ...canonical.roles]));
+  return {
+    ...(module || { id: moduleId, order: undefined, accessMode: "entire_organization" }),
+    label: canonical.label,
+    enabled: canonical.forceEnabled ? true : module?.enabled !== false,
+    roles,
+  };
+}
+
 const authHeaders = (json = false) => {
   const token = session.token();
   return { ...(token ? { Authorization: `Bearer ${token}` } : {}), ...(json ? { "Content-Type": "application/json" } : {}) };
@@ -47,7 +67,7 @@ function roleForCustomization(role = "owner") {
 
 export function canAccessConfiguredModule(moduleId, role = "owner") {
   if (!activeConfiguration) return true;
-  const module = activeConfiguration.modules.find((item) => item.id === moduleId);
+  const module = normalizedModuleState(activeConfiguration.modules.find((item) => item.id === moduleId), moduleId);
   if (!module) return true;
   if (!module.enabled) return false;
   const effectiveRole = roleForCustomization(role);
@@ -89,12 +109,12 @@ export function customizeNavigation(baseItems, role = "owner") {
   const states = new Map(activeConfiguration.modules.map((module) => [module.id, module]));
   return baseItems
     .filter((item) => {
-      const state = states.get(item.id);
+      const state = normalizedModuleState(states.get(item.id), item.id);
       if (!state) return true;
       return canAccessConfiguredModule(item.id, role);
     })
     .map((item) => {
-      const state = states.get(item.id);
+      const state = normalizedModuleState(states.get(item.id), item.id);
       /* Dashboard is the platform home. Older org customizations may still
          carry "Business HQ"; keep the new product language stable here. */
       if (item.id === "dashboard") return { ...item, label: item.label, customizationOrder: state?.order };
