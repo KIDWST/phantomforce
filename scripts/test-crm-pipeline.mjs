@@ -10,6 +10,7 @@ const files = {
   client: read("app/js/crmpipeline.js"),
   workspaces: read("app/js/workspaces.js"),
   pageworker: read("app/js/pageworker.js"),
+  crmProspects: read("app/js/crmprospects.js"),
   staticServer: read("ops/admin-live/admin-static-server.mjs"),
   audit: read("scripts/audit-client-setup-data-model.mjs"),
   packageJson: read("package.json"),
@@ -54,6 +55,10 @@ must(files.workspaces, /updateServerCrmLead/u, "Clients page must update server 
 must(files.pageworker, /persistCrmProspectLanes/u, "Clients page prompter must persist prospect lanes.");
 must(files.pageworker, /persistCrmProspectLanes[\s\S]*signalCrmRefresh/u, "Clients page prompter must signal the board to refresh after server persistence.");
 must(files.pageworker, /Server CRM saved the draft lanes/u, "Prompter result must report server CRM persistence.");
+must(files.crmProspects, /createCrmProspectBuildout/u, "CRM prospect builder must be shared for page-specific prompters.");
+must(files.workspaces, /data-client-crm-form/u, "Clients page must expose a visible prompt-to-CRM form.");
+must(files.workspaces, /persistCrmProspectLanes\(lanes, rawPrompt\)/u, "Visible Clients page prompt must persist CRM lanes when the server session can write.");
+must(files.workspaces, /No outreach, uploads, public exposure, or fake contact details/u, "Visible Clients page prompt must disclose CRM-only safe behavior.");
 must(files.audit, /PERSIST-CRM-PIPELINE/u, "Structured audit must report CRM pipeline persistence.");
 must(files.packageJson, /test:crm-pipeline/u, "Root package must expose the CRM pipeline regression test.");
 

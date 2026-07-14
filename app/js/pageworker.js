@@ -4,9 +4,9 @@
    draftable actions, and one blocking question max. External actions stay
    approval-gated. */
 
-import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260714-253";
-import { createCrmProspectBuildout, isCrmProspectBuildout } from "./command.js?v=phantom-live-20260714-253";
-import { persistCrmProspectLanes, signalCrmRefresh } from "./crmpipeline.js?v=phantom-live-20260714-253";
+import { store, visible, currentWs, wsName, pushActivity, session, currentTenantId } from "./store.js?v=phantom-live-20260714-255";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260714-255";
+import { persistCrmProspectLanes, signalCrmRefresh } from "./crmpipeline.js?v=phantom-live-20260714-255";
 
 const esc = (value = "") => String(value)
   .replaceAll("&", "&amp;")
@@ -400,7 +400,7 @@ export function runPageAction(pageId, prompt) {
     type: "prospect-buildout",
     title: buildout.created.length ? "Prospect lanes created" : "Prospect lanes already mapped",
     summary: `${createdNames.length || laneNames.length} draft lane${(createdNames.length || laneNames.length) === 1 ? "" : "s"} ready in Clients: ${names}.`,
-    leads: buildout.created,
+    leads: buildout.leads || buildout.created,
     notes: [
       "No outreach, upload, deploy, or public action happened.",
       "No fake contact details were generated.",

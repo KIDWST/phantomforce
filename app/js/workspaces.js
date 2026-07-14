@@ -9,32 +9,35 @@ import {
   PACKAGES, RETAINERS, FINANCE_CATEGORIES, MEMORY_CATEGORY_LABELS, MEMORY_RETENTION_DAYS, CHAT_HISTORY_RETENTION_DAYS,
   addMemory, toggleMemoryRemember, forgetMemory, forgetChatHistory, memoryStats, memoryRetention, chatHistoryStats, chatHistoryRetention,
   session, currentTenantId,
-} from "./store.js?v=phantom-live-20260714-253";
+} from "./store.js?v=phantom-live-20260714-255";
 import {
   isDatabaseSession, canManageActiveOrg, fetchServerApprovals, decideServerRun,
-} from "./orgs.js?v=phantom-live-20260714-253";
+} from "./orgs.js?v=phantom-live-20260714-255";
 import {
   createCrmLead as createServerCrmLead,
   crmRefreshSignal,
   crmServerAvailable,
   deleteCrmLead as deleteServerCrmLead,
   loadCrmLeads,
+  persistCrmProspectLanes,
+  signalCrmRefresh,
   updateCrmLead as updateServerCrmLead,
-} from "./crmpipeline.js?v=phantom-live-20260714-253";
+} from "./crmpipeline.js?v=phantom-live-20260714-255";
+import { createCrmProspectBuildout, isCrmProspectBuildout } from "./crmprospects.js?v=phantom-live-20260714-255";
 import {
   createProposal as createServerProposal,
   deleteProposal as deleteServerProposal,
   loadProposals,
   proposalServerAvailable,
   updateProposal as updateServerProposal,
-} from "./proposalpipeline.js?v=phantom-live-20260714-253";
+} from "./proposalpipeline.js?v=phantom-live-20260714-255";
 import {
   approvalServerAvailable,
   createWorkspaceApproval as createServerWorkspaceApproval,
   decideWorkspaceApproval as decideServerWorkspaceApproval,
   deleteWorkspaceApproval as deleteServerWorkspaceApproval,
   loadWorkspaceApprovals,
-} from "./approvalpipeline.js?v=phantom-live-20260714-253";
+} from "./approvalpipeline.js?v=phantom-live-20260714-255";
 
 export const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const title = (s) => String(s || "").replace(/\b\w/g, (c) => c.toUpperCase());
@@ -60,6 +63,7 @@ const LOCAL_CORE_WORKERS = [
 ];
 const MEMORY_DAY = 86400000;
 const crmRuntime = { state: "idle", tenant: "", leads: [], canWrite: false, error: "", refreshSignal: "" };
+const crmPromptUi = { busy: false, message: "", status: "" };
 const proposalRuntime = { state: "idle", tenant: "", proposals: [], canWrite: false, error: "" };
 const approvalRuntime = { state: "idle", tenant: "", approvals: [], canWrite: false, canDecide: false, error: "" };
 
@@ -307,6 +311,18 @@ function renderLeads(el, rerender) {
     ["new", "New"], ["follow-up", "Follow-up"], ["proposal", "Proposal out"], ["won", "Won"], ["lost", "Lost"],
   ];
   el.innerHTML = `
+    <section class="page-worker client-crm-worker" data-client-crm-worker>
+      <div class="page-worker-copy">
+        <p>Client intelligence</p>
+        <h3>Find and add CRM prospects.</h3>
+        <span>Tell Phantom who to find: schools, creators, gyms, service companies, warm prospects, or everyone. It creates draft CRM lanes only.</span>
+      </div>
+      <form class="page-worker-form" data-client-crm-form>
+        <textarea data-client-crm-input rows="1" placeholder="Example: add creators, businesses, schools, and everyone who could use PhantomForce..." aria-label="Find and add CRM prospects"></textarea>
+        <button type="submit" ${crmPromptUi.busy ? "disabled" : ""}>${crmPromptUi.busy ? "Thinking" : "Run"}</button>
+      </form>
+      ${crmPromptUi.message ? `<div class="page-worker-output ${esc(crmPromptUi.status || "")}" data-client-crm-result><p>${esc(crmPromptUi.message)}</p></div>` : ""}
+    </section>
     <div class="ws-toolbar">
       <p class="ws-note">Every lead moves draft → approval → send-ready. Nothing goes out without you. <b>${esc(crmStatus)}</b></p>
       <button class="btn btn-primary" data-act="add" ${serverBacked && !crmRuntime.canWrite ? "disabled" : ""}>+ Capture lead</button>
@@ -335,6 +351,46 @@ function renderLeads(el, rerender) {
       }).join("")}
     </div>`;
   const find = (id) => (serverBacked ? crmRuntime.leads : store.state.leads).find((l) => l.id === id);
+  const promptForm = el.querySelector("[data-client-crm-form]");
+  promptForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const input = promptForm.querySelector("[data-client-crm-input]");
+    const rawPrompt = String(input?.value || "").trim();
+    if (!rawPrompt) {
+      crmPromptUi.status = "is-error";
+      crmPromptUi.message = "Before we proceed, answer this: who should Phantom add to the CRM?";
+      rerender();
+      return;
+    }
+    const prompt = isCrmProspectBuildout(rawPrompt) ? rawPrompt : `find and add CRM prospects for ${rawPrompt}`;
+    crmPromptUi.busy = true;
+    crmPromptUi.status = "is-thinking";
+    crmPromptUi.message = "Phantom is mapping safe prospect lanes and refusing to invent fake contact details.";
+    rerender();
+    try {
+      const buildout = createCrmProspectBuildout(prompt);
+      const lanes = buildout.leads || buildout.created;
+      let saved = lanes.length;
+      if (crmServerAvailable() && crmRuntime.canWrite && lanes.length) {
+        const payload = await persistCrmProspectLanes(lanes, rawPrompt);
+        applyCrmPayload(payload);
+        saved = Array.isArray(payload.leads) ? payload.leads.length : saved;
+        signalCrmRefresh("client-crm-prompt-saved");
+      }
+      const names = (lanes.length ? lanes : buildout.segments).map((item) => item.company || item.name || item.title).join(", ");
+      crmPromptUi.status = "is-done";
+      crmPromptUi.message = `${saved} draft CRM prospect lane${saved === 1 ? "" : "s"} ready: ${names}. No outreach, uploads, public exposure, or fake contact details were created.`;
+      pushActivity("Client Intelligence", `created CRM prospect lanes from a Clients page prompt: ${names}.`);
+      store.save();
+      crmPromptUi.busy = false;
+      rerender();
+    } catch (error) {
+      crmPromptUi.status = "is-error";
+      crmPromptUi.message = `I could not convert that into CRM lanes yet: ${error?.message || "unknown error"}`;
+      crmPromptUi.busy = false;
+      rerender();
+    }
+  });
   const updateLead = async (lead, patch) => {
     if (!lead) return;
     if (serverBacked && crmRuntime.canWrite) {
@@ -1543,7 +1599,7 @@ function renderMemory(el, rerender) {
       if (!brainPanel.open || brainPanel.dataset.mounted) return;
       brainPanel.dataset.mounted = "1";
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
-      import("./brain.js?v=phantom-live-20260714-253")
+      import("./brain.js?v=phantom-live-20260714-255")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
         .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">This panel could not load. Try again in a moment.</p>`; });
     });
