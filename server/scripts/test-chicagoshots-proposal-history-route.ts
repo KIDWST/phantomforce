@@ -18,6 +18,7 @@ process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
+process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 process.env.PHANTOMFORCE_ALLOW_UNSIGNED_SESSION_HEADER = "false";
 process.env.PHANTOM_CHICAGOSHOTS_PROPOSAL_HISTORY_PATH = join(tempDir, "proposal-history.jsonl");
 

@@ -13,6 +13,7 @@ process.env.PHANTOMFORCE_SERVER_LISTEN = "false";
 process.env.PHANTOMFORCE_SERVER_LOGGER = "false";
 process.env.PHANTOMFORCE_AUTH_PROVIDER = "demo";
 process.env.PHANTOMFORCE_ENABLE_DEMO_AUTH = "true";
+process.env.PHANTOMFORCE_SKIP_SERVER_DOTENV = "true";
 
 const owner: AccessSession = { id: "owner", label: "Owner", role: "admin", canManageAccess: true, isSuperAdmin: true, orgId: "org-owner", orgRole: "owner" };
 const client: AccessSession = { id: "client", label: "Client", role: "client", canManageAccess: false, orgId: "org-client", orgRole: "member" };
