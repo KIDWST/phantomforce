@@ -83,6 +83,10 @@ export function mountVideoEditor(host, opts = {}) {
   const recorderMime = pickRecorderMime();
   let clipSeq = 0;
   let pickerItems = [];
+  let localPickerItems = [];
+  let localPickerLoading = false;
+  let localPickerSeq = 0;
+  const genPanel = { open: false, busy: false, prompt: "", modality: "video" };
   let playClock = 0;                // performance.now() timestamp for playhead 0 while playing
   let exportRun = null;
   let raf = 0;
@@ -661,11 +665,16 @@ export function mountVideoEditor(host, opts = {}) {
     updateTransportUI(exportRun ? t : state.playhead, exportRun ? exportRun.total : totalDuration());
   }
 
-  /* ---------------- UI: add row / picker ---------------- */
+  /* ---------------- UI: add row / AI generate / picker ---------------- */
   function renderAddRow() {
+    const hasAi = typeof opts.sources?.generateClip === "function";
     addRowEl.innerHTML = `
-      <button class="vc-add-btn" data-vc-add-pool type="button">＋ From Media Pool</button>
-      <label class="vc-add-btn">＋ From this PC<input type="file" data-vc-add-files accept="image/*,video/*" multiple hidden/></label>
+      <div class="vc-addrow-top">
+      <div class="vc-addrow-main">
+        ${hasAi ? `<button class="vc-add-btn vc-add-btn-ai" data-vc-add-ai type="button">${genPanel.busy ? "✨ Generating…" : "✨ Generate with AI"}</button>` : ""}
+        <button class="vc-add-btn" data-vc-add-pool type="button">＋ Your media</button>
+        <label class="vc-add-btn vc-add-btn-ghost">＋ This PC<input type="file" data-vc-add-files accept="image/*,video/*" multiple hidden/></label>
+      </div>
       <div class="vc-music">
         <span class="vc-microlabel">Music</span>
         ${music.el ? `
@@ -678,9 +687,14 @@ export function mountVideoEditor(host, opts = {}) {
           <label class="vc-add-btn vc-add-btn-ghost">＋ Add track<input type="file" data-vc-music-file accept="audio/*" hidden/></label>
           <span class="vc-microlabel vc-music-note">optional · stops at the cut end</span>
         `}
-      </div>`;
+      </div>
+      </div>
+      ${hasAi && genPanel.open ? genPanelHtml() : ""}`;
     addRowEl.querySelector("[data-vc-add-pool]").onclick = openPicker;
     addRowEl.querySelector("[data-vc-add-files]").onchange = (e) => { handleFiles(e.target.files); e.target.value = ""; };
+    const aiBtn = addRowEl.querySelector("[data-vc-add-ai]");
+    if (aiBtn) aiBtn.onclick = () => { genPanel.open = !genPanel.open; renderAddRow(); };
+    wireGenPanel();
     const mf = addRowEl.querySelector("[data-vc-music-file]");
     if (mf) mf.onchange = (e) => { if (e.target.files[0]) setMusicFile(e.target.files[0]); e.target.value = ""; };
     const mv = addRowEl.querySelector("[data-vc-music-vol]");
@@ -693,37 +707,125 @@ export function mountVideoEditor(host, opts = {}) {
     const mr = addRowEl.querySelector("[data-vc-music-remove]");
     if (mr) mr.onclick = () => { clearMusic(); renderAddRow(); };
   }
-  function poolItems() {
-    const out = [];
-    const safe = (fn) => { try { const r = typeof fn === "function" ? fn() : []; return Array.isArray(r) ? r : []; } catch { return []; } };
-    for (const r of safe(opts.sources?.poolImages)) if (r && r.url) out.push({ kind: "photo", title: r.title || "Pool image", url: r.url });
-    for (const r of safe(opts.sources?.poolVideos)) if (r && r.url) out.push({ kind: "video", title: r.title || "Pool video", url: r.url });
-    return out;
-  }
-  function openPicker() {
-    pickerItems = poolItems();
-    pickerEl.hidden = false;
-    pickerEl.innerHTML = `
-      <div class="vc-picker-backdrop" data-vc-picker-close></div>
-      <div class="vc-picker-panel" role="dialog" aria-label="Media Pool picker">
-        <header class="vc-picker-head">
-          <b>Media Pool</b>
-          <span class="vc-microlabel">pick media to append to the timeline</span>
-          <button class="vc-mini-btn" data-vc-picker-close type="button" aria-label="Close">✕</button>
-        </header>
-        <div class="vc-picker-grid">
-          ${pickerItems.length ? pickerItems.map((it, i) => `
-            <button class="vc-pick" data-vc-pick="${i}" type="button">
-              <span class="vc-pick-thumb">${it.kind === "video"
-                ? `<video src="${esc(it.url)}" muted preload="metadata"></video>`
-                : `<img src="${esc(it.url)}" alt="" loading="lazy"/>`}</span>
-              <span class="vc-pick-copy"><b>${esc(it.title)}</b><i>${it.kind === "video" ? "video" : "image"}</i></span>
-            </button>`).join("")
-          : `<p class="vc-picker-empty">Media Pool is empty — generate or save media in Media Lab first, or add files from this PC.</p>`}
+  function genPanelHtml() {
+    return `
+      <div class="vc-genpanel" data-vc-genpanel>
+        <div class="vc-genpanel-mode" data-vc-gen-mode>
+          <button type="button" class="${genPanel.modality === "video" ? "is-on" : ""}" data-v="video" ${genPanel.busy ? "disabled" : ""}>Video</button>
+          <button type="button" class="${genPanel.modality === "photo" ? "is-on" : ""}" data-v="photo" ${genPanel.busy ? "disabled" : ""}>Image</button>
+        </div>
+        <textarea class="vc-genpanel-prompt" data-vc-gen-prompt rows="2" maxlength="600" placeholder="Describe the shot — subject, setting, motion, mood…" ${genPanel.busy ? "disabled" : ""}>${esc(genPanel.prompt)}</textarea>
+        <div class="vc-genpanel-actions">
+          <span class="vc-microlabel">${genPanel.busy ? "Generating — this can take a moment…" : "Adds straight to your timeline when it's ready."}</span>
+          <button type="button" class="vc-mini-btn" data-vc-gen-cancel ${genPanel.busy ? "disabled" : ""}>Cancel</button>
+          <button type="button" class="vc-add-btn vc-add-btn-ai" data-vc-gen-go ${genPanel.busy ? "disabled" : ""}>${genPanel.busy ? "Working…" : "Generate"}</button>
         </div>
       </div>`;
   }
-  function closePicker() { pickerEl.hidden = true; pickerEl.innerHTML = ""; }
+  function wireGenPanel() {
+    const panel = addRowEl.querySelector("[data-vc-genpanel]");
+    if (!panel) return;
+    panel.querySelectorAll("[data-vc-gen-mode] button").forEach((b) => b.onclick = () => {
+      genPanel.modality = b.dataset.v;
+      renderAddRow();
+    });
+    const promptEl = panel.querySelector("[data-vc-gen-prompt]");
+    if (promptEl) {
+      promptEl.oninput = () => { genPanel.prompt = promptEl.value; };
+      promptEl.focus();
+      promptEl.selectionStart = promptEl.selectionEnd = promptEl.value.length;
+    }
+    panel.querySelector("[data-vc-gen-cancel]").onclick = () => { genPanel.open = false; renderAddRow(); };
+    panel.querySelector("[data-vc-gen-go]").onclick = async () => {
+      const prompt = genPanel.prompt.trim();
+      if (!prompt) { promptEl?.focus(); return; }
+      genPanel.busy = true;
+      renderAddRow();
+      try {
+        const result = await opts.sources.generateClip(prompt, genPanel.modality === "video" ? "video" : "image");
+        if (result?.url) {
+          addClip(result.type === "video" ? "video" : "photo", result.url, result.title || "Generated", false);
+          genPanel.open = false;
+          genPanel.prompt = "";
+        }
+      } finally {
+        genPanel.busy = false;
+        renderAddRow();
+      }
+    };
+  }
+  function poolItems() {
+    const out = [];
+    const safe = (fn) => { try { const r = typeof fn === "function" ? fn() : []; return Array.isArray(r) ? r : []; } catch { return []; } };
+    for (const r of safe(opts.sources?.poolImages)) if (r && r.url) out.push({ kind: "photo", title: r.title || "Pool image", url: r.url, source: "pool" });
+    for (const r of safe(opts.sources?.poolVideos)) if (r && r.url) out.push({ kind: "video", title: r.title || "Pool video", url: r.url, source: "pool" });
+    return out;
+  }
+  function pickerGroupHtml(label, items, emptyText) {
+    return `
+      <p class="vc-picker-section">${esc(label)}</p>
+      ${items.length ? `<div class="vc-picker-grid">${items.map(({ it, i }) => `
+        <button class="vc-pick" data-vc-pick="${i}" type="button">
+          <span class="vc-pick-thumb">${it.kind === "video"
+            ? `<video src="${esc(it.url)}" muted preload="metadata"></video>`
+            : `<img src="${esc(it.url)}" alt="" loading="lazy"/>`}</span>
+          <span class="vc-pick-copy"><b>${esc(it.title)}</b><i>${it.kind === "video" ? "video" : "image"}</i></span>
+        </button>`).join("")}</div>`
+        : `<p class="vc-picker-empty">${esc(emptyText)}</p>`}`;
+  }
+  function pickerGridHtml() {
+    const indexed = pickerItems.map((it, i) => ({ it, i }));
+    const pool = indexed.filter((row) => row.it.source === "pool");
+    const local = indexed.filter((row) => row.it.source === "local");
+    const hasLocal = typeof opts.sources?.listLocal === "function";
+    return `
+      ${pickerGroupHtml("Media Pool", pool, "Media Pool is empty — generate or save media in Media Lab first.")}
+      ${hasLocal ? pickerGroupHtml(
+        "This PC",
+        local,
+        localPickerLoading ? "Scanning local files…" : "No local media indexed yet.",
+      ) : ""}`;
+  }
+  function repaintPickerGrid() {
+    const grid = pickerEl.querySelector("[data-vc-picker-body]");
+    if (grid) grid.innerHTML = pickerGridHtml();
+  }
+  async function loadLocalPickerItems() {
+    const seq = ++localPickerSeq;
+    localPickerLoading = true;
+    repaintPickerGrid();
+    const rows = await opts.sources.listLocal("all").catch(() => []);
+    if (seq !== localPickerSeq) return;
+    localPickerLoading = false;
+    localPickerItems = Array.isArray(rows) ? rows : [];
+    repaintPickerGrid(); // repaint now — the loop below only repaints per item, and may be empty
+    // resolve blob URLs progressively so the grid can preview without the picker stalling
+    for (const row of localPickerItems) {
+      if (seq !== localPickerSeq) return;
+      const url = await opts.sources.localBlobUrl(row.id).catch(() => null);
+      if (seq !== localPickerSeq) return;
+      if (url) pickerItems.push({ kind: row.kind === "video" ? "video" : "photo", title: row.title, url, source: "local" });
+      repaintPickerGrid();
+    }
+  }
+  function openPicker() {
+    pickerItems = poolItems();
+    localPickerItems = [];
+    localPickerLoading = false;
+    pickerEl.hidden = false;
+    pickerEl.innerHTML = `
+      <div class="vc-picker-backdrop" data-vc-picker-close></div>
+      <div class="vc-picker-panel" role="dialog" aria-label="Your media">
+        <header class="vc-picker-head">
+          <b>Your media</b>
+          <span class="vc-microlabel">pick something to append to the timeline</span>
+          <button class="vc-mini-btn" data-vc-picker-close type="button" aria-label="Close">✕</button>
+        </header>
+        <div data-vc-picker-body>${pickerGridHtml()}</div>
+      </div>`;
+    if (typeof opts.sources?.listLocal === "function") loadLocalPickerItems();
+  }
+  function closePicker() { pickerEl.hidden = true; pickerEl.innerHTML = ""; localPickerSeq++; }
   pickerEl.addEventListener("click", (e) => {
     const pick = e.target.closest("[data-vc-pick]");
     if (pick) {
