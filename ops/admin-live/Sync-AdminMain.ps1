@@ -104,7 +104,7 @@ try {
   # missing one shows players an endless spinner. Verify every tracked game
   # file survived the pull (antivirus quarantine and partial checkouts are the
   # realistic causes) and shout about any gap instead of failing silently.
-  $trackedGames = @(Invoke-Git ls-files "app/games/*.html" | Where-Object { $_ })
+  $trackedGames = @((Invoke-Git ls-files "app/games/*.html") -split "`n" | ForEach-Object { $_.Trim() } | Where-Object { $_ })
   $missingGames = @($trackedGames | Where-Object { -not (Test-Path -LiteralPath (Join-Path $RepoRoot $_)) })
   if ($missingGames.Count -gt 0) {
     $list = $missingGames -join ", "
