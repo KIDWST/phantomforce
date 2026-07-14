@@ -9,7 +9,7 @@
 import {
   currentTenantId, isAdmin, session,
   workspaceStorageGetItem, workspaceStorageSetItem,
-} from "./store.js?v=phantom-live-20260714-005";
+} from "./store.js?v=phantom-live-20260714-006";
 
 const esc = (value) => String(value ?? "").replace(/[&<>"']/g, (ch) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
 const FALLBACK_KEY = "pf.phantomplay.offline.v1";
@@ -237,7 +237,8 @@ function renderFriends() {
         ${addable.length ? addable.map((entry) => `<div class="pp2-person">${statusDot(entry.status)}<b>${esc(entry.label)}</b><span>${entry.status === "playing" && entry.gameId ? `playing ${esc(gameById(entry.gameId)?.title || entry.gameId)}` : esc(entry.status)}</span><button type="button" class="pp2-play" data-pp2-befriend="${esc(entry.actorId)}">Add friend</button></div>`).join("") : empty("Nobody else is online", "Presence appears while workspace members have PhantomPlay open.")}
       </section>
     </div>
-    ${row("Made for playing together", [gameById("phantom-rumble")].filter(Boolean), "Two players on one keyboard, bots to fill the arena. Voice and online parties are on the roadmap — nothing here fakes them.")}
+    ${row("Made for playing together", [gameById("phantom-rumble")].filter(Boolean), "Two players on one keyboard, bots to fill the arena — or open a private online room with a friend from the Multiplayer tab in Classic view (this V2 shell doesn't have its own room UI yet).")}
+    <section class="pp2-panel"><h3>Multiplayer rooms</h3><p>Private rooms — invite codes, ready checks, host controls, and bot fill-in — live in Classic view for now.</p><button type="button" class="pp2-play" data-pp2-classic>Open Multiplayer in Classic view</button></section>
     <section class="pp2-panel"><h3>Workspace activity</h3>${feed.length ? `<ul class="pp2-feed">${feed.slice(0, 20).map((entry) => `<li><b>${esc(entry.actorLabel)}</b> ${entry.kind === "review" ? `reviewed <i>${esc(entry.subject)}</i> ${esc(entry.detail)}` : entry.kind === "wishlist" ? `wishlisted <i>${esc(entry.subject)}</i>` : entry.kind === "follow" ? `followed <i>${esc(entry.subject)}</i>` : `released <i>${esc(entry.subject)}</i>`}<span>${esc((entry.at || "").slice(0, 10))}</span></li>`).join("")}</ul>` : empty("Quiet so far", "Reviews, wishlists, and follows will show up here.")}</section>
   </div>`;
 }
