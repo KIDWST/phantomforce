@@ -2791,7 +2791,20 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 .side-brand-text b { display: block; font: 600 11.5px "Space Grotesk", sans-serif; letter-spacing: 0.11em; }
 .side-brand-text i { display: block; margin-top: 1px; font: 500 7px "DM Mono", monospace; font-style: normal; letter-spacing: 0.14em; color: var(--dim); }
 .side-toggle { display: none; }
-.side-nav { display: flex; flex-direction: column; gap: 2px; flex: 1 1 auto; min-height: 0; }
+.side-nav { display: flex; flex-direction: column; gap: 2px; min-height: 0; }
+.side-nav-main {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+.side-nav-bottom {
+  flex: 0 0 auto;
+  margin-top: auto;
+  padding-top: 9px;
+  border-top: 1px solid var(--line-strong);
+}
 .nav-item {
   display: flex; align-items: center; gap: 9px; width: 100%; text-align: left; cursor: pointer;
   min-height: 38px; padding: var(--sp-2) 10px; border-radius: var(--r-md); border: 1px solid transparent; background: none;
@@ -2800,24 +2813,6 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 }
 .nav-item .ic { width: 15px; height: 15px; flex: 0 0 15px; }
 .nav-item:hover { background: rgba(65, 255, 161, 0.06); color: var(--ink); }
-.nav-item-bottom:first-of-type,
-.nav-item:not(.nav-item-bottom) + .nav-item-bottom {
-  margin-top: auto;
-  position: relative;
-}
-/* the bottom zone starts with a single clean hairline — one divider,
-   consistent inset, no glow gradient competing with the active state */
-.nav-item:not(.nav-item-bottom) + .nav-item-bottom::before {
-  content: "";
-  position: absolute;
-  left: var(--sp-2);
-  right: var(--sp-2);
-  top: -7px;
-  height: 1px;
-  background: var(--line-strong);
-}
-/* bottom-zone items keep the exact same height/rhythm as the main list —
-   the quieter ink is what marks them as tucked away, not a different size */
 .nav-item-bottom {
   background: rgba(255,255,255,0.018);
   color: rgba(210, 235, 222, 0.72);
@@ -3546,10 +3541,11 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
 @media (max-width: 900px) {
   .phantom { flex-direction: column; }
   .sidebar { flex: 0 0 auto; width: 100%; max-width: 100vw; height: auto; position: sticky; top: 0; z-index: 25; flex-direction: row; align-items: center; gap: 10px; padding: 10px 12px; border-right: 0; border-bottom: 1px solid var(--line); overflow-x: hidden; }
-  .sidebar::-webkit-scrollbar, .side-nav::-webkit-scrollbar { display: none; }
+  .sidebar::-webkit-scrollbar, .side-nav::-webkit-scrollbar, .side-nav-main::-webkit-scrollbar { display: none; }
   .side-brand { border-bottom: 0; padding: 4px; flex: 0 0 auto; }
   .side-brand-text { display: none; }
   .side-nav { flex-direction: row; gap: 6px; flex: 1 1 auto; min-width: 0; overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+  .side-nav-bottom { display: none; }
   .nav-item span { display: none; }
   .nav-item { flex: 0 0 42px; justify-content: center; padding: 9px 11px; }
   .nav-item.is-active { flex-basis: auto; min-width: 42px; }
@@ -3751,6 +3747,7 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
   .sidebar.is-expanded .side-toggle span:nth-child(3) { transform: rotate(-45deg); }
   .side-brand,
   .side-nav,
+  .side-nav-bottom,
   .side-plan { display: none; }
   .sidebar.is-expanded .side-brand {
     display: flex;
@@ -3765,6 +3762,12 @@ body.overlay-open .phantom { filter: blur(14px) brightness(0.55) saturate(1.15);
     gap: 6px;
     overflow: visible;
     flex: 0 1 auto;
+  }
+  .sidebar.is-expanded .side-nav-bottom {
+    flex: 0 0 auto;
+    margin-top: 8px;
+    padding-top: 9px;
+    border-top: 1px solid var(--line-strong);
   }
   .sidebar.is-expanded .nav-item {
     flex: 0 0 auto;
