@@ -6,6 +6,10 @@
    Two layouts: wide wave spine and phone snake. Reduced motion → static. */
 
 import { store, visible, moneyView, fmtMoney } from "./store.js?v=phantom-live-20260714-249";
+import {
+  cachedOrganizationPulse,
+  organizationPulseAvailable,
+} from "./organizationpulse.js?v=phantom-live-20260714-249";
 
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const NARROW_AT = 620;
@@ -17,32 +21,43 @@ const signedMoney = (value) => value < 0 ? `-${fmtMoney(Math.abs(value))}` : fmt
    compact summary row — one source of truth, never fabricated. */
 function liveCounts() {
   const m = moneyView();
+  const growth = organizationPulseAvailable() ? cachedOrganizationPulse()?.managedGrowth : null;
+  const serverGrowth = growth?.available ? growth : null;
   const openLeads = visible(store.state.leads).filter((l) => !["won", "lost"].includes(l.status));
   const moving = visible(store.state.media).filter((x) => x.status !== "delivered");
   const builds = visible(store.state.sites);
   const sec = visible(store.state.security)[0];
   const secClean = !sec || sec.posture === "clean";
-  return { m, openLeads, moving, builds, secClean };
+  return {
+    m,
+    openLeads,
+    openLeadCount: serverGrowth ? Number(serverGrowth.openLeads || 0) : openLeads.length,
+    proposalPipeline: serverGrowth ? Number(serverGrowth.proposalPipeline || 0) : Number(m.pipeline || 0),
+    moving,
+    builds,
+    secClean,
+    serverGrowth,
+  };
 }
 
 /* Collapsed-state summary: real counts plus whether anything is urgent
    enough that the map should default to open instead of collapsed. */
 export function flowSummary() {
-  const { openLeads, moving, builds, secClean } = liveCounts();
+  const { openLeadCount, moving, builds, secClean } = liveCounts();
   return {
     builds: builds.length,
-    openLeads: openLeads.length,
+    openLeads: openLeadCount,
     moving: moving.length,
     urgent: !secClean,
-    text: `${builds.length} website${builds.length === 1 ? "" : "s"} · ${openLeads.length} open lead${openLeads.length === 1 ? "" : "s"} · ${moving.length} moving deliver${moving.length === 1 ? "y" : "ies"}`,
+    text: `${builds.length} website${builds.length === 1 ? "" : "s"} · ${openLeadCount} open lead${openLeadCount === 1 ? "" : "s"} · ${moving.length} moving deliver${moving.length === 1 ? "y" : "ies"}`,
   };
 }
 
 function flowNodes() {
-  const { m, openLeads, moving, builds, secClean } = liveCounts();
+  const { m, openLeadCount, proposalPipeline, moving, builds, secClean, serverGrowth } = liveCounts();
   return [
-    { id: "leads", ws: "leads", icon: "◉", label: "Leads", stat: `${openLeads.length} open` },
-    { id: "quotes", ws: "proposals", icon: "◆", label: "Quotes", stat: `${m.open.length} live` },
+    { id: "leads", ws: "leads", icon: "◉", label: "Leads", stat: `${openLeadCount} open` },
+    { id: "quotes", ws: "proposals", icon: "◆", label: "Quotes", stat: serverGrowth ? fmtMoney(proposalPipeline) : `${m.open.length} live` },
     { id: "delivery", ws: "media", icon: "▶", label: "Delivery", stat: `${moving.length} moving` },
     { id: "site", ws: "sites", icon: "▦", label: "Sites", stat: `${builds.length} live` },
     { id: "money", ws: "money", icon: "◈", label: "Accounting", stat: m.transactions.length ? signedMoney(m.netCash) : "books", size: 24 },

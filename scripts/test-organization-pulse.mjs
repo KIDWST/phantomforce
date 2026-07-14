@@ -15,6 +15,7 @@ const orgPulseClient = read("app/js/organizationpulse.js");
 const serverRecords = read("app/js/serverrecords.js");
 const clientSetup = read("app/js/clientsetup.js");
 const main = read("app/js/main.js");
+const flowMap = read("app/js/flowmap.js");
 
 // 1. Honesty contract: unavailable sections must carry a reason, never fake data.
 assert.match(pulse, /available: false; reason: string/, "Pulse sections must model unavailability with a reason");
@@ -102,6 +103,10 @@ assert.match(main, /organizationPulseAvailable\(\)\) return pulse \? pulsePendin
 assert.match(main, /organizationPulseAvailable\(\) \? pulseAttentionItems/u, "Attention items must prefer server pulse when signed in.");
 assert.match(main, /ensureOrganizationPulseFresh\(\);/u, "Dashboard shell must refresh Organization Pulse in the background.");
 assert.match(main, /crm: "leads"/u, "CRM surface actions must route to the real Clients workspace.");
+assert.match(flowMap, /organizationpulse\.js/u, "Operations map must share the Organization Pulse client.");
+assert.match(flowMap, /cachedOrganizationPulse\(\)\?\.managedGrowth/u, "Operations map summary must read Managed Growth Ops from the cached server pulse.");
+assert.match(flowMap, /openLeadCount: serverGrowth \? Number\(serverGrowth\.openLeads/u, "Operations map lead counts must prefer server-backed CRM counts.");
+assert.match(flowMap, /stat: serverGrowth \? fmtMoney\(proposalPipeline\)/u, "Operations map proposal stat must prefer server-backed proposal pipeline value.");
 
 // 12. Command palette records: signed-in lookup must read server CRM and
 //     proposal documents instead of drifting against local fallback arrays.
