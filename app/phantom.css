@@ -11650,7 +11650,7 @@ body .phantom .pc .pc-caption {
   .page-worker-gate b { white-space: normal; }
 }
 
-/* ======================= Website + store dogfood flow ======================= */
+/* ======================= Website + store creator flow ======================= */
 .ss-modebar {
   display: inline-flex; align-items: center; gap: 4px; padding: 4px;
   border: 1px solid var(--line); border-radius: 11px; background: rgba(0,0,0,.24);

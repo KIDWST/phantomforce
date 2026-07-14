@@ -17,6 +17,23 @@ export type PhantomPlayEngineProfile = {
   minVersion: string;
 };
 
+type PhantomPlayMatchAction = {
+  id: string;
+  seq: number;
+  actorId: string;
+  label: string;
+  type: string;
+  payload: Record<string, string | number | boolean | null>;
+  createdAt: string;
+};
+
+type PhantomPlayMatchState = {
+  gameId: string;
+  seq: number;
+  updatedAt: string;
+  actions: PhantomPlayMatchAction[];
+};
+
 export type PhantomPlayGame = {
   id: string;
   title: string;
@@ -36,6 +53,11 @@ export type PhantomPlayGame = {
   progressSupport: boolean;
   scoreSupport: boolean;
   engine?: PhantomPlayEngineProfile;
+  multiplayerOnly?: boolean;
+  localMultiplayer?: boolean;
+  onlineMultiplayer?: boolean;
+  minPlayers?: number;
+  maxPlayers?: number;
 };
 
 const PHANTOMPLAY_ART_VERSION = "phantomplay-art-20260712";
@@ -119,6 +141,7 @@ export type PhantomPlayRoom = {
   updatedAt: string;
   expiresAt: string;
   participants: PhantomPlayRoomParticipant[];
+  match?: PhantomPlayMatchState;
   safety: {
     transport: "workspace_relay";
     joinPolicy: "signed_in_same_tenant_code";

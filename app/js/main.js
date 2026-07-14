@@ -167,8 +167,8 @@ function renderOwnerLoginGate(card, {
       <h1>${heading}</h1>
       <form class="owner-login" data-owner-login>
         <label>
-          <span>Owner email</span>
-          <input type="email" data-owner-email name="phantomforce-owner-email" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="phantomforcesupport@gmail.com" autofocus required />
+          <span>Email</span>
+          <input type="email" data-owner-email name="pf-access-identity" autocomplete="new-password" autocapitalize="none" spellcheck="false" placeholder="you@yourcompany.com" autofocus required />
         </label>
         <label>
           <span>Owner password</span>
@@ -186,6 +186,17 @@ function renderOwnerLoginGate(card, {
   const emailInput = card.querySelector("[data-owner-email]");
   const passwordInput = card.querySelector("[data-owner-password]");
   const error = card.querySelector("[data-owner-error]");
+  [emailInput, passwordInput].forEach((input) => {
+    if (!input) return;
+    input.value = "";
+    const unlock = () => input.removeAttribute("readonly");
+    input.addEventListener("pointerdown", unlock, { once: true });
+    input.addEventListener("focus", unlock, { once: true });
+  });
+  setTimeout(() => {
+    if (emailInput) emailInput.value = "";
+    if (passwordInput) passwordInput.value = "";
+  }, 50);
   form.onsubmit = async (event) => {
     event.preventDefault();
     error.hidden = true;

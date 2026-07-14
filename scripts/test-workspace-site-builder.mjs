@@ -4,6 +4,25 @@ globalThis.localStorage = { getItem: () => null, setItem: () => {}, removeItem: 
 globalThis.window = { addEventListener: () => {} };
 
 const { baseSiteDraft, extractStoreProducts, applyWebsitePrompt } = await import("../app/js/workspaces.js?v=test-workspace-site-builder");
+const { store } = await import("../app/js/store.js?v=test-workspace-site-builder");
+
+const termina = store.state.sites.find((site) => site.id === "site-termina-workflow-store");
+assert.ok(termina, "Termina store should be seeded for admin Sites.");
+assert.equal(termina.title, "Termina - Terminal Workflow Manager Store");
+assert.equal(termina.kind, "Store");
+assert.equal(termina.store.enabled, true);
+assert.equal(termina.store.checkoutMode, "test");
+assert.equal(termina.store.paymentsConnected, false);
+assert.deepEqual(
+  termina.catalog.map((product) => [product.name, product.price, product.cadence]),
+  [
+    ["Termina Workflow Manager", 49, "monthly"],
+    ["Termina Pro Command Seat", 149, "monthly"],
+    ["Terminal Setup Sprint", 750, "one_time"],
+    ["Workflow Automation Buildout", 1500, "one_time"],
+  ],
+  "Termina store products should be visible by default.",
+);
 
 const parsed = extractStoreProducts("Make a store and add setup sprint for $1,500 and include monthly care for $300/mo.");
 assert.equal(parsed.length, 2, "valid one-time and monthly products should parse.");

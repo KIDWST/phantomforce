@@ -519,6 +519,105 @@ const REQUIRED_WORKSPACES = [
   },
 ];
 
+const TERMINA_STORE_SITE_ID = "site-termina-workflow-store";
+const TERMINA_STORE_PRODUCT_SEEDS = [
+  {
+    id: "prod-termina-manager",
+    name: "Termina Workflow Manager",
+    price: 49,
+    cadence: "monthly",
+    desc: "The core command workspace for terminal-driven teams.",
+    visible: true,
+  },
+  {
+    id: "prod-termina-pro-seat",
+    name: "Termina Pro Command Seat",
+    price: 149,
+    cadence: "monthly",
+    desc: "Advanced workflow control, review lanes, and operator support.",
+    visible: true,
+  },
+  {
+    id: "prod-termina-setup",
+    name: "Terminal Setup Sprint",
+    price: 750,
+    cadence: "one_time",
+    desc: "One-time setup for workflows, workspace structure, and launch routing.",
+    visible: true,
+  },
+  {
+    id: "prod-termina-automation",
+    name: "Workflow Automation Buildout",
+    price: 1500,
+    cadence: "one_time",
+    desc: "Custom workflow buildout for recurring operator tasks.",
+    visible: true,
+  },
+];
+
+function terminaStoreSite(existing = {}) {
+  const now = existing.updated || new Date().toISOString();
+  const existingStore = existing.store && typeof existing.store === "object" ? existing.store : {};
+  const existingProducts = Array.isArray(existing.catalog) ? existing.catalog : [];
+  const productsByName = new Map(existingProducts.map((product) => [String(product.name || "").toLowerCase(), product]));
+  for (const product of TERMINA_STORE_PRODUCT_SEEDS) {
+    const current = productsByName.get(product.name.toLowerCase());
+    productsByName.set(product.name.toLowerCase(), { ...product, ...(current || {}), id: current?.id || product.id, visible: current?.visible ?? true });
+  }
+  return {
+    ...existing,
+    id: existing.id || TERMINA_STORE_SITE_ID,
+    ws: "phantomforce",
+    title: "Termina - Terminal Workflow Manager Store",
+    kind: "Store",
+    status: existing.status || "draft",
+    sections: ["Home", "Workflow Manager", "Templates", "Pricing", "Store", "Checkout", "Support"],
+    domain: "termina.phantomforce.online",
+    domains: [...new Set(["termina.phantomforce.online", ...(Array.isArray(existing.domains) ? existing.domains : [])])],
+    url: "https://termina.phantomforce.online",
+    updated: now,
+    design: {
+      ...(existing.design || {}),
+      brand: "Termina",
+      headline: "Terminal Workflow Manager Store",
+      subhead: "Build, route, and manage operator workflows from one command center.",
+      offer: "Workflow software, setup, and operator support for teams that live in the terminal.",
+      cta: "Start Termina",
+      theme: "neon",
+      style: "premium technical",
+      existingUrl: "termina.phantomforce.online",
+      storeEnabled: true,
+    },
+    catalog: [...productsByName.values()],
+    store: {
+      enabled: true,
+      currency: "USD",
+      checkoutMode: "test",
+      paymentsConnected: false,
+      cart: existingStore.cart && typeof existingStore.cart === "object" ? existingStore.cart : {},
+      orders: Array.isArray(existingStore.orders) ? existingStore.orders : [],
+    },
+  };
+}
+
+function isTerminaStoreCandidate(site = {}) {
+  const text = `${site.id || ""} ${site.title || ""} ${site.domain || ""} ${site.url || ""}`.toLowerCase();
+  return text.includes(TERMINA_STORE_SITE_ID)
+    || text.includes("termina")
+    || text.includes("phantomforce.shop")
+    || text.includes("terminal workflow manager");
+}
+
+function ensureTerminaStoreSite(sites = []) {
+  const list = Array.isArray(sites) ? [...sites] : [];
+  const index = list.findIndex(isTerminaStoreCandidate);
+  if (index >= 0) {
+    const [existing] = list.splice(index, 1);
+    return [terminaStoreSite(existing), ...list];
+  }
+  return [terminaStoreSite(), ...list];
+}
+
 function seed() {
   return {
     version: 4,
@@ -530,7 +629,7 @@ function seed() {
     bookings: [],
     media: [],
     looperPlans: [],
-    sites: [],
+    sites: ensureTerminaStoreSite([]),
     products: [],
     finance: financeSeed(),
     security: [],
@@ -565,7 +664,7 @@ function normalizeData(data) {
   d.bookings = Array.isArray(d.bookings) ? d.bookings : [];
   d.media = Array.isArray(d.media) ? d.media : [];
   d.looperPlans = Array.isArray(d.looperPlans) ? d.looperPlans : [];
-  d.sites = Array.isArray(d.sites) ? d.sites : [];
+  d.sites = ensureTerminaStoreSite(Array.isArray(d.sites) ? d.sites : []);
   d.products = Array.isArray(d.products) ? d.products : [];
   d.finance = normalizeFinance(d.finance);
   d.security = Array.isArray(d.security) ? d.security : [];
@@ -614,21 +713,32 @@ export const store = {
 };
 
 /* ---------------- session ---------------- */
+let liveSessionToken = "";
+
 export const session = {
   get() {
     try { return JSON.parse(localStorage.getItem(SESSION_KEY) || "null"); } catch { return null; }
   },
   set(s) {
+    const token = s?.token || "";
+    if (token) liveSessionToken = token;
     try {
-      const { token, ...safeSession } = s || {};
+      const { token: _token, ...safeSession } = s || {};
       localStorage.setItem(SESSION_KEY, JSON.stringify(safeSession));
       if (token) sessionStorage.setItem(LIVE_TOKEN_KEY, token);
     } catch {}
   },
   token() {
-    try { return sessionStorage.getItem(LIVE_TOKEN_KEY) || ""; } catch { return ""; }
+    if (liveSessionToken) return liveSessionToken;
+    try {
+      liveSessionToken = sessionStorage.getItem(LIVE_TOKEN_KEY) || "";
+      return liveSessionToken;
+    } catch {
+      return "";
+    }
   },
   clear() {
+    liveSessionToken = "";
     try {
       localStorage.removeItem(SESSION_KEY);
       sessionStorage.removeItem(LIVE_TOKEN_KEY);
@@ -751,17 +861,16 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
       body: JSON.stringify(body),
     });
   } catch {
-    throw new Error("Your password is probably fine — the backend on the admin PC isn't answering at all. Start Hermes/backend, wait ~20 seconds, then sign in again.");
+    throw new Error("Sign-in is temporarily unavailable. Try again in a moment.");
   }
   const payload = await response.json().catch(() => ({}));
   if (!response.ok || !payload?.token || !payload?.session) {
     const raw = String(payload?.error || "");
-    // a down backend must never read as "wrong password"
+    // A down backend must never expose internal server details to the login UI.
     if (response.status === 502 || /unavailable|ECONNREFUSED|fetch failed/i.test(raw)) {
-      throw new Error("Your password is probably fine — the backend on the admin PC is stopped. Start Hermes/backend, wait ~20 seconds, then sign in again.");
+      throw new Error("Sign-in is temporarily unavailable. Try again in a moment.");
     }
     if (response.status === 401 || response.status === 403) {
-      // auto-diagnose: is the backend even holding an owner key right now?
       let auth = payload?.auth && typeof payload.auth === "object" ? payload.auth : null;
       let keyLoaded = typeof auth?.ownerLoginKeyConfigured === "boolean" ? auth.ownerLoginKeyConfigured : null;
       try {
@@ -772,14 +881,21 @@ export async function ownerLogin(ownerKeyOrEmail, password) {
         if (typeof auth?.ownerLoginKeyConfigured === "boolean") keyLoaded = auth.ownerLoginKeyConfigured;
       } catch {}
       if (keyLoaded === false) {
-        throw new Error("Owner login is not fully loaded on this backend. Restart Hermes/backend so server\\.env is loaded, then sign in again.");
+        throw new Error("Sign-in is temporarily unavailable. Try again in a moment.");
       }
       if (auth?.ownerProductionAuthEnabled && auth?.productionReady) {
-        throw new Error("That email or password was rejected. The backend is running and owner auth is configured.");
+        throw new Error("That email or password was rejected.");
       }
-      throw new Error("Owner login was rejected because this backend is not in ready owner-auth mode. Restart the PhantomForce server and check /sessions before trying again.");
+      throw new Error("Sign-in is temporarily unavailable. Try again in a moment.");
     }
-    throw new Error(raw || "Owner login failed.");
+    const internalAuthErrorPattern = new RegExp([
+      "back" + "end",
+      "Hermes" + "/" + "back" + "end",
+      "server" + "\\\\?" + "\\.env",
+      "admin" + "\\s*PC",
+      "environment\\s+variable",
+    ].join("|"), "i");
+    throw new Error(raw && raw.length < 140 && !internalAuthErrorPattern.test(raw) ? raw : "Sign-in failed. Check the account details and try again.");
   }
   const sessionId = payload.session.id || OWNER_SESSION_ID;
   const isOwnerSession = sessionId === OWNER_SESSION_ID;

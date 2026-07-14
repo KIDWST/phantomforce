@@ -71,7 +71,7 @@
   (`app/index.html`, `app/phantom.css`, `app/js/main.js`).
 - **Living Phantom character** — `app/js/character.js`: 11 painted poses, emotional
   inertia (`governMood`), hologram depth. Shared by admin + public site.
-- Current cache-bust build id: **`phantom-live-20260713-247`**.
+- Current cache-bust build id: **`phantom-live-20260713-248`**.
 
 ## Repo map
 - `app/` — the **admin console** (`admin.phantomforce.online`). `index.html`,

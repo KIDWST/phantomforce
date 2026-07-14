@@ -25,6 +25,7 @@ const GAME_ART_BY_SLUG = {
   "penalty-kick": artUrl("penalty-kick-cover.webp"),
   "rift-frenzy": artUrl("neon-drift-cover.webp"),
   "serpent-surge": artUrl("reflex-grid-cover.webp"),
+  "crown-circuit": artUrl("reflex-grid-cover.webp"),
 };
 const CATEGORY_ART = {
   Arcade: GAME_ART_BY_SLUG["neon-drift"],
@@ -43,6 +44,7 @@ const BUILT_INS = [
   { id: "penalty-kick", title: "Penalty Kick", summary: "Pick your lane, time the strike, and beat the keeper.", description: "A touch-friendly sports timing game with five shots, visible score, keeper reads, and saved score.", category: "Sports", tags: ["sports", "timing", "soccer", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/penalty-kick.html?v=1.0.1", thumbnail: GAME_ART_BY_SLUG["penalty-kick"], featured: false, version: "1.0.1", controls: "Choose a lane, then tap shoot at the sweet spot", progressSupport: true, scoreSupport: true },
   { id: "rift-frenzy", title: "Rift Frenzy", summary: "Grow from reef bait to apex hunter in a neon multiplayer-style fish arena.", description: "A modern eat-smaller-fish arena with rival schools, growth stages, boost windows, danger reads, and touch-friendly movement. It feels like a live arena even when running as a safe built-in sandbox.", category: "Arcade", tags: ["fish", "arena", "growth", "io", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/rift-frenzy.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["rift-frenzy"], featured: true, version: "1.0.4", controls: "Move with WASD/arrow keys or touch-drag. Eat smaller fish, avoid bigger rivals, boost with Space.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
   { id: "serpent-surge", title: "Serpent Surge", summary: "A fast snake arena with rivals, pickups, cutoffs, boost trails, and storm pressure.", description: "A PhantomPlay take on snake arena games: orbit energy, grow long, bait rival serpents, use boost carefully, and survive a closing storm ring without any external networking.", category: "Strategy", tags: ["snake", "arena", "io", "survival", "touch"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/serpent-surge.html?v=1.0.4", thumbnail: GAME_ART_BY_SLUG["serpent-surge"], featured: true, version: "1.0.4", controls: "Steer with mouse, touch, WASD, or arrows. Hold Space or touch pressure to boost.", progressSupport: true, scoreSupport: true, engine: { tier: "arena-large-map", minVersion: PHANTOMPLAY_ENGINE.version } },
+  { id: "crown-circuit", title: "Crown Circuit", summary: "A two-player-only lane card battle with towers, elixir, counters, and sudden death.", description: "A strictly multiplayer tower duel: two players draft from four unit cards, spend elixir, choose lanes, break towers, and win the crown. No solo mode, no bots, no fake opponents - local keyboard duels or PhantomPlay private rooms only.", category: "Strategy", tags: ["multiplayer-only", "tower duel", "cards", "lanes", "keyboard", "rooms"], contentRating: "everyone", developer: "Tak", developerAvatar: TAK_AVATAR, kind: "built_in", launchUrl: "/app/games/crown-circuit.html?v=1.0.0", thumbnail: GAME_ART_BY_SLUG["crown-circuit"], featured: true, version: "1.0.0", controls: "Local: P1 uses 1-4 then Q/W/E. P2 uses 7-0 then I/O/P. Online: create a PhantomPlay room, join with two players, then launch.", progressSupport: false, scoreSupport: true, multiplayerOnly: true, localMultiplayer: true, onlineMultiplayer: true, minPlayers: 2, maxPlayers: 2, engine: { tier: "arena-multiplayer-relay", minVersion: PHANTOMPLAY_ENGINE.version } },
 ];
 
 const ui = {
@@ -69,6 +71,7 @@ const ui = {
 let mountedRoot = null;
 let mountedOpts = null;
 let playClock = null;
+let matchClock = null;
 let playTickAt = 0;
 let messageBound = false;
 let keyboardBound = false;
@@ -352,7 +355,7 @@ function roomCard(room) {
     <header><div><p class="pp-kicker">${room.mode === "classroom" ? "CLASSROOM ROOM" : "FRIENDS ROOM"}</p><h3>${esc(room.gameTitle)}</h3></div><strong>${esc(room.code)}</strong></header>
     <p>Workspace-only room. Share the short code with people who are signed into the same workspace.</p>
     <div class="pp-room-roster">${roomRoster(room)}</div>
-    <div class="pp-room-actions"><button type="button" class="pp-primary" data-pp-room-play="${esc(room.gameId)}">${icon("play")} Launch game</button><button type="button" class="pp-secondary" data-pp-copy-room="${esc(room.code)}">Copy code</button><button type="button" class="pp-secondary" data-pp-room-leave="${esc(room.code)}">Leave</button></div>
+    <div class="pp-room-actions"><button type="button" class="pp-primary" data-pp-room-play="${esc(room.gameId)}" data-pp-room-code="${esc(room.code)}">${icon("play")} Launch game</button><button type="button" class="pp-secondary" data-pp-copy-room="${esc(room.code)}">Copy code</button><button type="button" class="pp-secondary" data-pp-room-leave="${esc(room.code)}">Leave</button></div>
   </article>`;
 }
 
@@ -486,7 +489,8 @@ function playerMarkup() {
   if (!ui.player) return "";
   const { game, play } = ui.player;
   const engine = engineFor(game);
-  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>The game is opening in a private sandbox.</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" tabindex="0" data-pp-frame></iframe></div><footer><span>Session <b>${esc(play.id.slice(-8))}</b></span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>Progress saves automatically</span></footer></div>`;
+  const roomCode = ui.player.room?.code || "";
+  return `<div class="pp-player" role="dialog" aria-modal="true" aria-label="Playing ${esc(game.title)}"><header><div><img src="${esc(thumbnailFor(game))}" alt=""/><span><b>${esc(game.title)}</b><i>${esc(game.controls)}</i></span></div><div class="pp-player-actions"><button data-pp-player-restart title="Restart game">Restart</button><button data-pp-player-pause title="Pause game">${ui.playerPaused ? "Resume" : "Pause"}</button><button data-pp-player-fullscreen title="Full screen">Full screen</button><button data-pp-player-close aria-label="Close game">×</button></div></header><div class="pp-player-stage"><button class="pp-player-exit" data-pp-player-close type="button" aria-label="Exit game">Exit</button><div class="pp-player-loading" ${ui.playerReady ? "hidden" : ""}><i></i><b>Loading ${esc(game.title)}…</b><span>${roomCode ? `Joining room ${esc(roomCode)}.` : "The game is opening in a private sandbox."}</span></div><iframe src="${esc(game.launchUrl)}" title="${esc(game.title)}" sandbox="allow-scripts" referrerpolicy="no-referrer" allow="fullscreen" tabindex="0" data-pp-frame></iframe></div><footer><span>${roomCode ? `Room <b>${esc(roomCode)}</b>` : `Session <b>${esc(play.id.slice(-8))}</b>`}</span><span data-pp-live-score>Score —</span><span data-pp-live-state>${ui.playerPaused ? "Paused" : "Playing"}</span><span>Engine ${esc(engine.version)}</span><span>${game.multiplayerOnly ? "Multiplayer only" : "Progress saves automatically"}</span></footer></div>`;
 }
 
 function render() {
@@ -533,18 +537,20 @@ function offlinePlay(game) {
   return { game, play };
 }
 
-async function launch(gameId) {
+async function launch(gameId, roomCode = "") {
   if (!gameId) return;
   const game = ui.snapshot.catalog.find((item) => item.id === gameId);
   if (!game?.launchUrl) { ui.error = "This game is not available to play yet."; render(); return; }
   try {
     const result = ui.offline ? offlinePlay(game) : await api("/api/phantomplay/plays", { method: "POST", body: JSON.stringify({ tenantId: currentTenantId(), gameId }) });
-    ui.player = { game: result.game || game, play: result.play };
+    const room = roomCode ? (ui.snapshot.rooms || []).find((item) => item.code === roomCode) || { code: roomCode, gameId } : null;
+    ui.player = { game: result.game || game, play: result.play, room };
     ui.playerReady = false;
     ui.playerPaused = false;
     playTickAt = Date.now();
     render();
     startClock();
+    startMatchPolling();
   } catch (error) { ui.error = error.message; render(); }
 }
 
@@ -623,6 +629,7 @@ async function closePlayer() {
   postToGame("exit", { focus: false });
   if (document.fullscreenElement) await document.exitFullscreen?.().catch(() => undefined);
   clearInterval(playClock);
+  clearInterval(matchClock);
   await persistPlay(true);
   ui.player = null;
   ui.playerReady = false;
@@ -636,6 +643,58 @@ function postToGame(type, options = {}) {
   const frame = mountedRoot?.querySelector("[data-pp-frame]");
   frame?.contentWindow?.postMessage({ source: "phantomplay-host", type, engine: ui.player ? engineFor(ui.player.game) : PHANTOMPLAY_ENGINE }, "*");
   if (options.focus !== false) frame?.focus?.({ preventScroll: true });
+}
+
+function postSettingsToGame() {
+  const frame = mountedRoot?.querySelector("[data-pp-frame]");
+  if (!frame || !ui.player) return;
+  frame.contentWindow?.postMessage({
+    source: "phantomplay-host",
+    type: "settings",
+    sound: ui.snapshot.preferences.sound,
+    reducedMotion: ui.snapshot.preferences.reducedMotion,
+    engine: engineFor(ui.player.game),
+    actorId: ui.snapshot.actorId,
+    room: ui.player.room || null,
+  }, "*");
+}
+
+async function pollMatchState() {
+  const code = ui.player?.room?.code;
+  if (!code || ui.offline) return;
+  try {
+    const payload = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}?tenant_id=${encodeURIComponent(currentTenantId())}`);
+    if (payload.room) {
+      ui.player.room = payload.room;
+      const frame = mountedRoot?.querySelector("[data-pp-frame]");
+      frame?.contentWindow?.postMessage({ source: "phantomplay-host", type: "match-state", room: payload.room, match: payload.room.match || null, actorId: ui.snapshot.actorId }, "*");
+    }
+  } catch {}
+}
+
+function startMatchPolling() {
+  clearInterval(matchClock);
+  if (!ui.player?.room?.code) return;
+  pollMatchState();
+  matchClock = setInterval(pollMatchState, 900);
+}
+
+async function sendMatchAction(action = {}) {
+  const code = ui.player?.room?.code;
+  if (!code || ui.offline) return;
+  try {
+    const payload = await api(`/api/phantomplay/rooms/${encodeURIComponent(code)}/match`, {
+      method: "POST",
+      body: JSON.stringify({ tenantId: currentTenantId(), gameId: ui.player.game.id, action }),
+    });
+    if (payload.room) {
+      ui.player.room = payload.room;
+      const frame = mountedRoot?.querySelector("[data-pp-frame]");
+      frame?.contentWindow?.postMessage({ source: "phantomplay-host", type: "match-state", room: payload.room, match: payload.room.match || null, actorId: ui.snapshot.actorId }, "*");
+    }
+  } catch (error) {
+    ui.error = error.message;
+  }
 }
 
 function togglePlayerPause() {
@@ -670,8 +729,11 @@ function onGameMessage(event) {
   if (event.data.type === "ready") {
     ui.playerReady = true;
     mountedRoot.querySelector(".pp-player-loading")?.setAttribute("hidden", "");
-    frame.contentWindow?.postMessage({ source: "phantomplay-host", type: "settings", sound: ui.snapshot.preferences.sound, reducedMotion: ui.snapshot.preferences.reducedMotion, engine: engineFor(ui.player.game) }, "*");
+    postSettingsToGame();
     frame.focus?.({ preventScroll: true });
+  }
+  if (event.data.type === "match-action") {
+    sendMatchAction(event.data.action || {});
   }
   if (event.data.type === "paused") {
     ui.playerPaused = !!event.data.paused;
@@ -784,7 +846,7 @@ function bind() {
   mountedRoot.querySelector("[data-pp-join-room-form]")?.addEventListener("submit", (event) => { event.preventDefault(); joinPrivateRoom(event.currentTarget); });
   mountedRoot.querySelector("[data-pp-room-clear]")?.addEventListener("click", () => { ui.roomMessage = ""; render(); });
   mountedRoot.querySelectorAll("[data-pp-copy-room]").forEach((button) => button.onclick = async () => { try { await navigator.clipboard?.writeText(button.dataset.ppCopyRoom || ""); ui.roomMessage = `Room ${button.dataset.ppCopyRoom} code copied locally.`; } catch { ui.roomMessage = `Room code: ${button.dataset.ppCopyRoom}`; } render(); });
-  mountedRoot.querySelectorAll("[data-pp-room-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppRoomPlay));
+  mountedRoot.querySelectorAll("[data-pp-room-play]").forEach((button) => button.onclick = () => launch(button.dataset.ppRoomPlay, button.dataset.ppRoomCode || ""));
   mountedRoot.querySelectorAll("[data-pp-room-leave]").forEach((button) => button.onclick = () => leavePrivateRoom(button.dataset.ppRoomLeave));
   mountedRoot.querySelectorAll("[data-pp-open-dev]").forEach((button) => button.onclick = () => { ui.selectedDeveloperId = button.dataset.ppOpenDev; ui.developerMessage = ""; render(); });
   mountedRoot.querySelector("[data-pp-dev-back]")?.addEventListener("click", () => { ui.selectedDeveloperId = ""; ui.developerMessage = ""; render(); });
@@ -818,5 +880,5 @@ export function renderPhantomPlay(root, opts = {}) {
   }
   render();
   hydrate();
-  return () => { clearInterval(playClock); document.body.classList.remove("phantomplay-playing"); mountedRoot = null; mountedOpts = null; };
+  return () => { clearInterval(playClock); clearInterval(matchClock); document.body.classList.remove("phantomplay-playing"); mountedRoot = null; mountedOpts = null; };
 }

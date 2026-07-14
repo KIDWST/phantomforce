@@ -767,17 +767,101 @@ function drawShape(cx, cy, r, shape, color) {
 }
 function draw() {
   ctx.clearRect(0, 0, cssW, cssH);
-  ctx.fillStyle = '#080a1e'; ctx.fillRect(0, 0, cssW, cssH);
+  drawBackground();
   drawPath(); drawSlots(); drawSpire(); drawSentinels(); drawEnemies(); drawParticlesOnCanvas();
   if (spireFlash > 0) { ctx.fillStyle = `rgba(255,77,141,${spireFlash * 0.35})`; ctx.fillRect(0, 0, cssW, cssH); }
 }
+function drawBackground() {
+  const grad = ctx.createLinearGradient(0, 0, cssW, cssH);
+  grad.addColorStop(0, '#061532');
+  grad.addColorStop(0.48, '#020715');
+  grad.addColorStop(1, '#130725');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  const nebulaA = ctx.createRadialGradient(cssW * 0.16, cssH * 0.50, 0, cssW * 0.16, cssH * 0.50, cssW * 0.42);
+  nebulaA.addColorStop(0, '#6c22ff38');
+  nebulaA.addColorStop(0.34, '#20c8ff16');
+  nebulaA.addColorStop(1, 'transparent');
+  ctx.fillStyle = nebulaA;
+  ctx.fillRect(0, 0, cssW, cssH);
+
+  const planet = ctx.createRadialGradient(cssW * 0.78, cssH * 0.18, 0, cssW * 0.78, cssH * 0.18, cssW * 0.28);
+  planet.addColorStop(0, '#1a66ff33');
+  planet.addColorStop(0.45, '#0b3c8a24');
+  planet.addColorStop(1, 'transparent');
+  ctx.fillStyle = planet;
+  ctx.beginPath();
+  ctx.arc(cssW * 0.78, cssH * 0.18, cssW * 0.28, 0, Math.PI * 2);
+  ctx.fill();
+
+  ctx.save();
+  ctx.globalAlpha = 0.72;
+  for (let i = 0; i < 105; i++) {
+    const x = ((Math.sin(i * 37.77) + 1) * 0.5 * cssW + simTime * (i % 3 ? 2 : -1)) % cssW;
+    const y = ((Math.cos(i * 19.13) + 1) * 0.5 * cssH);
+    const r = (i % 9 === 0 ? 1.8 : 0.8) * scale;
+    ctx.fillStyle = i % 7 === 0 ? '#6fdfff' : '#d9e8ff';
+    ctx.fillRect(x, y, r, r);
+  }
+  ctx.restore();
+
+  drawDistantCarrier(cssW * 0.79, cssH * 0.21, 1.0, 0.28, -1);
+  drawDistantCarrier(cssW * 0.19, cssH * 0.75, 1.25, 0.20, 1);
+}
+function drawDistantCarrier(x, y, size, alpha, dir) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(dir * size * scale, size * scale);
+  ctx.globalAlpha = alpha;
+  ctx.fillStyle = '#020711';
+  ctx.strokeStyle = '#2aaeff55';
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(-70, 0); ctx.lineTo(-34, -14); ctx.lineTo(44, -10); ctx.lineTo(82, 0);
+  ctx.lineTo(38, 12); ctx.lineTo(-48, 11); ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = '#20c8ff';
+  for (let i = 0; i < 5; i++) ctx.fillRect(-32 + i * 20, -2, 8, 2);
+  ctx.restore();
+}
 function drawPath() {
-  ctx.lineWidth = 26 * scale; ctx.strokeStyle = '#141a3d'; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+  ctx.shadowColor = '#20c8ff';
+  ctx.shadowBlur = 28 * scale;
+  ctx.lineWidth = 34 * scale; ctx.strokeStyle = '#0b66ff55';
   ctx.beginPath();
   PATH_PX.forEach(([x, y], i) => { const [px, py] = toPx(x, y); i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py); });
   ctx.stroke();
-  ctx.lineWidth = 2 * scale; ctx.strokeStyle = '#ffb84d33';
+  ctx.shadowBlur = 18 * scale;
+  ctx.lineWidth = 22 * scale; ctx.strokeStyle = '#179affcc';
   ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.lineWidth = 5 * scale; ctx.strokeStyle = '#8fe9ff';
+  ctx.stroke();
+  ctx.lineWidth = 1.4 * scale; ctx.strokeStyle = '#ffffffcc';
+  ctx.stroke();
+
+  ctx.save();
+  ctx.shadowColor = '#8fe9ff';
+  ctx.shadowBlur = 12 * scale;
+  for (let i = 0; i < 18; i++) {
+    const t = (simTime * 0.09 + i / 18) % 1;
+    const p = pointAtT(t), q = pointAtT(Math.min(1, t + 0.004));
+    const [x, y] = toPx(p.x, p.y), [qx, qy] = toPx(q.x, q.y);
+    const a = Math.atan2(qy - y, qx - x);
+    ctx.translate(x, y); ctx.rotate(a);
+    ctx.fillStyle = '#c7f7ff';
+    ctx.beginPath();
+    ctx.moveTo(8 * scale, 0);
+    ctx.lineTo(-5 * scale, -4 * scale);
+    ctx.lineTo(-2 * scale, 0);
+    ctx.lineTo(-5 * scale, 4 * scale);
+    ctx.closePath();
+    ctx.fill();
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+  }
+  ctx.restore();
 }
 function drawSlots() {
   for (let i = 0; i < SLOT_PX.length; i++) {
@@ -785,18 +869,36 @@ function drawSlots() {
     const occupied = sentinels.find((s) => s.slotIndex === i);
     const isSelected = i === selectedSlot;
     const isValidDrop = placingDef && !occupied;
-    ctx.beginPath(); ctx.arc(x, y, 15 * scale, 0, Math.PI * 2);
-    ctx.strokeStyle = isSelected ? '#ffb84d' : isValidDrop ? '#4ddbff' : '#2b3372';
+    const r = (occupied ? 18 : 15) * scale;
+    ctx.fillStyle = '#020916cc';
+    ctx.beginPath(); ctx.arc(x, y, r + 7 * scale, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = isSelected ? '#ffbf33' : isValidDrop ? '#20c8ff' : '#2c5c91';
+    ctx.shadowColor = ctx.strokeStyle;
+    ctx.shadowBlur = (isSelected || isValidDrop ? 16 : 6) * scale;
     ctx.lineWidth = (isSelected || isValidDrop ? 2.4 : 1.4) * scale;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.stroke();
+    ctx.shadowBlur = 0;
   }
 }
 function drawSpire() {
   const [x, y] = toPx(PATH_PX[PATH_PX.length - 1][0], PATH_PX[PATH_PX.length - 1][1]);
-  const grad = ctx.createRadialGradient(x, y, 2 * scale, x, y, 22 * scale);
-  grad.addColorStop(0, '#8a6bff'); grad.addColorStop(1, '#4ddbff11');
-  ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(x, y, 18 * scale, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = '#4ddbff'; ctx.lineWidth = 2 * scale; ctx.stroke();
+  const pulse = 1 + Math.sin(simTime * 5) * 0.04;
+  ctx.save();
+  ctx.shadowColor = '#20c8ff';
+  ctx.shadowBlur = 34 * scale;
+  const grad = ctx.createRadialGradient(x, y, 2 * scale, x, y, 54 * scale);
+  grad.addColorStop(0, '#dffcff');
+  grad.addColorStop(0.22, '#20c8ff');
+  grad.addColorStop(0.56, '#0b66ff55');
+  grad.addColorStop(1, '#20c8ff00');
+  ctx.fillStyle = grad;
+  ctx.beginPath(); ctx.arc(x, y, 48 * scale * pulse, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#8fe9ff'; ctx.lineWidth = 2.5 * scale;
+  for (let r of [24, 36, 48]) { ctx.beginPath(); ctx.arc(x, y, r * scale * pulse, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.fillStyle = '#dffcff';
+  ctx.beginPath(); ctx.moveTo(x, y - 30 * scale); ctx.lineTo(x + 14 * scale, y); ctx.lineTo(x, y + 30 * scale); ctx.lineTo(x - 14 * scale, y); ctx.closePath(); ctx.fill();
+  ctx.restore();
 }
 function drawSentinels() {
   for (const s of sentinels) {
@@ -808,9 +910,35 @@ function drawSentinels() {
       ctx.beginPath(); ctx.arc(px, py, stats.range * scale, 0, Math.PI * 2);
       ctx.strokeStyle = def.color + '55'; ctx.lineWidth = 1.2 * scale; ctx.stroke();
     }
-    drawShape(px, py, (s.tier === 1 ? 13 : 11) * scale, def.shape, def.color);
-    if (s.tier === 1) { ctx.strokeStyle = '#fff8'; ctx.lineWidth = 1.4 * scale; ctx.beginPath(); ctx.arc(px, py, (s.tier === 1 ? 13 : 11) * scale + 2 * scale, 0, Math.PI * 2); ctx.stroke(); }
+    drawTowerBase(px, py, def.color, s.tier);
+    ctx.save();
+    ctx.shadowColor = def.color;
+    ctx.shadowBlur = 20 * scale;
+    drawShape(px, py - 4 * scale, (s.tier === 1 ? 15 : 12) * scale, def.shape, def.color);
+    ctx.restore();
+    if (s.tier === 1) { ctx.strokeStyle = '#fff8'; ctx.lineWidth = 1.4 * scale; ctx.beginPath(); ctx.arc(px, py - 4 * scale, 18 * scale, 0, Math.PI * 2); ctx.stroke(); }
   }
+}
+function drawTowerBase(x, y, color, tier) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = '#071020';
+  ctx.strokeStyle = color;
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14 * scale;
+  ctx.lineWidth = 2 * scale;
+  ctx.beginPath();
+  for (let i = 0; i < 8; i++) {
+    const a = Math.PI / 4 * i + Math.PI / 8;
+    const r = (tier ? 27 : 23) * scale;
+    const px = Math.cos(a) * r, py = Math.sin(a) * r * 0.78;
+    i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+  }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.strokeStyle = '#ffffff33';
+  ctx.beginPath(); ctx.arc(0, 0, (tier ? 18 : 15) * scale, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
 }
 function drawEnemies() {
   for (const e of enemies) {
@@ -818,12 +946,37 @@ function drawEnemies() {
     const info = ENEMIES[e.type];
     const r = (info.r + (e.boss ? 6 : 0)) * scale;
     const slowed = e.slowUntil > simTime;
-    drawShape(x, y, r, e.type === 'skiff' ? 'tri' : e.type === 'bulwark' ? 'square' : 'circle', slowed ? '#4ddbff' : info.color);
-    if (e.boss) { ctx.strokeStyle = '#ff4d8d88'; ctx.lineWidth = 2 * scale; ctx.beginPath(); ctx.arc(x, y, r + 6 * scale, 0, Math.PI * 2); ctx.stroke(); }
+    drawEnemyShip(e, x, y, r, slowed ? '#20c8ff' : info.color);
+    if (e.boss) { ctx.strokeStyle = '#ff563dcc'; ctx.lineWidth = 2 * scale; ctx.shadowColor = '#ff563d'; ctx.shadowBlur = 18 * scale; ctx.beginPath(); ctx.arc(x, y, r + 12 * scale, 0, Math.PI * 2); ctx.stroke(); ctx.shadowBlur = 0; }
     const w = 22 * scale, ratio = Math.max(0, e.hp / e.maxHp);
     ctx.fillStyle = '#1a2050'; ctx.fillRect(x - w / 2, y - r - 8 * scale, w, 3 * scale);
     ctx.fillStyle = ratio > 0.4 ? '#5be6a0' : '#ff5c6c'; ctx.fillRect(x - w / 2, y - r - 8 * scale, w * ratio, 3 * scale);
   }
+}
+function drawEnemyShip(e, x, y, r, color) {
+  const p = pointAtT(Math.min(1, e.t + 0.004));
+  const [qx, qy] = toPx(p.x, p.y);
+  const a = Math.atan2(qy - y, qx - x);
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(a);
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 16 * scale;
+  ctx.fillStyle = '#020711';
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2 * scale;
+  const body = e.boss ? r * 1.9 : r * 1.35;
+  ctx.beginPath();
+  ctx.moveTo(body, 0);
+  ctx.lineTo(-body * 0.55, -r * 0.78);
+  ctx.lineTo(-body * 0.20, 0);
+  ctx.lineTo(-body * 0.55, r * 0.78);
+  ctx.closePath();
+  ctx.fill(); ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.fillRect(-body * 0.75, -r * 0.28, r * 0.55, r * 0.16);
+  ctx.fillRect(-body * 0.75, r * 0.12, r * 0.55, r * 0.16);
+  ctx.restore();
 }
 function drawParticlesOnCanvas() {
   for (const p of particles) {
@@ -831,11 +984,15 @@ function drawParticlesOnCanvas() {
     ctx.globalAlpha = t;
     if (p.type === 'tracer') {
       const [x1, y1] = toPx(p.x1, p.y1), [x2, y2] = toPx(p.x2, p.y2);
-      ctx.strokeStyle = p.color; ctx.lineWidth = 2 * scale;
+      ctx.shadowColor = p.color; ctx.shadowBlur = 18 * scale;
+      ctx.strokeStyle = p.color; ctx.lineWidth = 3.5 * scale;
       ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+      ctx.shadowBlur = 0;
     } else {
       const [x, y] = toPx(p.x, p.y);
-      ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x, y, 3 * scale, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowColor = p.color; ctx.shadowBlur = 12 * scale;
+      ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(x, y, 4 * scale, 0, Math.PI * 2); ctx.fill();
+      ctx.shadowBlur = 0;
     }
   }
   ctx.globalAlpha = 1;

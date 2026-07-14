@@ -1540,7 +1540,7 @@ function renderMemory(el, rerender) {
       const mount = brainPanel.querySelector("[data-memory-brain-mount]");
       import("./brain.js?v=phantom-live-20260714-249")
         .then((mod) => { if (mount && mount.isConnected) mod.renderPhantomBrain(mount); })
-        .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">The brain panel could not load. Check that the backend on the admin PC is running, then reopen this section.</p>`; });
+        .catch(() => { if (mount) mount.innerHTML = `<p class="ws-note">This panel could not load. Try again in a moment.</p>`; });
     });
     if (brainPanel.open && !brainPanel.dataset.mounted) {
       brainPanel.dispatchEvent(new Event("toggle"));
